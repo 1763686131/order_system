@@ -122,10 +122,12 @@ async function fetchOrders() {
         const startDateStr = document.getElementById('filterStartDate').value;
         const endDateStr = document.getElementById('filterEndDate').value;
 
+        // 🎯 修正版：不管数据库里是新时分戳还是老日期戳，统一精准拦截前10位(YYYY-MM-DD)
         const filteredOrders = serverOrders.filter(order => {
             if (order.status !== selectedStatus) return false;
             if (order.date) {
-                const orderDay = order.date.split(' ')[0]; 
+                // 截取前 10 位，完美兼容 "2026-07-01" 和 "2026-07-10 17:11"
+                const orderDay = order.date.substring(0, 10); 
                 if (startDateStr && orderDay < startDateStr) return false;
                 if (endDateStr && orderDay > endDateStr) return false;
             }
@@ -292,7 +294,7 @@ async function submitEditOrder() {
     try {
         const response = await fetch(`${API_BASE}/orders/${id}/edit`, {
             method: 'PUT',
-            headers: getHeaders(),
+            headers: getHeaders(), // 🎯 修正：带上超管身份令牌，后端才会允许放行修改
             body: JSON.stringify({ title: title, type: parseInt(type), date: date })
         });
         if (response.ok) {
