@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地订单管理看板 - 工业高精版</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+    <div id="loginSection" class="login-overlay">
+        <div class="login-box">
+            <h2>系统登录</h2>
+            <input id="loginUsername" placeholder="请输入账号ID" />
+            <input id="loginPassword" type="password" placeholder="请输入密码" />
+            <button class="btn-primary" onclick="handleLogin()">登录</button>
+        </div>
+    </div>
+
+    <div id="mainSection" class="hidden" style="display: flex; flex-direction: column; flex: 1;">
+        <div class="top-nav">
+            <div class="nav-left">
+                <h2>订单管理看板</h2>
+                <div class="user-info">
+                    当前登录: <strong id="currentUsername"></strong>
+                    <span id="currentUserRoleTag" class="user-tag"></span>
+                </div>
+            </div>
+            <div class="nav-right">
+                <button id="btnOpenAddUser" class="btn-success hidden" onclick="toggleModal('addUserModal', true)">➕ 添加用户</button>
+                <button id="btnOpenViewUser" class="btn-primary hidden" onclick="openViewUserModal()">👥 查看/管理用户</button>
+            </div>
+        </div>
+
+        <div class="main-wrapper">
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <h3>🚪 系统操作</h3>
+                    <button class="btn-danger" style="width: 100%;" onclick="handleLogout()">退出当前登录</button>
+                </div>
+                
+                <div id="sidebarAdminSection" class="sidebar-section hidden">
+                    <h3>📝 快速发布新订单</h3>
+                    <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">订单类型参数:</label>
+                    <select id="newOrderType">
+                        <option value="0" selected>中固订单</option>
+                        <option value="1">绝缘订单</option>
+                    </select>
+
+                    <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">货物长文本参数:</label>
+                    <textarea id="newOrderTitle" placeholder="输入货物长文本参数或编号...\n支持按键盘回车直接换行"></textarea>
+                    <button class="btn-primary" style="width: 100%;" onclick="createOrder()">上传并发布</button>
+                </div>
+            </div>
+
+            <div class="content-area">
+                <div class="area-header">
+                    <div id="listTitle" class="area-title">📋 订单看板列表</div>
+                    <div class="filter-group">
+                        <label>状态过滤:</label>
+                        <select id="filterStatus" onchange="fetchOrders()">
+                            <option value="pending" selected>未完成订单</option>
+                            <option value="completed">已完成订单</option>
+                        </select>
+
+                        <label style="margin-left:10px;">日期范围:</label>
+                        <input id="filterStartDate" type="date" onchange="fetchOrders()" />
+                        <span>至</span>
+                        <input id="filterEndDate" type="date" onchange="fetchOrders()" />
+                    </div>
+                </div>
+                
+                <div id="orderGrid" class="grid-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="addUserModal" class="modal-mask hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>添加系统新用户</span>
+                <span class="close-x" onclick="toggleModal('addUserModal', false)">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-item">
+                    <label>新账号 ID</label>
+                    <input id="newUsername" placeholder="请输入数字或字母账号" />
+                </div>
+                <div class="form-item">
+                    <label>访问密码</label>
+                    <input id="newPassword" type="text" placeholder="请输入密码" />
+                </div>
+                <div class="form-item">
+                    <label>角色权限分级</label>
+                    <select id="newRole">
+                        <option value="operator">操作员 (仅看未完成)</option>
+                        <option value="admin">管理员 (看全部+发单)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="toggleModal('addUserModal', false)">取消</button>
+                <button class="btn-success" onclick="createUser()">确认添加用户</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="viewUserModal" class="modal-mask hidden">
+        <div class="modal-box" style="max-width: 600px;">
+            <div class="modal-header">
+                <span>系统用户名单管理</span>
+                <span class="close-x" onclick="toggleModal('viewUserModal', false)">&times;</span>
+            </div>
+            <div class="modal-body" id="userListContainer"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="toggleModal('viewUserModal', false)">关闭窗口</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editOrderModal" class="modal-mask hidden">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span>✍️ 修改订单信息 (超级管理员权限)</span>
+                <span class="close-x" onclick="toggleModal('editOrderModal', false)">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input id="editOrderId" type="hidden" />
+                <div class="form-item">
+                    <label>订单类型参数</label>
+                    <select id="editOrderType">
+                        <option value="0">中固订单</option>
+                        <option value="1">绝缘订单</option>
+                    </select>
+                </div>
+                <div class="form-item">
+                    <label>订单名称 / 货物长文本参数</label>
+                    <textarea id="editOrderTitle" style="height:100px; resize:vertical;"></textarea>
+                </div>
+                <div class="form-item">
+                    <label>创建生成时间 (可手动微调)</label>
+                    <input id="editOrderDate" type="text" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="toggleModal('editOrderModal', false)">取消</button>
+                <button class="btn-warning" onclick="submitEditOrder()">确认修改</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="statusConfirmModal" class="modal-mask hidden">
+        <div class="modal-box" style="max-width: 420px;">
+            <div class="modal-header" style="background: #fafafa;">
+                <span>⚠️ 业务操作二次确认</span>
+                <span class="close-x" onclick="toggleModal('statusConfirmModal', false)">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div id="confirmTipText" class="confirm-tip-text"></div>
+                <div id="confirmCardPreview" class="confirm-card-preview">
+                    <div style="display:flex; justify-content:space-between; font-size:11px; color:#8c8c8c; margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px;">
+                        <span id="previewCardType"></span>
+                        <span id="previewCardDate"></span>
+                    </div>
+                    <div id="previewCardTitle"></div>
+                </div>
+            </div>
+            <div class="modal-footer" style="background: #fafafa;">
+                <input id="confirmTargetId" type="hidden" />
+                <input id="confirmTargetStatus" type="hidden" />
+                <button class="btn-secondary" onclick="toggleModal('statusConfirmModal', false)">取消操作</button>
+                <button id="btnConfirmSubmit" class="btn-success" onclick="submitUpdateOrderStatus()">确认变更</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/main.js"></script>
+</body>
+</html>
