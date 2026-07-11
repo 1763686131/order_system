@@ -17,7 +17,7 @@
         </div>
     </div>
 
-    <div id="mainSection" class="hidden" style="display: flex; flex-direction: column; flex: 1;">
+    <div id="mainSection" class="hidden main-section">
         <div class="top-nav">
             <div class="nav-left">
                 <h2>订单管理看板</h2>
@@ -36,20 +36,20 @@
             <div class="sidebar">
                 <div class="sidebar-section">
                     <h3>🚪 系统操作</h3>
-                    <button class="btn-danger" style="width: 100%;" onclick="handleLogout()">退出当前登录</button>
+                    <button class="btn-danger btn-full" onclick="handleLogout()">退出当前登录</button>
                 </div>
                 
                 <div id="sidebarAdminSection" class="sidebar-section hidden">
                     <h3>📝 快速发布新订单</h3>
-                    <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">订单类型参数:</label>
+                    <label for="newOrderType" class="field-label-sm">订单类型参数:</label>
                     <select id="newOrderType">
                         <option value="0" selected>中固订单</option>
                         <option value="1">绝缘订单</option>
                     </select>
 
-                    <label style="font-size:13px; color:#666; display:block; margin-bottom:4px;">货物长文本参数:</label>
+                    <label for="newOrderTitle" class="field-label-sm">货物长文本参数:</label>
                     <textarea id="newOrderTitle" placeholder="输入货物长文本参数或编号...\n支持按键盘回车直接换行"></textarea>
-                    <button class="btn-primary" style="width: 100%;" onclick="createOrder()">上传并发布</button>
+                    <button class="btn-primary btn-full" onclick="createOrder()">上传并发布</button>
                 </div>
             </div>
 
@@ -57,16 +57,18 @@
                 <div class="area-header">
                     <div id="listTitle" class="area-title">📋 订单看板列表</div>
                     <div class="filter-group">
-                        <label>状态过滤:</label>
+                        <label for="filterStatus">状态过滤:</label>
                         <select id="filterStatus" onchange="fetchOrders()">
                             <option value="pending" selected>未完成订单</option>
                             <option value="completed">已完成订单</option>
                         </select>
 
-                        <label style="margin-left:10px;">日期范围:</label>
-                        <input id="filterStartDate" type="date" onchange="fetchOrders()" />
+                        <label class="label-inline">日期范围:</label>
+                        <label for="filterStartDate" class="sr-only">开始日期</label>
+                        <input id="filterStartDate" type="date" placeholder="开始日期" onchange="fetchOrders()" />
                         <span>至</span>
-                        <input id="filterEndDate" type="date" onchange="fetchOrders()" />
+                        <label for="filterEndDate" class="sr-only">结束日期</label>
+                        <input id="filterEndDate" type="date" placeholder="结束日期" onchange="fetchOrders()" />
                     </div>
                 </div>
                 
@@ -83,15 +85,15 @@
             </div>
             <div class="modal-body">
                 <div class="form-item">
-                    <label>新账号 ID</label>
+                    <label for="newUsername">新账号 ID</label>
                     <input id="newUsername" placeholder="请输入数字或字母账号" />
                 </div>
                 <div class="form-item">
-                    <label>访问密码</label>
+                    <label for="newPassword">访问密码</label>
                     <input id="newPassword" type="text" placeholder="请输入密码" />
                 </div>
                 <div class="form-item">
-                    <label>角色权限分级</label>
+                    <label for="newRole">角色权限分级</label>
                     <select id="newRole">
                         <option value="operator">操作员 (仅看未完成)</option>
                         <option value="admin">管理员 (看全部+发单)</option>
@@ -106,7 +108,7 @@
     </div>
 
     <div id="viewUserModal" class="modal-mask hidden">
-        <div class="modal-box" style="max-width: 600px;">
+        <div class="modal-box modal-box-wide">
             <div class="modal-header">
                 <span>系统用户名单管理</span>
                 <span class="close-x" onclick="toggleModal('viewUserModal', false)">&times;</span>
@@ -128,19 +130,19 @@
             <div class="modal-body">
                 <input id="editOrderId" type="hidden" />
                 <div class="form-item">
-                    <label>订单类型参数</label>
+                    <label for="editOrderType">订单类型参数</label>
                     <select id="editOrderType">
                         <option value="0">中固订单</option>
                         <option value="1">绝缘订单</option>
                     </select>
                 </div>
                 <div class="form-item">
-                    <label>订单名称 / 货物长文本参数</label>
-                    <textarea id="editOrderTitle" style="height:100px; resize:vertical;"></textarea>
+                    <label for="editOrderTitle">订单名称 / 货物长文本参数</label>
+                    <textarea id="editOrderTitle" class="textarea-tall" placeholder="请输入订单名称或货物参数"></textarea>
                 </div>
                 <div class="form-item">
-                    <label>创建生成时间 (可手动微调)</label>
-                    <input id="editOrderDate" type="text" />
+                    <label for="editOrderDate">创建生成时间 (可手动微调)</label>
+                    <input id="editOrderDate" type="text" placeholder="YYYY-MM-DD HH:mm" />
                 </div>
             </div>
             <div class="modal-footer">
@@ -151,22 +153,22 @@
     </div>
 
     <div id="statusConfirmModal" class="modal-mask hidden">
-        <div class="modal-box" style="max-width: 420px;">
-            <div class="modal-header" style="background: #fafafa;">
+        <div class="modal-box modal-box-small">
+            <div class="modal-header modal-header-secondary">
                 <span>⚠️业务操作二次确认</span>
                 <span class="close-x" onclick="toggleModal('statusConfirmModal', false)">&times;</span>
             </div>
-            <div class="modal-body" style="padding: 20px;">
+            <div class="modal-body modal-body-compact">
                 <div id="confirmTipText" class="confirm-tip-text"></div>
                 <div id="confirmCardPreview" class="confirm-card-preview">
-                    <div style="display:flex; justify-content:space-between; font-size:11px; color:#8c8c8c; margin-bottom:6px; border-bottom:1px solid #eee; padding-bottom:4px;">
+                    <div class="confirm-preview-header">
                         <span id="previewCardType"></span>
                         <span id="previewCardDate"></span>
                     </div>
                     <div id="previewCardTitle"></div>
                 </div>
             </div>
-            <div class="modal-footer" style="background: #fafafa;">
+            <div class="modal-footer modal-footer-secondary">
                 <input id="confirmTargetId" type="hidden" />
                 <input id="confirmTargetStatus" type="hidden" />
                 <button class="btn-secondary" onclick="toggleModal('statusConfirmModal', false)">取消操作</button>
