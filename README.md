@@ -49,3 +49,79 @@ order_system/
 └── data/                     # 数据持久化存储层 (多文件分离)
     ├── users_db.json         # 独立的用户账户表数据库
     └── orders_db.json        # 独立的业务订单看板数据库
+
+```
+
+### 部署与维护指南
+💻 方案 A：Windows 本地电脑调试与运行
+确保本地电脑已安装并启动 Docker Desktop。
+
+进入 order_system/backend/ 目录，双击运行 run.bat。
+
+批处理脚本会自动清理旧镜像并执行秒构建。启动成功后，系统会自动调用默认浏览器弹出前端控制面板：http://localhost:7899。
+
+💾 方案 B：NAS (群晖 / 威联通 / 绿联 / 飞牛OS) 正式环境部署
+推荐使用 Docker Compose 方案进行图形化一键部署，不仅稳定，而且极其方便后期无缝修改维护：
+
+将整个 order_system 项目文件夹上传到 NAS 的 docker 共享目录下。
+
+打开 NAS 的 Docker 管理软件，选择新建 项目 (Project) 或 Compose 应用。
+
+粘贴并应用以下配置（注意核对你的 NAS 实际绝对存储路径）：
+
+```YAML
+version: '3'
+
+services:
+  order-board:
+    image: python:3.10-slim
+    container_name: nas_order_board
+    ports:
+      - "7899:7899"
+    volumes:
+      # 请将冒号前的路径修改为你 NAS 上对应的绝对实体路径
+      - /vol2/1000/Docker/order_system/backend:/app
+      - /vol2/1000/Docker/order_system/data:/app/data
+      - /vol2/1000/Docker/order_system/frontend:/app/frontend
+    working_dir: /app
+    # 🎯 强力矫正：注入中国北京本地东八区时区，确保发单与完成时戳精确一致
+    environment:
+      - TZ=Asia/Shanghai
+    command: sh -c "pip install flask flask-cors -i [https://pypi.tuna.tsinghua.edu.cn/simple](https://pypi.tuna.tsinghua.edu.cn/simple) && python app.py"
+    restart: always
+
+```
+
+### 🛠️ 后期开发维护与修改说明
+得益于系统的双向卷挂载设计，容器内的运行实体就是你 NAS 上的真实文件，后期维护非常简单：
+
+修改前端排版、调字号或改 JS 交互逻辑：
+
+直接用文本工具修改 NAS 里的 frontend/css/style.css 或 frontend/js/main.js。
+
+修改完后不需要重启 Docker 容器。直接去浏览器页面按 Ctrl + F5 强制刷新，全新的改动就会瞬间应用。
+
+修改后端接口逻辑 (app.py)：
+
+修改 NAS 里的 backend/app.py 并保存。
+
+修改完后，在 NAS Docker 界面找到 nas_order_board 容器，点击 “重启 (Restart)” 按钮，1秒内即可载入新代码。
+
+数据备份：
+
+定时备份 data/ 文件夹下的两个 JSON 文件即可。即使升级或删除 Docker 容器，历史订单和账号密码也绝对安全。
+
+### 🔒 初始系统安全策略凭证
+系统首次运行时，如果检测到没有数据文件，会自动执行“无中生有”机制生成干净的原始超管及测试账号：
+
+初始超级管理员：
+
+账号 ID：1
+
+初始密码：123456
+
+初始默认操作员：
+
+账号 ID：op01
+
+初始密码：123
