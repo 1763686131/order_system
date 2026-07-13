@@ -215,8 +215,17 @@ def edit_material_record(record_id):
     write_materials(mat_data)
     return jsonify({"success": True})
 
+# 🎯 🆕 新增：删除物料记录流水的独立后端接口
+@app.route('/api/materials/<int:record_id>', methods=['DELETE'])
+def delete_material_record(record_id):
+    if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
+    mat_data = read_materials()
+    mat_data['records'] = [x for x in mat_data.get('records', []) if x['id'] != record_id]
+    write_materials(mat_data)
+    return jsonify({"success": True})
 
-# 🎯 核心调整：万能文件路由必须放置在最底部，避免拦截 API 接口请求
+
+# 🎯 文件万能通配拦截器已死死锁定在【最底部】，彻底解除与 API 请求抢道导致的 500 卡死
 @app.route('/<path:path>')
 def send_static_files(path): 
     return send_from_directory(FRONTEND_DIR, path)

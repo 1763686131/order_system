@@ -28,9 +28,8 @@
             </div>
             <div class="nav-right">
                 <button id="btnSwitchPanel" class="btn-info" onclick="switchDashboardView()">📊 查看原材料数据</button>
-                <button id="btnNavCreateOrder" class="btn-primary hidden" onclick="toggleModal('createOrderModal', true)">📝 发布新订单</button>
+                <button id="btnNavCreateOrder" class="btn-success hidden" onclick="toggleModal('createOrderModal', true)">📝 发布新订单</button>
                 <button id="btnNavUploadMaterial" class="btn-success" onclick="openUploadMaterialModal()">✍️ 录入原材料</button>
-                
                 <button id="btnOpenAddUser" class="btn-success hidden" onclick="toggleModal('addUserModal', true)">➕ 添加用户</button>
                 <button id="btnOpenViewUser" class="btn-primary hidden" onclick="openViewUserModal()">👥 查看/管理用户</button>
                 <button class="btn-danger" onclick="handleLogout()">退出登录</button>
@@ -40,7 +39,10 @@
         <div class="main-wrapper">
             <div class="content-area">
                 <div class="area-header">
-                    <div id="listTitle" class="area-title">📋 订单看板列表</div>
+                    <div class="title-flex-box">
+                        <div id="listTitle" class="area-title">📋 订单看板列表</div>
+                        <button id="btnTitleViewSwitch" class="btn-info" style="padding:4px 12px; font-size:12px; border-radius:20px;" onclick="switchDashboardView()">📊 查看原材料数据</button>
+                    </div>
                     <div class="filter-group">
                         <span id="statusFilterLabel">状态过滤:</span>
                         <select id="filterStatus" onchange="fetchOrders()">
@@ -62,12 +64,13 @@
                         <div class="total-stock-box">
                             <span style="font-weight:600; font-size:14px;">🏭 工厂总原材料储备：</span>
                             <strong id="displayTotalStock" style="color: #1890ff; font-size:16px;">5000 kg</strong>
-                            <button id="btnEditStockAction" class="btn-warning hidden" style="padding: 4px 12px; font-size:11px; margin-left:8px; border-radius:12px;" onclick="triggerStockModifyModal()">✍️ 修改总储备</button>
+                            <button id="btnEditStockAction" class="btn-danger hidden" style="padding: 4px 12px; font-size:12px; margin-left:8px; border-radius:12px;" onclick="triggerStockModifyModal()">✍️ 修改总储备</button>
                         </div>
                         <div id="remainedMaterialCapsule" class="remained-capsule-fixed">剩余原材料：5000 kg</div>
                     </div>
                     <div id="materialCapsuleList" style="display:flex; flex-direction:column; gap:12px;"></div>
                 </div>
+
             </div>
         </div>
     </div>
@@ -130,13 +133,13 @@
                     </select>
                 </div>
                 <div class="form-item">
-                    <label for="newOrderTitle">货物长文本参数或编号 (支持触屏回车):</label>
-                    <textarea id="newOrderTitle" style="height:120px;" placeholder="请输入规格参数、地址、桶数配比..."></textarea>
+                    <label for="newOrderTitle">货物长文本参数或编号 (支持大字回车换行):</label>
+                    <textarea id="newOrderTitle" style="height:140px;" placeholder="请输入规格参数、货运地址、桶数比例等..."></textarea>
                 </div>
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="toggleModal('createOrderModal', false)">取消</button>
-                <button class="btn-primary" onclick="createOrder()">上传并发布订单</button>
+                <button class="btn-success" onclick="createOrder()">上传并发布订单</button>
             </div>
         </div>
     </div>
@@ -167,7 +170,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="toggleModal('editOrderModal', false)">取消</button>
-                <button class="btn-warning" onclick="submitEditOrder()">确认修改</button>
+                <button class="btn-danger" onclick="submitEditOrder()">确认修改</button>
             </div>
         </div>
     </div>
@@ -206,12 +209,12 @@
             <div class="modal-body" style="display: flex; gap: 15px; padding: 20px;">
                 <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
                     <div class="form-item">
-                        <label for="materialInputUse" style="font-weight:bold; color:#f5222d;">今日消耗原材料 (kg):</label>
-                        <input id="materialInputUse" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#91d5ff;" />
+                        <label for="materialInputUse" style="font-weight:bold; color:#ff4d4f;">今日消耗原材料 (kg):</label>
+                        <input id="materialInputUse" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#1890ff;" />
                     </div>
                     <div class="form-item">
                         <label for="materialInputProduct" style="font-weight:bold; color:#52c41a;">出货成品总数量 (kg):</label>
-                        <input id="materialInputProduct" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputProduct')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#b7eb8f;" />
+                        <input id="materialInputProduct" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputProduct')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#52c41a;" />
                     </div>
                 </div>
 
@@ -228,7 +231,7 @@
                     <button class="key-btn" onclick="pressKey('.')">.</button>
                     <button class="key-btn" onclick="pressKey('0')">0</button>
                     <button class="key-btn key-backspace" onclick="pressKey('backspace')">←</button>
-                    <button class="key-btn key-clear" onclick="pressKey('clear')" style="grid-column: span 3; font-size:13px; height: 35px; background:#bfbf8c;">清空重输</button>
+                    <button class="key-btn key-clear" onclick="pressKey('clear')" style="grid-column: span 3; font-size:13px; height: 35px; background:#bfbf8c; color:#fff;">清空重输</button>
                 </div>
             </div>
             <div class="modal-footer" style="background:#f6ffed;">
@@ -241,7 +244,7 @@
     <div id="editMaterialModal" class="modal-mask hidden">
         <div class="modal-box modal-box-small">
             <div class="modal-header">
-                <span>✍️ 修改物料记录</span>
+                <span>✍️ 修改物料流水明细记录</span>
                 <span class="close-x" onclick="toggleModal('editMaterialModal', false)">&times;</span>
             </div>
             <div class="modal-body">
@@ -257,7 +260,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="toggleModal('editMaterialModal', false)">取消</button>
-                <button class="btn-warning" onclick="submitEditMaterial()">确认重组数据</button>
+                <button class="btn-danger" onclick="submitEditMaterial()">确认重组数据</button>
             </div>
         </div>
     </div>
@@ -271,7 +274,7 @@
             <div class="modal-body">
                 <div class="form-item">
                     <label for="newStockInput">调整后的总储备量 (kg):</label>
-                    <input id="newStockInput" type="number" step="any" placeholder="默认值为 5000" />
+                    <input id="newStockInput" type="number" step="any" placeholder="当前设定默认值为5000" />
                 </div>
             </div>
             <div class="modal-footer">
@@ -287,11 +290,10 @@
                 <div style="font-size: 40px; margin-bottom: 10px;">✅</div>
                 <h3 style="color: #52c41a; font-size: 18px; margin-bottom: 8px;">物料数据上传成功</h3>
                 <p style="color: #666; font-size: 13px; line-height: 1.6; white-space: pre-line;" id="successNotifyDetail"></p>
-                <button class="btn-success" style="margin-top: 20px; padding: 6px 30px; border-radius: 20px warm;" onclick="toggleModal('uploadSuccessNotifyModal', false)">我已知晓</button>
+                <button class="btn-success" style="margin-top: 20px; padding: 6px 30px; border-radius: 20px;" onclick="toggleModal('uploadSuccessNotifyModal', false)">我已知晓</button>
             </div>
         </div>
     </div>
 
-    <script src="js/main.js"></script>
 </body>
 </html>

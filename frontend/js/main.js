@@ -62,7 +62,8 @@ function pressKey(key) {
 }
 
 function switchDashboardView() {
-    const btn = document.getElementById('btnSwitchPanel');
+    const btnNav = document.getElementById('btnSwitchPanel');
+    const btnTitle = document.getElementById('btnTitleViewSwitch');
     const orderGrid = document.getElementById('orderGrid');
     const materialWrapper = document.getElementById('materialViewWrapper');
     const filterStatus = document.getElementById('filterStatus');
@@ -71,7 +72,8 @@ function switchDashboardView() {
 
     if (currentDashboardMode === 'order') {
         currentDashboardMode = 'material';
-        btn.innerText = '📋 查看业务订单';
+        btnNav.innerText = '📋 查看业务订单';
+        btnTitle.innerText = '📋 查看业务订单';
         listTitle.innerText = '🏭 原材料数据列表';
         orderGrid.classList.add('hidden');
         materialWrapper.classList.remove('hidden');
@@ -80,7 +82,8 @@ function switchDashboardView() {
         fetchMaterialRecords();
     } else {
         currentDashboardMode = 'order';
-        btn.innerText = '📊 查看原材料数据';
+        btnNav.innerText = '📊 查看原材料数据';
+        btnTitle.innerText = '📊 查看原材料数据';
         listTitle.innerText = '📋 订单看板列表';
         orderGrid.classList.remove('hidden');
         materialWrapper.classList.add('hidden');
@@ -302,11 +305,13 @@ async function fetchMaterialRecords() {
             const row = document.createElement('div');
             row.className = 'material-capsule-item';
 
+            // 🎯 新增：只有具备管理岗位(超管、普通管理)的人才可以修改和物理清除流水数据
             let actionHtml = '';
             if (currentUser.role === 'super_admin' || currentUser.role === 'admin') {
                 actionHtml = `
                     <div class="capsule-right">
-                        <button class="btn-warning" onclick="openEditMaterialModal(${item.id}, ${item.used}, ${item.produced})">✍️ 修改</button>
+                        <button class="btn-primary" onclick="openEditMaterialModal(${item.id}, ${item.used}, ${item.produced})">✍️ 修改</button>
+                        <button class="btn-danger" onclick="deleteMaterialRecord(${item.id})">🗑️ 删除</button>
                     </div>
                 `;
             }
@@ -400,6 +405,15 @@ async function submitEditMaterial() {
             fetchMaterialRecords();
         }
     } catch (e) { alert('修改流水失败'); }
+}
+
+// 🎯 新增：删除物料记录流水核心客户端驱动
+async function deleteMaterialRecord(id) {
+    if (!confirm(`确定要物理【删除】单号为 #${id} 的原材料流水记录吗？`)) return;
+    try {
+        const response = await fetch(`${API_BASE}/materials/${id}`, { method: 'DELETE', headers: getHeaders() });
+        if (response.ok) fetchMaterialRecords();
+    } catch (e) { alert('删除流水条目异常'); }
 }
 
 function refreshMaterialViewAfterAction() {
@@ -567,6 +581,7 @@ window.onload = function() {
         initFilterDates();
         fetchOrders();
         
+        // 🎯 核心写回：3秒全自动高并发高可用看板轮询刷新
         setInterval(function() {
             refreshDashboardData();
             if (!document.getElementById('viewUserModal').classList.contains('hidden')) refreshUserList();
