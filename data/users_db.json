@@ -1,11 +1,11 @@
 [
     {
         "username": "1",
-        "password": "123456",
+        "password": "741200",
         "role": "super_admin"
     },
     {
-        "username": "op01",
+        "username": "2",
         "password": "123",
         "role": "operator"
     },

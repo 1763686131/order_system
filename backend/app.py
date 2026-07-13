@@ -25,7 +25,7 @@ FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
     if not os.path.exists(USERS_FILE):
-        d = [{"username": "1", "password": "123456", "role": "super_admin"}, {"username": "op01", "password": "123", "role": "operator"}]
+        d = [{"username": "1", "password": "741200", "role": "super_admin"}, {"username": "2", "password": "123456", "role": "operator"}]
         write_users(d)
         return d
     with open(USERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
