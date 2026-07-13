@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>本地订单管理看板 - 工业高精版</title>
+    <title>本地订单管理看板 - 生产物料综合版</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -27,6 +27,8 @@
                 </div>
             </div>
             <div class="nav-right">
+                <button id="btnSwitchPanel" class="btn-info" onclick="switchDashboardView()">📊 查看原材料数据</button>
+                <button class="btn-danger" onclick="handleLogout()">退出登录</button>
                 <button id="btnOpenAddUser" class="btn-success hidden" onclick="toggleModal('addUserModal', true)">➕ 添加用户</button>
                 <button id="btnOpenViewUser" class="btn-primary hidden" onclick="openViewUserModal()">👥 查看/管理用户</button>
             </div>
@@ -34,11 +36,6 @@
 
         <div class="main-wrapper">
             <div class="sidebar">
-                <div class="sidebar-section">
-                    <h3>🚪 系统操作</h3>
-                    <button class="btn-danger btn-full" onclick="handleLogout()">退出当前登录</button>
-                </div>
-                
                 <div id="sidebarAdminSection" class="sidebar-section hidden">
                     <h3>📝 快速发布新订单</h3>
                     <label for="newOrderType" class="field-label-sm">订单类型参数:</label>
@@ -48,8 +45,19 @@
                     </select>
 
                     <label for="newOrderTitle" class="field-label-sm">货物长文本参数:</label>
-                    <textarea id="newOrderTitle" placeholder="输入货物长文本参数或编号...\n支持按键盘回车直接换行"></textarea>
+                    <textarea id="newOrderTitle" placeholder="输入货物长文本参数或编号..."></textarea>
                     <button class="btn-primary btn-full" onclick="createOrder()">上传并发布</button>
+                </div>
+                
+                <div id="sidebarMaterialSection" class="sidebar-section">
+                    <h3>✍️ 用户输入 - 原材料使用</h3>
+                    <label for="materialInputUse" class="field-label-sm">今日原材料消耗量 (kg):</label>
+                    <input id="materialInputUse" inputmode="decimal" pattern="[0-9.]*" placeholder="输入消耗重量..." oninput="this.value=this.value.replace(/[^0-9.]/g,'')" />
+                    
+                    <label for="materialInputProduct" class="field-label-sm">出货成品总数量 (kg):</label>
+                    <input id="materialInputProduct" inputmode="decimal" pattern="[0-9.]*" placeholder="输入成品重量..." oninput="this.value=this.value.replace(/[^0-9.]/g,'')" />
+                    
+                    <button class="btn-success btn-full" onclick="uploadMaterialRecord()">上传物料数据</button>
                 </div>
             </div>
 
@@ -57,22 +65,32 @@
                 <div class="area-header">
                     <div id="listTitle" class="area-title">📋 订单看板列表</div>
                     <div class="filter-group">
-                        <label for="filterStatus">状态过滤:</label>
+                        <span id="statusFilterLabel">状态过滤:</span>
                         <select id="filterStatus" onchange="fetchOrders()">
                             <option value="pending" selected>未完成订单</option>
                             <option value="completed">已完成订单</option>
                         </select>
 
                         <label class="label-inline">日期范围:</label>
-                        <label for="filterStartDate" class="sr-only">开始日期</label>
-                        <input id="filterStartDate" type="date" placeholder="开始日期" onchange="fetchOrders()" />
+                        <input id="filterStartDate" type="date" onchange="refreshDashboardData()" />
                         <span>至</span>
-                        <label for="filterEndDate" class="sr-only">结束日期</label>
-                        <input id="filterEndDate" type="date" placeholder="结束日期" onchange="fetchOrders()" />
+                        <input id="filterEndDate" type="date" onchange="refreshDashboardData()" />
                     </div>
                 </div>
                 
                 <div id="orderGrid" class="grid-container"></div>
+
+                <div id="materialViewWrapper" class="material-container hidden">
+                    <div class="material-top-bar">
+                        <div class="total-stock-box" id="totalStockSettingBox">
+                            <label for="totalMaterialStock" style="font-weight:600; font-size:14px;">🏭 工厂总原材料储备 (kg):</label>
+                            <input id="totalMaterialStock" inputmode="decimal" pattern="[0-9.]*" onchange="updateTotalStockValue()" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" />
+                        </div>
+                        <div id="remainedMaterialCapsule" class="remained-capsule-fixed">剩余原材料：0 kg</div>
+                    </div>
+                    <div id="materialCapsuleList" style="display:flex; flex-direction:column; gap:12px;"></div>
+                </div>
+
             </div>
         </div>
     </div>
@@ -126,7 +144,6 @@
                 <span>✍️ 修改订单信息 (超级管理员权限)</span>
                 <span class="close-x" onclick="toggleModal('editOrderModal', false)">&times;</span>
             </div>
-
             <div class="modal-body">
                 <input id="editOrderId" type="hidden" />
                 <div class="form-item">
@@ -138,11 +155,11 @@
                 </div>
                 <div class="form-item">
                     <label for="editOrderTitle">订单名称 / 货物长文本参数</label>
-                    <textarea id="editOrderTitle" class="textarea-tall" placeholder="请输入订单名称或货物参数"></textarea>
+                    <textarea id="editOrderTitle" class="textarea-tall"></textarea>
                 </div>
                 <div class="form-item">
-                    <label for="editOrderDate">创建生成时间 (可手动微调)</label>
-                    <input id="editOrderDate" type="text" placeholder="YYYY-MM-DD HH:mm" />
+                    <label for="editOrderDate">创建生成时间</label>
+                    <input id="editOrderDate" type="text" />
                 </div>
             </div>
             <div class="modal-footer">
@@ -155,7 +172,7 @@
     <div id="statusConfirmModal" class="modal-mask hidden">
         <div class="modal-box modal-box-small">
             <div class="modal-header modal-header-secondary">
-                <span>⚠️业务操作二次确认</span>
+                <span>⚠️ 业务操作二次确认</span>
                 <span class="close-x" onclick="toggleModal('statusConfirmModal', false)">&times;</span>
             </div>
             <div class="modal-body modal-body-compact">
@@ -177,6 +194,30 @@
         </div>
     </div>
 
-    <script src="/js/main.js"></script>
+    <div id="editMaterialModal" class="modal-mask hidden">
+        <div class="modal-box modal-box-small">
+            <div class="modal-header">
+                <span>✍️ 修改物料流水记录 (管理岗位专享)</span>
+                <span class="close-x" onclick="toggleModal('editMaterialModal', false)">&times;</span>
+            </div>
+            <div class="modal-body">
+                <input id="editMaterialId" type="hidden" />
+                <div class="form-item">
+                    <label for="editMaterialUse">原材料使用量 (kg):</label>
+                    <input id="editMaterialUse" inputmode="decimal" pattern="[0-9.]*" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" />
+                </div>
+                <div class="form-item">
+                    <label for="editMaterialProduct">成品产出量 (kg):</label>
+                    <input id="editMaterialProduct" inputmode="decimal" pattern="[0-9.]*" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="toggleModal('editMaterialModal', false)">取消</button>
+                <button class="btn-warning" onclick="submitEditMaterial()">确认重组数据</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/main.js"></script>
 </body>
 </html>

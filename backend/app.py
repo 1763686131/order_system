@@ -7,12 +7,11 @@ from datetime import datetime
 from threading import Timer
 
 app = Flask(__name__)
-
-# 允许前端传输自定义的身份 Headers
 CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type", "Username", "Role"]}})
 
 USERS_FILE = '/app/data/users_db.json'
 ORDERS_FILE = '/app/data/orders_db.json'
+MATERIALS_FILE = '/app/data/material_db.json' # 🎯 🆕 新建库文件路径
 
 if os.path.exists('/app/frontend/index.html'):
     FRONTEND_DIR = '/app/frontend'
@@ -22,67 +21,57 @@ else:
 
 FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
 
-
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
     if not os.path.exists(USERS_FILE):
-        default_users = [
-            {"username": "1", "password": "123456", "role": "super_admin"},
-            {"username": "op01", "password": "123", "role": "operator"}
-        ]
-        write_users(default_users)
-        return default_users
-    with open(USERS_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        d = [{"username": "1", "password": "123456", "role": "super_admin"}, {"username": "op01", "password": "123", "role": "operator"}]
+        write_users(d)
+        return d
+    with open(USERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
 
 def write_users(data):
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
-
+    with open(USERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
 def read_orders():
     os.makedirs(os.path.dirname(ORDERS_FILE), exist_ok=True)
     if not os.path.exists(ORDERS_FILE):
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M')
-        default_orders = {
-            "orders": [
-                {"id": 1, "title": "测试中固大箱参数", "status": "pending", "type": 0, "date": current_time, "completed_date": ""},
-                {"id": 2, "title": "测试绝缘垫片长文本", "status": "completed", "type": 1, "date": current_time, "completed_date": current_time}
-            ]
-        }
-        write_orders(default_orders)
-        return default_orders
-    with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        ct = datetime.now().strftime('%Y-%m-%d %H:%M')
+        d = {"orders": [{"id": 1, "title": "测试中固大箱参数", "status": "pending", "type": 0, "date": ct, "completed_date": ""}]}
+        write_orders(d)
+        return d
+    with open(ORDERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
 
 def write_orders(data):
-    with open(ORDERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, ensure_ascii=False, indent=4)
+    with open(ORDERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+
+# 🎯 🆕 读写原材料独立数据表
+def read_materials():
+    os.makedirs(os.path.dirname(MATERIALS_FILE), exist_ok=True)
+    if not os.path.exists(MATERIALS_FILE):
+        d = {"total_stock": 10000.0, "records": []}
+        write_materials(d)
+        return d
+    with open(MATERIALS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+
+def write_materials(data):
+    with open(MATERIALS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
 
-# --- 🎯 终极修复：改用 Flask 官方高规格安全分发函数，彻底解决 Linux 图标引起的闪退重启 ---
 @app.route('/<path:path>')
-def send_static_files(path):
-    # 自动安全分发静态文件，自动处理二进制流，避免死锁
-    return send_from_directory(FRONTEND_DIR, path)
-
+def send_static_files(path): return send_from_directory(FRONTEND_DIR, path)
 
 @app.route('/', methods=['GET'])
 def index():
-    if os.path.exists(FRONTEND_PATH):
-        return send_from_directory(FRONTEND_DIR, 'index.html')
-    return f"<h3>错误：未找到前端网页！</h3>", 404
-
+    if os.path.exists(FRONTEND_PATH): return send_from_directory(FRONTEND_DIR, 'index.html')
+    return "<h3>错误：未找到前端网页！</h3>", 404
 
 @app.route('/api/login', methods=['POST'])
 def login():
     req_data = request.json
-    username = str(req_data.get('username', '')).strip()
-    password = str(req_data.get('password', '')).strip()
+    u, p = str(req_data.get('username', '')).strip(), str(req_data.get('password', '')).strip()
     users = read_users()
-    user = next((u for u in users if u['username'] == username and u['password'] == password), None)
-    if user:
-        return jsonify({"success": True, "user": {"username": user['username'], "role": user['role']}})
+    user = next((x for x in users if x['username'] == u and x['password'] == p), None)
+    if user: return jsonify({"success": True, "user": {"username": user['username'], "role": user['role']}})
     return jsonify({"success": False, "message": "账号或密码错误"}), 401
 
 
@@ -96,25 +85,21 @@ def get_all_users():
 def add_user():
     if request.headers.get('Role') != 'super_admin': return jsonify({"message": "越权"}), 403
     req_data = request.json
-    new_username = str(req_data.get('username', '')).strip()
-    new_password = str(req_data.get('password', '')).strip()
-    new_role = req_data.get('role', 'operator')
-    if not new_username or not new_password: return jsonify({"message": "为空"}), 400
+    nu, np, nr = str(req_data.get('username', '')).strip(), str(req_data.get('password', '')).strip(), req_data.get('role', 'operator')
+    if not nu or not np: return jsonify({"message": "为空"}), 400
     users = read_users()
-    if any(u['username'] == new_username for u in users): return jsonify({"message": "存在"}), 400
-    users.append({"username": new_username, "password": new_password, "role": new_role})
+    if any(x['username'] == nu for x in users): return jsonify({"message": "存在"}), 400
+    users.append({"username": nu, "password": np, "role": nr})
     write_users(users)
     return jsonify({"success": True})
 
 @app.route('/api/users/<string:username>/password', methods=['PUT'])
 def change_user_password(username):
     if request.headers.get('Role') != 'super_admin': return jsonify({"message": "越权"}), 403
-    req_data = request.json
+    p = str(request.json.get('password')).strip()
     users = read_users()
-    for u in users:
-        if u['username'] == username:
-            u['password'] = str(req_data.get('password')).strip()
-            break
+    for x in users:
+        if x['username'] == username: x['password'] = p; break
     write_users(users)
     return jsonify({"success": True})
 
@@ -123,60 +108,42 @@ def delete_user(username):
     if request.headers.get('Role') != 'super_admin': return jsonify({"message": "越权"}), 403
     if username == '1': return jsonify({"message": "保护"}), 400
     users = read_users()
-    users = [u for u in users if u['username'] != username]
+    users = [x for x in users if x['username'] != username]
     write_users(users)
     return jsonify({"success": True})
 
 
 # --- 📋 订单核心接口 ---
 @app.route('/api/orders', methods=['GET'])
-def get_orders():
-    return jsonify(read_orders().get('orders', []))
-
+def get_orders(): return jsonify(read_orders().get('orders', []))
 
 @app.route('/api/orders', methods=['POST'])
 def add_order():
-    username = request.headers.get('Username')
-    role = request.headers.get('Role', 'operator')
-    if str(username) == "1" or role in ['super_admin', 'admin']:
-        req_data = request.json
-        orders_data = read_orders()
-        orders_list = orders_data.get('orders', [])
-        current_time = datetime.now().strftime('%Y-%m-%d %H:%M')
-        new_id = max([o['id'] for o in orders_list], default=0) + 1
-        new_order = {
-            "id": new_id, 
-            "title": req_data.get('title'), 
-            "status": "pending",
-            "type": req_data.get('type', 0),  
-            "date": current_time,
-            "completed_date": ""  
-        }
-        orders_list.append(new_order)
-        orders_data['orders'] = orders_list
-        write_orders(orders_data)
-        return jsonify({"success": True, "data": new_order})
-    return jsonify({"success": False, "message": "权限不足"}), 403
-
+    if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
+    req_data = request.json
+    orders_data = read_orders()
+    orders_list = orders_data.get('orders', [])
+    ct = datetime.now().strftime('%Y-%m-%d %H:%M')
+    new_id = max([x['id'] for x in orders_list], default=0) + 1
+    new_order = {"id": new_id, "title": req_data.get('title'), "status": "pending", "type": req_data.get('type', 0), "date": ct, "completed_date": ""}
+    orders_list.append(new_order)
+    orders_data['orders'] = orders_list
+    write_orders(orders_data)
+    return jsonify({"success": True, "data": new_order})
 
 @app.route('/api/orders/<int:order_id>', methods=['PUT'])
 def update_order(order_id):
-    req_data = request.json
-    new_status = req_data.get('status')
+    ns = request.json.get('status')
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
-    for order in orders_list:
-        if order['id'] == order_id:
-            order['status'] = new_status
-            if new_status == 'completed':
-                order['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
-            else:
-                order['completed_date'] = ""
+    for x in orders_list:
+        if x['id'] == order_id:
+            x['status'] = ns
+            x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M') if ns == 'completed' else ""
             break
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True})
-
 
 @app.route('/api/orders/<int:order_id>/edit', methods=['PUT'])
 def edit_order_content(order_id):
@@ -184,31 +151,78 @@ def edit_order_content(order_id):
     req_data = request.json
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
-    for order in orders_list:
-        if order['id'] == order_id:
-            order['title'] = req_data.get('title')
-            order['type'] = req_data.get('type', 0)
-            order['date'] = req_data.get('date')
+    for x in orders_list:
+        if x['id'] == order_id:
+            x['title'] = req_data.get('title')
+            x['type'] = req_data.get('type', 0)
+            x['date'] = req_data.get('date')
             break
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True})
 
-
 @app.route('/api/orders/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
     if request.headers.get('Role') != 'super_admin': return jsonify({"message": "越权"}), 403
     orders_data = read_orders()
-    orders_list = orders_data.get('orders', [])
-    orders_list = [o for o in orders_list if o['id'] != order_id]
-    orders_data['orders'] = orders_list
+    orders_data['orders'] = [x for x in orders_data.get('orders', []) if x['id'] != order_id]
     write_orders(orders_data)
     return jsonify({"success": True})
 
 
+# --- 🎯 🆕 原材料高精持久化接口组 ---
+
+# 1. 查物料全量表
+@app.route('/api/materials', methods=['GET'])
+def get_materials():
+    return jsonify(read_materials())
+
+# 2. 增物料流水条目 (所有人均可上传，自动追加精确到时分的时间戳)
+@app.route('/api/materials', methods=['POST'])
+def add_material_record():
+    req_data = request.json
+    mat_data = read_materials()
+    records_list = mat_data.get('records', [])
+    ct = datetime.now().strftime('%Y-%m-%d %H:%M')
+    new_id = max([x['id'] for x in records_list], default=0) + 1
+    new_record = {
+        "id": new_id,
+        "used": float(req_data.get('used', 0)),
+        "produced": float(req_data.get('produced', 0)),
+        "date": ct
+    }
+    records_list.append(new_record)
+    mat_data['records'] = records_list
+    write_materials(mat_data)
+    return jsonify({"success": True})
+
+# 3. 改总物料库存储备量 (仅管理层能修改)
+@app.route('/api/materials/stock', methods=['PUT'])
+def update_total_stock():
+    if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
+    req_data = request.json
+    mat_data = read_materials()
+    mat_data['total_stock'] = float(req_data.get('total_stock', 0))
+    write_materials(mat_data)
+    return jsonify({"success": True})
+
+# 4. 改特定流水记录明细 (仅管理层能修改)
+@app.route('/api/materials/<int:record_id>', methods=['PUT'])
+def edit_material_record(record_id):
+    if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
+    req_data = request.json
+    mat_data = read_materials()
+    for x in mat_data.get('records', []):
+        if x['id'] == record_id:
+            x['used'] = float(req_data.get('used', 0))
+            x['produced'] = float(req_data.get('produced', 0))
+            break
+    write_materials(mat_data)
+    return jsonify({"success": True})
+
+
 def open_browser():
-    if not os.path.exists('/app/frontend/index.html'):
-        webbrowser.open("http://localhost:7899")
+    if not os.path.exists('/app/frontend/index.html'): webbrowser.open("http://localhost:7899")
 
 if __name__ == '__main__':
     Timer(1.5, open_browser).start()
