@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>本地订单管理看板 - 工业触屏完全体</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
@@ -13,7 +13,7 @@
             <h2>系统登录</h2>
             <input id="loginUsername" placeholder="请输入账号ID" />
             <input id="loginPassword" type="password" placeholder="请输入密码" />
-            <button class="btn-primary" onclick="handleLogin()">登录</button>
+            <button class="btn-primary" onclick="handleLogin()" style="width: 100%;">登录</button>
         </div>
     </div>
 
@@ -26,11 +26,12 @@
                     <span id="currentUserRoleTag" class="user-tag"></span>
                 </div>
             </div>
-            <div class="nav-right">
-                <button id="btnNavCreateOrder" class="btn-success hidden" onclick="toggleModal('createOrderModal', true)">📝 发布新订单</button>
-                <button id="btnNavUploadMaterial" class="btn-success" onclick="openUploadMaterialModal()">✍️ 录入原材料</button>
-                <button id="btnOpenAddUser" class="btn-success hidden" onclick="toggleModal('addUserModal', true)">➕ 添加用户</button>
-                <button id="btnOpenViewUser" class="btn-primary hidden" onclick="openViewUserModal()">👥 查看/管理用户</button>
+            <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰ 展开菜单</button>
+            <div class="nav-right" id="navRightMenu">
+                <button id="btnNavCreateOrder" class="btn-success hidden" onclick="toggleModal('createOrderModal', true); closeMobileMenu();">📝 发布新订单</button>
+                <button id="btnNavUploadMaterial" class="btn-success" onclick="openUploadMaterialModal(); closeMobileMenu();">✍️ 录入原材料</button>
+                <button id="btnOpenAddUser" class="btn-success hidden" onclick="toggleModal('addUserModal', true); closeMobileMenu();">➕ 添加用户</button>
+                <button id="btnOpenViewUser" class="btn-primary hidden" onclick="openViewUserModal(); closeMobileMenu();">👥 查看/管理用户</button>
                 <button class="btn-danger" onclick="handleLogout()">退出登录</button>
             </div>
         </div>
@@ -43,13 +44,13 @@
                         <button id="btnTitleViewSwitch" class="btn-info" style="padding:4px 12px; font-size:12px; border-radius:20px;" onclick="switchDashboardView()">📊 查看原材料数据</button>
                     </div>
                     <div class="filter-group">
-                        <span id="statusFilterLabel">状态过滤:</span>
+                        <span id="statusFilterLabel">状态:</span>
                         <select id="filterStatus" onchange="fetchOrders()">
                             <option value="pending" selected>未完成订单</option>
                             <option value="completed">已完成订单</option>
                         </select>
 
-                        <label class="label-inline">日期范围:</label>
+                        <label class="label-inline">日期:</label>
                         <input id="filterStartDate" type="date" onchange="refreshDashboardData()" />
                         <span>至</span>
                         <input id="filterEndDate" type="date" onchange="refreshDashboardData()" />
@@ -205,8 +206,8 @@
                 <span style="color:#67C23A; font-weight:bold;">✍️ 原材料数据录入</span>
                 <span class="close-x" onclick="toggleModal('uploadMaterialModal', false)">&times;</span>
             </div>
-            <div class="modal-body" style="display: flex; gap: 15px; padding: 20px;">
-                <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
+            <div class="modal-body upload-modal-body">
+                <div class="upload-inputs-area">
                     <div class="form-item">
                         <label for="materialInputUse" style="font-weight:bold; color:#F56C6C;">今日消耗原材料 (kg):</label>
                         <input id="materialInputUse" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#409EFF;" />
@@ -235,7 +236,7 @@
             </div>
             <div class="modal-footer" style="background:#f0f9eb;">
                 <button class="btn-secondary" onclick="toggleModal('uploadMaterialModal', false)">取消</button>
-                <button class="btn-success" onclick="uploadMaterialRecord()" style="padding:8px 24px;">确认上传数据</button>
+                <button class="btn-success" onclick="uploadMaterialRecord()" style="padding:8px 24px;">确认上传</button>
             </div>
         </div>
     </div>
@@ -243,7 +244,7 @@
     <div id="editMaterialModal" class="modal-mask hidden">
         <div class="modal-box modal-box-small">
             <div class="modal-header">
-                <span>✍️ 修改物料流水明细记录</span>
+                <span>✍️ 修改物料流水明细</span>
                 <span class="close-x" onclick="toggleModal('editMaterialModal', false)">&times;</span>
             </div>
             <div class="modal-body">
@@ -263,7 +264,7 @@
             </div>
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="toggleModal('editMaterialModal', false)">取消</button>
-                <button class="btn-danger" onclick="submitEditMaterial()">确认修改数据</button>
+                <button class="btn-danger" onclick="submitEditMaterial()">确认修改</button>
             </div>
         </div>
     </div>

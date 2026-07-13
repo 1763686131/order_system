@@ -16,10 +16,10 @@ button { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; f
 button:hover { opacity: 0.85; transform: translateY(-1px); }
 button:active { transform: translateY(0); }
 
-.btn-primary, .btn-info { background-color: #409EFF; color: #ffffff; } /* 🔵 蓝色 */
-.btn-success { background-color: #67C23A; color: #ffffff; }             /* 🟢 绿色 */
-.btn-danger, .btn-warning { background-color: #F56C6C; color: #ffffff; } /* 🚨 🔴 红色 */
-.btn-secondary { background-color: #409EFF; color: #ffffff; }           
+.btn-primary, .btn-info { background-color: #409EFF !important; color: #ffffff; } 
+.btn-success { background-color: #67C23A !important; color: #ffffff; }             
+.btn-danger, .btn-warning { background-color: #F56C6C !important; color: #ffffff; } 
+.btn-secondary { background-color: #409EFF !important; color: #ffffff; }           
 
 /* 主大区框架布局 */
 .main-section { display: flex; flex-direction: column; flex: 1; }
@@ -60,7 +60,6 @@ button:active { transform: translateY(0); }
 .total-stock-box { display: flex; align-items: center; gap: 6px; font-weight: bold; }
 .remained-capsule-fixed { background-color: #F56C6C; color: #ffffff; padding: 8px 18px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 6px rgba(245,108,108,0.2); border: 1px solid #F56C6C; }
 
-/* 🎯 原材料多列响应式卡片流转局 */
 .capsule-grid-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
@@ -95,7 +94,9 @@ button:active { transform: translateY(0); }
 .capsule-right { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .capsule-right button { padding: 4px 14px; font-size: 12px; border-radius: 4px; }
 
-/* 🎯 触屏九宫格物理小键盘 */
+/* 触屏九宫格物理小键盘 */
+.upload-modal-body { display: flex; gap: 15px; padding: 20px; }
+.upload-inputs-area { flex: 1; display: flex; flex-direction: column; justify-content: center; }
 .touch-keyboard-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: 190px; background: #f5f5f5; padding: 12px; border-radius: 6px; border: 1px solid #d9d9d9; }
 .key-btn { height: 42px; padding: 0; background: #ffffff; border: 1px solid #d9d9d9; border-radius: 6px; font-size: 18px; font-weight: bold; color: #333; display: flex; justify-content: center; align-items: center; box-shadow: 0 2px 0 rgba(0,0,0,0.015); user-select: none; }
 .key-btn:active { background: #e8e8e8; transform: translateY(1px); }
@@ -110,21 +111,72 @@ button:active { transform: translateY(0); }
 .login-box input { width: 100%; padding: 12px; margin-bottom: 16px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; }
 
 .modal-mask { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.45); display: flex; justify-content: center; align-items: center; z-index: 100; }
-.modal-box { background: #ffffff; border-radius: 8px; width: 100%; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; overflow: hidden; animation: modalFade 0.2s ease-out; }
+.modal-box { background: #ffffff; border-radius: 8px; width: 95%; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; flex-direction: column; overflow: hidden; animation: modalFade 0.2s ease-out; }
 @keyframes modalFade { from {transform: scale(0.95); opacity:0;} to {transform: scale(1); opacity:1;} }
 .modal-header { padding: 16px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 16px; font-weight: bold; }
 .modal-header-secondary { background: #fafafa; }
-.modal-body { padding: 24px; max-height: 440px; overflow-y: auto; }
+.modal-body { padding: 24px; max-height: 60vh; overflow-y: auto; }
 .modal-body.modal-body-compact { padding: 20px; }
 .modal-footer { padding: 12px 24px; border-top: 1px solid #f0f0f0; display: flex; justify-content: flex-end; gap: 10px; }
 .modal-footer-secondary { background: #fafafa; }
 .modal-box-wide { max-width: 600px; }
 .modal-box-small { max-width: 420px; }
 .textarea-tall { height: 100px; resize: vertical; width: 100%; padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px; }
-.close-x { cursor: pointer; font-size: 20px; color: #999; }
-.form-item { margin-bottom: 16px; }
+.close-x { cursor: pointer; font-size: 24px; color: #999; line-height: 1; }
+.form-item { margin-bottom: 16px; width: 100%; }
 .form-item label { display: block; margin-bottom: 6px; font-size: 14px; color: #555; font-weight: bold; }
 .form-item input, .form-item select, .form-item textarea { width: 100%; padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px; outline: none; }
 
-.user-item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+.user-item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; flex-wrap: wrap; gap: 8px; }
 .hidden { display: none !important; }
+
+/* =========================================================
+ * 📱 移动端专属响应式适配 (Media Query)
+ * ========================================================= */
+.mobile-menu-btn { display: none; background-color: #409EFF; color: white; padding: 6px 12px; border-radius: 4px; border: none; font-size: 14px; cursor: pointer; }
+
+@media (max-width: 768px) {
+    /* 1. 顶部导航栏变身为折叠菜单 */
+    .top-nav { flex-wrap: wrap; padding: 12px 16px; }
+    .nav-left { flex: 1; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; }
+    .mobile-menu-btn { display: block; margin-top: 8px; width: 100%; }
+    .nav-right { display: none; width: 100%; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #ebeef5; }
+    .nav-right.show-menu { display: flex; }
+    .nav-right button { width: 100%; justify-content: center; }
+    
+    /* 2. 主看板区：让筛选栏彻底换行 */
+    .content-area { padding: 10px; }
+    .area-header { flex-direction: column; align-items: flex-start; gap: 12px; padding: 12px; }
+    .title-flex-box { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 8px;}
+    
+    /* 🎯 核心修改：强制筛选栏换行显示 */
+    .filter-group { 
+        flex-direction: column; 
+        align-items: stretch; 
+        gap: 8px; 
+        width: 100%; 
+    }
+    .filter-group > div, .filter-group > span { display: block; }
+    .filter-group select, .filter-group input { width: 100%; }
+    /* 让日期选择框更加对齐 */
+    .filter-group { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
+    #filterStatus { grid-column: span 2; }
+    /* 日期选择器换行逻辑 */
+    .filter-group label[for], .label-inline { grid-column: span 2; font-size: 12px; color: #888; }
+    #filterStartDate, #filterEndDate { grid-column: span 2; }
+    
+    /* 3. 订单列表与原材料清单自动堆叠 */
+    .grid-container { grid-template-columns: 1fr; gap: 12px; }
+    .card-top { flex-wrap: wrap; gap: 4px; }
+    .capsule-grid-container { grid-template-columns: 1fr !important; }
+    .material-top-bar { flex-direction: column; align-items: flex-start; gap: 12px; }
+    .total-stock-box { flex-wrap: wrap; }
+    
+    /* 4. 模态框与九宫格键盘手机端纵向排列 */
+    .upload-modal-body { flex-direction: column; padding: 15px; }
+    .touch-keyboard-panel { width: 100%; margin-top: 4px; max-width: none; }
+    .modal-box { width: 95%; margin: 10px; }
+    .modal-body { padding: 16px; }
+    .modal-footer { flex-wrap: wrap; justify-content: center; }
+    .modal-footer button { flex: 1; min-width: 120px; }
+}

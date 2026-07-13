@@ -25,6 +25,16 @@ function initFilterDates() {
     document.getElementById('filterEndDate').value = endDate.toISOString().split('T')[0];
 }
 
+// 📱 移动端菜单控制函数
+function toggleMobileMenu() {
+    const menu = document.getElementById('navRightMenu');
+    if(menu) menu.classList.toggle('show-menu');
+}
+function closeMobileMenu() {
+    const menu = document.getElementById('navRightMenu');
+    if(menu) menu.classList.remove('show-menu');
+}
+
 function toggleModal(modalId, show) {
     const modal = document.getElementById(modalId);
     if (show) modal.classList.remove('hidden');
@@ -62,7 +72,6 @@ function pressKey(key) {
 }
 
 function switchDashboardView() {
-    const btnNav = document.getElementById('btnSwitchPanel');
     const btnTitle = document.getElementById('btnTitleViewSwitch');
     const orderGrid = document.getElementById('orderGrid');
     const materialWrapper = document.getElementById('materialViewWrapper');
@@ -72,9 +81,8 @@ function switchDashboardView() {
 
     if (currentDashboardMode === 'order') {
         currentDashboardMode = 'material';
-        if (btnNav) btnNav.innerText = '📋 查看业务订单';
         btnTitle.innerText = '📋 查看业务订单';
-        listTitle.innerText = '🏭 原材料数据列表';
+        listTitle.innerText = '🏭 原材料列表';
         orderGrid.classList.add('hidden');
         materialWrapper.classList.remove('hidden');
         filterStatus.classList.add('hidden');
@@ -82,7 +90,6 @@ function switchDashboardView() {
         fetchMaterialRecords();
     } else {
         currentDashboardMode = 'order';
-        if (btnNav) btnNav.innerText = '📊 查看原材料数据';
         btnTitle.innerText = '📊 查看原材料数据';
         listTitle.innerText = '📋 订单看板列表';
         orderGrid.classList.remove('hidden');
