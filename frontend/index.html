@@ -50,7 +50,7 @@
                 </div>
                 
                 <div id="sidebarMaterialSection" class="sidebar-section">
-                    <h3>✍️ 用户输入 - 原材料使用</h3>
+                    <h3>✍ { 用户输入 }</h3>
                     <label for="materialInputUse" class="field-label-sm">今日原材料消耗量 (kg):</label>
                     <input id="materialInputUse" inputmode="decimal" pattern="[0-9.]*" placeholder="输入消耗重量..." oninput="this.value=this.value.replace(/[^0-9.]/g,'')" />
                     
@@ -82,11 +82,12 @@
 
                 <div id="materialViewWrapper" class="material-container hidden">
                     <div class="material-top-bar">
-                        <div class="total-stock-box" id="totalStockSettingBox">
-                            <label for="totalMaterialStock" style="font-weight:600; font-size:14px;">🏭 工厂总原材料储备 (kg):</label>
-                            <input id="totalMaterialStock" inputmode="decimal" pattern="[0-9.]*" onchange="updateTotalStockValue()" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" />
+                        <div class="total-stock-box">
+                            <span style="font-weight:600; font-size:14px;">🏭 工厂总原材料储备：</span>
+                            <strong id="displayTotalStock" style="color: #1890ff; font-size:16px;">5000 kg</strong>
+                            <button id="btnEditStockAction" class="btn-warning hidden" style="padding: 2px 8px; font-size:11px; margin-left:8px; border-radius:12px;" onclick="triggerStockModifyModal()">✍️ 修改总储备</button>
                         </div>
-                        <div id="remainedMaterialCapsule" class="remained-capsule-fixed">剩余原材料：0 kg</div>
+                        <div id="remainedMaterialCapsule" class="remained-capsule-fixed">剩余原材料：5000 kg</div>
                     </div>
                     <div id="materialCapsuleList" style="display:flex; flex-direction:column; gap:12px;"></div>
                 </div>
@@ -214,6 +215,36 @@
             <div class="modal-footer">
                 <button class="btn-secondary" onclick="toggleModal('editMaterialModal', false)">取消</button>
                 <button class="btn-warning" onclick="submitEditMaterial()">确认重组数据</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="editTotalStockModal" class="modal-mask hidden">
+        <div class="modal-box modal-box-small">
+            <div class="modal-header">
+                <span>🏭 变更工厂总原材料储备量</span>
+                <span class="close-x" onclick="toggleModal('editTotalStockModal', false)">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="form-item">
+                    <label for="newStockInput">调整后的总储备量 (kg):</label>
+                    <input id="newStockInput" inputmode="decimal" pattern="[0-9.]*" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" placeholder="当前设定默认值为5000" />
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-secondary" onclick="toggleModal('editTotalStockModal', false)">取消</button>
+                <button class="btn-success" onclick="submitUpdateTotalStockValue()">确认更改</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="uploadSuccessNotifyModal" class="modal-mask hidden" style="z-index: 1000;">
+        <div class="modal-box modal-box-small" style="text-align: center; border: 2px solid #52c41a; background: #f6ffed;">
+            <div class="modal-body" style="padding: 30px;">
+                <div style="font-size: 40px; margin-bottom: 10px;">✅</div>
+                <h3 style="color: #52c41a; font-size: 18px; margin-bottom: 8px;">物料数据上传成功</h3>
+                <p style="color: #666; font-size: 13px; line-height: 1.6;" id="successNotifyDetail"></p>
+                <button class="btn-success" style="margin-top: 20px; padding: 6px 30px; border-radius: 20px;" onclick="toggleModal('uploadSuccessNotifyModal', false)">我已知晓</button>
             </div>
         </div>
     </div>

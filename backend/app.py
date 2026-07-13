@@ -11,15 +11,7 @@ CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type
 
 USERS_FILE = '/app/data/users_db.json'
 ORDERS_FILE = '/app/data/orders_db.json'
-MATERIALS_FILE = '/app/data/material_db.json' # 🎯 🆕 新建库文件路径
-
-if os.path.exists('/app/frontend/index.html'):
-    FRONTEND_DIR = '/app/frontend'
-else:
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')
-
-FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
+MATERIALS_FILE = '/app/data/material_db.json' 
 
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
@@ -44,11 +36,11 @@ def read_orders():
 def write_orders(data):
     with open(ORDERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
-# 🎯 🆕 读写原材料独立数据表
+# 🎯 核心修复点：初始化物料数据库，如果没有此文件，默认工厂总储备量赋值为 5000
 def read_materials():
     os.makedirs(os.path.dirname(MATERIALS_FILE), exist_ok=True)
     if not os.path.exists(MATERIALS_FILE):
-        d = {"total_stock": 10000.0, "records": []}
+        d = {"total_stock": 5000.0, "records": []} # 🎯 修正：满足需求，默认总数据赋 5000
         write_materials(d)
         return d
     with open(MATERIALS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
@@ -170,14 +162,12 @@ def delete_order(order_id):
     return jsonify({"success": True})
 
 
-# --- 🎯 🆕 原材料高精持久化接口组 ---
+# --- 🏭 原材料持久化存储服务 API ---
 
-# 1. 查物料全量表
 @app.route('/api/materials', methods=['GET'])
 def get_materials():
     return jsonify(read_materials())
 
-# 2. 增物料流水条目 (所有人均可上传，自动追加精确到时分的时间戳)
 @app.route('/api/materials', methods=['POST'])
 def add_material_record():
     req_data = request.json
@@ -193,10 +183,9 @@ def add_material_record():
     }
     records_list.append(new_record)
     mat_data['records'] = records_list
-    write_materials(mat_data)
+    write_materials(mat_data) # 🎯 修正：现在数据可以完美写入物理硬盘了
     return jsonify({"success": True})
 
-# 3. 改总物料库存储备量 (仅管理层能修改)
 @app.route('/api/materials/stock', methods=['PUT'])
 def update_total_stock():
     if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
@@ -206,7 +195,6 @@ def update_total_stock():
     write_materials(mat_data)
     return jsonify({"success": True})
 
-# 4. 改特定流水记录明细 (仅管理层能修改)
 @app.route('/api/materials/<int:record_id>', methods=['PUT'])
 def edit_material_record(record_id):
     if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403

@@ -1,7 +1,7 @@
 const API_BASE = '/api';
 let currentUser = { username: '', role: '' };
 let allOrdersLocal = []; 
-let currentDashboardMode = 'order'; // 'order' 代表订单看板，'material' 代表原材料大盘
+let currentDashboardMode = 'order'; 
 
 function getRoleName(role) {
     const maps = { 'super_admin': '超级管理员', 'admin': '管理员', 'operator': '操作员' };
@@ -30,7 +30,6 @@ function toggleModal(modalId, show) {
     else modal.classList.add('hidden');
 }
 
-// 🎯 顶部切流控制核心：点击切换“订单/原材料”视图
 function switchDashboardView() {
     const btn = document.getElementById('btnSwitchPanel');
     const orderGrid = document.getElementById('orderGrid');
@@ -60,7 +59,6 @@ function switchDashboardView() {
     }
 }
 
-// 统一刷新中枢
 function refreshDashboardData() {
     if (currentDashboardMode === 'order') {
         fetchOrders();
@@ -75,7 +73,7 @@ function renderUI() {
     const btnOpenAddUser = document.getElementById('btnOpenAddUser');
     const btnOpenViewUser = document.getElementById('btnOpenViewUser');
     const sidebarAdminSection = document.getElementById('sidebarAdminSection');
-    const totalStockSettingBox = document.getElementById('totalStockSettingBox');
+    const btnEditStockAction = document.getElementById('btnEditStockAction');
 
     if (!currentUser.username) {
         loginSection.classList.remove('hidden');
@@ -89,23 +87,22 @@ function renderUI() {
     document.getElementById('currentUsername').innerText = currentUser.username;
     document.getElementById('currentUserRoleTag').innerText = getRoleName(currentUser.role);
 
-    // 🎯 核心控制：根据权限对左侧快速发单和总储备框进行精准隔离隐藏
+    // 🎯 权限隔离控制：只有超管和管理员才能看并操作总库设定修改按钮
     if (currentUser.role === 'super_admin') {
         btnOpenAddUser.classList.remove('hidden');
         btnOpenViewUser.classList.remove('hidden');
         sidebarAdminSection.classList.remove('hidden');
-        totalStockSettingBox.classList.remove('hidden');
+        btnEditStockAction.classList.remove('hidden');
     } else if (currentUser.role === 'admin') {
         btnOpenAddUser.classList.add('hidden');
         btnOpenViewUser.classList.add('hidden');
         sidebarAdminSection.classList.remove('hidden');
-        totalStockSettingBox.classList.remove('hidden');
+        btnEditStockAction.classList.remove('hidden');
     } else {
-        // 操作员：隐藏总原材料设置、订单发布
         btnOpenAddUser.classList.add('hidden');
         btnOpenViewUser.classList.add('hidden');
         sidebarAdminSection.classList.add('hidden');
-        totalStockSettingBox.classList.add('hidden');
+        btnEditStockAction.classList.add('hidden');
     }
 }
 
@@ -148,7 +145,6 @@ function handleLogout() {
     renderUI();
 }
 
-// 2. 订单获取
 async function fetchOrders() {
     if (currentDashboardMode !== 'order') return;
     try {
@@ -237,16 +233,15 @@ async function fetchOrders() {
     } catch (error) { console.error("订单数据加载失败", error); }
 }
 
-// 🎯 🆕 3. 原材料核心数据驱动盘（全量过滤、联算）
+// 🎯 原材料核心数据驱动盘
 async function fetchMaterialRecords() {
     if (currentDashboardMode !== 'material') return;
     try {
         const response = await fetch(`${API_BASE}/materials`, { method: 'GET', headers: getHeaders() });
         const resData = await response.json();
         
-        const totalStockInput = document.getElementById('totalMaterialStock');
-        // 同步服务器总物料储备
-        totalStockInput.value = resData.total_stock || 0;
+        // 渲染顶部工厂储备量文字标签
+        document.getElementById('displayTotalStock').innerText = `${resData.total_stock} kg`;
 
         const container = document.getElementById('materialCapsuleList');
         container.innerHTML = '';
@@ -254,7 +249,6 @@ async function fetchMaterialRecords() {
         const startDateStr = document.getElementById('filterStartDate').value;
         const endDateStr = document.getElementById('filterEndDate').value;
 
-        // A. 第一阶段：时间戳视窗过滤
         const filteredRecords = resData.records.filter(item => {
             if (item.date) {
                 const day = item.date.substring(0, 10);
@@ -264,7 +258,7 @@ async function fetchMaterialRecords() {
             return true;
         });
 
-        // B. 第二阶段：精密工业公式联算（总物料 - 全量已用物料 = 剩余物料）
+        // 工业联算公式
         let totalUsed = 0;
         resData.records.forEach(item => {
             totalUsed += parseFloat(item.used || 0);
@@ -277,12 +271,10 @@ async function fetchMaterialRecords() {
             return;
         }
 
-        // C. 第三阶段：渲染全小写语义胶囊链路
         filteredRecords.forEach(item => {
             const row = document.createElement('div');
             row.className = 'material-capsule-item';
 
-            // 操作员没有修改权限，普通管理员和超管保留
             let actionHtml = '';
             if (currentUser.role === 'super_admin' || currentUser.role === 'admin') {
                 actionHtml = `
@@ -306,7 +298,7 @@ async function fetchMaterialRecords() {
     } catch (e) { console.error("获取原材料清单异常", e); }
 }
 
-// 🎯 🆕 4. 用户录入并上传原材料使用量
+// 🎯 上传原材料数据组，并调取屏幕中央提示模态框
 async function uploadMaterialRecord() {
     const usedInput = document.getElementById('materialInputUse');
     const productInput = document.getElementById('materialInputProduct');
@@ -326,21 +318,38 @@ async function uploadMaterialRecord() {
         if (response.ok) {
             usedInput.value = '';
             productInput.value = '';
+            
+            // 🎯 核心需求：触发屏幕正中央的优雅成功通知弹窗
+            document.getElementById('successNotifyDetail').innerText = `已成功向系统存入以下盘点数据：\n消耗原材料: ${usedVal} kg\n产出总成品: ${productVal} kg`;
+            toggleModal('uploadSuccessNotifyModal', true);
+
             refreshMaterialViewAfterAction();
         }
     } catch (e) { alert('物料断网上传异常'); }
 }
 
-// 🎯 🆕 5. 更新总原材料物料库数据
-async function updateTotalStockValue() {
-    const totalVal = parseFloat(document.getElementById('totalMaterialStock').value) || 0;
+// 🎯 触发工厂总储备修改窗口
+function triggerStockModifyModal() {
+    const currentStock = document.getElementById('displayTotalStock').innerText.replace(' kg', '');
+    document.getElementById('newStockInput').value = currentStock;
+    toggleModal('editTotalStockModal', true);
+}
+
+// 🎯 提交修改后的总储备
+async function submitUpdateTotalStockValue() {
+    const newStock = parseFloat(document.getElementById('newStockInput').value);
+    if (isNaN(newStock) || newStock < 0) return alert('请输入有效的数字库存储备！');
+
     try {
-        await fetch(`${API_BASE}/materials/stock`, {
+        const response = await fetch(`${API_BASE}/materials/stock`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({ total_stock: totalVal })
+            body: JSON.stringify({ total_stock: newStock })
         });
-        fetchMaterialRecords();
+        if (response.ok) {
+            toggleModal('editTotalStockModal', false);
+            fetchMaterialRecords();
+        }
     } catch (e) { alert('更新总物料库异常'); }
 }
 
@@ -377,7 +386,6 @@ function refreshMaterialViewAfterAction() {
     }
 }
 
-// 原始订单控制链
 function triggerStatusConfirm(orderId, targetStatus) {
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
