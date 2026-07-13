@@ -22,13 +22,21 @@ else:
 FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
 
 
+# ---------------------------------------------------------
+# 🎯 核心升级：工业级防弹数据库自愈逻辑
+# 不管数据库是被清空、乱码还是损坏，瞬间自动重建，免去手动删除烦恼
+# ---------------------------------------------------------
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
-    if not os.path.exists(USERS_FILE):
-        d = [{"username": "1", "password": "123456", "role": "super_admin"}, {"username": "op01", "password": "123", "role": "operator"}]
-        write_users(d)
-        return d
-    with open(USERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+    default_data = [{"username": "1", "password": "123456", "role": "super_admin"}, {"username": "op01", "password": "123", "role": "operator"}]
+    try:
+        with open(USERS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if not data or not isinstance(data, list): raise ValueError()
+            return data
+    except Exception:
+        write_users(default_data)
+        return default_data
 
 def write_users(data):
     with open(USERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
@@ -36,12 +44,16 @@ def write_users(data):
 
 def read_orders():
     os.makedirs(os.path.dirname(ORDERS_FILE), exist_ok=True)
-    if not os.path.exists(ORDERS_FILE):
-        ct = datetime.now().strftime('%Y-%m-%d %H:%M')
-        d = {"orders": [{"id": 1, "title": "测试中固大箱参数", "status": "pending", "type": 0, "date": ct, "completed_date": ""}]}
-        write_orders(d)
-        return d
-    with open(ORDERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+    ct = datetime.now().strftime('%Y-%m-%d %H:%M')
+    default_data = {"orders": [{"id": 1, "title": "测试中固大箱参数", "status": "pending", "type": 0, "date": ct, "completed_date": ""}]}
+    try:
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if not data or 'orders' not in data: raise ValueError()
+            return data
+    except Exception:
+        write_orders(default_data)
+        return default_data
 
 def write_orders(data):
     with open(ORDERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
@@ -49,14 +61,19 @@ def write_orders(data):
 
 def read_materials():
     os.makedirs(os.path.dirname(MATERIALS_FILE), exist_ok=True)
-    if not os.path.exists(MATERIALS_FILE):
-        d = {"total_stock": 5000.0, "records": []} 
-        write_materials(d)
-        return d
-    with open(MATERIALS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+    default_data = {"total_stock": 5000.0, "records": []} 
+    try:
+        with open(MATERIALS_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            if not data or 'total_stock' not in data: raise ValueError()
+            return data
+    except Exception:
+        write_materials(default_data)
+        return default_data
 
 def write_materials(data):
     with open(MATERIALS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+# ---------------------------------------------------------
 
 
 @app.route('/', methods=['GET'])
@@ -215,7 +232,6 @@ def edit_material_record(record_id):
     write_materials(mat_data)
     return jsonify({"success": True})
 
-# 🎯 🆕 新增：删除物料记录流水的独立后端接口
 @app.route('/api/materials/<int:record_id>', methods=['DELETE'])
 def delete_material_record(record_id):
     if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
@@ -225,7 +241,6 @@ def delete_material_record(record_id):
     return jsonify({"success": True})
 
 
-# 🎯 文件万能通配拦截器已死死锁定在【最底部】，彻底解除与 API 请求抢道导致的 500 卡死
 @app.route('/<path:path>')
 def send_static_files(path): 
     return send_from_directory(FRONTEND_DIR, path)

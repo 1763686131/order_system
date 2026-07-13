@@ -139,6 +139,7 @@ function renderUI() {
     }
 }
 
+// 🎯 核心强化：加入防呆报错处理
 async function handleLogin() {
     const usernameInput = document.getElementById('loginUsername').value.trim();
     const passwordInput = document.getElementById('loginPassword').value.trim();
@@ -150,8 +151,15 @@ async function handleLogin() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: usernameInput, password: passwordInput })
         });
+        
+        // 🚨 如果后端崩了，现在直接弹窗告诉你，不再卡死
+        if (!response.ok) {
+            if (response.status === 401) return alert('登录失败：账号或密码错误！');
+            return alert(`服务器状态异常 (错误码: ${response.status})，后端服务可能崩溃，请检查网络！`);
+        }
+
         const resData = await response.json();
-        if (response.ok && resData.success) {
+        if (resData.success) {
             currentUser = resData.user;
             localStorage.setItem('local_user', JSON.stringify(currentUser));
             renderUI();
@@ -161,7 +169,7 @@ async function handleLogin() {
             alert(resData.message || '凭证错误，登录失败');
         }
     } catch (error) {
-        alert('本地服务端连接失败，请检查 Docker。');
+        alert('🚨 本地服务端连接失败！网络已断开或 Docker 容器未启动。');
     }
 }
 
@@ -230,7 +238,7 @@ async function fetchOrders() {
             if (currentUser.role === 'super_admin') {
                 superActionHtml = `
                 <div class="action-row-super">
-                    <button class="btn-warning" onclick="openEditOrderModal(${order.id})">✍️ 修改</button>
+                    <button class="btn-primary" onclick="openEditOrderModal(${order.id})">✍️ 修改</button>
                     <button class="btn-danger" onclick="deleteOrder(${order.id})">🗑️ 删除</button>
                 </div>
                 `;
@@ -305,7 +313,6 @@ async function fetchMaterialRecords() {
             const row = document.createElement('div');
             row.className = 'material-capsule-item';
 
-            // 🎯 新增：只有具备管理岗位(超管、普通管理)的人才可以修改和物理清除流水数据
             let actionHtml = '';
             if (currentUser.role === 'super_admin' || currentUser.role === 'admin') {
                 actionHtml = `
@@ -407,7 +414,6 @@ async function submitEditMaterial() {
     } catch (e) { alert('修改流水失败'); }
 }
 
-// 🎯 新增：删除物料记录流水核心客户端驱动
 async function deleteMaterialRecord(id) {
     if (!confirm(`确定要物理【删除】单号为 #${id} 的原材料流水记录吗？`)) return;
     try {
@@ -443,7 +449,7 @@ function triggerStatusConfirm(orderId, targetStatus) {
     } else {
         tipText.innerText = "⚠️ 确认将以下订单恢复为【未完成】吗？";
         previewBox.className = "confirm-card-preview preview-pending";
-        submitBtn.className = "btn-warning";
+        submitBtn.className = "btn-primary"; // 统一用蓝色回退
     }
     toggleModal('statusConfirmModal', true);
 }
@@ -581,7 +587,6 @@ window.onload = function() {
         initFilterDates();
         fetchOrders();
         
-        // 🎯 核心写回：3秒全自动高并发高可用看板轮询刷新
         setInterval(function() {
             refreshDashboardData();
             if (!document.getElementById('viewUserModal').classList.contains('hidden')) refreshUserList();
