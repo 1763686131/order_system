@@ -197,7 +197,7 @@ async function fetchOrders() {
         const endDateStr = document.getElementById('filterEndDate').value;
 
         // 根据当前的 Tab (pending/completed) 过滤订单
-        const filteredOrders = serverOrders.filter(order => {
+        let filteredOrders = serverOrders.filter(order => {
             if (order.status !== currentTab) return false;
             if (order.date) {
                 const orderDay = order.date.substring(0, 10); 
@@ -206,6 +206,15 @@ async function fetchOrders() {
             }
             return true;
         });
+
+        // 🎯 核心修改：时间降序排序（最近的时间在最前面）
+        if (currentTab === 'completed') {
+            // 已完成订单：根据 completed_date 倒序
+            filteredOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
+        } else if (currentTab === 'pending') {
+            // 未完成订单：根据创建时间 date 倒序
+            filteredOrders.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        }
 
         if (filteredOrders.length === 0) {
             gridContainer.innerHTML = '<div style="color: #999; grid-column: 1/-1; text-align:center; padding:40px;">当前区间内无相关订单记录</div>';
@@ -216,7 +225,7 @@ async function fetchOrders() {
             const card = document.createElement('div');
             const orderType = order.type !== undefined ? order.type : 0;
             
-            // 🎯 卡片色系分流：0为中固(蓝)，1为绝缘(粉)
+            // 卡片色系分流：0为中固(蓝)，1为绝缘(粉)
             let cardClasses = 'order-card';
             let typeText = '未知';
             if (orderType == 1) {
@@ -236,19 +245,18 @@ async function fetchOrders() {
                 if (order.status === 'pending') {
                     actionBtn = `<button class="btn-success" onclick="triggerStatusConfirm(${order.id}, 'completed')">完成业务</button>`;
                 } else {
-                    actionBtn = `<button class="btn-warning" onclick="triggerStatusConfirm(${order.id}, 'pending')" style="background:#e6a23c !important;">设为未完成</button>`;
+                    actionBtn = `<button class="btn-outline-danger" onclick="triggerStatusConfirm(${order.id}, 'pending')" style="padding:4px 10px; font-size:12px;">设为未完成</button>`;
                 }
             }
 
             let superActionHtml = '';
             if (currentUser.role === 'super_admin') {
                 superActionHtml = `
-                    <button class="btn-primary" style="padding:4px 8px; font-size:12px;" onclick="openEditOrderModal(${order.id})">✍️ 修改</button>
-                    <button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteOrder(${order.id})">🗑️ 删除</button>
+                    <button class="btn-outline-primary" style="padding:4px 10px; font-size:12px;" onclick="openEditOrderModal(${order.id})">修改</button>
+                    <button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteOrder(${order.id})">删除</button>
                 `;
             }
 
-            // 右下角按钮区域
             let rightFooterHtml = `
                 <div class="card-footer-right">
                     ${superActionHtml}
@@ -256,13 +264,11 @@ async function fetchOrders() {
                 </div>
             `;
 
-            // 左下角完成时间区域
             let completedDateHtml = '';
             if (order.status === 'completed' && order.completed_date) {
-                completedDateHtml = `<div class="complete-date">✔ 完成: ${order.completed_date}</div>`;
+                completedDateHtml = `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>`;
             }
 
-            // 组装最新卡片排版
             card.innerHTML = `
                 <div class="card-header">
                     <span class="card-title-tag">[#${order.id}] ${typeText}</span>
@@ -295,7 +301,8 @@ async function fetchMaterialRecords() {
         const startDateStr = document.getElementById('filterStartDate').value;
         const endDateStr = document.getElementById('filterEndDate').value;
 
-        const filteredRecords = resData.records.filter(item => {
+        // 过滤日期
+        let filteredRecords = resData.records.filter(item => {
             if (item.date) {
                 const day = item.date.substring(0, 10);
                 if (startDateStr && day < startDateStr) return false;
@@ -303,6 +310,9 @@ async function fetchMaterialRecords() {
             }
             return true;
         });
+
+        // 🎯 核心修改：原材料数据按创建时间降序排序（最近的时间在最前面）
+        filteredRecords.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
         let totalUsed = 0;
         resData.records.forEach(item => {
@@ -327,8 +337,8 @@ async function fetchMaterialRecords() {
             if (currentUser.role === 'super_admin' || currentUser.role === 'admin') {
                 actionHtml = `
                     <div class="capsule-right">
-                        <button class="btn-primary" onclick="openEditMaterialModal(${item.id}, ${item.used}, ${item.produced}, '${safeRemark}')">✍️ 备注/修改</button>
-                        <button class="btn-danger" onclick="deleteMaterialRecord(${item.id})">🗑️ 删除</button>
+                        <button class="btn-outline-primary" style="padding:4px 10px; font-size:12px;" onclick="openEditMaterialModal(${item.id}, ${item.used}, ${item.produced}, '${safeRemark}')">修改备注</button>
+                        <button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteMaterialRecord(${item.id})">删除</button>
                     </div>
                 `;
             }
@@ -567,8 +577,8 @@ async function refreshUserList() {
             const isSelf = user.username === '1';
             const actionHtml = isSelf ? `<span style="color:#aaa; font-size:12px;">原始核心安全策略保护</span>` : `
                 <input id="pwd_${user.username}" value="${user.password}" style="width:110px; padding:4px; font-size:12px; margin-right:5px;" />
-                <button class="btn-primary" style="padding:4px 8px; font-size:12px;" onclick="modifyUserPassword('${user.username}')">改密</button>
-                <button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteUser('${user.username}')">注销</button>
+                <button class="btn-outline-primary" style="padding:4px 8px; font-size:12px;" onclick="modifyUserPassword('${user.username}')">改密</button>
+                <button class="btn-outline-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteUser('${user.username}')">注销</button>
             `;
             row.innerHTML = `<div class="user-item-info"><h5>ID: ${user.username}</h5><span>岗位: <strong>${getRoleName(user.role)}</strong></span></div><div style="display:flex; align-items:center;">${actionHtml}</div>`;
             container.appendChild(row);

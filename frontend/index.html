@@ -28,11 +28,11 @@
             </div>
             <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰ 展开菜单</button>
             <div class="nav-right" id="navRightMenu">
-                <button id="btnNavCreateOrder" class="btn-success hidden" onclick="toggleModal('createOrderModal', true); closeMobileMenu();">📝 发布新订单</button>
-                <button id="btnNavUploadMaterial" class="btn-success" onclick="openUploadMaterialModal(); closeMobileMenu();">✍️ 录入原材料</button>
-                <button id="btnOpenAddUser" class="btn-success hidden" onclick="toggleModal('addUserModal', true); closeMobileMenu();">➕ 添加用户</button>
-                <button id="btnOpenViewUser" class="btn-primary hidden" onclick="openViewUserModal(); closeMobileMenu();">👥 查看/管理用户</button>
-                <button class="btn-danger" onclick="handleLogout()">退出登录</button>
+                <button id="btnNavCreateOrder" class="btn-primary hidden" onclick="toggleModal('createOrderModal', true); closeMobileMenu();">📝 发布新订单</button>
+                <button id="btnNavUploadMaterial" class="btn-outline-success" onclick="openUploadMaterialModal(); closeMobileMenu();">✍️ 录入原材料</button>
+                <button id="btnOpenAddUser" class="btn-outline-primary hidden" onclick="toggleModal('addUserModal', true); closeMobileMenu();">➕ 添加用户</button>
+                <button id="btnOpenViewUser" class="btn-outline-info hidden" onclick="openViewUserModal(); closeMobileMenu();">👥 管理用户</button>
+                <button class="btn-text-gray" onclick="handleLogout()">退出登录</button>
             </div>
         </div>
 

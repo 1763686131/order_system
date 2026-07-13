@@ -53,9 +53,9 @@ button:active { transform: translateY(0); }
 .tab-btn.active {
     color: #409eff;
     border-color: #e4e7ed;
-    background: #ffffff;
+    background: #F0F2F5;
     font-weight: bold;
-    border-top: 3px solid #409eff;
+    border-top: 3px solid #F0F2F5;
 }
 .tab-btn:hover:not(.active) { color: #409eff; }
 
@@ -201,4 +201,44 @@ button:active { transform: translateY(0); }
     .upload-modal-body { flex-direction: column; padding: 15px; }
     .touch-keyboard-panel { width: 100%; margin-top: 4px; max-width: none; }
     .modal-box { width: 95%; margin: 10px; }
+}
+
+/* =========================================
+ * 🌟 视觉优化升级：幽灵按钮与间距控制
+ * ========================================= */
+
+/* 新增：幽灵按钮（镂空）样式，减少页面色块堆叠 */
+.btn-outline-primary { background: transparent !important; color: #409EFF; border: 1px solid #409EFF; }
+.btn-outline-primary:hover { background: #ecf5ff !important; }
+
+.btn-outline-success { background: transparent !important; color: #67C23A; border: 1px solid #67C23A; }
+.btn-outline-success:hover { background: #f0f9eb !important; }
+
+.btn-outline-danger { background: transparent !important; color: #F56C6C; border: 1px solid #F56C6C; }
+.btn-outline-danger:hover { background: #fef0f0 !important; }
+
+.btn-outline-info { background: transparent !important; color: #909399; border: 1px solid #dcdfe6; }
+.btn-outline-info:hover { color: #409EFF; border-color: #c6e2ff; background: #ecf5ff !important; }
+
+/* 新增：纯文字按钮（适用于退出登录等低频弱化操作） */
+.btn-text-gray { background: transparent !important; color: #909399; border: none; padding: 8px; font-weight: normal; }
+.btn-text-gray:hover { color: #F56C6C; background: transparent !important; }
+
+/* 覆盖优化 1：去掉控制区底边框，让标签页与底色彻底无缝融合 */
+.controls-container {
+    border-bottom: none !important;
+}
+
+/* 覆盖优化 2：增加卡片正文到底部按钮区的间距，留出呼吸感 */
+.card-body {
+    margin-bottom: 24px !important; 
+    color: #303133;
+}
+
+/* 覆盖优化 3：确保卡片底部按钮右对齐不被挤压 */
+.card-footer {
+    gap: 10px;
+}
+.card-footer-right {
+    flex-wrap: nowrap;
 }
