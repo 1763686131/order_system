@@ -2,7 +2,7 @@ const API_BASE = '/api';
 let currentUser = { username: '', role: '' };
 let allOrdersLocal = []; 
 let currentDashboardMode = 'order'; 
-let activeKeyboardTargetId = 'materialInputUse'; // 🎯 默认当前点击的数字输入框
+let activeKeyboardTargetId = 'materialInputUse'; 
 
 function getRoleName(role) {
     const maps = { 'super_admin': '超级管理员', 'admin': '管理员', 'operator': '操作员' };
@@ -31,10 +31,8 @@ function toggleModal(modalId, show) {
     else modal.classList.add('hidden');
 }
 
-// 🎯 原生九宫格触屏虚拟键盘核心驱动逻辑
 function openUploadMaterialModal() {
     toggleModal('uploadMaterialModal', true);
-    // 默认点亮并聚焦第一个输入框
     setActiveKeyboardTarget('materialInputUse');
     document.getElementById('materialInputUse').value = '';
     document.getElementById('materialInputProduct').value = '';
@@ -42,9 +40,7 @@ function openUploadMaterialModal() {
 
 function setActiveKeyboardTarget(id) {
     activeKeyboardTargetId = id;
-    // 移除其他激活高亮
     document.querySelectorAll('.keyboard-target').forEach(el => el.classList.remove('active-target'));
-    // 为当前选中的框框挂载蓝光高亮特效
     document.getElementById(id).classList.add('active-target');
 }
 
@@ -57,7 +53,6 @@ function pressKey(key) {
     } else if (key === 'backspace') {
         targetInput.value = currentVal.substring(0, currentVal.length - 1);
     } else if (key === '.') {
-        // 防呆：防止员工重复输入多个小数点
         if (!currentVal.includes('.')) {
             targetInput.value = currentVal + '.';
         }
@@ -123,7 +118,6 @@ function renderUI() {
     document.getElementById('currentUsername').innerText = currentUser.username;
     document.getElementById('currentUserRoleTag').innerText = getRoleName(currentUser.role);
 
-    // 🎯 顶部权限深度控制：发布新订单、修改总储备只对管理员层级可见
     if (currentUser.role === 'super_admin') {
         btnOpenAddUser.classList.remove('hidden');
         btnOpenViewUser.classList.remove('hidden');
@@ -348,11 +342,10 @@ async function uploadMaterialRecord() {
             body: JSON.stringify({ used: usedVal, produced: productVal })
         });
         if (response.ok) {
-            toggleModal('uploadMaterialModal', false); // 🎯 关闭录入弹窗
+            toggleModal('uploadMaterialModal', false); 
             usedInput.value = '';
             productInput.value = '';
             
-            // 🎯 全网设备绝对完美居中通知提示框
             document.getElementById('successNotifyDetail').innerText = `物料报表数据已成功存入安全持久层：\n\n🔴 消耗原材料: ${usedVal} kg\n🟢 产出总成品: ${productVal} kg`;
             toggleModal('uploadSuccessNotifyModal', true);
 
@@ -469,7 +462,7 @@ async function createOrder() {
             body: JSON.stringify({ title: title, type: parseInt(typeSelect.value) })
         });
         if (response.ok) {
-            toggleModal('createOrderModal', false); // 🎯 关闭发单弹窗
+            toggleModal('createOrderModal', false); 
             titleInput.value = '';
             fetchOrders();
         }

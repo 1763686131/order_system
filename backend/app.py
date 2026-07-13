@@ -215,10 +215,12 @@ def edit_material_record(record_id):
     write_materials(mat_data)
     return jsonify({"success": True})
 
-# 🎯 核心修复：把静态托管路由从顶部挪到【最后面】，防止它恶意把正常的 API 接口当成静态网页拦截，彻底根除 500 报错！
+
+# 🎯 核心调整：万能文件路由必须放置在最底部，避免拦截 API 接口请求
 @app.route('/<path:path>')
 def send_static_files(path): 
     return send_from_directory(FRONTEND_DIR, path)
+
 
 def open_browser():
     if not os.path.exists('/app/frontend/index.html'): webbrowser.open("http://localhost:7899")

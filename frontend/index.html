@@ -68,7 +68,6 @@
                     </div>
                     <div id="materialCapsuleList" style="display:flex; flex-direction:column; gap:12px;"></div>
                 </div>
-
             </div>
         </div>
     </div>
@@ -201,18 +200,18 @@
     <div id="uploadMaterialModal" class="modal-mask hidden">
         <div class="modal-box" style="max-width: 480px;">
             <div class="modal-header" style="background:#f6ffed;">
-                <span style="color:#52c41a; font-weight:bold;">✍️ { 用户输入 - 原材料数据录入 }</span>
+                <span style="color:#52c41a; font-weight:bold;">✍️ { 原材料数据录入 }</span>
                 <span class="close-x" onclick="toggleModal('uploadMaterialModal', false)">&times;</span>
             </div>
             <div class="modal-body" style="display: flex; gap: 15px; padding: 20px;">
                 <div style="flex: 1; display: flex; flex-direction: column; justify-content: center;">
                     <div class="form-item">
                         <label for="materialInputUse" style="font-weight:bold; color:#f5222d;">今日消耗原材料 (kg):</label>
-                        <input id="materialInputUse" readonly placeholder="点击键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#91d5ff;" />
+                        <input id="materialInputUse" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#91d5ff;" />
                     </div>
                     <div class="form-item">
                         <label for="materialInputProduct" style="font-weight:bold; color:#52c41a;">出货成品总数量 (kg):</label>
-                        <input id="materialInputProduct" readonly placeholder="点击键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputProduct')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#b7eb8f;" />
+                        <input id="materialInputProduct" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputProduct')" style="background:#fff; font-size:16px; font-weight:bold; border-color:#b7eb8f;" />
                     </div>
                 </div>
 
@@ -242,7 +241,7 @@
     <div id="editMaterialModal" class="modal-mask hidden">
         <div class="modal-box modal-box-small">
             <div class="modal-header">
-                <span>✍️ 修改物料流水记录 (管理岗位专享)</span>
+                <span>✍️ 修改物料记录</span>
                 <span class="close-x" onclick="toggleModal('editMaterialModal', false)">&times;</span>
             </div>
             <div class="modal-body">
@@ -272,7 +271,7 @@
             <div class="modal-body">
                 <div class="form-item">
                     <label for="newStockInput">调整后的总储备量 (kg):</label>
-                    <input id="newStockInput" type="number" step="any" placeholder="当前设定默认值为5000" />
+                    <input id="newStockInput" type="number" step="any" placeholder="默认值为 5000" />
                 </div>
             </div>
             <div class="modal-footer">
@@ -288,10 +287,11 @@
                 <div style="font-size: 40px; margin-bottom: 10px;">✅</div>
                 <h3 style="color: #52c41a; font-size: 18px; margin-bottom: 8px;">物料数据上传成功</h3>
                 <p style="color: #666; font-size: 13px; line-height: 1.6; white-space: pre-line;" id="successNotifyDetail"></p>
-                <button class="btn-success" style="margin-top: 20px; padding: 6px 30px; border-radius: 20px;" onclick="toggleModal('uploadSuccessNotifyModal', false)">我已知晓</button>
+                <button class="btn-success" style="margin-top: 20px; padding: 6px 30px; border-radius: 20px warm;" onclick="toggleModal('uploadSuccessNotifyModal', false)">我已知晓</button>
             </div>
         </div>
     </div>
 
+    <script src="js/main.js"></script>
 </body>
 </html>
