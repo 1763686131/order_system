@@ -139,7 +139,10 @@ function renderUI() {
     }
 }
 
+// ---------------------------------------------------------
 // 🎯 核心强化：加入防呆报错处理
+// 如果后端崩溃或断网，直接弹出精准错误代码，避免“没反应”
+// ---------------------------------------------------------
 async function handleLogin() {
     const usernameInput = document.getElementById('loginUsername').value.trim();
     const passwordInput = document.getElementById('loginPassword').value.trim();
@@ -152,10 +155,10 @@ async function handleLogin() {
             body: JSON.stringify({ username: usernameInput, password: passwordInput })
         });
         
-        // 🚨 如果后端崩了，现在直接弹窗告诉你，不再卡死
+        // 🚨 即使后端崩了，也会精准拦截提示你！
         if (!response.ok) {
             if (response.status === 401) return alert('登录失败：账号或密码错误！');
-            return alert(`服务器状态异常 (错误码: ${response.status})，后端服务可能崩溃，请检查网络！`);
+            return alert(`🚨 服务器连接异常 (状态码: ${response.status})，后端服务可能发生崩溃或重启！`);
         }
 
         const resData = await response.json();
@@ -449,7 +452,7 @@ function triggerStatusConfirm(orderId, targetStatus) {
     } else {
         tipText.innerText = "⚠️ 确认将以下订单恢复为【未完成】吗？";
         previewBox.className = "confirm-card-preview preview-pending";
-        submitBtn.className = "btn-primary"; // 统一用蓝色回退
+        submitBtn.className = "btn-primary";
     }
     toggleModal('statusConfirmModal', true);
 }
