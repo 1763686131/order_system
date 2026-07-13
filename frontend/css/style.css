@@ -1,5 +1,5 @@
 /* ----------------------------------------------------------------
- * 📦 统一工业级规范配色（红🔴、绿🟢、蓝🔵）样式表
+ * 📦 统一工业级规范配色（红🔴、绿🟢、蓝🔵）样式表 - 新版Tab标签风格
  * ---------------------------------------------------------------- */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; background-color: #f0f2f5; color: #333; display: flex; flex-direction: column; min-height: 100vh; }
@@ -11,7 +11,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helv
 .user-info { font-size: 14px; color: #666; }
 .user-tag { background: #409EFF; color: white; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-left: 6px; }
 
-/* 🎯 全新标准的（RGB）工业三原色按钮规范 */
+/* 按钮规范 */
 button { padding: 8px 16px; cursor: pointer; border: none; border-radius: 4px; font-size: 14px; font-weight: bold; transition: all 0.2s ease-in-out; display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
 button:hover { opacity: 0.85; transform: translateY(-1px); }
 button:active { transform: translateY(0); }
@@ -24,73 +24,124 @@ button:active { transform: translateY(0); }
 /* 主大区框架布局 */
 .main-section { display: flex; flex-direction: column; flex: 1; }
 .main-wrapper { display: flex; flex: 1; overflow: hidden; }
-.content-area { flex: 1; padding: 20px; background-color: #f0f2f5; overflow-y: auto; width: 100%; }
+.content-area { flex: 1; padding: 0; background-color: #f0f2f5; overflow-y: auto; width: 100%; }
 
-/* 大标题与状态切流按钮并排右移对齐 */
-.area-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: #fff; padding: 12px 20px; border-radius: 6px; border: 1px solid #e8e8e8; }
-.title-flex-box { display: flex; align-items: center; gap: 12px; }
-.area-title { font-size: 18px; font-weight: bold; color: #262626; }
-.filter-group { display: flex; align-items: center; gap: 12px; font-size: 14px; font-weight: bold; }
-.filter-group select, .filter-group input { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; outline: none; font-weight: normal; }
+/* --- 🎯 新增：顶部控制区 & 标签页 --- */
+.controls-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background-color: #ffffff; 
+    padding: 10px 24px 0;
+    border-bottom: 1px solid #e4e7ed;
+    margin-bottom: 20px;
+}
 
-/* 订单卡牌布局矩阵 */
-.grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 20px; }
-@media (min-width: 1400px) { .grid-container { grid-template-columns: repeat(4, 1fr); } }
-.order-card { background: #ffffff; border: 1px solid #e8e8e8; border-radius: 8px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.02); }
+.tabs { display: flex; gap: 5px; }
+.tab-btn {
+    padding: 14px 28px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-bottom: none;
+    cursor: pointer;
+    font-size: 15px;
+    color: #909399; 
+    border-radius: 4px 4px 0 0;
+    margin-bottom: -1px; 
+    font-weight: normal;
+}
+.tab-btn.active {
+    color: #409eff;
+    border-color: #e4e7ed;
+    background: #ffffff;
+    font-weight: bold;
+    border-top: 3px solid #409eff;
+}
+.tab-btn:hover:not(.active) { color: #409eff; }
 
-/* 状态色框规范 */
-.order-card.status-pending { border-top: 4px solid #409EFF; }
-.order-card.type-1.status-pending { border-top-color: #409EFF; background-color: #ffffff; }
-.order-card.status-completed { background-color: #f0f9eb !important; border: 1px solid #c2e7b0; border-top: 4px solid #67C23A !important; }
+/* 日期选择器 */
+.date-filter { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 14px; font-weight: bold; }
+.date-filter input { padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 14px; outline: none; font-weight: normal; }
 
-.card-top { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 8px; font-size: 12px; color: #8c8c8c; }
-.card-title-tag { font-weight: bold; font-size: 13px; color: #409EFF; }
-.card-body h4 { font-size: 14px; color: #262626; line-height: 1.6; word-break: break-all; font-weight: 500; }
+/* --- 卡片网格布局 --- */
+.order-grid, .grid-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    gap: 20px;
+    padding: 0 24px 24px 24px;
+}
 
-.card-footer-wrapper { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 4px; min-height: 36px; width: 100%; gap: 10px; }
-.card-completed-date { font-size: 11px; color: #67C23A; background: #f0f9eb; padding: 3px 8px; border-radius: 4px; font-weight: bold; border: 1px solid #c2e7b0; text-align: left; white-space: nowrap; }
-.card-actions { display: flex; flex-direction: column; gap: 6px; flex: 1; }
-.action-row-main { display: flex; justify-content: flex-end; width: 100%; } 
-.action-row-super { display: flex; justify-content: space-between; border-top: 1px dashed #e8e8e8; padding-top: 6px; gap: 6px; width: 100%; }
-.action-row-super button { flex: 1; padding: 4px; font-size: 11px; }
+/* 默认订单卡片 (中固蓝) */
+.order-card {
+    background: #ffffff;
+    border-radius: 6px;
+    border: 1px solid #e4e7ed;
+    border-top: 3px solid #409eff; 
+    box-shadow: 0 2px 12px 0 rgba(0,0,0,0.03);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.zhonggu-order .card-title-tag { color: #409eff; }
+
+/* 🎯 绝缘订单专属卡片色系 (粉红/浅红) */
+.insulation-order {
+    background-color: #fff0f6 !important; 
+    border-top: 3px solid #ff85c0 !important; 
+    border-color: #ffadd2 !important;
+}
+.insulation-order .card-title-tag { color: #eb2f96 !important; }
+
+/* 卡片内部元素排版 */
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    font-size: 14px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    padding-bottom: 8px;
+}
+.card-title-tag { font-weight: bold; font-size: 14px; }
+.order-time { color: #909399; font-size: 12px; }
+
+.card-body {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #303133;
+    flex-grow: 1; 
+    margin-bottom: 16px;
+    word-break: break-all;
+}
+
+.card-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-top: 1px dashed rgba(0,0,0,0.06);
+    padding-top: 12px;
+    min-height: 40px;
+}
+
+.complete-date { font-size: 12px; color: #67c23a; font-weight: bold; }
+.card-footer-right { display: flex; gap: 8px; justify-content: flex-end; width: 100%; }
 
 /* 原材料胶囊排版 */
-.material-container { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.material-container { padding: 0 24px 24px 24px; display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .material-top-bar { display: flex; justify-content: space-between; align-items: center; background: #ffffff; padding: 14px 20px; border-radius: 6px; border: 1px solid #e8e8e8; margin-bottom: 4px; }
 .total-stock-box { display: flex; align-items: center; gap: 6px; font-weight: bold; }
 .remained-capsule-fixed { background-color: #F56C6C; color: #ffffff; padding: 8px 18px; border-radius: 20px; font-size: 14px; font-weight: bold; box-shadow: 0 2px 6px rgba(245,108,108,0.2); border: 1px solid #F56C6C; }
 
-.capsule-grid-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(310px, 1fr));
-    gap: 16px;
-    margin-top: 8px;
-}
-.material-capsule-item { 
-    display: flex; 
-    flex-direction: column;
-    justify-content: space-between; 
-    background: #ffffff; 
-    border: 1px solid #409EFF; 
-    padding: 16px; 
-    border-radius: 8px; 
-    box-shadow: 0 2px 6px rgba(0,0,0,0.03); 
-    gap: 12px;
-}
+.capsule-grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 16px; margin-top: 8px; }
+.material-capsule-item { display: flex; flex-direction: column; justify-content: space-between; background: #ffffff; border: 1px solid #409EFF; padding: 16px; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.03); gap: 12px; }
 .capsule-left { display: flex; flex-direction: column; gap: 8px; font-size: 14px; width: 100%; }
 .capsule-time { color: #8c8c8c; font-family: monospace; font-weight: bold; border-bottom: 1px dashed #ebeef5; padding-bottom: 6px;}
 .capsule-stats { display: flex; justify-content: space-between; width: 100%; }
 .capsule-use-tag strong { color: #F56C6C; font-size: 16px; } 
 .capsule-product-tag strong { color: #67C23A; font-size: 16px; } 
-.capsule-remark-box {
-    background-color: #f4f4f5;
-    color: #909399;
-    padding: 8px 12px;
-    border-radius: 4px;
-    font-size: 13px;
-    line-height: 1.4;
-    word-break: break-all;
-}
+.capsule-remark-box { background-color: #f4f4f5; color: #909399; padding: 8px 12px; border-radius: 4px; font-size: 13px; line-height: 1.4; word-break: break-all; }
 .capsule-right { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .capsule-right button { padding: 4px 14px; font-size: 12px; border-radius: 4px; }
 
@@ -126,17 +177,13 @@ button:active { transform: translateY(0); }
 .form-item { margin-bottom: 16px; width: 100%; }
 .form-item label { display: block; margin-bottom: 6px; font-size: 14px; color: #555; font-weight: bold; }
 .form-item input, .form-item select, .form-item textarea { width: 100%; padding: 8px; border: 1px solid #d9d9d9; border-radius: 4px; outline: none; }
-
 .user-item-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #f0f0f0; flex-wrap: wrap; gap: 8px; }
 .hidden { display: none !important; }
 
-/* =========================================================
- * 📱 移动端专属响应式适配 (Media Query)
- * ========================================================= */
+/* 📱 移动端专属响应式适配 */
 .mobile-menu-btn { display: none; background-color: #409EFF; color: white; padding: 6px 12px; border-radius: 4px; border: none; font-size: 14px; cursor: pointer; }
 
 @media (max-width: 768px) {
-    /* 1. 顶部导航栏变身为折叠菜单 */
     .top-nav { flex-wrap: wrap; padding: 12px 16px; }
     .nav-left { flex: 1; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; }
     .mobile-menu-btn { display: block; margin-top: 8px; width: 100%; }
@@ -144,39 +191,14 @@ button:active { transform: translateY(0); }
     .nav-right.show-menu { display: flex; }
     .nav-right button { width: 100%; justify-content: center; }
     
-    /* 2. 主看板区：让筛选栏彻底换行 */
-    .content-area { padding: 10px; }
-    .area-header { flex-direction: column; align-items: flex-start; gap: 12px; padding: 12px; }
-    .title-flex-box { width: 100%; justify-content: space-between; flex-wrap: wrap; gap: 8px;}
+    .controls-container { flex-direction: column; align-items: flex-start; padding: 10px; }
+    .tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+    .tab-btn { flex: 1; white-space: nowrap; padding: 10px 15px; font-size: 14px; }
+    .date-filter { width: 100%; justify-content: space-between; margin-top: 12px; }
+    .date-filter input { width: 45%; }
     
-    /* 🎯 核心修改：强制筛选栏换行显示 */
-    .filter-group { 
-        flex-direction: column; 
-        align-items: stretch; 
-        gap: 8px; 
-        width: 100%; 
-    }
-    .filter-group > div, .filter-group > span { display: block; }
-    .filter-group select, .filter-group input { width: 100%; }
-    /* 让日期选择框更加对齐 */
-    .filter-group { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 8px; }
-    #filterStatus { grid-column: span 2; }
-    /* 日期选择器换行逻辑 */
-    .filter-group label[for], .label-inline { grid-column: span 2; font-size: 12px; color: #888; }
-    #filterStartDate, #filterEndDate { grid-column: span 2; }
-    
-    /* 3. 订单列表与原材料清单自动堆叠 */
-    .grid-container { grid-template-columns: 1fr; gap: 12px; }
-    .card-top { flex-wrap: wrap; gap: 4px; }
-    .capsule-grid-container { grid-template-columns: 1fr !important; }
-    .material-top-bar { flex-direction: column; align-items: flex-start; gap: 12px; }
-    .total-stock-box { flex-wrap: wrap; }
-    
-    /* 4. 模态框与九宫格键盘手机端纵向排列 */
+    .order-grid, .grid-container, .material-container { padding: 10px; grid-template-columns: 1fr; }
     .upload-modal-body { flex-direction: column; padding: 15px; }
     .touch-keyboard-panel { width: 100%; margin-top: 4px; max-width: none; }
     .modal-box { width: 95%; margin: 10px; }
-    .modal-body { padding: 16px; }
-    .modal-footer { flex-wrap: wrap; justify-content: center; }
-    .modal-footer button { flex: 1; min-width: 120px; }
 }

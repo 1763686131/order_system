@@ -1,7 +1,7 @@
 const API_BASE = '/api';
 let currentUser = { username: '', role: '' };
 let allOrdersLocal = []; 
-let currentDashboardMode = 'order'; 
+let currentTab = 'pending'; // 核心控制状态: 'pending' (未完成), 'completed' (已完成), 'materials' (原材料)
 let activeKeyboardTargetId = 'materialInputUse'; 
 
 function getRoleName(role) {
@@ -25,7 +25,6 @@ function initFilterDates() {
     document.getElementById('filterEndDate').value = endDate.toISOString().split('T')[0];
 }
 
-// 📱 移动端菜单控制函数
 function toggleMobileMenu() {
     const menu = document.getElementById('navRightMenu');
     if(menu) menu.classList.toggle('show-menu');
@@ -39,6 +38,40 @@ function toggleModal(modalId, show) {
     const modal = document.getElementById(modalId);
     if (show) modal.classList.remove('hidden');
     else modal.classList.add('hidden');
+}
+
+/* 🎯 核心逻辑：响应标签页切换 */
+function switchTab(tabName) {
+    currentTab = tabName;
+    
+    // 更新高亮样式
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.dataset.tab === tabName) {
+            btn.classList.add('active');
+        }
+    });
+
+    const orderGrid = document.getElementById('orderGrid');
+    const materialWrapper = document.getElementById('materialViewWrapper');
+
+    if (tabName === 'materials') {
+        orderGrid.classList.add('hidden');
+        materialWrapper.classList.remove('hidden');
+        fetchMaterialRecords();
+    } else {
+        orderGrid.classList.remove('hidden');
+        materialWrapper.classList.add('hidden');
+        fetchOrders();
+    }
+}
+
+function refreshDashboardData() {
+    if (currentTab === 'materials') {
+        fetchMaterialRecords();
+    } else {
+        fetchOrders();
+    }
 }
 
 function openUploadMaterialModal() {
@@ -68,43 +101,6 @@ function pressKey(key) {
         }
     } else {
         targetInput.value = currentVal + key;
-    }
-}
-
-function switchDashboardView() {
-    const btnTitle = document.getElementById('btnTitleViewSwitch');
-    const orderGrid = document.getElementById('orderGrid');
-    const materialWrapper = document.getElementById('materialViewWrapper');
-    const filterStatus = document.getElementById('filterStatus');
-    const statusFilterLabel = document.getElementById('statusFilterLabel');
-    const listTitle = document.getElementById('listTitle');
-
-    if (currentDashboardMode === 'order') {
-        currentDashboardMode = 'material';
-        btnTitle.innerText = '📋 查看业务订单';
-        listTitle.innerText = '🏭 原材料列表';
-        orderGrid.classList.add('hidden');
-        materialWrapper.classList.remove('hidden');
-        filterStatus.classList.add('hidden');
-        statusFilterLabel.classList.add('hidden');
-        fetchMaterialRecords();
-    } else {
-        currentDashboardMode = 'order';
-        btnTitle.innerText = '📊 查看原材料数据';
-        listTitle.innerText = '📋 订单看板列表';
-        orderGrid.classList.remove('hidden');
-        materialWrapper.classList.add('hidden');
-        filterStatus.classList.remove('hidden');
-        statusFilterLabel.classList.remove('hidden');
-        fetchOrders();
-    }
-}
-
-function refreshDashboardData() {
-    if (currentDashboardMode === 'order') {
-        fetchOrders();
-    } else {
-        fetchMaterialRecords();
     }
 }
 
@@ -186,7 +182,7 @@ function handleLogout() {
 }
 
 async function fetchOrders() {
-    if (currentDashboardMode !== 'order') return;
+    if (currentTab === 'materials') return;
     try {
         const response = await fetch(`${API_BASE}/orders`, { method: 'GET', headers: getHeaders() });
         const serverOrders = await response.json();
@@ -197,12 +193,12 @@ async function fetchOrders() {
         const gridContainer = document.getElementById('orderGrid');
         gridContainer.innerHTML = ''; 
 
-        const selectedStatus = document.getElementById('filterStatus').value;
         const startDateStr = document.getElementById('filterStartDate').value;
         const endDateStr = document.getElementById('filterEndDate').value;
 
+        // 根据当前的 Tab (pending/completed) 过滤订单
         const filteredOrders = serverOrders.filter(order => {
-            if (order.status !== selectedStatus) return false;
+            if (order.status !== currentTab) return false;
             if (order.date) {
                 const orderDay = order.date.substring(0, 10); 
                 if (startDateStr && orderDay < startDateStr) return false;
@@ -212,16 +208,27 @@ async function fetchOrders() {
         });
 
         if (filteredOrders.length === 0) {
-            gridContainer.innerHTML = '<div style="color: #999; grid-column: 1/-1; text-align:center; padding:40px;">当前筛选条件下无看板订单</div>';
+            gridContainer.innerHTML = '<div style="color: #999; grid-column: 1/-1; text-align:center; padding:40px;">当前区间内无相关订单记录</div>';
             return;
         }
 
         filteredOrders.forEach(order => {
             const card = document.createElement('div');
             const orderType = order.type !== undefined ? order.type : 0;
-            card.className = `order-card type-${orderType} status-${order.status}`;
             
-            const typeText = orderType == 1 ? "绝缘订单" : "中固订单";
+            // 🎯 卡片色系分流：0为中固(蓝)，1为绝缘(粉)
+            let cardClasses = 'order-card';
+            let typeText = '未知';
+            if (orderType == 1) {
+                cardClasses += ' insulation-order';
+                typeText = '绝缘订单';
+            } else {
+                cardClasses += ' zhonggu-order';
+                typeText = '中固订单';
+            }
+            card.className = cardClasses;
+            
+            // 权限判断
             let isActionHidden = (currentUser.role === 'operator' && order.status === 'completed');
 
             let actionBtn = '';
@@ -229,43 +236,44 @@ async function fetchOrders() {
                 if (order.status === 'pending') {
                     actionBtn = `<button class="btn-success" onclick="triggerStatusConfirm(${order.id}, 'completed')">完成业务</button>`;
                 } else {
-                    actionBtn = `<button class="btn-secondary" onclick="triggerStatusConfirm(${order.id}, 'pending')">设为未完成</button>`;
+                    actionBtn = `<button class="btn-warning" onclick="triggerStatusConfirm(${order.id}, 'pending')" style="background:#e6a23c !important;">设为未完成</button>`;
                 }
             }
 
             let superActionHtml = '';
             if (currentUser.role === 'super_admin') {
                 superActionHtml = `
-                <div class="action-row-super">
-                    <button class="btn-warning" onclick="openEditOrderModal(${order.id})">✍️ 修改</button>
-                    <button class="btn-danger" onclick="deleteOrder(${order.id})">🗑️ 删除</button>
-                </div>
+                    <button class="btn-primary" style="padding:4px 8px; font-size:12px;" onclick="openEditOrderModal(${order.id})">✍️ 修改</button>
+                    <button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteOrder(${order.id})">🗑️ 删除</button>
                 `;
             }
 
-            const footerActionsHtml = (actionBtn || superActionHtml) ? `
-                <div class="card-actions">
-                    ${actionBtn ? `<div class="action-row-main">${actionBtn}</div>` : ''}
+            // 右下角按钮区域
+            let rightFooterHtml = `
+                <div class="card-footer-right">
                     ${superActionHtml}
+                    ${actionBtn}
                 </div>
-            ` : '';
+            `;
 
+            // 左下角完成时间区域
             let completedDateHtml = '';
             if (order.status === 'completed' && order.completed_date) {
-                completedDateHtml = `<div class="card-completed-date">✔ 完成: ${order.completed_date}</div>`;
+                completedDateHtml = `<div class="complete-date">✔ 完成: ${order.completed_date}</div>`;
             }
 
+            // 组装最新卡片排版
             card.innerHTML = `
-                <div class="card-top">
+                <div class="card-header">
                     <span class="card-title-tag">[#${order.id}] ${typeText}</span>
-                    <span>🕒 创建: ${order.date || '未知'}</span>
+                    <span class="order-time">🕐 创建: ${order.date || '未知'}</span>
                 </div>
                 <div class="card-body">
-                    <h4>${formatTextWithBreaks(order.title)}</h4>
+                    ${formatTextWithBreaks(order.title)}
                 </div>
-                <div class="card-footer-wrapper">
+                <div class="card-footer">
                     ${completedDateHtml}
-                    ${footerActionsHtml}
+                    ${rightFooterHtml}
                 </div>
             `;
             gridContainer.appendChild(card);
@@ -274,7 +282,7 @@ async function fetchOrders() {
 }
 
 async function fetchMaterialRecords() {
-    if (currentDashboardMode !== 'material') return;
+    if (currentTab !== 'materials') return;
     try {
         const response = await fetch(`${API_BASE}/materials`, { method: 'GET', headers: getHeaders() });
         const resData = await response.json();
@@ -366,7 +374,7 @@ async function uploadMaterialRecord() {
             document.getElementById('successNotifyDetail').innerText = `物料报表数据已成功存入安全持久层：\n\n🔴 消耗原材料: ${usedVal} kg\n🟢 产出总成品: ${productVal} kg`;
             toggleModal('uploadSuccessNotifyModal', true);
 
-            refreshMaterialViewAfterAction();
+            if(currentTab === 'materials') fetchMaterialRecords();
         }
     } catch (e) { alert('物料断网上传异常'); }
 }
@@ -429,14 +437,6 @@ async function deleteMaterialRecord(id) {
     } catch (e) { alert('删除流水条目异常'); }
 }
 
-function refreshMaterialViewAfterAction() {
-    if (currentDashboardMode !== 'material') {
-        switchDashboardView(); 
-    } else {
-        fetchMaterialRecords();
-    }
-}
-
 function triggerStatusConfirm(orderId, targetStatus) {
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
@@ -451,11 +451,9 @@ function triggerStatusConfirm(orderId, targetStatus) {
     const submitBtn = document.getElementById('btnConfirmSubmit');
     if (targetStatus === 'completed') {
         tipText.innerText = "🛑 确认将以下订单标记为【已完成】吗？";
-        previewBox.className = "confirm-card-preview preview-completed";
         submitBtn.className = "btn-success";
     } else {
         tipText.innerText = "⚠️ 确认将以下订单恢复为【未完成】吗？";
-        previewBox.className = "confirm-card-preview preview-pending";
         submitBtn.className = "btn-warning";
     }
     toggleModal('statusConfirmModal', true);
@@ -491,7 +489,9 @@ async function createOrder() {
         if (response.ok) {
             toggleModal('createOrderModal', false); 
             titleInput.value = '';
-            fetchOrders();
+            
+            // 发单后自动跳到“未完成订单”并刷新
+            switchTab('pending');
         }
     } catch (error) { alert('断网发单失败'); }
 }
@@ -592,7 +592,9 @@ window.onload = function() {
         currentUser = JSON.parse(savedUser);
         renderUI();
         initFilterDates();
-        fetchOrders();
+        
+        // 初始化时加载“未完成订单”数据
+        switchTab('pending');
         
         setInterval(function() {
             refreshDashboardData();

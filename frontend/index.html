@@ -38,26 +38,22 @@
 
         <div class="main-wrapper">
             <div class="content-area">
-                <div class="area-header">
-                    <div class="title-flex-box">
-                        <div id="listTitle" class="area-title">📋 订单列表</div>
-                        <button id="btnTitleViewSwitch" class="btn-info" style="padding:4px 12px; font-size:12px; border-radius:20px;" onclick="switchDashboardView()">📊 查看原材料数据</button>
+                <div class="controls-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-tab="pending" onclick="switchTab('pending')">未完成订单</button>
+                        <button class="tab-btn" data-tab="completed" onclick="switchTab('completed')">已完成订单</button>
+                        <button class="tab-btn" data-tab="materials" onclick="switchTab('materials')">原材料数据</button>
                     </div>
-                    <div class="filter-group">
-                        <span id="statusFilterLabel">状态:</span>
-                        <select id="filterStatus" onchange="fetchOrders()">
-                            <option value="pending" selected>未完成订单</option>
-                            <option value="completed">已完成订单</option>
-                        </select>
-
-                        <label class="label-inline">日期:</label>
+                    
+                    <div class="date-filter filter-group">
+                        <label>日期: </label>
                         <input id="filterStartDate" type="date" onchange="refreshDashboardData()" />
                         <span>至</span>
                         <input id="filterEndDate" type="date" onchange="refreshDashboardData()" />
                     </div>
                 </div>
                 
-                <div id="orderGrid" class="grid-container"></div>
+                <div id="orderGrid" class="order-grid grid-container"></div>
 
                 <div id="materialViewWrapper" class="material-container hidden">
                     <div class="material-top-bar">
@@ -182,13 +178,13 @@
                 <span class="close-x" onclick="toggleModal('statusConfirmModal', false)">&times;</span>
             </div>
             <div class="modal-body modal-body-compact">
-                <div id="confirmTipText" class="confirm-tip-text"></div>
-                <div id="confirmCardPreview" class="confirm-card-preview">
-                    <div class="confirm-preview-header">
+                <div id="confirmTipText" class="confirm-tip-text" style="font-weight:bold; color:#F56C6C; margin-bottom:10px;"></div>
+                <div id="confirmCardPreview" class="confirm-card-preview" style="background:#f9f9f9; padding:15px; border-radius:6px; border:1px solid #ddd;">
+                    <div class="confirm-preview-header" style="font-size:12px; color:#409EFF; font-weight:bold; margin-bottom:10px; display:flex; justify-content:space-between;">
                         <span id="previewCardType"></span>
-                        <span id="previewCardDate"></span>
+                        <span id="previewCardDate" style="color:#999;"></span>
                     </div>
-                    <div id="previewCardTitle"></div>
+                    <div id="previewCardTitle" style="font-size:14px; line-height:1.6;"></div>
                 </div>
             </div>
             <div class="modal-footer modal-footer-secondary">
