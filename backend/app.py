@@ -186,7 +186,8 @@ def add_material_record():
         "id": new_id,
         "used": float(req_data.get('used', 0)),
         "produced": float(req_data.get('produced', 0)),
-        "date": ct
+        "date": ct,
+        "remark": req_data.get('remark', '') 
     }
     records_list.append(new_record)
     mat_data['records'] = records_list
@@ -211,11 +212,11 @@ def edit_material_record(record_id):
         if x['id'] == record_id:
             x['used'] = float(req_data.get('used', 0))
             x['produced'] = float(req_data.get('produced', 0))
+            x['remark'] = str(req_data.get('remark', '')) 
             break
     write_materials(mat_data)
     return jsonify({"success": True})
 
-# 🎯 🆕 新增：删除物料记录流水的独立后端接口
 @app.route('/api/materials/<int:record_id>', methods=['DELETE'])
 def delete_material_record(record_id):
     if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403

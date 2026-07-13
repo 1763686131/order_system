@@ -72,7 +72,7 @@ function switchDashboardView() {
 
     if (currentDashboardMode === 'order') {
         currentDashboardMode = 'material';
-        btnNav.innerText = '📋 查看业务订单';
+        if (btnNav) btnNav.innerText = '📋 查看业务订单';
         btnTitle.innerText = '📋 查看业务订单';
         listTitle.innerText = '🏭 原材料数据列表';
         orderGrid.classList.add('hidden');
@@ -82,7 +82,7 @@ function switchDashboardView() {
         fetchMaterialRecords();
     } else {
         currentDashboardMode = 'order';
-        btnNav.innerText = '📊 查看原材料数据';
+        if (btnNav) btnNav.innerText = '📊 查看原材料数据';
         btnTitle.innerText = '📊 查看原材料数据';
         listTitle.innerText = '📋 订单看板列表';
         orderGrid.classList.remove('hidden');
@@ -305,12 +305,14 @@ async function fetchMaterialRecords() {
             const row = document.createElement('div');
             row.className = 'material-capsule-item';
 
-            // 🎯 新增：只有具备管理岗位(超管、普通管理)的人才可以修改和物理清除流水数据
+            const safeRemark = item.remark ? item.remark.replace(/'/g, "&#39;") : '';
+            const remarkHtml = item.remark ? `<div class="capsule-remark-box">📝 备注：${item.remark}</div>` : '';
+
             let actionHtml = '';
             if (currentUser.role === 'super_admin' || currentUser.role === 'admin') {
                 actionHtml = `
                     <div class="capsule-right">
-                        <button class="btn-primary" onclick="openEditMaterialModal(${item.id}, ${item.used}, ${item.produced})">✍️ 修改</button>
+                        <button class="btn-primary" onclick="openEditMaterialModal(${item.id}, ${item.used}, ${item.produced}, '${safeRemark}')">✍️ 备注/修改</button>
                         <button class="btn-danger" onclick="deleteMaterialRecord(${item.id})">🗑️ 删除</button>
                     </div>
                 `;
@@ -318,9 +320,12 @@ async function fetchMaterialRecords() {
 
             row.innerHTML = `
                 <div class="capsule-left">
-                    <span class="capsule-time">🕒 ${item.date}</span>
-                    <span class="capsule-use-tag">原材料使用：<strong>${item.used} kg</strong></span>
-                    <span class="capsule-product-tag">成品数量：<strong>${item.produced} kg</strong></span>
+                    <div class="capsule-time">🕒 ${item.date}</div>
+                    <div class="capsule-stats">
+                        <span class="capsule-use-tag">用料：<strong>${item.used} kg</strong></span>
+                        <span class="capsule-product-tag">成品：<strong>${item.produced} kg</strong></span>
+                    </div>
+                    ${remarkHtml}
                 </div>
                 ${actionHtml}
             `;
@@ -382,10 +387,11 @@ async function submitUpdateTotalStockValue() {
     } catch (e) { alert('更新总物料库异常'); }
 }
 
-function openEditMaterialModal(id, used, produced) {
+function openEditMaterialModal(id, used, produced, remark = '') {
     document.getElementById('editMaterialId').value = id;
     document.getElementById('editMaterialUse').value = used;
     document.getElementById('editMaterialProduct').value = produced;
+    document.getElementById('editMaterialRemark').value = remark;
     toggleModal('editMaterialModal', true);
 }
 
@@ -393,12 +399,13 @@ async function submitEditMaterial() {
     const id = document.getElementById('editMaterialId').value;
     const used = parseFloat(document.getElementById('editMaterialUse').value) || 0;
     const produced = parseFloat(document.getElementById('editMaterialProduct').value) || 0;
+    const remark = document.getElementById('editMaterialRemark').value.trim();
 
     try {
         const response = await fetch(`${API_BASE}/materials/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({ used: used, produced: produced })
+            body: JSON.stringify({ used: used, produced: produced, remark: remark })
         });
         if (response.ok) {
             toggleModal('editMaterialModal', false);
@@ -407,7 +414,6 @@ async function submitEditMaterial() {
     } catch (e) { alert('修改流水失败'); }
 }
 
-// 🎯 新增：删除物料记录流水核心客户端驱动
 async function deleteMaterialRecord(id) {
     if (!confirm(`确定要物理【删除】单号为 #${id} 的原材料流水记录吗？`)) return;
     try {
@@ -581,7 +587,6 @@ window.onload = function() {
         initFilterDates();
         fetchOrders();
         
-        // 🎯 核心写回：3秒全自动高并发高可用看板轮询刷新
         setInterval(function() {
             refreshDashboardData();
             if (!document.getElementById('viewUserModal').classList.contains('hidden')) refreshUserList();
