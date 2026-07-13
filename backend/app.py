@@ -13,6 +13,15 @@ USERS_FILE = '/app/data/users_db.json'
 ORDERS_FILE = '/app/data/orders_db.json'
 MATERIALS_FILE = '/app/data/material_db.json' 
 
+if os.path.exists('/app/frontend/index.html'):
+    FRONTEND_DIR = '/app/frontend'
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')
+
+FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
+
+
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
     if not os.path.exists(USERS_FILE):
@@ -23,6 +32,7 @@ def read_users():
 
 def write_users(data):
     with open(USERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+
 
 def read_orders():
     os.makedirs(os.path.dirname(ORDERS_FILE), exist_ok=True)
@@ -36,11 +46,11 @@ def read_orders():
 def write_orders(data):
     with open(ORDERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
-# 🎯 核心修复点：初始化物料数据库，如果没有此文件，默认工厂总储备量赋值为 5000
+
 def read_materials():
     os.makedirs(os.path.dirname(MATERIALS_FILE), exist_ok=True)
     if not os.path.exists(MATERIALS_FILE):
-        d = {"total_stock": 5000.0, "records": []} # 🎯 修正：满足需求，默认总数据赋 5000
+        d = {"total_stock": 5000.0, "records": []} 
         write_materials(d)
         return d
     with open(MATERIALS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
@@ -48,9 +58,6 @@ def read_materials():
 def write_materials(data):
     with open(MATERIALS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
-
-@app.route('/<path:path>')
-def send_static_files(path): return send_from_directory(FRONTEND_DIR, path)
 
 @app.route('/', methods=['GET'])
 def index():
@@ -183,7 +190,7 @@ def add_material_record():
     }
     records_list.append(new_record)
     mat_data['records'] = records_list
-    write_materials(mat_data) # 🎯 修正：现在数据可以完美写入物理硬盘了
+    write_materials(mat_data) 
     return jsonify({"success": True})
 
 @app.route('/api/materials/stock', methods=['PUT'])
@@ -208,6 +215,10 @@ def edit_material_record(record_id):
     write_materials(mat_data)
     return jsonify({"success": True})
 
+# 🎯 核心修复：把静态托管路由从顶部挪到【最后面】，防止它恶意把正常的 API 接口当成静态网页拦截，彻底根除 500 报错！
+@app.route('/<path:path>')
+def send_static_files(path): 
+    return send_from_directory(FRONTEND_DIR, path)
 
 def open_browser():
     if not os.path.exists('/app/frontend/index.html'): webbrowser.open("http://localhost:7899")

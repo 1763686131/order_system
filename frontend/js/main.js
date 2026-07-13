@@ -2,6 +2,7 @@ const API_BASE = '/api';
 let currentUser = { username: '', role: '' };
 let allOrdersLocal = []; 
 let currentDashboardMode = 'order'; 
+let activeKeyboardTargetId = 'materialInputUse'; // 🎯 默认当前点击的数字输入框
 
 function getRoleName(role) {
     const maps = { 'super_admin': '超级管理员', 'admin': '管理员', 'operator': '操作员' };
@@ -28,6 +29,41 @@ function toggleModal(modalId, show) {
     const modal = document.getElementById(modalId);
     if (show) modal.classList.remove('hidden');
     else modal.classList.add('hidden');
+}
+
+// 🎯 原生九宫格触屏虚拟键盘核心驱动逻辑
+function openUploadMaterialModal() {
+    toggleModal('uploadMaterialModal', true);
+    // 默认点亮并聚焦第一个输入框
+    setActiveKeyboardTarget('materialInputUse');
+    document.getElementById('materialInputUse').value = '';
+    document.getElementById('materialInputProduct').value = '';
+}
+
+function setActiveKeyboardTarget(id) {
+    activeKeyboardTargetId = id;
+    // 移除其他激活高亮
+    document.querySelectorAll('.keyboard-target').forEach(el => el.classList.remove('active-target'));
+    // 为当前选中的框框挂载蓝光高亮特效
+    document.getElementById(id).classList.add('active-target');
+}
+
+function pressKey(key) {
+    const targetInput = document.getElementById(activeKeyboardTargetId);
+    let currentVal = targetInput.value;
+
+    if (key === 'clear') {
+        targetInput.value = '';
+    } else if (key === 'backspace') {
+        targetInput.value = currentVal.substring(0, currentVal.length - 1);
+    } else if (key === '.') {
+        // 防呆：防止员工重复输入多个小数点
+        if (!currentVal.includes('.')) {
+            targetInput.value = currentVal + '.';
+        }
+    } else {
+        targetInput.value = currentVal + key;
+    }
 }
 
 function switchDashboardView() {
@@ -72,7 +108,7 @@ function renderUI() {
     const mainSection = document.getElementById('mainSection');
     const btnOpenAddUser = document.getElementById('btnOpenAddUser');
     const btnOpenViewUser = document.getElementById('btnOpenViewUser');
-    const sidebarAdminSection = document.getElementById('sidebarAdminSection');
+    const btnNavCreateOrder = document.getElementById('btnNavCreateOrder');
     const btnEditStockAction = document.getElementById('btnEditStockAction');
 
     if (!currentUser.username) {
@@ -87,21 +123,21 @@ function renderUI() {
     document.getElementById('currentUsername').innerText = currentUser.username;
     document.getElementById('currentUserRoleTag').innerText = getRoleName(currentUser.role);
 
-    // 🎯 权限隔离控制：只有超管和管理员才能看并操作总库设定修改按钮
+    // 🎯 顶部权限深度控制：发布新订单、修改总储备只对管理员层级可见
     if (currentUser.role === 'super_admin') {
         btnOpenAddUser.classList.remove('hidden');
         btnOpenViewUser.classList.remove('hidden');
-        sidebarAdminSection.classList.remove('hidden');
+        btnNavCreateOrder.classList.remove('hidden');
         btnEditStockAction.classList.remove('hidden');
     } else if (currentUser.role === 'admin') {
         btnOpenAddUser.classList.add('hidden');
         btnOpenViewUser.classList.add('hidden');
-        sidebarAdminSection.classList.remove('hidden');
+        btnNavCreateOrder.classList.remove('hidden');
         btnEditStockAction.classList.remove('hidden');
     } else {
         btnOpenAddUser.classList.add('hidden');
         btnOpenViewUser.classList.add('hidden');
-        sidebarAdminSection.classList.add('hidden');
+        btnNavCreateOrder.classList.add('hidden');
         btnEditStockAction.classList.add('hidden');
     }
 }
@@ -233,14 +269,12 @@ async function fetchOrders() {
     } catch (error) { console.error("订单数据加载失败", error); }
 }
 
-// 🎯 原材料核心数据驱动盘
 async function fetchMaterialRecords() {
     if (currentDashboardMode !== 'material') return;
     try {
         const response = await fetch(`${API_BASE}/materials`, { method: 'GET', headers: getHeaders() });
         const resData = await response.json();
         
-        // 渲染顶部工厂储备量文字标签
         document.getElementById('displayTotalStock').innerText = `${resData.total_stock} kg`;
 
         const container = document.getElementById('materialCapsuleList');
@@ -258,7 +292,6 @@ async function fetchMaterialRecords() {
             return true;
         });
 
-        // 工业联算公式
         let totalUsed = 0;
         resData.records.forEach(item => {
             totalUsed += parseFloat(item.used || 0);
@@ -298,7 +331,6 @@ async function fetchMaterialRecords() {
     } catch (e) { console.error("获取原材料清单异常", e); }
 }
 
-// 🎯 上传原材料数据组，并调取屏幕中央提示模态框
 async function uploadMaterialRecord() {
     const usedInput = document.getElementById('materialInputUse');
     const productInput = document.getElementById('materialInputProduct');
@@ -306,7 +338,7 @@ async function uploadMaterialRecord() {
     const productVal = parseFloat(productInput.value);
 
     if (isNaN(usedVal) || isNaN(productVal)) {
-        return alert('录入失败：请确保原材料和出货成品数量均已填入有效数字！');
+        return alert('录入失败：请点击右侧虚拟键盘完整填入有效的数字！');
     }
 
     try {
@@ -316,11 +348,12 @@ async function uploadMaterialRecord() {
             body: JSON.stringify({ used: usedVal, produced: productVal })
         });
         if (response.ok) {
+            toggleModal('uploadMaterialModal', false); // 🎯 关闭录入弹窗
             usedInput.value = '';
             productInput.value = '';
             
-            // 🎯 核心需求：触发屏幕正中央的优雅成功通知弹窗
-            document.getElementById('successNotifyDetail').innerText = `已成功向系统存入以下盘点数据：\n消耗原材料: ${usedVal} kg\n产出总成品: ${productVal} kg`;
+            // 🎯 全网设备绝对完美居中通知提示框
+            document.getElementById('successNotifyDetail').innerText = `物料报表数据已成功存入安全持久层：\n\n🔴 消耗原材料: ${usedVal} kg\n🟢 产出总成品: ${productVal} kg`;
             toggleModal('uploadSuccessNotifyModal', true);
 
             refreshMaterialViewAfterAction();
@@ -328,14 +361,12 @@ async function uploadMaterialRecord() {
     } catch (e) { alert('物料断网上传异常'); }
 }
 
-// 🎯 触发工厂总储备修改窗口
 function triggerStockModifyModal() {
     const currentStock = document.getElementById('displayTotalStock').innerText.replace(' kg', '');
     document.getElementById('newStockInput').value = currentStock;
     toggleModal('editTotalStockModal', true);
 }
 
-// 🎯 提交修改后的总储备
 async function submitUpdateTotalStockValue() {
     const newStock = parseFloat(document.getElementById('newStockInput').value);
     if (isNaN(newStock) || newStock < 0) return alert('请输入有效的数字库存储备！');
@@ -438,6 +469,7 @@ async function createOrder() {
             body: JSON.stringify({ title: title, type: parseInt(typeSelect.value) })
         });
         if (response.ok) {
+            toggleModal('createOrderModal', false); // 🎯 关闭发单弹窗
             titleInput.value = '';
             fetchOrders();
         }
