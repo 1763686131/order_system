@@ -251,8 +251,13 @@ async function fetchOrders() {
 
             let superActionHtml = '';
             if (currentUser.role === 'super_admin') {
+                // 🎯 核心修改：如果是已完成状态 (completed)，就不生成“修改”按钮，只保留“删除”按钮
+                const editBtnHtml = order.status === 'completed' 
+                    ? '' 
+                    : `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px;" onclick="openEditOrderModal(${order.id})">修改</button>`;
+                
                 superActionHtml = `
-                    <button class="btn-outline-primary" style="padding:4px 10px; font-size:12px;" onclick="openEditOrderModal(${order.id})">修改</button>
+                    ${editBtnHtml}
                     <button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteOrder(${order.id})">删除</button>
                 `;
             }
@@ -269,7 +274,7 @@ async function fetchOrders() {
                 completedDateHtml = `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>`;
             }
 
-            // 🎯 新增：格式化结构化数据为纯净的列表排版 (兼容老数据的同时优美展示新数据)
+            // 🎯 格式化结构化数据为纯净的列表排版 (兼容老数据的同时优美展示新数据)
             let structuredDataHtml = '';
             // 只要存在新字段中的任意一个，就渲染出浅灰底色的结构化区域
             if (order.order_client || order.receiver_name || order.receiver_phone || order.receiver_address || order.goods_name || order.goods_weight || order.goods_quantity || order.goods_packaging || order.logistics_service) {
@@ -289,7 +294,7 @@ async function fetchOrders() {
                 structuredDataHtml += `</div>`;
             }
 
-            // 🎯 修改：将原本的 title 和新增的 structuredDataHtml 组合渲染到 card-body 里面
+            // 将原本的 title 和新增的 structuredDataHtml 组合渲染到 card-body 里面
             card.innerHTML = `
                 <div class="card-header">
                     <span class="card-title-tag">[#${order.id}] ${typeText}</span>
@@ -335,7 +340,7 @@ async function fetchMaterialRecords() {
             return true;
         });
 
-        // 🎯 核心修改：原材料数据按创建时间降序排序（最近的时间在最前面）
+        // 原材料数据按创建时间降序排序（最近的时间在最前面）
         filteredRecords.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
         let totalUsed = 0;
