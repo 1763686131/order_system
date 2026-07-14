@@ -183,20 +183,70 @@ button:active { transform: translateY(0); }
 /* 📱 移动端专属响应式适配 */
 .mobile-menu-btn { display: none; background-color: #409EFF; color: white; padding: 6px 12px; border-radius: 4px; border: none; font-size: 14px; cursor: pointer; }
 
+/* =========================================================
+ * 📱 移动端专属响应式适配 (Media Query)
+ * ========================================================= */
+.mobile-menu-btn { display: none; background-color: #409EFF; color: white; padding: 6px 12px; border-radius: 4px; border: none; font-size: 14px; cursor: pointer; }
+
 @media (max-width: 768px) {
-    .top-nav { flex-wrap: wrap; padding: 12px 16px; }
-    .nav-left { flex: 1; flex-direction: column; align-items: flex-start; gap: 4px; width: 100%; }
-    .mobile-menu-btn { display: block; margin-top: 8px; width: 100%; }
-    .nav-right { display: none; width: 100%; flex-direction: column; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid #ebeef5; }
+    /* 1. 🎯 优化：顶部导航栏采用网格布局，将按钮移至右上角 */
+    .top-nav { 
+        display: grid; 
+        grid-template-columns: 1fr auto; /* 左侧自适应，右侧给按钮留位 */
+        padding: 12px 16px; 
+        align-items: center; 
+    }
+    .nav-left { 
+        flex-direction: column; 
+        align-items: flex-start; 
+        gap: 4px; 
+        width: auto; 
+    }
+    .mobile-menu-btn { 
+        display: block; 
+        margin: 0; /* 取消原先的顶部间距 */
+        width: auto; /* 取消原先的 100% 宽度 */
+        padding: 8px 14px; 
+        font-size: 14px;
+    }
+    /* 展开的菜单占满下一行 */
+    .nav-right { 
+        grid-column: 1 / -1; 
+        display: none; 
+        width: 100%; 
+        flex-direction: column; 
+        gap: 10px; 
+        margin-top: 12px; 
+        padding-top: 12px; 
+        border-top: 1px solid #ebeef5; 
+    }
     .nav-right.show-menu { display: flex; }
     .nav-right button { width: 100%; justify-content: center; }
     
-    .controls-container { flex-direction: column; align-items: flex-start; padding: 10px; }
-    .tabs { width: 100%; overflow-x: auto; flex-wrap: nowrap; padding-bottom: 2px; }
+    /* 2. 🎯 优化：利用 flex 的 order 属性，无缝上下调换日期和标签的位置 */
+    .controls-container { 
+        flex-direction: column; 
+        align-items: flex-start; 
+        padding: 10px; 
+    }
+    .date-filter { 
+        order: 1; /* 日期排在第一位 (上面) */
+        width: 100%; 
+        justify-content: space-between; 
+        margin-top: 0; /* 取消原有的顶部间距 */
+        margin-bottom: 12px; /* 增加到底部标签的间距 */
+    }
+    .tabs { 
+        order: 2; /* 标签排在第二位 (下面) */
+        width: 100%; 
+        overflow-x: auto; 
+        flex-wrap: nowrap; 
+        padding-bottom: 2px; 
+    }
     .tab-btn { flex: 1; white-space: nowrap; padding: 10px 15px; font-size: 14px; }
-    .date-filter { width: 100%; justify-content: space-between; margin-top: 12px; }
     .date-filter input { width: 45%; }
     
+    /* 其他模态框与布局保持不变 */
     .order-grid, .grid-container, .material-container { padding: 10px; grid-template-columns: 1fr; }
     .upload-modal-body { flex-direction: column; padding: 15px; }
     .touch-keyboard-panel { width: 100%; margin-top: 4px; max-width: none; }
