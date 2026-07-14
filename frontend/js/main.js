@@ -234,7 +234,7 @@ async function fetchOrders() {
                 ? `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px; margin-right:4px;" onclick="copyOrderInfo(${order.id})">复制</button>`
                 : '';
 
-            let completedDateHtml = order.status === 'completed' && order.completed_date ? `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>` : '';
+            let completedDateHtml = order.status === 'completed' && order.completed_date ? `<div class="complete-date" style="white-space: nowrap;">完成时间： ${order.completed_date}</div>` : '';
 
             let structuredDataHtml = '';
             if (order.order_client || order.receiver_name || (!isOperator && order.receiver_phone) || order.receiver_address || order.goods_name || order.goods_weight || order.goods_quantity || order.goods_packaging || (!isOperator && order.logistics_service) || order.remark) {
@@ -306,7 +306,7 @@ function copyOrderInfo(orderId) {
 
     if (navigator.clipboard && window.isSecureContext) {
         navigator.clipboard.writeText(clipText).then(() => {
-            alert('✅ 极简物流信息已成功复制！\n可以直接去微信粘贴转发了。');
+            alert('✅ 物流信息已成功复制！\n可以直接去微信粘贴转发了。');
         }).catch(() => fallbackCopyTextToClipboard(clipText));
     } else {
         fallbackCopyTextToClipboard(clipText);
@@ -331,7 +331,7 @@ function fallbackCopyTextToClipboard(text) {
     textArea.select();
     try {
         document.execCommand('copy');
-        alert('✅ 极简物流信息已成功复制！\n可以直接去微信粘贴转发了。');
+        alert('✅物流信息已成功复制！\n可以直接去微信粘贴转发了。');
     } catch (err) {
         alert('⚠️ 当前浏览器不支持自动复制，请手动选中并复制。');
     }
