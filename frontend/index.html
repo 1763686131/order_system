@@ -129,23 +129,42 @@
                     </select>
                 </div>
                 <div class="form-item">
-                    <label for="newOrderTitle">原始文本参数 (预留识别框/备注说明):</label>
-                    <textarea id="newOrderTitle" style="height:60px;" placeholder="后续升级智能识别时使用，当前可填备注..."></textarea>
+                    <label for="newOrderTitle">文本粘贴区 (请按格式粘贴):</label>
+                    <textarea id="newOrderTitle" style="height:100px; font-size:14px; background:#f0f9eb; border-color:#67C23A;" placeholder="格式：
+第一行: 客户名 (如 陶芸)
+第二行: 收货人 电话 地址 (如 牛华 13068188388 浙江省温州...)
+第三行起: 货物规格 (如 粘钢胶40公斤×27组+30*1)"></textarea>
+                    <button type="button" class="btn-success" style="width: 100%; margin-top: 8px; font-size: 15px; padding: 10px;" onclick="smartParse('new')">✨ 一键智能识别并填充下方表单</button>
                 </div>
                 <div style="padding: 10px; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 10px;">
-                    <div class="form-item"><label>制单归属 (如: 陶芸):</label><input id="newOrderClient" placeholder="对应图片中的第一行" /></div>
-                    <div class="form-item"><label>收货姓名:</label><input id="newReceiverName" placeholder="例如: 牛华" /></div>
-                    <div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="newReceiverPhone" placeholder="例如: 13068188388 (必填)" /></div>
-                    <div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="newReceiverAddress" placeholder="例如: 浙江省温州市... (必填)" /></div>
-                    <div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><input id="newGoodsName" placeholder="例如: 中固粘钢胶40公斤×27组... (必填)" /></div>
+                    <div class="form-item"><label>制单归属 (如: 陶芸):</label><input id="newOrderClient" /></div>
+                    <div class="form-item"><label>收货姓名:</label><input id="newReceiverName" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="newReceiverPhone" placeholder="必须是11位手机或座机(例:0571-88538883)" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="newReceiverAddress" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><textarea id="newGoodsName" style="height:50px;"></textarea></div>
                     
                     <div style="display: flex; gap: 10px;">
-                        <div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="newGoodsWeight" placeholder="例如: 1110kg (必填)" /></div>
+                        <div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="newGoodsWeight" placeholder="自动计算或手填" /></div>
                         <div class="form-item" style="flex:1;"><label>货物数量:</label><input id="newGoodsQuantity" placeholder="例如: 56件" /></div>
                     </div>
                     
-                    <div class="form-item"><label>货物包装:</label><input id="newGoodsPackaging" placeholder="例如: 桶装" /></div>
-                    <div class="form-item"><label>物流服务:</label><input id="newLogisticsService" placeholder="例如: 送货上门+回单签字拍照" /></div>
+                    <div class="form-item">
+                        <label>货物包装:</label>
+                        <select id="newGoodsPackaging">
+                            <option value="桶装" selected>桶装</option>
+                            <option value="袋装">袋装</option>
+                            <option value="托盘">托盘</option>
+                        </select>
+                    </div>
+                    <div class="form-item">
+                        <label>物流服务:</label>
+                        <select id="newLogisticsService">
+                            <option value="送货上门+回单拍照回传" selected>送货上门+回单拍照回传</option>
+                            <option value="送货上门">送货上门</option>
+                            <option value="用户自提">用户自提</option>
+                        </select>
+                    </div>
+                    <div class="form-item"><label>📝 附加备注信息:</label><input id="newOrderRemark" placeholder="选填，例如：加急、替换等..." /></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -175,23 +194,39 @@
                     </select>
                 </div>
                 <div class="form-item">
-                    <label for="editOrderTitle">原始文本参数 (预留识别框/备注说明):</label>
+                    <label for="editOrderTitle">文本粘贴区 (支持重新识别):</label>
                     <textarea id="editOrderTitle" style="height:60px;"></textarea>
+                    <button type="button" class="btn-success" style="width: 100%; margin-top: 5px; font-size: 13px;" onclick="smartParse('edit')">✨ 提取重算文本</button>
                 </div>
                 <div style="padding: 10px; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 10px;">
                     <div class="form-item"><label>制单归属:</label><input id="editOrderClient" /></div>
                     <div class="form-item"><label>收货姓名:</label><input id="editReceiverName" /></div>
                     <div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="editReceiverPhone" /></div>
                     <div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="editReceiverAddress" /></div>
-                    <div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><input id="editGoodsName" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><textarea id="editGoodsName" style="height:50px;"></textarea></div>
                     
                     <div style="display: flex; gap: 10px;">
                         <div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="editGoodsWeight" /></div>
                         <div class="form-item" style="flex:1;"><label>货物数量:</label><input id="editGoodsQuantity" /></div>
                     </div>
                     
-                    <div class="form-item"><label>货物包装:</label><input id="editGoodsPackaging" /></div>
-                    <div class="form-item"><label>物流服务:</label><input id="editLogisticsService" /></div>
+                    <div class="form-item">
+                        <label>货物包装:</label>
+                        <select id="editGoodsPackaging">
+                            <option value="桶装">桶装</option>
+                            <option value="袋装">袋装</option>
+                            <option value="托盘">托盘</option>
+                        </select>
+                    </div>
+                    <div class="form-item">
+                        <label>物流服务:</label>
+                        <select id="editLogisticsService">
+                            <option value="送货上门+回单拍照回传">送货上门+回单拍照回传</option>
+                            <option value="送货上门">送货上门</option>
+                            <option value="用户自提">用户自提</option>
+                        </select>
+                    </div>
+                    <div class="form-item"><label>📝 附加备注信息:</label><input id="editOrderRemark" /></div>
                 </div>
             </div>
             <div class="modal-footer">

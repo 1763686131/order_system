@@ -1,7 +1,7 @@
 const API_BASE = '/api';
 let currentUser = { username: '', role: '' };
 let allOrdersLocal = []; 
-let currentTab = 'pending'; // 核心控制状态: 'pending' (未完成), 'completed' (已完成), 'materials' (原材料)
+let currentTab = 'pending'; 
 let activeKeyboardTargetId = 'materialInputUse'; 
 
 function getRoleName(role) {
@@ -40,16 +40,11 @@ function toggleModal(modalId, show) {
     else modal.classList.add('hidden');
 }
 
-/* 🎯 核心逻辑：响应标签页切换 */
 function switchTab(tabName) {
     currentTab = tabName;
-    
-    // 更新高亮样式
     document.querySelectorAll('.tab-btn').forEach(btn => {
         btn.classList.remove('active');
-        if (btn.dataset.tab === tabName) {
-            btn.classList.add('active');
-        }
+        if (btn.dataset.tab === tabName) btn.classList.add('active');
     });
 
     const orderGrid = document.getElementById('orderGrid');
@@ -67,11 +62,8 @@ function switchTab(tabName) {
 }
 
 function refreshDashboardData() {
-    if (currentTab === 'materials') {
-        fetchMaterialRecords();
-    } else {
-        fetchOrders();
-    }
+    if (currentTab === 'materials') fetchMaterialRecords();
+    else fetchOrders();
 }
 
 function openUploadMaterialModal() {
@@ -90,18 +82,10 @@ function setActiveKeyboardTarget(id) {
 function pressKey(key) {
     const targetInput = document.getElementById(activeKeyboardTargetId);
     let currentVal = targetInput.value;
-
-    if (key === 'clear') {
-        targetInput.value = '';
-    } else if (key === 'backspace') {
-        targetInput.value = currentVal.substring(0, currentVal.length - 1);
-    } else if (key === '.') {
-        if (!currentVal.includes('.')) {
-            targetInput.value = currentVal + '.';
-        }
-    } else {
-        targetInput.value = currentVal + key;
-    }
+    if (key === 'clear') targetInput.value = '';
+    else if (key === 'backspace') targetInput.value = currentVal.substring(0, currentVal.length - 1);
+    else if (key === '.') { if (!currentVal.includes('.')) targetInput.value = currentVal + '.'; }
+    else targetInput.value = currentVal + key;
 }
 
 function renderUI() {
@@ -160,12 +144,8 @@ async function handleLogin() {
             renderUI();
             initFilterDates();
             refreshDashboardData();
-        } else {
-            alert(resData.message || '凭证错误，登录失败');
-        }
-    } catch (error) {
-        alert('本地服务端连接失败，请检查 Docker。');
-    }
+        } else { alert(resData.message || '凭证错误，登录失败'); }
+    } catch (error) { alert('本地服务端连接失败，请检查 Docker。'); }
 }
 
 function formatTextWithBreaks(text) {
@@ -196,7 +176,6 @@ async function fetchOrders() {
         const startDateStr = document.getElementById('filterStartDate').value;
         const endDateStr = document.getElementById('filterEndDate').value;
 
-        // 根据当前的 Tab (pending/completed) 过滤订单
         let filteredOrders = serverOrders.filter(order => {
             if (order.status !== currentTab) return false;
             if (order.date) {
@@ -207,12 +186,9 @@ async function fetchOrders() {
             return true;
         });
 
-        // 🎯 核心修改：时间降序排序（最近的时间在最前面）
         if (currentTab === 'completed') {
-            // 已完成订单：根据 completed_date 倒序
             filteredOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
         } else if (currentTab === 'pending') {
-            // 未完成订单：根据创建时间 date 倒序
             filteredOrders.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         }
 
@@ -225,21 +201,16 @@ async function fetchOrders() {
             const card = document.createElement('div');
             const orderType = order.type !== undefined ? order.type : 0;
             
-            // 卡片色系分流：0为中固(蓝)，1为绝缘(粉)
             let cardClasses = 'order-card';
             let typeText = '未知';
             if (orderType == 1) {
-                cardClasses += ' insulation-order';
-                typeText = '绝缘订单';
+                cardClasses += ' insulation-order'; typeText = '绝缘订单';
             } else {
-                cardClasses += ' zhonggu-order';
-                typeText = '中固订单';
+                cardClasses += ' zhonggu-order'; typeText = '中固订单';
             }
             card.className = cardClasses;
             
-            // 权限判断
             let isActionHidden = (currentUser.role === 'operator' && order.status === 'completed');
-
             let actionBtn = '';
             if (!isActionHidden) {
                 if (order.status === 'pending') {
@@ -251,64 +222,47 @@ async function fetchOrders() {
 
             let superActionHtml = '';
             if (currentUser.role === 'super_admin') {
-                // 🎯 核心修改：如果是已完成状态 (completed)，就不生成“修改”按钮，只保留“删除”按钮
                 const editBtnHtml = order.status === 'completed' 
-                    ? '' 
-                    : `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px;" onclick="openEditOrderModal(${order.id})">修改</button>`;
-                
-                superActionHtml = `
-                    ${editBtnHtml}
-                    <button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteOrder(${order.id})">删除</button>
-                `;
+                    ? '' : `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px;" onclick="openEditOrderModal(${order.id})">修改</button>`;
+                superActionHtml = `${editBtnHtml}<button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteOrder(${order.id})">删除</button>`;
             }
 
-            let rightFooterHtml = `
-                <div class="card-footer-right">
-                    ${superActionHtml}
-                    ${actionBtn}
-                </div>
-            `;
+            let completedDateHtml = order.status === 'completed' && order.completed_date ? `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>` : '';
 
-            let completedDateHtml = '';
-            if (order.status === 'completed' && order.completed_date) {
-                completedDateHtml = `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>`;
-            }
-
-            // 🎯 格式化结构化数据为纯净的列表排版 (兼容老数据的同时优美展示新数据)
             let structuredDataHtml = '';
-            // 只要存在新字段中的任意一个，就渲染出浅灰底色的结构化区域
             if (order.order_client || order.receiver_name || order.receiver_phone || order.receiver_address || order.goods_name || order.goods_weight || order.goods_quantity || order.goods_packaging || order.logistics_service) {
                 structuredDataHtml = `<div style="margin-top: 12px; padding: 12px; background: #f8f9fb; border-radius: 6px; font-size: 13px; line-height: 2;">`;
-                
                 const typeLabel = orderType == 1 ? '绝缘订单' : '中固订单';
                 if (order.order_client) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">${typeLabel}:</span><strong style="color:#333;">${order.order_client}</strong></div>`;
                 if (order.receiver_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货姓名:</span><strong style="color:#333;">${order.receiver_name}</strong></div>`;
                 if (order.receiver_phone) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货电话:</span><strong style="color:#333;">${order.receiver_phone}</strong></div>`;
                 if (order.receiver_address) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货地址:</span><strong style="color:#333;">${order.receiver_address}</strong></div>`;
-                if (order.goods_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物名称:</span><strong style="color:#409EFF; font-size: 14px;">${order.goods_name}</strong></div>`;
+                if (order.goods_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物名称:</span><div style="color:#409EFF; font-weight:bold; font-size: 14px; flex:1;">${formatTextWithBreaks(order.goods_name)}</div></div>`;
                 if (order.goods_weight) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物重量:</span><strong style="color:#E6A23C;">${order.goods_weight}</strong></div>`;
                 if (order.goods_quantity) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物数量:</span><strong style="color:#E6A23C;">${order.goods_quantity}</strong></div>`;
                 if (order.goods_packaging) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物包装:</span><strong style="color:#333;">${order.goods_packaging}</strong></div>`;
                 if (order.logistics_service) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">物流服务:</span><strong style="color:#333;">${order.logistics_service}</strong></div>`;
-                
+                if (order.remark) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">备注信息:</span><strong style="color:#F56C6C;">${order.remark}</strong></div>`;
                 structuredDataHtml += `</div>`;
             }
 
-            // 将原本的 title 和新增的 structuredDataHtml 组合渲染到 card-body 里面
+            // 🎯 只要有结构化数据，就彻底隐藏原始长文本 Title，让前端更干净
+            let oldTextHtml = (!order.receiver_name && !order.goods_name && order.title)
+                ? `<div style="color: #606266; font-size: 14px; margin-bottom: 4px;">${formatTextWithBreaks(order.title)}</div>` 
+                : '';
+
             card.innerHTML = `
                 <div class="card-header">
                     <span class="card-title-tag">[#${order.id}] ${typeText}</span>
                     <span class="order-time">🕐 创建: ${order.date || '未知'}</span>
                 </div>
                 <div class="card-body">
-                    <div style="color: #606266; font-size: 14px; margin-bottom: ${structuredDataHtml ? '4px' : '0'};">
-                        ${formatTextWithBreaks(order.title)}
-                    </div>
+                    ${oldTextHtml}
                     ${structuredDataHtml}
                 </div>
                 <div class="card-footer">
                     ${completedDateHtml}
-                    ${rightFooterHtml}
+                    <div class="card-footer-right">${superActionHtml}${actionBtn}</div>
                 </div>
             `;
             gridContainer.appendChild(card);
@@ -321,7 +275,6 @@ async function fetchMaterialRecords() {
     try {
         const response = await fetch(`${API_BASE}/materials`, { method: 'GET', headers: getHeaders() });
         const resData = await response.json();
-        
         document.getElementById('displayTotalStock').innerText = `${resData.total_stock} kg`;
 
         const container = document.getElementById('materialCapsuleList');
@@ -330,7 +283,6 @@ async function fetchMaterialRecords() {
         const startDateStr = document.getElementById('filterStartDate').value;
         const endDateStr = document.getElementById('filterEndDate').value;
 
-        // 过滤日期
         let filteredRecords = resData.records.filter(item => {
             if (item.date) {
                 const day = item.date.substring(0, 10);
@@ -340,13 +292,10 @@ async function fetchMaterialRecords() {
             return true;
         });
 
-        // 原材料数据按创建时间降序排序（最近的时间在最前面）
         filteredRecords.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
         let totalUsed = 0;
-        resData.records.forEach(item => {
-            totalUsed += parseFloat(item.used || 0);
-        });
+        resData.records.forEach(item => { totalUsed += parseFloat(item.used || 0); });
         const remains = parseFloat(resData.total_stock || 0) - totalUsed;
         document.getElementById('remainedMaterialCapsule').innerText = `剩余原材料：${remains.toFixed(2)} kg`;
 
@@ -386,18 +335,13 @@ async function fetchMaterialRecords() {
             container.appendChild(row);
         });
 
-    } catch (e) { console.error("获取原材料清单异常", e); }
+    } catch (e) { console.error("获取原材料异常", e); }
 }
 
 async function uploadMaterialRecord() {
-    const usedInput = document.getElementById('materialInputUse');
-    const productInput = document.getElementById('materialInputProduct');
-    const usedVal = parseFloat(usedInput.value);
-    const productVal = parseFloat(productInput.value);
-
-    if (isNaN(usedVal) || isNaN(productVal)) {
-        return alert('录入失败：请点击右侧虚拟键盘完整填入有效的数字！');
-    }
+    const usedVal = parseFloat(document.getElementById('materialInputUse').value);
+    const productVal = parseFloat(document.getElementById('materialInputProduct').value);
+    if (isNaN(usedVal) || isNaN(productVal)) return alert('录入失败：请点击右侧虚拟键盘完整填入有效的数字！');
 
     try {
         const response = await fetch(`${API_BASE}/materials`, {
@@ -407,38 +351,25 @@ async function uploadMaterialRecord() {
         });
         if (response.ok) {
             toggleModal('uploadMaterialModal', false); 
-            usedInput.value = '';
-            productInput.value = '';
-            
             document.getElementById('successNotifyDetail').innerText = `物料报表数据已成功存入安全持久层：\n\n🔴 消耗原材料: ${usedVal} kg\n🟢 产出总成品: ${productVal} kg`;
             toggleModal('uploadSuccessNotifyModal', true);
-
             if(currentTab === 'materials') fetchMaterialRecords();
         }
     } catch (e) { alert('物料断网上传异常'); }
 }
 
 function triggerStockModifyModal() {
-    const currentStock = document.getElementById('displayTotalStock').innerText.replace(' kg', '');
-    document.getElementById('newStockInput').value = currentStock;
+    document.getElementById('newStockInput').value = document.getElementById('displayTotalStock').innerText.replace(' kg', '');
     toggleModal('editTotalStockModal', true);
 }
 
 async function submitUpdateTotalStockValue() {
     const newStock = parseFloat(document.getElementById('newStockInput').value);
-    if (isNaN(newStock) || newStock < 0) return alert('请输入有效的数字库存储备！');
-
+    if (isNaN(newStock) || newStock < 0) return alert('请输入有效的数字！');
     try {
-        const response = await fetch(`${API_BASE}/materials/stock`, {
-            method: 'PUT',
-            headers: getHeaders(),
-            body: JSON.stringify({ total_stock: newStock })
-        });
-        if (response.ok) {
-            toggleModal('editTotalStockModal', false);
-            fetchMaterialRecords();
-        }
-    } catch (e) { alert('更新总物料库异常'); }
+        const response = await fetch(`${API_BASE}/materials/stock`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ total_stock: newStock }) });
+        if (response.ok) { toggleModal('editTotalStockModal', false); fetchMaterialRecords(); }
+    } catch (e) { alert('更新总库异常'); }
 }
 
 function openEditMaterialModal(id, used, produced, remark = '') {
@@ -451,29 +382,23 @@ function openEditMaterialModal(id, used, produced, remark = '') {
 
 async function submitEditMaterial() {
     const id = document.getElementById('editMaterialId').value;
-    const used = parseFloat(document.getElementById('editMaterialUse').value) || 0;
-    const produced = parseFloat(document.getElementById('editMaterialProduct').value) || 0;
-    const remark = document.getElementById('editMaterialRemark').value.trim();
-
+    const payload = {
+        used: parseFloat(document.getElementById('editMaterialUse').value) || 0,
+        produced: parseFloat(document.getElementById('editMaterialProduct').value) || 0,
+        remark: document.getElementById('editMaterialRemark').value.trim()
+    };
     try {
-        const response = await fetch(`${API_BASE}/materials/${id}`, {
-            method: 'PUT',
-            headers: getHeaders(),
-            body: JSON.stringify({ used: used, produced: produced, remark: remark })
-        });
-        if (response.ok) {
-            toggleModal('editMaterialModal', false);
-            fetchMaterialRecords();
-        }
+        const response = await fetch(`${API_BASE}/materials/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) });
+        if (response.ok) { toggleModal('editMaterialModal', false); fetchMaterialRecords(); }
     } catch (e) { alert('修改流水失败'); }
 }
 
 async function deleteMaterialRecord(id) {
-    if (!confirm(`确定要物理【删除】单号为 #${id} 的原材料流水记录吗？`)) return;
+    if (!confirm(`确定要物理【删除】单号为 #${id} 的流水记录吗？`)) return;
     try {
         const response = await fetch(`${API_BASE}/materials/${id}`, { method: 'DELETE', headers: getHeaders() });
         if (response.ok) fetchMaterialRecords();
-    } catch (e) { alert('删除流水条目异常'); }
+    } catch (e) {}
 }
 
 function triggerStatusConfirm(orderId, targetStatus) {
@@ -481,19 +406,16 @@ function triggerStatusConfirm(orderId, targetStatus) {
     if (!order) return;
     document.getElementById('confirmTargetId').value = orderId;
     document.getElementById('confirmTargetStatus').value = targetStatus;
-    const orderType = order.type !== undefined ? order.type : 0;
-    document.getElementById('previewCardType').innerText = `[#${order.id}] ${orderType == 1 ? '绝缘订单' : '中固订单'}`;
+    document.getElementById('previewCardType').innerText = `[#${order.id}] ${order.type == 1 ? '绝缘订单' : '中固订单'}`;
     document.getElementById('previewCardDate').innerText = `🕒 创建: ${order.date || '未知'}`;
-    document.getElementById('previewCardTitle').innerHTML = formatTextWithBreaks(order.title);
-    const previewBox = document.getElementById('confirmCardPreview');
+    document.getElementById('previewCardTitle').innerHTML = order.goods_name ? formatTextWithBreaks(order.goods_name) : formatTextWithBreaks(order.title);
+    
     const tipText = document.getElementById('confirmTipText');
     const submitBtn = document.getElementById('btnConfirmSubmit');
     if (targetStatus === 'completed') {
-        tipText.innerText = "🛑 确认将以下订单标记为【已完成】吗？";
-        submitBtn.className = "btn-success";
+        tipText.innerText = "🛑 确认将以下订单标记为【已完成】吗？"; submitBtn.className = "btn-success";
     } else {
-        tipText.innerText = "⚠️ 确认将以下订单恢复为【未完成】吗？";
-        submitBtn.className = "btn-warning";
+        tipText.innerText = "⚠️ 确认将以下订单恢复为【未完成】吗？"; submitBtn.className = "btn-warning";
     }
     toggleModal('statusConfirmModal', true);
 }
@@ -502,26 +424,86 @@ async function submitUpdateOrderStatus() {
     const id = document.getElementById('confirmTargetId').value;
     const status = document.getElementById('confirmTargetStatus').value;
     try {
-        const response = await fetch(`${API_BASE}/orders/${id}`, {
-            method: 'PUT',
-            headers: getHeaders(),
-            body: JSON.stringify({ status: status })
-        });
-        if (response.ok) {
-            toggleModal('statusConfirmModal', false);
-            fetchOrders();
-        }
+        const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: status }) });
+        if (response.ok) { toggleModal('statusConfirmModal', false); fetchOrders(); }
     } catch (error) { alert('调整状态失败'); }
 }
 
+// 🌟🌟🌟 全新一键智能识别引擎 🌟🌟🌟
+function smartParse(prefix) {
+    const text = document.getElementById(`${prefix}OrderTitle`).value;
+    if (!text.trim()) return alert('请先在上方输入框粘贴或填写内容，再点击识别！');
+
+    // 清除空行并分割
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+    if (lines.length === 0) return;
+
+    // 1. 提取制单归属 (第一行)
+    document.getElementById(`${prefix}OrderClient`).value = lines[0].replace(/[:：]$/, '').trim();
+
+    // 2. 提取收货人、电话、地址 (第二行)
+    if (lines.length > 1) {
+        let line2 = lines[1];
+        // 正则提取 11位手机 或 区号-座机号
+        let phoneMatch = line2.match(/(1[3-9]\d{9}|0\d{2,3}-\d{7,8})/);
+        let phone = phoneMatch ? phoneMatch[0] : '';
+        let name = '';
+        let address = '';
+
+        if (phone) {
+            let parts = line2.split(phone);
+            // 电话左边是名字，去掉多余的前缀和标点
+            name = parts[0].replace(/收货人|电话|联系方式|:|：/g, '').trim();
+            // 电话右边是地址，去掉开头的句号逗号
+            address = parts[1].replace(/^[。，,.;:\s]+/, '').trim();
+        } else {
+            name = line2; // 如果没匹配到电话，整行塞进名字里当做保底兜底
+        }
+
+        document.getElementById(`${prefix}ReceiverName`).value = name;
+        document.getElementById(`${prefix}ReceiverPhone`).value = phone;
+        document.getElementById(`${prefix}ReceiverAddress`).value = address;
+    }
+
+    // 3. 提取货物并进行自动算数累加 (第三行及以后)
+    if (lines.length > 2) {
+        let goodsStr = lines.slice(2).join('\n');
+        document.getElementById(`${prefix}GoodsName`).value = goodsStr;
+
+        // 数学提取引擎：匹配 "数字*数字" (中间可带 公斤,kg等单位, 支持 +,✖️,×,X,x)
+        let calcRegex = /(\d+(?:\.\d+)?)\s*(?:公斤|kg|克|g|升|L|ml|吨|t|T)?\s*(?:\*|x|X|✖️|×)\s*(\d+(?:\.\d+)?)/g;
+        let totalWeight = 0;
+        let match;
+        while ((match = calcRegex.exec(goodsStr)) !== null) {
+            totalWeight += parseFloat(match[1]) * parseFloat(match[2]);
+        }
+        
+        if (totalWeight > 0) {
+            // 提取运算成功，自动回填重量
+            document.getElementById(`${prefix}GoodsWeight`).value = totalWeight + 'kg';
+        } else {
+            document.getElementById(`${prefix}GoodsWeight`).value = '';
+        }
+    }
+}
+
+// 严谨的电话号校验逻辑器
+function validatePayload(payload) {
+    if (!payload.receiver_phone || !payload.receiver_address || !payload.goods_name || !payload.goods_weight) {
+        return '【收货电话】、【收货地址】、【货物名称】、【货物重量】为必填项，请补充完整！';
+    }
+    // 强制验证手机号(11位)或带区号座机(0571-88538883)
+    const phoneRegex = /^(?:1[3-9]\d{9}|0\d{2,3}-\d{7,8})$/;
+    if (!phoneRegex.test(payload.receiver_phone)) {
+        return '【收货电话】格式不正确！请确保是 11位手机号，或是包含中划线的座机号（如 0571-88538883）。';
+    }
+    return null; // 验证通过
+}
+
 async function createOrder() {
-    const titleInput = document.getElementById('newOrderTitle').value;
-    const typeSelect = parseInt(document.getElementById('newOrderType').value);
-    
-    // 获取新增的字段
     const payload = {
-        title: titleInput,
-        type: typeSelect,
+        title: document.getElementById('newOrderTitle').value,
+        type: parseInt(document.getElementById('newOrderType').value),
         order_client: document.getElementById('newOrderClient').value.trim(),
         receiver_name: document.getElementById('newReceiverName').value.trim(),
         receiver_phone: document.getElementById('newReceiverPhone').value.trim(),
@@ -529,26 +511,20 @@ async function createOrder() {
         goods_name: document.getElementById('newGoodsName').value.trim(),
         goods_weight: document.getElementById('newGoodsWeight').value.trim(),
         goods_quantity: document.getElementById('newGoodsQuantity').value.trim(),
-        goods_packaging: document.getElementById('newGoodsPackaging').value.trim(),
-        logistics_service: document.getElementById('newLogisticsService').value.trim()
+        goods_packaging: document.getElementById('newGoodsPackaging').value,
+        logistics_service: document.getElementById('newLogisticsService').value,
+        remark: document.getElementById('newOrderRemark').value.trim()
     };
 
-    // 必填项强制拦截校验
-    if (!payload.receiver_phone || !payload.receiver_address || !payload.goods_name || !payload.goods_weight) {
-        return alert('发单失败：【收货电话】、【收货地址】、【货物名称】、【货物重量】为必填项，请补充完整！');
-    }
+    const errMsg = validatePayload(payload);
+    if (errMsg) return alert('发单失败：' + errMsg);
 
     try {
-        const response = await fetch(`${API_BASE}/orders`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(payload)
-        });
+        const response = await fetch(`${API_BASE}/orders`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
         if (response.ok) {
             toggleModal('createOrderModal', false); 
-            // 清空所有输入框
             document.querySelectorAll('#createOrderModal input, #createOrderModal textarea').forEach(el => el.value = '');
-            switchTab('pending'); // 发单后自动跳到未完成
+            switchTab('pending'); 
         }
     } catch (error) { alert('断网发单失败'); }
 }
@@ -557,13 +533,11 @@ function openEditOrderModal(orderId) {
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
     
-    // 渲染老字段（带隐藏ID和时间）
     document.getElementById('editOrderId').value = order.id;
     document.getElementById('editOrderDate').value = order.date || '';
     document.getElementById('editOrderType').value = order.type !== undefined ? order.type : 0;
     document.getElementById('editOrderTitle').value = order.title || '';
     
-    // 渲染新加入的结构化字段
     document.getElementById('editOrderClient').value = order.order_client || '';
     document.getElementById('editReceiverName').value = order.receiver_name || '';
     document.getElementById('editReceiverPhone').value = order.receiver_phone || '';
@@ -571,21 +545,24 @@ function openEditOrderModal(orderId) {
     document.getElementById('editGoodsName').value = order.goods_name || '';
     document.getElementById('editGoodsWeight').value = order.goods_weight || '';
     document.getElementById('editGoodsQuantity').value = order.goods_quantity || '';
-    document.getElementById('editGoodsPackaging').value = order.goods_packaging || '';
-    document.getElementById('editLogisticsService').value = order.logistics_service || '';
+    
+    // 渲染 Select
+    document.getElementById('editGoodsPackaging').value = order.goods_packaging || '桶装';
+    document.getElementById('editLogisticsService').value = order.logistics_service || '送货上门+回单拍照回传';
+    
+    document.getElementById('editOrderRemark').value = order.remark || '';
     
     toggleModal('editOrderModal', true);
 }
 
 async function submitEditOrder() {
     const id = document.getElementById('editOrderId').value;
-    const type = document.getElementById('editOrderType').value;
-    const title = document.getElementById('editOrderTitle').value;
     const date = document.getElementById('editOrderDate').value.trim();
-    
+    if (!date) return alert('创建时间不能为空！');
+
     const payload = {
-        title: title,
-        type: parseInt(type),
+        title: document.getElementById('editOrderTitle').value,
+        type: parseInt(document.getElementById('editOrderType').value),
         date: date,
         order_client: document.getElementById('editOrderClient').value.trim(),
         receiver_name: document.getElementById('editReceiverName').value.trim(),
@@ -594,27 +571,17 @@ async function submitEditOrder() {
         goods_name: document.getElementById('editGoodsName').value.trim(),
         goods_weight: document.getElementById('editGoodsWeight').value.trim(),
         goods_quantity: document.getElementById('editGoodsQuantity').value.trim(),
-        goods_packaging: document.getElementById('editGoodsPackaging').value.trim(),
-        logistics_service: document.getElementById('editLogisticsService').value.trim()
+        goods_packaging: document.getElementById('editGoodsPackaging').value,
+        logistics_service: document.getElementById('editLogisticsService').value,
+        remark: document.getElementById('editOrderRemark').value.trim()
     };
 
-    if (!date) return alert('创建时间不能为空！');
-    
-    // 必填项强制拦截校验
-    if (!payload.receiver_phone || !payload.receiver_address || !payload.goods_name || !payload.goods_weight) {
-        return alert('修改失败：【收货电话】、【收货地址】、【货物名称】、【货物重量】为必填项，不可留空！');
-    }
+    const errMsg = validatePayload(payload);
+    if (errMsg) return alert('修改失败：' + errMsg);
 
     try {
-        const response = await fetch(`${API_BASE}/orders/${id}/edit`, {
-            method: 'PUT',
-            headers: getHeaders(),
-            body: JSON.stringify(payload)
-        });
-        if (response.ok) {
-            toggleModal('editOrderModal', false);
-            fetchOrders();
-        }
+        const response = await fetch(`${API_BASE}/orders/${id}/edit`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) });
+        if (response.ok) { toggleModal('editOrderModal', false); fetchOrders(); }
     } catch (e) { alert('请求异常'); }
 }
 
@@ -623,7 +590,7 @@ async function deleteOrder(id) {
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'DELETE', headers: getHeaders() });
         if (response.ok) fetchOrders();
-    } catch (e) { alert('删除异常'); }
+    } catch (e) {}
 }
 
 async function createUser() {
@@ -633,17 +600,14 @@ async function createUser() {
     if (!usernameInput.value.trim() || !passwordInput.value.trim()) return alert('请填写完整数据');
     try {
         const response = await fetch(`${API_BASE}/users`, {
-            method: 'POST',
-            headers: getHeaders(),
+            method: 'POST', headers: getHeaders(),
             body: JSON.stringify({ username: usernameInput.value.trim(), password: passwordInput.value.trim(), role: roleSelect.value })
         });
         const data = await response.json();
         if (response.ok && data.success) {
-            alert('系统级账号创建成功！');
-            usernameInput.value = ''; passwordInput.value = '';
-            toggleModal('addUserModal', false);
+            alert('系统级账号创建成功！'); usernameInput.value = ''; passwordInput.value = ''; toggleModal('addUserModal', false);
         }
-    } catch (e) { alert('请求异常'); }
+    } catch (e) {}
 }
 
 async function openViewUserModal() { toggleModal('viewUserModal', true); await refreshUserList(); }
@@ -657,8 +621,7 @@ async function refreshUserList() {
         users.forEach(user => {
             const row = document.createElement('div');
             row.className = 'user-item-row';
-            const isSelf = user.username === '1';
-            const actionHtml = isSelf ? `<span style="color:#aaa; font-size:12px;">原始核心安全策略保护</span>` : `
+            const actionHtml = user.username === '1' ? `<span style="color:#aaa; font-size:12px;">原始核心安全策略保护</span>` : `
                 <input id="pwd_${user.username}" value="${user.password}" style="width:110px; padding:4px; font-size:12px; margin-right:5px;" />
                 <button class="btn-outline-primary" style="padding:4px 8px; font-size:12px;" onclick="modifyUserPassword('${user.username}')">改密</button>
                 <button class="btn-outline-danger" style="padding:4px 8px; font-size:12px;" onclick="deleteUser('${user.username}')">注销</button>
@@ -666,7 +629,7 @@ async function refreshUserList() {
             row.innerHTML = `<div class="user-item-info"><h5>ID: ${user.username}</h5><span>岗位: <strong>${getRoleName(user.role)}</strong></span></div><div style="display:flex; align-items:center;">${actionHtml}</div>`;
             container.appendChild(row);
         });
-    } catch (e) { console.error("获取账户清单失败", e); }
+    } catch (e) {}
 }
 
 async function modifyUserPassword(u) {
@@ -685,10 +648,7 @@ window.onload = function() {
         currentUser = JSON.parse(savedUser);
         renderUI();
         initFilterDates();
-        
-        // 初始化时加载“未完成订单”数据
         switchTab('pending');
-        
         setInterval(function() {
             refreshDashboardData();
             if (!document.getElementById('viewUserModal').classList.contains('hidden')) refreshUserList();

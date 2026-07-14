@@ -141,14 +141,15 @@ def add_order():
         "goods_weight": req_data.get('goods_weight', ''),
         "goods_quantity": req_data.get('goods_quantity', ''),
         "goods_packaging": req_data.get('goods_packaging', ''),
-        "logistics_service": req_data.get('logistics_service', '')
+        "logistics_service": req_data.get('logistics_service', ''),
+        "remark": req_data.get('remark', '')
     }
     
     orders_list.append(new_order)
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True, "data": new_order})
-# --- 把它插在 add_order 和 edit_order_content 之间 ---
+
 
 @app.route('/api/orders/<int:order_id>', methods=['PUT'])
 def update_order(order_id):
@@ -187,7 +188,8 @@ def edit_order_content(order_id):
             x['goods_weight'] = req_data.get('goods_weight', '')
             x['goods_quantity'] = req_data.get('goods_quantity', '')
             x['goods_packaging'] = req_data.get('goods_packaging', '')
-            x['logistics_service'] = req_data.get('logistics_service', '')
+            x['logistics_service'] = req_data.get('logistics_service', ''),
+            x['remark'] = req_data.get('remark', '')
             break
     orders_data['orders'] = orders_list
     write_orders(orders_data)
