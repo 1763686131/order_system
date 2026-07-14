@@ -100,9 +100,9 @@ button:active { transform: translateY(0); }
     justify-content: space-between;
     align-items: flex-start;
     font-size: 14px;
-    margin-bottom: 12px;
+    margin-bottom: 5px;
     border-bottom: 1px solid rgba(0,0,0,0.04);
-    padding-bottom: 8px;
+    padding-bottom: 1px;
 }
 .card-title-tag { font-weight: bold; font-size: 14px; }
 .order-time { color: #909399; font-size: 12px; }
@@ -281,7 +281,7 @@ button:active { transform: translateY(0); }
 
 /* 覆盖优化 2：增加卡片正文到底部按钮区的间距，留出呼吸感 */
 .card-body {
-    margin-bottom: 24px !important; 
+    margin-bottom: 2px !important; 
     color: #303133;
 }
 
