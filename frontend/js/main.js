@@ -210,7 +210,9 @@ async function fetchOrders() {
             }
             card.className = cardClasses;
             
-            let isActionHidden = (currentUser.role === 'operator' && order.status === 'completed');
+            let isOperator = currentUser.role === 'operator';
+            let isActionHidden = (isOperator && order.status === 'completed');
+            
             let actionBtn = '';
             if (!isActionHidden) {
                 if (order.status === 'pending') {
@@ -227,26 +229,31 @@ async function fetchOrders() {
                 superActionHtml = `${editBtnHtml}<button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteOrder(${order.id})">删除</button>`;
             }
 
+            // 🌟 如果是操作员，直接不生成复制按钮，隐藏保护到底
+            let copyBtnHtml = !isOperator 
+                ? `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px; margin-right:4px;" onclick="copyOrderInfo(${order.id})">📋 复制物流</button>`
+                : '';
+
             let completedDateHtml = order.status === 'completed' && order.completed_date ? `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>` : '';
 
             let structuredDataHtml = '';
-            if (order.order_client || order.receiver_name || order.receiver_phone || order.receiver_address || order.goods_name || order.goods_weight || order.goods_quantity || order.goods_packaging || order.logistics_service) {
+            if (order.order_client || order.receiver_name || (!isOperator && order.receiver_phone) || order.receiver_address || order.goods_name || order.goods_weight || order.goods_quantity || order.goods_packaging || (!isOperator && order.logistics_service) || order.remark) {
                 structuredDataHtml = `<div style="margin-top: 12px; padding: 12px; background: #f8f9fb; border-radius: 6px; font-size: 13px; line-height: 2;">`;
+                
                 const typeLabel = orderType == 1 ? '绝缘订单' : '中固订单';
                 if (order.order_client) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">${typeLabel}:</span><strong style="color:#333;">${order.order_client}</strong></div>`;
                 if (order.receiver_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货姓名:</span><strong style="color:#333;">${order.receiver_name}</strong></div>`;
-                if (order.receiver_phone) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货电话:</span><strong style="color:#333;">${order.receiver_phone}</strong></div>`;
-                if (order.receiver_address) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货地址:</span><strong style="color:#333;">${order.receiver_address}</strong></div>`;
-                if (order.goods_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物名称:</span><div style="color:#409EFF; font-weight:bold; font-size: 14px; flex:1;">${formatTextWithBreaks(order.goods_name)}</div></div>`;
+                if (!isOperator && order.receiver_phone) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货电话:</span><strong style="color:#333;">${order.receiver_phone}</strong></div>`;
+                if (order.receiver_address) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货地址:</span><strong style="color:#333; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; flex: 1;" title="${order.receiver_address}">${order.receiver_address}</strong></div>`;
+                if (order.goods_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0; padding-top: 3px;">货物名称:</span><div style="color:#409EFF; font-weight:900; font-size: 18px; flex:1; line-height: 1.5; letter-spacing: 0.5px;">${formatTextWithBreaks(order.goods_name)}</div></div>`;
                 if (order.goods_weight) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物重量:</span><strong style="color:#E6A23C;">${order.goods_weight}</strong></div>`;
                 if (order.goods_quantity) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物数量:</span><strong style="color:#E6A23C;">${order.goods_quantity}</strong></div>`;
                 if (order.goods_packaging) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物包装:</span><strong style="color:#333;">${order.goods_packaging}</strong></div>`;
-                if (order.logistics_service) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">物流服务:</span><strong style="color:#333;">${order.logistics_service}</strong></div>`;
+                if (!isOperator && order.logistics_service) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">物流服务:</span><strong style="color:#333;">${order.logistics_service}</strong></div>`;
                 if (order.remark) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">备注信息:</span><strong style="color:#F56C6C;">${order.remark}</strong></div>`;
                 structuredDataHtml += `</div>`;
             }
 
-            // 🎯 只要有结构化数据，就彻底隐藏原始长文本 Title，让前端更干净
             let oldTextHtml = (!order.receiver_name && !order.goods_name && order.title)
                 ? `<div style="color: #606266; font-size: 14px; margin-bottom: 4px;">${formatTextWithBreaks(order.title)}</div>` 
                 : '';
@@ -262,12 +269,73 @@ async function fetchOrders() {
                 </div>
                 <div class="card-footer">
                     ${completedDateHtml}
-                    <div class="card-footer-right">${superActionHtml}${actionBtn}</div>
+                    <div class="card-footer-right">${copyBtnHtml}${superActionHtml}${actionBtn}</div>
                 </div>
             `;
             gridContainer.appendChild(card);
         });
     } catch (error) { console.error("订单数据加载失败", error); }
+}
+
+// 🌟🌟🌟 更新：一键生成并复制微信转发格式的物流信息 🌟🌟🌟
+function copyOrderInfo(orderId) {
+    const order = allOrdersLocal.find(o => o.id === orderId);
+    if (!order) return;
+    
+    let isOperator = currentUser.role === 'operator';
+    const typeText = (order.type == 1) ? '绝缘订单' : '中固订单';
+    
+    // 核心要求：绝缘订单截取 1-8 个字，中固订单截取 1-5 个字
+    let nameLimit = (order.type == 1) ? 8 : 5;
+    let shortGoodsName = (order.goods_name || '').replace(/\n/g, '').trim().substring(0, nameLimit);
+    
+    let clipText = `【${typeText}】\n`;
+    if (order.receiver_name) clipText += `姓名：${order.receiver_name}\n`;
+    if (!isOperator && order.receiver_phone) clipText += `电话：${order.receiver_phone}\n`;
+    if (order.receiver_address) clipText += `地址：${order.receiver_address}\n`;
+    
+    if (shortGoodsName) clipText += `名称：${shortGoodsName}\n`;
+    
+    // 核心要求：数量和重量分开两排渲染
+    if (order.goods_weight) clipText += `重量：${order.goods_weight}\n`;
+    if (order.goods_quantity) clipText += `件数：${order.goods_quantity}\n`;
+    
+    if (order.goods_packaging) clipText += `包装：${order.goods_packaging}\n`;
+    if (!isOperator && order.logistics_service) clipText += `服务：${order.logistics_service}\n`;
+    if (order.remark) clipText += `备注：${order.remark}\n`;
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(clipText).then(() => {
+            alert('✅ 极简物流信息已成功复制！\n可以直接去微信粘贴转发了。');
+        }).catch(() => fallbackCopyTextToClipboard(clipText));
+    } else {
+        fallbackCopyTextToClipboard(clipText);
+    }
+}
+
+function fallbackCopyTextToClipboard(text) {
+    let textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.top = "0";
+    textArea.style.left = "0";
+    textArea.style.width = "2em";
+    textArea.style.height = "2em";
+    textArea.style.padding = "0";
+    textArea.style.border = "none";
+    textArea.style.outline = "none";
+    textArea.style.boxShadow = "none";
+    textArea.style.background = "transparent";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    try {
+        document.execCommand('copy');
+        alert('✅ 极简物流信息已成功复制！\n可以直接去微信粘贴转发了。');
+    } catch (err) {
+        alert('⚠️ 当前浏览器不支持自动复制，请手动选中并复制。');
+    }
+    document.body.removeChild(textArea);
 }
 
 async function fetchMaterialRecords() {
@@ -429,38 +497,29 @@ async function submitUpdateOrderStatus() {
     } catch (error) { alert('调整状态失败'); }
 }
 
-// 🌟🌟🌟 全新一键智能识别引擎 🌟🌟🌟
-// 🌟🌟🌟 强化版一键智能识别引擎 🌟🌟🌟
 function smartParse(prefix) {
     const text = document.getElementById(`${prefix}OrderTitle`).value;
     if (!text.trim()) return alert('请先在上方输入框粘贴或填写内容，再点击识别！');
 
-    // 清除空行并分割
     const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
     if (lines.length === 0) return;
 
-    // 1. 提取制单归属 (第一行)
     document.getElementById(`${prefix}OrderClient`).value = lines[0].replace(/[:：]$/, '').trim();
 
-    // 2. 提取收货人、电话、地址 (第二行)
     if (lines.length > 1) {
         let line2 = lines[1];
-        // 正则提取 11位手机 或 区号-座机号
         let phoneMatch = line2.match(/(1[3-9]\d{9}|0\d{2,3}-\d{7,8})/);
         let phone = phoneMatch ? phoneMatch[0] : '';
         let name = '';
         let address = '';
 
-        // 先移除电话号码以及常见的前缀标签
         let strWithoutPhone = line2.replace(phone, '').replace(/(?:电话|联系方式|手机)[:：]?\s*/g, '');
 
-        // 尝试1：通过标准前缀 "姓名：" 或 "收货人：" 提取
         let nameMatch = strWithoutPhone.match(/(?:姓名|收货人)[:：]\s*([^\s。，,;；]{1,5})/);
         if (nameMatch) {
             name = nameMatch[1];
             strWithoutPhone = strWithoutPhone.replace(nameMatch[0], '');
         } else {
-            // 尝试2：通过用户自定义的 "?" 或 "？" 提取 (取问号后面的 1-4 个字符)
             let qMatch = strWithoutPhone.match(/[?？]\s*([^\s。，,;；:：]{1,4})/);
             if (qMatch) {
                 name = qMatch[1];
@@ -468,39 +527,30 @@ function smartParse(prefix) {
             }
         }
 
-        // 提取地址
         let addrMatch = strWithoutPhone.match(/(?:地址)[:：]\s*(.*)/);
         if (addrMatch) {
-            // 如果有明确的"地址："前缀，提取后面内容
             address = addrMatch[1];
             strWithoutPhone = strWithoutPhone.replace(addrMatch[0], '');
         } else {
-            // 如果没有明确地址前缀，剩下的先全部作为地址候选
             address = strWithoutPhone; 
         }
 
-        // 尝试3：终极盲猜兜底方案 (如果名字依然为空，比如没写前缀也没打问号)
         if (!name) {
-            // 将地址候选区按空格和标点切块
             let parts = address.split(/[\s。，,;；]+/).filter(p => p.trim() !== '');
-            // 找 2~4 个字，且不包含地址特征词(省市区县镇村街道路号栋室楼)的独立片段
             let potentialName = parts.find(p => p.length >= 2 && p.length <= 4 && !/[省市区县镇村街道路号栋室楼]/.test(p));
             if (potentialName) {
                 name = potentialName;
                 address = address.replace(potentialName, '');
             } else {
-                // 如果彻底猜不出，回退到最原始的左右切割
                 let fallbackParts = line2.split(phone);
                 name = fallbackParts[0].replace(/收货人|电话|联系方式|:|：/g, '').trim();
                 address = (fallbackParts[1] || '').replace(/^[。，,.;:\s]+/, '').trim();
-                // 如果左边太长右边太短，大概率是写反了，自动对调
                 if (name.length > 6 && address.length <= 6) {
                     let temp = name; name = address; address = temp;
                 }
             }
         }
 
-        // 最终清理多余的标点和空格
         name = name.replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '').replace(/[?？]/g, '');
         address = address.replace(/(?:地址)[:：]?/g, '').replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '');
         
@@ -509,20 +559,41 @@ function smartParse(prefix) {
         document.getElementById(`${prefix}ReceiverAddress`).value = address;
     }
 
-    // 3. 提取货物并进行自动算数累加 (第三行及以后)
     if (lines.length > 2) {
         let goodsStr = lines.slice(2).join('\n');
         document.getElementById(`${prefix}GoodsName`).value = goodsStr;
 
-        // 数学提取引擎：匹配 "数字*数字"
-        let calcRegex = /(\d+(?:\.\d+)?)\s*(?:公斤|kg|克|g|升|L|ml|吨|t|T)?\s*(?:\*|x|X|✖️|×)\s*(\d+(?:\.\d+)?)/g;
         let totalWeight = 0;
+        let tempStr = goodsStr;
+
+        let calcRegex1 = /(\d+(?:\.\d+)?)\s*(?:[A-Za-z\u4e00-\u9fa5]{0,6})?\s*([*xX✖️×\/÷])\s*(\d+(?:\.\d+)?)/g;
         let match;
-        while ((match = calcRegex.exec(goodsStr)) !== null) {
-            totalWeight += parseFloat(match[1]) * parseFloat(match[2]);
+        while ((match = calcRegex1.exec(tempStr)) !== null) {
+            let num1 = parseFloat(match[1]);
+            let op = match[2];
+            let num2 = parseFloat(match[3]);
+            let val = 0;
+            
+            if (/[*xX✖️×]/.test(op)) val = num1 * num2;
+            else if (/[/÷]/.test(op)) val = num1 / num2;
+            
+            let prefixStr = tempStr.substring(0, match.index).trim();
+            if (prefixStr.endsWith('-')) totalWeight -= val;
+            else totalWeight += val; 
+
+            tempStr = tempStr.substring(0, match.index) + " ".repeat(match[0].length) + tempStr.substring(match.index + match[0].length);
+        }
+
+        let calcRegex2 = /([+-])\s*(\d+(?:\.\d+)?)/g;
+        while ((match = calcRegex2.exec(tempStr)) !== null) {
+            let sign = match[1];
+            let num = parseFloat(match[2]);
+            if (sign === '+') totalWeight += num;
+            else if (sign === '-') totalWeight -= num;
         }
         
-        if (totalWeight > 0) {
+        if (totalWeight !== 0) {
+            totalWeight = Math.round(totalWeight * 100) / 100;
             document.getElementById(`${prefix}GoodsWeight`).value = totalWeight + 'kg';
         } else {
             document.getElementById(`${prefix}GoodsWeight`).value = '';
@@ -530,17 +601,15 @@ function smartParse(prefix) {
     }
 }
 
-// 严谨的电话号校验逻辑器
 function validatePayload(payload) {
     if (!payload.receiver_phone || !payload.receiver_address || !payload.goods_name || !payload.goods_weight) {
         return '【收货电话】、【收货地址】、【货物名称】、【货物重量】为必填项，请补充完整！';
     }
-    // 强制验证手机号(11位)或带区号座机(0571-88538883)
     const phoneRegex = /^(?:1[3-9]\d{9}|0\d{2,3}-\d{7,8})$/;
     if (!phoneRegex.test(payload.receiver_phone)) {
         return '【收货电话】格式不正确！请确保是 11位手机号，或是包含中划线的座机号（如 0571-88538883）。';
     }
-    return null; // 验证通过
+    return null; 
 }
 
 async function createOrder() {
@@ -589,10 +658,8 @@ function openEditOrderModal(orderId) {
     document.getElementById('editGoodsWeight').value = order.goods_weight || '';
     document.getElementById('editGoodsQuantity').value = order.goods_quantity || '';
     
-    // 渲染 Select
     document.getElementById('editGoodsPackaging').value = order.goods_packaging || '桶装';
     document.getElementById('editLogisticsService').value = order.logistics_service || '送货上门+回单拍照回传';
-    
     document.getElementById('editOrderRemark').value = order.remark || '';
     
     toggleModal('editOrderModal', true);
