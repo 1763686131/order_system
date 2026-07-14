@@ -430,6 +430,7 @@ async function submitUpdateOrderStatus() {
 }
 
 // 🌟🌟🌟 全新一键智能识别引擎 🌟🌟🌟
+// 🌟🌟🌟 强化版一键智能识别引擎 🌟🌟🌟
 function smartParse(prefix) {
     const text = document.getElementById(`${prefix}OrderTitle`).value;
     if (!text.trim()) return alert('请先在上方输入框粘贴或填写内容，再点击识别！');
@@ -450,16 +451,59 @@ function smartParse(prefix) {
         let name = '';
         let address = '';
 
-        if (phone) {
-            let parts = line2.split(phone);
-            // 电话左边是名字，去掉多余的前缀和标点
-            name = parts[0].replace(/收货人|电话|联系方式|:|：/g, '').trim();
-            // 电话右边是地址，去掉开头的句号逗号
-            address = parts[1].replace(/^[。，,.;:\s]+/, '').trim();
+        // 先移除电话号码以及常见的前缀标签
+        let strWithoutPhone = line2.replace(phone, '').replace(/(?:电话|联系方式|手机)[:：]?\s*/g, '');
+
+        // 尝试1：通过标准前缀 "姓名：" 或 "收货人：" 提取
+        let nameMatch = strWithoutPhone.match(/(?:姓名|收货人)[:：]\s*([^\s。，,;；]{1,5})/);
+        if (nameMatch) {
+            name = nameMatch[1];
+            strWithoutPhone = strWithoutPhone.replace(nameMatch[0], '');
         } else {
-            name = line2; // 如果没匹配到电话，整行塞进名字里当做保底兜底
+            // 尝试2：通过用户自定义的 "?" 或 "？" 提取 (取问号后面的 1-4 个字符)
+            let qMatch = strWithoutPhone.match(/[?？]\s*([^\s。，,;；:：]{1,4})/);
+            if (qMatch) {
+                name = qMatch[1];
+                strWithoutPhone = strWithoutPhone.replace(qMatch[0], '');
+            }
         }
 
+        // 提取地址
+        let addrMatch = strWithoutPhone.match(/(?:地址)[:：]\s*(.*)/);
+        if (addrMatch) {
+            // 如果有明确的"地址："前缀，提取后面内容
+            address = addrMatch[1];
+            strWithoutPhone = strWithoutPhone.replace(addrMatch[0], '');
+        } else {
+            // 如果没有明确地址前缀，剩下的先全部作为地址候选
+            address = strWithoutPhone; 
+        }
+
+        // 尝试3：终极盲猜兜底方案 (如果名字依然为空，比如没写前缀也没打问号)
+        if (!name) {
+            // 将地址候选区按空格和标点切块
+            let parts = address.split(/[\s。，,;；]+/).filter(p => p.trim() !== '');
+            // 找 2~4 个字，且不包含地址特征词(省市区县镇村街道路号栋室楼)的独立片段
+            let potentialName = parts.find(p => p.length >= 2 && p.length <= 4 && !/[省市区县镇村街道路号栋室楼]/.test(p));
+            if (potentialName) {
+                name = potentialName;
+                address = address.replace(potentialName, '');
+            } else {
+                // 如果彻底猜不出，回退到最原始的左右切割
+                let fallbackParts = line2.split(phone);
+                name = fallbackParts[0].replace(/收货人|电话|联系方式|:|：/g, '').trim();
+                address = (fallbackParts[1] || '').replace(/^[。，,.;:\s]+/, '').trim();
+                // 如果左边太长右边太短，大概率是写反了，自动对调
+                if (name.length > 6 && address.length <= 6) {
+                    let temp = name; name = address; address = temp;
+                }
+            }
+        }
+
+        // 最终清理多余的标点和空格
+        name = name.replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '').replace(/[?？]/g, '');
+        address = address.replace(/(?:地址)[:：]?/g, '').replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '');
+        
         document.getElementById(`${prefix}ReceiverName`).value = name;
         document.getElementById(`${prefix}ReceiverPhone`).value = phone;
         document.getElementById(`${prefix}ReceiverAddress`).value = address;
@@ -470,7 +514,7 @@ function smartParse(prefix) {
         let goodsStr = lines.slice(2).join('\n');
         document.getElementById(`${prefix}GoodsName`).value = goodsStr;
 
-        // 数学提取引擎：匹配 "数字*数字" (中间可带 公斤,kg等单位, 支持 +,✖️,×,X,x)
+        // 数学提取引擎：匹配 "数字*数字"
         let calcRegex = /(\d+(?:\.\d+)?)\s*(?:公斤|kg|克|g|升|L|ml|吨|t|T)?\s*(?:\*|x|X|✖️|×)\s*(\d+(?:\.\d+)?)/g;
         let totalWeight = 0;
         let match;
@@ -479,7 +523,6 @@ function smartParse(prefix) {
         }
         
         if (totalWeight > 0) {
-            // 提取运算成功，自动回填重量
             document.getElementById(`${prefix}GoodsWeight`).value = totalWeight + 'kg';
         } else {
             document.getElementById(`${prefix}GoodsWeight`).value = '';
