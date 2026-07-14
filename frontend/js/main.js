@@ -231,7 +231,7 @@ async function fetchOrders() {
 
             // 🌟 如果是操作员，直接不生成复制按钮，隐藏保护到底
             let copyBtnHtml = !isOperator 
-                ? `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px; margin-right:4px;" onclick="copyOrderInfo(${order.id})">📋 复制物流</button>`
+                ? `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px; margin-right:4px;" onclick="copyOrderInfo(${order.id})">复制</button>`
                 : '';
 
             let completedDateHtml = order.status === 'completed' && order.completed_date ? `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>` : '';
