@@ -148,6 +148,24 @@ def add_order():
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True, "data": new_order})
+# --- 把它插在 add_order 和 edit_order_content 之间 ---
+
+@app.route('/api/orders/<int:order_id>', methods=['PUT'])
+def update_order(order_id):
+    ns = request.json.get('status')
+    orders_data = read_orders()
+    orders_list = orders_data.get('orders', [])
+    for x in orders_list:
+        if x['id'] == order_id:
+            x['status'] = ns
+            # 状态如果是完成，就打上当前时间戳；如果是撤销未完成，就清空时间戳
+            x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M') if ns == 'completed' else ""
+            break
+    orders_data['orders'] = orders_list
+    write_orders(orders_data)
+    return jsonify({"success": True})
+
+# ---------------------------------------------------
 
 @app.route('/api/orders/<int:order_id>/edit', methods=['PUT'])
 def edit_order_content(order_id):

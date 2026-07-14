@@ -129,8 +129,23 @@
                     </select>
                 </div>
                 <div class="form-item">
-                    <label for="newOrderTitle">货物长文本参数或编号 (支持大字回车换行):</label>
-                    <textarea id="newOrderTitle" style="height:140px;" placeholder="请输入规格参数、货运地址、桶数比例等..."></textarea>
+                    <label for="newOrderTitle">原始文本参数 (预留识别框/备注说明):</label>
+                    <textarea id="newOrderTitle" style="height:60px;" placeholder="后续升级智能识别时使用，当前可填备注..."></textarea>
+                </div>
+                <div style="padding: 10px; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 10px;">
+                    <div class="form-item"><label>制单归属 (如: 陶芸):</label><input id="newOrderClient" placeholder="对应图片中的第一行" /></div>
+                    <div class="form-item"><label>收货姓名:</label><input id="newReceiverName" placeholder="例如: 牛华" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="newReceiverPhone" placeholder="例如: 13068188388 (必填)" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="newReceiverAddress" placeholder="例如: 浙江省温州市... (必填)" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><input id="newGoodsName" placeholder="例如: 中固粘钢胶40公斤×27组... (必填)" /></div>
+                    
+                    <div style="display: flex; gap: 10px;">
+                        <div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="newGoodsWeight" placeholder="例如: 1110kg (必填)" /></div>
+                        <div class="form-item" style="flex:1;"><label>货物数量:</label><input id="newGoodsQuantity" placeholder="例如: 56件" /></div>
+                    </div>
+                    
+                    <div class="form-item"><label>货物包装:</label><input id="newGoodsPackaging" placeholder="例如: 桶装" /></div>
+                    <div class="form-item"><label>物流服务:</label><input id="newLogisticsService" placeholder="例如: 送货上门+回单签字拍照" /></div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -147,31 +162,36 @@
                 <span class="close-x" onclick="toggleModal('editOrderModal', false)">&times;</span>
             </div>
             <div class="modal-body">
+                <input id="editOrderId" type="hidden" />
                 <div class="form-item">
-                    <label for="newOrderType">订单类型参数:</label>
-                    <select id="newOrderType">
-                        <option value="0" selected>中固订单</option>
+                    <label for="editOrderDate">创建生成时间 (不可轻易改动):</label>
+                    <input id="editOrderDate" type="text" />
+                </div>
+                <div class="form-item">
+                    <label for="editOrderType">订单类型参数:</label>
+                    <select id="editOrderType">
+                        <option value="0">中固订单</option>
                         <option value="1">绝缘订单</option>
                     </select>
                 </div>
                 <div class="form-item">
-                    <label for="newOrderTitle">原始文本参数 (预留识别框/备注说明):</label>
-                    <textarea id="newOrderTitle" style="height:60px;" placeholder="后续升级智能识别时使用，当前可填备注..."></textarea>
+                    <label for="editOrderTitle">原始文本参数 (预留识别框/备注说明):</label>
+                    <textarea id="editOrderTitle" style="height:60px;"></textarea>
                 </div>
                 <div style="padding: 10px; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 10px;">
-                    <div class="form-item"><label>制单归属 (如: 陶芸):</label><input id="newOrderClient" placeholder="对应图片中的第一行" /></div>
-                    <div class="form-item"><label>收货姓名:</label><input id="newReceiverName" placeholder="例如: 牛华" /></div>
-                    <div class="form-item"><label>收货电话:</label><input id="newReceiverPhone" placeholder="例如: 13068188388" /></div>
-                    <div class="form-item"><label>收货地址:</label><input id="newReceiverAddress" placeholder="例如: 浙江省温州市..." /></div>
-                    <div class="form-item"><label>货物名称:</label><input id="newGoodsName" placeholder="例如: 中固粘钢胶40公斤×27组..." /></div>
+                    <div class="form-item"><label>制单归属:</label><input id="editOrderClient" /></div>
+                    <div class="form-item"><label>收货姓名:</label><input id="editReceiverName" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="editReceiverPhone" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="editReceiverAddress" /></div>
+                    <div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><input id="editGoodsName" /></div>
                     
                     <div style="display: flex; gap: 10px;">
-                        <div class="form-item" style="flex:1;"><label>货物重量:</label><input id="newGoodsWeight" placeholder="例如: 1110kg" /></div>
-                        <div class="form-item" style="flex:1;"><label>货物数量:</label><input id="newGoodsQuantity" placeholder="例如: 56件" /></div>
+                        <div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="editGoodsWeight" /></div>
+                        <div class="form-item" style="flex:1;"><label>货物数量:</label><input id="editGoodsQuantity" /></div>
                     </div>
                     
-                    <div class="form-item"><label>货物包装:</label><input id="newGoodsPackaging" placeholder="例如: 桶装" /></div>
-                    <div class="form-item"><label>物流服务:</label><input id="newLogisticsService" placeholder="例如: 送货上门+回单签字拍照" /></div>
+                    <div class="form-item"><label>货物包装:</label><input id="editGoodsPackaging" /></div>
+                    <div class="form-item"><label>物流服务:</label><input id="editLogisticsService" /></div>
                 </div>
             </div>
             <div class="modal-footer">

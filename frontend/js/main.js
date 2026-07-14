@@ -528,9 +528,9 @@ async function createOrder() {
         logistics_service: document.getElementById('newLogisticsService').value.trim()
     };
 
-    // 简单校验：至少填了原始文本或者收货人名字
-    if (!payload.title.trim() && !payload.receiver_name.trim() && !payload.goods_name.trim()) {
-        return alert('请至少录入一些订单信息或原始文本！');
+    // 必填项强制拦截校验
+    if (!payload.receiver_phone || !payload.receiver_address || !payload.goods_name || !payload.goods_weight) {
+        return alert('发单失败：【收货电话】、【收货地址】、【货物名称】、【货物重量】为必填项，请补充完整！');
     }
 
     try {
@@ -551,10 +551,24 @@ async function createOrder() {
 function openEditOrderModal(orderId) {
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
+    
+    // 渲染老字段（带隐藏ID和时间）
     document.getElementById('editOrderId').value = order.id;
-    document.getElementById('editOrderType').value = order.type !== undefined ? order.type : 0;
-    document.getElementById('editOrderTitle').value = order.title;
     document.getElementById('editOrderDate').value = order.date || '';
+    document.getElementById('editOrderType').value = order.type !== undefined ? order.type : 0;
+    document.getElementById('editOrderTitle').value = order.title || '';
+    
+    // 渲染新加入的结构化字段
+    document.getElementById('editOrderClient').value = order.order_client || '';
+    document.getElementById('editReceiverName').value = order.receiver_name || '';
+    document.getElementById('editReceiverPhone').value = order.receiver_phone || '';
+    document.getElementById('editReceiverAddress').value = order.receiver_address || '';
+    document.getElementById('editGoodsName').value = order.goods_name || '';
+    document.getElementById('editGoodsWeight').value = order.goods_weight || '';
+    document.getElementById('editGoodsQuantity').value = order.goods_quantity || '';
+    document.getElementById('editGoodsPackaging').value = order.goods_packaging || '';
+    document.getElementById('editLogisticsService').value = order.logistics_service || '';
+    
     toggleModal('editOrderModal', true);
 }
 
@@ -563,12 +577,34 @@ async function submitEditOrder() {
     const type = document.getElementById('editOrderType').value;
     const title = document.getElementById('editOrderTitle').value;
     const date = document.getElementById('editOrderDate').value.trim();
-    if (!title.trim() || !date) return alert('修改项不能为空！');
+    
+    const payload = {
+        title: title,
+        type: parseInt(type),
+        date: date,
+        order_client: document.getElementById('editOrderClient').value.trim(),
+        receiver_name: document.getElementById('editReceiverName').value.trim(),
+        receiver_phone: document.getElementById('editReceiverPhone').value.trim(),
+        receiver_address: document.getElementById('editReceiverAddress').value.trim(),
+        goods_name: document.getElementById('editGoodsName').value.trim(),
+        goods_weight: document.getElementById('editGoodsWeight').value.trim(),
+        goods_quantity: document.getElementById('editGoodsQuantity').value.trim(),
+        goods_packaging: document.getElementById('editGoodsPackaging').value.trim(),
+        logistics_service: document.getElementById('editLogisticsService').value.trim()
+    };
+
+    if (!date) return alert('创建时间不能为空！');
+    
+    // 必填项强制拦截校验
+    if (!payload.receiver_phone || !payload.receiver_address || !payload.goods_name || !payload.goods_weight) {
+        return alert('修改失败：【收货电话】、【收货地址】、【货物名称】、【货物重量】为必填项，不可留空！');
+    }
+
     try {
         const response = await fetch(`${API_BASE}/orders/${id}/edit`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({ title: title, type: parseInt(type), date: date })
+            body: JSON.stringify(payload)
         });
         if (response.ok) {
             toggleModal('editOrderModal', false);
