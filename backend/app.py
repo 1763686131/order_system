@@ -25,7 +25,7 @@ FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
     if not os.path.exists(USERS_FILE):
-        d = [{"username": "1", "password": "741200", "role": "super_admin"}, {"username": "2", "password": "123456", "role": "operator"}]
+        d = [{"username": "1", "password": "741200", "role": "super_admin"}, {"username": "2return", "password": "123456", "role": "operator"}]
         write_users(d)
         return d
     with open(USERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
@@ -124,25 +124,30 @@ def add_order():
     orders_list = orders_data.get('orders', [])
     ct = datetime.now().strftime('%Y-%m-%d %H:%M')
     new_id = max([x['id'] for x in orders_list], default=0) + 1
-    new_order = {"id": new_id, "title": req_data.get('title'), "status": "pending", "type": req_data.get('type', 0), "date": ct, "completed_date": ""}
+    
+    # 🌟 新增：接收所有的结构化字段
+    new_order = {
+        "id": new_id, 
+        "title": req_data.get('title', ''), 
+        "status": "pending", 
+        "type": req_data.get('type', 0), 
+        "date": ct, 
+        "completed_date": "",
+        "order_client": req_data.get('order_client', ''),
+        "receiver_name": req_data.get('receiver_name', ''),
+        "receiver_phone": req_data.get('receiver_phone', ''),
+        "receiver_address": req_data.get('receiver_address', ''),
+        "goods_name": req_data.get('goods_name', ''),
+        "goods_weight": req_data.get('goods_weight', ''),
+        "goods_quantity": req_data.get('goods_quantity', ''),
+        "goods_packaging": req_data.get('goods_packaging', ''),
+        "logistics_service": req_data.get('logistics_service', '')
+    }
+    
     orders_list.append(new_order)
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True, "data": new_order})
-
-@app.route('/api/orders/<int:order_id>', methods=['PUT'])
-def update_order(order_id):
-    ns = request.json.get('status')
-    orders_data = read_orders()
-    orders_list = orders_data.get('orders', [])
-    for x in orders_list:
-        if x['id'] == order_id:
-            x['status'] = ns
-            x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M') if ns == 'completed' else ""
-            break
-    orders_data['orders'] = orders_list
-    write_orders(orders_data)
-    return jsonify({"success": True})
 
 @app.route('/api/orders/<int:order_id>/edit', methods=['PUT'])
 def edit_order_content(order_id):
@@ -152,9 +157,19 @@ def edit_order_content(order_id):
     orders_list = orders_data.get('orders', [])
     for x in orders_list:
         if x['id'] == order_id:
-            x['title'] = req_data.get('title')
+            x['title'] = req_data.get('title', '')
             x['type'] = req_data.get('type', 0)
-            x['date'] = req_data.get('date')
+            x['date'] = req_data.get('date', '')
+            # 🌟 新增：支持超级管理员修改结构化字段
+            x['order_client'] = req_data.get('order_client', '')
+            x['receiver_name'] = req_data.get('receiver_name', '')
+            x['receiver_phone'] = req_data.get('receiver_phone', '')
+            x['receiver_address'] = req_data.get('receiver_address', '')
+            x['goods_name'] = req_data.get('goods_name', '')
+            x['goods_weight'] = req_data.get('goods_weight', '')
+            x['goods_quantity'] = req_data.get('goods_quantity', '')
+            x['goods_packaging'] = req_data.get('goods_packaging', '')
+            x['logistics_service'] = req_data.get('logistics_service', '')
             break
     orders_data['orders'] = orders_list
     write_orders(orders_data)

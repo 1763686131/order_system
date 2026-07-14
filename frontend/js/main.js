@@ -269,13 +269,37 @@ async function fetchOrders() {
                 completedDateHtml = `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>`;
             }
 
+            // 🎯 新增：格式化结构化数据为纯净的列表排版 (兼容老数据的同时优美展示新数据)
+            let structuredDataHtml = '';
+            // 只要存在新字段中的任意一个，就渲染出浅灰底色的结构化区域
+            if (order.order_client || order.receiver_name || order.receiver_phone || order.receiver_address || order.goods_name || order.goods_weight || order.goods_quantity || order.goods_packaging || order.logistics_service) {
+                structuredDataHtml = `<div style="margin-top: 12px; padding: 12px; background: #f8f9fb; border-radius: 6px; font-size: 13px; line-height: 2;">`;
+                
+                const typeLabel = orderType == 1 ? '绝缘订单' : '中固订单';
+                if (order.order_client) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">${typeLabel}:</span><strong style="color:#333;">${order.order_client}</strong></div>`;
+                if (order.receiver_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货姓名:</span><strong style="color:#333;">${order.receiver_name}</strong></div>`;
+                if (order.receiver_phone) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货电话:</span><strong style="color:#333;">${order.receiver_phone}</strong></div>`;
+                if (order.receiver_address) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货地址:</span><strong style="color:#333;">${order.receiver_address}</strong></div>`;
+                if (order.goods_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物名称:</span><strong style="color:#409EFF; font-size: 14px;">${order.goods_name}</strong></div>`;
+                if (order.goods_weight) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物重量:</span><strong style="color:#E6A23C;">${order.goods_weight}</strong></div>`;
+                if (order.goods_quantity) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物数量:</span><strong style="color:#E6A23C;">${order.goods_quantity}</strong></div>`;
+                if (order.goods_packaging) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物包装:</span><strong style="color:#333;">${order.goods_packaging}</strong></div>`;
+                if (order.logistics_service) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">物流服务:</span><strong style="color:#333;">${order.logistics_service}</strong></div>`;
+                
+                structuredDataHtml += `</div>`;
+            }
+
+            // 🎯 修改：将原本的 title 和新增的 structuredDataHtml 组合渲染到 card-body 里面
             card.innerHTML = `
                 <div class="card-header">
                     <span class="card-title-tag">[#${order.id}] ${typeText}</span>
                     <span class="order-time">🕐 创建: ${order.date || '未知'}</span>
                 </div>
                 <div class="card-body">
-                    ${formatTextWithBreaks(order.title)}
+                    <div style="color: #606266; font-size: 14px; margin-bottom: ${structuredDataHtml ? '4px' : '0'};">
+                        ${formatTextWithBreaks(order.title)}
+                    </div>
+                    ${structuredDataHtml}
                 </div>
                 <div class="card-footer">
                     ${completedDateHtml}
@@ -486,22 +510,40 @@ async function submitUpdateOrderStatus() {
 }
 
 async function createOrder() {
-    const titleInput = document.getElementById('newOrderTitle');
-    const typeSelect = document.getElementById('newOrderType');
-    const title = titleInput.value; 
-    if (!title.trim()) return alert('请录入商品参数或货物文本！');
+    const titleInput = document.getElementById('newOrderTitle').value;
+    const typeSelect = parseInt(document.getElementById('newOrderType').value);
+    
+    // 获取新增的字段
+    const payload = {
+        title: titleInput,
+        type: typeSelect,
+        order_client: document.getElementById('newOrderClient').value.trim(),
+        receiver_name: document.getElementById('newReceiverName').value.trim(),
+        receiver_phone: document.getElementById('newReceiverPhone').value.trim(),
+        receiver_address: document.getElementById('newReceiverAddress').value.trim(),
+        goods_name: document.getElementById('newGoodsName').value.trim(),
+        goods_weight: document.getElementById('newGoodsWeight').value.trim(),
+        goods_quantity: document.getElementById('newGoodsQuantity').value.trim(),
+        goods_packaging: document.getElementById('newGoodsPackaging').value.trim(),
+        logistics_service: document.getElementById('newLogisticsService').value.trim()
+    };
+
+    // 简单校验：至少填了原始文本或者收货人名字
+    if (!payload.title.trim() && !payload.receiver_name.trim() && !payload.goods_name.trim()) {
+        return alert('请至少录入一些订单信息或原始文本！');
+    }
+
     try {
         const response = await fetch(`${API_BASE}/orders`, {
             method: 'POST',
             headers: getHeaders(),
-            body: JSON.stringify({ title: title, type: parseInt(typeSelect.value) })
+            body: JSON.stringify(payload)
         });
         if (response.ok) {
             toggleModal('createOrderModal', false); 
-            titleInput.value = '';
-            
-            // 发单后自动跳到“未完成订单”并刷新
-            switchTab('pending');
+            // 清空所有输入框
+            document.querySelectorAll('#createOrderModal input, #createOrderModal textarea').forEach(el => el.value = '');
+            switchTab('pending'); // 发单后自动跳到未完成
         }
     } catch (error) { alert('断网发单失败'); }
 }
