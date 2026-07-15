@@ -67,10 +67,18 @@ def index():
 @app.route('/api/login', methods=['POST'])
 def login():
     req_data = request.json
-    u, p = str(req_data.get('username', '')).strip(), str(req_data.get('password', '')).strip()
-    users = read_users()
-    user = next((x for x in users if x['username'] == u and x['password'] == p), None)
-    if user: return jsonify({"success": True, "user": {"username": user['username'], "role": user['role']}})
+    users_data = read_users()
+    for u in users_data:
+        if u['username'] == req_data.get('username') and u['password'] == req_data.get('password'):
+            # 🌟 核心修复：在这里把 permissions 数组一起打包返回给前端
+            return jsonify({
+                "success": True, 
+                "user": {
+                    "username": u['username'], 
+                    "role": u['role'],
+                    "permissions": u.get('permissions', [])  # <--- 就是少了这一句！
+                }
+            })
     return jsonify({"success": False, "message": "账号或密码错误"}), 401
 
 
