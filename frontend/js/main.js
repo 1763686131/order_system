@@ -1,22 +1,19 @@
 const API_BASE = '/api';
-let currentUser = { username: '', name: '', role: '', permissions: [] }; // 🌟 新增了 name 字段
+let currentUser = { username: '', name: '', role: '', permissions: [] }; 
 let allOrdersLocal = []; 
 let currentTab = 'pending'; 
 let activeKeyboardTargetId = 'materialInputUse'; 
 
-// 🌟 全新角色名称映射
 function getRoleName(role) {
     const maps = { 'super_admin': '超级管理员', 'admin': '管理员', 'employee': '员工', 'operator': '员工' };
     return maps[role] || role;
 }
 
-// 🌟 核心引擎：权限校验算法
 function hasPerm(permKey) {
     if (currentUser.role === 'super_admin') return true;
     return currentUser.permissions && currentUser.permissions.includes(permKey);
 }
 
-// 🌟 权限树形配置图谱
 const PERMISSIONS_CONFIG = [
     {
         group: 'pending_order', label: '📦 未完成订单权限',
@@ -125,12 +122,13 @@ function pressKey(key) {
     else targetInput.value = currentVal + key;
 }
 
-// 🌟 顶部导航栏渲染：绑定真实姓名和权限
 function renderUI() {
     const loginSection = document.getElementById('loginSection');
     const mainSection = document.getElementById('mainSection');
     const btnOpenViewUser = document.getElementById('btnOpenViewUser');
     const btnNavCreateOrder = document.getElementById('btnNavCreateOrder');
+    
+    // 🌟 这两个就是看板上的核心按钮
     const btnEditStockAction = document.getElementById('btnEditStockAction');
     const btnUploadMaterialAction = document.getElementById('btnUploadMaterialAction');
 
@@ -143,20 +141,22 @@ function renderUI() {
     loginSection.classList.add('hidden');
     mainSection.classList.remove('hidden');
 
-    // 🌟 在导航栏主页右上角，优先展示真实中文名，如果没填则兜底展示账号名
     document.getElementById('currentUsername').innerText = currentUser.name || currentUser.username;
     document.getElementById('currentUserRoleTag').innerText = getRoleName(currentUser.role);
 
-    // 控制台按钮：只有超管和管理员可见
     if (['super_admin', 'admin'].includes(currentUser.role)) btnOpenViewUser.classList.remove('hidden');
     else btnOpenViewUser.classList.add('hidden');
 
     if (hasPerm('pending.add')) btnNavCreateOrder.classList.remove('hidden');
     else btnNavCreateOrder.classList.add('hidden');
 
-    if (hasPerm('material.edit_stock')) btnEditStockAction.classList.remove('hidden');
-    else btnEditStockAction.classList.add('hidden');
+    // 🌟 控制左侧的“变更总储备”按钮
+    if (btnEditStockAction) {
+        if (hasPerm('material.edit_stock')) btnEditStockAction.classList.remove('hidden');
+        else btnEditStockAction.classList.add('hidden');
+    }
     
+    // 🌟 控制右侧的“+ 录入生产消耗与产出”大按钮
     if (btnUploadMaterialAction) {
         if (hasPerm('material.add')) btnUploadMaterialAction.classList.remove('hidden');
         else btnUploadMaterialAction.classList.add('hidden');
@@ -645,8 +645,6 @@ async function refreshUserList() {
 
             let roleName = getRoleName(user.role);
             let color = user.role === 'super_admin' ? '#F56C6C' : (user.role === 'admin' ? '#E6A23C' : '#67C23A');
-            
-            // 🌟 渲染：展示真实的中文姓名，账号放在括号里作为辅助显示
             let displayName = user.name ? user.name : user.username;
             
             row.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
@@ -667,7 +665,7 @@ function prepareCreateUser() {
     
     document.getElementById('detailUsername').value = '';
     document.getElementById('detailUsername').disabled = false;
-    document.getElementById('detailName').value = ''; // 🌟 清空真实姓名
+    document.getElementById('detailName').value = '';
     document.getElementById('detailPassword').value = '';
     
     document.getElementById('btnUpdatePwd').style.display = 'none';
@@ -691,7 +689,7 @@ function loadUserDetail(user) {
     
     document.getElementById('detailUsername').value = user.username;
     document.getElementById('detailUsername').disabled = true; 
-    document.getElementById('detailName').value = user.name || ''; // 🌟 读取并渲染真实姓名
+    document.getElementById('detailName').value = user.name || ''; 
     document.getElementById('detailPassword').value = user.password;
     
     document.getElementById('btnUpdatePwd').style.display = 'inline-block';
@@ -773,7 +771,7 @@ function getSelectedPermissions() {
 }
 
 async function saveUserData() {
-    const n = document.getElementById('detailName').value.trim(); // 🌟 抓取真实中文名
+    const n = document.getElementById('detailName').value.trim(); 
 
     if (!currentEditUser) {
         const u = document.getElementById('detailUsername').value.trim();
@@ -781,7 +779,6 @@ async function saveUserData() {
         const r = document.getElementById('detailRole').value;
         if (!u || !p) return alert('账号密码不能为空！');
         
-        // 🌟 Payload 加入 name 字段
         const payload = { username: u, name: n, password: p, role: r, permissions: getSelectedPermissions() };
         try {
             const res = await fetch(`${API_BASE}/users`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
@@ -792,7 +789,6 @@ async function saveUserData() {
         } catch(e) { alert('网络异常'); }
     } else {
         const r = document.getElementById('detailRole').value;
-        // 🌟 Payload 加入 name 字段
         const payload = { name: n, permissions: getSelectedPermissions(), role: r }; 
         try {
             const res = await fetch(`${API_BASE}/users/${currentEditUser.username}/permissions`, { 

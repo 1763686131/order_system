@@ -32,7 +32,6 @@
                 <span class="nav-username">你好，<strong id="currentUsername"></strong></span>
                 
                 <button id="btnOpenViewUser" class="btn-outline-primary hidden" onclick="openViewUserModal()">👥 账户与权限控制台</button>
-                <button id="btnEditStockAction" class="btn-outline-primary hidden" onclick="triggerStockModifyModal()">库储备</button>
                 <button id="btnNavCreateOrder" class="btn-success hidden" onclick="toggleModal('createOrderModal', true)">📝 发布新订单</button>
                 <button class="btn-danger" onclick="handleLogout()">安全退出</button>
             </div>
@@ -61,11 +60,14 @@
                     <div class="material-top-bar">
                         <div class="total-stock-box">
                             <span style="font-weight:600; font-size:14px;">原材料储备：</span>
-                            <strong id="displayTotalStock" style="color: #409EFF; font-size:16px;">5000 kg</strong>
-                            <button id="btnEditStockAction" class="btn-danger hidden" style="padding: 4px 12px; font-size:12px; margin-left:8px; border-radius:12px;" onclick="triggerStockModifyModal()">修改</button>
+                            <strong id="displayTotalStock" style="color: #409EFF; font-size:16px;">加载中...</strong>
+                            <button id="btnEditStockAction" class="btn-danger hidden" style="padding: 4px 12px; font-size:12px; margin-left:8px; border-radius:12px;" onclick="triggerStockModifyModal()">修改总库</button>
                         </div>
-                        <div id="remainedMaterialCapsule" class="remained-capsule-fixed">剩余原材料：5000 kg</div>
+                        <div id="remainedMaterialCapsule" class="remained-capsule-fixed">剩余原材料：加载中...</div>
                     </div>
+                    
+                    <button id="btnUploadMaterialAction" class="btn-success hidden" style="width: 100%; padding: 14px; font-size: 16px; border-radius: 6px; box-shadow: 0 2px 6px rgba(103,194,58,0.25); display: flex; justify-content: center; align-items: center;" onclick="openUploadMaterialModal()">+ 录入生产消耗与产出</button>
+
                     <div id="materialCapsuleList" class="capsule-grid-container"></div>
                 </div>
 
@@ -124,7 +126,7 @@
                         <div class="form-item" id="createUsernameGroup">
                             <label>系统登录账号:</label>
                             <input id="detailUsername" placeholder="输入账号名称" />
-                            <div class="form-item">
+                            <div class="form-item" style="margin-top: 16px;">
                             <label>员工真实姓名:</label>
                             <input id="detailName" placeholder="输入员工的中文全名" />
                         </div>
@@ -407,6 +409,7 @@
             </div>
         </div>
     </div>
+
 <script src="js/main.js"></script>
 </body>
 </html>
