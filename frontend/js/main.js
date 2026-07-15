@@ -793,14 +793,18 @@ async function saveUserData() {
             } else alert('账户名称已存在或无权限！');
         } catch(e) { alert('网络异常'); }
     } else {
-        const payload = { permissions: getSelectedPermissions() };
+        // 🐛 修复 Bug 2：把原本漏掉的 role (角色) 也一并打包发送给后端
+        const r = document.getElementById('detailRole').value;
+        const payload = { permissions: getSelectedPermissions(), role: r }; 
         try {
             const res = await fetch(`${API_BASE}/users/${currentEditUser.username}/permissions`, { 
                 method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) 
             });
             if (res.ok) { 
-                alert(`✅ 已成功更新 ${currentEditUser.username} 的模块访问权限！`); 
+                alert(`✅ 已成功更新 [${currentEditUser.username}] 的账户角色与访问权限！`); 
                 window.location.reload(); // 🔥 强制刷新页面
+            } else {
+                alert('更新失败，可能权限不足');
             }
         } catch(e) { alert('更新权限失败'); }
     }
@@ -829,6 +833,8 @@ async function deleteCurrentUser() {
         if (res.ok) { 
             alert('账户已彻底销毁！');
             window.location.reload(); // 🔥 强制刷新页面
+        } else {
+            alert('❌ 物理销毁失败：接口异常或越权操作');
         }
     } catch(e) {}
 }

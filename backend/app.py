@@ -113,15 +113,12 @@ def add_user():
     write_users(users_data)
     return jsonify({"success": True})
 
-@app.route('/api/users/<username>/password', methods=['PUT'])
-def update_user_password(username):
-    if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
-    req_data = request.json
+@app.route('/api/users/<username>', methods=['DELETE'])
+def delete_user(username):
+    if request.headers.get('Role') != 'super_admin': return jsonify({"message": "越权：仅超级管理员可删除"}), 403
     users_data = read_users()
-    for u in users_data:
-        if u['username'] == username:
-            u['password'] = req_data.get('password')
-            break
+    # 🐛 修复 Bug 1：强制转换为字符串进行比对，防止 JSON 里的 int 与 URL 里的 string 不匹配
+    users_data = [u for u in users_data if str(u['username']) != str(username)]
     write_users(users_data)
     return jsonify({"success": True})
 
@@ -130,70 +127,101 @@ def update_user_permissions(username):
     req_role = request.headers.get('Role')
     if req_role not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
     
-    perms = request.json.get('permissions', [])
-    users_data = read_users()
+    req_data = request.json
+    perms = req_data.get('permissions', [])
+    new_role = req_data.get('role') # 🌟 接收前端传来的新角色
     
+    users_data = read_users()
     for u in users_data:
-        if u['username'] == username:
-            # 防御机制：管理员不能去改超级管理员和其他管理员的权限
+        if str(u['username']) == str(username):
             if req_role == 'admin' and u['role'] in ['super_admin', 'admin']:
                 return jsonify({"message": "越权：您无权修改该级别账户的权限"}), 403
+            
+            # 🛡️ 终极防御：防止黑客抓包越权！管理员即使伪造请求，也绝对改不了危险权限
+            if req_role == 'admin':
+                admin_restricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete']
+                old_perms = set(u.get('permissions', []))
+                new_perms = set(perms)
+                # 强行保持危险权限与修改前完全一致，管理员无法动这些勾
+                for restricted in admin_restricted:
+                    if restricted in old_perms: new_perms.add(restricted)
+                    else: new_perms.discard(restricted)
+                perms = list(new_perms)
+
             u['permissions'] = perms
+            
+            # 🐛 修复 Bug 2：允许超级管理员更新下属的角色
+            if new_role and req_role == 'super_admin' and u['role'] != 'super_admin':
+                u['role'] = new_role
             break
             
     write_users(users_data)
     return jsonify({"success": True})
 
-
-# --- 📋 订单核心接口 ---
-@app.route('/api/orders', methods=['GET'])
-def get_orders(): return jsonify(read_orders().get('orders', []))
-
-@app.route('/api/orders', methods=['POST'])
-def add_order():
-    if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
-    req_data = request.json
+@app.route('/api/orders/<int:order_id>', methods=['DELETE'])
+def delete_order(order_id):
+    req_role = request.headers.get('Role')
+    req_username = request.headers.get('Username')
+    
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
-    ct = datetime.now().strftime('%Y-%m-%d %H:%M')
-    new_id = max([x['id'] for x in orders_list], default=0) + 1
     
-    # 🌟 新增：接收所有的结构化字段
-    new_order = {
-        "id": new_id, 
-        "title": req_data.get('title', ''), 
-        "status": "pending", 
-        "type": req_data.get('type', 0), 
-        "date": ct, 
-        "completed_date": "",
-        "order_client": req_data.get('order_client', ''),
-        "receiver_name": req_data.get('receiver_name', ''),
-        "receiver_phone": req_data.get('receiver_phone', ''),
-        "receiver_address": req_data.get('receiver_address', ''),
-        "goods_name": req_data.get('goods_name', ''),
-        "goods_weight": req_data.get('goods_weight', ''),
-        "goods_quantity": req_data.get('goods_quantity', ''),
-        "goods_packaging": req_data.get('goods_packaging', ''),
-        "logistics_service": req_data.get('logistics_service', ''),
-        "remark": req_data.get('remark', '')
-    }
+    target_order = next((o for o in orders_list if o['id'] == order_id), None)
+    if not target_order: return jsonify({"message": "找不到订单"}), 404
     
-    orders_list.append(new_order)
+    # 🌟 核心逻辑变更：判断当前是要删未完成还是已完成订单
+    needed_perm = 'completed.delete' if target_order['status'] == 'completed' else 'pending.delete'
+    
+    # 🐛 修复 Bug 3：后端验证不再只看超管，而是去数据库查该员工有没有权限树里赋予的权限
+    has_p = False
+    if req_role == 'super_admin': has_p = True
+    else:
+        for u in read_users():
+            if str(u['username']) == str(req_username):
+                has_p = needed_perm in u.get('permissions', [])
+                break
+                
+    if not has_p: return jsonify({"message": "底层权限不足，拦截删除操作"}), 403
+    
+    orders_list = [x for x in orders_list if x['id'] != order_id]
     orders_data['orders'] = orders_list
     write_orders(orders_data)
-    return jsonify({"success": True, "data": new_order})
+    return jsonify({"success": True})
 
-
-@app.route('/api/orders/<int:order_id>', methods=['PUT'])
-def update_order(order_id):
-    ns = request.json.get('status')
+@app.route('/api/orders/<int:order_id>/edit', methods=['PUT'])
+def edit_order_content(order_id):
+    req_role = request.headers.get('Role')
+    req_username = request.headers.get('Username')
+    
+    # 🐛 修复 Bug 3 同理：后端验证员工有没有修改权限
+    has_p = False
+    if req_role == 'super_admin': has_p = True
+    else:
+        for u in read_users():
+            if str(u['username']) == str(req_username):
+                has_p = 'pending.edit' in u.get('permissions', [])
+                break
+                
+    if not has_p: return jsonify({"message": "底层权限不足，拦截修改操作"}), 403
+    
+    req_data = request.json
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
     for x in orders_list:
         if x['id'] == order_id:
-            x['status'] = ns
-            # 状态如果是完成，就打上当前时间戳；如果是撤销未完成，就清空时间戳
-            x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M') if ns == 'completed' else ""
+            x['title'] = req_data.get('title', '')
+            x['type'] = req_data.get('type', 0)
+            x['date'] = req_data.get('date', '')
+            x['order_client'] = req_data.get('order_client', '')
+            x['receiver_name'] = req_data.get('receiver_name', '')
+            x['receiver_phone'] = req_data.get('receiver_phone', '')
+            x['receiver_address'] = req_data.get('receiver_address', '')
+            x['goods_name'] = req_data.get('goods_name', '')
+            x['goods_weight'] = req_data.get('goods_weight', '')
+            x['goods_quantity'] = req_data.get('goods_quantity', '')
+            x['goods_packaging'] = req_data.get('goods_packaging', '')
+            x['logistics_service'] = req_data.get('logistics_service', '')
+            x['remark'] = req_data.get('remark', '')
             break
     orders_data['orders'] = orders_list
     write_orders(orders_data)
