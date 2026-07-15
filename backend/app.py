@@ -1,5 +1,5 @@
-from flask import Flask, request, jsonify, Response, send_from_directory
-from flask_cors import CORS
+from flask import Flask, request, jsonify, Response, send_from_directory # type: ignore
+from flask_cors import CORS # type: ignore
 import os
 import json
 import webbrowser
@@ -82,33 +82,58 @@ def get_all_users():
 
 @app.route('/api/users', methods=['POST'])
 def add_user():
-    if request.headers.get('Role') != 'super_admin': return jsonify({"message": "越权"}), 403
+    req_role = request.headers.get('Role')
+    if req_role not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
+    
     req_data = request.json
-    nu, np, nr = str(req_data.get('username', '')).strip(), str(req_data.get('password', '')).strip(), req_data.get('role', 'operator')
-    if not nu or not np: return jsonify({"message": "为空"}), 400
-    users = read_users()
-    if any(x['username'] == nu for x in users): return jsonify({"message": "存在"}), 400
-    users.append({"username": nu, "password": np, "role": nr})
-    write_users(users)
+    users_data = read_users()
+    target_role = req_data.get('role', 'employee')
+    
+    # 管理员只能创建普通员工，绝不能创建管理员或超级管理员
+    if req_role == 'admin' and target_role in ['super_admin', 'admin']:
+        return jsonify({"message": "越权操作：管理员只能创建员工账号"}), 403
+        
+    for u in users_data:
+        if u['username'] == req_data.get('username'): return jsonify({"message": "账号已存在"}), 400
+        
+    users_data.append({
+        "username": req_data.get('username'),
+        "password": req_data.get('password'),
+        "role": target_role,
+        "permissions": req_data.get('permissions', []) # 🌟 新增保存权限数组
+    })
+    write_users(users_data)
     return jsonify({"success": True})
 
-@app.route('/api/users/<string:username>/password', methods=['PUT'])
-def change_user_password(username):
-    if request.headers.get('Role') != 'super_admin': return jsonify({"message": "越权"}), 403
-    p = str(request.json.get('password')).strip()
-    users = read_users()
-    for x in users:
-        if x['username'] == username: x['password'] = p; break
-    write_users(users)
+@app.route('/api/users/<username>/password', methods=['PUT'])
+def update_user_password(username):
+    if request.headers.get('Role') not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
+    req_data = request.json
+    users_data = read_users()
+    for u in users_data:
+        if u['username'] == username:
+            u['password'] = req_data.get('password')
+            break
+    write_users(users_data)
     return jsonify({"success": True})
 
-@app.route('/api/users/<string:username>', methods=['DELETE'])
-def delete_user(username):
-    if request.headers.get('Role') != 'super_admin': return jsonify({"message": "越权"}), 403
-    if username == '1': return jsonify({"message": "保护"}), 400
-    users = read_users()
-    users = [x for x in users if x['username'] != username]
-    write_users(users)
+@app.route('/api/users/<username>/permissions', methods=['PUT'])
+def update_user_permissions(username):
+    req_role = request.headers.get('Role')
+    if req_role not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
+    
+    perms = request.json.get('permissions', [])
+    users_data = read_users()
+    
+    for u in users_data:
+        if u['username'] == username:
+            # 防御机制：管理员不能去改超级管理员和其他管理员的权限
+            if req_role == 'admin' and u['role'] in ['super_admin', 'admin']:
+                return jsonify({"message": "越权：您无权修改该级别账户的权限"}), 403
+            u['permissions'] = perms
+            break
+            
+    write_users(users_data)
     return jsonify({"success": True})
 
 
@@ -179,7 +204,7 @@ def edit_order_content(order_id):
             x['title'] = req_data.get('title', '')
             x['type'] = req_data.get('type', 0)
             x['date'] = req_data.get('date', '')
-            # 🌟 新增：支持超级管理员修改结构化字段
+            # 新增：支持超级管理员修改结构化字段
             x['order_client'] = req_data.get('order_client', '')
             x['receiver_name'] = req_data.get('receiver_name', '')
             x['receiver_phone'] = req_data.get('receiver_phone', '')
@@ -204,7 +229,7 @@ def delete_order(order_id):
     return jsonify({"success": True})
 
 
-# --- 🏭 原材料持久化存储服务 API ---
+# --- 原材料持久化存储服务 API ---
 
 @app.route('/api/materials', methods=['GET'])
 def get_materials():

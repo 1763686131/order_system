@@ -292,3 +292,22 @@ button:active { transform: translateY(0); }
 .card-footer-right {
     flex-wrap: nowrap;
 }
+
+
+/* 🌟 全新高级账户管理控制台分屏样式 */
+.user-manage-container { display: flex; gap: 20px; min-height: 430px; }
+.user-list-panel { width: 35%; border-right: 1px solid #EBEEF5; padding-right: 15px; overflow-y: auto; max-height: 500px; }
+.user-detail-panel { width: 65%; padding-left: 5px; }
+
+.user-list-item { padding: 12px; border: 1px solid #EBEEF5; border-radius: 6px; margin-bottom: 10px; cursor: pointer; transition: 0.2s; background: #fff; }
+.user-list-item:hover { border-color: #c6e2ff; background: #f4f9ff; }
+.user-list-item.active { border-color: #409EFF; background: #ecf5ff; box-shadow: 0 2px 4px rgba(64,158,255,0.1); }
+
+/* 🌟 树形权限控件样式 */
+.perm-tree { margin-top: 15px; border: 1px solid #EBEEF5; border-radius: 6px; padding: 15px; background: #FAFAFA; max-height: 280px; overflow-y: auto; }
+.perm-group { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px dashed #e4e7ed; }
+.perm-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.perm-group > label { font-weight: bold; color: #303133; display: flex; align-items: center; gap: 8px; font-size: 14px; margin-bottom: 10px; cursor: pointer; }
+.perm-children { margin-left: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.perm-children label { font-size: 13px; color: #606266; display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.perm-children label.disabled-perm { color: #c0c4cc; cursor: not-allowed; }

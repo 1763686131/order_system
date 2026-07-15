@@ -28,11 +28,13 @@
             </div>
             <button class="mobile-menu-btn" onclick="toggleMobileMenu()">☰菜单</button>
             <div class="nav-right" id="navRightMenu">
-                <button id="btnNavCreateOrder" class="btn-primary hidden" onclick="toggleModal('createOrderModal', true); closeMobileMenu();">📝 发布新订单</button>
-                <button id="btnNavUploadMaterial" class="btn-outline-success" onclick="openUploadMaterialModal(); closeMobileMenu();">✍️ 录入原材料</button>
-                <button id="btnOpenAddUser" class="btn-outline-primary hidden" onclick="toggleModal('addUserModal', true); closeMobileMenu();">➕ 添加用户</button>
-                <button id="btnOpenViewUser" class="btn-outline-info hidden" onclick="openViewUserModal(); closeMobileMenu();">👥 管理用户</button>
-                <button class="btn-text-gray" onclick="handleLogout()">退出登录</button>
+                <span id="currentUserRoleTag" class="role-tag"></span>
+                <span class="nav-username">你好，<strong id="currentUsername"></strong></span>
+                
+                <button id="btnOpenViewUser" class="btn-outline-primary hidden" onclick="openViewUserModal()">👥 账户与权限控制台</button>
+                <button id="btnEditStockAction" class="btn-outline-primary hidden" onclick="triggerStockModifyModal()">库储备</button>
+                <button id="btnNavCreateOrder" class="btn-success hidden" onclick="toggleModal('createOrderModal', true)">📝 发布新订单</button>
+                <button class="btn-danger" onclick="handleLogout()">安全退出</button>
             </div>
         </div>
 
@@ -102,14 +104,56 @@
     </div>
 
     <div id="viewUserModal" class="modal-mask hidden">
-        <div class="modal-box modal-box-wide">
+        <div class="modal-box" style="width: 850px; max-width: 95%;">
             <div class="modal-header">
-                <span>系统用户名单管理</span>
+                <span>👥 系统账户与权限管理控制台</span>
                 <span class="close-x" onclick="toggleModal('viewUserModal', false)">&times;</span>
             </div>
-            <div class="modal-body" id="userListContainer"></div>
+            <div class="modal-body" style="padding: 20px;">
+                <div class="user-manage-container">
+                    <div class="user-list-panel">
+                        <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                            <strong style="color:#606266; font-size: 15px;">员工名单</strong>
+                            <button class="btn-success" style="padding: 4px 8px; font-size: 12px;" onclick="prepareCreateUser()">+ 新增员工</button>
+                        </div>
+                        <div id="userListContainer"></div>
+                    </div>
+                    <div class="user-detail-panel" id="userDetailPanel" style="display: none;">
+                        <h4 id="detailTitle" style="margin-top:0; color:#303133; border-bottom: 1px solid #ebeef5; padding-bottom:12px; margin-bottom: 15px;">用户信息配置</h4>
+                        
+                        <div class="form-item" id="createUsernameGroup">
+                            <label>系统登录账号:</label>
+                            <input id="detailUsername" placeholder="输入账号名称" />
+                        </div>
+                        
+                        <div class="form-item">
+                            <label>账户安全密码:</label>
+                            <div style="display:flex; gap:10px;">
+                                <input id="detailPassword" placeholder="输入登录密码" style="flex:1;" />
+                                <button id="btnUpdatePwd" class="btn-outline-primary" style="padding:0 15px; display:none;" onclick="updateUserPassword()">立即改密</button>
+                            </div>
+                        </div>
+
+                        <div class="form-item">
+                            <label>系统岗位级别:</label>
+                            <select id="detailRole">
+                                <option value="employee">普通员工</option>
+                                <option value="admin">管理员</option>
+                            </select>
+                            <span id="detailRoleText" style="display:none; color: #E6A23C; font-weight: bold; padding-top:8px;"></span>
+                        </div>
+
+                        <div id="permissionsWrapper">
+                            <label style="font-weight: bold; display:block; margin-top:15px; color:#606266;">🛡️ 模块功能权限分配 (勾选即刻赋权):</label>
+                            <div class="perm-tree" id="permTreeContainer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="modal-footer">
-                <button class="btn-secondary" onclick="toggleModal('viewUserModal', false)">关闭窗口</button>
+                <button class="btn-danger" id="btnDeleteUser" style="display:none; float:left;" onclick="deleteCurrentUser()">物理注销该账户</button>
+                <button class="btn-secondary" onclick="toggleModal('viewUserModal', false)">关闭</button>
+                <button class="btn-success" id="btnSaveUser" style="display:none;" onclick="saveUserData()">💾 保存账户与权限</button>
             </div>
         </div>
     </div>
