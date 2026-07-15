@@ -1,5 +1,5 @@
 const API_BASE = '/api';
-let currentUser = { username: '', role: '', permissions: [] };
+let currentUser = { username: '', name: '', role: '', permissions: [] }; // 🌟 新增了 name 字段
 let allOrdersLocal = []; 
 let currentTab = 'pending'; 
 let activeKeyboardTargetId = 'materialInputUse'; 
@@ -16,7 +16,7 @@ function hasPerm(permKey) {
     return currentUser.permissions && currentUser.permissions.includes(permKey);
 }
 
-// 🌟 权限树形配置图谱 (已彻底分离为三大独立树干)
+// 🌟 权限树形配置图谱
 const PERMISSIONS_CONFIG = [
     {
         group: 'pending_order', label: '📦 未完成订单权限',
@@ -125,7 +125,7 @@ function pressKey(key) {
     else targetInput.value = currentVal + key;
 }
 
-// 🌟 顶部导航栏渲染：绑定细分权限
+// 🌟 顶部导航栏渲染：绑定真实姓名和权限
 function renderUI() {
     const loginSection = document.getElementById('loginSection');
     const mainSection = document.getElementById('mainSection');
@@ -143,22 +143,20 @@ function renderUI() {
     loginSection.classList.add('hidden');
     mainSection.classList.remove('hidden');
 
-    document.getElementById('currentUsername').innerText = currentUser.username;
+    // 🌟 在导航栏主页右上角，优先展示真实中文名，如果没填则兜底展示账号名
+    document.getElementById('currentUsername').innerText = currentUser.name || currentUser.username;
     document.getElementById('currentUserRoleTag').innerText = getRoleName(currentUser.role);
 
     // 控制台按钮：只有超管和管理员可见
     if (['super_admin', 'admin'].includes(currentUser.role)) btnOpenViewUser.classList.remove('hidden');
     else btnOpenViewUser.classList.add('hidden');
 
-    // 发单按钮管控 -> pending.add
     if (hasPerm('pending.add')) btnNavCreateOrder.classList.remove('hidden');
     else btnNavCreateOrder.classList.add('hidden');
 
-    // 调库按钮管控 -> material.edit_stock
     if (hasPerm('material.edit_stock')) btnEditStockAction.classList.remove('hidden');
     else btnEditStockAction.classList.add('hidden');
     
-    // 物料录入管控 -> material.add
     if (btnUploadMaterialAction) {
         if (hasPerm('material.add')) btnUploadMaterialAction.classList.remove('hidden');
         else btnUploadMaterialAction.classList.add('hidden');
@@ -194,7 +192,7 @@ function formatTextWithBreaks(text) {
 }
 
 function handleLogout() {
-    currentUser = { username: '', role: '', permissions: [] };
+    currentUser = { username: '', name: '', role: '', permissions: [] };
     localStorage.removeItem('local_user');
     document.getElementById('loginUsername').value = '';
     document.getElementById('loginPassword').value = '';
@@ -246,7 +244,6 @@ async function fetchOrders() {
             
             let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
             
-            // 🌟 动态计算底部的各种操作按钮 (完全根据新权限树匹配)
             let actionBtn = '';
             let superActionHtml = '';
             let copyBtnHtml = '';
@@ -381,7 +378,6 @@ async function fetchMaterialRecords() {
             let actionHtml = '';
             let btnCluster = '';
             
-            // 根据物料细分权限判定
             if (hasPerm('material.edit')) {
                 btnCluster += `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px; margin-right:4px;" onclick="openEditMaterialModal(${item.id}, ${item.used}, ${item.produced}, '${safeRemark}')">修改备注</button>`;
             }
@@ -490,7 +486,6 @@ async function submitUpdateOrderStatus() {
     } catch (error) {}
 }
 
-// ============== 核心：智能运算引擎 =================
 function smartParse(prefix) {
     const text = document.getElementById(`${prefix}OrderTitle`).value;
     if (!text.trim()) return alert('请先在上方输入框粘贴或填写内容，再点击识别！');
@@ -622,7 +617,7 @@ async function deleteOrder(id) {
 
 
 // =======================================================
-// 🌟 核心升级：全新集中式账户与权限控制台 (精准越权管控)
+// 🌟 核心升级：集中式账户与权限控制台
 // =======================================================
 let currentEditUser = null; 
 
@@ -644,16 +639,18 @@ async function refreshUserList() {
             row.className = 'user-list-item';
             if (currentEditUser && currentEditUser.username === user.username) row.classList.add('active');
             
-            // 🔓 管理员能够查看到员工名单，方便改权限 (超管看所有人)
             if (currentUser.role === 'admin' && user.role !== 'employee' && user.role !== 'operator') {
-                return; // 不渲染比自己等级高的
+                return; 
             }
 
             let roleName = getRoleName(user.role);
             let color = user.role === 'super_admin' ? '#F56C6C' : (user.role === 'admin' ? '#E6A23C' : '#67C23A');
             
+            // 🌟 渲染：展示真实的中文姓名，账号放在括号里作为辅助显示
+            let displayName = user.name ? user.name : user.username;
+            
             row.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size: 15px; font-weight: bold; color: #303133;">👤 ${user.username}</span>
+                <span style="font-size: 15px; font-weight: bold; color: #303133;">👤 ${displayName} <span style="font-size:12px;color:#999;font-weight:normal;">(${user.username})</span></span>
                 <span style="font-size: 12px; background: ${color}20; color: ${color}; padding: 2px 8px; border-radius: 12px;">${roleName}</span>
             </div>`;
             row.onclick = () => loadUserDetail(user);
@@ -670,6 +667,7 @@ function prepareCreateUser() {
     
     document.getElementById('detailUsername').value = '';
     document.getElementById('detailUsername').disabled = false;
+    document.getElementById('detailName').value = ''; // 🌟 清空真实姓名
     document.getElementById('detailPassword').value = '';
     
     document.getElementById('btnUpdatePwd').style.display = 'none';
@@ -688,16 +686,17 @@ function loadUserDetail(user) {
     event.currentTarget.classList.add('active');
     
     document.getElementById('userDetailPanel').style.display = 'block';
-    document.getElementById('detailTitle').innerText = `⚙️ 配置用户：${user.username}`;
+    let detailDisplayName = user.name ? user.name : user.username;
+    document.getElementById('detailTitle').innerText = `⚙️ 配置用户：${detailDisplayName}`;
     
     document.getElementById('detailUsername').value = user.username;
     document.getElementById('detailUsername').disabled = true; 
+    document.getElementById('detailName').value = user.name || ''; // 🌟 读取并渲染真实姓名
     document.getElementById('detailPassword').value = user.password;
     
     document.getElementById('btnUpdatePwd').style.display = 'inline-block';
     document.getElementById('btnSaveUser').style.display = 'inline-block';
     
-    // 🔒 删除账号按钮：只有超管能删除别人
     if (currentUser.role === 'super_admin' && user.role !== 'super_admin') {
         document.getElementById('btnDeleteUser').style.display = 'inline-block';
     } else {
@@ -727,7 +726,6 @@ function loadUserDetail(user) {
 function renderPermissionTree(userPerms) {
     let treeHtml = '';
     
-    // 🛡️ 管理员禁止更改的“危险操作”权限黑名单
     const adminRestricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete'];
 
     PERMISSIONS_CONFIG.forEach(group => {
@@ -740,7 +738,6 @@ function renderPermissionTree(userPerms) {
             
             let disabledStr = '';
             let labelClass = '';
-            // 🔒 如果当前操作者是 admin，遇到“修改”和“删除”的权限，直接将其锁死置灰，防呆防御！
             if (currentUser.role === 'admin' && adminRestricted.includes(child.key)) {
                 disabledStr = 'disabled title="系统限制：管理员无权授予或撤销此危险权限"';
                 labelClass = 'disabled-perm';
@@ -758,7 +755,6 @@ function renderPermissionTree(userPerms) {
 
 function toggleGroupPerms(parentCb) {
     const group = parentCb.dataset.group;
-    // 只控制那些没被禁用的复选框 (保证管理员点了全选也不会把被禁用的修改/删除勾上)
     const cbs = document.querySelectorAll(`.perm-cb[data-group="${group}"]:not([disabled])`);
     cbs.forEach(cb => cb.checked = parentCb.checked);
 }
@@ -776,33 +772,35 @@ function getSelectedPermissions() {
     return perms;
 }
 
-// 🌟 核心：保存数据完毕后，直接触发全页面强制刷新
 async function saveUserData() {
+    const n = document.getElementById('detailName').value.trim(); // 🌟 抓取真实中文名
+
     if (!currentEditUser) {
         const u = document.getElementById('detailUsername').value.trim();
         const p = document.getElementById('detailPassword').value.trim();
         const r = document.getElementById('detailRole').value;
         if (!u || !p) return alert('账号密码不能为空！');
         
-        const payload = { username: u, password: p, role: r, permissions: getSelectedPermissions() };
+        // 🌟 Payload 加入 name 字段
+        const payload = { username: u, name: n, password: p, role: r, permissions: getSelectedPermissions() };
         try {
             const res = await fetch(`${API_BASE}/users`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
             if (res.ok) { 
                 alert('✨ 新系统账户创建并赋权成功！'); 
-                window.location.reload(); // 🔥 强制刷新页面
+                window.location.reload(); 
             } else alert('账户名称已存在或无权限！');
         } catch(e) { alert('网络异常'); }
     } else {
-        // 🐛 修复 Bug 2：把原本漏掉的 role (角色) 也一并打包发送给后端
         const r = document.getElementById('detailRole').value;
-        const payload = { permissions: getSelectedPermissions(), role: r }; 
+        // 🌟 Payload 加入 name 字段
+        const payload = { name: n, permissions: getSelectedPermissions(), role: r }; 
         try {
             const res = await fetch(`${API_BASE}/users/${currentEditUser.username}/permissions`, { 
                 method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) 
             });
             if (res.ok) { 
-                alert(`✅ 已成功更新 [${currentEditUser.username}] 的账户角色与访问权限！`); 
-                window.location.reload(); // 🔥 强制刷新页面
+                alert(`✅ 已成功更新信息！`); 
+                window.location.reload(); 
             } else {
                 alert('更新失败，可能权限不足');
             }
@@ -820,7 +818,7 @@ async function updateUserPassword() {
         }); 
         if (res.ok) {
             alert('✅ 密码重置成功！');
-            window.location.reload(); // 改密码后也干脆刷新一下，防止状态滞留
+            window.location.reload(); 
         }
     } catch(e) {}
 }
@@ -832,7 +830,7 @@ async function deleteCurrentUser() {
         const res = await fetch(`${API_BASE}/users/${currentEditUser.username}`, { method: 'DELETE', headers: getHeaders() }); 
         if (res.ok) { 
             alert('账户已彻底销毁！');
-            window.location.reload(); // 🔥 强制刷新页面
+            window.location.reload(); 
         } else {
             alert('❌ 物理销毁失败：接口异常或越权操作');
         }

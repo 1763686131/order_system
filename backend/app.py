@@ -25,7 +25,8 @@ FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
     if not os.path.exists(USERS_FILE):
-        d = [{"username": "1", "password": "741200", "role": "super_admin"}, {"username": "2", "password": "123456", "role": "operator"}]
+        # 🌟 初始化时加入默认的 name 字段
+        d = [{"username": "1", "password": "741200", "role": "super_admin", "name": "系统超管"}, {"username": "2", "password": "123456", "role": "operator", "name": "默认测试员工"}]
         write_users(d)
         return d
     with open(USERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
@@ -72,6 +73,7 @@ def login():
                 "success": True, 
                 "user": {
                     "username": u['username'], 
+                    "name": u.get('name', u['username']), # 🌟 返回真实中文名给前端，如果没有则用账号兜底
                     "role": u['role'],
                     "permissions": u.get('permissions', [])
                 }
@@ -103,6 +105,7 @@ def add_user():
         
     users_data.append({
         "username": req_data.get('username'),
+        "name": req_data.get('name', req_data.get('username')), # 🌟 接收真实中文名
         "password": req_data.get('password'),
         "role": target_role,
         "permissions": req_data.get('permissions', [])
@@ -138,6 +141,7 @@ def update_user_permissions(username):
     req_data = request.json
     perms = req_data.get('permissions', [])
     new_role = req_data.get('role')
+    new_name = req_data.get('name') # 🌟 接收前端更新的真实中文名
     
     users_data = read_users()
     for u in users_data:
@@ -156,6 +160,9 @@ def update_user_permissions(username):
                 perms = list(new_perms)
 
             u['permissions'] = perms
+            if new_name is not None:
+                u['name'] = new_name # 🌟 更新真实姓名
+                
             if new_role and req_role == 'super_admin' and u['role'] != 'super_admin':
                 u['role'] = new_role
             break
@@ -229,10 +236,8 @@ def delete_order(order_id):
     target_order = next((o for o in orders_list if o['id'] == order_id), None)
     if not target_order: return jsonify({"message": "找不到订单"}), 404
     
-    # 根据订单状态判定需要什么权限
     needed_perm = 'completed.delete' if target_order['status'] == 'completed' else 'pending.delete'
     
-    # 鉴权
     has_p = False
     if req_role == 'super_admin': has_p = True
     else:
@@ -253,7 +258,6 @@ def edit_order_content(order_id):
     req_role = request.headers.get('Role')
     req_username = request.headers.get('Username')
     
-    # 鉴权
     has_p = False
     if req_role == 'super_admin': has_p = True
     else:
