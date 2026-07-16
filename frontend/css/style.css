@@ -311,3 +311,62 @@ button:active { transform: translateY(0); }
 .perm-children { margin-left: 28px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .perm-children label { font-size: 13px; color: #606266; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .perm-children label.disabled-perm { color: #c0c4cc; cursor: not-allowed; }
+
+/* ========================================================
+ * 📦 专属定制：深蓝色未完成订单卡片
+ * ======================================================== */
+.new-pending-card {
+    width: 420.5px;
+    min-height: 465px; /* 保证最小高度，内容多时自动撑开 */
+    background: rgba(0, 33, 112, 1);
+    box-shadow: 0px 2px 4px rgba(0, 0, 0, 0.25);
+    opacity: 1;
+    color: #ffffff; /* 深色背景，文字统一用白色 */
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+}
+
+.npc-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+}
+
+.npc-title { font-size: 18px; }
+.npc-date { font-size: 14px; }
+.npc-type { font-size: 16px; margin-bottom: 15px; }
+
+.npc-body {
+    flex-grow: 1;
+    font-size: 14px;
+    line-height: 1.8;
+}
+
+.npc-row { margin-bottom: 6px; }
+
+.npc-label { color: #ffffff; }
+.npc-val { color: #ffffff; }
+
+.npc-footer {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 20px;
+    padding-top: 15px;
+}
+
+/* 底部功能按钮样式 */
+.npc-btn {
+    background: transparent;
+    border: 1px solid #ffffff;
+    color: #ffffff;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+    font-size: 13px;
+}
+
+.npc-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+}

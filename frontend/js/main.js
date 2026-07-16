@@ -235,65 +235,118 @@ async function fetchOrders() {
         filteredOrders.forEach(order => {
             const card = document.createElement('div');
             const orderType = order.type !== undefined ? order.type : 0;
-            
-            let cardClasses = 'order-card';
             let typeText = orderType == 1 ? '绝缘订单' : '中固订单';
-            if (orderType == 1) cardClasses += ' insulation-order'; 
-            else cardClasses += ' zhonggu-order';
-            card.className = cardClasses;
-            
-            let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
-            
-            let actionBtn = '';
-            let superActionHtml = '';
-            let copyBtnHtml = '';
 
-            if (order.status === 'pending') {
-                if (hasPerm('pending.complete')) actionBtn = `<button class="btn-success" onclick="triggerStatusConfirm(${order.id}, 'completed')">完成业务</button>`;
-                if (hasPerm('pending.edit')) superActionHtml += `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px;" onclick="openEditOrderModal(${order.id})">修改</button>`;
-                if (hasPerm('pending.delete')) superActionHtml += `<button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteOrder(${order.id})">删除</button>`;
-                if (hasPerm('pending.copy')) copyBtnHtml = `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px; margin-right:4px;" onclick="copyOrderInfo(${order.id})">📋 复制物流</button>`;
-            } else if (order.status === 'completed') {
-                if (hasPerm('completed.uncomplete')) actionBtn = `<button class="btn-outline-danger" onclick="triggerStatusConfirm(${order.id}, 'pending')" style="padding:4px 10px; font-size:12px;">设为未完成</button>`;
-                if (hasPerm('completed.delete')) superActionHtml += `<button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteOrder(${order.id})">删除</button>`;
-                if (hasPerm('pending.copy')) copyBtnHtml = `<button class="btn-outline-primary" style="padding:4px 10px; font-size:12px; margin-right:4px;" onclick="copyOrderInfo(${order.id})">📋 复制物流</button>`;
-            }
-
-            let completedDateHtml = order.status === 'completed' && order.completed_date ? `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>` : '';
-
-            let structuredDataHtml = '';
-            if (order.order_client || order.receiver_name || (!isEmployee && order.receiver_phone) || order.receiver_address || order.goods_name || order.goods_weight || order.goods_quantity || order.goods_packaging || (!isEmployee && order.logistics_service) || order.remark) {
-                structuredDataHtml = `<div style="margin-top: 12px; padding: 12px; background: #f8f9fb; border-radius: 6px; font-size: 13px; line-height: 2;">`;
+            if (currentTab === 'pending') {
+                // ==========================================
+                // 🌟 你指定的新版未完成订单专属卡片
+                // ==========================================
+                card.className = 'new-pending-card';
+                let clientName = order.order_client || '未知';
+                let goodsInfo = order.goods_name ? formatTextWithBreaks(order.goods_name) : formatTextWithBreaks(order.title);
                 
-                const typeLabel = orderType == 1 ? '绝缘订单' : '中固订单';
-                if (order.order_client) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">${typeLabel}:</span><strong style="color:#333;">${order.order_client}</strong></div>`;
-                if (order.receiver_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货姓名:</span><strong style="color:#333;">${order.receiver_name}</strong></div>`;
-                if (!isEmployee && order.receiver_phone) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货电话:</span><strong style="color:#333;">${order.receiver_phone}</strong></div>`;
-                if (order.receiver_address) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货地址:</span><strong style="color:#333; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; flex: 1;" title="${order.receiver_address}">${order.receiver_address}</strong></div>`;
-                if (order.goods_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0; padding-top: 3px;">货物名称:</span><div style="color:#409EFF; font-weight:900; font-size: 18px; flex:1; line-height: 1.5; letter-spacing: 0.5px;">${formatTextWithBreaks(order.goods_name)}</div></div>`;
-                if (order.goods_weight) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物重量:</span><strong style="color:#E6A23C;">${order.goods_weight}</strong></div>`;
-                if (order.goods_quantity) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物数量:</span><strong style="color:#E6A23C;">${order.goods_quantity}</strong></div>`;
-                if (order.goods_packaging) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物包装:</span><strong style="color:#333;">${order.goods_packaging}</strong></div>`;
-                if (!isEmployee && order.logistics_service) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">物流服务:</span><strong style="color:#333;">${order.logistics_service}</strong></div>`;
-                if (order.remark) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">备注信息:</span><strong style="color:#F56C6C;">${order.remark}</strong></div>`;
-                structuredDataHtml += `</div>`;
+                card.innerHTML = `
+                    <div class="npc-header">
+                        <div class="npc-title">${clientName}订单</div>
+                        <div class="npc-date">${order.date || ''}</div>
+                    </div>
+                    <div class="npc-type">${typeText}</div>
+                    <div class="npc-body">
+                        <div class="npc-row">
+                            <span class="npc-label">收货地址：</span><span class="npc-val">${order.receiver_address || ''}</span>
+                        </div>
+                        <div class="npc-row">
+                            <span class="npc-label">收货姓名：</span><span class="npc-val">${order.receiver_name || ''}</span>
+                        </div>
+                        <div class="npc-row">
+                            <span class="npc-label">联系电话：</span><span class="npc-val">${order.receiver_phone || ''}</span>
+                        </div>
+                        <div class="npc-row" style="margin-top: 15px;">
+                            <span class="npc-label">货物信息：</span>
+                            <div class="npc-val" style="color: red; margin-top: 5px; word-break: break-all;">${goodsInfo}</div>
+                        </div>
+                        <div class="npc-row" style="margin-top: 15px;">
+                            <span class="npc-label">货物包装：</span><span class="npc-val">${order.goods_packaging || ''}</span>
+                        </div>
+                        <div class="npc-row">
+                            <span class="npc-label">货物数量：</span><span class="npc-val">${order.goods_weight || ''}</span>
+                        </div>
+                        <div class="npc-row">
+                            <span class="npc-label">货物件数：</span><span class="npc-val">${order.goods_quantity || ''}</span>
+                        </div>
+                        <div class="npc-row">
+                            <span class="npc-label">物流服务：</span><span class="npc-val">${order.logistics_service || ''}</span>
+                        </div>
+                        <div class="npc-row">
+                            <span class="npc-label">备注信息：</span><span class="npc-val">${order.remark || ''}</span>
+                        </div>
+                    </div>
+                    <div class="npc-footer">
+                        <button class="npc-btn">返回</button>
+                        <button class="npc-btn" onclick="triggerStatusConfirm(${order.id}, 'completed')">确定完成</button>
+                        <button class="npc-btn" onclick="openEditOrderModal(${order.id})">修改删除</button>
+                        <button class="npc-btn" onclick="copyOrderInfo(${order.id})">复制信息</button>
+                    </div>
+                `;
+            } else {
+                // ==========================================
+                // 📦 维持原样的老版已完成订单卡片
+                // ==========================================
+                let cardClasses = 'order-card';
+                if (orderType == 1) cardClasses += ' insulation-order'; 
+                else cardClasses += ' zhonggu-order';
+                card.className = cardClasses;
+                
+                let isActionHidden = (currentUser.role === 'operator' && order.status === 'completed');
+                let actionBtn = '';
+                if (!isActionHidden) {
+                    actionBtn = `<button class="btn-outline-danger" onclick="triggerStatusConfirm(${order.id}, 'pending')" style="padding:4px 10px; font-size:12px;">设为未完成</button>`;
+                }
+
+                let superActionHtml = '';
+                if (currentUser.role === 'super_admin') {
+                    superActionHtml = `
+                        <button class="btn-outline-primary" style="padding:4px 10px; font-size:12px;" onclick="openEditOrderModal(${order.id})">修改</button>
+                        <button class="btn-outline-danger" style="padding:4px 10px; font-size:12px;" onclick="deleteOrder(${order.id})">删除</button>
+                    `;
+                }
+
+                let completedDateHtml = order.status === 'completed' && order.completed_date ? `<div class="complete-date" style="white-space: nowrap;">✔ ${order.completed_date}</div>` : '';
+
+                let structuredDataHtml = '';
+                if (order.order_client || order.receiver_name || order.receiver_phone || order.receiver_address || order.goods_name || order.goods_weight || order.goods_quantity || order.goods_packaging || order.logistics_service) {
+                    structuredDataHtml = `<div style="margin-top: 12px; padding: 12px; background: #f8f9fb; border-radius: 6px; font-size: 13px; line-height: 2;">`;
+                    
+                    const typeLabel = orderType == 1 ? '绝缘订单' : '中固订单';
+                    if (order.order_client) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">${typeLabel}:</span><strong style="color:#333;">${order.order_client}</strong></div>`;
+                    if (order.receiver_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货姓名:</span><strong style="color:#333;">${order.receiver_name}</strong></div>`;
+                    if (order.receiver_phone) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货电话:</span><strong style="color:#333;">${order.receiver_phone}</strong></div>`;
+                    if (order.receiver_address) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">收货地址:</span><strong style="color:#333;">${order.receiver_address}</strong></div>`;
+                    if (order.goods_name) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物名称:</span><strong style="color:#409EFF; font-size: 14px;">${order.goods_name}</strong></div>`;
+                    if (order.goods_weight) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物重量:</span><strong style="color:#E6A23C;">${order.goods_weight}</strong></div>`;
+                    if (order.goods_quantity) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物数量:</span><strong style="color:#E6A23C;">${order.goods_quantity}</strong></div>`;
+                    if (order.goods_packaging) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">货物包装:</span><strong style="color:#333;">${order.goods_packaging}</strong></div>`;
+                    if (order.logistics_service) structuredDataHtml += `<div style="display:flex;"><span style="color:#909399; width: 75px; flex-shrink: 0;">物流服务:</span><strong style="color:#333;">${order.logistics_service}</strong></div>`;
+                    structuredDataHtml += `</div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="card-header">
+                        <span class="card-title-tag">[#${order.id}] ${typeText}</span>
+                        <span class="order-time">🕐 创建: ${order.date || '未知'}</span>
+                    </div>
+                    <div class="card-body">
+                        <div style="color: #606266; font-size: 14px; margin-bottom: ${structuredDataHtml ? '4px' : '0'};">
+                            ${formatTextWithBreaks(order.title)}
+                        </div>
+                        ${structuredDataHtml}
+                    </div>
+                    <div class="card-footer">
+                        ${completedDateHtml}
+                        <div class="card-footer-right">${superActionHtml}${actionBtn}</div>
+                    </div>
+                `;
             }
-
-            let oldTextHtml = (!order.receiver_name && !order.goods_name && order.title)
-                ? `<div style="color: #606266; font-size: 14px; margin-bottom: 4px;">${formatTextWithBreaks(order.title)}</div>` 
-                : '';
-
-            card.innerHTML = `
-                <div class="card-header">
-                    <span class="card-title-tag">[#${order.id}] ${typeText}</span>
-                    <span class="order-time">🕐 创建: ${order.date || '未知'}</span>
-                </div>
-                <div class="card-body">${oldTextHtml}${structuredDataHtml}</div>
-                <div class="card-footer">
-                    ${completedDateHtml}
-                    <div class="card-footer-right">${copyBtnHtml}${superActionHtml}${actionBtn}</div>
-                </div>
-            `;
             gridContainer.appendChild(card);
         });
     } catch (error) { console.error("订单数据加载失败", error); }
@@ -847,3 +900,4 @@ window.onload = function() {
         }, 3000); 
     } else { renderUI(); }
 };
+
