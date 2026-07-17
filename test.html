@@ -63,6 +63,46 @@
     display: flex; 
   }
 
+  /* ================= 公共时间线样式 ================= */
+  .timeline-container {
+    display: flex;
+    flex-direction: column;
+    gap: 32px; 
+    width: 100%;
+  }
+
+  .timeline-group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .timeline-date {
+    font-size: 22px;
+    font-weight: 900;
+    color: #111;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .timeline-date::before {
+    content: '';
+    display: block;
+    width: 6px;
+    height: 20px;
+    background-color: #1890ff;
+    border-radius: 4px;
+  }
+
+  /* 重点修改：原材料列表容器改为 Grid，PC端一排两个 */
+  .timeline-items {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+
+
   /* ================= Tab 0: 未完成订单 ================= */
   .flip-container { perspective: 1000px; width: 100%; max-width: 380px; }
   .flipper { transition: 0.6s; transform-style: preserve-3d; position: relative; display: grid; }
@@ -105,96 +145,77 @@
   .c-btn:active { transform: scale(0.95); }
   .c-btn-outline { background: #fff; border: 1px solid #D0D7DE; color: #8C99A8; } .c-btn-blue { background: #1890ff; color: #fff; box-shadow: 0 4px 12px rgba(24,144,255,0.35); } .c-btn-pink { background: #E84C68; color: #fff; box-shadow: 0 4px 12px rgba(232,76,104,0.35); } .c-btn-green { background: #4CC478; color: #fff; box-shadow: 0 4px 12px rgba(76,196,120,0.35); }
 
-  /* ================= Tab 2: 已出库订单 ================= */
+  /* ================= Tab 2: 已出库订单网格 ================= */
   .shipped-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(460px, 1fr)); gap: 20px; width: 100%; }
   .shipped-card { display: flex; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden; position: relative; border: 1px solid #ebedf0; transition: transform 0.2s, box-shadow 0.2s; }
   .shipped-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
   .ribbon { position: absolute; top: 14px; right: -36px; background-color: #D5EFE3; color: #4CBCA0; padding: 4px 40px; font-size: 12px; font-weight: bold; transform: rotate(45deg); text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); z-index: 10; }
-  .shipped-left { flex: 1.3; padding: 20px; display: flex; flex-direction: column; border-right: 1px dashed #e8e8e8; }
-  .shipped-title { font-size: 18px; font-weight: 800; color: #111; margin-bottom: 14px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-  .s-tags-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; } .s-tag { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+  .shipped-left { flex: 1.3; padding: 20px 24px; display: flex; flex-direction: column; border-right: 1px dashed #e8e8e8; min-width: 0; }
+  
+  .shipped-title { 
+    font-size: 18px; 
+    font-weight: 800; 
+    color: #111; 
+    margin-bottom: 8px; 
+    line-height: 1.5; 
+    padding-top: 4px;
+    padding-bottom: 4px; 
+    margin-right: 60px; 
+    white-space: nowrap; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+  }
+  
+  .shipped-title.expanded {
+    white-space: normal;
+    word-break: break-all;
+  }
+
+  .expand-list-text { 
+    display: none; 
+    font-size: 13px; 
+    color: #8A7BFE; 
+    text-align: right; 
+    margin-top: 0; 
+    margin-bottom: 12px; 
+    margin-right: 60px; 
+    cursor: pointer; 
+    font-weight: bold; 
+    position: relative;
+    z-index: 11;
+  }
+
+  .s-tags-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+  .shipped-left .s-tags-wrapper:last-of-type { margin-bottom: 20px; } 
+  
+  .s-tag { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
   .s-tag-purple { background-color: #EDEBFF; color: #8A7BFE; } .s-tag-cyan { background-color: #DDF8F6; color: #2BCBC7; } .s-tag-green { background-color: #E2F6ED; color: #69D5A5; } .s-tag-pink { background-color: #FDECEE; color: #F26E83; }
-  .shipped-bottom { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; } .s-time-label { font-size: 12px; color: #999; margin-bottom: 4px; } .s-time-value { font-size: 18px; font-weight: bold; color: #111; letter-spacing: 0.5px; }
-  .s-status-btn { background-color: #DDF5EB; color: #4CBCA0; padding: 6px 14px; border-radius: 4px; font-size: 13px; font-weight: bold; }
+  
+  .shipped-bottom { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; } 
+  .s-time-label { font-size: 12px; color: #999; margin-bottom: 4px; } 
+  .s-time-value { font-size: 18px; font-weight: bold; color: #111; letter-spacing: 0.5px; }
+  
+  .s-detail-btn { background-color: #EDEBFF; color: #8A7BFE; padding: 6px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
+  .s-detail-btn:hover { background-color: #E2E0FB; }
+
   .shipped-right { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; justify-content: center; background-color: #FAFAFA; }
   .s-sub-title { font-size: 12px; color: #8C99A8; text-align: center; font-weight: bold; margin-bottom: 6px; } .s-main-title { font-size: 20px; font-weight: bold; color: #222; text-align: center; margin-bottom: 16px; } .s-info-list { font-size: 13px; color: #666; line-height: 1.6; } .s-info-list div { margin-bottom: 4px; }
 
-  /* ================= Tab 3: 原材料时间线 ================= */
-  
-  /* 整个时间线容器 */
-  .material-timeline {
-    display: flex;
-    flex-direction: column;
-    gap: 32px; /* 每天数据之间的间距 */
-    width: 100%;
-  }
-
-  /* 每天的时间组块 */
-  .timeline-group {
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* 时间节点头部 (类朋友圈日期样式) */
-  .timeline-date {
-    font-size: 22px;
-    font-weight: 900;
-    color: #111;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  /* 日期前面的蓝色小装饰条 */
-  .timeline-date::before {
-    content: '';
-    display: block;
-    width: 6px;
-    height: 20px;
-    background-color: #1890ff;
-    border-radius: 4px;
-  }
-
-  /* 存放当天卡片的容器 */
-  .timeline-items {
-    display: flex;
-    flex-direction: column;
-    gap: 16px; /* 卡片之间的间距 */
-  }
-
-  /* 胶囊卡片主体 */
+  /* ================= Tab 3: 原材料胶囊卡片 ================= */
   .material-card {
-    display: flex;
-    align-items: center;
-    background: #ffffff;
-    border-radius: 50px; 
-    box-shadow: 0 4px 16px rgba(0,0,0,0.03); 
-    padding: 18px 32px;
-    width: fit-content; 
-    min-width: 60%;
+    display: flex; align-items: center; background: #ffffff; border-radius: 50px; 
+    box-shadow: 0 4px 16px rgba(0,0,0,0.03); padding: 18px 32px; 
+    width: 100%; /* 重点修改：撑满父级网格，不再使用固定最小宽度 */
     border: 1px solid #f0f0f0;
   }
-
-  /* 左中侧数据组 */
   .m-data-group { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
   .m-item { font-size: 15px; letter-spacing: 0.5px; }
-
-  /* 各类标签与数值颜色 */
   .m-label-black { color: #111; font-weight: bold; }
   .m-label-blue { color: #1A4B84; font-weight: bold; }
-  .m-val-pink { color: #F47B8B; }
-  .m-val-green { color: #61D081; }
-  .m-val-blue { color: #5C91C5; }
-
-  /* 垂直灰线分割器 */
+  .m-val-pink { color: #F47B8B; } .m-val-green { color: #61D081; } .m-val-blue { color: #5C91C5; }
   .m-divider { width: 1px; height: 24px; background-color: #E4E9EC; margin: 0 24px; }
-
-  /* 右侧备注部分 */
-  .m-note { font-size: 15px; white-space: nowrap; }
-  .m-note-label { color: #111; }
-  .m-note-val { color: #111; font-weight: bold; }
-
+  .m-note { font-size: 15px; } /* 去掉 nowrap，以防网格较窄时文本溢出 */
+  .m-note-label { color: #111; } .m-note-val { color: #111; font-weight: bold; }
 
   /* ================= 移动端适配 (Media Query) ================= */
   @media (max-width: 768px) {
@@ -207,7 +228,11 @@
     .s-sub-title, .s-main-title { text-align: left; }
     .ribbon { top: 10px; right: -40px; padding: 4px 44px; font-size: 11px; }
 
-    /* 原材料胶囊卡片手机端自动变为上下结构 */
+    .shipped-title, .expand-list-text { margin-right: 65px; }
+
+    /* 重点修改：移动端下原材料列表变为一排一个 */
+    .timeline-items { grid-template-columns: 1fr; }
+
     .material-card { flex-direction: column; align-items: flex-start; border-radius: 16px; padding: 20px; width: 100%; }
     .m-data-group { flex-direction: column; align-items: flex-start; gap: 12px; }
     .m-divider { width: 100%; height: 1px; margin: 16px 0; }
@@ -232,6 +257,7 @@
     <div class="nav-item" onclick="switchTab(0)">未完成订单</div>
     <div class="nav-item" onclick="switchTab(1)">已完成订单</div>
     <div class="nav-item" onclick="switchTab(2)">已出库订单</div>
+    <!-- 默认激活原材料数据以预览效果 -->
     <div class="nav-item active" style="margin-left: auto;" onclick="switchTab(3)">原材料数据</div>
   </div>
 
@@ -250,10 +276,7 @@
           <div class="tags-wrapper">
             <div class="tags-label">标签&备注</div>
             <div class="tags-container">
-              <div class="tag tag-blue">包装:桶装</div>
-              <div class="tag tag-cyan">货物总重量:900KG</div>
-              <div class="tag tag-red">备注信息:带检测报告</div>
-              <div class="tag tag-green">件数:60件</div>
+              <div class="tag tag-blue">包装:桶装</div><div class="tag tag-cyan">货物总重量:900KG</div><div class="tag tag-red">备注信息:带检测报告</div><div class="tag tag-green">件数:60件</div>
             </div>
           </div>
           <div class="actions">
@@ -318,37 +341,122 @@
 
   <!-- Tab 2: 已出库订单 -->
   <div id="tab-2" class="tab-pane">
-    <div class="shipped-grid">
-      <div class="shipped-card">
-        <div class="ribbon">已完成</div>
-        <div class="shipped-left">
-          <div class="shipped-title">中固碳纤维胶30公斤×10组中固碳纤维胶30公斤×10组</div>
-          <div class="s-tags-wrapper">
-            <div class="s-tag s-tag-purple">包装:桶装</div><div class="s-tag s-tag-cyan">货物总重量:900KG</div><div class="s-tag s-tag-green">件数:60件</div><div class="s-tag s-tag-pink">备注信息:带检测报告</div>
+    <div class="timeline-container">
+      
+      <div class="timeline-group">
+        <div class="timeline-date">2026-07-18</div>
+        <div class="shipped-grid">
+          <div class="shipped-card">
+            <div class="ribbon">已完成</div>
+            
+            <div class="shipped-left">
+              <div class="shipped-title">环氧树脂胶粘剂大桶装A+B组分套装 (额外增加了固化剂与专用大型搅拌工具)</div>
+              <div class="expand-list-text">展开列表</div>
+              
+              <div class="s-tags-wrapper">
+                <div class="s-tag s-tag-purple">包装:铁桶</div>
+                <div class="s-tag s-tag-cyan">货物总重量:2000KG</div>
+                <div class="s-tag s-tag-green">件数:100件</div>
+              </div>
+              <div class="s-tags-wrapper">
+                <div class="s-tag s-tag-pink">备注信息:专车配送</div>
+              </div>
+              <div class="s-tags-wrapper">
+                <div class="s-tag s-tag-pink">物流信息:JD1234567890</div>
+              </div>
+              
+              <div class="shipped-bottom">
+                <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-18 09:15</div></div>
+                <div class="s-detail-btn">详情</div>
+              </div>
+            </div>
+            
+            <div class="shipped-right">
+              <div class="s-sub-title">分销商订单</div><div class="s-main-title">华东区专线</div>
+              <div class="s-info-list"><div>收货姓名：张三</div><div>联系电话：15912345678</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：上海市浦东新区张江高科技园区科苑路</div></div>
+            </div>
           </div>
-          <div class="shipped-bottom">
-            <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-16 22:00</div></div>
-            <div class="s-status-btn">已发货</div>
-          </div>
-        </div>
-        <div class="shipped-right">
-          <div class="s-sub-title">中固订单</div><div class="s-main-title">陶芸订单</div>
-          <div class="s-info-list"><div>收货姓名：牛华</div><div>联系电话：13068188388</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：广东省中山市动凤镇东成路中山市职业技术学院</div></div>
         </div>
       </div>
+
+      <div class="timeline-group">
+        <div class="timeline-date">2026-07-17</div>
+        <div class="shipped-grid">
+          <div class="shipped-card">
+            <div class="ribbon">已完成</div>
+            
+            <div class="shipped-left">
+              <div class="shipped-title">中固植筋胶400ml装</div>
+              <div class="expand-list-text">展开列表</div>
+              
+              <div class="s-tags-wrapper">
+                <div class="s-tag s-tag-purple">包装:箱装</div>
+                <div class="s-tag s-tag-cyan">货物总重量:150KG</div>
+                <div class="s-tag s-tag-green">件数:10件</div>
+              </div>
+              <div class="s-tags-wrapper">
+                <div class="s-tag s-tag-pink">物流信息:SF1029384756</div>
+              </div>
+              
+              <div class="shipped-bottom">
+                <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-17 14:30</div></div>
+                <div class="s-detail-btn">详情</div>
+              </div>
+            </div>
+            
+            <div class="shipped-right">
+              <div class="s-sub-title">中固订单</div><div class="s-main-title">李总加急单</div>
+              <div class="s-info-list"><div>收货姓名：李四</div><div>联系电话：13800138000</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：北京市朝阳区建国路88号SOHO现代城</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="timeline-group">
+        <div class="timeline-date">2026-07-16</div>
+        <div class="shipped-grid">
+          <div class="shipped-card">
+            <div class="ribbon">已完成</div>
+            
+            <div class="shipped-left">
+              <div class="shipped-title">中固碳纤维胶30公斤×10组中固碳纤维胶30公斤×10组</div>
+              <div class="expand-list-text">展开列表</div>
+              
+              <div class="s-tags-wrapper">
+                <div class="s-tag s-tag-purple">包装:桶装</div>
+                <div class="s-tag s-tag-cyan">货物总重量:900KG</div>
+                <div class="s-tag s-tag-green">件数:60件</div>
+              </div>
+              <div class="s-tags-wrapper">
+                <div class="s-tag s-tag-pink">备注信息:带检测报告</div>
+              </div>
+              <div class="s-tags-wrapper">
+                <div class="s-tag s-tag-pink">物流信息:SF0218125203163</div>
+              </div>
+              
+              <div class="shipped-bottom">
+                <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-16 22:00</div></div>
+                <div class="s-detail-btn">详情</div>
+              </div>
+            </div>
+            
+            <div class="shipped-right">
+              <div class="s-sub-title">中固订单</div><div class="s-main-title">陶芸订单</div>
+              <div class="s-info-list"><div>收货姓名：牛华</div><div>联系电话：13068188388</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：广东省中山市动凤镇东成路中山市职业技术学院</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
-  <!-- Tab 3: 原材料数据 (带时间线节点) -->
+  <!-- Tab 3: 原材料数据 -->
   <div id="tab-3" class="tab-pane active">
-    <div class="material-timeline">
+    <div class="timeline-container">
       
-      <!-- ===== 2026-07-18 的数据 ===== -->
       <div class="timeline-group">
-        <!-- 时间节点标题 -->
         <div class="timeline-date">2026-07-18</div>
-        
-        <!-- 当天输入的内容列表 -->
         <div class="timeline-items">
           
           <div class="material-card">
@@ -358,9 +466,7 @@
               <div class="m-item"><span class="m-label-blue">剩余树脂：</span><span class="m-val-blue">2500kg</span></div>
             </div>
             <div class="m-divider"></div>
-            <div class="m-note">
-              <span class="m-note-label">备注：</span><span class="m-note-val">粘钢胶</span>
-            </div>
+            <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">粘钢胶</span></div>
           </div>
 
           <div class="material-card">
@@ -370,20 +476,14 @@
               <div class="m-item"><span class="m-label-blue">剩余树脂：</span><span class="m-val-blue">2300kg</span></div>
             </div>
             <div class="m-divider"></div>
-            <div class="m-note">
-              <span class="m-note-label">备注：</span><span class="m-note-val">植筋胶</span>
-            </div>
+            <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">植筋胶</span></div>
           </div>
 
         </div>
       </div>
 
-      <!-- ===== 2026-07-17 的数据 ===== -->
       <div class="timeline-group">
-        <!-- 时间节点标题 -->
         <div class="timeline-date">2026-07-17</div>
-        
-        <!-- 当天输入的内容列表 -->
         <div class="timeline-items">
           
           <div class="material-card">
@@ -393,9 +493,7 @@
               <div class="m-item"><span class="m-label-blue">剩余树脂：</span><span class="m-val-blue">3000kg</span></div>
             </div>
             <div class="m-divider"></div>
-            <div class="m-note">
-              <span class="m-note-label">备注：</span><span class="m-note-val">碳纤维胶大货订单</span>
-            </div>
+            <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">碳纤维胶大货订单</span></div>
           </div>
 
         </div>
@@ -435,6 +533,8 @@
       const tabPanes = document.querySelectorAll('.tab-pane');
       tabPanes.forEach(pane => pane.classList.remove('active'));
       document.getElementById('tab-' + index).classList.add('active');
+
+      if (index === 2) { initExpandButtons(); }
     }
 
     function toggleCard() {
@@ -445,6 +545,49 @@
     function openModal() { document.getElementById('confirmModal').style.display = 'flex'; }
     function closeModal() { document.getElementById('confirmModal').style.display = 'none'; }
     function finalSubmit() { alert('订单已确认完成！'); closeModal(); }
+
+    function initExpandButtons() {
+      const containers = document.querySelectorAll('#tab-2 .shipped-left');
+      
+      containers.forEach(container => {
+        const title = container.querySelector('.shipped-title');
+        const expandBtn = container.querySelector('.expand-list-text');
+
+        if (title && expandBtn) {
+          const isExpanded = title.classList.contains('expanded');
+          title.classList.remove('expanded');
+
+          if (title.scrollWidth > title.clientWidth) {
+            expandBtn.style.display = 'block'; 
+            
+            if (isExpanded) {
+              title.classList.add('expanded');
+              expandBtn.textContent = '收起列表';
+            } else {
+              expandBtn.textContent = '展开列表';
+            }
+          } else {
+            expandBtn.style.display = 'none';
+          }
+
+          if (!expandBtn.dataset.bound) {
+            expandBtn.dataset.bound = "true";
+            expandBtn.addEventListener('click', function() {
+              if (title.classList.contains('expanded')) {
+                title.classList.remove('expanded'); 
+                expandBtn.textContent = '展开列表';
+              } else {
+                title.classList.add('expanded'); 
+                expandBtn.textContent = '收起列表';
+              }
+            });
+          }
+        }
+      });
+    }
+
+    window.addEventListener('load', initExpandButtons);
+    window.addEventListener('resize', initExpandButtons);
   </script>
 
 </body>
