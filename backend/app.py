@@ -25,7 +25,6 @@ FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
     if not os.path.exists(USERS_FILE):
-        # 🌟 初始化时加入默认的 name 字段
         d = [{"username": "1", "password": "741200", "role": "super_admin", "name": "系统超管"}, {"username": "2", "password": "123456", "role": "operator", "name": "默认测试员工"}]
         write_users(d)
         return d
@@ -73,17 +72,13 @@ def login():
                 "success": True, 
                 "user": {
                     "username": u['username'], 
-                    "name": u.get('name', u['username']), # 🌟 返回真实中文名给前端，如果没有则用账号兜底
+                    "name": u.get('name', u['username']),
                     "role": u['role'],
                     "permissions": u.get('permissions', [])
                 }
             })
     return jsonify({"success": False, "message": "账号或密码错误"}), 401
 
-
-# ==========================================
-# 🌟 账户与权限管理 API
-# ==========================================
 @app.route('/api/users', methods=['GET'])
 def get_all_users():
     return jsonify(read_users())
@@ -105,7 +100,7 @@ def add_user():
         
     users_data.append({
         "username": req_data.get('username'),
-        "name": req_data.get('name', req_data.get('username')), # 🌟 接收真实中文名
+        "name": req_data.get('name', req_data.get('username')),
         "password": req_data.get('password'),
         "role": target_role,
         "permissions": req_data.get('permissions', [])
@@ -141,7 +136,7 @@ def update_user_permissions(username):
     req_data = request.json
     perms = req_data.get('permissions', [])
     new_role = req_data.get('role')
-    new_name = req_data.get('name') # 🌟 接收前端更新的真实中文名
+    new_name = req_data.get('name') 
     
     users_data = read_users()
     for u in users_data:
@@ -149,7 +144,6 @@ def update_user_permissions(username):
             if req_role == 'admin' and u['role'] in ['super_admin', 'admin']:
                 return jsonify({"message": "越权：无权修改高级别账户"}), 403
             
-            # 防御：强制拦截管理员修改危险权限
             if req_role == 'admin':
                 admin_restricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete']
                 old_perms = set(u.get('permissions', []))
@@ -161,7 +155,7 @@ def update_user_permissions(username):
 
             u['permissions'] = perms
             if new_name is not None:
-                u['name'] = new_name # 🌟 更新真实姓名
+                u['name'] = new_name 
                 
             if new_role and req_role == 'super_admin' and u['role'] != 'super_admin':
                 u['role'] = new_role
@@ -170,10 +164,6 @@ def update_user_permissions(username):
     write_users(users_data)
     return jsonify({"success": True})
 
-
-# ==========================================
-# 📦 订单流水管理 API
-# ==========================================
 @app.route('/api/orders', methods=['GET'])
 def get_orders():
     orders_data = read_orders()
@@ -194,6 +184,8 @@ def add_order():
         "type": req_data.get('type', 0), 
         "date": ct, 
         "completed_date": "",
+        "shipped_date": "",
+        "logistics_no": "",
         "order_client": req_data.get('order_client', ''),
         "receiver_name": req_data.get('receiver_name', ''),
         "receiver_phone": req_data.get('receiver_phone', ''),
@@ -211,19 +203,40 @@ def add_order():
     write_orders(orders_data)
     return jsonify({"success": True, "data": new_order})
 
+
+# ==========================================
+# 🔥 核心防御区域：精准分配时间与单号
+# ==========================================
 @app.route('/api/orders/<int:order_id>', methods=['PUT'])
 def update_order_status(order_id):
-    ns = request.json.get('status')
+    req_data = request.json
+    ns = req_data.get('status')
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
     for x in orders_list:
         if x['id'] == order_id:
             x['status'] = ns
-            x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M') if ns == 'completed' else ""
+            
+            # 依据不同状态精准存储数据，绝不误杀覆盖
+            if ns == 'completed':
+                x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+            elif ns == 'shipped':
+                # ✅ 存入发货单号和发货时间
+                x['logistics_no'] = req_data.get('logistics_no', '专车配送/自提')
+                x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
+                # 同时保留一份 completed_date 防止有些老数据报错
+                x['completed_date'] = x['shipped_date']
+            elif ns == 'pending':
+                # 撤销回未完成时，清空时间
+                x['completed_date'] = ""
+                x['shipped_date'] = ""
+                x['logistics_no'] = ""
             break
+            
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True})
+
 
 @app.route('/api/orders/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
@@ -351,7 +364,6 @@ def delete_material_record(record_id):
 @app.route('/<path:path>')
 def send_static_files(path): 
     return send_from_directory(FRONTEND_DIR, path)
-
 
 def open_browser():
     if not os.path.exists('/app/frontend/index.html'): webbrowser.open("http://localhost:7899")

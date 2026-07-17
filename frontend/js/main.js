@@ -1,10 +1,11 @@
 /* ========================================================
- * 🌟 核心运行配置与安全鉴权体系 (从旧项目完整移植)
+ * 🚀 核心运行配置与安全鉴权体系
  * ======================================================== */
 const API_BASE = '/api';
 let currentUser = { username: '', name: '', role: '', permissions: [] }; 
 let allOrdersLocal = []; 
-let currentTab = 'pending'; 
+let currentTab = 0; // 0=未完成, 1=已完成, 2=已出库, 3=原材料
+let activeKeyboardTargetId = 'materialInputUse';
 
 function getRoleName(role) {
     const maps = { 'super_admin': '超级管理员', 'admin': '管理员', 'employee': '员工', 'operator': '员工' };
@@ -25,14 +26,13 @@ function getHeaders() {
 }
 
 /* ========================================================
- * 🚀 NOMI 小圆(Xiao Yuan) 权限渲染引擎
+ * 🤖 NOMI 小圆(Xiao Yuan) 权限引擎与基础交互
  * ======================================================== */
 function renderUI() {
     const loginSection = document.getElementById('loginSection');
     const mainSection = document.getElementById('mainSection');
     const fabContainer = document.getElementById('fabContainer');
     
-    // 没登录：显示登录遮罩，把主界面和小圆藏起来
     if (!currentUser.username) {
         loginSection.classList.remove('hidden');
         mainSection.style.display = 'none';
@@ -40,17 +40,14 @@ function renderUI() {
         return;
     }
 
-    // 登录成功：显示主界面和小圆，藏起登录遮罩
     loginSection.classList.add('hidden');
     mainSection.style.display = 'block';
     fabContainer.style.display = 'block';
 
-    // 🌟 给小圆“注入灵魂”：根据身份决定她身上能展开哪些功能！
     const btnOpenViewUser = document.getElementById('btnOpenViewUser');
     const fabAddOrder = document.getElementById('fabAddOrder');
     const fabAddMaterial = document.getElementById('fabAddMaterial');
 
-    // 只有管理员以上身份，小圆才会长出“账户控制”功能
     if (['super_admin', 'admin'].includes(currentUser.role)) {
         btnOpenViewUser.style.display = 'block';
     } else {
@@ -81,8 +78,8 @@ async function handleLogin() {
             if (!currentUser.permissions) currentUser.permissions = [];
             localStorage.setItem('local_user', JSON.stringify(currentUser));
             renderUI();
+            switchTab(0); 
             
-            // 登录成功后小圆立刻说话欢迎
             setTimeout(() => {
                 const speechBubble = document.getElementById('aiSpeechBubble');
                 if(speechBubble) {
@@ -91,9 +88,8 @@ async function handleLogin() {
                     setTimeout(() => speechBubble.classList.remove('show'), 4000);
                 }
             }, 1000);
-            
         } else { alert(resData.message || '凭证错误，登录失败'); }
-    } catch (error) { alert('本地服务端连接失败，请检查 Docker。'); }
+    } catch (error) { alert('本地服务端连接失败，请检查系统。'); }
 }
 
 function handleLogout() {
@@ -104,13 +100,617 @@ function handleLogout() {
     renderUI();
 }
 
+/* ========================================================
+ * 📦 业务功能整合：动态数据渲染 (涵盖 Tab 0、1、2 核心驱动)
+ * ======================================================== */
+function formatTextWithBreaks(text) {
+    if (!text) return '';
+    return text.replace(/\n/g, '<br>');
+}
+
+// 获取规范格式的秒级系统当前操作时间
+function getCurrentDateTime() {
+    const now = new Date();
+    const Y = now.getFullYear();
+    const M = String(now.getMonth() + 1).padStart(2, '0');
+    const D = String(now.getDate()).padStart(2, '0');
+    const h = String(now.getHours()).padStart(2, '0');
+    const m = String(now.getMinutes()).padStart(2, '0');
+    return `${Y}-${M}-${D} ${h}:${m}`;
+}
+
+// 🎯 核心控制台：全向动态订单请求与画布装配核心
+async function fetchOrders() {
+    if (currentTab !== 0 && currentTab !== 1 && currentTab !== 2) return; 
+
+    try {
+        const response = await fetch(`${API_BASE}/orders`, { method: 'GET', headers: getHeaders() });
+        const serverOrders = await response.json();
+        allOrdersLocal = serverOrders;
+        
+        // 如果有任何一个流转确认或修改弹窗处于开启状态，锁定画布防止数据回刷打断
+        const confirmModal = document.getElementById('confirmModal');
+        const shipOrderModal = document.getElementById('shipOrderModal');
+        if ((confirmModal && confirmModal.style.display === 'flex') || 
+            (shipOrderModal && shipOrderModal.style.display === 'flex')) return;
+
+        const targetContainer = document.getElementById(`tab-${currentTab}`);
+
+        // ==================================================================
+        // 🎮 引擎 C：已出库订单动态渲染 (Tab 2 时间线横向滚动 Switch 网格看板)
+        // ===================================================================
+        if (currentTab === 2) {
+            let shippedOrders = serverOrders.filter(o => o.status === 'shipped');
+            
+            if (shippedOrders.length === 0) {
+                targetContainer.innerHTML = '<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">当前暂无已出库物流单据记录</div>';
+                return;
+            }
+            
+            // 聚类按天分组
+            let groups = {};
+            shippedOrders.forEach(o => {
+                let day = o.shipped_date ? o.shipped_date.substring(0, 10) : (o.completed_date ? o.completed_date.substring(0, 10) : '未知日期');
+                if (!groups[day]) groups[day] = [];
+                groups[day].push(o);
+            });
+            
+            let tHtml = '<div class="timeline-container">';
+            Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
+                tHtml += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="shipped-grid">`;
+                
+                groups[date].forEach(o => {
+                    let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
+                    let typeText = o.type == 1 ? '绝缘订单' : '中固订单';
+                    
+                    let tagsHtml = '';
+                    if (o.goods_packaging) tagsHtml += `<div class="s-tag s-tag-purple">包装:${o.goods_packaging}</div>`;
+                    if (o.goods_weight) tagsHtml += `<div class="s-tag s-tag-cyan">货物总重量:${o.goods_weight}</div>`;
+                    if (o.goods_quantity) tagsHtml += `<div class="s-tag s-tag-green">件数:${o.goods_quantity}</div>`;
+                    
+                    tHtml += `
+                    <div class="shipped-card">
+                        <div class="ribbon">已出库</div>
+                        <div class="shipped-left">
+                            <div class="shipped-title">${o.goods_name || '无货物名称'}</div>
+                            <div class="expand-list-text">展开列表</div>
+                            <div class="s-tags-wrapper">${tagsHtml}</div>
+                            ${o.remark ? `<div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:${o.remark}</div></div>` : ''}
+                            <div class="s-tags-wrapper"><div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">物流单号:${o.logistics_no || '暂无单号'}</div></div>
+                            <div class="shipped-bottom">
+                                <div><div class="s-time-label">出库发货时间</div><div class="s-time-value">${o.shipped_date || o.completed_date || '未知'}</div></div>
+                                <div class="s-detail-btn" onclick="openEditOrderModal(${o.id})">详情</div>
+                            </div>
+                        </div>
+                        <div class="shipped-right">
+                            <div class="s-sub-title">${typeText}</div><div class="s-main-title">${o.order_client || '未命名'}</div>
+                            <div class="s-info-list">
+                                <div>收货姓名：${o.receiver_name || '未填'}</div>
+                                <div>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</div>
+                                <div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;" title="${o.receiver_address || ''}">收货地址：${o.receiver_address || '未填'}</div>
+                            </div>
+                        </div>
+                    </div>`;
+                });
+                
+                tHtml += `</div></div>`;
+            });
+            targetContainer.innerHTML = tHtml + '</div>';
+            setTimeout(initExpandButtons, 50); // 唤醒超长排版折叠轴
+            return;
+        }
+
+        // 判定待渲染的状态
+        let targetStatus = (currentTab === 1) ? 'completed' : 'pending';
+        let filteredOrders = serverOrders.filter(o => o.status === targetStatus);
+        
+        if (targetStatus === 'completed') {
+            filteredOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
+        } else {
+            filteredOrders.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+        }
+
+        if (filteredOrders.length === 0) {
+            targetContainer.innerHTML = `<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">当前列表下无任何订单单据记录</div>`;
+            return;
+        }
+
+        let html = '';
+        filteredOrders.forEach(o => {
+            let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
+            let typeName = o.type == 1 ? '绝缘订单' : '中固订单';
+            let goodsLines = (o.goods_name || '').split('\n').filter(l => l.trim() !== '');
+
+            // ==========================================
+            // 🏭 引擎 A：未完成订单 (3D 翻转 + 巨型大字报)
+            // ==========================================
+            if (currentTab === 0) {
+                let frontGoodsHtml = '';
+                goodsLines.forEach(line => {
+                    let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
+                    frontGoodsHtml += `<div class="product-item auto-fit-text">${formattedLine}</div>`;
+                });
+
+                let backGoodsHtml = '';
+                goodsLines.forEach(line => {
+                    let formattedBackLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
+                    backGoodsHtml += `<div class="info-row text-red text-bold auto-fit-text">${formattedBackLine}</div>`;
+                });
+
+                let tagsHtml = '';
+                if (o.goods_packaging) tagsHtml += `<div class="tag tag-blue">包装:${o.goods_packaging}</div>`;
+                if (o.goods_weight) tagsHtml += `<div class="tag tag-cyan">货物总重量:${o.goods_weight}</div>`;
+                if (o.remark) tagsHtml += `<div class="tag tag-red">备注信息:${o.remark}</div>`;
+                if (o.goods_quantity) tagsHtml += `<div class="tag tag-green">件数:${o.goods_quantity}</div>`;
+
+                let frontActs = '';
+                if (hasPerm('pending.complete')) {
+                    frontActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
+                }
+                frontActs += `<button class="btn btn-default" onclick="toggleCard(this)">详情页面</button>`;
+
+                let backActs = `<button class="btn btn-default" onclick="toggleCard(this)">⇦返回</button>`;
+                if (hasPerm('pending.complete')) backActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
+                if (hasPerm('pending.edit')) backActs += `<button class="btn btn-danger" onclick="openEditOrderModal(${o.id})">修改订单</button>`;
+                if (hasPerm('pending.copy')) backActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制信息</button>`;
+
+                html += `
+                <div class="flip-container">
+                  <div class="flipper">
+                    <div class="order-card front">
+                      <div class="order-title">${o.order_client || '未命名归属'}订单</div>
+                      <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
+                      <div class="product-list">
+                        ${frontGoodsHtml || '<div class="product-item" style="color:#999;">暂无货物明细</div>'}
+                      </div>
+                      <div class="tags-wrapper">
+                        <div class="tags-label">标签&备注</div>
+                        <div class="tags-container">${tagsHtml}</div>
+                      </div>
+                      <div class="actions">${frontActs}</div>
+                    </div>
+                    <div class="order-card back">
+                      <div class="order-title">${o.order_client || '未命名归属'}订单</div>
+                      <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
+                      <div class="product-list">
+                        <div class="info-row" style="display: flex; justify-content: space-between;">
+                          <span>收货姓名：${o.receiver_name || '未填'}</span>
+                          <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
+                        </div>
+                        <div class="info-row">收货地址：${o.receiver_address || '未填'}</div>
+                        <div class="info-row info-label" style="margin-top: 12px;">货物信息：</div>
+                        ${backGoodsHtml}
+                        <div style="display: flex; gap: 24px; margin-top: 16px;">
+                          <div class="info-row"><span class="info-label">货物包装：</span>${o.goods_packaging || '无'}</div>
+                          <div class="info-row"><span class="info-label">货物数量：</span><span class="text-red text-bold">${o.goods_weight || '无'}</span></div>
+                        </div>
+                        <div style="display: flex; gap: 24px;">
+                          <div class="info-row"><span class="info-label">货物件数：</span>${o.goods_quantity || '无'}</div>
+                          <div class="info-row"><span class="info-label">物流服务：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
+                        </div>
+                        ${o.remark ? `<div class="info-row"><span class="info-label">备注信息：</span><span class="text-red text-bold">${o.remark}</span></div>` : ''}
+                      </div>
+                      <div class="actions-back">${backActs}</div>
+                    </div>
+                  </div>
+                </div>`;
+            } 
+            // ==========================================
+            // 🏭 引擎 B：已完成订单 (静态详单面板，供发货员核对)
+            // ==========================================
+            else if (currentTab === 1) {
+                let cGoodsHtml = '';
+                goodsLines.forEach(line => {
+                    cGoodsHtml += `<div class="c-row c-text-red text-bold auto-fit-text">${line}</div>`;
+                });
+
+                let cActs = '';
+                if (hasPerm('completed.uncomplete')) {
+                    cActs += `<button class="c-btn c-btn-outline" onclick="triggerStatusConfirm(${o.id}, 'pending')">撤销完成</button>`;
+                }
+                // 🎯 核心：点击“发货”拉起物流单号输入极简遮罩弹窗
+                cActs += `<button class="c-btn c-btn-blue" onclick="triggerShipModal(${o.id})">发货</button>`;
+                if (hasPerm('completed.delete')) {
+                    cActs += `<button class="c-btn c-btn-pink" onclick="deleteOrder(${o.id})">物理删除</button>`;
+                }
+                cActs += `<button class="c-btn c-btn-green" onclick="copyOrderInfo(${o.id})">复制信息</button>`;
+
+                let shortDate = o.completed_date ? o.completed_date.split(' ')[0] : '未知日期';
+
+                html += `
+                <div class="completed-card">
+                  <div class="c-title">${o.order_client || '未命名归属'}订单</div>
+                  <div class="c-header">
+                    <div class="c-header-left"><strong>${typeName}</strong><span>发货核对明细</span></div>
+                    <div class="c-header-right">${shortDate}</div>
+                  </div>
+                  
+                  <div class="c-info-box">
+                    <div class="c-row-split c-text-grey">
+                      <span>收货姓名：${o.receiver_name || '未填'}</span>
+                      <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
+                    </div>
+                    <div class="c-row c-text-grey c-spacing">收货地址：${o.receiver_address || '未填'}</div>
+                    
+                    <div class="c-row c-label">货物信息：</div>
+                    <div style="display:flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
+                        ${cGoodsHtml || '<div class="c-row c-text-grey">暂无货物明细</div>'}
+                    </div>
+                    
+                    <div class="c-row-split" style="margin-top: 16px;">
+                      <div><span class="c-label">货物包装：</span>${o.goods_packaging || '无'}</div>
+                      <div><span class="c-label">货物数量：</span><span class="c-text-orange text-bold">${o.goods_weight || '无'}</span></div>
+                    </div>
+                    <div class="c-row-split" style="margin-top: 16px;">
+                      <div><span class="c-label">货物件数：</span>${o.goods_quantity || '无'}</div>
+                      <div style="text-align: right;"><span class="c-label">物流服务：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
+                    </div>
+                    ${o.remark ? `<div class="c-row" style="margin-top: 20px;"><span class="c-label">备注信息：</span><span class="c-text-pink text-bold">${o.remark}</span></div>` : ''}
+                    
+                    <div class="c-row" style="margin-top: 28px; padding-top: 20px; border-top: 1px dashed #E4E9EC;">
+                      <span class="c-label">完成时间：</span><span class="c-text-grey">${o.completed_date || '未知'}</span>
+                    </div>
+                  </div>
+                  <div class="c-actions">${cActs}</div>
+                </div>`;
+            }
+        });
+        
+        targetContainer.innerHTML = html;
+        setTimeout(autoFitText, 50);
+
+    } catch (error) { 
+        console.error("数据拉取引擎异常", error); 
+    }
+}
+
+// ================= 🎯 新增：发货物流录入控制逻辑 =================
+function triggerShipModal(orderId) {
+    document.getElementById('shipTargetId').value = orderId;
+    document.getElementById('shipLogisticsNo').value = ''; 
+    document.getElementById('shipOrderModal').style.display = 'flex';
+}
+
+function closeShipModal() {
+    document.getElementById('shipOrderModal').style.display = 'none';
+}
+
+async function submitShipOrder() {
+    const id = document.getElementById('shipTargetId').value;
+    let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
+    if (!logisticsNo) logisticsNo = '专车配送/自提'; 
+    
+    const currentDateTime = getCurrentDateTime();
+    
+    try {
+        const response = await fetch(`${API_BASE}/orders/${id}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                status: 'shipped',
+                logistics_no: logisticsNo,
+                shipped_date: currentDateTime,     
+                completed_date: currentDateTime   
+            })
+        });
+        if (response.ok) {
+            closeShipModal();
+            fetchOrders(); 
+        }
+    } catch (e) {
+        alert('发货出库网络通讯失败');
+    }
+}
+
+// 二次确认流转通用弹窗
+function triggerStatusConfirm(orderId, targetStatus) {
+    const order = allOrdersLocal.find(o => o.id === orderId);
+    if (!order) return;
+    
+    document.getElementById('confirmTargetId').value = orderId;
+    document.getElementById('confirmTargetStatus').value = targetStatus;
+    
+    document.getElementById('newConfirmTitle').innerText = `${order.order_client || '未命名'}订单`;
+    document.getElementById('newConfirmSubtitle').innerHTML = `单据日期 &nbsp; ${order.date || '未知时间'}`;
+    
+    let goodsLines = (order.goods_name || '').split('\n').filter(l => l.trim() !== '');
+    let goodsHtml = '';
+    goodsLines.forEach(line => {
+        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
+        goodsHtml += `<div class="modal-product">${formattedLine}</div>`;
+    });
+    if (goodsHtml === '') goodsHtml = '<div class="modal-product" style="color:#999;">无详细货物内容</div>';
+    
+    document.getElementById('newConfirmBody').innerHTML = goodsHtml;
+    
+    const confirmBtn = document.querySelector('#confirmModal .modal-btn-confirm');
+    if (targetStatus === 'pending') {
+        confirmBtn.innerText = '确认撤销至未完成状态';
+        confirmBtn.style.backgroundColor = '#ff4d4f'; 
+    } else {
+        confirmBtn.innerText = '确定完成';
+        confirmBtn.style.backgroundColor = '#1890ff'; 
+    }
+
+    document.getElementById('confirmModal').style.display = 'flex';
+}
+
+function closeModal() { 
+    document.getElementById('confirmModal').style.display = 'none'; 
+}
+
+async function submitUpdateOrderStatus() {
+    const id = document.getElementById('confirmTargetId').value;
+    const status = document.getElementById('confirmTargetStatus').value;
+    try {
+        const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: status }) });
+        if (response.ok) { 
+            closeModal(); 
+            fetchOrders(); 
+        }
+    } catch (error) {
+        alert("流转操作异常");
+    }
+}
+
+async function deleteOrder(id) {
+    if (!confirm(`严重安全警告：您确定要彻底物理删除这条订单记录吗？此操作无法撤销！`)) return;
+    try {
+        const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'DELETE', headers: getHeaders() });
+        if (response.ok) fetchOrders();
+    } catch (e) {}
+}
+
+function copyOrderInfo(orderId) {
+    const order = allOrdersLocal.find(o => o.id === orderId);
+    if (!order) return;
+    
+    let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
+    const typeText = (order.type == 1) ? '绝缘订单' : '中固订单';
+    let nameLimit = (order.type == 1) ? 8 : 5;
+    let shortGoodsName = (order.goods_name || '').replace(/\n/g, '').trim().substring(0, nameLimit);
+    
+    let clipText = `【${typeText}】\n`;
+    if (order.receiver_name) clipText += `姓名：${order.receiver_name}\n`;
+    if (!isEmployee && order.receiver_phone) clipText += `电话：${order.receiver_phone}\n`;
+    if (order.receiver_address) clipText += `地址：${order.receiver_address}\n`;
+    if (shortGoodsName) clipText += `名称：${shortGoodsName}\n`;
+    if (order.goods_weight) clipText += `重量：${order.goods_weight}\n`;
+    if (order.goods_quantity) clipText += `件数：${order.goods_quantity}\n`;
+    if (order.goods_packaging) clipText += `包装：${order.goods_packaging}\n`;
+    if (!isEmployee && order.logistics_service) clipText += `服务：${order.logistics_service}\n`;
+    if (order.remark) clipText += `备注：${order.remark}\n`;
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(clipText).then(() => { alert('✅ 极简物流信息已成功复制！'); }).catch(() => fallbackCopyTextToClipboard(clipText));
+    } else fallbackCopyTextToClipboard(clipText);
+}
+
+function fallbackCopyTextToClipboard(text) {
+    let textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed"; textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus(); textArea.select();
+    try { document.execCommand('copy'); alert('✅ 极简物流信息已成功复制！'); } 
+    catch (err) { alert('⚠️ 自动复制失败，请手动复制。'); }
+    document.body.removeChild(textArea);
+}
+
+function validatePayload(payload) {
+    if (!payload.receiver_phone || !payload.receiver_address || !payload.goods_name || !payload.goods_weight) return '【收货电话】、【地址】、【名称】、【重量】为必填项！';
+    if (!/^(?:1[3-9]\d{9}|0\d{2,3}-\d{7,8})$/.test(payload.receiver_phone)) return '【收货电话】格式不正确！必须是11位手机号或带区号的座机。';
+    return null; 
+}
+
+function smartParse(prefix) {
+    const text = document.getElementById(`${prefix}OrderTitle`).value;
+    if (!text.trim()) return alert('请先在上方输入框粘贴或填写内容，再点击识别！');
+    const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
+    if (lines.length === 0) return;
+    
+    document.getElementById(`${prefix}OrderClient`).value = lines[0].replace(/[:：]$/, '').trim();
+    if (lines.length > 1) {
+        let line2 = lines[1];
+        let phoneMatch = line2.match(/(1[3-9]\d{9}|0\d{2,3}-\d{7,8})/);
+        let phone = phoneMatch ? phoneMatch[0] : '';
+        let name = '', address = '';
+        let strWithoutPhone = line2.replace(phone, '').replace(/(?:电话|联系方式|手机)[:：]?\s*/g, '');
+        let nameMatch = strWithoutPhone.match(/(?:姓名|收货人)[:：]\s*([^\s。，,;；]{1,5})/);
+        if (nameMatch) { name = nameMatch[1]; strWithoutPhone = strWithoutPhone.replace(nameMatch[0], ''); }
+        else {
+            let qMatch = strWithoutPhone.match(/[?？]\s*([^\s。，,;；:：]{1,4})/);
+            if (qMatch) { name = qMatch[1]; strWithoutPhone = strWithoutPhone.replace(qMatch[0], ''); }
+        }
+        let addrMatch = strWithoutPhone.match(/(?:地址)[:：]\s*(.*)/);
+        if (addrMatch) { address = addrMatch[1]; strWithoutPhone = strWithoutPhone.replace(addrMatch[0], ''); } 
+        else { address = strWithoutPhone; }
+        
+        if (!name) {
+            let parts = address.split(/[\s。，,;；]+/).filter(p => p.trim() !== '');
+            let potentialName = parts.find(p => p.length >= 2 && p.length <= 4 && !/[省市区县镇村街道路号栋室楼]/.test(p));
+            if (potentialName) { name = potentialName; address = address.replace(potentialName, ''); } 
+            else {
+                let fallbackParts = line2.split(phone);
+                name = fallbackParts[0].replace(/收货人|电话|联系方式|:|：/g, '').trim();
+                address = (fallbackParts[1] || '').replace(/^[。，,.;:\s]+/, '').trim();
+                if (name.length > 6 && address.length <= 6) { let temp = name; name = address; address = temp; }
+            }
+        }
+        document.getElementById(`${prefix}ReceiverName`).value = name.replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '').replace(/[?？]/g, '');
+        document.getElementById(`${prefix}ReceiverPhone`).value = phone;
+        document.getElementById(`${prefix}ReceiverAddress`).value = address.replace(/(?:地址)[:：]?/g, '').replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '');
+    }
+
+    if (lines.length > 2) {
+        let goodsStr = lines.slice(2).join('\n');
+        document.getElementById(`${prefix}GoodsName`).value = goodsStr;
+        let totalWeight = 0, tempStr = goodsStr;
+        let calcRegex1 = /(\d+(?:\.\d+)?)\s*(?:[A-Za-z\u4e00-\u9fa5]{0,6})?\s*([*xX✖️×\/÷])\s*(\d+(?:\.\d+)?)/g;
+        let match;
+        while ((match = calcRegex1.exec(tempStr)) !== null) {
+            let val = /[*/÷]/.test(match[2]) ? (/[*xX✖️×]/.test(match[2]) ? parseFloat(match[1]) * parseFloat(match[3]) : parseFloat(match[1]) / parseFloat(match[3])) : 0;
+            if (tempStr.substring(0, match.index).trim().endsWith('-')) totalWeight -= val; else totalWeight += val; 
+            tempStr = tempStr.substring(0, match.index) + " ".repeat(match[0].length) + tempStr.substring(match.index + match[0].length);
+        }
+        let calcRegex2 = /([+-])\s*(\d+(?:\.\d+)?)/g;
+        while ((match = calcRegex2.exec(tempStr)) !== null) {
+            if (match[1] === '+') totalWeight += parseFloat(match[2]); else totalWeight -= parseFloat(match[2]);
+        }
+        if (totalWeight !== 0) document.getElementById(`${prefix}GoodsWeight`).value = (Math.round(totalWeight * 100) / 100) + 'kg';
+        else document.getElementById(`${prefix}GoodsWeight`).value = '';
+    }
+}
+
+async function createOrder() {
+    const payload = {
+        title: document.getElementById('newOrderTitle').value, 
+        type: parseInt(document.getElementById('newOrderType').value),
+        order_client: document.getElementById('newOrderClient').value.trim(), 
+        receiver_name: document.getElementById('newReceiverName').value.trim(),
+        receiver_phone: document.getElementById('newReceiverPhone').value.trim(), 
+        receiver_address: document.getElementById('newReceiverAddress').value.trim(),
+        goods_name: document.getElementById('newGoodsName').value.trim(), 
+        goods_weight: document.getElementById('newGoodsWeight').value.trim(),
+        goods_quantity: document.getElementById('newGoodsQuantity').value.trim(), 
+        goods_packaging: document.getElementById('newGoodsPackaging').value,
+        logistics_service: document.getElementById('newLogisticsService').value, 
+        remark: document.getElementById('newOrderRemark').value.trim()
+    };
+    const errMsg = validatePayload(payload);
+    if (errMsg) return alert('发单失败：' + errMsg);
+    try {
+        const response = await fetch(`${API_BASE}/orders`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
+        if (response.ok) {
+            toggleModal('createOrderModal', false); 
+            document.querySelectorAll('#createOrderModal input, #createOrderModal textarea').forEach(el => el.value = '');
+            switchTab(0); 
+        }
+    } catch (error) {}
+}
+
+function openEditOrderModal(orderId) {
+    const order = allOrdersLocal.find(o => o.id === orderId);
+    if (!order) return;
+    
+    document.getElementById('editOrderId').value = order.id;
+    document.getElementById('editOrderDate').value = order.date || '';
+    document.getElementById('editOrderType').value = order.type !== undefined ? order.type : 0;
+    document.getElementById('editOrderTitle').value = order.title || '';
+    
+    ['OrderClient', 'ReceiverName', 'ReceiverPhone', 'ReceiverAddress', 'GoodsName', 'GoodsWeight', 'GoodsQuantity'].forEach(k => {
+        const el = document.getElementById(`edit${k}`);
+        if (el) {
+            el.value = order[k.replace(/([A-Z])/g, "_$1").toLowerCase().substring(1)] || '';
+        }
+    });
+    
+    document.getElementById('editGoodsPackaging').value = order.goods_packaging || '桶装';
+    document.getElementById('editLogisticsService').value = order.logistics_service || '送货上门+回单拍照回传';
+    document.getElementById('editOrderRemark').value = order.remark || '';
+    
+    const delBtn = document.getElementById('btnDeleteOrderInEdit');
+    if (delBtn) {
+        if (hasPerm('pending.delete')) delBtn.style.display = 'inline-block';
+        else delBtn.style.display = 'none';
+    }
+
+    toggleModal('editOrderModal', true);
+}
+
+async function submitEditOrder() {
+    const id = document.getElementById('editOrderId').value;
+    const date = document.getElementById('editOrderDate').value.trim();
+    if (!date) return alert('时间不能为空！');
+    const payload = {
+        title: document.getElementById('editOrderTitle').value, 
+        type: parseInt(document.getElementById('editOrderType').value), 
+        date: date,
+        order_client: document.getElementById('editOrderClient').value.trim(), 
+        receiver_name: document.getElementById('editReceiverName').value.trim(),
+        receiver_phone: document.getElementById('editReceiverPhone').value.trim(), 
+        receiver_address: document.getElementById('editReceiverAddress').value.trim(),
+        goods_name: document.getElementById('editGoodsName').value.trim(), 
+        goods_weight: document.getElementById('editGoodsWeight').value.trim(),
+        goods_quantity: document.getElementById('editGoodsQuantity').value.trim(), 
+        goods_packaging: document.getElementById('editGoodsPackaging').value,
+        logistics_service: document.getElementById('editLogisticsService').value, 
+        remark: document.getElementById('editOrderRemark').value.trim()
+    };
+    const errMsg = validatePayload(payload);
+    if (errMsg) return alert('修改失败：' + errMsg);
+    try {
+        const response = await fetch(`${API_BASE}/orders/${id}/edit`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) });
+        if (response.ok) { 
+            toggleModal('editOrderModal', false); 
+            fetchOrders(); 
+        }
+    } catch (e) { alert('请求异常'); }
+}
+
+async function deleteOrderInEdit() {
+    const id = document.getElementById('editOrderId').value;
+    if (!id) return;
+    
+    if (!confirm('安全警告：您确定要彻底物理删除这条订单记录吗？此操作无法撤销！')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'DELETE', headers: getHeaders() });
+        if (response.ok) {
+            toggleModal('editOrderModal', false); 
+            fetchOrders(); 
+        }
+    } catch (e) {
+        alert('物理删除请求异常');
+    }
+}
 
 /* ========================================================
- * 👥 账户与权限管理核心控制台 (从旧项目 100% 移植保留)
+ * 🏭 原材料录入与物理键盘
+ * ======================================================== */
+function openUploadMaterialModal() {
+    toggleModal('uploadMaterialModal', true);
+    setActiveKeyboardTarget('materialInputUse');
+    document.getElementById('materialInputUse').value = '';
+    document.getElementById('materialInputProduct').value = '';
+}
+
+function setActiveKeyboardTarget(id) {
+    activeKeyboardTargetId = id;
+    document.querySelectorAll('.keyboard-target').forEach(el => el.classList.remove('active-target'));
+    document.getElementById(id).classList.add('active-target');
+}
+
+function pressKey(key) {
+    const targetInput = document.getElementById(activeKeyboardTargetId);
+    let currentVal = targetInput.value;
+    if (key === 'clear') targetInput.value = '';
+    else if (key === 'backspace') targetInput.value = currentVal.substring(0, currentVal.length - 1);
+    else if (key === '.') { if (!currentVal.includes('.')) targetInput.value = currentVal + '.'; }
+    else targetInput.value = currentVal + key;
+}
+
+async function uploadMaterialRecord() {
+    const usedVal = parseFloat(document.getElementById('materialInputUse').value);
+    const productVal = parseFloat(document.getElementById('materialInputProduct').value);
+    if (isNaN(usedVal) || isNaN(productVal)) return alert('录入失败：请完整输入耗材与产出量！');
+
+    try {
+        const response = await fetch(`${API_BASE}/materials`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ used: usedVal, produced: productVal }) });
+        if (response.ok) {
+            toggleModal('uploadMaterialModal', false); 
+            document.getElementById('successNotifyDetail').innerText = `物料报表已存入：\n消耗: ${usedVal} kg\n产出: ${productVal} kg`;
+            toggleModal('uploadSuccessNotifyModal', true);
+        }
+    } catch (e) {}
+}
+
+/* ========================================================
+ * ⚙️ 账户与权限管理控制台
  * ======================================================== */
 const PERMISSIONS_CONFIG = [
     {
-        group: 'pending_order', label: '📦 未完成订单权限',
+        group: 'pending_order', label: '未完成订单权限',
         children: [
             { key: 'pending.add', label: '操作：发布新订单' },
             { key: 'pending.complete', label: '操作：完成业务' },
@@ -120,14 +720,14 @@ const PERMISSIONS_CONFIG = [
         ]
     },
     {
-        group: 'completed_order', label: '✅ 已完成订单权限',
+        group: 'completed_order', label: '已完成订单权限',
         children: [
             { key: 'completed.uncomplete', label: '操作：撤销完成状态' },
             { key: 'completed.delete', label: '操作：删除订单' }
         ]
     },
     {
-        group: 'material', label: '🛢️ 生产物料库权限',
+        group: 'material', label: '生产物料库权限',
         children: [
             { key: 'material.add', label: '操作：录入消耗与产出' },
             { key: 'material.edit', label: '操作：修改流水备注' },
@@ -172,7 +772,7 @@ async function refreshUserList() {
             let displayName = user.name ? user.name : user.username;
             
             row.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size: 15px; font-weight: bold; color: #333;">👤 ${displayName} <span style="font-size:12px;color:#999;font-weight:normal;">(${user.username})</span></span>
+                <span style="font-size: 15px; font-weight: bold; color: #333;">${displayName} <span style="font-size:12px;color:#999;font-weight:normal;">(${user.username})</span></span>
                 <span style="font-size: 12px; background: ${color}20; color: ${color}; padding: 2px 8px; border-radius: 12px; font-weight: bold;">${roleName}</span>
             </div>`;
             row.onclick = () => loadUserDetail(user);
@@ -185,7 +785,7 @@ function prepareCreateUser() {
     currentEditUser = null;
     document.querySelectorAll('.user-list-item').forEach(el => el.classList.remove('active'));
     document.getElementById('userDetailPanel').style.display = 'block';
-    document.getElementById('detailTitle').innerText = "✨ 新建系统账户";
+    document.getElementById('detailTitle').innerText = "新建系统账户";
     
     document.getElementById('detailUsername').value = '';
     document.getElementById('detailUsername').disabled = false;
@@ -209,7 +809,7 @@ function loadUserDetail(user) {
     
     document.getElementById('userDetailPanel').style.display = 'block';
     let detailDisplayName = user.name ? user.name : user.username;
-    document.getElementById('detailTitle').innerText = `⚙️ 配置用户：${detailDisplayName}`;
+    document.getElementById('detailTitle').innerText = `配置用户：${detailDisplayName}`;
     
     document.getElementById('detailUsername').value = user.username;
     document.getElementById('detailUsername').disabled = true; 
@@ -303,17 +903,17 @@ async function saveUserData() {
         const payload = { username: u, name: n, password: p, role: r, permissions: getSelectedPermissions() };
         try {
             const res = await fetch(`${API_BASE}/users`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
-            if (res.ok) { alert('✨ 新系统账户创建并赋权成功！'); window.location.reload(); } 
-            else alert('账户名称已存在或无权限！');
-        } catch(e) { alert('网络异常'); }
+            if (res.ok) { window.location.reload(); } 
+            else alert('账号已存在或无权限！');
+        } catch(e) {}
     } else {
         const r = document.getElementById('detailRole').value;
         const payload = { name: n, permissions: getSelectedPermissions(), role: r }; 
         try {
             const res = await fetch(`${API_BASE}/users/${currentEditUser.username}/permissions`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) });
-            if (res.ok) { alert(`✅ 已成功更新信息！`); window.location.reload(); } 
-            else alert('更新失败，可能权限不足');
-        } catch(e) { alert('更新权限失败'); }
+            if (res.ok) { window.location.reload(); } 
+            else alert('更新失败，权限不足');
+        } catch(e) {}
     }
 }
 
@@ -323,23 +923,21 @@ async function updateUserPassword() {
     if(!p) return alert('密码不能为空');
     try { 
         const res = await fetch(`${API_BASE}/users/${currentEditUser.username}/password`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ password: p }) }); 
-        if (res.ok) { alert('✅ 密码重置成功！'); window.location.reload(); }
+        if (res.ok) { window.location.reload(); }
     } catch(e) {}
 }
 
 async function deleteCurrentUser() {
     if (!currentEditUser) return;
-    if (!confirm(`💣 严重警告：确定要彻底物理删除账户 [${currentEditUser.username}] 吗？`)) return;
+    if (!confirm(`确定要彻底物理删除账户 [${currentEditUser.username}] 吗？`)) return;
     try { 
         const res = await fetch(`${API_BASE}/users/${currentEditUser.username}`, { method: 'DELETE', headers: getHeaders() }); 
-        if (res.ok) { alert('账户已彻底销毁！'); window.location.reload(); } 
-        else alert('❌ 物理销毁失败：接口异常或越权操作');
+        if (res.ok) { window.location.reload(); } 
     } catch(e) {}
 }
 
-
 /* ========================================================
- * 第一部分：全新 UI 界面的交互动效 (完全来自 test.html 原作，一字未改)
+ * 🎨 前端 UI 界面的交互动效 
  * ======================================================== */
 function switchTab(index) {
   const navItems = document.querySelectorAll('.nav-item');
@@ -350,17 +948,52 @@ function switchTab(index) {
   tabPanes.forEach(pane => pane.classList.remove('active'));
   document.getElementById('tab-' + index).classList.add('active');
 
+  currentTab = index;
+
+  if (index === 0 || index === 1 || index === 2) {
+      fetchOrders();
+  }
+
   if (index === 2) { initExpandButtons(); }
 }
 
-function toggleCard() {
-  const flipper = document.getElementById('cardFlipper');
-  flipper.classList.toggle('flipped');
+function toggleCard(btn) {
+  const flipper = btn.closest('.flipper');
+  if (flipper) {
+      flipper.classList.toggle('flipped');
+      setTimeout(autoFitText, 350); 
+  }
 }
 
-function openModal() { document.getElementById('confirmModal').style.display = 'flex'; }
-function closeModal() { document.getElementById('confirmModal').style.display = 'none'; }
-function finalSubmit() { alert('订单已确认完成！'); closeModal(); }
+function autoFitText() {
+    document.querySelectorAll(`#tab-${currentTab} .auto-fit-text`).forEach(el => {
+        el.style.fontSize = '';
+        const largeTexts = el.querySelectorAll('.text-red-large');
+        largeTexts.forEach(c => c.style.fontSize = '');
+
+        if (el.clientWidth === 0) return;
+
+        let currentSize = parseFloat(window.getComputedStyle(el).fontSize);
+        let childrenDeltas = Array.from(largeTexts).map(c => {
+            return parseFloat(window.getComputedStyle(c).fontSize) - currentSize;
+        });
+
+        let iterations = 0; 
+        while (el.scrollWidth > el.clientWidth && currentSize > 12 && iterations < 50) {
+            currentSize -= 0.5;
+            el.style.fontSize = currentSize + 'px';
+            largeTexts.forEach((c, index) => {
+                c.style.fontSize = (currentSize + childrenDeltas[index]) + 'px';
+            });
+            iterations++;
+        }
+    });
+}
+
+window.addEventListener('resize', () => {
+    initExpandButtons();
+    if (currentTab === 0 || currentTab === 1) autoFitText();
+});
 
 function initExpandButtons() {
   const containers = document.querySelectorAll('#tab-2 .shipped-left');
@@ -401,8 +1034,8 @@ function initExpandButtons() {
 }
 
 window.addEventListener('load', initExpandButtons);
-window.addEventListener('resize', initExpandButtons);
 
+/* AI悬浮智能体拖拽、点击、全局失焦 */
 const fabMain = document.getElementById('fabMain');
 const fabContainer = document.getElementById('fabContainer');
 
@@ -520,7 +1153,6 @@ function triggerAiSpeech() {
 }
 setInterval(triggerAiSpeech, 30000);
 
-
 /* ========================================================
  * 🔄 系统初始化启动挂载点
  * ======================================================== */
@@ -530,7 +1162,31 @@ window.onload = function() {
         currentUser = JSON.parse(savedUser);
         if (!currentUser.permissions) currentUser.permissions = [];
         renderUI();
+        switchTab(0);
+
+        // 全局定时轮询：优化刷新逻辑
+        setInterval(function() {
+            const editModal = document.getElementById('editOrderModal');
+            const shipModal = document.getElementById('shipOrderModal');
+            
+            // 1. 如果处于翻面或任何操作弹窗状态，拦截刷新防打扰
+            if (document.querySelector('.flipper.flipped') || 
+                document.getElementById('confirmModal').style.display === 'flex' ||
+                (shipModal && shipModal.style.display === 'flex') ||
+                (editModal && !editModal.classList.contains('hidden'))) {
+                return;
+            }
+            
+            // 2. 🎯 核心修改：仅仅在【未完成订单】看板时，才执行 3 秒实时自动刷新！
+            if (currentTab === 0) {
+                fetchOrders();
+            }
+            
+            if (!document.getElementById('viewUserModal').classList.contains('hidden')) refreshUserList();
+            
+        }, 3000); 
+
     } else {
-        renderUI(); // 如果没登录，渲染引擎会拉起登录遮罩
+        renderUI(); 
     }
 };

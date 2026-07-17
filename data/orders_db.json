@@ -1,21 +1,44 @@
 {
     "orders": [
         {
-            "id": 1,
-            "title": "（这是预留的原始识别文本区，当前可留空或写备注）",
-            "status": "pending",
+            "id": 12,
+            "title": "陶芸订单\n收货姓名：牛华 联系电话：13068188388 收货地址：广东省中山市动凤镇东成路中山市职业技术学院\n\n中固碳纤维胶30公斤×10组\n中固碳纤维胶30公斤×10组\n中固碳纤维胶30公斤×10组",
+            "status": "shipped",
             "type": 0,
-            "date": "2026-07-14 10:00",
-            "completed_date": "",
-            "order_client": "陶芸",
+            "date": "2026-07-17 18:09",
+            "completed_date": "2026-07-18 02:09",
+            "shipped_date": "2026-07-18 02:09",
+            "logistics_no": "195456464646",
+            "order_client": "陶芸订单",
             "receiver_name": "牛华",
             "receiver_phone": "13068188388",
-            "receiver_address": "浙江省温州市龙湾区瓯江路大墙围",
-            "goods_name": "中固粘钢胶40公斤×27组+灌注胶30公斤×1组",
-            "goods_weight": "1110kg",
+            "receiver_address": "广东省中山市动凤镇东成路中山市职业技术学院",
+            "goods_name": "中固碳纤维胶30公斤×10组\n中固碳纤维胶30公斤×10组\n中固碳纤维胶30公斤×10组",
+            "goods_weight": "100kg",
+            "goods_quantity": "",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": ""
+        },
+        {
+            "id": 13,
+            "title": "陶芸订单\n收货姓名：牛华 联系电话：13068188388 收货地址：广东省中山市动凤镇东成路中山市职业技术学院\n\n中固碳纤维胶30公斤×10组\n中固碳纤维胶30公斤×10组\n中固碳纤维胶30公斤×10组",
+            "status": "shipped",
+            "type": 0,
+            "date": "2026-07-17 18:10",
+            "completed_date": "2026-07-18 02:11",
+            "shipped_date": "2026-07-18 02:11",
+            "logistics_no": "195456464646",
+            "order_client": "陶芸订单",
+            "receiver_name": "牛华",
+            "receiver_phone": "13068188388",
+            "receiver_address": "广东省中山市动凤镇东成路中山市职业技术学院",
+            "goods_name": "中固碳纤维胶30公斤×10组\n中固碳纤维胶30公斤×10组\n中固碳纤维胶30公斤×10组",
+            "goods_weight": "600kg",
             "goods_quantity": "56件",
             "goods_packaging": "桶装",
-            "logistics_service": "送货上门+回单签字拍照"
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": ""
         }
     ]
 }

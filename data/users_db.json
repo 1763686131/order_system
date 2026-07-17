@@ -8,5 +8,12 @@
         "username": "11",
         "password": "123456",
         "role": "operator"
+    },
+    {
+        "username": "111",
+        "name": "千城",
+        "password": "123456",
+        "role": "admin",
+        "permissions": []
     }
 ]

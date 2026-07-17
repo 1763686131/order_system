@@ -19,170 +19,20 @@
 
   <div id="mainSection" style="display: none;">
     <div class="nav-bar">
-      <div class="nav-item" onclick="switchTab(0)">未完成订单</div>
+      <div class="nav-item active" onclick="switchTab(0)">未完成订单</div>
       <div class="nav-item" onclick="switchTab(1)">已完成订单</div>
-      <div class="nav-item active" onclick="switchTab(2)">已出库订单</div>
+      <div class="nav-item" onclick="switchTab(2)">已出库订单</div>
       <div class="nav-item" style="margin-left: auto;" onclick="switchTab(3)">原材料数据</div>
     </div>
 
-    <div id="tab-0" class="tab-pane">
-      <div class="flip-container">
-        <div class="flipper" id="cardFlipper">
-          <div class="order-card front">
-            <div class="order-title">陶芸订单</div>
-            <div class="order-header"><span><strong>中固订单</strong> 产品列表</span><span>2026-7-15 22:00</span></div>
-            <div class="product-list">
-              <div class="product-item">中固碳纤维胶 <span class="text-red-large">30</span>公斤装×<span class="text-red-large">10</span>组</div>
-              <div class="product-item">中固碳纤维胶 <span class="text-red-large">30</span>公斤装×<span class="text-red-large">10</span>组</div>
-              <div class="product-item">中固碳纤维胶 <span class="text-red-large">30</span>公斤装×<span class="text-red-large">10</span>组</div>
-            </div>
-            <div class="tags-wrapper">
-              <div class="tags-label">标签&备注</div>
-              <div class="tags-container">
-                <div class="tag tag-blue">包装:桶装</div><div class="tag tag-cyan">货物总重量:900KG</div><div class="tag tag-red">备注信息:带检测报告</div><div class="tag tag-green">件数:60件</div>
-              </div>
-            </div>
-            <div class="actions">
-              <button class="btn btn-primary" onclick="openModal()">确定完成</button>
-              <button class="btn btn-default" onclick="toggleCard()">详情页面</button>
-            </div>
-          </div>
-          <div class="order-card back">
-            <div class="order-title">陶芸订单</div>
-            <div class="order-header"><span><strong>中固订单</strong> 产品列表</span><span>2026-7-15 22:00</span></div>
-            <div class="product-list">
-              <div class="info-row" style="display: flex; justify-content: space-between;"><span>收货姓名：牛华</span><span>联系电话：13068188388</span></div>
-              <div class="info-row">收货地址：广东省中山市动凤镇东成路中山市职业技术学院</div>
-              <div class="info-row info-label" style="margin-top: 12px;">货物信息：</div>
-              <div class="info-row text-red text-bold">中固碳纤维胶30公斤×10组</div>
-              <div class="info-row text-red text-bold">中固碳纤维胶30公斤×10组</div>
-              <div class="info-row text-red text-bold">中固碳纤维胶30公斤×10组</div>
-              <div style="display: flex; gap: 24px; margin-top: 16px;">
-                <div class="info-row"><span class="info-label">货物包装：</span>桶装</div><div class="info-row"><span class="info-label">货物数量：</span><span class="text-red text-bold">900kg</span></div>
-              </div>
-              <div style="display: flex; gap: 24px;">
-                <div class="info-row"><span class="info-label">货物件数：</span>60件</div><div class="info-row"><span class="info-label">物流服务：</span>送货上门+回单拍照回传</div>
-              </div>
-              <div class="info-row"><span class="info-label">备注信息：</span><span class="text-red text-bold">带检测报告</span></div>
-            </div>
-            <div class="actions-back">
-              <button class="btn btn-default" onclick="toggleCard()">⇦返回</button>
-              <button class="btn btn-primary" onclick="openModal()">确定完成</button>
-              <button class="btn btn-danger">修改删除</button>
-              <button class="btn btn-success">复制信息</button>
-            </div>
-          </div>
+    <div id="tab-0" class="tab-pane active">
         </div>
-      </div>
-    </div>
 
     <div id="tab-1" class="tab-pane">
-      <div class="completed-card">
-        <div class="c-title">陶芸订单</div>
-        <div class="c-header"><div class="c-header-left"><strong>中固订单</strong><span>产品列表</span></div><div class="c-header-right">2026-7-15 22:00</div></div>
-        <div class="c-info-box">
-          <div class="c-row-split c-text-grey"><span>收货姓名：牛华</span><span>联系电话：13068188388</span></div>
-          <div class="c-row c-text-grey c-spacing">收货地址：广东省中山市动凤镇东成路中山市职业技术学院</div>
-          <div class="c-row c-label">货物信息：</div>
-          <div class="c-row c-text-red text-bold">中固碳纤维胶30公斤×10组</div>
-          <div class="c-row c-text-red text-bold">中固碳纤维胶30公斤×10组</div>
-          <div class="c-row c-text-red text-bold c-spacing">中固碳纤维胶30公斤×10组</div>
-          <div class="c-row-split"><div><span class="c-label">货物包装：</span>桶装</div><div><span class="c-label">货物数量：</span><span class="c-text-orange text-bold">900kg</span></div></div>
-          <div class="c-row-split"><div><span class="c-label">货物件数：</span>60件</div><div style="text-align: right;"><span class="c-label">物流服务：</span>送货上门+回单拍照回传</div></div>
-          <div class="c-row"><span class="c-label">备注信息：</span><span class="c-text-pink text-bold">带检测报告</span></div>
-          <div class="c-row" style="margin-top: 8px;"><span class="c-label">完成时间：</span>2026-7-15 23:00</div>
-        </div>
-        <div class="c-actions">
-          <button class="c-btn c-btn-outline">撤销完成</button>
-          <button class="c-btn c-btn-blue">发货</button>
-          <button class="c-btn c-btn-pink">删除</button>
-          <button class="c-btn c-btn-green">复制信息</button>
-        </div>
-      </div>
-    </div>
-
-    <div id="tab-2" class="tab-pane active">
-      <div class="timeline-container">
-        
-        <div class="timeline-group">
-          <div class="timeline-date">2026-07-18</div>
-          <div class="shipped-grid">
-            <div class="shipped-card">
-              <div class="ribbon">已完成</div>
-              <div class="shipped-left">
-                <div class="shipped-title">环氧树脂胶粘剂大桶装A+B组分套装 (额外增加了固化剂与专用大型搅拌工具)</div>
-                <div class="expand-list-text">展开列表</div>
-                <div class="s-tags-wrapper">
-                  <div class="s-tag s-tag-purple">包装:铁桶</div><div class="s-tag s-tag-cyan">货物总重量:2000KG</div><div class="s-tag s-tag-green">件数:100件</div>
-                </div>
-                <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:专车配送</div></div>
-                <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">物流信息:JD1234567890</div></div>
-                <div class="shipped-bottom">
-                  <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-18 09:15</div></div>
-                  <div class="s-detail-btn">详情</div>
-                </div>
-              </div>
-              <div class="shipped-right">
-                <div class="s-sub-title">分销商订单</div><div class="s-main-title">华东区专线</div>
-                <div class="s-info-list"><div>收货姓名：张三</div><div>联系电话：15912345678</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：上海市浦东新区张江高科技园区科苑路</div></div>
-              </div>
-            </div>
-          </div>
         </div>
 
-        <div class="timeline-group">
-          <div class="timeline-date">2026-07-17</div>
-          <div class="shipped-grid">
-            <div class="shipped-card">
-              <div class="ribbon">已完成</div>
-              <div class="shipped-left">
-                <div class="shipped-title">中固植筋胶400ml装</div>
-                <div class="expand-list-text">展开列表</div>
-                <div class="s-tags-wrapper">
-                  <div class="s-tag s-tag-purple">包装:箱装</div><div class="s-tag s-tag-cyan">货物总重量:150KG</div><div class="s-tag s-tag-green">件数:10件</div>
-                </div>
-                <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">物流信息:SF1029384756</div></div>
-                <div class="shipped-bottom">
-                  <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-17 14:30</div></div>
-                  <div class="s-detail-btn">详情</div>
-                </div>
-              </div>
-              <div class="shipped-right">
-                <div class="s-sub-title">中固订单</div><div class="s-main-title">李总加急单</div>
-                <div class="s-info-list"><div>收货姓名：李四</div><div>联系电话：13800138000</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：北京市朝阳区建国路88号SOHO现代城</div></div>
-              </div>
-            </div>
-          </div>
+    <div id="tab-2" class="tab-pane">
         </div>
-
-        <div class="timeline-group">
-          <div class="timeline-date">2026-07-16</div>
-          <div class="shipped-grid">
-            <div class="shipped-card">
-              <div class="ribbon">已完成</div>
-              <div class="shipped-left">
-                <div class="shipped-title">中固碳纤维胶30公斤×10组中固碳纤维胶30公斤×10组</div>
-                <div class="expand-list-text">展开列表</div>
-                <div class="s-tags-wrapper">
-                  <div class="s-tag s-tag-purple">包装:桶装</div><div class="s-tag s-tag-cyan">货物总重量:900KG</div><div class="s-tag s-tag-green">件数:60件</div>
-                </div>
-                <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:带检测报告</div></div>
-                <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">物流信息:SF0218125203163</div></div>
-                <div class="shipped-bottom">
-                  <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-16 22:00</div></div>
-                  <div class="s-detail-btn">详情</div>
-                </div>
-              </div>
-              <div class="shipped-right">
-                <div class="s-sub-title">中固订单</div><div class="s-main-title">陶芸订单</div>
-                <div class="s-info-list"><div>收货姓名：牛华</div><div>联系电话：13068188388</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：广东省中山市动凤镇东成路中山市职业技术学院</div></div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </div>
 
     <div id="tab-3" class="tab-pane">
       <div class="timeline-container">
@@ -198,29 +48,6 @@
               <div class="m-divider"></div>
               <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">粘钢胶</span></div>
             </div>
-            <div class="material-card">
-              <div class="m-data-group">
-                <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">200kg</span></div>
-                <div class="m-item"><span class="m-label-black">成品：</span><span class="m-val-green">450kg</span></div>
-                <div class="m-item"><span class="m-label-blue">剩余树脂：</span><span class="m-val-blue">2300kg</span></div>
-              </div>
-              <div class="m-divider"></div>
-              <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">植筋胶</span></div>
-            </div>
-          </div>
-        </div>
-        <div class="timeline-group">
-          <div class="timeline-date">2026-07-17</div>
-          <div class="timeline-items">
-            <div class="material-card">
-              <div class="m-data-group">
-                <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">1200kg</span></div>
-                <div class="m-item"><span class="m-label-black">成品：</span><span class="m-val-green">1800kg</span></div>
-                <div class="m-item"><span class="m-label-blue">剩余树脂：</span><span class="m-val-blue">3000kg</span></div>
-              </div>
-              <div class="m-divider"></div>
-              <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">碳纤维胶大货订单</span></div>
-            </div>
           </div>
         </div>
       </div>
@@ -229,19 +56,15 @@
 
   <div id="fabContainer" class="fab-container" style="display: none;">
     <div class="fab-menu">
-      <div id="fabAddMaterial" class="fab-item" style="display: none;" onclick="alert('录入原材料数据模块开启')">录入原材料数据</div>
-      <div id="fabAddOrder" class="fab-item" style="display: none;" onclick="alert('录入订单信息模块开启')">录入订单信息</div>
+      <div id="fabAddMaterial" class="fab-item" style="display: none;" onclick="openUploadMaterialModal()">录入原材料数据</div>
+      <div id="fabAddOrder" class="fab-item" style="display: none;" onclick="toggleModal('createOrderModal', true)">录入订单信息</div>
       <div id="btnOpenViewUser" class="fab-item" style="display: none;" onclick="openViewUserModal()">账户控制</div>
       <div class="fab-item" style="color: #ff4d4f;" onclick="handleLogout()">退出登录</div>
     </div>
-
     <div id="aiSpeechBubble" class="ai-speech-bubble">准备接入大模型...</div>
-    
     <div id="fabMain" class="ai-face">
       <div class="face-inner">
-        <div class="eye left"></div>
-        <div class="eye right"></div>
-        <div class="mouth"></div>
+        <div class="eye left"></div><div class="eye right"></div><div class="mouth"></div>
       </div>
     </div>
   </div>
@@ -254,24 +77,41 @@
         </svg>
       </div>
       <div class="modal-header">
-        <div class="modal-title">陶芸订单</div>
-        <div class="modal-subtitle">单据日期 &nbsp; 2026-7-15 &nbsp; 22:00</div>
+        <div class="modal-title" id="newConfirmTitle">加载中...</div>
+        <div class="modal-subtitle" id="newConfirmSubtitle">加载中...</div>
       </div>
-      <div class="modal-body">
-        <div class="modal-product">中固碳纤维胶<span class="text-red-large">30</span>公斤×<span class="text-red-large">10</span>组</div>
-        <div class="modal-product">中固碳纤维胶<span class="text-red-large">30</span>公斤×<span class="text-red-large">10</span>组</div>
-        <div class="modal-product">中固碳纤维胶<span class="text-red-large">30</span>公斤×<span class="text-red-large">10</span>组</div>
+      <div class="modal-body" id="newConfirmBody"></div>
+      <input id="confirmTargetId" type="hidden" />
+      <input id="confirmTargetStatus" type="hidden" />
+      <button id="btnConfirmSubmit" class="modal-btn-confirm" onclick="submitUpdateOrderStatus()">确定操作</button>
+    </div>
+  </div>
+
+  <div id="shipOrderModal" class="modal-overlay" style="display: none;">
+    <div class="modal-content" style="width: 420px;">
+      <div class="modal-close" onclick="closeShipModal()">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M1 1L13 13M13 1L1 13" stroke="#ff4d4f" stroke-width="2" stroke-linecap="round"/>
+        </svg>
       </div>
-      <button class="modal-btn-confirm" onclick="finalSubmit()">确定完成</button>
+      <div class="modal-header">
+        <div class="modal-title" id="shipModalTitle">完成订单发货</div>
+        <div class="modal-subtitle" id="shipModalSubtitle">录入配运单号以同步出库看板</div>
+      </div>
+      <div class="modal-body" style="padding: 24px 30px 32px 30px;">
+        <div class="form-item">
+            <label for="shipLogisticsNo" style="font-weight: bold; color: #555; margin-bottom: 10px;">物流单号 / 物流凭证信息:</label>
+            <input id="shipLogisticsNo" placeholder="请输入物流单号(如顺丰/京东单号)，选填" style="width:100%; padding:14px; font-size:16px; border:1px solid #d9d9d9; border-radius:8px; outline:none;" />
+        </div>
+      </div>
+      <input id="shipTargetId" type="hidden" />
+      <button class="modal-btn-confirm" onclick="submitShipOrder()" style="background-color: #52c41a;">确认发货并完成出库</button>
     </div>
   </div>
 
   <div id="viewUserModal" class="old-modal-mask hidden">
     <div class="old-modal-box" style="width: 850px; max-width: 95%;">
-        <div class="old-modal-header">
-            <span>👥 系统账户与权限管理控制台</span>
-            <span class="old-close-x" onclick="toggleModal('viewUserModal', false)">&times;</span>
-        </div>
+        <div class="old-modal-header"><span>系统账户与权限管理控制台</span><span class="old-close-x" onclick="toggleModal('viewUserModal', false)">&times;</span></div>
         <div class="old-modal-body" style="padding: 20px;">
             <div class="user-manage-container">
                 <div class="user-list-panel">
@@ -283,46 +123,81 @@
                 </div>
                 <div class="user-detail-panel" id="userDetailPanel" style="display: none;">
                     <h4 id="detailTitle" style="margin-top:0; color:#303133; border-bottom: 1px solid #ebeef5; padding-bottom:12px; margin-bottom: 15px;">用户信息配置</h4>
-                    
-                    <div class="form-item" id="createUsernameGroup">
-                        <label>系统登录账号:</label>
-                        <input id="detailUsername" placeholder="输入账号名称" />
-                        <div class="form-item" style="margin-top: 16px;">
-                        <label>员工真实姓名:</label>
-                        <input id="detailName" placeholder="输入员工的中文全名" />
-                    </div>
-                    </div>
-                    
-                    <div class="form-item">
-                        <label>账户安全密码:</label>
-                        <div style="display:flex; gap:10px;">
-                            <input id="detailPassword" placeholder="输入登录密码" style="flex:1;" />
-                            <button id="btnUpdatePwd" class="btn-default" style="padding:0 15px; display:none;" onclick="updateUserPassword()">立即改密</button>
-                        </div>
-                    </div>
-
-                    <div class="form-item">
-                        <label>系统岗位级别:</label>
-                        <select id="detailRole">
-                            <option value="employee">普通员工</option>
-                            <option value="admin">管理员</option>
-                        </select>
-                        <span id="detailRoleText" style="display:none; color: #ff4d4f; font-weight: bold; padding-top:8px;"></span>
-                    </div>
-
-                    <div id="permissionsWrapper">
-                        <label style="font-weight: bold; display:block; margin-top:15px; color:#606266;">🛡️ 模块功能权限分配 (勾选即刻赋权):</label>
-                        <div class="perm-tree" id="permTreeContainer"></div>
-                    </div>
+                    <div class="form-item" id="createUsernameGroup"><label>系统登录账号:</label><input id="detailUsername" placeholder="输入账号名称" /><div class="form-item" style="margin-top: 16px;"><label>员工真实姓名:</label><input id="detailName" placeholder="输入员工的中文全名" /></div></div>
+                    <div class="form-item"><label>账户安全密码:</label><div style="display:flex; gap:10px;"><input id="detailPassword" placeholder="输入登录密码" style="flex:1;" /><button id="btnUpdatePwd" class="btn-default" style="padding:0 15px; display:none;" onclick="updateUserPassword()">立即改密</button></div></div>
+                    <div class="form-item"><label>系统岗位级别:</label><select id="detailRole"><option value="employee">普通员工</option><option value="admin">管理员</option></select><span id="detailRoleText" style="display:none; color: #ff4d4f; font-weight: bold; padding-top:8px;"></span></div>
+                    <div id="permissionsWrapper"><label style="font-weight: bold; display:block; margin-top:15px; color:#606266;">模块功能权限分配 (勾选即刻赋权):</label><div class="perm-tree" id="permTreeContainer"></div></div>
                 </div>
             </div>
         </div>
-        <div class="old-modal-footer">
-            <button class="btn-danger" id="btnDeleteUser" style="display:none; float:left;" onclick="deleteCurrentUser()">物理注销该账户</button>
-            <button class="btn-default" onclick="toggleModal('viewUserModal', false)">关闭</button>
-            <button class="btn-success" id="btnSaveUser" style="display:none;" onclick="saveUserData()">💾 保存账户与权限</button>
-        </div>
+        <div class="old-modal-footer"><button class="btn-danger" id="btnDeleteUser" style="display:none; float:left;" onclick="deleteCurrentUser()">物理注销该账户</button><button class="btn-default" onclick="toggleModal('viewUserModal', false)">关闭</button><button class="btn-success" id="btnSaveUser" style="display:none;" onclick="saveUserData()">保存账户与权限</button></div>
     </div>
+  </div>
+
+  <div id="createOrderModal" class="old-modal-mask hidden">
+      <div class="old-modal-box">
+          <div class="old-modal-header"><span>发布系统新订单</span><span class="old-close-x" onclick="toggleModal('createOrderModal', false)">&times;</span></div>
+          <div class="old-modal-body" style="padding: 20px;">
+              <div class="form-item"><label for="newOrderType">订单类型参数:</label><select id="newOrderType"><option value="0" selected>中固订单</option><option value="1">绝缘订单</option></select></div>
+              <div class="form-item">
+                  <label for="newOrderTitle">文本粘贴区 (请按格式粘贴):</label>
+                  <textarea id="newOrderTitle" class="textarea-tall" style="background:#f9f9f9;" placeholder="第一行: 客户名&#10;第二行: 收货人 电话 地址&#10;第三行起: 货物规格"></textarea>
+                  <button type="button" class="btn-success" style="width: 100%; margin-top: 8px; font-size: 14px; padding: 10px;" onclick="smartParse('new')">一键智能识别并填充下方表单</button>
+              </div>
+              <div style="padding: 10px; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 10px;">
+                  <div class="form-item"><label>制单归属 (如: 陶芸):</label><input id="newOrderClient" /></div>
+                  <div class="form-item"><label>收货姓名:</label><input id="newReceiverName" /></div>
+                  <div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="newReceiverPhone" placeholder="必须是11位手机或座机" /></div>
+                  <div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="newReceiverAddress" /></div>
+                  <div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><textarea id="newGoodsName" style="height:50px;"></textarea></div>
+                  <div style="display: flex; gap: 10px;"><div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="newGoodsWeight" placeholder="自动计算或手填" /></div><div class="form-item" style="flex:1;"><label>货物数量:</label><input id="newGoodsQuantity" placeholder="例如: 56件" /></div></div>
+                  <div class="form-item"><label>货物包装:</label><select id="newGoodsPackaging"><option value="桶装" selected>桶装</option><option value="袋装">袋装</option><option value="托盘">托盘</option></select></div>
+                  <div class="form-item"><label>物流服务:</label><select id="newLogisticsService"><option value="送货上门+回单拍照回传" selected>送货上门+回单拍照回传</option><option value="送货上门">送货上门</option><option value="用户自提">用户自提</option></select></div>
+                  <div class="form-item"><label>附加备注信息:</label><input id="newOrderRemark" placeholder="选填，例如：加急、替换等..." /></div>
+              </div>
+          </div>
+          <div class="old-modal-footer"><button class="btn-default" onclick="toggleModal('createOrderModal', false)">取消</button><button class="btn-primary" onclick="createOrder()">上传并发布订单</button></div>
+      </div>
+  </div>
+
+  <div id="editOrderModal" class="old-modal-mask hidden">
+      <div class="old-modal-box">
+          <div class="old-modal-header"><span>修改订单信息</span><span class="old-close-x" onclick="toggleModal('editOrderModal', false)">&times;</span></div>
+          <div class="old-modal-body" style="padding: 20px;">
+              <input id="editOrderId" type="hidden" />
+              <div class="form-item"><label for="editOrderDate">创建生成时间:</label><input id="editOrderDate" type="text" style="background: #f5f5f5; color: #999;" readonly /></div>
+              <div class="form-item"><label for="editOrderType">订单类型参数:</label><select id="editOrderType"><option value="0">中固订单</option><option value="1">绝缘订单</option></select></div>
+              <div class="form-item"><label for="editOrderTitle">文本粘贴区:</label><textarea id="editOrderTitle" class="textarea-tall" style="background:#f9f9f9;" placeholder="重新粘贴规范文本重算下方数据..."></textarea><button type="button" class="btn-success" style="width: 100%; margin-top: 8px; font-size: 14px; padding: 10px;" onclick="smartParse('edit')">一键重新提取并填充下方表单</button></div>
+              <div style="padding: 10px; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 10px;">
+                  <div class="form-item"><label>制单归属:</label><input id="editOrderClient" /></div><div class="form-item"><label>收货姓名:</label><input id="editReceiverName" /></div><div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="editReceiverPhone" /></div><div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="editReceiverAddress" /></div><div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><textarea id="editGoodsName" style="height:50px;"></textarea></div>
+                  <div style="display: flex; gap: 10px;"><div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="editGoodsWeight" /></div><div class="form-item" style="flex:1;"><label>货物数量:</label><input id="editGoodsQuantity" /></div></div>
+                  <div class="form-item"><label>货物包装:</label><select id="editGoodsPackaging"><option value="桶装">桶装</option><option value="袋装">袋装</option><option value="托盘">托盘</option></select></div>
+                  <div class="form-item"><label>物流服务:</label><select id="editLogisticsService"><option value="送货上门+回单拍照回传">送货上门+回单拍照回传</option><option value="送货上门">送货上门</option><option value="用户自提">用户自提</option></select></div>
+                  <div class="form-item"><label>附加备注信息:</label><input id="editOrderRemark" /></div>
+              </div>
+          </div>
+          <div class="old-modal-footer"><button id="btnDeleteOrderInEdit" class="btn-danger" style="float: left; display: none;" onclick="deleteOrderInEdit()">删除订单</button><button class="btn-default" onclick="toggleModal('editOrderModal', false)">取消</button><button class="btn-primary" onclick="submitEditOrder()">确认修改</button></div>
+      </div>
+  </div>
+
+  <div id="uploadMaterialModal" class="old-modal-mask hidden">
+      <div class="old-modal-box" style="max-width: 480px;">
+          <div class="old-modal-header"><span style="color:#1890ff; font-weight:bold;">原材料数据录入</span><span class="old-close-x" onclick="toggleModal('uploadMaterialModal', false)">&times;</span></div>
+          <div class="old-modal-body upload-modal-body" style="padding: 20px;">
+              <div class="upload-inputs-area">
+                  <div class="form-item"><label for="materialInputUse" style="font-weight:bold; color:#ff4d4f;">今日消耗原材料 (kg):</label><input id="materialInputUse" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#fff; font-size:16px; font-weight:bold;" /></div>
+                  <div class="form-item"><label for="materialInputProduct" style="font-weight:bold; color:#52c41a;">出货成品总数量 (kg):</label><input id="materialInputProduct" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputProduct')" style="background:#fff; font-size:16px; font-weight:bold;" /></div>
+              </div>
+              <div class="touch-keyboard-panel">
+                  <button class="key-btn" onclick="pressKey('1')">1</button><button class="key-btn" onclick="pressKey('2')">2</button><button class="key-btn" onclick="pressKey('3')">3</button><button class="key-btn" onclick="pressKey('4')">4</button><button class="key-btn" onclick="pressKey('5')">5</button><button class="key-btn" onclick="pressKey('6')">6</button><button class="key-btn" onclick="pressKey('7')">7</button><button class="key-btn" onclick="pressKey('8')">8</button><button class="key-btn" onclick="pressKey('9')">9</button><button class="key-btn" onclick="pressKey('.')">.</button><button class="key-btn" onclick="pressKey('0')">0</button><button class="key-btn key-backspace" onclick="pressKey('backspace')">←</button><button class="key-btn key-clear" onclick="pressKey('clear')" style="grid-column: span 3; font-size:13px; height: 35px; background:#f5f5f5; color:#666;">清空重输</button>
+              </div>
+          </div>
+          <div class="old-modal-footer"><button class="btn-default" onclick="toggleModal('uploadMaterialModal', false)">取消</button><button class="btn-primary" onclick="uploadMaterialRecord()" style="padding:8px 24px;">确认上传</button></div>
+      </div>
+  </div>
+
+  <div id="uploadSuccessNotifyModal" class="old-modal-mask hidden" style="z-index: 100000;">
+      <div class="old-modal-box" style="max-width: 320px; text-align: center; background: #ffffff;"><div class="old-modal-body" style="padding: 30px;"><h3 style="color: #1890ff; font-size: 18px; margin-bottom: 8px;">物料数据上传成功</h3><p style="color: #666; font-size: 13px; line-height: 1.6; white-space: pre-line;" id="successNotifyDetail"></p><button class="btn-primary" style="margin-top: 20px; padding: 8px 30px; border-radius: 4px;" onclick="toggleModal('uploadSuccessNotifyModal', false)">我已知晓</button></div></div>
   </div>
 
   <script src="js/main.js"></script>
