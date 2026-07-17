@@ -100,11 +100,15 @@
   .shipped-card { display: flex; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden; position: relative; border: 1px solid #ebedf0; transition: transform 0.2s, box-shadow 0.2s; }
   .shipped-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
   .ribbon { position: absolute; top: 14px; right: -36px; background-color: #D5EFE3; color: #4CBCA0; padding: 4px 40px; font-size: 12px; font-weight: bold; transform: rotate(45deg); text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); z-index: 10; }
-  .shipped-left { flex: 1.3; padding: 20px 24px; display: flex; flex-direction: column; border-right: 1px dashed #e8e8e8; min-width: 0; }
   
-  .shipped-title { font-size: 18px; font-weight: 800; color: #111; margin-bottom: 8px; line-height: 1.5; padding-top: 4px; padding-bottom: 4px; margin-right: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  /* 微调左侧比例到 1.4，给标题腾出更多空间 */
+  .shipped-left { flex: 1.4; padding: 20px 24px; display: flex; flex-direction: column; border-right: 1px dashed #e8e8e8; min-width: 0; }
+  
+  /* 重点修复：取消电脑端 margin-right 安全边距，让文字在电脑端能展示约 14-15 个字符 */
+  .shipped-title { font-size: 18px; font-weight: 800; color: #111; margin-bottom: 8px; line-height: 1.5; padding-top: 4px; padding-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .shipped-title.expanded { white-space: normal; word-break: break-all; }
-  .expand-list-text { display: none; font-size: 13px; color: #8A7BFE; text-align: right; margin-top: 0; margin-bottom: 12px; margin-right: 60px; cursor: pointer; font-weight: bold; position: relative; z-index: 11; }
+  .expand-list-text { display: none; font-size: 13px; color: #8A7BFE; text-align: right; margin-top: 0; margin-bottom: 12px; cursor: pointer; font-weight: bold; position: relative; z-index: 11; }
+  
   .s-tags-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
   .shipped-left .s-tags-wrapper:last-of-type { margin-bottom: 20px; } 
   
@@ -178,48 +182,30 @@
   }
   .fab-item:hover { background: #e6f7ff; transform: translateY(-2px); }
 
-  /* ================= AI 气泡对话框 (新增功能) ================= */
+  /* AI 气泡对话框 */
   .ai-speech-bubble {
     position: absolute;
-    right: 75px; /* 在悬浮球左边一点 */
+    right: 75px; 
     bottom: 10px;
     background: #ffffff;
     padding: 12px 16px;
-    border-radius: 16px 16px 0 16px; /* 特殊的聊天气泡圆角 */
+    border-radius: 16px 16px 0 16px; 
     box-shadow: 0 6px 20px rgba(0,0,0,0.1);
     font-size: 13px;
     font-weight: bold;
     color: #1A4B84;
     white-space: nowrap;
-    pointer-events: none; /* 不可被点击，防止妨碍操作 */
+    pointer-events: none; 
     
     opacity: 0;
     visibility: hidden;
-    transform: translateX(15px); /* 默认偏右一点点 */
+    transform: translateX(15px); 
     transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
+  .ai-speech-bubble::after { content: ''; position: absolute; right: -8px; bottom: 0; width: 0; height: 0; border-bottom: 12px solid #ffffff; border-right: 12px solid transparent; }
+  .ai-speech-bubble.show { opacity: 1; visibility: visible; transform: translateX(0); }
 
-  /* 气泡小尾巴 */
-  .ai-speech-bubble::after {
-    content: '';
-    position: absolute;
-    right: -8px;
-    bottom: 0;
-    width: 0;
-    height: 0;
-    border-bottom: 12px solid #ffffff;
-    border-right: 12px solid transparent;
-  }
-
-  /* 显示气泡的激活类 */
-  .ai-speech-bubble.show {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(0); /* 滑出显示 */
-  }
-
-
-  /* ================= AI 智能数字脸面板 (优化微整容) ================= */
+  /* AI 智能数字脸面板 */
   .ai-face {
     width: 100%;
     height: 100%;
@@ -239,83 +225,24 @@
     background: radial-gradient(circle at 30% 30%, #5c2a33, #1f0f15);
     box-shadow: inset -4px -4px 10px rgba(0,0,0,0.6), inset 2px 2px 8px rgba(255,255,255,0.2), 0 6px 25px rgba(255, 77, 79, 0.5);
   }
-
   .ai-face:active { cursor: grabbing; transform: scale(0.9); }
 
-  .face-inner {
-    position: absolute;
-    top: 0; left: 0; width: 100%; height: 100%;
-    animation: floatFace 4s ease-in-out infinite; 
-  }
+  .face-inner { position: absolute; top: 0; left: 0; width: 100%; height: 100%; animation: floatFace 4s ease-in-out infinite; }
+  @keyframes floatFace { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
 
-  @keyframes floatFace {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-4px); }
-  }
+  .eye { position: absolute; top: 18px; width: 8px; height: 12px; background: #00e5ff; border-radius: 6px; animation: blink 4s infinite; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+  .eye.left { left: 16px; } .eye.right { right: 16px; }
+  @keyframes blink { 0%, 94%, 98%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
 
-  /* 眼睛：上移防重叠 */
-  .eye {
-    position: absolute;
-    top: 18px; /* 重点优化：比之前上移4px */
-    width: 8px;
-    height: 12px; /* 重点优化：稍微改小变圆润 */
-    background: #00e5ff;
-    border-radius: 6px;
-    animation: blink 4s infinite; 
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-  .eye.left { left: 16px; }
-  .eye.right { right: 16px; }
-
-  @keyframes blink {
-    0%, 94%, 98%, 100% { transform: scaleY(1); }
-    96% { transform: scaleY(0.1); }
-  }
-
-  /* 嘴巴：保持下方，制造完美间隙 */
-  .mouth {
-    position: absolute;
-    top: 36px; /* 眼睛底边在30px，嘴巴在36px，留下完美的6px间隙！ */
-    left: 20px;
-    width: 20px;
-    height: 8px;
-    border: 3px solid #00e5ff;
-    border-top: none;
-    border-radius: 0 0 20px 20px;
-    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
+  .mouth { position: absolute; top: 36px; left: 20px; width: 20px; height: 8px; border: 3px solid #00e5ff; border-top: none; border-radius: 0 0 20px 20px; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
 
   /* 激活状态：OMG 紧张发抖脸 */
   .fab-container.active .face-inner { animation: jitter 0.15s infinite; }
-  
-  .fab-container.active .eye { 
-    width: 12px; 
-    height: 12px; 
-    top: 16px; 
-    background: transparent; 
-    border: 3px solid #ff4d4f; 
-    border-radius: 50%; 
-    animation: none; 
-  }
-  .fab-container.active .eye.left { left: 14px; } 
-  .fab-container.active .eye.right { right: 14px; }
-  
-  .fab-container.active .mouth { 
-    width: 14px; 
-    height: 16px; 
-    top: 36px; 
-    left: 23px; 
-    border: 3px solid #ff4d4f; 
-    border-radius: 50%; 
-  }
+  .fab-container.active .eye { width: 12px; height: 12px; top: 16px; background: transparent; border: 3px solid #ff4d4f; border-radius: 50%; animation: none; }
+  .fab-container.active .eye.left { left: 14px; } .fab-container.active .eye.right { right: 14px; }
+  .fab-container.active .mouth { width: 14px; height: 16px; top: 36px; left: 23px; border: 3px solid #ff4d4f; border-radius: 50%; }
 
-  @keyframes jitter {
-    0%, 100% { transform: translate(0, 0); }
-    25% { transform: translate(-1px, 1px); }
-    50% { transform: translate(1px, -1px); }
-    75% { transform: translate(-1px, -1px); }
-  }
-
+  @keyframes jitter { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-1px, 1px); } 50% { transform: translate(1px, -1px); } 75% { transform: translate(-1px, -1px); } }
 
   /* ================= 移动端适配 (Media Query) ================= */
   @media (max-width: 768px) {
@@ -326,6 +253,8 @@
     .shipped-right { padding: 16px; align-items: flex-start; }
     .s-sub-title, .s-main-title { text-align: left; }
     .ribbon { top: 10px; right: -40px; padding: 4px 44px; font-size: 11px; }
+    
+    /* 重点：在手机端恢复右侧防遮挡安全边距 */
     .shipped-title, .expand-list-text { margin-right: 65px; }
 
     .timeline-items { grid-template-columns: 1fr; }
@@ -352,6 +281,7 @@
   <div class="nav-bar">
     <div class="nav-item" onclick="switchTab(0)">未完成订单</div>
     <div class="nav-item" onclick="switchTab(1)">已完成订单</div>
+    <!-- 默认激活出库订单以预览长标题不被过早截断的效果 -->
     <div class="nav-item active" onclick="switchTab(2)">已出库订单</div>
     <div class="nav-item" style="margin-left: auto;" onclick="switchTab(3)">原材料数据</div>
   </div>
@@ -434,7 +364,7 @@
     </div>
   </div>
 
-  <!-- Tab 2: 已出库订单 -->
+  <!-- Tab 2: 已出库订单 (修复标题PC端截断过早) -->
   <div id="tab-2" class="tab-pane active">
     <div class="timeline-container">
       
@@ -495,6 +425,7 @@
           <div class="shipped-card">
             <div class="ribbon">已完成</div>
             <div class="shipped-left">
+              <!-- 你原本被意外截断成很短的标题，现在可以正常展示了 -->
               <div class="shipped-title">中固碳纤维胶30公斤×10组中固碳纤维胶30公斤×10组</div>
               <div class="expand-list-text">展开列表</div>
               <div class="s-tags-wrapper">
@@ -772,8 +703,6 @@
 
     /* ================= AI自言自语（气泡对话框）逻辑 ================= */
     const aiPhrases = [
-      "主人，我叫小圆，是你的智能小助手~",
-      "主人，今天的订单都处理完了吗？",
       "今天又有什么新订单呀？",
       "需要我帮你查库存吗？",
       "闲着也是闲着，看看数据吧！",
@@ -804,8 +733,7 @@
     // 刚打开页面 5 秒后，先打个招呼
     setTimeout(triggerAiSpeech, 5000);
 
-    // 为了方便你预览，设定为每隔 30 秒（30000毫秒）自言自语一次。
-    // （你后续可以改成 3 * 60000，也就是 3 分钟）
+    // 为了方便你预览，设定为每隔 30 秒自言自语一次
     setInterval(triggerAiSpeech, 30000);
 
   </script>

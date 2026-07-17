@@ -1,0 +1,12 @@
+{
+    "total_stock": 5000.0,
+    "records": [
+        {
+            "id": 1,
+            "used": 55.0,
+            "produced": 88.0,
+            "date": "2026-07-17 14:25",
+            "remark": ""
+        }
+    ]
+}
