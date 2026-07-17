@@ -16,18 +16,23 @@
     background-color: #EDF5FC;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
     color: #333;
-    padding: 24px;
+    padding: 80px 24px 24px 24px;
   }
 
-  /* 导航栏样式 */
+  /* 导航栏样式：固定吸顶 */
   .nav-bar {
+    position: fixed; 
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 999; 
     display: flex;
     gap: 16px;
-    margin-bottom: 24px;
-    background: #fff;
+    margin-bottom: 0; 
+    background: rgba(255, 255, 255, 0.9); 
+    backdrop-filter: blur(10px); 
     padding: 12px 24px;
-    border-radius: 8px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.04); 
     overflow-x: auto; 
     white-space: nowrap;
     align-items: center; 
@@ -36,72 +41,19 @@
   .nav-bar::-webkit-scrollbar { display: none; }
   .nav-bar { -ms-overflow-style: none; scrollbar-width: none; }
 
-  .nav-item {
-    font-size: 16px;
-    font-weight: bold;
-    padding: 8px 16px;
-    cursor: pointer;
-    border-radius: 4px;
-    color: #666;
-    transition: all 0.3s;
-  }
-
-  .nav-item.active {
-    color: #1890ff;
-    background-color: #e6f7ff;
-  }
+  .nav-item { font-size: 16px; font-weight: bold; padding: 8px 16px; cursor: pointer; border-radius: 4px; color: #666; transition: all 0.3s; }
+  .nav-item.active { color: #1890ff; background-color: #e6f7ff; }
 
   /* 内容区容器 */
-  .tab-pane {
-    display: none; 
-    gap: 20px;
-    flex-wrap: wrap;
-    align-items: flex-start;
-  }
-  
-  .tab-pane.active {
-    display: flex; 
-  }
+  .tab-pane { display: none; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .tab-pane.active { display: flex; }
 
   /* ================= 公共时间线样式 ================= */
-  .timeline-container {
-    display: flex;
-    flex-direction: column;
-    gap: 32px; 
-    width: 100%;
-  }
-
-  .timeline-group {
-    display: flex;
-    flex-direction: column;
-  }
-
-  .timeline-date {
-    font-size: 22px;
-    font-weight: 900;
-    color: #111;
-    margin-bottom: 16px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
-
-  .timeline-date::before {
-    content: '';
-    display: block;
-    width: 6px;
-    height: 20px;
-    background-color: #1890ff;
-    border-radius: 4px;
-  }
-
-  /* 重点修改：原材料列表容器改为 Grid，PC端一排两个 */
-  .timeline-items {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 16px;
-  }
-
+  .timeline-container { display: flex; flex-direction: column; gap: 32px; width: 100%; }
+  .timeline-group { display: flex; flex-direction: column; }
+  .timeline-date { font-size: 22px; font-weight: 900; color: #111; margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+  .timeline-date::before { content: ''; display: block; width: 6px; height: 20px; background-color: #1890ff; border-radius: 4px; }
+  .timeline-items { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
 
   /* ================= Tab 0: 未完成订单 ================= */
   .flip-container { perspective: 1000px; width: 100%; max-width: 380px; }
@@ -117,9 +69,7 @@
   .product-item { font-size: 15px; font-weight: bold; margin-bottom: 12px; line-height: 1.5; }
   .info-row { font-size: 13px; color: #666; margin-bottom: 8px; line-height: 1.6; }
   .info-label { font-weight: bold; color: #333; }
-  .text-red { color: #ff4d4f; }
-  .text-red-large { color: #ff4d4f; font-size: 22px; margin: 0 2px; }
-  .text-bold { font-weight: bold; font-size: 14px; }
+  .text-red { color: #ff4d4f; } .text-red-large { color: #ff4d4f; font-size: 22px; margin: 0 2px; } .text-bold { font-weight: bold; font-size: 14px; }
   .tags-wrapper { margin-top: 16px; margin-bottom: 24px; }
   .tags-label { font-size: 12px; color: #888; margin-bottom: 8px; }
   .tags-container { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -152,39 +102,9 @@
   .ribbon { position: absolute; top: 14px; right: -36px; background-color: #D5EFE3; color: #4CBCA0; padding: 4px 40px; font-size: 12px; font-weight: bold; transform: rotate(45deg); text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); z-index: 10; }
   .shipped-left { flex: 1.3; padding: 20px 24px; display: flex; flex-direction: column; border-right: 1px dashed #e8e8e8; min-width: 0; }
   
-  .shipped-title { 
-    font-size: 18px; 
-    font-weight: 800; 
-    color: #111; 
-    margin-bottom: 8px; 
-    line-height: 1.5; 
-    padding-top: 4px;
-    padding-bottom: 4px; 
-    margin-right: 60px; 
-    white-space: nowrap; 
-    overflow: hidden; 
-    text-overflow: ellipsis; 
-  }
-  
-  .shipped-title.expanded {
-    white-space: normal;
-    word-break: break-all;
-  }
-
-  .expand-list-text { 
-    display: none; 
-    font-size: 13px; 
-    color: #8A7BFE; 
-    text-align: right; 
-    margin-top: 0; 
-    margin-bottom: 12px; 
-    margin-right: 60px; 
-    cursor: pointer; 
-    font-weight: bold; 
-    position: relative;
-    z-index: 11;
-  }
-
+  .shipped-title { font-size: 18px; font-weight: 800; color: #111; margin-bottom: 8px; line-height: 1.5; padding-top: 4px; padding-bottom: 4px; margin-right: 60px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .shipped-title.expanded { white-space: normal; word-break: break-all; }
+  .expand-list-text { display: none; font-size: 13px; color: #8A7BFE; text-align: right; margin-top: 0; margin-bottom: 12px; margin-right: 60px; cursor: pointer; font-weight: bold; position: relative; z-index: 11; }
   .s-tags-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
   .shipped-left .s-tags-wrapper:last-of-type { margin-bottom: 20px; } 
   
@@ -192,54 +112,230 @@
   .s-tag-purple { background-color: #EDEBFF; color: #8A7BFE; } .s-tag-cyan { background-color: #DDF8F6; color: #2BCBC7; } .s-tag-green { background-color: #E2F6ED; color: #69D5A5; } .s-tag-pink { background-color: #FDECEE; color: #F26E83; }
   
   .shipped-bottom { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; } 
-  .s-time-label { font-size: 12px; color: #999; margin-bottom: 4px; } 
-  .s-time-value { font-size: 18px; font-weight: bold; color: #111; letter-spacing: 0.5px; }
-  
-  .s-detail-btn { background-color: #EDEBFF; color: #8A7BFE; padding: 6px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; }
-  .s-detail-btn:hover { background-color: #E2E0FB; }
+  .s-time-label { font-size: 12px; color: #999; margin-bottom: 4px; } .s-time-value { font-size: 18px; font-weight: bold; color: #111; letter-spacing: 0.5px; }
+  .s-detail-btn { background-color: #EDEBFF; color: #8A7BFE; padding: 6px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; } .s-detail-btn:hover { background-color: #E2E0FB; }
 
   .shipped-right { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; justify-content: center; background-color: #FAFAFA; }
   .s-sub-title { font-size: 12px; color: #8C99A8; text-align: center; font-weight: bold; margin-bottom: 6px; } .s-main-title { font-size: 20px; font-weight: bold; color: #222; text-align: center; margin-bottom: 16px; } .s-info-list { font-size: 13px; color: #666; line-height: 1.6; } .s-info-list div { margin-bottom: 4px; }
 
   /* ================= Tab 3: 原材料胶囊卡片 ================= */
-  .material-card {
-    display: flex; align-items: center; background: #ffffff; border-radius: 50px; 
-    box-shadow: 0 4px 16px rgba(0,0,0,0.03); padding: 18px 32px; 
-    width: 100%; /* 重点修改：撑满父级网格，不再使用固定最小宽度 */
-    border: 1px solid #f0f0f0;
-  }
+  .material-card { display: flex; align-items: center; background: #ffffff; border-radius: 50px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); padding: 18px 32px; width: 100%; border: 1px solid #f0f0f0; }
   .m-data-group { display: flex; align-items: center; gap: 32px; flex-wrap: wrap; }
   .m-item { font-size: 15px; letter-spacing: 0.5px; }
-  .m-label-black { color: #111; font-weight: bold; }
-  .m-label-blue { color: #1A4B84; font-weight: bold; }
+  .m-label-black { color: #111; font-weight: bold; } .m-label-blue { color: #1A4B84; font-weight: bold; }
   .m-val-pink { color: #F47B8B; } .m-val-green { color: #61D081; } .m-val-blue { color: #5C91C5; }
   .m-divider { width: 1px; height: 24px; background-color: #E4E9EC; margin: 0 24px; }
-  .m-note { font-size: 15px; } /* 去掉 nowrap，以防网格较窄时文本溢出 */
-  .m-note-label { color: #111; } .m-note-val { color: #111; font-weight: bold; }
+  .m-note { font-size: 15px; } .m-note-label { color: #111; } .m-note-val { color: #111; font-weight: bold; }
+
+  /* ================= NOMI风动态AI悬浮智能体 ================= */
+  .fab-container {
+    position: fixed;
+    right: 32px;
+    bottom: 32px;
+    width: 60px;
+    height: 60px; 
+    z-index: 10000; 
+  }
+
+  .fab-menu {
+    position: absolute;
+    bottom: 75px; 
+    left: 50%;
+    transform: translateX(-50%) translateY(20px) scale(0.5); 
+    transform-origin: bottom center; 
+    
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: center;
+    width: max-content;
+    
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none; 
+    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); 
+  }
+
+  .fab-container.active .fab-menu {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0) scale(1);
+    pointer-events: auto;
+  }
+
+  .fab-item {
+    background: #ffffff;
+    padding: 10px 20px;
+    border-radius: 24px;
+    color: #1890ff;
+    font-size: 14px;
+    font-weight: bold;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    border: 1px solid #e6f7ff;
+  }
+  .fab-item:hover { background: #e6f7ff; transform: translateY(-2px); }
+
+  /* ================= AI 气泡对话框 (新增功能) ================= */
+  .ai-speech-bubble {
+    position: absolute;
+    right: 75px; /* 在悬浮球左边一点 */
+    bottom: 10px;
+    background: #ffffff;
+    padding: 12px 16px;
+    border-radius: 16px 16px 0 16px; /* 特殊的聊天气泡圆角 */
+    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    font-size: 13px;
+    font-weight: bold;
+    color: #1A4B84;
+    white-space: nowrap;
+    pointer-events: none; /* 不可被点击，防止妨碍操作 */
+    
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(15px); /* 默认偏右一点点 */
+    transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 气泡小尾巴 */
+  .ai-speech-bubble::after {
+    content: '';
+    position: absolute;
+    right: -8px;
+    bottom: 0;
+    width: 0;
+    height: 0;
+    border-bottom: 12px solid #ffffff;
+    border-right: 12px solid transparent;
+  }
+
+  /* 显示气泡的激活类 */
+  .ai-speech-bubble.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(0); /* 滑出显示 */
+  }
+
+
+  /* ================= AI 智能数字脸面板 (优化微整容) ================= */
+  .ai-face {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 30% 30%, #2a3b5c, #0f172a);
+    border-radius: 50%;
+    box-shadow: inset -4px -4px 10px rgba(0,0,0,0.6), inset 2px 2px 8px rgba(255,255,255,0.2), 0 6px 20px rgba(24, 144, 255, 0.4);
+    position: relative;
+    cursor: grab;
+    user-select: none;
+    overflow: hidden; 
+    opacity: 0.5; 
+    transition: opacity 0.3s ease, transform 0.2s, background 0.4s, box-shadow 0.4s;
+  }
+
+  .fab-container.active .ai-face, .ai-face:hover { opacity: 1; }
+  .fab-container.active .ai-face {
+    background: radial-gradient(circle at 30% 30%, #5c2a33, #1f0f15);
+    box-shadow: inset -4px -4px 10px rgba(0,0,0,0.6), inset 2px 2px 8px rgba(255,255,255,0.2), 0 6px 25px rgba(255, 77, 79, 0.5);
+  }
+
+  .ai-face:active { cursor: grabbing; transform: scale(0.9); }
+
+  .face-inner {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    animation: floatFace 4s ease-in-out infinite; 
+  }
+
+  @keyframes floatFace {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  /* 眼睛：上移防重叠 */
+  .eye {
+    position: absolute;
+    top: 18px; /* 重点优化：比之前上移4px */
+    width: 8px;
+    height: 12px; /* 重点优化：稍微改小变圆润 */
+    background: #00e5ff;
+    border-radius: 6px;
+    animation: blink 4s infinite; 
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .eye.left { left: 16px; }
+  .eye.right { right: 16px; }
+
+  @keyframes blink {
+    0%, 94%, 98%, 100% { transform: scaleY(1); }
+    96% { transform: scaleY(0.1); }
+  }
+
+  /* 嘴巴：保持下方，制造完美间隙 */
+  .mouth {
+    position: absolute;
+    top: 36px; /* 眼睛底边在30px，嘴巴在36px，留下完美的6px间隙！ */
+    left: 20px;
+    width: 20px;
+    height: 8px;
+    border: 3px solid #00e5ff;
+    border-top: none;
+    border-radius: 0 0 20px 20px;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* 激活状态：OMG 紧张发抖脸 */
+  .fab-container.active .face-inner { animation: jitter 0.15s infinite; }
+  
+  .fab-container.active .eye { 
+    width: 12px; 
+    height: 12px; 
+    top: 16px; 
+    background: transparent; 
+    border: 3px solid #ff4d4f; 
+    border-radius: 50%; 
+    animation: none; 
+  }
+  .fab-container.active .eye.left { left: 14px; } 
+  .fab-container.active .eye.right { right: 14px; }
+  
+  .fab-container.active .mouth { 
+    width: 14px; 
+    height: 16px; 
+    top: 36px; 
+    left: 23px; 
+    border: 3px solid #ff4d4f; 
+    border-radius: 50%; 
+  }
+
+  @keyframes jitter {
+    0%, 100% { transform: translate(0, 0); }
+    25% { transform: translate(-1px, 1px); }
+    50% { transform: translate(1px, -1px); }
+    75% { transform: translate(-1px, -1px); }
+  }
+
 
   /* ================= 移动端适配 (Media Query) ================= */
   @media (max-width: 768px) {
-    body { padding: 16px; } 
-    
+    body { padding: 70px 16px 16px 16px; } 
     .shipped-grid { grid-template-columns: 1fr; gap: 16px; }
     .shipped-card { flex-direction: column; }
     .shipped-left { border-right: none; border-bottom: 1px dashed #e8e8e8; padding: 16px; }
     .shipped-right { padding: 16px; align-items: flex-start; }
     .s-sub-title, .s-main-title { text-align: left; }
     .ribbon { top: 10px; right: -40px; padding: 4px 44px; font-size: 11px; }
-
     .shipped-title, .expand-list-text { margin-right: 65px; }
 
-    /* 重点修改：移动端下原材料列表变为一排一个 */
     .timeline-items { grid-template-columns: 1fr; }
-
     .material-card { flex-direction: column; align-items: flex-start; border-radius: 16px; padding: 20px; width: 100%; }
     .m-data-group { flex-direction: column; align-items: flex-start; gap: 12px; }
     .m-divider { width: 100%; height: 1px; margin: 16px 0; }
   }
 
   /* ================= 二次确认弹窗 ================= */
-  .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); z-index: 1000; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-in-out; }
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); z-index: 100000; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-in-out; }
   @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
   .modal-content { background: #fff; border-radius: 16px; width: 320px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
   @keyframes scaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -252,13 +348,12 @@
 </head>
 <body>
 
-  <!-- 顶部导航栏 -->
+  <!-- 顶部悬浮导航栏 -->
   <div class="nav-bar">
     <div class="nav-item" onclick="switchTab(0)">未完成订单</div>
     <div class="nav-item" onclick="switchTab(1)">已完成订单</div>
-    <div class="nav-item" onclick="switchTab(2)">已出库订单</div>
-    <!-- 默认激活原材料数据以预览效果 -->
-    <div class="nav-item active" style="margin-left: auto;" onclick="switchTab(3)">原材料数据</div>
+    <div class="nav-item active" onclick="switchTab(2)">已出库订单</div>
+    <div class="nav-item" style="margin-left: auto;" onclick="switchTab(3)">原材料数据</div>
   </div>
 
   <!-- Tab 0: 未完成订单 -->
@@ -340,7 +435,7 @@
   </div>
 
   <!-- Tab 2: 已出库订单 -->
-  <div id="tab-2" class="tab-pane">
+  <div id="tab-2" class="tab-pane active">
     <div class="timeline-container">
       
       <div class="timeline-group">
@@ -348,29 +443,19 @@
         <div class="shipped-grid">
           <div class="shipped-card">
             <div class="ribbon">已完成</div>
-            
             <div class="shipped-left">
               <div class="shipped-title">环氧树脂胶粘剂大桶装A+B组分套装 (额外增加了固化剂与专用大型搅拌工具)</div>
               <div class="expand-list-text">展开列表</div>
-              
               <div class="s-tags-wrapper">
-                <div class="s-tag s-tag-purple">包装:铁桶</div>
-                <div class="s-tag s-tag-cyan">货物总重量:2000KG</div>
-                <div class="s-tag s-tag-green">件数:100件</div>
+                <div class="s-tag s-tag-purple">包装:铁桶</div><div class="s-tag s-tag-cyan">货物总重量:2000KG</div><div class="s-tag s-tag-green">件数:100件</div>
               </div>
-              <div class="s-tags-wrapper">
-                <div class="s-tag s-tag-pink">备注信息:专车配送</div>
-              </div>
-              <div class="s-tags-wrapper">
-                <div class="s-tag s-tag-pink">物流信息:JD1234567890</div>
-              </div>
-              
+              <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:专车配送</div></div>
+              <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">物流信息:JD1234567890</div></div>
               <div class="shipped-bottom">
                 <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-18 09:15</div></div>
                 <div class="s-detail-btn">详情</div>
               </div>
             </div>
-            
             <div class="shipped-right">
               <div class="s-sub-title">分销商订单</div><div class="s-main-title">华东区专线</div>
               <div class="s-info-list"><div>收货姓名：张三</div><div>联系电话：15912345678</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：上海市浦东新区张江高科技园区科苑路</div></div>
@@ -384,26 +469,18 @@
         <div class="shipped-grid">
           <div class="shipped-card">
             <div class="ribbon">已完成</div>
-            
             <div class="shipped-left">
               <div class="shipped-title">中固植筋胶400ml装</div>
               <div class="expand-list-text">展开列表</div>
-              
               <div class="s-tags-wrapper">
-                <div class="s-tag s-tag-purple">包装:箱装</div>
-                <div class="s-tag s-tag-cyan">货物总重量:150KG</div>
-                <div class="s-tag s-tag-green">件数:10件</div>
+                <div class="s-tag s-tag-purple">包装:箱装</div><div class="s-tag s-tag-cyan">货物总重量:150KG</div><div class="s-tag s-tag-green">件数:10件</div>
               </div>
-              <div class="s-tags-wrapper">
-                <div class="s-tag s-tag-pink">物流信息:SF1029384756</div>
-              </div>
-              
+              <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">物流信息:SF1029384756</div></div>
               <div class="shipped-bottom">
                 <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-17 14:30</div></div>
                 <div class="s-detail-btn">详情</div>
               </div>
             </div>
-            
             <div class="shipped-right">
               <div class="s-sub-title">中固订单</div><div class="s-main-title">李总加急单</div>
               <div class="s-info-list"><div>收货姓名：李四</div><div>联系电话：13800138000</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：北京市朝阳区建国路88号SOHO现代城</div></div>
@@ -417,29 +494,19 @@
         <div class="shipped-grid">
           <div class="shipped-card">
             <div class="ribbon">已完成</div>
-            
             <div class="shipped-left">
               <div class="shipped-title">中固碳纤维胶30公斤×10组中固碳纤维胶30公斤×10组</div>
               <div class="expand-list-text">展开列表</div>
-              
               <div class="s-tags-wrapper">
-                <div class="s-tag s-tag-purple">包装:桶装</div>
-                <div class="s-tag s-tag-cyan">货物总重量:900KG</div>
-                <div class="s-tag s-tag-green">件数:60件</div>
+                <div class="s-tag s-tag-purple">包装:桶装</div><div class="s-tag s-tag-cyan">货物总重量:900KG</div><div class="s-tag s-tag-green">件数:60件</div>
               </div>
-              <div class="s-tags-wrapper">
-                <div class="s-tag s-tag-pink">备注信息:带检测报告</div>
-              </div>
-              <div class="s-tags-wrapper">
-                <div class="s-tag s-tag-pink">物流信息:SF0218125203163</div>
-              </div>
-              
+              <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:带检测报告</div></div>
+              <div class="s-tags-wrapper"><div class="s-tag s-tag-pink">物流信息:SF0218125203163</div></div>
               <div class="shipped-bottom">
                 <div><div class="s-time-label">完成时间</div><div class="s-time-value">2026-7-16 22:00</div></div>
                 <div class="s-detail-btn">详情</div>
               </div>
             </div>
-            
             <div class="shipped-right">
               <div class="s-sub-title">中固订单</div><div class="s-main-title">陶芸订单</div>
               <div class="s-info-list"><div>收货姓名：牛华</div><div>联系电话：13068188388</div><div style="display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">收货地址：广东省中山市动凤镇东成路中山市职业技术学院</div></div>
@@ -452,13 +519,11 @@
   </div>
 
   <!-- Tab 3: 原材料数据 -->
-  <div id="tab-3" class="tab-pane active">
+  <div id="tab-3" class="tab-pane">
     <div class="timeline-container">
-      
       <div class="timeline-group">
         <div class="timeline-date">2026-07-18</div>
         <div class="timeline-items">
-          
           <div class="material-card">
             <div class="m-data-group">
               <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">500kg</span></div>
@@ -468,7 +533,6 @@
             <div class="m-divider"></div>
             <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">粘钢胶</span></div>
           </div>
-
           <div class="material-card">
             <div class="m-data-group">
               <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">200kg</span></div>
@@ -478,14 +542,11 @@
             <div class="m-divider"></div>
             <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">植筋胶</span></div>
           </div>
-
         </div>
       </div>
-
       <div class="timeline-group">
         <div class="timeline-date">2026-07-17</div>
         <div class="timeline-items">
-          
           <div class="material-card">
             <div class="m-data-group">
               <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">1200kg</span></div>
@@ -495,11 +556,34 @@
             <div class="m-divider"></div>
             <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">碳纤维胶大货订单</span></div>
           </div>
-
         </div>
       </div>
-
     </div>
+  </div>
+
+  <!-- NOMI风动态AI悬浮智能体 -->
+  <div id="fabContainer" class="fab-container">
+    
+    <!-- 向上正中央弹出的胶囊菜单 -->
+    <div class="fab-menu">
+      <div class="fab-item" onclick="alert('录入原材料数据模块开启')">录入原材料数据</div>
+      <div class="fab-item" onclick="alert('录入订单信息模块开启')">录入订单信息</div>
+      <div class="fab-item" onclick="alert('进入账户控制')">账户控制</div>
+      <div class="fab-item" style="color: #ff4d4f;" onclick="alert('成功退出登录')">退出登录</div>
+    </div>
+
+    <!-- AI气泡自言自语 -->
+    <div id="aiSpeechBubble" class="ai-speech-bubble">准备接入大模型...</div>
+    
+    <!-- 纯 CSS 绘制的动态智能数字脸 -->
+    <div id="fabMain" class="ai-face">
+      <div class="face-inner">
+        <div class="eye left"></div>
+        <div class="eye right"></div>
+        <div class="mouth"></div>
+      </div>
+    </div>
+
   </div>
 
   <!-- 二次确认弹窗 -->
@@ -525,6 +609,7 @@
 
   <!-- 脚本 -->
   <script>
+    // Tab 切换逻辑
     function switchTab(index) {
       const navItems = document.querySelectorAll('.nav-item');
       navItems.forEach(item => item.classList.remove('active'));
@@ -546,9 +631,9 @@
     function closeModal() { document.getElementById('confirmModal').style.display = 'none'; }
     function finalSubmit() { alert('订单已确认完成！'); closeModal(); }
 
+    // 超长文字截断检测
     function initExpandButtons() {
       const containers = document.querySelectorAll('#tab-2 .shipped-left');
-      
       containers.forEach(container => {
         const title = container.querySelector('.shipped-title');
         const expandBtn = container.querySelector('.expand-list-text');
@@ -559,7 +644,6 @@
 
           if (title.scrollWidth > title.clientWidth) {
             expandBtn.style.display = 'block'; 
-            
             if (isExpanded) {
               title.classList.add('expanded');
               expandBtn.textContent = '收起列表';
@@ -588,6 +672,142 @@
 
     window.addEventListener('load', initExpandButtons);
     window.addEventListener('resize', initExpandButtons);
+
+    /* ================= AI悬浮智能体拖拽、点击、全局失焦 ================= */
+    const fabMain = document.getElementById('fabMain');
+    const fabContainer = document.getElementById('fabContainer');
+    
+    let isDragging = false;
+    let hasDragged = false; 
+    let isMouseDownOnFab = false; 
+    let startX, startY, initialX, initialY;
+
+    function dragStart(e) {
+      if (e.type === 'touchstart') {
+        startX = e.touches[0].clientX;
+        startY = e.touches[0].clientY;
+      } else {
+        startX = e.clientX;
+        startY = e.clientY;
+      }
+      
+      initialX = fabContainer.offsetLeft;
+      initialY = fabContainer.offsetTop;
+      
+      isDragging = true;
+      hasDragged = false;
+      isMouseDownOnFab = true; 
+      fabMain.style.transition = 'none'; 
+    }
+
+    function drag(e) {
+      if (!isDragging) return;
+      
+      let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+      let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+      
+      let dx = clientX - startX;
+      let dy = clientY - startY;
+
+      if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+        hasDragged = true;
+      }
+
+      if (hasDragged) {
+        e.preventDefault(); 
+        
+        let newX = initialX + dx;
+        let newY = initialY + dy;
+        
+        const maxX = window.innerWidth - 60;
+        const maxY = window.innerHeight - 60;
+        
+        newX = Math.max(0, Math.min(newX, maxX));
+        newY = Math.max(0, Math.min(newY, maxY));
+
+        fabContainer.style.right = 'auto'; 
+        fabContainer.style.bottom = 'auto';
+        fabContainer.style.left = newX + 'px';
+        fabContainer.style.top = newY + 'px';
+      }
+    }
+
+    function dragEnd(e) {
+      if (!isMouseDownOnFab) return;
+
+      isDragging = false;
+      fabMain.style.transition = 'opacity 0.3s ease, transform 0.2s, background 0.4s, box-shadow 0.4s';
+      
+      if (!hasDragged) {
+        fabContainer.classList.toggle('active');
+        // 点击后如果有气泡在显示，立马藏起来
+        document.getElementById('aiSpeechBubble').classList.remove('show');
+      }
+      isMouseDownOnFab = false; 
+    }
+
+    fabMain.addEventListener('mousedown', dragStart);
+    document.addEventListener('mousemove', drag, { passive: false });
+    document.addEventListener('mouseup', dragEnd);
+    fabMain.addEventListener('touchstart', dragStart, { passive: false });
+    document.addEventListener('touchmove', drag, { passive: false });
+    document.addEventListener('touchend', dragEnd);
+
+    // 全局失焦：点击空白处收起菜单
+    function closeFabMenuOnOutsideClick(e) {
+      if (fabContainer.classList.contains('active') && !fabContainer.contains(e.target)) {
+        fabContainer.classList.remove('active');
+      }
+    }
+    document.addEventListener('mousedown', closeFabMenuOnOutsideClick);
+    document.addEventListener('touchstart', closeFabMenuOnOutsideClick, { passive: true });
+
+    // 点击功能菜单后自动收起
+    const fabItemsList = document.querySelectorAll('.fab-item');
+    fabItemsList.forEach(item => {
+      item.addEventListener('click', function() {
+        setTimeout(() => { fabContainer.classList.remove('active'); }, 100);
+      });
+    });
+
+    /* ================= AI自言自语（气泡对话框）逻辑 ================= */
+    const aiPhrases = [
+      "主人，我叫小圆，是你的智能小助手~",
+      "主人，今天的订单都处理完了吗？",
+      "今天又有什么新订单呀？",
+      "需要我帮你查库存吗？",
+      "闲着也是闲着，看看数据吧！",
+      "随时准备接入 AI 大脑神经~",
+      "中固的产品最近卖得很火呢！",
+      "发呆中... 随时可以戳我哦"
+    ];
+
+    const speechBubble = document.getElementById('aiSpeechBubble');
+
+    function triggerAiSpeech() {
+      // 智能判断：如果主人正在展开菜单，或者正在拖拽我，就乖乖闭嘴不打扰
+      if (fabContainer.classList.contains('active') || isDragging) return;
+
+      // 随机抽选一句话
+      const randomPhrase = aiPhrases[Math.floor(Math.random() * aiPhrases.length)];
+      speechBubble.textContent = randomPhrase;
+      
+      // 显示气泡
+      speechBubble.classList.add('show');
+
+      // 4秒后自动消失
+      setTimeout(() => {
+        speechBubble.classList.remove('show');
+      }, 4000);
+    }
+
+    // 刚打开页面 5 秒后，先打个招呼
+    setTimeout(triggerAiSpeech, 5000);
+
+    // 为了方便你预览，设定为每隔 30 秒（30000毫秒）自言自语一次。
+    // （你后续可以改成 3 * 60000，也就是 3 分钟）
+    setInterval(triggerAiSpeech, 30000);
+
   </script>
 
 </body>
