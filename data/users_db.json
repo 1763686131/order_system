@@ -5,17 +5,7 @@
         "role": "super_admin"
     },
     {
-        "username": "2",
-        "password": "123",
-        "role": "operator"
-    },
-    {
         "username": "11",
-        "password": "123456",
-        "role": "operator"
-    },
-    {
-        "username": "2",
         "password": "123456",
         "role": "operator"
     }
