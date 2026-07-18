@@ -48,7 +48,6 @@ function renderUI() {
     const fabAddOrder = document.getElementById('fabAddOrder');
     const fabAddMaterial = document.getElementById('fabAddMaterial');
 
-    // 🎯 悬浮球的控制也全部收归为具体的颗粒权限
     if (hasPerm('system.user_manage')) btnOpenViewUser.style.display = 'block';
     else btnOpenViewUser.style.display = 'none';
 
@@ -100,7 +99,7 @@ function handleLogout() {
 }
 
 /* ========================================================
- * 📦 业务功能整合：动态数据渲染
+ * 📦 业务功能整合：动态数据渲染与【显示全部】巨幕弹窗引擎
  * ======================================================== */
 function formatTextWithBreaks(text) {
     if (!text) return '';
@@ -117,6 +116,33 @@ function getCurrentDateTime() {
     return `${Y}-${M}-${D} ${h}:${m}`;
 }
 
+// 🎯 全新打造：【显示全部】超大触屏宽屏模态框激活器
+function openShowAllGoodsModal(orderId) {
+    const order = allOrdersLocal.find(o => o.id === orderId);
+    if (!order) return;
+    
+    // 生成弹窗的大字报高亮明细
+    let goodsLines = (order.goods_name || '').split('\n').filter(l => l.trim() !== '');
+    let goodsHtml = '';
+    goodsLines.forEach(line => {
+        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large" style="font-size: 42px;">$1</span>');
+        goodsHtml += `<div class="modal-product" style="font-size: 26px; font-weight: bold; margin-bottom: 20px; border-bottom: 1px dashed #eee; padding-bottom: 12px; text-align: left;">${formattedLine}</div>`;
+    });
+    
+    // 重用系统的旧 modal 结构，注入无限空间
+    document.getElementById('confirmTargetId').value = orderId;
+    document.getElementById('confirmTargetStatus').value = 'view_only';
+    document.getElementById('newConfirmTitle').innerText = `📦 ${order.order_client || '未命名'} · 货物全量清单明细`;
+    document.getElementById('newConfirmSubtitle').innerHTML = `单据创建日期 &nbsp; ${order.date || '未知时间'}`;
+    document.getElementById('newConfirmBody').innerHTML = `<div style="max-height: 55vh; overflow-y: auto; padding-right: 10px;">${goodsHtml}</div>`;
+    
+    const confirmBtn = document.querySelector('#confirmModal .modal-btn-confirm');
+    confirmBtn.innerText = '看完关闭';
+    confirmBtn.style.backgroundColor = '#1890ff';
+    
+    document.getElementById('confirmModal').style.display = 'flex';
+}
+
 // 🎯 核心控制台：全向动态订单请求与画布装配核心
 async function fetchOrders() {
     if (currentTab !== 0 && currentTab !== 1 && currentTab !== 2) return; 
@@ -128,7 +154,8 @@ async function fetchOrders() {
         
         const confirmModal = document.getElementById('confirmModal');
         const shipOrderModal = document.getElementById('shipOrderModal');
-        if ((confirmModal && confirmModal.style.display === 'flex') || 
+        // 如果用户正在查看【显示全部】大弹窗，拦截其3秒重绘，保证阅读不被打断
+        if ((confirmModal && confirmModal.style.display === 'flex' && document.getElementById('confirmTargetStatus').value === 'view_only') || 
             (shipOrderModal && shipOrderModal.style.display === 'flex')) return;
 
         const targetContainer = document.getElementById(`tab-${currentTab}`);
@@ -200,47 +227,61 @@ async function fetchOrders() {
         }
 
         let targetStatus = (currentTab === 1) ? 'completed' : 'pending';
-        let filteredOrders = serverOrders.filter(o => o.status === targetStatus);
-        
-        const currentDataHash = JSON.stringify(filteredOrders);
-        if (targetContainer.dataset.hash === currentDataHash) return; 
-        targetContainer.dataset.hash = currentDataHash;
+        let filteredOrders = serverOrders.filter(o => o.status === 'completed' || o.status === 'pending'); // 扩宽防闪缓存池
+        let displayedOrders = serverOrders.filter(o => o.status === targetStatus);
 
         if (targetStatus === 'completed') {
-            filteredOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
+            displayedOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
         } else {
-            filteredOrders.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+            displayedOrders.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
         }
 
-        if (filteredOrders.length === 0) {
+        if (displayedOrders.length === 0) {
             targetContainer.innerHTML = `<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">当前列表下无任何订单单据记录</div>`;
             return;
         }
 
         let html = '';
-        filteredOrders.forEach(o => {
+        displayedOrders.forEach(o => {
             let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
             let typeName = o.type == 1 ? '绝缘订单' : '中固订单';
             let goodsLines = (o.goods_name || '').split('\n').filter(l => l.trim() !== '');
+            let totalLines = goodsLines.length;
 
-            // ==========================================
-            // 🏭 未完成订单 (Tab 0) 细粒度按钮隐藏判定与智能缩放
-            // ==========================================
+            // ==================================================================
+            // 🏭 未完成订单 (Tab 0) - 🎯 超过8行进行硬切断并追加【显示全部】蓝色动作
+            // ==================================================================
             if (currentTab === 0) {
                 let frontGoodsHtml = '';
-                let lineCount = goodsLines.length;
                 
-                // 🎯 只要超过 5 行，立刻追加 compact 类名让字号间距全部微缩
-                let compactClass = lineCount >= 6 ? 'compact' : '';
+                // 判断行数是否超标（大于8行）
+                let isOverLimit = totalLines > 8;
+                let renderLines = isOverLimit ? goodsLines.slice(0, 8) : goodsLines;
 
-                goodsLines.forEach(line => {
+                renderLines.forEach(line => {
                     let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
                     frontGoodsHtml += `<div class="product-item auto-fit-text">${formattedLine}</div>`;
                 });
 
-                // 🎯 超过 10 行时，追加滚动跳动提示
-                if (lineCount > 10) {
-                    frontGoodsHtml += `<div class="scroll-down-hint">👇 向下滑动，下方还有更多信息 👇</div>`;
+                let tagsHtml = '';
+                // 只有当行数在正常范围内（小于等于8行）时，正面才显示标签，超过直接隐藏让给视图
+                if (!isOverLimit) {
+                    if (o.goods_packaging) tagsHtml += `<div class="tag tag-blue">包装:${o.goods_packaging}</div>`;
+                    if (o.goods_weight) tagsHtml += `<div class="tag tag-cyan">货物总重量:${o.goods_weight}</div>`;
+                    if (o.remark) tagsHtml += `<div class="tag tag-red">备注信息:${o.remark}</div>`;
+                    if (o.goods_quantity) tagsHtml += `<div class="tag tag-green">件数:${o.goods_quantity}</div>`;
+                }
+
+                let frontActs = '';
+                if (hasPerm('pending.complete')) {
+                    frontActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
+                }
+                
+                // 🚀 核心逻辑：超过8行则把“详情页面”替换为蓝色突出的【显示全部】呼出大弹窗
+                if (isOverLimit) {
+                    frontActs += `<button class="btn btn-primary" style="background-color: #002766; color:#fff;" onclick="openShowAllGoodsModal(${o.id})">显示全部</button>`;
+                } else if (hasPerm('pending.view_detail')) {
+                    frontActs += `<button class="btn btn-default" onclick="toggleCard(this)">详情页面</button>`;
                 }
 
                 let backGoodsHtml = '';
@@ -248,43 +289,11 @@ async function fetchOrders() {
                     backGoodsHtml += `<div class="info-row text-red text-bold" style="white-space: normal; word-break: break-all;">${line}</div>`;
                 });
 
-                // 🎯 智能让位逻辑：行数太多时（超过8行），直接放弃渲染下方标签，留出纯净空间给货物信息
-                let tagsHtmlStr = '';
-                if (lineCount <= 8) {
-                    let tagsHtml = '';
-                    if (o.goods_packaging) tagsHtml += `<div class="tag tag-blue">包装:${o.goods_packaging}</div>`;
-                    if (o.goods_weight) tagsHtml += `<div class="tag tag-cyan">货物总重量:${o.goods_weight}</div>`;
-                    if (o.remark) tagsHtml += `<div class="tag tag-red">备注信息:${o.remark}</div>`;
-                    if (o.goods_quantity) tagsHtml += `<div class="tag tag-green">件数:${o.goods_quantity}</div>`;
-
-                    tagsHtmlStr = `
-                    <div class="tags-wrapper">
-                        <div class="tags-label">标签&备注</div>
-                        <div class="tags-container">${tagsHtml}</div>
-                    </div>`;
-                }
-
-                let frontActs = '';
-                if (hasPerm('pending.complete')) {
-                    frontActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
-                }
-                if (hasPerm('pending.view_detail')) {
-                    frontActs += `<button class="btn btn-default" onclick="toggleCard(this)">详情页面</button>`;
-                }
-
                 let backActs = '';
-                if (hasPerm('pending.view_detail')) {
-                    backActs += `<button class="btn btn-default" onclick="toggleCard(this)">⇦返回</button>`;
-                }
-                if (hasPerm('pending.complete')) {
-                    backActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
-                }
-                if (hasPerm('pending.edit')) {
-                    backActs += `<button class="btn btn-danger" onclick="openEditOrderModal(${o.id})">修改订单</button>`;
-                }
-                if (hasPerm('pending.copy')) {
-                    backActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制信息</button>`;
-                }
+                if (hasPerm('pending.view_detail')) backActs += `<button class="btn btn-default" onclick="toggleCard(this)">⇦返回</button>`;
+                if (hasPerm('pending.complete')) backActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
+                if (hasPerm('pending.edit')) backActs += `<button class="btn btn-danger" onclick="openEditOrderModal(${o.id})">修改订单</button>`;
+                if (hasPerm('pending.copy')) backActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制信息</button>`;
 
                 html += `
                 <div class="flip-container">
@@ -293,17 +302,17 @@ async function fetchOrders() {
                       <div class="order-title">${o.order_client || '未命名归属'}订单</div>
                       <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
                       
-                      <div class="product-list ${compactClass}">
+                      <div class="product-list" style="overflow: hidden;">
                         ${frontGoodsHtml || '<div class="product-item" style="color:#999;">暂无货物明细</div>'}
                       </div>
                       
-                      ${tagsHtmlStr}
+                      ${!isOverLimit ? `<div class="tags-wrapper"><div class="tags-label">标签&备注</div><div class="tags-container">${tagsHtml}</div></div>` : ''}
                       <div class="actions">${frontActs}</div>
                     </div>
                     <div class="order-card back">
                       <div class="order-title">${o.order_client || '未命名归属'}订单</div>
                       <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
-                      <div class="product-list">
+                      <div class="product-list" style="overflow-y: auto;">
                         <div class="info-row" style="display: flex; justify-content: space-between;">
                           <span>收货姓名：${o.receiver_name || '未填'}</span>
                           <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
@@ -327,7 +336,7 @@ async function fetchOrders() {
                 </div>`;
             } 
             // ==========================================
-            // 🏭 已完成订单 (Tab 1) 细粒度按钮隐藏判定
+            // 🏭 已完成订单 (Tab 1)
             // ==========================================
             else if (currentTab === 1) {
                 let cGoodsHtml = '';
@@ -359,7 +368,7 @@ async function fetchOrders() {
                     <span>${shortDate}</span>
                   </div>
                   
-                  <div class="product-list" style="gap: 10px;">
+                  <div class="product-list" style="gap: 10px; overflow-y: auto;">
                     <div class="info-row" style="display: flex; justify-content: space-between;">
                       <span>收货姓名：${o.receiver_name || '未填'}</span>
                       <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
@@ -494,6 +503,12 @@ async function submitShipOrder() {
 }
 
 function triggerStatusConfirm(orderId, targetStatus) {
+    // 🚀 安全拦截判定：如果是看完关闭【显示全部】大弹窗，直接关闭离开，不要发网络请求
+    if (targetStatus === 'view_only') {
+        closeModal();
+        return;
+    }
+
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
     document.getElementById('confirmTargetId').value = orderId;
@@ -526,6 +541,13 @@ function closeModal() { document.getElementById('confirmModal').style.display = 
 async function submitUpdateOrderStatus() {
     const id = document.getElementById('confirmTargetId').value;
     const status = document.getElementById('confirmTargetStatus').value;
+    
+    // 🚀 安全拦截：如果是只读查看模式，点击底部按钮直接退弹窗，不要更新接口
+    if (status === 'view_only') {
+        closeModal();
+        return;
+    }
+
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: status }) });
         if (response.ok) { closeModal(); fetchOrders(); }
@@ -595,7 +617,7 @@ function smartParse(prefix) {
         let phone = phoneMatch ? phoneMatch[0] : '';
         let name = '', address = '';
         let strWithoutPhone = line2.replace(phone, '').replace(/(?:电话|联系方式|手机)[:：]?\s*/g, '');
-        let nameMatch = strWithoutPhone.match(/(?:姓名|收货人)[:：]\s*([^\s。，,;；]{1,5})/);
+        let nameMatch = strWithoutPhone.match(/(?:姓名|收货人)[:：]\s*([^\s宏区区县镇村街道路号栋室楼]{1,5})/);
         if (nameMatch) { name = nameMatch[1]; strWithoutPhone = strWithoutPhone.replace(nameMatch[0], ''); }
         else {
             let qMatch = strWithoutPhone.match(/[?？]\s*([^\s。，,;；:：]{1,4})/);
@@ -618,7 +640,7 @@ function smartParse(prefix) {
         }
         document.getElementById(`${prefix}ReceiverName`).value = name.replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '').replace(/[?？]/g, '');
         document.getElementById(`${prefix}ReceiverPhone`).value = phone;
-        document.getElementById(`${prefix}ReceiverAddress`).value = address.replace(/(?:地址)[:：]?/g, '').replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '');
+        document.getElementById(`${prefix}ReceiverAddress`).value = address.replace(/(?:地址)[:：]?g, '').replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '');
     }
 
     if (lines.length > 2) {
@@ -859,6 +881,18 @@ function initExpandButtons() {
 }
 
 window.addEventListener('load', initExpandButtons);
+
+/* ========================================================
+ * 🖱️ 工业触屏/滑鼠滚轮横向映射控制 (全屏画廊左右滑完美恢复)
+ * ======================================================== */
+document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
+    container.addEventListener('wheel', function(e) {
+        if (e.deltaY !== 0) {
+            e.preventDefault(); 
+            this.scrollLeft += e.deltaY; 
+        }
+    }, { passive: false });
+});
 
 /* ========================================================
  * 🔄 系统初始化启动挂载点
