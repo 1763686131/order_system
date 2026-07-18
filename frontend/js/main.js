@@ -4,7 +4,7 @@
 const API_BASE = '/api';
 let currentUser = { username: '', name: '', role: '', permissions: [] }; 
 let allOrdersLocal = []; 
-let currentTab = 0; // 0=未完成, 1=已完成, 2=已出库, 3=原材料
+let currentTab = 0; 
 let activeKeyboardTargetId = 'materialInputUse';
 
 function getRoleName(role) {
@@ -99,51 +99,16 @@ function handleLogout() {
 }
 
 /* ========================================================
- * 📦 业务功能整合：动态数据渲染与【显示全部】巨幕弹窗引擎
+ * 📦 业务功能整合：动态数据渲染
  * ======================================================== */
-function formatTextWithBreaks(text) {
-    if (!text) return '';
-    return text.replace(/\n/g, '<br>');
-}
-
+function formatTextWithBreaks(text) { return !text ? '' : text.replace(/\n/g, '<br>'); }
 function getCurrentDateTime() {
     const now = new Date();
-    const Y = now.getFullYear();
-    const M = String(now.getMonth() + 1).padStart(2, '0');
-    const D = String(now.getDate()).padStart(2, '0');
-    const h = String(now.getHours()).padStart(2, '0');
-    const m = String(now.getMinutes()).padStart(2, '0');
+    const Y = now.getFullYear(); const M = String(now.getMonth() + 1).padStart(2, '0'); const D = String(now.getDate()).padStart(2, '0');
+    const h = String(now.getHours()).padStart(2, '0'); const m = String(now.getMinutes()).padStart(2, '0');
     return `${Y}-${M}-${D} ${h}:${m}`;
 }
 
-// 🎯 全新打造：【显示全部】超大触屏宽屏模态框激活器
-function openShowAllGoodsModal(orderId) {
-    const order = allOrdersLocal.find(o => o.id === orderId);
-    if (!order) return;
-    
-    // 生成弹窗的大字报高亮明细
-    let goodsLines = (order.goods_name || '').split('\n').filter(l => l.trim() !== '');
-    let goodsHtml = '';
-    goodsLines.forEach(line => {
-        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large" style="font-size: 42px;">$1</span>');
-        goodsHtml += `<div class="modal-product" style="font-size: 26px; font-weight: bold; margin-bottom: 20px; border-bottom: 1px dashed #eee; padding-bottom: 12px; text-align: left;">${formattedLine}</div>`;
-    });
-    
-    // 重用系统的旧 modal 结构，注入无限空间
-    document.getElementById('confirmTargetId').value = orderId;
-    document.getElementById('confirmTargetStatus').value = 'view_only';
-    document.getElementById('newConfirmTitle').innerText = `📦 ${order.order_client || '未命名'} · 货物全量清单明细`;
-    document.getElementById('newConfirmSubtitle').innerHTML = `单据创建日期 &nbsp; ${order.date || '未知时间'}`;
-    document.getElementById('newConfirmBody').innerHTML = `<div style="max-height: 55vh; overflow-y: auto; padding-right: 10px;">${goodsHtml}</div>`;
-    
-    const confirmBtn = document.querySelector('#confirmModal .modal-btn-confirm');
-    confirmBtn.innerText = '看完关闭';
-    confirmBtn.style.backgroundColor = '#1890ff';
-    
-    document.getElementById('confirmModal').style.display = 'flex';
-}
-
-// 🎯 核心控制台：全向动态订单请求与画布装配核心
 async function fetchOrders() {
     if (currentTab !== 0 && currentTab !== 1 && currentTab !== 2) return; 
 
@@ -154,15 +119,12 @@ async function fetchOrders() {
         
         const confirmModal = document.getElementById('confirmModal');
         const shipOrderModal = document.getElementById('shipOrderModal');
-        // 如果用户正在查看【显示全部】大弹窗，拦截其3秒重绘，保证阅读不被打断
-        if ((confirmModal && confirmModal.style.display === 'flex' && document.getElementById('confirmTargetStatus').value === 'view_only') || 
-            (shipOrderModal && shipOrderModal.style.display === 'flex')) return;
+        if ((confirmModal && confirmModal.style.display === 'flex') || (shipOrderModal && shipOrderModal.style.display === 'flex')) return;
 
         const targetContainer = document.getElementById(`tab-${currentTab}`);
 
         if (currentTab === 2) {
             let shippedOrders = serverOrders.filter(o => o.status === 'shipped');
-            
             const currentDataHash = JSON.stringify(shippedOrders);
             if (targetContainer.dataset.hash === currentDataHash) return; 
             targetContainer.dataset.hash = currentDataHash;
@@ -175,8 +137,7 @@ async function fetchOrders() {
             let groups = {};
             shippedOrders.forEach(o => {
                 let day = o.shipped_date ? o.shipped_date.substring(0, 10) : (o.completed_date ? o.completed_date.substring(0, 10) : '未知日期');
-                if (!groups[day]) groups[day] = [];
-                groups[day].push(o);
+                if (!groups[day]) groups[day] = []; groups[day].push(o);
             });
             
             let tHtml = '<div class="timeline-container">';
@@ -191,9 +152,7 @@ async function fetchOrders() {
                     if (o.goods_quantity) tagsHtml += `<div class="s-tag s-tag-green">件数:${o.goods_quantity}</div>`;
                     
                     let detailBtnHtml = '';
-                    if (hasPerm('shipped.detail')) {
-                        detailBtnHtml = `<div class="s-detail-btn" onclick="openEditOrderModal(${o.id})">详情</div>`;
-                    }
+                    if (hasPerm('shipped.detail')) detailBtnHtml = `<div class="s-detail-btn" onclick="openEditOrderModal(${o.id})">详情</div>`;
                     
                     tHtml += `
                     <div class="shipped-card">
@@ -227,14 +186,11 @@ async function fetchOrders() {
         }
 
         let targetStatus = (currentTab === 1) ? 'completed' : 'pending';
-        let filteredOrders = serverOrders.filter(o => o.status === 'completed' || o.status === 'pending'); // 扩宽防闪缓存池
+        let filteredOrders = serverOrders.filter(o => o.status === 'completed' || o.status === 'pending');
         let displayedOrders = serverOrders.filter(o => o.status === targetStatus);
 
-        if (targetStatus === 'completed') {
-            displayedOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
-        } else {
-            displayedOrders.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-        }
+        if (targetStatus === 'completed') displayedOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
+        else displayedOrders.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
         if (displayedOrders.length === 0) {
             targetContainer.innerHTML = `<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">当前列表下无任何订单单据记录</div>`;
@@ -246,54 +202,41 @@ async function fetchOrders() {
             let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
             let typeName = o.type == 1 ? '绝缘订单' : '中固订单';
             let goodsLines = (o.goods_name || '').split('\n').filter(l => l.trim() !== '');
-            let totalLines = goodsLines.length;
 
-            // ==================================================================
-            // 🏭 未完成订单 (Tab 0) - 🎯 超过8行进行硬切断并追加【显示全部】蓝色动作
-            // ==================================================================
+            // ==========================================
+            // 🏭 未完成订单 (Tab 0)
+            // ==========================================
             if (currentTab === 0) {
                 let frontGoodsHtml = '';
-                
-                // 判断行数是否超标（大于8行）
-                let isOverLimit = totalLines > 8;
-                let renderLines = isOverLimit ? goodsLines.slice(0, 8) : goodsLines;
-
-                renderLines.forEach(line => {
+                goodsLines.forEach(line => {
                     let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
                     frontGoodsHtml += `<div class="product-item auto-fit-text">${formattedLine}</div>`;
                 });
 
                 let tagsHtml = '';
-                // 只有当行数在正常范围内（小于等于8行）时，正面才显示标签，超过直接隐藏让给视图
-                if (!isOverLimit) {
-                    if (o.goods_packaging) tagsHtml += `<div class="tag tag-blue">包装:${o.goods_packaging}</div>`;
-                    if (o.goods_weight) tagsHtml += `<div class="tag tag-cyan">货物总重量:${o.goods_weight}</div>`;
-                    if (o.remark) tagsHtml += `<div class="tag tag-red">备注信息:${o.remark}</div>`;
-                    if (o.goods_quantity) tagsHtml += `<div class="tag tag-green">件数:${o.goods_quantity}</div>`;
-                }
+                if (o.goods_packaging) tagsHtml += `<div class="tag tag-blue">包装:${o.goods_packaging}</div>`;
+                if (o.goods_weight) tagsHtml += `<div class="tag tag-cyan">货物总重量:${o.goods_weight}</div>`;
+                if (o.remark) tagsHtml += `<div class="tag tag-red">备注信息:${o.remark}</div>`;
+                if (o.goods_quantity) tagsHtml += `<div class="tag tag-green">件数:${o.goods_quantity}</div>`;
+
+                let tagsHtmlStr = `
+                <div class="tags-wrapper" style="margin-top: 20px; border-top: 1px dashed #f0f0f0; padding-top: 12px;">
+                    <div class="tags-label">标签&备注</div>
+                    <div class="tags-container">${tagsHtml}</div>
+                </div>`;
 
                 let frontActs = '';
-                if (hasPerm('pending.complete')) {
-                    frontActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
-                }
-                
-                // 🚀 核心逻辑：超过8行则把“详情页面”替换为蓝色突出的【显示全部】呼出大弹窗
-                if (isOverLimit) {
-                    frontActs += `<button class="btn btn-primary" style="background-color: #002766; color:#fff;" onclick="openShowAllGoodsModal(${o.id})">显示全部</button>`;
-                } else if (hasPerm('pending.view_detail')) {
-                    frontActs += `<button class="btn btn-default" onclick="toggleCard(this)">详情页面</button>`;
-                }
+                if (hasPerm('pending.complete')) frontActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
+                if (hasPerm('pending.view_detail')) frontActs += `<button class="btn btn-default" onclick="toggleCard(this)">详情页面</button>`;
 
                 let backGoodsHtml = '';
-                goodsLines.forEach(line => {
-                    backGoodsHtml += `<div class="info-row text-red text-bold" style="white-space: normal; word-break: break-all;">${line}</div>`;
-                });
+                goodsLines.forEach(line => { backGoodsHtml += `<div class="info-row text-red text-bold" style="white-space: normal; word-break: break-all;">${line}</div>`; });
 
                 let backActs = '';
                 if (hasPerm('pending.view_detail')) backActs += `<button class="btn btn-default" onclick="toggleCard(this)">⇦返回</button>`;
                 if (hasPerm('pending.complete')) backActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
-                if (hasPerm('pending.edit')) backActs += `<button class="btn btn-danger" onclick="openEditOrderModal(${o.id})">修改订单</button>`;
-                if (hasPerm('pending.copy')) backActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制信息</button>`;
+                if (hasPerm('pending.edit')) backActs += `<button class="btn btn-danger" onclick="openEditOrderModal(${o.id})">修改</button>`;
+                if (hasPerm('pending.copy')) backActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制</button>`;
 
                 html += `
                 <div class="flip-container">
@@ -302,11 +245,12 @@ async function fetchOrders() {
                       <div class="order-title">${o.order_client || '未命名归属'}订单</div>
                       <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
                       
-                      <div class="product-list" style="overflow: hidden;">
+                      <div class="product-list auto-scroll-target">
                         ${frontGoodsHtml || '<div class="product-item" style="color:#999;">暂无货物明细</div>'}
+                        ${tagsHtmlStr}
                       </div>
+                      <div class="scroll-down-hint">👇 向下滑动，下方还有信息 👇</div>
                       
-                      ${!isOverLimit ? `<div class="tags-wrapper"><div class="tags-label">标签&备注</div><div class="tags-container">${tagsHtml}</div></div>` : ''}
                       <div class="actions">${frontActs}</div>
                     </div>
                     <div class="order-card back">
@@ -345,18 +289,10 @@ async function fetchOrders() {
                 });
 
                 let cActs = '';
-                if (hasPerm('completed.uncomplete')) {
-                    cActs += `<button class="btn btn-default" onclick="triggerStatusConfirm(${o.id}, 'pending')">撤销完成</button>`;
-                }
-                if (hasPerm('completed.ship')) {
-                    cActs += `<button class="btn btn-primary" onclick="triggerShipModal(${o.id})">发货出库</button>`;
-                }
-                if (hasPerm('completed.delete')) {
-                    cActs += `<button class="btn btn-danger" onclick="deleteOrder(${o.id})">物理删除</button>`;
-                }
-                if (hasPerm('completed.copy')) {
-                    cActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制信息</button>`;
-                }
+                if (hasPerm('completed.uncomplete')) cActs += `<button class="btn btn-default" onclick="triggerStatusConfirm(${o.id}, 'pending')">撤销</button>`;
+                if (hasPerm('completed.ship')) cActs += `<button class="btn btn-primary" onclick="triggerShipModal(${o.id})">出库</button>`;
+                if (hasPerm('completed.delete')) cActs += `<button class="btn btn-danger" onclick="deleteOrder(${o.id})">删除</button>`;
+                if (hasPerm('completed.copy')) cActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制</button>`;
 
                 let shortDate = o.completed_date ? o.completed_date.split(' ')[0] : '未知日期';
 
@@ -374,10 +310,8 @@ async function fetchOrders() {
                       <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
                     </div>
                     <div class="info-row">收货地址：${o.receiver_address || '未填'}</div>
-                    
                     <div class="info-row info-label" style="margin-top: 6px;">货物信息：</div>
                     ${cGoodsHtml || '<div class="info-row" style="color:#999; flex-shrink: 0;">暂无货物明细</div>'}
-                    
                     <div style="margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;">
                         <div style="display: flex; gap: 24px;">
                           <div class="info-row"><span class="info-label">货物包装：</span>${o.goods_packaging || '无'}</div>
@@ -388,53 +322,41 @@ async function fetchOrders() {
                           <div class="info-row"><span class="info-label">物流服务：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
                         </div>
                         ${o.remark ? `<div class="info-row"><span class="info-label">备注信息：</span><span class="text-red text-bold">${o.remark}</span></div>` : ''}
-                        
                         <div class="info-row" style="color: #888; border-top: 1px dashed #f0f0f0; padding-top: 8px; margin-top: 4px;">
                           <span class="info-label" style="color: #333;">完成时间：</span>${o.completed_date || '未知'}
                         </div>
                     </div>
                   </div>
-                  
                   <div class="actions-back" style="margin-top: 12px; padding-top: 12px;">${cActs}</div>
                 </div>`;
             }
         });
         
         targetContainer.innerHTML = html;
-        setTimeout(autoFitText, 50);
+        
+        // 🚀 核心渲染后处理
+        setTimeout(() => {
+            autoFitText();
+            autoFitVerticalText();
+        }, 50);
 
-    } catch (error) { 
-        console.error("数据拉取引擎异常", error); 
-    }
+    } catch (error) { console.error("数据拉取引擎异常", error); }
 }
 
-// ==========================================
-// 🏭 引擎 D：原材料监控中心
-// ==========================================
 async function fetchMaterials() {
     if (currentTab !== 3) return;
     try {
         const response = await fetch(`${API_BASE}/materials`, { method: 'GET', headers: getHeaders() });
         const matData = await response.json();
-        
         const targetContainer = document.getElementById('tab-3');
         let allRecords = matData.records || [];
-        
         let currentStock = parseFloat(matData.total_stock) || 0;
-        
         allRecords.sort((a, b) => a.date.localeCompare(b.date));
-        allRecords.forEach(r => {
-            currentStock -= (parseFloat(r.used) || 0);
-            r.remaining = currentStock; 
-        });
+        allRecords.forEach(r => { currentStock -= (parseFloat(r.used) || 0); r.remaining = currentStock; });
         
         const now = new Date();
         const threeDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3).getTime();
-        
-        const filteredRecords = allRecords.filter(r => {
-            const rDateMs = new Date(r.date.replace(/-/g, '/')).getTime();
-            return rDateMs >= threeDaysAgo;
-        });
+        const filteredRecords = allRecords.filter(r => { return new Date(r.date.replace(/-/g, '/')).getTime() >= threeDaysAgo; });
         
         if (filteredRecords.length === 0) {
             targetContainer.innerHTML = '<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">最近 3 天内暂无原材料（树脂）使用记录</div>';
@@ -442,16 +364,11 @@ async function fetchMaterials() {
         }
         
         let groups = {};
-        filteredRecords.forEach(r => {
-            let day = r.date.substring(0, 10);
-            if (!groups[day]) groups[day] = [];
-            groups[day].push(r);
-        });
+        filteredRecords.forEach(r => { let day = r.date.substring(0, 10); if (!groups[day]) groups[day] = []; groups[day].push(r); });
         
         let html = '<div class="timeline-container">';
         Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
             html += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="timeline-items">`;
-            
             groups[date].sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
                 let remarkText = r.remark ? r.remark : '无';
                 html += `
@@ -460,21 +377,16 @@ async function fetchMaterials() {
                         <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">${r.used} kg</span></div>
                         <div class="m-item"><span class="m-label-black">成品：</span><span class="m-val-green">${r.produced} kg</span></div>
                         <div class="m-item"><span class="m-label-blue">剩余：</span><span class="m-val-blue">${r.remaining.toFixed(1)} kg</span></div>
-                        <div class="m-note">
-                            <span class="m-note-label">备注：</span><span class="m-note-val">${remarkText}</span>
-                        </div>
+                        <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">${remarkText}</span></div>
                     </div>
                 </div>`;
             });
             html += `</div></div>`;
         });
         html += '</div>';
-        
         targetContainer.innerHTML = html;
         
-    } catch(error) {
-        console.error('拉取原材料数据异常', error);
-    }
+    } catch(error) { console.error('拉取原材料数据异常', error); }
 }
 
 function triggerShipModal(orderId) {
@@ -483,9 +395,7 @@ function triggerShipModal(orderId) {
     document.getElementById('shipOrderModal').style.display = 'flex';
 }
 
-function closeShipModal() {
-    document.getElementById('shipOrderModal').style.display = 'none';
-}
+function closeShipModal() { document.getElementById('shipOrderModal').style.display = 'none'; }
 
 async function submitShipOrder() {
     const id = document.getElementById('shipTargetId').value;
@@ -503,12 +413,6 @@ async function submitShipOrder() {
 }
 
 function triggerStatusConfirm(orderId, targetStatus) {
-    // 🚀 安全拦截判定：如果是看完关闭【显示全部】大弹窗，直接关闭离开，不要发网络请求
-    if (targetStatus === 'view_only') {
-        closeModal();
-        return;
-    }
-
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
     document.getElementById('confirmTargetId').value = orderId;
@@ -541,13 +445,6 @@ function closeModal() { document.getElementById('confirmModal').style.display = 
 async function submitUpdateOrderStatus() {
     const id = document.getElementById('confirmTargetId').value;
     const status = document.getElementById('confirmTargetStatus').value;
-    
-    // 🚀 安全拦截：如果是只读查看模式，点击底部按钮直接退弹窗，不要更新接口
-    if (status === 'view_only') {
-        closeModal();
-        return;
-    }
-
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: status }) });
         if (response.ok) { closeModal(); fetchOrders(); }
@@ -617,7 +514,7 @@ function smartParse(prefix) {
         let phone = phoneMatch ? phoneMatch[0] : '';
         let name = '', address = '';
         let strWithoutPhone = line2.replace(phone, '').replace(/(?:电话|联系方式|手机)[:：]?\s*/g, '');
-        let nameMatch = strWithoutPhone.match(/(?:姓名|收货人)[:：]\s*([^\s宏区区县镇村街道路号栋室楼]{1,5})/);
+        let nameMatch = strWithoutPhone.match(/(?:姓名|收货人)[:：]\s*([^\s。，,;；]{1,5})/);
         if (nameMatch) { name = nameMatch[1]; strWithoutPhone = strWithoutPhone.replace(nameMatch[0], ''); }
         else {
             let qMatch = strWithoutPhone.match(/[?？]\s*([^\s。，,;；:：]{1,4})/);
@@ -640,7 +537,7 @@ function smartParse(prefix) {
         }
         document.getElementById(`${prefix}ReceiverName`).value = name.replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '').replace(/[?？]/g, '');
         document.getElementById(`${prefix}ReceiverPhone`).value = phone;
-        document.getElementById(`${prefix}ReceiverAddress`).value = address.replace(/(?:地址)[:：]?g, '').replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '');
+        document.getElementById(`${prefix}ReceiverAddress`).value = address.replace(/(?:地址)[:：]?/g, '').replace(/^[。，,;；\s]+|[。，,;；\s]+$/g, '');
     }
 
     if (lines.length > 2) {
@@ -752,9 +649,6 @@ async function deleteOrderInEdit() {
     } catch (e) { alert('物理删除请求异常'); }
 }
 
-/* ========================================================
- * 🏭 原材料录入与物理键盘
- * ======================================================== */
 function openUploadMaterialModal() {
     toggleModal('uploadMaterialModal', true);
     setActiveKeyboardTarget('materialInputUse');
@@ -793,9 +687,6 @@ async function uploadMaterialRecord() {
     } catch (e) {}
 }
 
-/* ========================================================
- * 🎨 前端 UI 界面的交互动效 
- * ======================================================== */
 function toggleModal(modalId, show) {
     const modal = document.getElementById(modalId);
     if (show) modal.classList.remove('hidden');
@@ -826,10 +717,13 @@ function toggleCard(btn) {
   const flipper = btn.closest('.flipper');
   if (flipper) {
       flipper.classList.toggle('flipped');
-      setTimeout(autoFitText, 350); 
+      setTimeout(() => { autoFitText(); autoFitVerticalText(); }, 350); 
   }
 }
 
+// ===============================================
+// 🎯 引擎 A：单行水平防挤压缩放
+// ===============================================
 function autoFitText() {
     document.querySelectorAll(`#tab-${currentTab} .auto-fit-text`).forEach(el => {
         el.style.fontSize = '';
@@ -848,9 +742,67 @@ function autoFitText() {
     });
 }
 
+// ===============================================
+// 🎯 引擎 B：全新全列表垂直智能缩放侦测！
+// ===============================================
+function autoFitVerticalText() {
+    // 💡 手机端由于取消了高度死锁，直接拉伸，所以禁用缩放和滚动
+    const isMobile = window.innerWidth <= 768;
+
+    document.querySelectorAll('.front .auto-scroll-target').forEach(list => {
+        // 重置样式，方便重新计算
+        list.style.gap = '16px';
+        const items = list.querySelectorAll('.product-item');
+        const reds = list.querySelectorAll('.text-red-large');
+        const hint = list.nextElementSibling; // scroll-down-hint
+
+        let baseSize = 24; 
+        let redSize = 42; 
+        let gap = 16;
+        
+        // 只有电脑端才根据行数起步缩小
+        if (!isMobile && items.length > 8) {
+            baseSize = 16;
+            redSize = 26;
+            gap = 6;
+        }
+
+        list.style.gap = gap + 'px';
+        items.forEach(el => el.style.fontSize = baseSize + 'px');
+        reds.forEach(el => el.style.fontSize = redSize + 'px');
+
+        if (isMobile) {
+            if(hint && hint.classList.contains('scroll-down-hint')) hint.style.display = 'none';
+            return; // 手机端不需要智能压缩和滚动箭头
+        }
+
+        // 开始智能探测：如果总体高度被撑爆，就开始不断降级字号，最低降到 14px！
+        let loop = 0;
+        while (list.scrollHeight > list.clientHeight && baseSize > 14 && loop < 15) {
+            baseSize -= 1;
+            redSize -= 1.5;
+            gap = Math.max(4, gap - 1);
+            list.style.gap = gap + 'px';
+            items.forEach(el => el.style.fontSize = baseSize + 'px');
+            reds.forEach(el => el.style.fontSize = redSize + 'px');
+            loop++;
+        }
+
+        // 极限缩小后依然放不下，暴露出向下滑动的箭头提示，交给 JS 引擎去滚动！
+        if (list.scrollHeight > list.clientHeight + 5) {
+            if(hint && hint.classList.contains('scroll-down-hint')) hint.style.display = 'block';
+        } else {
+            if(hint && hint.classList.contains('scroll-down-hint')) hint.style.display = 'none';
+        }
+    });
+}
+
 window.addEventListener('resize', () => {
     initExpandButtons();
-    if (currentTab === 0 || currentTab === 1) autoFitText();
+    if (currentTab === 0 || currentTab === 1) {
+        autoFitText();
+        autoFitVerticalText();
+    }
 });
 
 function initExpandButtons() {
@@ -883,7 +835,7 @@ function initExpandButtons() {
 window.addEventListener('load', initExpandButtons);
 
 /* ========================================================
- * 🖱️ 工业触屏/滑鼠滚轮横向映射控制 (全屏画廊左右滑完美恢复)
+ * 🖱️ 工业触屏/滑鼠滚轮横向映射控制
  * ======================================================== */
 document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
     container.addEventListener('wheel', function(e) {
@@ -893,6 +845,64 @@ document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
         }
     }, { passive: false });
 });
+
+/* ========================================================
+ * 🛸 智能平滑自动滚动引擎 (Ping-Pong Auto Scroll)
+ * ======================================================== */
+const scrollStates = new WeakMap();
+
+function autoScrollEngine() {
+    // 💡 手机端禁用自动滚动引擎
+    if (window.innerWidth <= 768) {
+        requestAnimationFrame(autoScrollEngine);
+        return;
+    }
+
+    document.querySelectorAll('.front .auto-scroll-target').forEach(list => {
+        // 如果内容高度超过盒子视口高度，意味着放不下，启动滚动
+        if (list.scrollHeight > list.clientHeight + 5) {
+            
+            if (!scrollStates.has(list)) {
+                scrollStates.set(list, {
+                    pos: list.scrollTop, 
+                    dir: 0.3,            
+                    paused: false,
+                    userHover: false
+                });
+                
+                list.addEventListener('mouseenter', () => { let s = scrollStates.get(list); if(s) s.userHover = true; });
+                list.addEventListener('mouseleave', () => { let s = scrollStates.get(list); if(s) s.userHover = false; });
+                list.addEventListener('touchstart', () => { let s = scrollStates.get(list); if(s) s.userHover = true; }, {passive: true});
+                list.addEventListener('touchend', () => { let s = scrollStates.get(list); if(s) s.userHover = false; });
+            }
+            
+            let state = scrollStates.get(list);
+
+            if (state.userHover) {
+                state.pos = list.scrollTop;
+                return;
+            }
+
+            if (!state.paused) {
+                state.pos += state.dir;
+                list.scrollTop = state.pos; 
+                
+                if (Math.ceil(list.scrollTop) + list.clientHeight >= list.scrollHeight) {
+                    state.dir = -0.3; 
+                    state.paused = true;
+                    setTimeout(() => { if(scrollStates.has(list)) scrollStates.get(list).paused = false; }, 2500);
+                } 
+                else if (list.scrollTop <= 0 && state.dir < 0) {
+                    state.dir = 0.3; 
+                    state.paused = true;
+                    setTimeout(() => { if(scrollStates.has(list)) scrollStates.get(list).paused = false; }, 2500);
+                }
+            }
+        }
+    });
+    requestAnimationFrame(autoScrollEngine);
+}
+requestAnimationFrame(autoScrollEngine);
 
 /* ========================================================
  * 🔄 系统初始化启动挂载点
