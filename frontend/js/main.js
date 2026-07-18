@@ -99,7 +99,7 @@ function handleLogout() {
 }
 
 /* ========================================================
- * 📦 业务功能整合：动态数据渲染
+ * 📦 业务功能整合：动态数据渲染与卡片智能裂变引擎
  * ======================================================== */
 function formatTextWithBreaks(text) { return !text ? '' : text.replace(/\n/g, '<br>'); }
 function getCurrentDateTime() {
@@ -107,6 +107,31 @@ function getCurrentDateTime() {
     const Y = now.getFullYear(); const M = String(now.getMonth() + 1).padStart(2, '0'); const D = String(now.getDate()).padStart(2, '0');
     const h = String(now.getHours()).padStart(2, '0'); const m = String(now.getMinutes()).padStart(2, '0');
     return `${Y}-${M}-${D} ${h}:${m}`;
+}
+
+// 🎯 全新：智能 12 字符视觉换行引擎！(中文字符算1，英文数字算0.5)
+function wrapText12(text) {
+    if (!text) return '';
+    let res = '';
+    let currentLen = 0;
+    for(let i = 0; i < text.length; i++) {
+        let char = text[i];
+        res += char;
+        
+        // 匹配汉字或全角字符算 1，数字/英文/半角符号算 0.5
+        if (char.match(/[^\x00-\xff]/)) {
+            currentLen += 1;
+        } else {
+            currentLen += 0.5;
+        }
+        
+        // 达到或超过 12 个视觉字符长度，强制换行，并重置计数器
+        if (currentLen >= 12 && i !== text.length - 1) {
+            res += '\n';
+            currentLen = 0;
+        }
+    }
+    return res;
 }
 
 async function fetchOrders() {
@@ -192,147 +217,195 @@ async function fetchOrders() {
         if (targetStatus === 'completed') displayedOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
         else displayedOrders.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
 
+        const currentDataHash = JSON.stringify(displayedOrders);
+        if (targetContainer.dataset.hash === currentDataHash) return; 
+        targetContainer.dataset.hash = currentDataHash;
+
         if (displayedOrders.length === 0) {
             targetContainer.innerHTML = `<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">当前列表下无任何订单单据记录</div>`;
             return;
         }
 
         let html = '';
+        let isMobile = window.innerWidth <= 768; 
+
         displayedOrders.forEach(o => {
             let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
             let typeName = o.type == 1 ? '绝缘订单' : '中固订单';
             let goodsLines = (o.goods_name || '').split('\n').filter(l => l.trim() !== '');
 
-            if (currentTab === 0) {
-                let frontGoodsHtml = '';
-                goodsLines.forEach(line => {
-                    let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
-                    frontGoodsHtml += `<div class="product-item auto-fit-text">${formattedLine}</div>`;
-                });
+            let chunks = [];
+            if (isMobile) {
+                chunks = [goodsLines];
+            } else {
+                for (let i = 0; i < goodsLines.length; i += 8) {
+                    chunks.push(goodsLines.slice(i, i + 8));
+                }
+                if (chunks.length === 0) chunks.push([]);
+            }
 
-                let tagsHtml = '';
-                if (o.goods_packaging) tagsHtml += `<div class="tag tag-blue">包装:${o.goods_packaging}</div>`;
-                if (o.goods_weight) tagsHtml += `<div class="tag tag-cyan">货物总重量:${o.goods_weight}</div>`;
-                if (o.remark) tagsHtml += `<div class="tag tag-red">备注信息:${o.remark}</div>`;
-                if (o.goods_quantity) tagsHtml += `<div class="tag tag-green">件数:${o.goods_quantity}</div>`;
+            chunks.forEach((chunkLines, chunkIndex) => {
+                let isFirstCard = chunkIndex === 0;
+                let isSplit = chunks.length > 1;
+                let partLetter = String.fromCharCode(65 + chunkIndex); 
 
-                let tagsHtmlStr = `
-                <div class="tags-wrapper">
-                    <div class="tags-label">标签&备注</div>
-                    <div class="tags-container">${tagsHtml}</div>
-                </div>`;
+                let compactClass = (!isMobile && chunkLines.length >= 6) ? 'compact' : '';
 
-                let frontActs = '';
-                if (hasPerm('pending.complete')) frontActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
-                if (hasPerm('pending.view_detail')) frontActs += `<button class="btn btn-default" onclick="toggleCard(this)">详情页面</button>`;
+                if (currentTab === 0) {
+                    let frontGoodsHtml = '';
+                    chunkLines.forEach(line => {
+                        // 🌟 调用新的 12字符智能换行引擎
+                        let wrapLine = wrapText12(line);
+                        let formattedLine = wrapLine.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
+                        formattedLine = formattedLine.replace(/\n/g, '<br>');
+                        
+                        frontGoodsHtml += `<div class="product-item">${formattedLine}</div>`;
+                    });
 
-                let backGoodsHtml = '';
-                goodsLines.forEach(line => { backGoodsHtml += `<div class="info-row text-red text-bold" style="white-space: normal; word-break: break-all;">${line}</div>`; });
+                    let indicatorHtml = (!isMobile && isSplit) ? `<div class="card-part-indicator">${partLetter}</div>` : '';
 
-                let backActs = '';
-                if (hasPerm('pending.view_detail')) backActs += `<button class="btn btn-default" onclick="toggleCard(this)">⇦返回</button>`;
-                if (hasPerm('pending.complete')) backActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
-                if (hasPerm('pending.edit')) backActs += `<button class="btn btn-danger" onclick="openEditOrderModal(${o.id})">修改</button>`;
-                if (hasPerm('pending.copy')) backActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制</button>`;
+                    let tagsHtmlStr = '';
+                    let frontActs = '';
+                    let backGoodsHtml = '';
+                    let backActs = '';
 
-                html += `
-                <div class="flip-container">
-                  <div class="flipper">
-                    <div class="order-card front">
-                      <div class="order-title">${o.order_client || '未命名归属'}订单</div>
-                      <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
-                      
-                      <div class="product-list auto-scroll-target">
-                        ${frontGoodsHtml || '<div class="product-item" style="color:#999;">暂无货物明细</div>'}
-                        ${tagsHtmlStr}
+                    if (isFirstCard) {
+                        let tagsHtml = '';
+                        if (o.goods_packaging) tagsHtml += `<div class="tag tag-blue">包装:${o.goods_packaging}</div>`;
+                        if (o.goods_weight) tagsHtml += `<div class="tag tag-cyan">重量:${o.goods_weight}</div>`;
+                        if (o.remark) tagsHtml += `<div class="tag tag-red">备注:${o.remark}</div>`;
+                        if (o.goods_quantity) tagsHtml += `<div class="tag tag-green">件数:${o.goods_quantity}</div>`;
+
+                        if (tagsHtml) {
+                            tagsHtmlStr = `
+                            <div class="tags-wrapper">
+                                <div class="tags-label">标签&备注</div>
+                                <div class="tags-container">${tagsHtml}</div>
+                            </div>`;
+                        }
+
+                        if (hasPerm('pending.complete')) frontActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
+                        if (hasPerm('pending.view_detail')) frontActs += `<button class="btn btn-default" onclick="toggleCard(this)">详情页面</button>`;
+
+                        goodsLines.forEach(line => {
+                            let wrapLine = wrapText12(line).replace(/\n/g, '<br>');
+                            backGoodsHtml += `<div class="info-row text-red text-bold" style="white-space: normal; word-break: break-all;">${wrapLine}</div>`;
+                        });
+
+                        if (hasPerm('pending.view_detail')) backActs += `<button class="btn btn-default" onclick="toggleCard(this)">⇦返回</button>`;
+                        if (hasPerm('pending.complete')) backActs += `<button class="btn btn-primary" onclick="triggerStatusConfirm(${o.id}, 'completed')">确定完成</button>`;
+                        if (hasPerm('pending.edit')) backActs += `<button class="btn btn-danger" onclick="openEditOrderModal(${o.id})">修改</button>`;
+                        if (hasPerm('pending.copy')) backActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制</button>`;
+                    }
+
+                    html += `
+                    <div class="flip-container">
+                      <div class="flipper ${!isFirstCard ? 'no-flip' : ''}">
+                        <div class="order-card front">
+                          <div class="order-title">${o.order_client || '未命名归属'}订单</div>
+                          <div class="order-header"><span><strong>${typeName}</strong> 产品列表 ${!isFirstCard ? '(续集)' : ''}</span><span>${isFirstCard ? (o.date || '未知时间') : ''}</span></div>
+                          
+                          <div class="product-list ${compactClass}">
+                            ${frontGoodsHtml || '<div class="product-item" style="color:#999;">暂无货物明细</div>'}
+                            ${indicatorHtml}
+                          </div>
+                          
+                          ${tagsHtmlStr}
+                          ${isFirstCard ? `<div class="actions">${frontActs}</div>` : ''}
+                        </div>
+                        
+                        ${isFirstCard ? `
+                        <div class="order-card back">
+                          <div class="order-title">${o.order_client || '未命名归属'}订单</div>
+                          <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
+                          <div class="product-list">
+                            <div class="info-row" style="display: flex; justify-content: space-between;">
+                              <span>收货姓名：${o.receiver_name || '未填'}</span>
+                              <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
+                            </div>
+                            <div class="info-row">收货地址：${o.receiver_address || '未填'}</div>
+                            <div class="info-row info-label" style="margin-top: 12px;">货物全量信息：</div>
+                            ${backGoodsHtml}
+                            <div style="display: flex; gap: 24px; margin-top: 16px;">
+                              <div class="info-row"><span class="info-label">包装：</span>${o.goods_packaging || '无'}</div>
+                              <div class="info-row"><span class="info-label">数量：</span><span class="text-red text-bold">${o.goods_weight || '无'}</span></div>
+                            </div>
+                            <div style="display: flex; gap: 24px;">
+                              <div class="info-row"><span class="info-label">件数：</span>${o.goods_quantity || '无'}</div>
+                              <div class="info-row"><span class="info-label">物流服务：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
+                            </div>
+                            ${o.remark ? `<div class="info-row"><span class="info-label">备注：</span><span class="text-red text-bold">${o.remark}</span></div>` : ''}
+                          </div>
+                          <div class="actions-back">${backActs}</div>
+                        </div>
+                        ` : `<div class="order-card back"></div>`}
                       </div>
-                      <div class="scroll-down-hint">👇 向下滑动，下方还有信息 👇</div>
+                    </div>`;
+                } 
+                else if (currentTab === 1) {
+                    let frontGoodsHtml = '';
+                    chunkLines.forEach(line => { 
+                        let wrapLine = wrapText12(line).replace(/\n/g, '<br>');
+                        frontGoodsHtml += `<div class="info-row text-red text-bold" style="flex-shrink: 0;">${wrapLine}</div>`; 
+                    });
+                    let indicatorHtml = (!isMobile && isSplit) ? `<div class="card-part-indicator" style="font-size:70px;">${partLetter}</div>` : '';
+
+                    let cActs = '';
+                    let shortDate = o.completed_date ? o.completed_date.split(' ')[0] : '未知日期';
+
+                    if (isFirstCard) {
+                        if (hasPerm('completed.uncomplete')) cActs += `<button class="btn btn-default" onclick="triggerStatusConfirm(${o.id}, 'pending')">撤销</button>`;
+                        if (hasPerm('completed.ship')) cActs += `<button class="btn btn-primary" onclick="triggerShipModal(${o.id})">出库</button>`;
+                        if (hasPerm('completed.delete')) cActs += `<button class="btn btn-danger" onclick="deleteOrder(${o.id})">删除</button>`;
+                        if (hasPerm('completed.copy')) cActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制</button>`;
+                    }
+
+                    html += `
+                    <div class="completed-card" style="padding: 20px 24px; font-size: 15px;">
+                      <div class="order-title" style="font-size: 28px; margin-bottom: 8px;">${o.order_client || '未命名归属'}订单</div>
+                      <div class="order-header" style="font-size: 15px; padding-bottom: 8px; margin-bottom: 12px;">
+                        <span><strong>${typeName}</strong> 发货核对明细 ${!isFirstCard ? '(续)' : ''}</span>
+                        <span>${isFirstCard ? shortDate : ''}</span>
+                      </div>
                       
-                      <div class="actions">${frontActs}</div>
-                    </div>
-                    <div class="order-card back">
-                      <div class="order-title">${o.order_client || '未命名归属'}订单</div>
-                      <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
-                      <div class="product-list">
+                      <div class="product-list ${compactClass}" style="position:relative;">
+                        ${isFirstCard ? `
                         <div class="info-row" style="display: flex; justify-content: space-between;">
                           <span>收货姓名：${o.receiver_name || '未填'}</span>
-                          <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
+                          <span>电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
                         </div>
                         <div class="info-row">收货地址：${o.receiver_address || '未填'}</div>
-                        <div class="info-row info-label" style="margin-top: 12px;">货物信息：</div>
-                        ${backGoodsHtml}
-                        <div style="display: flex; gap: 24px; margin-top: 16px;">
-                          <div class="info-row"><span class="info-label">货物包装：</span>${o.goods_packaging || '无'}</div>
-                          <div class="info-row"><span class="info-label">货物数量：</span><span class="text-red text-bold">${o.goods_weight || '无'}</span></div>
+                        <div class="info-row info-label" style="margin-top: 6px;">货物信息：</div>
+                        ` : ''}
+
+                        ${frontGoodsHtml || '<div class="info-row" style="color:#999; flex-shrink: 0;">暂无货物明细</div>'}
+                        ${indicatorHtml}
+
+                        ${isFirstCard ? `
+                        <div style="margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;">
+                            <div style="display: flex; gap: 24px;">
+                              <div class="info-row"><span class="info-label">包装：</span>${o.goods_packaging || '无'}</div>
+                              <div class="info-row"><span class="info-label">数量：</span><span class="text-red text-bold">${o.goods_weight || '无'}</span></div>
+                            </div>
+                            <div style="display: flex; gap: 24px;">
+                              <div class="info-row"><span class="info-label">件数：</span>${o.goods_quantity || '无'}</div>
+                              <div class="info-row"><span class="info-label">物流：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
+                            </div>
+                            ${o.remark ? `<div class="info-row"><span class="info-label">备注信息：</span><span class="text-red text-bold">${o.remark}</span></div>` : ''}
+                            <div class="info-row" style="color: #888; border-top: 1px dashed #f0f0f0; padding-top: 8px; margin-top: 4px;">
+                              <span class="info-label" style="color: #333;">完成时间：</span>${o.completed_date || '未知'}
+                            </div>
                         </div>
-                        <div style="display: flex; gap: 24px;">
-                          <div class="info-row"><span class="info-label">货物件数：</span>${o.goods_quantity || '无'}</div>
-                          <div class="info-row"><span class="info-label">物流服务：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
-                        </div>
-                        ${o.remark ? `<div class="info-row"><span class="info-label">备注信息：</span><span class="text-red text-bold">${o.remark}</span></div>` : ''}
+                        ` : ''}
                       </div>
-                      <div class="actions-back">${backActs}</div>
-                    </div>
-                  </div>
-                </div>`;
-            } 
-            else if (currentTab === 1) {
-                let cGoodsHtml = '';
-                goodsLines.forEach(line => {
-                    cGoodsHtml += `<div class="info-row text-red text-bold" style="flex-shrink: 0; white-space: normal; word-break: break-all;">${line}</div>`;
-                });
-
-                let cActs = '';
-                if (hasPerm('completed.uncomplete')) cActs += `<button class="btn btn-default" onclick="triggerStatusConfirm(${o.id}, 'pending')">撤销</button>`;
-                if (hasPerm('completed.ship')) cActs += `<button class="btn btn-primary" onclick="triggerShipModal(${o.id})">出库</button>`;
-                if (hasPerm('completed.delete')) cActs += `<button class="btn btn-danger" onclick="deleteOrder(${o.id})">删除</button>`;
-                if (hasPerm('completed.copy')) cActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制</button>`;
-
-                let shortDate = o.completed_date ? o.completed_date.split(' ')[0] : '未知日期';
-
-                html += `
-                <div class="completed-card" style="padding: 20px 24px; font-size: 15px;">
-                  <div class="order-title" style="font-size: 28px; margin-bottom: 8px;">${o.order_client || '未命名归属'}订单</div>
-                  <div class="order-header" style="font-size: 15px; padding-bottom: 8px; margin-bottom: 12px;">
-                    <span><strong>${typeName}</strong> 发货核对明细</span>
-                    <span>${shortDate}</span>
-                  </div>
-                  
-                  <div class="product-list">
-                    <div class="info-row" style="display: flex; justify-content: space-between;">
-                      <span>收货姓名：${o.receiver_name || '未填'}</span>
-                      <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
-                    </div>
-                    <div class="info-row">收货地址：${o.receiver_address || '未填'}</div>
-                    <div class="info-row info-label" style="margin-top: 6px;">货物信息：</div>
-                    ${cGoodsHtml || '<div class="info-row" style="color:#999; flex-shrink: 0;">暂无货物明细</div>'}
-                    <div style="margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;">
-                        <div style="display: flex; gap: 24px;">
-                          <div class="info-row"><span class="info-label">货物包装：</span>${o.goods_packaging || '无'}</div>
-                          <div class="info-row"><span class="info-label">货物数量：</span><span class="text-red text-bold">${o.goods_weight || '无'}</span></div>
-                        </div>
-                        <div style="display: flex; gap: 24px;">
-                          <div class="info-row"><span class="info-label">货物件数：</span>${o.goods_quantity || '无'}</div>
-                          <div class="info-row"><span class="info-label">物流服务：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
-                        </div>
-                        ${o.remark ? `<div class="info-row"><span class="info-label">备注信息：</span><span class="text-red text-bold">${o.remark}</span></div>` : ''}
-                        <div class="info-row" style="color: #888; border-top: 1px dashed #f0f0f0; padding-top: 8px; margin-top: 4px;">
-                          <span class="info-label" style="color: #333;">完成时间：</span>${o.completed_date || '未知'}
-                        </div>
-                    </div>
-                  </div>
-                  <div class="actions-back" style="margin-top: 12px; padding-top: 12px;">${cActs}</div>
-                </div>`;
-            }
+                      ${isFirstCard ? `<div class="actions-back" style="margin-top: 12px; padding-top: 12px;">${cActs}</div>` : ''}
+                    </div>`;
+                }
+            });
         });
         
         targetContainer.innerHTML = html;
-        
-        // 🚀 核心渲染后处理，加长延迟确保 DOM 高度被浏览器计算完毕！
-        setTimeout(() => {
-            autoFitText();
-            autoFitVerticalText();
-        }, 100);
+        setTimeout(() => { autoFitVerticalText(); }, 50);
 
     } catch (error) { console.error("数据拉取引擎异常", error); }
 }
@@ -417,7 +490,9 @@ function triggerStatusConfirm(orderId, targetStatus) {
     let goodsLines = (order.goods_name || '').split('\n').filter(l => l.trim() !== '');
     let goodsHtml = '';
     goodsLines.forEach(line => {
-        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
+        let wrapLine = wrapText12(line);
+        let formattedLine = wrapLine.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
+        formattedLine = formattedLine.replace(/\n/g, '<br>');
         goodsHtml += `<div class="modal-product">${formattedLine}</div>`;
     });
     if (goodsHtml === '') goodsHtml = '<div class="modal-product" style="color:#999;">无详细货物内容</div>';
@@ -701,57 +776,34 @@ function switchTab(index) {
   if (index === 0 || index === 1 || index === 2) fetchOrders();
   else if (index === 3) fetchMaterials();
   if (index === 2) initExpandButtons(); 
+  
+  setTimeout(() => { autoFitVerticalText(); }, 50);
 }
 
 function toggleCard(btn) {
   const flipper = btn.closest('.flipper');
   if (flipper) {
       flipper.classList.toggle('flipped');
-      setTimeout(() => { autoFitText(); autoFitVerticalText(); }, 350); 
+      setTimeout(() => { autoFitVerticalText(); }, 350); 
   }
 }
 
-// 🎯 横向单行抗挤压收缩
-function autoFitText() {
-    document.querySelectorAll(`#tab-${currentTab} .auto-fit-text`).forEach(el => {
-        el.style.fontSize = '';
-        const largeTexts = el.querySelectorAll('.text-red-large');
-        largeTexts.forEach(c => c.style.fontSize = '');
-        if (el.clientWidth === 0) return;
-        let currentSize = parseFloat(window.getComputedStyle(el).fontSize);
-        let childrenDeltas = Array.from(largeTexts).map(c => { return parseFloat(window.getComputedStyle(c).fontSize) - currentSize; });
-        let iterations = 0; 
-        while (el.scrollWidth > el.clientWidth && currentSize > 12 && iterations < 50) {
-            currentSize -= 0.5;
-            el.style.fontSize = currentSize + 'px';
-            largeTexts.forEach((c, index) => { c.style.fontSize = (currentSize + childrenDeltas[index]) + 'px'; });
-            iterations++;
-        }
-    });
-}
-
-// 🎯 核心：智能垂直缩放！
+// 🎯 全新：整个列表纵向智能压缩（剔除导致拉伸异常的死循环）
 function autoFitVerticalText() {
-    if (window.innerWidth <= 768) return; // 手机端免除干预！
+    if (window.innerWidth <= 768) return; 
 
-    document.querySelectorAll('.front .auto-scroll-target').forEach(list => {
-        const items = list.querySelectorAll('.product-item');
+    document.querySelectorAll('.front .product-list, .completed-card .product-list').forEach(list => {
+        const items = list.querySelectorAll('.product-item, .info-row.text-red');
         const reds = list.querySelectorAll('.text-red-large');
-        const hint = list.nextElementSibling; 
 
-        let baseSize = 24; 
-        let redSize = 42; 
-        let gap = 16;
-        
-        if (items.length > 8) {
-            baseSize = 16; redSize = 26; gap = 8;
-        }
+        let baseSize = list.classList.contains('compact') ? 16 : 24; 
+        let redSize = list.classList.contains('compact') ? 26 : 42; 
+        let gap = list.classList.contains('compact') ? 8 : 16;
 
         list.style.gap = gap + 'px';
         items.forEach(el => el.style.fontSize = baseSize + 'px');
         reds.forEach(el => el.style.fontSize = redSize + 'px');
 
-        // 核心：强制重绘，获取最真实的渲染高度！
         void list.offsetHeight; 
 
         let loop = 0;
@@ -764,24 +816,15 @@ function autoFitVerticalText() {
             items.forEach(el => el.style.fontSize = baseSize + 'px');
             reds.forEach(el => el.style.fontSize = redSize + 'px');
             
-            void list.offsetHeight; // 每次缩小强制刷新高度！
+            void list.offsetHeight; 
             loop++;
-        }
-
-        if (list.scrollHeight > list.clientHeight + 5) {
-            if(hint && hint.classList.contains('scroll-down-hint')) hint.style.display = 'block';
-        } else {
-            if(hint && hint.classList.contains('scroll-down-hint')) hint.style.display = 'none';
         }
     });
 }
 
 window.addEventListener('resize', () => {
     initExpandButtons();
-    if (currentTab === 0 || currentTab === 1) {
-        autoFitText();
-        autoFitVerticalText();
-    }
+    if (currentTab === 0 || currentTab === 1) autoFitVerticalText();
 });
 
 function initExpandButtons() {
@@ -813,9 +856,6 @@ function initExpandButtons() {
 
 window.addEventListener('load', initExpandButtons);
 
-/* ========================================================
- * 🖱️ 工业触屏/滑鼠滚轮横向映射控制
- * ======================================================== */
 document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
     container.addEventListener('wheel', function(e) {
         if (e.deltaY !== 0) {
@@ -824,51 +864,6 @@ document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
         }
     }, { passive: false });
 });
-
-/* ========================================================
- * 🛸 智能平滑自动滚动引擎 (Ping-Pong Auto Scroll)
- * ======================================================== */
-const scrollStates = new WeakMap();
-
-function autoScrollEngine() {
-    if (window.innerWidth <= 768) {
-        requestAnimationFrame(autoScrollEngine);
-        return;
-    }
-
-    document.querySelectorAll('.front .auto-scroll-target').forEach(list => {
-        if (list.scrollHeight > list.clientHeight + 5) {
-            
-            if (!scrollStates.has(list)) {
-                scrollStates.set(list, { pos: list.scrollTop, dir: 0.2, paused: false, userHover: false });
-                
-                list.addEventListener('mouseenter', () => { let s = scrollStates.get(list); if(s) s.userHover = true; });
-                list.addEventListener('mouseleave', () => { let s = scrollStates.get(list); if(s) s.userHover = false; });
-                list.addEventListener('touchstart', () => { let s = scrollStates.get(list); if(s) s.userHover = true; }, {passive: true});
-                list.addEventListener('touchend', () => { let s = scrollStates.get(list); if(s) s.userHover = false; });
-            }
-            
-            let state = scrollStates.get(list);
-            if (state.userHover) { state.pos = list.scrollTop; return; }
-
-            if (!state.paused) {
-                state.pos += state.dir;
-                list.scrollTop = state.pos; 
-                
-                if (Math.ceil(list.scrollTop) + list.clientHeight >= list.scrollHeight) {
-                    state.dir = -0.2; state.paused = true;
-                    setTimeout(() => { if(scrollStates.has(list)) scrollStates.get(list).paused = false; }, 2500);
-                } 
-                else if (list.scrollTop <= 0 && state.dir < 0) {
-                    state.dir = 0.2; state.paused = true;
-                    setTimeout(() => { if(scrollStates.has(list)) scrollStates.get(list).paused = false; }, 2500);
-                }
-            }
-        }
-    });
-    requestAnimationFrame(autoScrollEngine);
-}
-requestAnimationFrame(autoScrollEngine);
 
 /* ========================================================
  * 🔄 系统初始化启动挂载点

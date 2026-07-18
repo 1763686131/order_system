@@ -21,6 +21,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 
 .flipper { height: 100%; transition: 0.6s; transform-style: preserve-3d; position: relative; display: grid; }
 .flipper.flipped { transform: rotateY(180deg); }
+.flipper.no-flip { transform: none !important; }
 
 .order-card { background: #ffffff; border-radius: 24px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); padding: 28px 32px; border: 1px solid #ebedf0; display: flex; flex-direction: column; grid-area: 1 / 1; backface-visibility: hidden; height: 100%; overflow: hidden; }
 .front { transform: rotateY(0deg); z-index: 2; }
@@ -33,14 +34,22 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .back .order-header { font-size: 15px; padding-bottom: 8px; margin-bottom: 12px; }
 .back .order-header strong { font-size: 16px; }
 
-/* 核心防溢出设定，PC端严格在内部滚动 */
-.product-list { flex: 1 1 0; min-height: 0; padding-right: 2px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 16px; -ms-overflow-style: none; scrollbar-width: none; }
+/* 核心防溢出设定，PC端严格在内部锁死 */
+.product-list { flex: 1 1 0; min-height: 0; padding-right: 2px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 16px; -ms-overflow-style: none; scrollbar-width: none; position: relative; }
 .product-list::-webkit-scrollbar { display: none; }
 .front .product-list { overflow: hidden; }
 .back .product-list { overflow-y: auto; gap: 10px; scrollbar-width: none; }
 .back .product-list::-webkit-scrollbar { display: none; }
 
-.product-item { font-size: 24px; font-weight: bold; line-height: 1.5; transition: font-size 0.2s ease; }
+/* 🌟 智能微缩模式 (超过 6 行触发) */
+.product-list.compact { gap: 8px; }
+.product-list.compact .product-item { font-size: 20px; }
+.product-list.compact .text-red-large { font-size: 34px; }
+
+/* 🌟 卡片 A / B 专属右下角浮动水印 */
+.card-part-indicator { position: absolute; bottom: -10px; right: 0px; font-size: 100px; font-weight: 900; color: rgba(24, 144, 255, 0.08); pointer-events: none; user-select: none; line-height: 1; z-index: 0; }
+
+.product-item { font-size: 24px; font-weight: bold; line-height: 1.4; transition: font-size 0.2s ease; position: relative; z-index: 1; }
 .back .product-item { font-size: 18px; }
 .info-row { font-size: 18px; color: #666; line-height: 1.5; }
 .back .info-row { font-size: 15px; }
@@ -53,16 +62,13 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .text-bold { font-weight: bold; font-size: 18px; }
 .back .text-bold { font-size: 15px; }
 
-.tags-wrapper { flex-shrink: 0; margin-top: 16px; border-top: 1px dashed #f0f0f0; padding-top: 12px; width: 100%; }
+.tags-wrapper { flex-shrink: 0; margin-top: 10px; border-top: 1px dashed #f0f0f0; padding-top: 12px; width: 100%; position: relative; z-index: 2;}
 .tags-label { font-size: 16px; color: #888; margin-bottom: 6px; font-weight: bold; }
 .tags-container { display: flex; flex-wrap: wrap; gap: 8px; }
 .tag { font-size: 16px; padding: 6px 12px; border-radius: 6px; font-weight: bold; }
 .tag-blue { background-color: #e6f7ff; color: #1890ff; } .tag-cyan { background-color: #e6fffb; color: #13c2c2; } .tag-red { background-color: #fff1f0; color: #ff4d4f; } .tag-green { background-color: #f6ffed; color: #52c41a; }
 
-@keyframes hintBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
-.scroll-down-hint { display: none; text-align: center; color: #ff4d4f; font-size: 15px; font-weight: bold; padding: 6px 0 0 0; animation: hintBounce 1.5s infinite; text-shadow: 0 2px 10px rgba(255,77,79,0.12); flex-shrink: 0; width: 100%; }
-
-.actions { display: flex; justify-content: center; gap: 16px; margin-top: auto; padding-top: 16px; border-top: 1px solid #f0f0f0; flex-shrink: 0; }
+.actions { display: flex; justify-content: center; gap: 16px; margin-top: auto; padding-top: 16px; border-top: 1px solid #f0f0f0; flex-shrink: 0; position: relative; z-index: 2; }
 .actions-back { display: flex; justify-content: space-between; gap: 6px; margin-top: auto; padding-top: 12px; border-top: 1px solid #f0f0f0; flex-shrink: 0; width: 100%; }
 .actions-back .btn { flex: 1; padding: 8px 0; font-size: 13px; min-width: 0; text-align: center; white-space: nowrap; border-radius: 8px; }
 
@@ -70,6 +76,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .btn:active { transform: scale(0.95); }
 .btn-primary { background-color: #1890ff; color: white; } .btn-danger { background-color: #ff4d4f; color: white; } .btn-success { background-color: #52c41a; color: white; } .btn-default { background-color: #f5f5f5; color: #555; border: 1px solid #d9d9d9; }
 
+/* ================= Tab 1: 已完成订单 ================= */
 .completed-card { background: #ffffff; border-radius: 24px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); padding: 28px 40px; display: flex; flex-direction: column; overflow: hidden; }
 .completed-card .product-list { overflow-y: auto; }
 .c-title { text-align: center; font-size: 34px; font-weight: 900; margin-bottom: 16px; color: #1A1A1A; letter-spacing: 1px; flex-shrink: 0; }
@@ -80,6 +87,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .c-btn:active { transform: scale(0.95); }
 .c-btn-outline { background: #fff; border: 1px solid #D0D7DE; color: #8C99A8; } .c-btn-blue { background: #1890ff; color: #fff; box-shadow: 0 4px 12px rgba(24,144,255,0.35); } .c-btn-pink { background: #E84C68; color: #fff; box-shadow: 0 4px 12px rgba(232,76,104,0.35); } .c-btn-green { background: #4CC478; color: #fff; box-shadow: 0 4px 12px rgba(76,196,120,0.35); }
 
+/* ================= Tab 2: 已出库订单网格 ================= */
 #tab-2 { flex-wrap: wrap; height: auto; overflow: visible; gap: 32px; }
 .shipped-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 32px; width: 100%; }
 .shipped-card { display: flex; background: #ffffff; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden; position: relative; border: 1px solid #ebedf0; transition: transform 0.2s, box-shadow 0.2s; }
@@ -99,6 +107,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .shipped-right { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; justify-content: center; background-color: #FAFAFA; }
 .s-sub-title { font-size: 13px; color: #8C99A8; text-align: center; font-weight: bold; margin-bottom: 6px; } .s-main-title { font-size: 20px; font-weight: bold; color: #222; text-align: center; margin-bottom: 16px; } .s-info-list { font-size: 14px; color: #666; line-height: 1.6; } .s-info-list div { margin-bottom: 4px; }
 
+/* ================= Tab 3: 原材料数据 ================= */
 #tab-3 { flex-wrap: wrap; height: auto; overflow: visible; gap: 32px; }
 .timeline-container { display: flex; flex-direction: column; gap: 40px; width: 100%; }
 .timeline-group { display: flex; flex-direction: column; }
@@ -112,29 +121,32 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .m-val-pink { color: #F47B8B; font-weight:bold; } .m-val-green { color: #61D081; font-weight:bold; } .m-val-blue { color: #5C91C5; font-weight:bold; }
 .m-note { font-size: 18px; } .m-note-label { color: #111; } .m-note-val { color: #111; font-weight: bold; }
 
-/* 📱 移动端绝对响应式解耦区域 (🌟 彻底移除破坏性代码，回归最初模样) */
+/* 📱 移动端绝对响应式解耦区域 (🌟 彻底移除破坏性代码，回归最原生拉伸伸展) */
 @media (max-width: 768px) {
-  body { padding: 160px 16px 20px 16px; font-size: 15px; overflow-y: auto; overflow-x: hidden; }
-  .nav-bar { flex-wrap: wrap; overflow: hidden; white-space: normal; padding: 12px 16px; gap: 12px; }
-  .nav-item { font-size: 16px; padding: 12px 0; flex: 1 1 45%; text-align: center; }
+  body { padding: 160px 16px 20px 16px !important; font-size: 15px !important; overflow-y: auto !important; overflow-x: hidden !important; }
+  .nav-bar { flex-wrap: wrap !important; overflow: hidden !important; white-space: normal !important; padding: 12px 16px !important; gap: 12px !important; }
+  .nav-item { font-size: 16px !important; padding: 12px 0 !important; flex: 1 1 45% !important; text-align: center !important; }
   
-  #tab-0, #tab-1 { height: auto; flex-wrap: wrap; overflow: visible; padding-bottom: 0; gap: 24px; }
-  #tab-0 .flip-container, #tab-1 .completed-card { flex: 1 1 100%; min-width: 100%; height: auto; }
+  #tab-0, #tab-1 { height: auto !important; flex-wrap: wrap !important; overflow: visible !important; padding-bottom: 0 !important; gap: 24px !important; }
+  #tab-0 .flip-container, #tab-1 .completed-card { flex: 1 1 100% !important; min-width: 100% !important; height: auto !important; }
   
-  /* 仅让 product-list 解除高度锁死自然撑开，绝不能去修改 order-card 的 overflow！ */
-  .product-list { flex: 1 1 auto; min-height: auto; }
-  .front .product-list, .back .product-list, .completed-card .product-list { overflow: visible; }
-  .scroll-down-hint { display: none !important; }
+  /* 完全拔除高度死锁，且决不触碰 overflow 破坏3D翻转！ */
+  .flipper { height: auto !important; }
+  .order-card { height: auto !important; min-height: 100% !important; padding-bottom: 24px !important; }
+  .product-list { flex: 1 1 auto !important; min-height: auto !important; height: auto !important; overflow: visible !important; }
+  .front .product-list, .back .product-list, .completed-card .product-list { overflow: visible !important; }
+  .card-part-indicator { display: none !important; }
 
-  .shipped-grid { grid-template-columns: 1fr; gap: 16px; }
-  .shipped-card { flex-direction: column; }
-  .shipped-left { border-right: none; border-bottom: 1px dashed #e8e8e8; padding: 16px; }
-  .shipped-right { padding: 16px; align-items: flex-start; }
-  .s-sub-title, .s-main-title { text-align: left; }
-  .ribbon { top: 10px; right: -40px; padding: 4px 44px; font-size: 11px; }
-  .shipped-title, .expand-list-text { margin-right: 65px; }
-  .timeline-items { grid-template-columns: 1fr; }
-  .material-card { flex-direction: column; align-items: flex-start; border-radius: 20px; padding: 24px; width: 100%; }
-  .m-data-group { flex-direction: column; align-items: flex-start; gap: 16px; }
-  .m-divider { width: 100%; height: 1px; margin: 20px 0; }
+  .shipped-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+  .shipped-card { flex-direction: column !important; }
+  .shipped-left { border-right: none !important; border-bottom: 1px dashed #e8e8e8 !important; padding: 16px !important; }
+  .shipped-right { padding: 16px !important; align-items: flex-start !important; }
+  .s-sub-title, .s-main-title { text-align: left !important; }
+  .ribbon { top: 10px !important; right: -40px !important; padding: 4px 44px !important; font-size: 11px !important; }
+  .shipped-title, .expand-list-text { margin-right: 65px !important; }
+
+  .timeline-items { grid-template-columns: 1fr !important; }
+  .material-card { flex-direction: column !important; align-items: flex-start !important; border-radius: 20px !important; padding: 24px !important; width: 100% !important; }
+  .m-data-group { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+  .m-divider { width: 100% !important; height: 1px !important; margin: 20px 0 !important; }
 }
