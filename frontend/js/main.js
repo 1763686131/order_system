@@ -26,7 +26,7 @@ function getHeaders() {
 }
 
 /* ========================================================
- * 🤖 NOMI 小圆(Xiao Yuan) 权限引擎与基础交互
+ * 🤖 权限引擎与基础交互
  * ======================================================== */
 function renderUI() {
     const loginSection = document.getElementById('loginSection');
@@ -36,13 +36,13 @@ function renderUI() {
     if (!currentUser.username) {
         loginSection.classList.remove('hidden');
         mainSection.style.display = 'none';
-        fabContainer.style.display = 'none';
+        if(fabContainer) fabContainer.style.display = 'none';
         return;
     }
 
     loginSection.classList.add('hidden');
     mainSection.style.display = 'block';
-    fabContainer.style.display = 'block';
+    if(fabContainer) fabContainer.style.display = 'block';
 
     const btnOpenViewUser = document.getElementById('btnOpenViewUser');
     const fabAddOrder = document.getElementById('fabAddOrder');
@@ -219,20 +219,15 @@ async function fetchOrders() {
             let typeName = o.type == 1 ? '绝缘订单' : '中固订单';
             let goodsLines = (o.goods_name || '').split('\n').filter(l => l.trim() !== '');
 
-            // ==========================================
-            // 🏭 未完成订单 (Tab 0)
-            // ==========================================
             if (currentTab === 0) {
                 let frontGoodsHtml = '';
                 goodsLines.forEach(line => {
-                    // 正面依然保留大号红字与动态缩放，方便车间远距离看清
                     let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
                     frontGoodsHtml += `<div class="product-item auto-fit-text">${formattedLine}</div>`;
                 });
 
                 let backGoodsHtml = '';
                 goodsLines.forEach(line => {
-                    // 🎯 背面详情页：取消数字强行放大，取消 auto-fit-text，还原为朴素红字并允许自然换行
                     backGoodsHtml += `<div class="info-row text-red text-bold" style="white-space: normal; word-break: break-all;">${line}</div>`;
                 });
 
@@ -294,13 +289,9 @@ async function fetchOrders() {
                   </div>
                 </div>`;
             } 
-            // ==========================================
-            // 🏭 已完成订单 (Tab 1)
-            // ==========================================
             else if (currentTab === 1) {
                 let cGoodsHtml = '';
                 goodsLines.forEach(line => {
-                    // 🎯 已完成页：同样取消大字报与自动压缩，默认红字加粗，允许长信息自然折行显示
                     cGoodsHtml += `<div class="info-row text-red text-bold" style="flex-shrink: 0; white-space: normal; word-break: break-all;">${line}</div>`;
                 });
 
@@ -361,6 +352,75 @@ async function fetchOrders() {
 
     } catch (error) { 
         console.error("数据拉取引擎异常", error); 
+    }
+}
+
+// ==========================================
+// 🏭 引擎 D：原材料监控中心
+// ==========================================
+async function fetchMaterials() {
+    if (currentTab !== 3) return;
+    try {
+        const response = await fetch(`${API_BASE}/materials`, { method: 'GET', headers: getHeaders() });
+        const matData = await response.json();
+        
+        const targetContainer = document.getElementById('tab-3');
+        let allRecords = matData.records || [];
+        
+        let currentStock = parseFloat(matData.total_stock) || 0;
+        
+        allRecords.sort((a, b) => a.date.localeCompare(b.date));
+        allRecords.forEach(r => {
+            currentStock -= (parseFloat(r.used) || 0);
+            r.remaining = currentStock; 
+        });
+        
+        const now = new Date();
+        const threeDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3).getTime();
+        
+        const filteredRecords = allRecords.filter(r => {
+            const rDateMs = new Date(r.date.replace(/-/g, '/')).getTime();
+            return rDateMs >= threeDaysAgo;
+        });
+        
+        if (filteredRecords.length === 0) {
+            targetContainer.innerHTML = '<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">最近 3 天内暂无原材料（树脂）使用记录</div>';
+            return;
+        }
+        
+        let groups = {};
+        filteredRecords.forEach(r => {
+            let day = r.date.substring(0, 10);
+            if (!groups[day]) groups[day] = [];
+            groups[day].push(r);
+        });
+        
+        let html = '<div class="timeline-container">';
+        Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
+            html += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="timeline-items">`;
+            
+            groups[date].sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
+                let remarkText = r.remark ? r.remark : '无';
+                html += `
+                <div class="material-card">
+                    <div class="m-data-group">
+                        <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">${r.used} kg</span></div>
+                        <div class="m-item"><span class="m-label-black">成品：</span><span class="m-val-green">${r.produced} kg</span></div>
+                        <div class="m-item"><span class="m-label-blue">剩余：</span><span class="m-val-blue">${r.remaining.toFixed(1)} kg</span></div>
+                        <div class="m-note">
+                            <span class="m-note-label">备注：</span><span class="m-note-val">${remarkText}</span>
+                        </div>
+                    </div>
+                </div>`;
+            });
+            html += `</div></div>`;
+        });
+        html += '</div>';
+        
+        targetContainer.innerHTML = html;
+        
+    } catch(error) {
+        console.error('拉取原材料数据异常', error);
     }
 }
 
@@ -662,216 +722,20 @@ async function uploadMaterialRecord() {
             toggleModal('uploadMaterialModal', false); 
             document.getElementById('successNotifyDetail').innerText = `物料报表已存入：\n消耗: ${usedVal} kg\n产出: ${productVal} kg`;
             toggleModal('uploadSuccessNotifyModal', true);
+            if (currentTab === 3) fetchMaterials();
         }
     } catch (e) {}
 }
 
 /* ========================================================
- * ⚙️ 账户与权限管理控制台
+ * 🎨 前端 UI 界面的交互动效 
  * ======================================================== */
-const PERMISSIONS_CONFIG = [
-    {
-        group: 'pending_order', label: '未完成订单权限',
-        children: [
-            { key: 'pending.add', label: '操作：发布新订单' }, { key: 'pending.complete', label: '操作：完成业务' },
-            { key: 'pending.copy', label: '操作：复制物流' }, { key: 'pending.edit', label: '操作：修改订单' },
-            { key: 'pending.delete', label: '操作：删除订单' }
-        ]
-    },
-    {
-        group: 'completed_order', label: '已完成订单权限',
-        children: [
-            { key: 'completed.uncomplete', label: '操作：撤销完成状态' }, { key: 'completed.delete', label: '操作：删除订单' }
-        ]
-    },
-    {
-        group: 'material', label: '生产物料库权限',
-        children: [
-            { key: 'material.add', label: '操作：录入消耗与产出' }, { key: 'material.edit', label: '操作：修改流水备注' },
-            { key: 'material.edit_stock', label: '操作：调整总物理库存' }, { key: 'material.delete', label: '操作：删除流水记录' }
-        ]
-    }
-];
-
-let currentEditUser = null; 
-
 function toggleModal(modalId, show) {
     const modal = document.getElementById(modalId);
     if (show) modal.classList.remove('hidden');
     else modal.classList.add('hidden');
 }
 
-async function openViewUserModal() { 
-    toggleModal('viewUserModal', true); 
-    document.getElementById('userDetailPanel').style.display = 'none';
-    await refreshUserList(); 
-}
-
-async function refreshUserList() {
-    try {
-        const response = await fetch(`${API_BASE}/users`, { method: 'GET', headers: getHeaders() });
-        const users = await response.json();
-        const container = document.getElementById('userListContainer');
-        container.innerHTML = '';
-        users.forEach(user => {
-            const row = document.createElement('div');
-            row.className = 'user-list-item';
-            if (currentEditUser && currentEditUser.username === user.username) row.classList.add('active');
-            if (currentUser.role === 'admin' && user.role !== 'employee' && user.role !== 'operator') return; 
-
-            let roleName = getRoleName(user.role);
-            let color = user.role === 'super_admin' ? '#ff4d4f' : (user.role === 'admin' ? '#faad14' : '#52c41a');
-            let displayName = user.name ? user.name : user.username;
-            row.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="font-size: 15px; font-weight: bold; color: #333;">${displayName} <span style="font-size:12px;color:#999;font-weight:normal;">(${user.username})</span></span>
-                <span style="font-size: 12px; background: ${color}20; color: ${color}; padding: 2px 8px; border-radius: 12px; font-weight: bold;">${roleName}</span>
-            </div>`;
-            row.onclick = () => loadUserDetail(user);
-            container.appendChild(row);
-        });
-    } catch (e) {}
-}
-
-function prepareCreateUser() {
-    currentEditUser = null;
-    document.querySelectorAll('.user-list-item').forEach(el => el.classList.remove('active'));
-    document.getElementById('userDetailPanel').style.display = 'block';
-    document.getElementById('detailTitle').innerText = "新建系统账户";
-    document.getElementById('detailUsername').value = '';
-    document.getElementById('detailUsername').disabled = false;
-    document.getElementById('detailName').value = '';
-    document.getElementById('detailPassword').value = '';
-    document.getElementById('btnUpdatePwd').style.display = 'none';
-    document.getElementById('btnDeleteUser').style.display = 'none';
-    document.getElementById('btnSaveUser').style.display = 'inline-block';
-    document.getElementById('detailRole').style.display = 'inline-block';
-    document.getElementById('detailRoleText').style.display = 'none';
-    renderPermissionTree([]);
-}
-
-function loadUserDetail(user) {
-    currentEditUser = user;
-    document.querySelectorAll('.user-list-item').forEach(el => el.classList.remove('active'));
-    event.currentTarget.classList.add('active');
-    
-    document.getElementById('userDetailPanel').style.display = 'block';
-    let detailDisplayName = user.name ? user.name : user.username;
-    document.getElementById('detailTitle').innerText = `配置用户：${detailDisplayName}`;
-    document.getElementById('detailUsername').value = user.username;
-    document.getElementById('detailUsername').disabled = true; 
-    document.getElementById('detailName').value = user.name || ''; 
-    document.getElementById('detailPassword').value = user.password;
-    document.getElementById('btnUpdatePwd').style.display = 'inline-block';
-    document.getElementById('btnSaveUser').style.display = 'inline-block';
-    
-    if (currentUser.role === 'super_admin' && user.role !== 'super_admin') {
-        document.getElementById('btnDeleteUser').style.display = 'inline-block';
-    } else {
-        document.getElementById('btnDeleteUser').style.display = 'none';
-    }
-    
-    const roleSelect = document.getElementById('detailRole');
-    const roleText = document.getElementById('detailRoleText');
-    if (user.role === 'super_admin') {
-        roleSelect.style.display = 'none';
-        roleText.style.display = 'inline-block';
-        roleText.innerText = '最高级安全守护者 (不可更改)';
-        document.getElementById('permissionsWrapper').style.display = 'none'; 
-    } else {
-        roleSelect.style.display = 'inline-block';
-        roleText.style.display = 'none';
-        roleSelect.value = (user.role === 'operator') ? 'employee' : user.role;
-        document.getElementById('permissionsWrapper').style.display = 'block';
-        if (currentUser.role === 'admin') roleSelect.disabled = true;
-        else roleSelect.disabled = false;
-        renderPermissionTree(user.permissions || []);
-    }
-}
-
-function renderPermissionTree(userPerms) {
-    let treeHtml = '';
-    const adminRestricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete'];
-    PERMISSIONS_CONFIG.forEach(group => {
-        treeHtml += `<div class="perm-group"><label><input type="checkbox" class="perm-parent" data-group="${group.group}" onchange="toggleGroupPerms(this)"> ${group.label}</label><div class="perm-children">`;
-        group.children.forEach(child => {
-            let isChecked = userPerms.includes(child.key) ? 'checked' : '';
-            let disabledStr = '';
-            let labelClass = '';
-            if (currentUser.role === 'admin' && adminRestricted.includes(child.key)) {
-                disabledStr = 'disabled title="系统限制：管理员无权授予或撤销此危险权限"';
-                labelClass = 'disabled-perm';
-            }
-            treeHtml += `<label class="${labelClass}"><input type="checkbox" class="perm-cb" value="${child.key}" data-group="${group.group}" onchange="checkParentPerm(this)" ${isChecked} ${disabledStr}> ${child.label}</label>`;
-        });
-        treeHtml += `</div></div>`;
-    });
-    document.getElementById('permTreeContainer').innerHTML = treeHtml;
-    document.querySelectorAll('.perm-cb').forEach(cb => checkParentPerm(cb, false));
-}
-
-function toggleGroupPerms(parentCb) {
-    const group = parentCb.dataset.group;
-    const cbs = document.querySelectorAll(`.perm-cb[data-group="${group}"]:not([disabled])`);
-    cbs.forEach(cb => cb.checked = parentCb.checked);
-}
-
-function checkParentPerm(childCb, cascade = true) {
-    const group = childCb.dataset.group;
-    const cbs = document.querySelectorAll(`.perm-cb[data-group="${group}"]`);
-    const parentCb = document.querySelector(`.perm-parent[data-group="${group}"]`);
-    parentCb.checked = Array.from(cbs).some(cb => cb.checked);
-}
-
-function getSelectedPermissions() {
-    const perms = [];
-    document.querySelectorAll('.perm-cb:checked').forEach(cb => perms.push(cb.value));
-    return perms;
-}
-
-async function saveUserData() {
-    const n = document.getElementById('detailName').value.trim(); 
-    if (!currentEditUser) {
-        const u = document.getElementById('detailUsername').value.trim();
-        const p = document.getElementById('detailPassword').value.trim();
-        const r = document.getElementById('detailRole').value;
-        if (!u || !p) return alert('账号密码不能为空！');
-        const payload = { username: u, name: n, password: p, role: r, permissions: getSelectedPermissions() };
-        try {
-            const res = await fetch(`${API_BASE}/users`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
-            if (res.ok) { window.location.reload(); } else alert('账号已存在或无权限！');
-        } catch(e) {}
-    } else {
-        const r = document.getElementById('detailRole').value;
-        const payload = { name: n, permissions: getSelectedPermissions(), role: r }; 
-        try {
-            const res = await fetch(`${API_BASE}/users/${currentEditUser.username}/permissions`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) });
-            if (res.ok) { window.location.reload(); } else alert('更新失败，权限不足');
-        } catch(e) {}
-    }
-}
-
-async function updateUserPassword() {
-    if (!currentEditUser) return;
-    const p = document.getElementById('detailPassword').value.trim();
-    if(!p) return alert('密码不能为空');
-    try { 
-        const res = await fetch(`${API_BASE}/users/${currentEditUser.username}/password`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ password: p }) }); 
-        if (res.ok) { window.location.reload(); }
-    } catch(e) {}
-}
-
-async function deleteCurrentUser() {
-    if (!currentEditUser) return;
-    if (!confirm(`确定要彻底物理删除账户 [${currentEditUser.username}] 吗？`)) return;
-    try { 
-        const res = await fetch(`${API_BASE}/users/${currentEditUser.username}`, { method: 'DELETE', headers: getHeaders() }); 
-        if (res.ok) { window.location.reload(); } 
-    } catch(e) {}
-}
-
-/* ========================================================
- * 🎨 前端 UI 界面的交互动效 
- * ======================================================== */
 function switchTab(index) {
   const navItems = document.querySelectorAll('.nav-item');
   navItems.forEach(item => item.classList.remove('active'));
@@ -882,7 +746,13 @@ function switchTab(index) {
   document.getElementById('tab-' + index).classList.add('active');
 
   currentTab = index;
-  if (index === 0 || index === 1 || index === 2) fetchOrders();
+  
+  if (index === 0 || index === 1 || index === 2) {
+      fetchOrders();
+  } else if (index === 3) {
+      fetchMaterials();
+  }
+
   if (index === 2) initExpandButtons(); 
 }
 
@@ -946,90 +816,6 @@ function initExpandButtons() {
 
 window.addEventListener('load', initExpandButtons);
 
-/* AI悬浮智能体拖拽、点击、全局失焦 */
-const fabMain = document.getElementById('fabMain');
-const fabContainer = document.getElementById('fabContainer');
-let isDragging = false, hasDragged = false, isMouseDownOnFab = false, startX, startY, initialX, initialY;
-
-function dragStart(e) {
-  if (e.type === 'touchstart') { startX = e.touches[0].clientX; startY = e.touches[0].clientY; } 
-  else { startX = e.clientX; startY = e.clientY; }
-  initialX = fabContainer.offsetLeft; initialY = fabContainer.offsetTop;
-  isDragging = true; hasDragged = false; isMouseDownOnFab = true; fabMain.style.transition = 'none'; 
-}
-
-function drag(e) {
-  if (!isDragging) return;
-  let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
-  let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-  let dx = clientX - startX, dy = clientY - startY;
-  if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasDragged = true;
-
-  if (hasDragged) {
-    e.preventDefault(); 
-    let newX = initialX + dx, newY = initialY + dy;
-    const maxX = window.innerWidth - 60, maxY = window.innerHeight - 60;
-    newX = Math.max(0, Math.min(newX, maxX)); newY = Math.max(0, Math.min(newY, maxY));
-    fabContainer.style.right = 'auto'; fabContainer.style.bottom = 'auto';
-    fabContainer.style.left = newX + 'px'; fabContainer.style.top = newY + 'px';
-  }
-}
-
-function dragEnd(e) {
-  if (!isMouseDownOnFab) return;
-  isDragging = false;
-  fabMain.style.transition = 'opacity 0.3s ease, transform 0.2s, background 0.4s, box-shadow 0.4s';
-  if (!hasDragged) {
-    fabContainer.classList.toggle('active');
-    document.getElementById('aiSpeechBubble').classList.remove('show');
-  }
-  isMouseDownOnFab = false; 
-}
-
-if(fabMain) {
-    fabMain.addEventListener('mousedown', dragStart);
-    fabMain.addEventListener('touchstart', dragStart, { passive: false });
-}
-document.addEventListener('mousemove', drag, { passive: false });
-document.addEventListener('mouseup', dragEnd);
-document.addEventListener('touchmove', drag, { passive: false });
-document.addEventListener('touchend', dragEnd);
-
-function closeFabMenuOnOutsideClick(e) {
-  if (fabContainer && fabContainer.classList.contains('active') && !fabContainer.contains(e.target)) fabContainer.classList.remove('active');
-}
-document.addEventListener('mousedown', closeFabMenuOnOutsideClick);
-document.addEventListener('touchstart', closeFabMenuOnOutsideClick, { passive: true });
-
-const fabItemsList = document.querySelectorAll('.fab-item');
-fabItemsList.forEach(item => {
-  item.addEventListener('click', function() { setTimeout(() => { fabContainer.classList.remove('active'); }, 100); });
-});
-
-const aiPhrases = ["主人，我叫小圆，是你的智能小助手~", "主人，今天的订单都处理完了吗？", "今天又有什么新订单呀？", "需要我帮你查库存吗？", "闲着也是闲着，看看数据吧！", "随时准备接入 AI 大脑神经~", "中固的产品最近卖得很火呢！", "发呆中... 随时可以戳我哦"];
-const speechBubble = document.getElementById('aiSpeechBubble');
-
-function triggerAiSpeech() {
-  if (!fabContainer || !speechBubble) return;
-  if (fabContainer.classList.contains('active') || isDragging) return;
-  const randomPhrase = aiPhrases[Math.floor(Math.random() * aiPhrases.length)];
-  speechBubble.textContent = randomPhrase; speechBubble.classList.add('show');
-  setTimeout(() => { speechBubble.classList.remove('show'); }, 4000);
-}
-setInterval(triggerAiSpeech, 30000);
-
-/* ========================================================
- * 🖱️ 工业触屏/滑鼠滚轮横向映射控制
- * ======================================================== */
-document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
-    container.addEventListener('wheel', function(e) {
-        if (e.deltaY !== 0) {
-            e.preventDefault(); 
-            this.scrollLeft += e.deltaY; 
-        }
-    }, { passive: false });
-});
-
 /* ========================================================
  * 🔄 系统初始化启动挂载点
  * ======================================================== */
@@ -1056,7 +842,10 @@ window.onload = function() {
                 fetchOrders();
             }
             
-            if (!document.getElementById('viewUserModal').classList.contains('hidden')) refreshUserList();
+            // 为了防止未引入 users.js 报错，加一个安全判断
+            if (typeof refreshUserList === 'function' && !document.getElementById('viewUserModal').classList.contains('hidden')) {
+                refreshUserList();
+            }
             
         }, 3000); 
 
