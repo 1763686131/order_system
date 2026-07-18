@@ -101,14 +101,13 @@ function handleLogout() {
 }
 
 /* ========================================================
- * 📦 业务功能整合：动态数据渲染 (涵盖 Tab 0、1、2 核心驱动)
+ * 📦 业务功能整合：动态数据渲染
  * ======================================================== */
 function formatTextWithBreaks(text) {
     if (!text) return '';
     return text.replace(/\n/g, '<br>');
 }
 
-// 获取规范格式的秒级系统当前操作时间
 function getCurrentDateTime() {
     const now = new Date();
     const Y = now.getFullYear();
@@ -128,7 +127,6 @@ async function fetchOrders() {
         const serverOrders = await response.json();
         allOrdersLocal = serverOrders;
         
-        // 如果有任何一个流转确认或修改弹窗处于开启状态，锁定画布防止数据回刷打断
         const confirmModal = document.getElementById('confirmModal');
         const shipOrderModal = document.getElementById('shipOrderModal');
         if ((confirmModal && confirmModal.style.display === 'flex') || 
@@ -136,18 +134,18 @@ async function fetchOrders() {
 
         const targetContainer = document.getElementById(`tab-${currentTab}`);
 
-        // ==================================================================
-        // 🎮 引擎 C：已出库订单动态渲染 (Tab 2 时间线横向滚动 Switch 网格看板)
-        // ===================================================================
         if (currentTab === 2) {
             let shippedOrders = serverOrders.filter(o => o.status === 'shipped');
             
+            const currentDataHash = JSON.stringify(shippedOrders);
+            if (targetContainer.dataset.hash === currentDataHash) return; 
+            targetContainer.dataset.hash = currentDataHash;
+
             if (shippedOrders.length === 0) {
                 targetContainer.innerHTML = '<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">当前暂无已出库物流单据记录</div>';
                 return;
             }
             
-            // 聚类按天分组
             let groups = {};
             shippedOrders.forEach(o => {
                 let day = o.shipped_date ? o.shipped_date.substring(0, 10) : (o.completed_date ? o.completed_date.substring(0, 10) : '未知日期');
@@ -158,11 +156,9 @@ async function fetchOrders() {
             let tHtml = '<div class="timeline-container">';
             Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
                 tHtml += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="shipped-grid">`;
-                
                 groups[date].forEach(o => {
                     let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
                     let typeText = o.type == 1 ? '绝缘订单' : '中固订单';
-                    
                     let tagsHtml = '';
                     if (o.goods_packaging) tagsHtml += `<div class="s-tag s-tag-purple">包装:${o.goods_packaging}</div>`;
                     if (o.goods_weight) tagsHtml += `<div class="s-tag s-tag-cyan">货物总重量:${o.goods_weight}</div>`;
@@ -192,18 +188,20 @@ async function fetchOrders() {
                         </div>
                     </div>`;
                 });
-                
                 tHtml += `</div></div>`;
             });
             targetContainer.innerHTML = tHtml + '</div>';
-            setTimeout(initExpandButtons, 50); // 唤醒超长排版折叠轴
+            setTimeout(initExpandButtons, 50); 
             return;
         }
 
-        // 判定待渲染的状态
         let targetStatus = (currentTab === 1) ? 'completed' : 'pending';
         let filteredOrders = serverOrders.filter(o => o.status === targetStatus);
         
+        const currentDataHash = JSON.stringify(filteredOrders);
+        if (targetContainer.dataset.hash === currentDataHash) return; 
+        targetContainer.dataset.hash = currentDataHash;
+
         if (targetStatus === 'completed') {
             filteredOrders.sort((a, b) => (b.completed_date || '').localeCompare(a.completed_date || ''));
         } else {
@@ -222,19 +220,20 @@ async function fetchOrders() {
             let goodsLines = (o.goods_name || '').split('\n').filter(l => l.trim() !== '');
 
             // ==========================================
-            // 🏭 引擎 A：未完成订单 (3D 翻转 + 巨型大字报)
+            // 🏭 未完成订单 (Tab 0)
             // ==========================================
             if (currentTab === 0) {
                 let frontGoodsHtml = '';
                 goodsLines.forEach(line => {
+                    // 正面依然保留大号红字与动态缩放，方便车间远距离看清
                     let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
                     frontGoodsHtml += `<div class="product-item auto-fit-text">${formattedLine}</div>`;
                 });
 
                 let backGoodsHtml = '';
                 goodsLines.forEach(line => {
-                    let formattedBackLine = line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
-                    backGoodsHtml += `<div class="info-row text-red text-bold auto-fit-text">${formattedBackLine}</div>`;
+                    // 🎯 背面详情页：取消数字强行放大，取消 auto-fit-text，还原为朴素红字并允许自然换行
+                    backGoodsHtml += `<div class="info-row text-red text-bold" style="white-space: normal; word-break: break-all;">${line}</div>`;
                 });
 
                 let tagsHtml = '';
@@ -296,62 +295,63 @@ async function fetchOrders() {
                 </div>`;
             } 
             // ==========================================
-            // 🏭 引擎 B：已完成订单 (静态详单面板，供发货员核对)
+            // 🏭 已完成订单 (Tab 1)
             // ==========================================
             else if (currentTab === 1) {
                 let cGoodsHtml = '';
                 goodsLines.forEach(line => {
-                    cGoodsHtml += `<div class="c-row c-text-red text-bold auto-fit-text">${line}</div>`;
+                    // 🎯 已完成页：同样取消大字报与自动压缩，默认红字加粗，允许长信息自然折行显示
+                    cGoodsHtml += `<div class="info-row text-red text-bold" style="flex-shrink: 0; white-space: normal; word-break: break-all;">${line}</div>`;
                 });
 
                 let cActs = '';
                 if (hasPerm('completed.uncomplete')) {
-                    cActs += `<button class="c-btn c-btn-outline" onclick="triggerStatusConfirm(${o.id}, 'pending')">撤销完成</button>`;
+                    cActs += `<button class="btn btn-default" onclick="triggerStatusConfirm(${o.id}, 'pending')">撤销完成</button>`;
                 }
-                // 🎯 核心：点击“发货”拉起物流单号输入极简遮罩弹窗
-                cActs += `<button class="c-btn c-btn-blue" onclick="triggerShipModal(${o.id})">发货</button>`;
+                cActs += `<button class="btn btn-primary" onclick="triggerShipModal(${o.id})">发货出库</button>`;
                 if (hasPerm('completed.delete')) {
-                    cActs += `<button class="c-btn c-btn-pink" onclick="deleteOrder(${o.id})">物理删除</button>`;
+                    cActs += `<button class="btn btn-danger" onclick="deleteOrder(${o.id})">物理删除</button>`;
                 }
-                cActs += `<button class="c-btn c-btn-green" onclick="copyOrderInfo(${o.id})">复制信息</button>`;
+                cActs += `<button class="btn btn-success" onclick="copyOrderInfo(${o.id})">复制信息</button>`;
 
                 let shortDate = o.completed_date ? o.completed_date.split(' ')[0] : '未知日期';
 
                 html += `
-                <div class="completed-card">
-                  <div class="c-title">${o.order_client || '未命名归属'}订单</div>
-                  <div class="c-header">
-                    <div class="c-header-left"><strong>${typeName}</strong><span>发货核对明细</span></div>
-                    <div class="c-header-right">${shortDate}</div>
+                <div class="completed-card" style="padding: 20px 24px; font-size: 15px;">
+                  <div class="order-title" style="font-size: 28px; margin-bottom: 8px;">${o.order_client || '未命名归属'}订单</div>
+                  <div class="order-header" style="font-size: 15px; padding-bottom: 8px; margin-bottom: 12px;">
+                    <span><strong>${typeName}</strong> 发货核对明细</span>
+                    <span>${shortDate}</span>
                   </div>
                   
-                  <div class="c-info-box">
-                    <div class="c-row-split c-text-grey">
+                  <div class="product-list" style="gap: 10px;">
+                    <div class="info-row" style="display: flex; justify-content: space-between;">
                       <span>收货姓名：${o.receiver_name || '未填'}</span>
                       <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
                     </div>
-                    <div class="c-row c-text-grey c-spacing">收货地址：${o.receiver_address || '未填'}</div>
+                    <div class="info-row">收货地址：${o.receiver_address || '未填'}</div>
                     
-                    <div class="c-row c-label">货物信息：</div>
-                    <div style="display:flex; flex-direction: column; gap: 16px; margin-bottom: 24px;">
-                        ${cGoodsHtml || '<div class="c-row c-text-grey">暂无货物明细</div>'}
-                    </div>
+                    <div class="info-row info-label" style="margin-top: 6px;">货物信息：</div>
+                    ${cGoodsHtml || '<div class="info-row" style="color:#999; flex-shrink: 0;">暂无货物明细</div>'}
                     
-                    <div class="c-row-split" style="margin-top: 16px;">
-                      <div><span class="c-label">货物包装：</span>${o.goods_packaging || '无'}</div>
-                      <div><span class="c-label">货物数量：</span><span class="c-text-orange text-bold">${o.goods_weight || '无'}</span></div>
-                    </div>
-                    <div class="c-row-split" style="margin-top: 16px;">
-                      <div><span class="c-label">货物件数：</span>${o.goods_quantity || '无'}</div>
-                      <div style="text-align: right;"><span class="c-label">物流服务：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
-                    </div>
-                    ${o.remark ? `<div class="c-row" style="margin-top: 20px;"><span class="c-label">备注信息：</span><span class="c-text-pink text-bold">${o.remark}</span></div>` : ''}
-                    
-                    <div class="c-row" style="margin-top: 28px; padding-top: 20px; border-top: 1px dashed #E4E9EC;">
-                      <span class="c-label">完成时间：</span><span class="c-text-grey">${o.completed_date || '未知'}</span>
+                    <div style="margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;">
+                        <div style="display: flex; gap: 24px;">
+                          <div class="info-row"><span class="info-label">货物包装：</span>${o.goods_packaging || '无'}</div>
+                          <div class="info-row"><span class="info-label">货物数量：</span><span class="text-red text-bold">${o.goods_weight || '无'}</span></div>
+                        </div>
+                        <div style="display: flex; gap: 24px;">
+                          <div class="info-row"><span class="info-label">货物件数：</span>${o.goods_quantity || '无'}</div>
+                          <div class="info-row"><span class="info-label">物流服务：</span>${isEmployee ? '***' : (o.logistics_service || '无')}</div>
+                        </div>
+                        ${o.remark ? `<div class="info-row"><span class="info-label">备注信息：</span><span class="text-red text-bold">${o.remark}</span></div>` : ''}
+                        
+                        <div class="info-row" style="color: #888; border-top: 1px dashed #f0f0f0; padding-top: 8px; margin-top: 4px;">
+                          <span class="info-label" style="color: #333;">完成时间：</span>${o.completed_date || '未知'}
+                        </div>
                     </div>
                   </div>
-                  <div class="c-actions">${cActs}</div>
+                  
+                  <div class="actions-back" style="margin-top: 12px; padding-top: 12px;">${cActs}</div>
                 </div>`;
             }
         });
@@ -364,7 +364,6 @@ async function fetchOrders() {
     }
 }
 
-// ================= 🎯 新增：发货物流录入控制逻辑 =================
 function triggerShipModal(orderId) {
     document.getElementById('shipTargetId').value = orderId;
     document.getElementById('shipLogisticsNo').value = ''; 
@@ -379,37 +378,22 @@ async function submitShipOrder() {
     const id = document.getElementById('shipTargetId').value;
     let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
     if (!logisticsNo) logisticsNo = '专车配送/自提'; 
-    
     const currentDateTime = getCurrentDateTime();
-    
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({
-                status: 'shipped',
-                logistics_no: logisticsNo,
-                shipped_date: currentDateTime,     
-                completed_date: currentDateTime   
-            })
+            body: JSON.stringify({ status: 'shipped', logistics_no: logisticsNo, shipped_date: currentDateTime, completed_date: currentDateTime })
         });
-        if (response.ok) {
-            closeShipModal();
-            fetchOrders(); 
-        }
-    } catch (e) {
-        alert('发货出库网络通讯失败');
-    }
+        if (response.ok) { closeShipModal(); fetchOrders(); }
+    } catch (e) { alert('发货出库网络通讯失败'); }
 }
 
-// 二次确认流转通用弹窗
 function triggerStatusConfirm(orderId, targetStatus) {
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
-    
     document.getElementById('confirmTargetId').value = orderId;
     document.getElementById('confirmTargetStatus').value = targetStatus;
-    
     document.getElementById('newConfirmTitle').innerText = `${order.order_client || '未命名'}订单`;
     document.getElementById('newConfirmSubtitle').innerHTML = `单据日期 &nbsp; ${order.date || '未知时间'}`;
     
@@ -422,7 +406,6 @@ function triggerStatusConfirm(orderId, targetStatus) {
     if (goodsHtml === '') goodsHtml = '<div class="modal-product" style="color:#999;">无详细货物内容</div>';
     
     document.getElementById('newConfirmBody').innerHTML = goodsHtml;
-    
     const confirmBtn = document.querySelector('#confirmModal .modal-btn-confirm');
     if (targetStatus === 'pending') {
         confirmBtn.innerText = '确认撤销至未完成状态';
@@ -431,26 +414,18 @@ function triggerStatusConfirm(orderId, targetStatus) {
         confirmBtn.innerText = '确定完成';
         confirmBtn.style.backgroundColor = '#1890ff'; 
     }
-
     document.getElementById('confirmModal').style.display = 'flex';
 }
 
-function closeModal() { 
-    document.getElementById('confirmModal').style.display = 'none'; 
-}
+function closeModal() { document.getElementById('confirmModal').style.display = 'none'; }
 
 async function submitUpdateOrderStatus() {
     const id = document.getElementById('confirmTargetId').value;
     const status = document.getElementById('confirmTargetStatus').value;
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify({ status: status }) });
-        if (response.ok) { 
-            closeModal(); 
-            fetchOrders(); 
-        }
-    } catch (error) {
-        alert("流转操作异常");
-    }
+        if (response.ok) { closeModal(); fetchOrders(); }
+    } catch (error) { alert("流转操作异常"); }
 }
 
 async function deleteOrder(id) {
@@ -522,7 +497,7 @@ function smartParse(prefix) {
             let qMatch = strWithoutPhone.match(/[?？]\s*([^\s。，,;；:：]{1,4})/);
             if (qMatch) { name = qMatch[1]; strWithoutPhone = strWithoutPhone.replace(qMatch[0], ''); }
         }
-        let addrMatch = strWithoutPhone.match(/(?:地址)[:：]\s*(.*)/);
+        let addrMatch = strWithoutPhone.match(/(?:地址)[:：]?\s*(.*)/);
         if (addrMatch) { address = addrMatch[1]; strWithoutPhone = strWithoutPhone.replace(addrMatch[0], ''); } 
         else { address = strWithoutPhone; }
         
@@ -592,7 +567,6 @@ async function createOrder() {
 function openEditOrderModal(orderId) {
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
-    
     document.getElementById('editOrderId').value = order.id;
     document.getElementById('editOrderDate').value = order.date || '';
     document.getElementById('editOrderType').value = order.type !== undefined ? order.type : 0;
@@ -600,9 +574,7 @@ function openEditOrderModal(orderId) {
     
     ['OrderClient', 'ReceiverName', 'ReceiverPhone', 'ReceiverAddress', 'GoodsName', 'GoodsWeight', 'GoodsQuantity'].forEach(k => {
         const el = document.getElementById(`edit${k}`);
-        if (el) {
-            el.value = order[k.replace(/([A-Z])/g, "_$1").toLowerCase().substring(1)] || '';
-        }
+        if (el) el.value = order[k.replace(/([A-Z])/g, "_$1").toLowerCase().substring(1)] || '';
     });
     
     document.getElementById('editGoodsPackaging').value = order.goods_packaging || '桶装';
@@ -614,7 +586,6 @@ function openEditOrderModal(orderId) {
         if (hasPerm('pending.delete')) delBtn.style.display = 'inline-block';
         else delBtn.style.display = 'none';
     }
-
     toggleModal('editOrderModal', true);
 }
 
@@ -641,28 +612,18 @@ async function submitEditOrder() {
     if (errMsg) return alert('修改失败：' + errMsg);
     try {
         const response = await fetch(`${API_BASE}/orders/${id}/edit`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) });
-        if (response.ok) { 
-            toggleModal('editOrderModal', false); 
-            fetchOrders(); 
-        }
+        if (response.ok) { toggleModal('editOrderModal', false); fetchOrders(); }
     } catch (e) { alert('请求异常'); }
 }
 
 async function deleteOrderInEdit() {
     const id = document.getElementById('editOrderId').value;
     if (!id) return;
-    
     if (!confirm('安全警告：您确定要彻底物理删除这条订单记录吗？此操作无法撤销！')) return;
-    
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, { method: 'DELETE', headers: getHeaders() });
-        if (response.ok) {
-            toggleModal('editOrderModal', false); 
-            fetchOrders(); 
-        }
-    } catch (e) {
-        alert('物理删除请求异常');
-    }
+        if (response.ok) { toggleModal('editOrderModal', false); fetchOrders(); }
+    } catch (e) { alert('物理删除请求异常'); }
 }
 
 /* ========================================================
@@ -712,27 +673,22 @@ const PERMISSIONS_CONFIG = [
     {
         group: 'pending_order', label: '未完成订单权限',
         children: [
-            { key: 'pending.add', label: '操作：发布新订单' },
-            { key: 'pending.complete', label: '操作：完成业务' },
-            { key: 'pending.copy', label: '操作：复制物流' },
-            { key: 'pending.edit', label: '操作：修改订单' },
+            { key: 'pending.add', label: '操作：发布新订单' }, { key: 'pending.complete', label: '操作：完成业务' },
+            { key: 'pending.copy', label: '操作：复制物流' }, { key: 'pending.edit', label: '操作：修改订单' },
             { key: 'pending.delete', label: '操作：删除订单' }
         ]
     },
     {
         group: 'completed_order', label: '已完成订单权限',
         children: [
-            { key: 'completed.uncomplete', label: '操作：撤销完成状态' },
-            { key: 'completed.delete', label: '操作：删除订单' }
+            { key: 'completed.uncomplete', label: '操作：撤销完成状态' }, { key: 'completed.delete', label: '操作：删除订单' }
         ]
     },
     {
         group: 'material', label: '生产物料库权限',
         children: [
-            { key: 'material.add', label: '操作：录入消耗与产出' },
-            { key: 'material.edit', label: '操作：修改流水备注' },
-            { key: 'material.edit_stock', label: '操作：调整总物理库存' },
-            { key: 'material.delete', label: '操作：删除流水记录' }
+            { key: 'material.add', label: '操作：录入消耗与产出' }, { key: 'material.edit', label: '操作：修改流水备注' },
+            { key: 'material.edit_stock', label: '操作：调整总物理库存' }, { key: 'material.delete', label: '操作：删除流水记录' }
         ]
     }
 ];
@@ -757,20 +713,15 @@ async function refreshUserList() {
         const users = await response.json();
         const container = document.getElementById('userListContainer');
         container.innerHTML = '';
-        
         users.forEach(user => {
             const row = document.createElement('div');
             row.className = 'user-list-item';
             if (currentEditUser && currentEditUser.username === user.username) row.classList.add('active');
-            
-            if (currentUser.role === 'admin' && user.role !== 'employee' && user.role !== 'operator') {
-                return; 
-            }
+            if (currentUser.role === 'admin' && user.role !== 'employee' && user.role !== 'operator') return; 
 
             let roleName = getRoleName(user.role);
             let color = user.role === 'super_admin' ? '#ff4d4f' : (user.role === 'admin' ? '#faad14' : '#52c41a');
             let displayName = user.name ? user.name : user.username;
-            
             row.innerHTML = `<div style="display:flex; justify-content:space-between; align-items:center;">
                 <span style="font-size: 15px; font-weight: bold; color: #333;">${displayName} <span style="font-size:12px;color:#999;font-weight:normal;">(${user.username})</span></span>
                 <span style="font-size: 12px; background: ${color}20; color: ${color}; padding: 2px 8px; border-radius: 12px; font-weight: bold;">${roleName}</span>
@@ -786,19 +737,15 @@ function prepareCreateUser() {
     document.querySelectorAll('.user-list-item').forEach(el => el.classList.remove('active'));
     document.getElementById('userDetailPanel').style.display = 'block';
     document.getElementById('detailTitle').innerText = "新建系统账户";
-    
     document.getElementById('detailUsername').value = '';
     document.getElementById('detailUsername').disabled = false;
     document.getElementById('detailName').value = '';
     document.getElementById('detailPassword').value = '';
-    
     document.getElementById('btnUpdatePwd').style.display = 'none';
     document.getElementById('btnDeleteUser').style.display = 'none';
     document.getElementById('btnSaveUser').style.display = 'inline-block';
-    
     document.getElementById('detailRole').style.display = 'inline-block';
     document.getElementById('detailRoleText').style.display = 'none';
-    
     renderPermissionTree([]);
 }
 
@@ -810,12 +757,10 @@ function loadUserDetail(user) {
     document.getElementById('userDetailPanel').style.display = 'block';
     let detailDisplayName = user.name ? user.name : user.username;
     document.getElementById('detailTitle').innerText = `配置用户：${detailDisplayName}`;
-    
     document.getElementById('detailUsername').value = user.username;
     document.getElementById('detailUsername').disabled = true; 
     document.getElementById('detailName').value = user.name || ''; 
     document.getElementById('detailPassword').value = user.password;
-    
     document.getElementById('btnUpdatePwd').style.display = 'inline-block';
     document.getElementById('btnSaveUser').style.display = 'inline-block';
     
@@ -837,10 +782,8 @@ function loadUserDetail(user) {
         roleText.style.display = 'none';
         roleSelect.value = (user.role === 'operator') ? 'employee' : user.role;
         document.getElementById('permissionsWrapper').style.display = 'block';
-        
         if (currentUser.role === 'admin') roleSelect.disabled = true;
         else roleSelect.disabled = false;
-        
         renderPermissionTree(user.permissions || []);
     }
 }
@@ -848,12 +791,8 @@ function loadUserDetail(user) {
 function renderPermissionTree(userPerms) {
     let treeHtml = '';
     const adminRestricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete'];
-
     PERMISSIONS_CONFIG.forEach(group => {
-        treeHtml += `<div class="perm-group">
-            <label><input type="checkbox" class="perm-parent" data-group="${group.group}" onchange="toggleGroupPerms(this)"> ${group.label}</label>
-            <div class="perm-children">`;
-
+        treeHtml += `<div class="perm-group"><label><input type="checkbox" class="perm-parent" data-group="${group.group}" onchange="toggleGroupPerms(this)"> ${group.label}</label><div class="perm-children">`;
         group.children.forEach(child => {
             let isChecked = userPerms.includes(child.key) ? 'checked' : '';
             let disabledStr = '';
@@ -864,10 +803,8 @@ function renderPermissionTree(userPerms) {
             }
             treeHtml += `<label class="${labelClass}"><input type="checkbox" class="perm-cb" value="${child.key}" data-group="${group.group}" onchange="checkParentPerm(this)" ${isChecked} ${disabledStr}> ${child.label}</label>`;
         });
-        
         treeHtml += `</div></div>`;
     });
-    
     document.getElementById('permTreeContainer').innerHTML = treeHtml;
     document.querySelectorAll('.perm-cb').forEach(cb => checkParentPerm(cb, false));
 }
@@ -893,26 +830,22 @@ function getSelectedPermissions() {
 
 async function saveUserData() {
     const n = document.getElementById('detailName').value.trim(); 
-
     if (!currentEditUser) {
         const u = document.getElementById('detailUsername').value.trim();
         const p = document.getElementById('detailPassword').value.trim();
         const r = document.getElementById('detailRole').value;
         if (!u || !p) return alert('账号密码不能为空！');
-        
         const payload = { username: u, name: n, password: p, role: r, permissions: getSelectedPermissions() };
         try {
             const res = await fetch(`${API_BASE}/users`, { method: 'POST', headers: getHeaders(), body: JSON.stringify(payload) });
-            if (res.ok) { window.location.reload(); } 
-            else alert('账号已存在或无权限！');
+            if (res.ok) { window.location.reload(); } else alert('账号已存在或无权限！');
         } catch(e) {}
     } else {
         const r = document.getElementById('detailRole').value;
         const payload = { name: n, permissions: getSelectedPermissions(), role: r }; 
         try {
             const res = await fetch(`${API_BASE}/users/${currentEditUser.username}/permissions`, { method: 'PUT', headers: getHeaders(), body: JSON.stringify(payload) });
-            if (res.ok) { window.location.reload(); } 
-            else alert('更新失败，权限不足');
+            if (res.ok) { window.location.reload(); } else alert('更新失败，权限不足');
         } catch(e) {}
     }
 }
@@ -949,12 +882,8 @@ function switchTab(index) {
   document.getElementById('tab-' + index).classList.add('active');
 
   currentTab = index;
-
-  if (index === 0 || index === 1 || index === 2) {
-      fetchOrders();
-  }
-
-  if (index === 2) { initExpandButtons(); }
+  if (index === 0 || index === 1 || index === 2) fetchOrders();
+  if (index === 2) initExpandButtons(); 
 }
 
 function toggleCard(btn) {
@@ -970,21 +899,14 @@ function autoFitText() {
         el.style.fontSize = '';
         const largeTexts = el.querySelectorAll('.text-red-large');
         largeTexts.forEach(c => c.style.fontSize = '');
-
         if (el.clientWidth === 0) return;
-
         let currentSize = parseFloat(window.getComputedStyle(el).fontSize);
-        let childrenDeltas = Array.from(largeTexts).map(c => {
-            return parseFloat(window.getComputedStyle(c).fontSize) - currentSize;
-        });
-
+        let childrenDeltas = Array.from(largeTexts).map(c => { return parseFloat(window.getComputedStyle(c).fontSize) - currentSize; });
         let iterations = 0; 
         while (el.scrollWidth > el.clientWidth && currentSize > 12 && iterations < 50) {
             currentSize -= 0.5;
             el.style.fontSize = currentSize + 'px';
-            largeTexts.forEach((c, index) => {
-                c.style.fontSize = (currentSize + childrenDeltas[index]) + 'px';
-            });
+            largeTexts.forEach((c, index) => { c.style.fontSize = (currentSize + childrenDeltas[index]) + 'px'; });
             iterations++;
         }
     });
@@ -1000,33 +922,22 @@ function initExpandButtons() {
   containers.forEach(container => {
     const title = container.querySelector('.shipped-title');
     const expandBtn = container.querySelector('.expand-list-text');
-
     if (title && expandBtn) {
       const isExpanded = title.classList.contains('expanded');
       title.classList.remove('expanded');
-
       if (title.scrollWidth > title.clientWidth) {
         expandBtn.style.display = 'block'; 
         if (isExpanded) {
           title.classList.add('expanded');
           expandBtn.textContent = '收起列表';
-        } else {
-          expandBtn.textContent = '展开列表';
-        }
-      } else {
-        expandBtn.style.display = 'none';
-      }
+        } else expandBtn.textContent = '展开列表';
+      } else expandBtn.style.display = 'none';
 
       if (!expandBtn.dataset.bound) {
         expandBtn.dataset.bound = "true";
         expandBtn.addEventListener('click', function() {
-          if (title.classList.contains('expanded')) {
-            title.classList.remove('expanded'); 
-            expandBtn.textContent = '展开列表';
-          } else {
-            title.classList.add('expanded'); 
-            expandBtn.textContent = '收起列表';
-          }
+          if (title.classList.contains('expanded')) { title.classList.remove('expanded'); expandBtn.textContent = '展开列表'; } 
+          else { title.classList.add('expanded'); expandBtn.textContent = '收起列表'; }
         });
       }
     }
@@ -1038,68 +949,36 @@ window.addEventListener('load', initExpandButtons);
 /* AI悬浮智能体拖拽、点击、全局失焦 */
 const fabMain = document.getElementById('fabMain');
 const fabContainer = document.getElementById('fabContainer');
-
-let isDragging = false;
-let hasDragged = false; 
-let isMouseDownOnFab = false; 
-let startX, startY, initialX, initialY;
+let isDragging = false, hasDragged = false, isMouseDownOnFab = false, startX, startY, initialX, initialY;
 
 function dragStart(e) {
-  if (e.type === 'touchstart') {
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-  } else {
-    startX = e.clientX;
-    startY = e.clientY;
-  }
-  
-  initialX = fabContainer.offsetLeft;
-  initialY = fabContainer.offsetTop;
-  
-  isDragging = true;
-  hasDragged = false;
-  isMouseDownOnFab = true; 
-  fabMain.style.transition = 'none'; 
+  if (e.type === 'touchstart') { startX = e.touches[0].clientX; startY = e.touches[0].clientY; } 
+  else { startX = e.clientX; startY = e.clientY; }
+  initialX = fabContainer.offsetLeft; initialY = fabContainer.offsetTop;
+  isDragging = true; hasDragged = false; isMouseDownOnFab = true; fabMain.style.transition = 'none'; 
 }
 
 function drag(e) {
   if (!isDragging) return;
-  
   let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
   let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-  
-  let dx = clientX - startX;
-  let dy = clientY - startY;
-
-  if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
-    hasDragged = true;
-  }
+  let dx = clientX - startX, dy = clientY - startY;
+  if (Math.abs(dx) > 5 || Math.abs(dy) > 5) hasDragged = true;
 
   if (hasDragged) {
     e.preventDefault(); 
-    
-    let newX = initialX + dx;
-    let newY = initialY + dy;
-    
-    const maxX = window.innerWidth - 60;
-    const maxY = window.innerHeight - 60;
-    
-    newX = Math.max(0, Math.min(newX, maxX));
-    newY = Math.max(0, Math.min(newY, maxY));
-
-    fabContainer.style.right = 'auto'; 
-    fabContainer.style.bottom = 'auto';
-    fabContainer.style.left = newX + 'px';
-    fabContainer.style.top = newY + 'px';
+    let newX = initialX + dx, newY = initialY + dy;
+    const maxX = window.innerWidth - 60, maxY = window.innerHeight - 60;
+    newX = Math.max(0, Math.min(newX, maxX)); newY = Math.max(0, Math.min(newY, maxY));
+    fabContainer.style.right = 'auto'; fabContainer.style.bottom = 'auto';
+    fabContainer.style.left = newX + 'px'; fabContainer.style.top = newY + 'px';
   }
 }
 
 function dragEnd(e) {
   if (!isMouseDownOnFab) return;
-
   isDragging = false;
   fabMain.style.transition = 'opacity 0.3s ease, transform 0.2s, background 0.4s, box-shadow 0.4s';
-  
   if (!hasDragged) {
     fabContainer.classList.toggle('active');
     document.getElementById('aiSpeechBubble').classList.remove('show');
@@ -1117,41 +996,39 @@ document.addEventListener('touchmove', drag, { passive: false });
 document.addEventListener('touchend', dragEnd);
 
 function closeFabMenuOnOutsideClick(e) {
-  if (fabContainer && fabContainer.classList.contains('active') && !fabContainer.contains(e.target)) {
-    fabContainer.classList.remove('active');
-  }
+  if (fabContainer && fabContainer.classList.contains('active') && !fabContainer.contains(e.target)) fabContainer.classList.remove('active');
 }
 document.addEventListener('mousedown', closeFabMenuOnOutsideClick);
 document.addEventListener('touchstart', closeFabMenuOnOutsideClick, { passive: true });
 
 const fabItemsList = document.querySelectorAll('.fab-item');
 fabItemsList.forEach(item => {
-  item.addEventListener('click', function() {
-    setTimeout(() => { fabContainer.classList.remove('active'); }, 100);
-  });
+  item.addEventListener('click', function() { setTimeout(() => { fabContainer.classList.remove('active'); }, 100); });
 });
 
-const aiPhrases = [
-  "主人，我叫小圆，是你的智能小助手~",
-  "主人，今天的订单都处理完了吗？",
-  "今天又有什么新订单呀？",
-  "需要我帮你查库存吗？",
-  "闲着也是闲着，看看数据吧！",
-  "随时准备接入 AI 大脑神经~",
-  "中固的产品最近卖得很火呢！",
-  "发呆中... 随时可以戳我哦"
-];
+const aiPhrases = ["主人，我叫小圆，是你的智能小助手~", "主人，今天的订单都处理完了吗？", "今天又有什么新订单呀？", "需要我帮你查库存吗？", "闲着也是闲着，看看数据吧！", "随时准备接入 AI 大脑神经~", "中固的产品最近卖得很火呢！", "发呆中... 随时可以戳我哦"];
 const speechBubble = document.getElementById('aiSpeechBubble');
 
 function triggerAiSpeech() {
   if (!fabContainer || !speechBubble) return;
   if (fabContainer.classList.contains('active') || isDragging) return;
   const randomPhrase = aiPhrases[Math.floor(Math.random() * aiPhrases.length)];
-  speechBubble.textContent = randomPhrase;
-  speechBubble.classList.add('show');
+  speechBubble.textContent = randomPhrase; speechBubble.classList.add('show');
   setTimeout(() => { speechBubble.classList.remove('show'); }, 4000);
 }
 setInterval(triggerAiSpeech, 30000);
+
+/* ========================================================
+ * 🖱️ 工业触屏/滑鼠滚轮横向映射控制
+ * ======================================================== */
+document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
+    container.addEventListener('wheel', function(e) {
+        if (e.deltaY !== 0) {
+            e.preventDefault(); 
+            this.scrollLeft += e.deltaY; 
+        }
+    }, { passive: false });
+});
 
 /* ========================================================
  * 🔄 系统初始化启动挂载点
@@ -1164,12 +1041,10 @@ window.onload = function() {
         renderUI();
         switchTab(0);
 
-        // 全局定时轮询：优化刷新逻辑
         setInterval(function() {
             const editModal = document.getElementById('editOrderModal');
             const shipModal = document.getElementById('shipOrderModal');
             
-            // 1. 如果处于翻面或任何操作弹窗状态，拦截刷新防打扰
             if (document.querySelector('.flipper.flipped') || 
                 document.getElementById('confirmModal').style.display === 'flex' ||
                 (shipModal && shipModal.style.display === 'flex') ||
@@ -1177,7 +1052,6 @@ window.onload = function() {
                 return;
             }
             
-            // 2. 🎯 核心修改：仅仅在【未完成订单】看板时，才执行 3 秒实时自动刷新！
             if (currentTab === 0) {
                 fetchOrders();
             }
