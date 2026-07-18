@@ -1,11 +1,10 @@
 /* ==============================================================
-   🌟 全局核心业务样式 (1080P 完美适配版)
+   🌟 主业务核心排版样式 (1080P 完美适配版)
    ============================================================== */
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #333; padding: 160px 60px 80px 60px; font-size: 18px; overflow-x: hidden; }
 
-/* ================= 导航栏样式 ================= */
 .nav-bar { position: fixed; top: 0; left: 0; width: 100%; z-index: 999; display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; white-space: nowrap; gap: 24px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 24px 60px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); align-items: center; }
 .nav-bar::-webkit-scrollbar { height: 6px; }
 .nav-bar::-webkit-scrollbar-track { background: transparent; }
@@ -13,11 +12,9 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .nav-item { font-size: 24px; font-weight: bold; padding: 16px 28px; cursor: pointer; border-radius: 10px; color: #666; transition: all 0.3s; flex-shrink: 0; }
 .nav-item.active { color: #1890ff; background-color: #e6f7ff; }
 
-/* 内容区基础容器 */
 .tab-pane { display: none; gap: 48px; align-items: flex-start; justify-content: flex-start; }
 .tab-pane.active { display: flex; }
 
-/* ================= 🎮 Switch 式横滑卡片画廊 ================= */
 #tab-0, #tab-1 { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; height: calc(100vh - 280px); align-items: stretch; padding-top: 15px; padding-bottom: 32px; gap: 64px; -ms-overflow-style: none; scrollbar-width: none; }
 #tab-0::-webkit-scrollbar, #tab-1::-webkit-scrollbar { display: none; }
 #tab-0 .flip-container, #tab-1 .completed-card { flex: 0 0 calc((100vw - 312px) / 4); min-width: 380px; max-width: none; height: 100%; }
@@ -36,35 +33,34 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .back .order-header { font-size: 15px; padding-bottom: 8px; margin-bottom: 12px; }
 .back .order-header strong { font-size: 16px; }
 
-/* 👇 产品列表布局（卡片死锁高度，内容在内部溢出滑动） 👇 */
+/* 核心防溢出设定，PC端严格在内部滚动 */
 .product-list { flex: 1 1 0; min-height: 0; padding-right: 2px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 16px; -ms-overflow-style: none; scrollbar-width: none; }
 .product-list::-webkit-scrollbar { display: none; }
 .front .product-list { overflow: hidden; }
-.back .product-list { overflow-y: auto; gap: 10px; }
+.back .product-list { overflow-y: auto; gap: 10px; scrollbar-width: none; }
+.back .product-list::-webkit-scrollbar { display: none; }
 
-.product-item { font-size: 24px; font-weight: bold; line-height: 1.5; transition: font-size 0.2s; }
+.product-item { font-size: 24px; font-weight: bold; line-height: 1.5; transition: font-size 0.2s ease; }
 .back .product-item { font-size: 18px; }
 .info-row { font-size: 18px; color: #666; line-height: 1.5; }
 .back .info-row { font-size: 15px; }
 .info-label { font-weight: bold; color: #333; }
 
-.text-red-large { color: #ff4d4f; font-size: 42px; font-weight: 900; font-family: Impact, Arial, sans-serif; margin: 0 6px; display: inline-block; letter-spacing: 1px; transition: font-size 0.2s; }
+.text-red-large { color: #ff4d4f; font-size: 42px; font-weight: 900; font-family: Impact, Arial, sans-serif; margin: 0 6px; display: inline-block; letter-spacing: 1px; transition: font-size 0.2s ease; }
 .back .text-red-large { font-size: 28px; }
 .auto-fit-text { width: 100%; white-space: nowrap; overflow: hidden; }
 .text-red { color: #ff4d4f; }
 .text-bold { font-weight: bold; font-size: 18px; }
 .back .text-bold { font-size: 15px; }
 
-/* 标签备注直接融入排版 */
-.tags-wrapper { flex-shrink: 0; }
+.tags-wrapper { flex-shrink: 0; margin-top: 16px; border-top: 1px dashed #f0f0f0; padding-top: 12px; width: 100%; }
 .tags-label { font-size: 16px; color: #888; margin-bottom: 6px; font-weight: bold; }
 .tags-container { display: flex; flex-wrap: wrap; gap: 8px; }
 .tag { font-size: 16px; padding: 6px 12px; border-radius: 6px; font-weight: bold; }
 .tag-blue { background-color: #e6f7ff; color: #1890ff; } .tag-cyan { background-color: #e6fffb; color: #13c2c2; } .tag-red { background-color: #fff1f0; color: #ff4d4f; } .tag-green { background-color: #f6ffed; color: #52c41a; }
 
-/* 🌟 下滑提示动画 */
-@keyframes scrollHintBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
-.scroll-down-hint { display: none; text-align: center; color: #ff4d4f; font-size: 15px; font-weight: bold; padding: 6px 0 0 0; animation: scrollHintBounce 1.5s infinite; text-shadow: 0 2px 10px rgba(255,77,79,0.15); flex-shrink: 0; }
+@keyframes hintBounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
+.scroll-down-hint { display: none; text-align: center; color: #ff4d4f; font-size: 15px; font-weight: bold; padding: 6px 0 0 0; animation: hintBounce 1.5s infinite; text-shadow: 0 2px 10px rgba(255,77,79,0.12); flex-shrink: 0; width: 100%; }
 
 .actions { display: flex; justify-content: center; gap: 16px; margin-top: auto; padding-top: 16px; border-top: 1px solid #f0f0f0; flex-shrink: 0; }
 .actions-back { display: flex; justify-content: space-between; gap: 6px; margin-top: auto; padding-top: 12px; border-top: 1px solid #f0f0f0; flex-shrink: 0; width: 100%; }
@@ -74,7 +70,6 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .btn:active { transform: scale(0.95); }
 .btn-primary { background-color: #1890ff; color: white; } .btn-danger { background-color: #ff4d4f; color: white; } .btn-success { background-color: #52c41a; color: white; } .btn-default { background-color: #f5f5f5; color: #555; border: 1px solid #d9d9d9; }
 
-/* ================= Tab 1: 已完成订单 ================= */
 .completed-card { background: #ffffff; border-radius: 24px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); padding: 28px 40px; display: flex; flex-direction: column; overflow: hidden; }
 .completed-card .product-list { overflow-y: auto; }
 .c-title { text-align: center; font-size: 34px; font-weight: 900; margin-bottom: 16px; color: #1A1A1A; letter-spacing: 1px; flex-shrink: 0; }
@@ -85,7 +80,6 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .c-btn:active { transform: scale(0.95); }
 .c-btn-outline { background: #fff; border: 1px solid #D0D7DE; color: #8C99A8; } .c-btn-blue { background: #1890ff; color: #fff; box-shadow: 0 4px 12px rgba(24,144,255,0.35); } .c-btn-pink { background: #E84C68; color: #fff; box-shadow: 0 4px 12px rgba(232,76,104,0.35); } .c-btn-green { background: #4CC478; color: #fff; box-shadow: 0 4px 12px rgba(76,196,120,0.35); }
 
-/* ================= Tab 2: 已出库订单网格 ================= */
 #tab-2 { flex-wrap: wrap; height: auto; overflow: visible; gap: 32px; }
 .shipped-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 32px; width: 100%; }
 .shipped-card { display: flex; background: #ffffff; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden; position: relative; border: 1px solid #ebedf0; transition: transform 0.2s, box-shadow 0.2s; }
@@ -105,8 +99,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .shipped-right { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; justify-content: center; background-color: #FAFAFA; }
 .s-sub-title { font-size: 13px; color: #8C99A8; text-align: center; font-weight: bold; margin-bottom: 6px; } .s-main-title { font-size: 20px; font-weight: bold; color: #222; text-align: center; margin-bottom: 16px; } .s-info-list { font-size: 14px; color: #666; line-height: 1.6; } .s-info-list div { margin-bottom: 4px; }
 
-/* ================= Tab 3: 原材料数据 ================= */
-#tab-3 { flex-wrap: wrap; height: auto; overflow: visible; }
+#tab-3 { flex-wrap: wrap; height: auto; overflow: visible; gap: 32px; }
 .timeline-container { display: flex; flex-direction: column; gap: 40px; width: 100%; }
 .timeline-group { display: flex; flex-direction: column; }
 .timeline-date { font-size: 26px; font-weight: 900; color: #111; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; }
@@ -119,20 +112,18 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .m-val-pink { color: #F47B8B; font-weight:bold; } .m-val-green { color: #61D081; font-weight:bold; } .m-val-blue { color: #5C91C5; font-weight:bold; }
 .m-note { font-size: 18px; } .m-note-label { color: #111; } .m-note-val { color: #111; font-weight: bold; }
 
-/* 📱 移动端绝对隔离 (解除所有高度锁死，恢复自然拉伸) */
+/* 📱 移动端绝对响应式解耦区域 (🌟 彻底移除破坏性代码，回归最初模样) */
 @media (max-width: 768px) {
   body { padding: 160px 16px 20px 16px; font-size: 15px; overflow-y: auto; overflow-x: hidden; }
   .nav-bar { flex-wrap: wrap; overflow: hidden; white-space: normal; padding: 12px 16px; gap: 12px; }
   .nav-item { font-size: 16px; padding: 12px 0; flex: 1 1 45%; text-align: center; }
   
-  #tab-0, #tab-1 { height: auto; flex-wrap: wrap; overflow: visible; padding-bottom: 0; }
+  #tab-0, #tab-1 { height: auto; flex-wrap: wrap; overflow: visible; padding-bottom: 0; gap: 24px; }
   #tab-0 .flip-container, #tab-1 .completed-card { flex: 1 1 100%; min-width: 100%; height: auto; }
   
-  /* 🌟 核心修复：彻底释放移动端的卡片高度限制 */
-  .flipper { height: auto; }
-  .order-card { height: auto; min-height: 100%; padding-bottom: 24px; }
-  .product-list { flex: 1 1 auto; min-height: auto; overflow: visible !important; }
-  .front .product-list, .back .product-list, .completed-card .product-list { overflow: visible !important; }
+  /* 仅让 product-list 解除高度锁死自然撑开，绝不能去修改 order-card 的 overflow！ */
+  .product-list { flex: 1 1 auto; min-height: auto; }
+  .front .product-list, .back .product-list, .completed-card .product-list { overflow: visible; }
   .scroll-down-hint { display: none !important; }
 
   .shipped-grid { grid-template-columns: 1fr; gap: 16px; }
@@ -142,7 +133,6 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
   .s-sub-title, .s-main-title { text-align: left; }
   .ribbon { top: 10px; right: -40px; padding: 4px 44px; font-size: 11px; }
   .shipped-title, .expand-list-text { margin-right: 65px; }
-
   .timeline-items { grid-template-columns: 1fr; }
   .material-card { flex-direction: column; align-items: flex-start; border-radius: 20px; padding: 24px; width: 100%; }
   .m-data-group { flex-direction: column; align-items: flex-start; gap: 16px; }

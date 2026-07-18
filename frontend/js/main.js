@@ -203,9 +203,6 @@ async function fetchOrders() {
             let typeName = o.type == 1 ? '绝缘订单' : '中固订单';
             let goodsLines = (o.goods_name || '').split('\n').filter(l => l.trim() !== '');
 
-            // ==========================================
-            // 🏭 未完成订单 (Tab 0)
-            // ==========================================
             if (currentTab === 0) {
                 let frontGoodsHtml = '';
                 goodsLines.forEach(line => {
@@ -220,7 +217,7 @@ async function fetchOrders() {
                 if (o.goods_quantity) tagsHtml += `<div class="tag tag-green">件数:${o.goods_quantity}</div>`;
 
                 let tagsHtmlStr = `
-                <div class="tags-wrapper" style="margin-top: 20px; border-top: 1px dashed #f0f0f0; padding-top: 12px;">
+                <div class="tags-wrapper">
                     <div class="tags-label">标签&备注</div>
                     <div class="tags-container">${tagsHtml}</div>
                 </div>`;
@@ -256,7 +253,7 @@ async function fetchOrders() {
                     <div class="order-card back">
                       <div class="order-title">${o.order_client || '未命名归属'}订单</div>
                       <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
-                      <div class="product-list" style="overflow-y: auto;">
+                      <div class="product-list">
                         <div class="info-row" style="display: flex; justify-content: space-between;">
                           <span>收货姓名：${o.receiver_name || '未填'}</span>
                           <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
@@ -279,9 +276,6 @@ async function fetchOrders() {
                   </div>
                 </div>`;
             } 
-            // ==========================================
-            // 🏭 已完成订单 (Tab 1)
-            // ==========================================
             else if (currentTab === 1) {
                 let cGoodsHtml = '';
                 goodsLines.forEach(line => {
@@ -304,7 +298,7 @@ async function fetchOrders() {
                     <span>${shortDate}</span>
                   </div>
                   
-                  <div class="product-list" style="gap: 10px; overflow-y: auto;">
+                  <div class="product-list">
                     <div class="info-row" style="display: flex; justify-content: space-between;">
                       <span>收货姓名：${o.receiver_name || '未填'}</span>
                       <span>联系电话：${isEmployee ? '***' : (o.receiver_phone || '未填')}</span>
@@ -334,11 +328,11 @@ async function fetchOrders() {
         
         targetContainer.innerHTML = html;
         
-        // 🚀 核心渲染后处理
+        // 🚀 核心渲染后处理，加长延迟确保 DOM 高度被浏览器计算完毕！
         setTimeout(() => {
             autoFitText();
             autoFitVerticalText();
-        }, 50);
+        }, 100);
 
     } catch (error) { console.error("数据拉取引擎异常", error); }
 }
@@ -704,12 +698,8 @@ function switchTab(index) {
 
   currentTab = index;
   
-  if (index === 0 || index === 1 || index === 2) {
-      fetchOrders();
-  } else if (index === 3) {
-      fetchMaterials();
-  }
-
+  if (index === 0 || index === 1 || index === 2) fetchOrders();
+  else if (index === 3) fetchMaterials();
   if (index === 2) initExpandButtons(); 
 }
 
@@ -721,9 +711,7 @@ function toggleCard(btn) {
   }
 }
 
-// ===============================================
-// 🎯 引擎 A：单行水平防挤压缩放
-// ===============================================
+// 🎯 横向单行抗挤压收缩
 function autoFitText() {
     document.querySelectorAll(`#tab-${currentTab} .auto-fit-text`).forEach(el => {
         el.style.fontSize = '';
@@ -742,53 +730,44 @@ function autoFitText() {
     });
 }
 
-// ===============================================
-// 🎯 引擎 B：全新全列表垂直智能缩放侦测！
-// ===============================================
+// 🎯 核心：智能垂直缩放！
 function autoFitVerticalText() {
-    // 💡 手机端由于取消了高度死锁，直接拉伸，所以禁用缩放和滚动
-    const isMobile = window.innerWidth <= 768;
+    if (window.innerWidth <= 768) return; // 手机端免除干预！
 
     document.querySelectorAll('.front .auto-scroll-target').forEach(list => {
-        // 重置样式，方便重新计算
-        list.style.gap = '16px';
         const items = list.querySelectorAll('.product-item');
         const reds = list.querySelectorAll('.text-red-large');
-        const hint = list.nextElementSibling; // scroll-down-hint
+        const hint = list.nextElementSibling; 
 
         let baseSize = 24; 
         let redSize = 42; 
         let gap = 16;
         
-        // 只有电脑端才根据行数起步缩小
-        if (!isMobile && items.length > 8) {
-            baseSize = 16;
-            redSize = 26;
-            gap = 6;
+        if (items.length > 8) {
+            baseSize = 16; redSize = 26; gap = 8;
         }
 
         list.style.gap = gap + 'px';
         items.forEach(el => el.style.fontSize = baseSize + 'px');
         reds.forEach(el => el.style.fontSize = redSize + 'px');
 
-        if (isMobile) {
-            if(hint && hint.classList.contains('scroll-down-hint')) hint.style.display = 'none';
-            return; // 手机端不需要智能压缩和滚动箭头
-        }
+        // 核心：强制重绘，获取最真实的渲染高度！
+        void list.offsetHeight; 
 
-        // 开始智能探测：如果总体高度被撑爆，就开始不断降级字号，最低降到 14px！
         let loop = 0;
-        while (list.scrollHeight > list.clientHeight && baseSize > 14 && loop < 15) {
+        while (list.scrollHeight > list.clientHeight && baseSize > 14 && loop < 10) {
             baseSize -= 1;
             redSize -= 1.5;
             gap = Math.max(4, gap - 1);
+            
             list.style.gap = gap + 'px';
             items.forEach(el => el.style.fontSize = baseSize + 'px');
             reds.forEach(el => el.style.fontSize = redSize + 'px');
+            
+            void list.offsetHeight; // 每次缩小强制刷新高度！
             loop++;
         }
 
-        // 极限缩小后依然放不下，暴露出向下滑动的箭头提示，交给 JS 引擎去滚动！
         if (list.scrollHeight > list.clientHeight + 5) {
             if(hint && hint.classList.contains('scroll-down-hint')) hint.style.display = 'block';
         } else {
@@ -852,23 +831,16 @@ document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
 const scrollStates = new WeakMap();
 
 function autoScrollEngine() {
-    // 💡 手机端禁用自动滚动引擎
     if (window.innerWidth <= 768) {
         requestAnimationFrame(autoScrollEngine);
         return;
     }
 
     document.querySelectorAll('.front .auto-scroll-target').forEach(list => {
-        // 如果内容高度超过盒子视口高度，意味着放不下，启动滚动
         if (list.scrollHeight > list.clientHeight + 5) {
             
             if (!scrollStates.has(list)) {
-                scrollStates.set(list, {
-                    pos: list.scrollTop, 
-                    dir: 0.3,            
-                    paused: false,
-                    userHover: false
-                });
+                scrollStates.set(list, { pos: list.scrollTop, dir: 0.2, paused: false, userHover: false });
                 
                 list.addEventListener('mouseenter', () => { let s = scrollStates.get(list); if(s) s.userHover = true; });
                 list.addEventListener('mouseleave', () => { let s = scrollStates.get(list); if(s) s.userHover = false; });
@@ -877,24 +849,18 @@ function autoScrollEngine() {
             }
             
             let state = scrollStates.get(list);
-
-            if (state.userHover) {
-                state.pos = list.scrollTop;
-                return;
-            }
+            if (state.userHover) { state.pos = list.scrollTop; return; }
 
             if (!state.paused) {
                 state.pos += state.dir;
                 list.scrollTop = state.pos; 
                 
                 if (Math.ceil(list.scrollTop) + list.clientHeight >= list.scrollHeight) {
-                    state.dir = -0.3; 
-                    state.paused = true;
+                    state.dir = -0.2; state.paused = true;
                     setTimeout(() => { if(scrollStates.has(list)) scrollStates.get(list).paused = false; }, 2500);
                 } 
                 else if (list.scrollTop <= 0 && state.dir < 0) {
-                    state.dir = 0.3; 
-                    state.paused = true;
+                    state.dir = 0.2; state.paused = true;
                     setTimeout(() => { if(scrollStates.has(list)) scrollStates.get(list).paused = false; }, 2500);
                 }
             }
@@ -926,17 +892,10 @@ window.onload = function() {
                 return;
             }
             
-            if (currentTab === 0) {
-                fetchOrders();
-            }
-            
-            if (typeof refreshUserList === 'function' && !document.getElementById('viewUserModal').classList.contains('hidden')) {
-                refreshUserList();
-            }
+            if (currentTab === 0) fetchOrders();
+            if (typeof refreshUserList === 'function' && !document.getElementById('viewUserModal').classList.contains('hidden')) refreshUserList();
             
         }, 3000); 
 
-    } else {
-        renderUI(); 
-    }
+    } else renderUI(); 
 };

@@ -1,6 +1,27 @@
 /* ========================================================
- * ⚙️ 用户控制台、老式系统弹窗与物理键盘 (独立模块)
+ * ⚙️ 用户控制台、基础系统弹窗与物理键盘 (独立模块)
  * ======================================================== */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); z-index: 100000; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-in-out; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal-content { background: #fff; border-radius: 20px; width: 420px; position: relative; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; display: flex; flex-direction: column; animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+@keyframes scaleUp { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-close { position: absolute; top: 24px; right: 24px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.modal-close svg { width: 18px; height: 18px; }
+.modal-header { padding: 30px 30px 20px; } .modal-title { font-size: 24px; font-weight: bold; color: #333; margin-bottom: 10px; } .modal-subtitle { font-size: 16px; color: #999; }
+.modal-body { padding: 20px 30px 40px; text-align: center; } .modal-product { font-size: 20px; color: #333; margin-bottom: 24px; line-height: 1.6; } .modal-product:last-child { margin-bottom: 0; }
+.modal-btn-confirm { width: 100%; background-color: #1890ff; color: #fff; border: none; padding: 20px 0; font-size: 20px; cursor: pointer; font-weight: bold; transition: background-color 0.2s; } .modal-btn-confirm:hover { background-color: #40a9ff; }
+
+.login-overlay { position: fixed; top:0; left:0; width:100vw; height:100vh; background-color: #EDF5FC; display: flex; justify-content: center; align-items: center; z-index: 99999; }
+.login-box { background: white; padding: 50px; border-radius: 16px; box-shadow: 0 4px 30px rgba(0,0,0,0.08); width: 100%; max-width: 420px; text-align: center; }
+.login-box h2 { margin-bottom: 32px; color: #1890ff; font-size: 28px; }
+.login-box input { width: 100%; padding: 16px; margin-bottom: 24px; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 16px; outline: none; }
+.form-item { margin-bottom: 20px; width: 100%; text-align: left; }
+.form-item label { display: block; margin-bottom: 8px; font-size: 16px; color: #555; font-weight: bold; }
+.form-item input, .form-item select, .form-item textarea { width: 100%; padding: 12px 16px; border: 1px solid #d9d9d9; border-radius: 6px; outline: none; font-size: 16px; font-family: inherit; }
+.textarea-tall { height: 120px; resize: vertical; }
+
+.hidden { display: none !important; }
+
 .old-modal-mask { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 100000; }
 .old-modal-box { background: #ffffff; border-radius: 16px; box-shadow: 0 10px 40px rgba(0,0,0,0.15); display: flex; flex-direction: column; overflow: hidden; max-height: 90vh; width: 95%; max-width: 700px; animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
 .old-modal-header { padding: 20px 32px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; font-size: 20px; font-weight: bold; background: #fafafa; }
@@ -9,15 +30,12 @@
 .old-close-x { cursor: pointer; font-size: 28px; color: #999; line-height: 1; transition: color 0.2s; }
 .old-close-x:hover { color: #ff4d4f; }
 
-/* 用户管理面板 */
 .user-manage-container { display: flex; gap: 24px; min-height: 450px; }
 .user-list-panel { width: 35%; border-right: 1px solid #eee; padding-right: 20px; overflow-y: auto; max-height: 500px; }
 .user-detail-panel { width: 65%; padding-left: 10px; }
 .user-list-item { padding: 16px; border: 1px solid #eee; border-radius: 8px; margin-bottom: 12px; cursor: pointer; transition: 0.2s; background: #fff; }
 .user-list-item:hover { border-color: #1890ff; background: #f0f7ff; }
 .user-list-item.active { border-color: #1890ff; background: #e6f7ff; box-shadow: 0 2px 8px rgba(24,144,255,0.1); }
-
-/* 权限分配树 */
 .perm-tree { margin-top: 20px; border: 1px solid #eee; border-radius: 8px; padding: 20px; background: #f9f9f9; max-height: 300px; overflow-y: auto; }
 .perm-group { margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px dashed #e4e7ed; }
 .perm-group:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
@@ -26,7 +44,6 @@
 .perm-children label { font-size: 15px; color: #666; display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .perm-children label.disabled-perm { color: #ccc; cursor: not-allowed; }
 
-/* 物理触屏键盘 */
 .upload-inputs-area { flex: 1; display: flex; flex-direction: column; justify-content: center; margin-bottom: 20px;}
 .touch-keyboard-panel { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; background: #f5f5f5; padding: 16px; border-radius: 8px; border: 1px solid #d9d9d9; margin-top: 16px; }
 .key-btn { height: 56px; background: #ffffff; border: 1px solid #d9d9d9; border-radius: 8px; font-size: 24px; font-weight: bold; color: #333; display: flex; justify-content: center; align-items: center; cursor: pointer; user-select: none; }
@@ -35,7 +52,6 @@
 .keyboard-target { cursor: pointer; transition: all 0.3s; }
 .keyboard-target.active-target { border-color: #1890ff !important; box-shadow: 0 0 10px rgba(24,144,255,0.3); background: #e6f7ff !important; }
 
-/* 移动端适配 */
 @media (max-width: 768px) {
   .user-manage-container { flex-direction: column; }
   .user-list-panel { width: 100%; border-right: none; border-bottom: 1px solid #eee; padding-right: 0; padding-bottom: 20px; margin-bottom: 20px; max-height: 250px; }
