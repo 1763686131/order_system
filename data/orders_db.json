@@ -39,6 +39,46 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": ""
+        },
+        {
+            "id": 14,
+            "title": "固特公司\n收件地址：温州市洞头区南塘小学   徐志博  电话：13588977059。\n中固支装胶30支 胶枪2把",
+            "status": "shipped",
+            "type": 0,
+            "date": "2026-07-18 01:56",
+            "completed_date": "2026-07-18 10:06",
+            "shipped_date": "2026-07-18 10:06",
+            "logistics_no": "195456464646",
+            "order_client": "固特公司",
+            "receiver_name": "徐志博",
+            "receiver_phone": "13588977059",
+            "receiver_address": "温州市洞头区南塘小学",
+            "goods_name": "中固支装胶30支 胶枪2把",
+            "goods_weight": "30kg",
+            "goods_quantity": "1件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": ""
+        },
+        {
+            "id": 15,
+            "title": "固特公司 \n收件地址：温州市洞头区南塘小学  徐志博 电话：13588977059。\n中固支装胶30支 \n胶枪2把",
+            "status": "pending",
+            "type": 0,
+            "date": "2026-07-18 02:07",
+            "completed_date": "",
+            "shipped_date": "",
+            "logistics_no": "",
+            "order_client": "固特公司",
+            "receiver_name": "徐志博",
+            "receiver_phone": "13588977059",
+            "receiver_address": "温州市洞头区南塘小学",
+            "goods_name": "中固支装胶30支\n胶枪2把",
+            "goods_weight": "50kg",
+            "goods_quantity": "2件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": ""
         }
     ]
 }
