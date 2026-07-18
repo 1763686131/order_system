@@ -37,13 +37,20 @@ document.addEventListener('DOMContentLoaded', () => {
         fabMain.style.transition = 'none'; 
     }
 
-    // 2. 拖拽进行中
+    // 2. 拖拽中
     function drag(e) {
-        if (!isDragging) return;
+        if (!isDragging || !isMouseDownOnFab) return;
+        e.preventDefault(); 
         
-        let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
-        let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
-        
+        let clientX, clientY;
+        if (e.type === 'touchmove') {
+            clientX = e.touches[0].clientX;
+            clientY = e.touches[0].clientY;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
         let dx = clientX - startX;
         let dy = clientY - startY;
 
@@ -52,45 +59,65 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (hasDragged) {
-            e.preventDefault(); 
-            
             let newX = initialX + dx;
             let newY = initialY + dy;
             
-            const maxX = window.innerWidth - 60;
-            const maxY = window.innerHeight - 60;
+            let maxX = window.innerWidth - fabContainer.offsetWidth;
+            let maxY = window.innerHeight - fabContainer.offsetHeight;
             
             newX = Math.max(0, Math.min(newX, maxX));
             newY = Math.max(0, Math.min(newY, maxY));
 
-            fabContainer.style.right = 'auto'; 
-            fabContainer.style.bottom = 'auto';
             fabContainer.style.left = newX + 'px';
             fabContainer.style.top = newY + 'px';
+            fabContainer.style.right = 'auto';
+            fabContainer.style.bottom = 'auto';
         }
     }
 
-    // 3. 拖拽结束 & 点击判定
+    // 3. 拖拽结束
     function dragEnd(e) {
-        if (!isMouseDownOnFab) return;
-
+        if (!isDragging) return;
         isDragging = false;
-        fabMain.style.transition = 'opacity 0.3s ease, transform 0.2s, background 0.4s, box-shadow 0.4s';
-        
-        if (!hasDragged) {
-            // 如果没有拖拽，说明是点击事件，切换菜单显示状态
-            fabContainer.classList.toggle('active');
-            if(speechBubble) speechBubble.classList.remove('show');
-        }
-        isMouseDownOnFab = false; 
+        isMouseDownOnFab = false;
+        fabMain.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
     }
 
-    // 事件绑定
+    // 监听 PC 端点击事件展开/收起菜单
+    fabMain.addEventListener('click', function(e) {
+        if (!hasDragged) {
+            fabContainer.classList.toggle('active');
+        }
+    });
+
+    // ==========================================================
+    // 🔥 新增：移动端专属的“双击”检测逻辑 (其他代码全是你原本的)
+    // ==========================================================
+    let lastTapTime = 0;
+    fabMain.addEventListener('touchend', function(e) {
+        if (hasDragged) return; // 如果是拖拽操作，坚决不触发双击
+        
+        const currentTime = new Date().getTime();
+        const tapLength = currentTime - lastTapTime;
+        
+        // 两次轻触间隔在 350 毫秒以内，判定为双击！
+        if (tapLength > 0 && tapLength < 350) {
+            fabContainer.classList.toggle('active');
+            e.preventDefault(); // 阻止手机浏览器弹出乱七八糟的默认行为
+            lastTapTime = 0;    // 触发后重置时间
+        } else {
+            lastTapTime = currentTime; // 记录第一次点击的时间
+        }
+    });
+    // ==========================================================
+
+    // 监听PC端鼠标拖拽
     fabMain.addEventListener('mousedown', dragStart);
-    fabMain.addEventListener('touchstart', dragStart, { passive: false });
-    
     document.addEventListener('mousemove', drag, { passive: false });
     document.addEventListener('mouseup', dragEnd);
+
+    // 监听移动端触摸拖拽
+    fabMain.addEventListener('touchstart', dragStart, { passive: false });
     document.addEventListener('touchmove', drag, { passive: false });
     document.addEventListener('touchend', dragEnd);
 
@@ -123,13 +150,12 @@ document.addEventListener('DOMContentLoaded', () => {
     ];
 
     function triggerAiSpeech() {
-        if (!speechBubble) return;
-        if (fabContainer.classList.contains('active') || isDragging) return;
+        if (hasDragged || isMouseDownOnFab) return;
         const randomPhrase = aiPhrases[Math.floor(Math.random() * aiPhrases.length)];
-        speechBubble.textContent = randomPhrase; 
+        speechBubble.textContent = randomPhrase;
         speechBubble.classList.add('show');
         setTimeout(() => { speechBubble.classList.remove('show'); }, 4000);
     }
-    
+
     setInterval(triggerAiSpeech, 30000);
 });
