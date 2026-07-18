@@ -150,3 +150,79 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
   .m-data-group { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
   .m-divider { width: 100% !important; height: 1px !important; margin: 20px 0 !important; }
 }
+
+/* ========================================================
+ * 🔒 电脑端 1920 物理锁（横向滑动轨道 + 终极末尾留白补丁）
+ * ======================================================== */
+@media screen and (min-width: 769px) {
+    body {
+        min-width: 1920px !important;
+        overflow: hidden !important; /* 彻底锁死整个网页的外层滚动条，把滑动权限交给内部轨道 */
+    }
+
+    /* flex 横向轨道布局，绝不换行 (nowrap) */
+    #tab-0.active, #tab-1.active {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important; /* 开启横向滚动 */
+        overflow-y: hidden !important;
+        gap: 30px !important;
+        width: 100vw !important; /* 占满屏幕宽度 */
+        padding: 0 35px 20px 35px !important; 
+        box-sizing: border-box !important;
+        height: calc(100vh - 260px) !important;
+        align-items: stretch !important;
+        /* 隐藏原生滚动条，让滑动看起来更像原生 App */
+        scrollbar-width: none; 
+        -ms-overflow-style: none;
+    }
+    
+    #tab-0.active::-webkit-scrollbar, #tab-1.active::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* 🔥 终极必杀技：秒杀最右边卡片撞墙、贴窗框的浏览器Bug！
+       在横向轨道的最后面，强行挂载一个 35px 宽度的隐形“空气卡片”。
+       这样不管你加多少张卡片，滑到最右边时，都会稳稳地留出 35px 的呼吸边距，与最左边完全对称！ */
+    #tab-0.active::after, #tab-1.active::after {
+        content: "" !important;
+        display: block !important;
+        flex: 0 0 35px !important; /* 精准卡死 35px 隐形右边距 */
+        height: 100% !important;
+        pointer-events: none !important; /* 隐形状态，不干扰任何鼠标点击事件 */
+    }
+
+    /* 已出库页面 (Tab 2) 保持网格排列，因为这是历史记录，适合往下翻 */
+    .shipped-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, 440px) !important;
+        gap: 30px !important;
+        width: 1850px !important;
+        margin: 0 auto !important;
+    }
+
+    /* 严格锁死单张卡片的宽度为 440px，在横向轨道里绝对不被挤压 */
+    .flip-container, .completed-card {
+        width: 440px !important;
+        flex: 0 0 440px !important; /* 第一张到第N张，宽度永远是440px */
+        height: 100% !important; 
+        min-height: 520px !important; 
+    }
+
+    .order-card {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    /* 内部缩放引擎空间，保持完美弹性 */
+    .product-list {
+        flex: 1 1 0 !important; 
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: hidden !important; 
+    }
+
+    .shipped-card {
+        width: 440px !important;
+    }
+}

@@ -17,27 +17,26 @@ function getCurrentDateTime() {
     return `${Y}-${M}-${D} ${h}:${m}`;
 }
 
-// 3. 智能 12 字符视觉权重换行引擎 (中文字符算1，英文数字算0.5)
-function wrapText12(text) {
-    if (!text) return '';
-    let res = '';
+// 3. 智能单行文本动态缩放比例引擎 (横向防挤压)
+function calculateTextScale(text, targetLen = 15) {
+    if (!text) return 1;
     let currentLen = 0;
     for(let i = 0; i < text.length; i++) {
-        let char = text[i];
-        res += char;
-        
-        if (char.match(/[^\x00-\xff]/)) {
-            currentLen += 1;
+        // 🔥 核心修复：精准正则表达式捕获！
+        // 只有纯数字和纯英文字母算 0.55 宽度。汉字、+-*/、标点符号、空格统统算 1 宽度！
+        if (/[a-zA-Z0-9]/.test(text[i])) {
+            currentLen += 0.55;
         } else {
-            currentLen += 0.5;
-        }
-        
-        if (currentLen >= 12 && i !== text.length - 1) {
-            res += '\n';
-            currentLen = 0;
+            currentLen += 1;
         }
     }
-    return res;
+    if (currentLen === 0) return 1;
+    
+    // 计算缩放比例：基准长度 / 实际长度
+    let scale = targetLen / currentLen;
+    
+    // 限制缩放范围：最大放大 1.4 倍（防止字太少变得像巨无霸），最小缩小 0.4 倍（保证长文本也能在一行显示全）
+    return Math.min(Math.max(scale, 0.4), 1.4);
 }
 
 // 4. 兼容性剪贴板复制兜底工具

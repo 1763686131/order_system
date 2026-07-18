@@ -205,8 +205,9 @@ async function fetchOrders() {
             if (isMobile) {
                 chunks = [goodsLines];
             } else {
-                for (let i = 0; i < goodsLines.length; i += 8) {
-                    chunks.push(goodsLines.slice(i, i + 8));
+                // 【核心改动】：容量解禁！从 8 行提升到 12 行再拆分新卡片！
+                for (let i = 0; i < goodsLines.length; i += 12) {
+                    chunks.push(goodsLines.slice(i, i + 12));
                 }
                 if (chunks.length === 0) chunks.push([]);
             }
@@ -216,16 +217,15 @@ async function fetchOrders() {
                 let isSplit = chunks.length > 1;
                 let partLetter = String.fromCharCode(65 + chunkIndex); 
 
-                let compactClass = (!isMobile && chunkLines.length >= 6) ? 'compact' : '';
+                let compactClass = (!isMobile && chunkLines.length >= 8) ? 'compact' : '';
 
                 if (currentTab === 0) {
                     let frontGoodsHtml = '';
                     chunkLines.forEach(line => {
-                        let wrapLine = wrapText12(line);
-                        let formattedLine = wrapLine.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
-                        formattedLine = formattedLine.replace(/\n/g, '<br>');
-                        
-                        frontGoodsHtml += `<div class="product-item">${formattedLine}</div>`;
+                        let lineScale = calculateTextScale(line, 15);
+                        let renderScale = Math.min(lineScale, 1.15); 
+                        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large" style="font-size: calc(var(--red-size, 42px) * ${renderScale});">$1</span>`);
+                        frontGoodsHtml += `<div class="product-item" style="font-size: calc(var(--base-size, 24px) * ${renderScale}); white-space: nowrap; height: calc(var(--red-size, 42px) * 1.1); display: flex; align-items: center;">${formattedLine}</div>`;
                     });
 
                     let indicatorHtml = (!isMobile && isSplit) ? `<div class="card-part-indicator">${partLetter}</div>` : '';
@@ -254,8 +254,9 @@ async function fetchOrders() {
                         if (hasPerm('pending.view_detail')) frontActs += `<button class="btn btn-default" onclick="toggleCard(this)">详情页面</button>`;
 
                         goodsLines.forEach(line => {
-                            let wrapLine = wrapText12(line).replace(/\n/g, '<br>');
-                            backGoodsHtml += `<div class="info-row text-red text-bold" style="white-space: normal; word-break: break-all;">${wrapLine}</div>`;
+                            let lineScale = calculateTextScale(line, 15);
+                            let renderScale = Math.min(lineScale, 1.15);
+                            backGoodsHtml += `<div class="info-row text-red text-bold" style="font-size: calc(15px * ${renderScale}); white-space: nowrap; height: 24px; display: flex; align-items: center;">${line}</div>`;
                         });
 
                         if (hasPerm('pending.view_detail')) backActs += `<button class="btn btn-default" onclick="toggleCard(this)">⇦返回</button>`;
@@ -311,8 +312,9 @@ async function fetchOrders() {
                 else if (currentTab === 1) {
                     let frontGoodsHtml = '';
                     chunkLines.forEach(line => { 
-                        let wrapLine = wrapText12(line).replace(/\n/g, '<br>');
-                        frontGoodsHtml += `<div class="info-row text-red text-bold" style="flex-shrink: 0;">${wrapLine}</div>`; 
+                        let lineScale = calculateTextScale(line, 15);
+                        let renderScale = Math.min(lineScale, 1.15);
+                        frontGoodsHtml += `<div class="info-row text-red text-bold" style="font-size: calc(var(--base-size, 24px) * ${renderScale}); white-space: nowrap; flex-shrink: 0; height: calc(var(--base-size, 24px) * 1.4); display: flex; align-items: center;">${line}</div>`; 
                     });
                     let indicatorHtml = (!isMobile && isSplit) ? `<div class="card-part-indicator" style="font-size:70px;">${partLetter}</div>` : '';
 
@@ -456,10 +458,10 @@ function triggerStatusConfirm(orderId, targetStatus) {
     let goodsLines = (order.goods_name || '').split('\n').filter(l => l.trim() !== '');
     let goodsHtml = '';
     goodsLines.forEach(line => {
-        let wrapLine = wrapText12(line);
-        let formattedLine = wrapLine.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>');
-        formattedLine = formattedLine.replace(/\n/g, '<br>');
-        goodsHtml += `<div class="modal-product">${formattedLine}</div>`;
+        let lineScale = calculateTextScale(line, 15);
+        let renderScale = Math.min(lineScale, 1.15);
+        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large" style="font-size: calc(24px * ${renderScale});">$1</span>`);
+        goodsHtml += `<div class="modal-product" style="font-size: calc(16px * ${renderScale}); white-space: nowrap; height: 32px; display: flex; align-items: center;">${formattedLine}</div>`;
     });
     if (goodsHtml === '') goodsHtml = '<div class="modal-product" style="color:#999;">无详细货物内容</div>';
     
@@ -682,16 +684,13 @@ function autoFitVerticalText() {
     if (window.innerWidth <= 768) return; 
 
     document.querySelectorAll('.front .product-list, .completed-card .product-list').forEach(list => {
-        const items = list.querySelectorAll('.product-item, .info-row.text-red');
-        const reds = list.querySelectorAll('.text-red-large');
-
         let baseSize = list.classList.contains('compact') ? 16 : 24; 
         let redSize = list.classList.contains('compact') ? 26 : 42; 
         let gap = list.classList.contains('compact') ? 8 : 16;
 
         list.style.gap = gap + 'px';
-        items.forEach(el => el.style.fontSize = baseSize + 'px');
-        reds.forEach(el => el.style.fontSize = redSize + 'px');
+        list.style.setProperty('--base-size', baseSize + 'px');
+        list.style.setProperty('--red-size', redSize + 'px');
 
         void list.offsetHeight; 
 
@@ -702,8 +701,8 @@ function autoFitVerticalText() {
             gap = Math.max(4, gap - 1);
             
             list.style.gap = gap + 'px';
-            items.forEach(el => el.style.fontSize = baseSize + 'px');
-            reds.forEach(el => el.style.fontSize = redSize + 'px');
+            list.style.setProperty('--base-size', baseSize + 'px');
+            list.style.setProperty('--red-size', redSize + 'px');
             
             void list.offsetHeight; 
             loop++;
