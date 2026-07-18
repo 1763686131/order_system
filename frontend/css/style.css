@@ -24,7 +24,7 @@ body {
 .tab-pane { display: none; gap: 48px; align-items: flex-start; justify-content: flex-start; }
 .tab-pane.active { display: flex; }
 
-/* ================= 🎮 Switch 式横滑卡片画廊 (已恢复覆盖 Tab-0 与 Tab-1) ================= */
+/* ================= 🎮 Switch 式横滑卡片画廊 ================= */
 #tab-0, #tab-1 { 
   flex-wrap: nowrap; 
   overflow-x: auto; 
@@ -56,10 +56,41 @@ body {
 .back .order-header { font-size: 15px; padding-bottom: 8px; margin-bottom: 12px; }
 .back .order-header strong { font-size: 16px; }
 
-.product-list { flex-grow: 1; overflow-y: auto; padding-right: 8px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 16px; }
+/* 👇 还原回安全的默认属性，移除导致高度塌陷的 BUG 代码 👇 */
+.product-list { 
+  flex-grow: 1; 
+  overflow-y: auto; 
+  padding-right: 8px; 
+  margin-bottom: 12px; 
+  display: flex; 
+  flex-direction: column; 
+  gap: 16px; 
+}
 .back .product-list { gap: 10px; }
 .product-list::-webkit-scrollbar { width: 6px; }
 .product-list::-webkit-scrollbar-thumb { background: #dcdcdc; border-radius: 4px; }
+
+/* 🌟 JS 智能排版引擎调用的紧凑类（缩小尺寸应对超长行数） */
+.product-list.compact { gap: 6px; }
+.product-list.compact .product-item { font-size: 19px; }
+.product-list.compact .text-red-large { font-size: 32px; }
+
+/* 🌟 超 10 行时的跳动提示动画 */
+@keyframes scrollHintBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(6px); }
+}
+.scroll-down-hint {
+    text-align: center;
+    color: #ff4d4f;
+    font-size: 16px;
+    font-weight: bold;
+    padding: 12px 0 4px 0;
+    margin-top: auto;
+    animation: scrollHintBounce 1.5s infinite;
+    flex-shrink: 0;
+    text-shadow: 0 2px 10px rgba(255,77,79,0.15);
+}
 
 .product-item { font-size: 24px; font-weight: bold; line-height: 1.5; }
 .back .product-item { font-size: 18px; }
@@ -90,7 +121,7 @@ body {
 .btn:active { transform: scale(0.95); }
 .btn-primary { background-color: #1890ff; color: white; } .btn-danger { background-color: #ff4d4f; color: white; } .btn-success { background-color: #52c41a; color: white; } .btn-default { background-color: #f5f5f5; color: #555; border: 1px solid #d9d9d9; }
 
-/* ================= Tab 1: 已完成订单 (横向比例还原) ================= */
+/* ================= Tab 1: 已完成订单 ================= */
 .completed-card { 
   background: #ffffff; 
   border-radius: 24px; 
@@ -103,11 +134,6 @@ body {
 .c-title { text-align: center; font-size: 34px; font-weight: 900; margin-bottom: 16px; color: #1A1A1A; letter-spacing: 1px; flex-shrink: 0; }
 .c-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; }
 .c-header-left strong { color: #333; font-size: 20px; margin-right: 8px; } .c-header-left span { color: #8C99A8; font-size: 18px; } .c-header-right { color: #8C99A8; font-size: 16px; }
-.c-info-box { border: 1px solid #E4E9EC; border-radius: 14px; padding: 24px; font-size: 18px; color: #333; line-height: 1.6; background-color: #FCFCFD; flex-grow: 1; overflow-y: auto; }
-.c-info-box::-webkit-scrollbar { width: 6px; } .c-info-box::-webkit-scrollbar-thumb { background: #dcdcdc; border-radius: 4px; }
-.c-row-split { display: flex; justify-content: space-between; margin-bottom: 12px; } .c-row { margin-bottom: 12px; } .c-row:last-child { margin-bottom: 0; } .c-spacing { margin-bottom: 16px; }
-.c-text-grey { color: #666; } .c-label { font-weight: bold; color: #111; }
-.c-text-red { color: #E83E5C; } .c-text-orange { color: #FF8C00; } .c-text-pink { color: #E84C68; }
 .c-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 24px; border-top: 1px solid #F0F2F5; flex-shrink: 0; }
 .c-btn { flex: 1; padding: 12px 0; border-radius: 12px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; text-align: center; white-space: nowrap; transition: transform 0.1s; }
 .c-btn:active { transform: scale(0.95); }
@@ -147,31 +173,6 @@ body {
 .m-val-pink { color: #F47B8B; font-weight:bold; } .m-val-green { color: #61D081; font-weight:bold; } .m-val-blue { color: #5C91C5; font-weight:bold; }
 .m-divider { width: 1px; height: 30px; background-color: #E4E9EC; margin: 0 30px; }
 .m-note { font-size: 18px; } .m-note-label { color: #111; } .m-note-val { color: #111; font-weight: bold; }
-
-/* ================= NOMI风动态AI悬浮智能体 ================= */
-.fab-container { position: fixed; right: 40px; bottom: 40px; width: 70px; height: 70px; z-index: 10000; }
-.fab-menu { position: absolute; bottom: 85px; left: 50%; transform: translateX(-50%) translateY(20px) scale(0.5); transform-origin: bottom center; display: flex; flex-direction: column; gap: 12px; align-items: center; width: max-content; opacity: 0; visibility: hidden; pointer-events: none; transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.fab-container.active .fab-menu { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0) scale(1); pointer-events: auto; }
-.fab-item { background: #ffffff; padding: 12px 24px; border-radius: 24px; color: #1890ff; font-size: 16px; font-weight: bold; box-shadow: 0 4px 16px rgba(0,0,0,0.15); cursor: pointer; white-space: nowrap; transition: all 0.2s; border: 1px solid #e6f7ff; }
-.fab-item:hover { background: #e6f7ff; transform: translateY(-2px); }
-.ai-speech-bubble { position: absolute; right: 85px; bottom: 12px; background: #ffffff; padding: 16px 20px; border-radius: 16px 16px 0 16px; box-shadow: 0 6px 20px rgba(0,0,0,0.1); font-size: 15px; font-weight: bold; color: #1A4B84; white-space: nowrap; pointer-events: none; opacity: 0; visibility: hidden; transform: translateX(15px); transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.ai-speech-bubble::after { content: ''; position: absolute; right: -8px; bottom: 0; width: 0; height: 0; border-bottom: 12px solid #ffffff; border-right: 12px solid transparent; }
-.ai-speech-bubble.show { opacity: 1; visibility: visible; transform: translateX(0); }
-.ai-face { width: 100%; height: 100%; background: radial-gradient(circle at 30% 30%, #2a3b5c, #0f172a); border-radius: 50%; box-shadow: inset -4px -4px 10px rgba(0,0,0,0.6), inset 2px 2px 8px rgba(255,255,255,0.2), 0 6px 20px rgba(24, 144, 255, 0.4); position: relative; cursor: grab; user-select: none; overflow: hidden; opacity: 0.5; transition: opacity 0.3s ease, transform 0.2s, background 0.4s, box-shadow 0.4s; }
-.fab-container.active .ai-face, .ai-face:hover { opacity: 1; }
-.fab-container.active .ai-face { background: radial-gradient(circle at 30% 30%, #5c2a33, #1f0f15); box-shadow: inset -4px -4px 10px rgba(0,0,0,0.6), inset 2px 2px 8px rgba(255,255,255,0.2), 0 6px 25px rgba(255, 77, 79, 0.5); }
-.ai-face:active { cursor: grabbing; transform: scale(0.9); }
-.face-inner { position: absolute; top: 0; left: 0; width: 100%; height: 100%; animation: floatFace 4s ease-in-out infinite; }
-@keyframes floatFace { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
-.eye { position: absolute; top: 22px; width: 10px; height: 14px; background: #00e5ff; border-radius: 6px; animation: blink 4s infinite; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.eye.left { left: 18px; } .eye.right { right: 18px; }
-@keyframes blink { 0%, 94%, 98%, 100% { transform: scaleY(1); } 96% { transform: scaleY(0.1); } }
-.mouth { position: absolute; top: 42px; left: 24px; width: 22px; height: 10px; border: 3px solid #00e5ff; border-top: none; border-radius: 0 0 20px 20px; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-.fab-container.active .face-inner { animation: jitter 0.15s infinite; }
-.fab-container.active .eye { width: 14px; height: 14px; top: 20px; background: transparent; border: 3px solid #ff4d4f; border-radius: 50%; animation: none; }
-.fab-container.active .eye.left { left: 16px; } .fab-container.active .eye.right { right: 16px; }
-.fab-container.active .mouth { width: 16px; height: 18px; top: 42px; left: 27px; border: 3px solid #ff4d4f; border-radius: 50%; }
-@keyframes jitter { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-1px, 1px); } 50% { transform: translate(1px, -1px); } 75% { transform: translate(-1px, -1px); } }
 
 /* ================= 各种弹窗组件 ================= */
 .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.4); z-index: 100000; justify-content: center; align-items: center; animation: fadeIn 0.2s ease-in-out; }

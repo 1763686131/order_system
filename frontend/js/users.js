@@ -4,26 +4,47 @@
  * 负责用户列表拉取、新增用户、权限分配树渲染以及密码修改
  */
 
+// 🎯 全新细粒度权限配置树（映射每一个前端功能按钮）
 const PERMISSIONS_CONFIG = [
     {
-        group: 'pending_order', label: '未完成订单权限',
+        group: 'pending_order', label: '未完成订单 (车间看板)',
         children: [
-            { key: 'pending.add', label: '操作：发布新订单' }, { key: 'pending.complete', label: '操作：完成业务' },
-            { key: 'pending.copy', label: '操作：复制物流' }, { key: 'pending.edit', label: '操作：修改订单' },
-            { key: 'pending.delete', label: '操作：删除订单' }
+            { key: 'pending.add', label: '显示：发布新订单 (悬浮球)' },
+            { key: 'pending.view_detail', label: '显示：卡片翻转与详情页面' },
+            { key: 'pending.complete', label: '操作：确定完成业务' },
+            { key: 'pending.edit', label: '操作：修改订单信息' },
+            { key: 'pending.copy', label: '显示：复制物流信息' },
+            { key: 'pending.delete', label: '操作：物理删除订单' }
         ]
     },
     {
-        group: 'completed_order', label: '已完成订单权限',
+        group: 'completed_order', label: '已完成订单 (核对发货)',
         children: [
-            { key: 'completed.uncomplete', label: '操作：撤销完成状态' }, { key: 'completed.delete', label: '操作：删除订单' }
+            { key: 'completed.ship', label: '操作：发货并出库' },
+            { key: 'completed.uncomplete', label: '操作：撤销回未完成' },
+            { key: 'completed.copy', label: '显示：复制物流信息' },
+            { key: 'completed.delete', label: '操作：物理删除订单' }
         ]
     },
     {
-        group: 'material', label: '生产物料库权限',
+        group: 'shipped_order', label: '已出库订单 (历史归档)',
         children: [
-            { key: 'material.add', label: '操作：录入消耗与产出' }, { key: 'material.edit', label: '操作：修改流水备注' },
-            { key: 'material.edit_stock', label: '操作：调整总物理库存' }, { key: 'material.delete', label: '操作：删除流水记录' }
+            { key: 'shipped.detail', label: '显示：查看历史详细信息' }
+        ]
+    },
+    {
+        group: 'material', label: '原材料监控中心',
+        children: [
+            { key: 'material.add', label: '操作：录入消耗与产出' },
+            { key: 'material.edit', label: '隐藏接口：修改流水备注' },
+            { key: 'material.edit_stock', label: '隐藏接口：调整总物理库存' },
+            { key: 'material.delete', label: '隐藏接口：删除流水记录' }
+        ]
+    },
+    {
+        group: 'system', label: '系统高级功能',
+        children: [
+            { key: 'system.user_manage', label: '显示：账户控制台 (悬浮球)' }
         ]
     }
 ];
@@ -119,7 +140,8 @@ function loadUserDetail(user) {
 
 function renderPermissionTree(userPerms) {
     let treeHtml = '';
-    const adminRestricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete'];
+    // 管理员无权授予这些高危底层操作权限
+    const adminRestricted = ['pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete', 'system.user_manage'];
     PERMISSIONS_CONFIG.forEach(group => {
         treeHtml += `<div class="perm-group"><label><input type="checkbox" class="perm-parent" data-group="${group.group}" onchange="toggleGroupPerms(this)"> ${group.label}</label><div class="perm-children">`;
         group.children.forEach(child => {
