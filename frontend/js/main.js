@@ -7,6 +7,13 @@ let allOrdersLocal = [];
 let currentTab = 0; 
 let activeKeyboardTargetId = 'materialInputUse';
 
+// 【核心状态】存储当前被小圆筛选的日期范围
+let nomiActiveFilterStart = null; 
+let nomiActiveFilterEnd = null;
+
+let nomiMaterialFilterStart = null;
+let nomiMaterialFilterEnd = null;
+
 function getRoleName(role) {
     const maps = { 'super_admin': '超级管理员', 'admin': '管理员', 'employee': '员工', 'operator': '员工' };
     return maps[role] || role;
@@ -117,12 +124,37 @@ async function fetchOrders() {
 
         if (currentTab === 2) {
             let shippedOrders = serverOrders.filter(o => o.status === 'shipped');
-            const currentDataHash = JSON.stringify(shippedOrders);
+            
+            // 🔥 【核心范围过滤逻辑】：有范围则用范围，没范围则默认展示最近三天
+            if (nomiActiveFilterStart && nomiActiveFilterEnd) {
+                let startT = new Date(nomiActiveFilterStart.replace(/-/g, '/')).getTime();
+                let endT = new Date(nomiActiveFilterEnd.replace(/-/g, '/')).getTime() + 86400000 - 1; 
+                
+                shippedOrders = shippedOrders.filter(o => {
+                    let dateStr = o.shipped_date || o.completed_date || '';
+                    if (!dateStr) return false;
+                    let t = new Date(dateStr.substring(0, 10).replace(/-/g, '/')).getTime();
+                    return t >= startT && t <= endT;
+                });
+            } else {
+                const now = new Date();
+                const threeDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2).getTime(); 
+                
+                shippedOrders = shippedOrders.filter(o => {
+                    let dateStr = o.shipped_date || o.completed_date || '';
+                    if (!dateStr) return false;
+                    let t = new Date(dateStr.substring(0, 10).replace(/-/g, '/')).getTime();
+                    return t >= threeDaysAgo;
+                });
+            }
+
+            const currentDataHash = JSON.stringify(shippedOrders) + "_" + nomiActiveFilterStart + "_" + nomiActiveFilterEnd;
             if (targetContainer.dataset.hash === currentDataHash) return; 
             targetContainer.dataset.hash = currentDataHash;
 
             if (shippedOrders.length === 0) {
-                targetContainer.innerHTML = '<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">当前暂无已出库物流单据记录</div>';
+                let msg = nomiActiveFilterStart ? `没有找到 ${nomiActiveFilterStart} 到 ${nomiActiveFilterEnd} 的出库记录` : `最近 3 天内暂无任何已出库的物流记录`;
+                targetContainer.innerHTML = `<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">${msg}</div>`;
                 return;
             }
             
@@ -133,8 +165,13 @@ async function fetchOrders() {
             });
             
             let tHtml = '<div class="timeline-container">';
+            
+            // 彻底移除了“清除筛选”按钮的代码，刷新即恢复默认！
+
+            // 🔥 完美修复：恢复按日期分组的朋友圈时间线渲染逻辑
             Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
                 tHtml += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="shipped-grid">`;
+                
                 groups[date].forEach(o => {
                     let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
                     let typeText = o.type == 1 ? '绝缘订单' : '中固订单';
@@ -170,9 +207,12 @@ async function fetchOrders() {
                         </div>
                     </div>`;
                 });
+                
                 tHtml += `</div></div>`;
             });
-            targetContainer.innerHTML = tHtml + '</div>';
+            
+            tHtml += '</div>';
+            targetContainer.innerHTML = tHtml;
             setTimeout(initExpandButtons, 50); 
             return;
         }
@@ -205,7 +245,6 @@ async function fetchOrders() {
             if (isMobile) {
                 chunks = [goodsLines];
             } else {
-                // 【核心改动】：容量解禁！从 8 行提升到 12 行再拆分新卡片！
                 for (let i = 0; i < goodsLines.length; i += 12) {
                     chunks.push(goodsLines.slice(i, i + 12));
                 }
@@ -378,6 +417,18 @@ async function fetchOrders() {
     } catch (error) { console.error("数据拉取引擎异常", error); }
 }
 
+window.executeShippedDateFilter = function(startDate, endDate) {
+    nomiActiveFilterStart = startDate;
+    nomiActiveFilterEnd = endDate;
+    fetchOrders(); 
+};
+
+window.executeMaterialDateFilter = function(startDate, endDate) {
+    nomiMaterialFilterStart = startDate;
+    nomiMaterialFilterEnd = endDate;
+    fetchMaterials(); 
+};
+
 async function fetchMaterials() {
     if (currentTab !== 3) return;
     try {
@@ -389,12 +440,34 @@ async function fetchMaterials() {
         allRecords.sort((a, b) => a.date.localeCompare(b.date));
         allRecords.forEach(r => { currentStock -= (parseFloat(r.used) || 0); r.remaining = currentStock; });
         
-        const now = new Date();
-        const threeDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 3).getTime();
-        const filteredRecords = allRecords.filter(r => { return new Date(r.date.replace(/-/g, '/')).getTime() >= threeDaysAgo; });
+        let filteredRecords = [];
+
+        // 🔥 【原材料范围过滤逻辑】：有范围则用范围，没范围则默认展示最近三天
+        if (nomiMaterialFilterStart && nomiMaterialFilterEnd) {
+            let startT = new Date(nomiMaterialFilterStart.replace(/-/g, '/')).getTime();
+            let endT = new Date(nomiMaterialFilterEnd.replace(/-/g, '/')).getTime() + 86400000 - 1; 
+            
+            filteredRecords = allRecords.filter(r => {
+                let dateStr = r.date || '';
+                if (!dateStr) return false;
+                let t = new Date(dateStr.substring(0, 10).replace(/-/g, '/')).getTime();
+                return t >= startT && t <= endT;
+            });
+        } else {
+            const now = new Date();
+            const threeDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2).getTime(); 
+            
+            filteredRecords = allRecords.filter(r => {
+                let dateStr = r.date || '';
+                if (!dateStr) return false;
+                let t = new Date(dateStr.substring(0, 10).replace(/-/g, '/')).getTime();
+                return t >= threeDaysAgo;
+            });
+        }
         
         if (filteredRecords.length === 0) {
-            targetContainer.innerHTML = '<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">最近 3 天内暂无原材料（树脂）使用记录</div>';
+            let msg = nomiMaterialFilterStart ? `没有找到 ${nomiMaterialFilterStart} 到 ${nomiMaterialFilterEnd} 的原材料记录` : `最近 3 天内暂无原材料（树脂）使用记录`;
+            targetContainer.innerHTML = `<div style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">${msg}</div>`;
             return;
         }
         
@@ -402,6 +475,9 @@ async function fetchMaterials() {
         filteredRecords.forEach(r => { let day = r.date.substring(0, 10); if (!groups[day]) groups[day] = []; groups[day].push(r); });
         
         let html = '<div class="timeline-container">';
+        
+        // 彻底移除了“清除筛选”按钮的代码，刷新即恢复默认！
+
         Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
             html += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="timeline-items">`;
             groups[date].sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
@@ -669,6 +745,12 @@ function switchTab(index) {
   else if (index === 3) fetchMaterials();
   if (index === 2) initExpandButtons(); 
   
+  if (index === 2) {
+      if (typeof window.triggerDateFilterSpeech === 'function') window.triggerDateFilterSpeech('shipped');
+  } else if (index === 3) {
+      if (typeof window.triggerDateFilterSpeech === 'function') window.triggerDateFilterSpeech('material');
+  }
+
   setTimeout(() => { autoFitVerticalText(); }, 50);
 }
 

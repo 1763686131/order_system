@@ -1,9 +1,7 @@
 /**
  * ========================================================
- * 🤖 NOMI (Xiao Yuan) 悬浮智能体驱动模块
+ * 🤖 NOMI (Xiao Yuan) 悬浮智能体驱动模块 (终极完整版)
  * ========================================================
- * 负责处理悬浮球的物理拖拽、点击展开、失焦隐藏以及定时语音气泡交互。
- * 独立组件，不依赖具体业务数据。
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -12,12 +10,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const speechBubble = document.getElementById('aiSpeechBubble');
     const fabItemsList = document.querySelectorAll('.fab-item');
 
-    if (!fabMain || !fabContainer) return; // 确保 DOM 存在
+    if (!fabMain || !fabContainer) return; 
 
     let isDragging = false;
     let hasDragged = false; 
     let isMouseDownOnFab = false; 
     let startX, startY, initialX, initialY;
+    
+    // 【核心状态】日期筛选自动消失的定时器锁
+    let filterTimeoutLock = null;
 
     // 1. 拖拽开始
     function dragStart(e) {
@@ -40,7 +41,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. 拖拽中
     function drag(e) {
         if (!isDragging || !isMouseDownOnFab) return;
-        e.preventDefault(); 
         
         let clientX, clientY;
         if (e.type === 'touchmove') {
@@ -59,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (hasDragged) {
+            e.preventDefault(); 
             let newX = initialX + dx;
             let newY = initialY + dy;
             
@@ -90,41 +91,46 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // ==========================================================
-    // 🔥 新增：移动端专属的“双击”检测逻辑 (其他代码全是你原本的)
-    // ==========================================================
+    // 移动端/触屏端轻触模拟 click
     let lastTapTime = 0;
     fabMain.addEventListener('touchend', function(e) {
-        if (hasDragged) return; // 如果是拖拽操作，坚决不触发双击
-        
+        if (hasDragged) return; 
         const currentTime = new Date().getTime();
         const tapLength = currentTime - lastTapTime;
-        
-        // 两次轻触间隔在 350 毫秒以内，判定为双击！
         if (tapLength > 0 && tapLength < 350) {
             fabContainer.classList.toggle('active');
-            e.preventDefault(); // 阻止手机浏览器弹出乱七八糟的默认行为
-            lastTapTime = 0;    // 触发后重置时间
+            e.preventDefault();
+            lastTapTime = 0;   
         } else {
-            lastTapTime = currentTime; // 记录第一次点击的时间
+            lastTapTime = currentTime;
         }
     });
-    // ==========================================================
 
-    // 监听PC端鼠标拖拽
+    // 监听鼠标拖拽
     fabMain.addEventListener('mousedown', dragStart);
     document.addEventListener('mousemove', drag, { passive: false });
     document.addEventListener('mouseup', dragEnd);
 
-    // 监听移动端触摸拖拽
+    // 监听触摸拖拽
     fabMain.addEventListener('touchstart', dragStart, { passive: false });
     document.addEventListener('touchmove', drag, { passive: false });
     document.addEventListener('touchend', dragEnd);
 
-    // 4. 全局失焦隐藏（点击 NOMI 外的区域收起菜单）
+    // 4. 全局失焦隐藏
     function closeFabMenuOnOutsideClick(e) {
+        // ① NOMI 操作菜单的失焦秒关
         if (fabContainer.classList.contains('active') && !fabContainer.contains(e.target)) {
             fabContainer.classList.remove('active');
+        }
+
+        // ② 交互气泡的失焦秒关
+        if (speechBubble && speechBubble.classList.contains('show')) {
+            if (speechBubble.contains(e.target)) return;
+            speechBubble.classList.remove('show');
+            if (filterTimeoutLock) {
+                clearTimeout(filterTimeoutLock);
+                filterTimeoutLock = null;
+            }
         }
     }
     document.addEventListener('mousedown', closeFabMenuOnOutsideClick);
@@ -137,7 +143,85 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 6. 定时 AI 语音气泡
+    // ==========================================================
+    // 🌟 范围日期筛选交互气泡引擎
+    // ==========================================================
+    function startFilterTimer() {
+        if (filterTimeoutLock) clearTimeout(filterTimeoutLock);
+        filterTimeoutLock = setTimeout(() => {
+            speechBubble.classList.remove('show');
+        }, 10000); 
+    }
+
+    function stopFilterTimer() {
+        if (filterTimeoutLock) clearTimeout(filterTimeoutLock);
+    }
+
+    window.triggerDateFilterSpeech = function(filterType = 'shipped') {
+        if (!speechBubble) return;
+
+        let tipText = filterType === 'material' ? '主人，请选择要查看的【原材料】记录范围：' : '主人，请选择要查看的【出库单】范围：';
+
+        speechBubble.innerHTML = `
+            <div id="nomiFilterArea" style="display: flex; flex-direction: column; gap: 8px; font-size: 14px; text-align: left; pointer-events: auto;">
+                <span style="font-weight: bold; color: #333;">${tipText}</span>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <span style="color:#666;font-size:12px;white-space:nowrap;width:15px;">从</span>
+                    <input type="date" id="nomiFilterStart" style="padding: 2px 4px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; flex: 1; height: 26px; box-sizing: border-box;">
+                </div>
+                <div style="display: flex; gap: 6px; align-items: center;">
+                    <span style="color:#666;font-size:12px;white-space:nowrap;width:15px;">至</span>
+                    <input type="date" id="nomiFilterEnd" style="padding: 2px 4px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; flex: 1; height: 26px; box-sizing: border-box;">
+                    <button id="btnNomiDateConfirm" style="background: #1890ff; color: #fff; border: none; padding: 0 10px; border-radius: 4px; height: 26px; font-size: 12px; cursor: pointer; font-weight: bold;">筛选</button>
+                </div>
+            </div>
+        `;
+        
+        speechBubble.classList.add('show');
+
+        const filterArea = document.getElementById('nomiFilterArea');
+        if (filterArea) {
+            filterArea.addEventListener('mouseenter', stopFilterTimer);
+            filterArea.addEventListener('mouseleave', startFilterTimer);
+            filterArea.addEventListener('touchstart', stopFilterTimer, { passive: true });
+            filterArea.addEventListener('touchend', startFilterTimer, { passive: true });
+        }
+
+        setTimeout(() => {
+            const btnConfirm = document.getElementById('btnNomiDateConfirm');
+            const dateStart = document.getElementById('nomiFilterStart');
+            const dateEnd = document.getElementById('nomiFilterEnd');
+            
+            if (btnConfirm && dateStart && dateEnd) {
+                btnConfirm.addEventListener('click', () => {
+                    const startVal = dateStart.value;
+                    const endVal = dateEnd.value;
+                    
+                    if (!startVal || !endVal) return alert('请完整选择开始和结束日期哦！');
+                    if (startVal > endVal) return alert('开始日期不能晚于结束日期！');
+
+                    if (filterType === 'material') {
+                        if (typeof window.executeMaterialDateFilter === 'function') {
+                            window.executeMaterialDateFilter(startVal, endVal);
+                        }
+                    } else {
+                        if (typeof window.executeShippedDateFilter === 'function') {
+                            window.executeShippedDateFilter(startVal, endVal);
+                        }
+                    }
+                    
+                    speechBubble.classList.remove('show');
+                    stopFilterTimer();
+                });
+            }
+        }, 50);
+
+        startFilterTimer(); 
+    };
+
+    // ==========================================================
+    // 💬 6. 定时 AI 语音闲聊气泡 (完美修复哑巴 BUG)
+    // ==========================================================
     const aiPhrases = [
         "主人，我叫小圆，是你的智能小助手~", 
         "主人，今天的订单都处理完了吗？", 
@@ -151,10 +235,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function triggerAiSpeech() {
         if (hasDragged || isMouseDownOnFab) return;
+        
+        // 🔥 修复点 1：只要气泡现在是“显示”状态（无论是在选日期，还是正在说话），都不准打扰
+        if (speechBubble.classList.contains('show')) return;
+
         const randomPhrase = aiPhrases[Math.floor(Math.random() * aiPhrases.length)];
+        
+        // 🔥 修复点 2：直接用文字覆盖掉原本气泡里残留的隐藏 HTML（清除旧表单），彻底杜绝假死
         speechBubble.textContent = randomPhrase;
         speechBubble.classList.add('show');
-        setTimeout(() => { speechBubble.classList.remove('show'); }, 4000);
+        
+        setTimeout(() => { 
+            // 🔥 修复点 3：过了 4 秒后，如果气泡里的内容还是这句话（说明中途主人没有点开表单），才自动收起它
+            if (speechBubble.textContent === randomPhrase) {
+                speechBubble.classList.remove('show'); 
+            }
+        }, 4000);
     }
 
     setInterval(triggerAiSpeech, 30000);
