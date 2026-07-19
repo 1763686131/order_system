@@ -437,16 +437,20 @@ async function fetchMaterials() {
         const targetContainer = document.getElementById('tab-3');
         let allRecords = matData.records || [];
         let currentStock = parseFloat(matData.total_stock) || 0;
+        
+        // 为了正确计算剩余库存，先按时间正序排列计算
         allRecords.sort((a, b) => a.date.localeCompare(b.date));
-        allRecords.forEach(r => { currentStock -= (parseFloat(r.used) || 0); r.remaining = currentStock; });
+        allRecords.forEach(r => { 
+            currentStock -= (parseFloat(r.used) || 0); 
+            r.remaining = currentStock; 
+        });
         
         let filteredRecords = [];
 
-        // 🔥 【原材料范围过滤逻辑】：有范围则用范围，没范围则默认展示最近三天
+        // 【原材料范围过滤逻辑】
         if (nomiMaterialFilterStart && nomiMaterialFilterEnd) {
             let startT = new Date(nomiMaterialFilterStart.replace(/-/g, '/')).getTime();
             let endT = new Date(nomiMaterialFilterEnd.replace(/-/g, '/')).getTime() + 86400000 - 1; 
-            
             filteredRecords = allRecords.filter(r => {
                 let dateStr = r.date || '';
                 if (!dateStr) return false;
@@ -456,7 +460,6 @@ async function fetchMaterials() {
         } else {
             const now = new Date();
             const threeDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2).getTime(); 
-            
             filteredRecords = allRecords.filter(r => {
                 let dateStr = r.date || '';
                 if (!dateStr) return false;
@@ -472,24 +475,77 @@ async function fetchMaterials() {
         }
         
         let groups = {};
-        filteredRecords.forEach(r => { let day = r.date.substring(0, 10); if (!groups[day]) groups[day] = []; groups[day].push(r); });
+        filteredRecords.forEach(r => { 
+            let day = r.date.substring(0, 10); 
+            if (!groups[day]) groups[day] = []; 
+            groups[day].push(r); 
+        });
         
         let html = '<div class="timeline-container">';
         
-        // 彻底移除了“清除筛选”按钮的代码，刷新即恢复默认！
-
         Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
             html += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="timeline-items">`;
+            
             groups[date].sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
                 let remarkText = r.remark ? r.remark : '无';
+                
                 html += `
-                <div class="material-card">
-                    <div class="m-data-group">
-                        <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">${r.used} kg</span></div>
-                        <div class="m-item"><span class="m-label-black">成品：</span><span class="m-val-green">${r.produced} kg</span></div>
-                        <div class="m-item"><span class="m-label-blue">剩余：</span><span class="m-val-blue">${r.remaining.toFixed(1)} kg</span></div>
-                        <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">${remarkText}</span></div>
+                <div class="material-card" id="mat-card-${r.id}" style="border-radius: 12px; overflow: hidden; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.04); padding: 16px;">
+                    
+                    <div id="mat-view-${r.id}">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #f0f0f0; padding-bottom: 8px;">
+                                <span style="color: #555; font-size: 14px; font-weight: bold;">使用树脂</span>
+                                <span style="color: #eb2f96; font-weight: bold; font-size: 15px;">${r.used} kg</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #f0f0f0; padding-bottom: 8px;">
+                                <span style="color: #555; font-size: 14px; font-weight: bold;">成品出货</span>
+                                <span style="color: #52c41a; font-weight: bold; font-size: 15px;">${r.produced} kg</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #f0f0f0; padding-bottom: 8px;">
+                                <span style="color: #1890ff; font-size: 14px; font-weight: bold;">剩余库存</span>
+                                <span style="color: #1890ff; font-weight: bold; font-size: 15px;">${r.remaining.toFixed(1)} kg</span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-top: 4px;">
+                                <span style="color: #888; font-size: 13px; flex-shrink: 0; margin-right: 12px;">附加备注</span>
+                                <span style="color: #333; font-size: 13px; text-align: right; word-break: break-all;">${remarkText}</span>
+                            </div>
+                        </div>
+                        
+                        ${hasPerm('material.edit') ? `
+                        <div style="text-align: right; margin-top: 16px;">
+                            <button style="padding: 6px 18px; font-size: 12px; border-radius: 20px; font-weight: bold; background: #f0f2f5; border: none; color: #666; cursor: pointer; transition: all 0.3s;" onclick="toggleInlineMatEdit(${r.id}, true)">修改记录</button>
+                        </div>
+                        ` : ''}
                     </div>
+
+                    <div id="mat-edit-${r.id}" style="display: none;">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div style="display: flex; align-items: center; background: #fff0f6; padding: 6px 12px; border-radius: 8px; border: 1px solid #ffadd2;">
+                                <span style="width: 75px; font-weight: bold; color: #eb2f96; font-size: 13px;">使用树脂:</span>
+                                <input id="inline-used-${r.id}" type="number" value="${r.used}" style="flex: 1; width: 50px; padding: 4px; border: none; background: transparent; outline: none; font-weight: bold; color: #eb2f96; font-size: 15px; text-align: right;" />
+                                <span style="margin-left: 6px; color: #eb2f96; font-size: 13px;">kg</span>
+                            </div>
+                            <div style="display: flex; align-items: center; background: #f6ffed; padding: 6px 12px; border-radius: 8px; border: 1px solid #b7eb8f;">
+                                <span style="width: 75px; font-weight: bold; color: #52c41a; font-size: 13px;">成品出货:</span>
+                                <input id="inline-produced-${r.id}" type="number" value="${r.produced}" style="flex: 1; width: 50px; padding: 4px; border: none; background: transparent; outline: none; font-weight: bold; color: #52c41a; font-size: 15px; text-align: right;" />
+                                <span style="margin-left: 6px; color: #52c41a; font-size: 13px;">kg</span>
+                            </div>
+                            <div style="display: flex; align-items: center; background: #f0f5ff; padding: 6px 12px; border-radius: 8px; border: 1px solid #adc6ff;">
+                                <span style="width: 75px; font-weight: bold; color: #2f54eb; font-size: 13px;">附加备注:</span>
+                                <input id="inline-remark-${r.id}" type="text" value="${r.remark || ''}" placeholder="选填..." style="flex: 1; width: 50px; padding: 4px; border: none; background: transparent; outline: none; color: #2f54eb; font-size: 14px; text-align: right;" />
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 16px;">
+                            ${hasPerm('material.delete') ? `
+                            <button style="padding: 6px 16px; font-size: 12px; border-radius: 20px; font-weight: bold; background: #fff; border: 1px solid #ff4d4f; color: #ff4d4f; cursor: pointer;" onclick="deleteInlineMatRecord(${r.id})">删除</button>
+                            ` : ''}
+                            <button style="padding: 6px 16px; font-size: 12px; border-radius: 20px; font-weight: bold; border: none; background: #f0f2f5; color: #666; cursor: pointer;" onclick="toggleInlineMatEdit(${r.id}, false)">取消</button>
+                            <button style="padding: 6px 20px; font-size: 12px; border-radius: 20px; font-weight: bold; background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); border: none; color: white; box-shadow: 0 4px 10px rgba(82, 196, 26, 0.3); cursor: pointer;" onclick="submitInlineMatEdit(${r.id})">完成保存</button>
+                        </div>
+                    </div>
+                    
                 </div>`;
             });
             html += `</div></div>`;
@@ -497,7 +553,9 @@ async function fetchMaterials() {
         html += '</div>';
         targetContainer.innerHTML = html;
         
-    } catch(error) { console.error('拉取原材料数据异常', error); }
+    } catch(error) { 
+        console.error('拉取原材料数据异常', error); 
+    }
 }
 
 function triggerShipModal(orderId) {
@@ -826,13 +884,41 @@ function initExpandButtons() {
 
 window.addEventListener('load', initExpandButtons);
 
+// ========================================================
+// 🖱️ 多维滚动与触摸事件强化映射
+// ========================================================
+// 1. 强制 Tab 0 (未完成) 和 Tab 1 (已完成) 横向排列并响应横向滚轮
 document.querySelectorAll('#tab-0, #tab-1').forEach(container => {
     container.addEventListener('wheel', function(e) {
         if (e.deltaY !== 0) {
             e.preventDefault(); 
-            this.scrollLeft += e.deltaY; 
+            this.scrollLeft += e.deltaY; // 把上下滚轮映射成左右滑动
         }
     }, { passive: false });
+});
+
+// 2. 强制 Tab 2 (已出库) 和 Tab 3 (原材料) 顺畅响应垂直滚轮与触屏拖拽
+document.querySelectorAll('#tab-2, #tab-3').forEach(container => {
+    // 滚轮控制上下滑动
+    container.addEventListener('wheel', function(e) {
+        if (e.deltaY !== 0) {
+            this.scrollTop += e.deltaY;
+        }
+    }, { passive: true });
+    
+    // 触屏控制上下滑动 (针对手机端体验优化)
+    let startY;
+    container.addEventListener('touchstart', function(e) {
+        startY = e.touches[0].pageY;
+    }, { passive: true });
+    
+    container.addEventListener('touchmove', function(e) {
+        if (!startY) return;
+        const y = e.touches[0].pageY;
+        const walk = (startY - y);
+        this.scrollTop += walk; // 根据手指滑动距离强制上下移动
+        startY = y;
+    }, { passive: true });
 });
 
 /* ========================================================
@@ -864,3 +950,76 @@ window.onload = function() {
 
     } else renderUI(); 
 };
+
+// ========================================================
+// 📦 原材料【行内就地编辑与删除】控制引擎
+// ========================================================
+function toggleInlineMatEdit(id, isEditing) {
+    const viewBlock = document.getElementById(`mat-view-${id}`);
+    const editBlock = document.getElementById(`mat-edit-${id}`);
+    if (viewBlock && editBlock) {
+        if (isEditing) {
+            viewBlock.style.display = 'none';
+            editBlock.style.display = 'block';
+        } else {
+            viewBlock.style.display = 'block';
+            editBlock.style.display = 'none';
+        }
+    }
+}
+
+async function submitInlineMatEdit(id) {
+    const usedInput = document.getElementById(`inline-used-${id}`);
+    const producedInput = document.getElementById(`inline-produced-${id}`);
+    const remarkInput = document.getElementById(`inline-remark-${id}`);
+    
+    if (!usedInput || !producedInput) return;
+    
+    const usedVal = parseFloat(usedInput.value);
+    const prodVal = parseFloat(producedInput.value);
+    const remarkVal = remarkInput ? remarkInput.value.trim() : '';
+    
+    if (isNaN(usedVal) || isNaN(prodVal)) {
+        return alert('保存失败：消耗量与产出量必须输入有效的数字！');
+    }
+
+    try {
+        const response = await fetch(`${API_BASE}/materials/${id}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({
+                used: usedVal,
+                produced: prodVal,
+                remark: remarkVal
+            })
+        });
+        
+        if (response.ok) {
+            // 保存成功后重载数据实现就地刷新与库存重算
+            fetchMaterials();
+        } else {
+            alert('修改失败：底层鉴权拦截或服务器异常');
+        }
+    } catch (e) {
+        alert('网络通讯异常，保存失败');
+    }
+}
+
+async function deleteInlineMatRecord(id) {
+    if (!confirm('安全警告：您确定要彻底物理删除这条原材料使用流水记录吗？\n删除后所有剩余树脂库存将自动动态重算，此操作不可撤销！')) return;
+    
+    try {
+        const response = await fetch(`${API_BASE}/materials/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        
+        if (response.ok) {
+            fetchMaterials(); // 重新拉取，卡片物理消失，库存重新洗牌
+        } else {
+            alert('删除失败：底层权限不足');
+        }
+    } catch (e) {
+        alert('网络通讯异常，删除失败');
+    }
+}

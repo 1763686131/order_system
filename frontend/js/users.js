@@ -36,9 +36,9 @@ const PERMISSIONS_CONFIG = [
         group: 'material', label: '原材料监控中心',
         children: [
             { key: 'material.add', label: '操作：录入消耗与产出' },
-            { key: 'material.edit', label: '隐藏接口：修改流水备注' },
-            { key: 'material.edit_stock', label: '隐藏接口：调整总物理库存' },
-            { key: 'material.delete', label: '隐藏接口：删除流水记录' }
+            { key: 'material.edit', label: '操作：内页原地修改数据与备注' },
+            { key: 'material.delete', label: '操作：物理删除流水记录' },
+            { key: 'material.edit_stock', label: '隐藏接口：调整总物理库存' }
         ]
     },
     {
