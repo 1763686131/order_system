@@ -152,7 +152,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 }
 
 /* ========================================================
- * 🔒 电脑端 1920 物理锁（横向滑动轨道 + 终极末尾留白补丁）
+ * 🔒 电脑端 1920 物理锁（横纵向滑动轨道 + 终极末尾留白补丁）
  * ======================================================== */
 @media screen and (min-width: 769px) {
     body {
@@ -167,8 +167,14 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         overflow-x: auto !important; /* 开启横向滚动 */
         overflow-y: hidden !important;
         gap: 30px !important;
-        width: 100vw !important; /* 占满屏幕宽度 */
-        padding: 0 35px 20px 35px !important; 
+        
+        /* 🚀 核心修复：抵消 body 自带的 60px 边距，让轨道真正横跨全屏 */
+        width: 100vw !important; 
+        margin-left: -60px !important; 
+        
+        /* 🚀 间距调优：左右只留 20px ("一点点"空间)，告别夸张大白边 */
+        padding: 0 20px 20px 20px !important; 
+        
         box-sizing: border-box !important;
         height: calc(100vh - 260px) !important;
         align-items: stretch !important;
@@ -181,15 +187,13 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         display: none !important;
     }
 
-    /* 🔥 终极必杀技：秒杀最右边卡片撞墙、贴窗框的浏览器Bug！
-       在横向轨道的最后面，强行挂载一个 35px 宽度的隐形“空气卡片”。
-       这样不管你加多少张卡片，滑到最右边时，都会稳稳地留出 35px 的呼吸边距，与最左边完全对称！ */
+    /* 🔥 终极必杀技：右侧隐形卡片同步缩小到 20px，保证滑到最右边时完全对称！ */
     #tab-0.active::after, #tab-1.active::after {
         content: "" !important;
         display: block !important;
-        flex: 0 0 35px !important; /* 精准卡死 35px 隐形右边距 */
+        flex: 0 0 20px !important; /* 与左侧 20px 完美呼应 */
         height: 100% !important;
-        pointer-events: none !important; /* 隐形状态，不干扰任何鼠标点击事件 */
+        pointer-events: none !important; 
     }
 
     /* 已出库页面 (Tab 2) 保持网格排列，因为这是历史记录，适合往下翻 */
@@ -204,7 +208,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
     /* 严格锁死单张卡片的宽度为 440px，在横向轨道里绝对不被挤压 */
     .flip-container, .completed-card {
         width: 440px !important;
-        flex: 0 0 440px !important; /* 第一张到第N张，宽度永远是440px */
+        flex: 0 0 440px !important; 
         height: 100% !important; 
         min-height: 520px !important; 
     }
@@ -224,5 +228,34 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 
     .shipped-card {
         width: 440px !important;
+    }
+
+    /* ========================================================
+     * 🔒 电脑端专属：为已出库(Tab 2)和原材料(Tab 3)开启物理纵向滚动轨道
+     * ======================================================== */
+    #tab-2.active, #tab-3.active {
+        display: flex !important;
+        height: calc(100vh - 220px) !important; 
+        overflow-y: auto !important;            
+        overflow-x: hidden !important;
+        
+        /* 🚀 同步修复：抵消 body 限制，对齐上面的 20px 极简边距 */
+        width: 100vw !important;
+        margin-left: -60px !important;
+        padding: 0 20px 100px 20px !important; 
+        
+        box-sizing: border-box !important;
+        scrollbar-width: none; 
+        -ms-overflow-style: none;
+    }
+
+    #tab-2.active::-webkit-scrollbar, #tab-3.active::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* 优化原材料面板在电脑端的阅读体验（居中且限制最大宽度） */
+    #tab-3 .timeline-container {
+        width: 1400px !important; 
+        margin: 0 auto !important; 
     }
 }
