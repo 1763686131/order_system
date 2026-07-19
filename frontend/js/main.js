@@ -486,68 +486,64 @@ async function fetchMaterials() {
         Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
             html += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="timeline-items">`;
             
-            groups[date].sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
-                let remarkText = r.remark ? r.remark : '无';
+            // ... 上面是已有的排序和数据过滤逻辑 ...
+        groups[date].sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
+            let remarkText = r.remark ? r.remark : '无';
+            
+            html += `
+            <div class="material-card" id="mat-card-${r.id}" style="box-sizing: border-box; width: 100%;">
                 
-                html += `
-                <div class="material-card" id="mat-card-${r.id}" style="border-radius: 12px; overflow: hidden; border: none; box-shadow: 0 4px 15px rgba(0,0,0,0.04); padding: 16px;">
-                    
-                    <div id="mat-view-${r.id}">
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #f0f0f0; padding-bottom: 8px;">
-                                <span style="color: #555; font-size: 14px; font-weight: bold;">使用树脂</span>
-                                <span style="color: #eb2f96; font-weight: bold; font-size: 15px;">${r.used} kg</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #f0f0f0; padding-bottom: 8px;">
-                                <span style="color: #555; font-size: 14px; font-weight: bold;">成品出货</span>
-                                <span style="color: #52c41a; font-weight: bold; font-size: 15px;">${r.produced} kg</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed #f0f0f0; padding-bottom: 8px;">
-                                <span style="color: #1890ff; font-size: 14px; font-weight: bold;">剩余库存</span>
-                                <span style="color: #1890ff; font-weight: bold; font-size: 15px;">${r.remaining.toFixed(1)} kg</span>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; align-items: flex-start; padding-top: 4px;">
-                                <span style="color: #888; font-size: 13px; flex-shrink: 0; margin-right: 12px;">附加备注</span>
-                                <span style="color: #333; font-size: 13px; text-align: right; word-break: break-all;">${remarkText}</span>
-                            </div>
-                        </div>
-                        
-                        ${hasPerm('material.edit') ? `
-                        <div style="text-align: right; margin-top: 16px;">
-                            <button style="padding: 6px 18px; font-size: 12px; border-radius: 20px; font-weight: bold; background: #f0f2f5; border: none; color: #666; cursor: pointer; transition: all 0.3s;" onclick="toggleInlineMatEdit(${r.id}, true)">修改记录</button>
-                        </div>
-                        ` : ''}
+                <div id="mat-view-${r.id}" style="display: flex; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px; box-sizing: border-box;">
+                    <div class="m-data-group">
+                        <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">${r.used} kg</span></div>
+                        <div class="m-item"><span class="m-label-black">成品：</span><span class="m-val-green">${r.produced} kg</span></div>
+                        <div class="m-item"><span class="m-label-blue">剩余树脂：</span><span class="m-val-blue">${r.remaining.toFixed(1)} kg</span></div>
                     </div>
+                    <div style="flex-grow: 1; min-width: 10px;"></div>
+                    <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">${remarkText}</span></div>
+                    
+                    ${hasPerm('material.edit') ? `
+                    <div style="margin-left: auto; padding-left: 10px;">
+                        <button class="btn-default" style="padding: 6px 16px; font-size: 13px; border-radius: 20px; border: 1px solid #d9d9d9; height: 34px; font-weight: bold; cursor: pointer;" onclick="toggleInlineMatEdit(${r.id}, true)">修改</button>
+                    </div>
+                    ` : ''}
+                </div>
 
-                    <div id="mat-edit-${r.id}" style="display: none;">
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
-                            <div style="display: flex; align-items: center; background: #fff0f6; padding: 6px 12px; border-radius: 8px; border: 1px solid #ffadd2;">
-                                <span style="width: 75px; font-weight: bold; color: #eb2f96; font-size: 13px;">使用树脂:</span>
-                                <input id="inline-used-${r.id}" type="number" value="${r.used}" style="flex: 1; width: 50px; padding: 4px; border: none; background: transparent; outline: none; font-weight: bold; color: #eb2f96; font-size: 15px; text-align: right;" />
-                                <span style="margin-left: 6px; color: #eb2f96; font-size: 13px;">kg</span>
-                            </div>
-                            <div style="display: flex; align-items: center; background: #f6ffed; padding: 6px 12px; border-radius: 8px; border: 1px solid #b7eb8f;">
-                                <span style="width: 75px; font-weight: bold; color: #52c41a; font-size: 13px;">成品出货:</span>
-                                <input id="inline-produced-${r.id}" type="number" value="${r.produced}" style="flex: 1; width: 50px; padding: 4px; border: none; background: transparent; outline: none; font-weight: bold; color: #52c41a; font-size: 15px; text-align: right;" />
-                                <span style="margin-left: 6px; color: #52c41a; font-size: 13px;">kg</span>
-                            </div>
-                            <div style="display: flex; align-items: center; background: #f0f5ff; padding: 6px 12px; border-radius: 8px; border: 1px solid #adc6ff;">
-                                <span style="width: 75px; font-weight: bold; color: #2f54eb; font-size: 13px;">附加备注:</span>
-                                <input id="inline-remark-${r.id}" type="text" value="${r.remark || ''}" placeholder="选填..." style="flex: 1; width: 50px; padding: 4px; border: none; background: transparent; outline: none; color: #2f54eb; font-size: 14px; text-align: right;" />
-                            </div>
+                <div id="mat-edit-${r.id}" style="display: none; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px; box-sizing: border-box;">
+                    <div class="m-data-group" style="flex-wrap: wrap; gap: 8px;">
+                        <div class="m-item" style="display: flex; align-items: center;">
+                            <span class="m-label-black" style="font-size: 13px;">使用树脂：</span>
+                            <input id="inline-used-${r.id}" type="number" value="${r.used}" style="width: 70px; height: 28px; padding: 0 4px; border: 1px solid #eb2f96; border-radius: 8px; outline: none; font-weight: bold; color: #eb2f96; text-align: center; background: #fff0f6;" />
+                            <span class="m-val-pink" style="margin-left: 2px; font-size: 13px;">kg</span>
                         </div>
-                        
-                        <div style="display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin-top: 16px;">
-                            ${hasPerm('material.delete') ? `
-                            <button style="padding: 6px 16px; font-size: 12px; border-radius: 20px; font-weight: bold; background: #fff; border: 1px solid #ff4d4f; color: #ff4d4f; cursor: pointer;" onclick="deleteInlineMatRecord(${r.id})">删除</button>
-                            ` : ''}
-                            <button style="padding: 6px 16px; font-size: 12px; border-radius: 20px; font-weight: bold; border: none; background: #f0f2f5; color: #666; cursor: pointer;" onclick="toggleInlineMatEdit(${r.id}, false)">取消</button>
-                            <button style="padding: 6px 20px; font-size: 12px; border-radius: 20px; font-weight: bold; background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); border: none; color: white; box-shadow: 0 4px 10px rgba(82, 196, 26, 0.3); cursor: pointer;" onclick="submitInlineMatEdit(${r.id})">完成保存</button>
+                        <div class="m-item" style="display: flex; align-items: center;">
+                            <span class="m-label-black" style="font-size: 13px;">成品：</span>
+                            <input id="inline-produced-${r.id}" type="number" value="${r.produced}" style="width: 70px; height: 28px; padding: 0 4px; border: 1px solid #52c41a; border-radius: 8px; outline: none; font-weight: bold; color: #52c41a; text-align: center; background: #f6ffed;" />
+                            <span class="m-val-green" style="margin-left: 2px; font-size: 13px;">kg</span>
+                        </div>
+                        <div class="m-item" style="font-size: 13px;">
+                            <span class="m-label-blue">剩余：</span>
+                            <span class="m-val-blue">${r.remaining.toFixed(1)} kg</span>
                         </div>
                     </div>
+                    <div style="flex-grow: 1; min-width: 10px;"></div>
+                    <div class="m-note" style="display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 260px;">
+                        <span class="m-note-label" style="white-space: nowrap; font-size: 13px;">备注：</span>
+                        <input id="inline-remark-${r.id}" type="text" value="${r.remark || ''}" placeholder="备注..." style="width: 100%; height: 28px; padding: 0 6px; border: 1px solid #b3d8ff; border-radius: 8px; outline: none; color: #111; font-size: 13px; background: #f0f7ff;" />
+                    </div>
                     
-                </div>`;
-            });
+                    <div style="margin-left: auto; display: flex; align-items: center; gap: 6px; padding-left: 10px;">
+                        ${hasPerm('material.delete') ? `
+                        <button class="btn-danger" style="padding: 4px 14px; font-size: 12px; border-radius: 20px; border: none; height: 32px; font-weight: bold; color: white; cursor: pointer;" onclick="deleteInlineMatRecord(${r.id})">删除</button>
+                        ` : ''}
+                        <button class="btn-default" style="padding: 4px 14px; font-size: 12px; border-radius: 20px; border: 1px solid #d9d9d9; height: 32px; font-weight: bold; cursor: pointer;" onclick="toggleInlineMatEdit(${r.id}, false)">取消</button>
+                        <button class="btn-primary" style="padding: 4px 16px; font-size: 12px; border-radius: 20px; border: none; height: 32px; font-weight: bold; background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); color: white; cursor: pointer;" onclick="submitInlineMatEdit(${r.id})">完成</button>
+                    </div>
+                </div>
+                
+            </div>`;
+        });
+// ... 下面保持原样 ...
             html += `</div></div>`;
         });
         html += '</div>';
@@ -960,9 +956,9 @@ function toggleInlineMatEdit(id, isEditing) {
     if (viewBlock && editBlock) {
         if (isEditing) {
             viewBlock.style.display = 'none';
-            editBlock.style.display = 'block';
+            editBlock.style.display = 'flex'; // 🚀 确保是 flex 横向排版
         } else {
-            viewBlock.style.display = 'block';
+            viewBlock.style.display = 'flex'; // 🚀 确保是 flex 横向排版
             editBlock.style.display = 'none';
         }
     }

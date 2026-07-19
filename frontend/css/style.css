@@ -168,17 +168,16 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         overflow-y: hidden !important;
         gap: 30px !important;
         
-        /* 🚀 核心修复：抵消 body 自带的 60px 边距，让轨道真正横跨全屏 */
+        /* 核心修复：抵消 body 自带的 60px 边距，让轨道真正横跨全屏 */
         width: 100vw !important; 
         margin-left: -60px !important; 
         
-        /* 🚀 间距调优：左右只留 20px ("一点点"空间)，告别夸张大白边 */
+        /* 间距调优：左右只留 20px 空间 */
         padding: 0 20px 20px 20px !important; 
         
         box-sizing: border-box !important;
         height: calc(100vh - 260px) !important;
         align-items: stretch !important;
-        /* 隐藏原生滚动条，让滑动看起来更像原生 App */
         scrollbar-width: none; 
         -ms-overflow-style: none;
     }
@@ -187,16 +186,16 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         display: none !important;
     }
 
-    /* 🔥 终极必杀技：右侧隐形卡片同步缩小到 20px，保证滑到最右边时完全对称！ */
+    /* 右侧隐形卡片同步缩小 */
     #tab-0.active::after, #tab-1.active::after {
         content: "" !important;
         display: block !important;
-        flex: 0 0 20px !important; /* 与左侧 20px 完美呼应 */
+        flex: 0 0 20px !important; 
         height: 100% !important;
         pointer-events: none !important; 
     }
 
-    /* 已出库页面 (Tab 2) 保持网格排列，因为这是历史记录，适合往下翻 */
+    /* 已出库页面 (Tab 2) 保持网格排列 */
     .shipped-grid {
         display: grid !important;
         grid-template-columns: repeat(4, 440px) !important;
@@ -205,7 +204,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         margin: 0 auto !important;
     }
 
-    /* 严格锁死单张卡片的宽度为 440px，在横向轨道里绝对不被挤压 */
+    /* 严格锁死单张卡片的宽度为 440px */
     .flip-container, .completed-card {
         width: 440px !important;
         flex: 0 0 440px !important; 
@@ -218,7 +217,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         height: 100% !important;
     }
 
-    /* 内部缩放引擎空间，保持完美弹性 */
+    /* 内部缩放引擎空间 */
     .product-list {
         flex: 1 1 0 !important; 
         height: auto !important;
@@ -230,19 +229,33 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         width: 440px !important;
     }
 
+    /* 已出库页面 (Tab 2) 开启物理纵向滚动轨道 */
+    #tab-2.active {
+        display: flex !important;
+        height: calc(100vh - 220px) !important; 
+        overflow-y: auto !important;            
+        overflow-x: hidden !important;
+        width: 100vw !important;
+        margin-left: -60px !important;
+        padding: 0 20px 100px 20px !important; 
+        box-sizing: border-box !important;
+        scrollbar-width: none; 
+        -ms-overflow-style: none;
+    }
+
     /* ========================================================
-     * 🔒 电脑端专属：为已出库(Tab 2)和原材料(Tab 3)开启物理纵向滚动轨道
+     * 🚀 原材料专属轨道优化：卡片边缘到屏幕左右固定留白约 10px
      * ======================================================== */
-    #tab-2.active, #tab-3.active {
+    #tab-3.active {
         display: flex !important;
         height: calc(100vh - 220px) !important; 
         overflow-y: auto !important;            
         overflow-x: hidden !important;
         
-        /* 🚀 同步修复：抵消 body 限制，对齐上面的 20px 极简边距 */
         width: 100vw !important;
         margin-left: -60px !important;
-        padding: 0 20px 100px 20px !important; 
+        /* 左右留出 10px 的呼吸轨道空间 */
+        padding: 0 10px 100px 10px !important; 
         
         box-sizing: border-box !important;
         scrollbar-width: none; 
@@ -253,9 +266,19 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         display: none !important;
     }
 
-    /* 优化原材料面板在电脑端的阅读体验（居中且限制最大宽度） */
+    /* 🚀 终极样式修正：让网格系统精准控制为“一行只并排展示 2 个” */
+    #tab-3 .timeline-items {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important; /* 核心：平分整行，一行两个 */
+        gap: 16px !important; /* 卡片之间的间距 */
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 让时间线大容器撑满 100% 视口 */
     #tab-3 .timeline-container {
-        width: 1400px !important; 
-        margin: 0 auto !important; 
+        width: 100% !important; 
+        margin: 0 !important; 
+        box-sizing: border-box !important;
     }
 }
