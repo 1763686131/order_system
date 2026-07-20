@@ -185,26 +185,21 @@ async function fetchOrders() {
                     if (hasPerm('shipped.detail')) detailBtnHtml = `<div class="s-detail-btn" onclick="openEditOrderModal(${o.id})">详情</div>`;
                     
                     // ==================================================
-                    // ✅ 全新翻译引擎：把后端的纯数字索引，翻译成前端好看的中文
+                    // ✅ 数字翻译字典与“默认其它”的兜底逻辑
                     // ==================================================
                     let methodMap = {0: '物流', 1: '零担快运', 2: '快递', 3: '专车', 4: '其它'};
-                    let renderMethod = '其它'; // 遇到异常数据，默认兜底展示其它
+                    let renderMethod = '其它'; // 🔥 当为空或者异常时，前端默认展示“其它”
                     
-                    // 1. 如果有新版数字索引字段
+                    // 如果存在最新的数字索引
                     if (o.shipping_method !== undefined && o.shipping_method !== "") {
                         renderMethod = methodMap[o.shipping_method] || '其它';
-                        // 如果选了其它(4)，并且手动打字了，就显示手动打的字
                         if (o.shipping_method === 4 && o.shipping_custom) {
-                            renderMethod = o.shipping_custom;
+                            renderMethod = o.shipping_custom; // 如果手写了内容，展示手写内容
                         }
                     } 
-                    // 2. 兼容昨天的测试数据
+                    // 兼容旧数据
                     else if (o.logistics_type) {
                         renderMethod = o.logistics_type; 
-                    } 
-                    // 3. 兼容远古没有任何出库方式的旧数据
-                    else {
-                        renderMethod = '物流'; 
                     }
 
                     tHtml += `
@@ -215,12 +210,10 @@ async function fetchOrders() {
                             <div class="expand-list-text">展开列表</div>
                             <div class="s-tags-wrapper">${tagsHtml}</div>
                             ${o.remark ? `<div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:${o.remark}</div></div>` : ''}
-                            
                             <div class="s-tags-wrapper">
                                 <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">方式: ${renderMethod}</div>
                                 <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">单号/凭证: ${o.logistics_no || '暂无记录'}</div>
                             </div>
-                            
                             <div class="shipped-bottom">
                                 <div><div class="s-time-label">出库发货时间</div><div class="s-time-value">${o.shipped_date || o.completed_date || '未知'}</div></div>
                                 ${detailBtnHtml}
@@ -606,12 +599,11 @@ async function submitShipOrder() {
     let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
     if (!logisticsNo) logisticsNo = '无单号记录'; 
 
-    // 拿到被勾选的那个单选框
+    // 🔥 抓取单选框的数字值 (如果没有选中，兜底默认给 4：其它)
     const selectedRadio = document.querySelector('input[name="shipLogisticsType"]:checked');
-    // 获取对应的值并转为数字类型，如果没拿到默认就是 0(物流)
-    let shippingMethodIdx = selectedRadio ? parseInt(selectedRadio.value) : 0; 
+    let shippingMethodIdx = selectedRadio ? parseInt(selectedRadio.value) : 4; 
     
-    // 如果选了4(其它)，顺便把输入框里的字也抓下来，免得丢失自定义信息
+    // 如果选中的是 4(其它)，则抓取旁边输入框的字
     let customText = '';
     if (shippingMethodIdx === 4) {
         customText = document.getElementById('shipLogisticsTypeOther').value.trim();
@@ -624,8 +616,8 @@ async function submitShipOrder() {
             headers: getHeaders(),
             body: JSON.stringify({ 
                 status: 'shipped', 
-                shipping_method: shippingMethodIdx, // ✅ 核心：上传索引数字 0,1,2,3,4
-                shipping_custom: customText,        // 辅助：上传手写补充文本
+                shipping_method: shippingMethodIdx, // ✅ 核心：上传数字索引 0,1,2,3,4
+                shipping_custom: customText,        // ✅ 核心：上传手写补充文本
                 logistics_no: logisticsNo, 
                 shipped_date: currentDateTime, 
                 completed_date: currentDateTime 

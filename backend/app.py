@@ -224,7 +224,7 @@ def update_order_status(order_id):
             if ns == 'completed':
                 x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
             elif ns == 'shipped':
-                # ✅ 接受数字索引入库 (默认如果传错给4:其它)
+                # ✅ 接受数字索引入库
                 x['shipping_method'] = req_data.get('shipping_method', 4)
                 x['shipping_custom'] = req_data.get('shipping_custom', '')
                 x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
