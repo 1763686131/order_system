@@ -362,3 +362,121 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 #userModal button:nth-last-of-type(1):hover {
     background: #bee5d3 !important;
 }
+
+/* =========================================================
+   💊 修改订单弹窗 (editOrderModal) 底部按钮 UI 完美覆写
+   强行镇压旧版的 float 浮动，改用现代 Flex 均分大药丸布局
+   ========================================================= */
+
+/* 1. 重构底部容器：取消原本的左右乱飘，变成等宽弹性盒子 */
+#editOrderModal .old-modal-footer {
+    display: flex !important;
+    gap: 12px !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 20px !important;
+    border-top: 1px solid #f0f2f5 !important;
+}
+
+/* 2. 统一大药丸按钮基础样式 (抹除原有内联样式) */
+#editOrderModal .old-modal-footer button {
+    flex: 1 !important;
+    float: none !important; /* 彻底废除旧版的左浮动 */
+    border-radius: 20px !important;
+    border: none !important;
+    font-weight: bold !important;
+    height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    outline: none !important;
+    box-shadow: none !important;
+    font-size: 14px !important;
+}
+
+/* 3. 第1个按钮：删除订单 (定制水蜜桃粉，危险操作) */
+#editOrderModal .old-modal-footer button:nth-of-type(1) {
+    background: #FDECEE !important;
+    color: #F46E83 !important;
+}
+#editOrderModal .old-modal-footer button:nth-of-type(1):hover {
+    background: #fbcdd1 !important;
+}
+
+/* 4. 第2个按钮：取消 (高级冷灰) */
+#editOrderModal .old-modal-footer button:nth-of-type(2) {
+    background: #f0f2f5 !important;
+    color: #666 !important;
+}
+#editOrderModal .old-modal-footer button:nth-of-type(2):hover {
+    background: #e4e7ed !important;
+}
+
+/* 5. 第3个按钮：确认修改 (定制薄荷绿，确认操作) */
+#editOrderModal .old-modal-footer button:nth-of-type(3) {
+    background: #D5EFE3 !important;
+    color: #4CBCA0 !important;
+}
+#editOrderModal .old-modal-footer button:nth-of-type(3):hover {
+    background: #bee5d3 !important;
+}
+
+/* =========================================================
+   💊 账户控制台弹窗 (viewUserModal) 底部按钮 UI 完美覆写
+   统一采用 Flex 等宽大药丸布局，彻底镇压旧版 float 浮动
+   ========================================================= */
+
+/* 1. 重构底部容器：等宽弹性盒子，告别左右乱飘 */
+#viewUserModal .old-modal-footer {
+    display: flex !important;
+    gap: 12px !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 20px !important;
+    border-top: 1px solid #f0f2f5 !important;
+}
+
+/* 2. 统一大药丸按钮基础样式 (彻底抹除旧版内联样式和浮动) */
+#viewUserModal .old-modal-footer button {
+    flex: 1 !important;
+    float: none !important; /* 核心：废除极其古老的左浮动 */
+    border-radius: 20px !important;
+    border: none !important;
+    font-weight: bold !important;
+    height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important; /* 强制覆盖可能存在的外边距 */
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    outline: none !important;
+    box-shadow: none !important;
+    font-size: 14px !important;
+}
+
+/* 3. 第1个按钮：物理注销该账户 (定制水蜜桃粉，高危操作) */
+#viewUserModal .old-modal-footer button:nth-of-type(1) {
+    background: #FDECEE !important;
+    color: #F46E83 !important;
+}
+#viewUserModal .old-modal-footer button:nth-of-type(1):hover {
+    background: #fbcdd1 !important;
+}
+
+/* 4. 第2个按钮：关闭 (高级冷灰) */
+#viewUserModal .old-modal-footer button:nth-of-type(2) {
+    background: #f0f2f5 !important;
+    color: #666 !important;
+}
+#viewUserModal .old-modal-footer button:nth-of-type(2):hover {
+    background: #e4e7ed !important;
+}
+
+/* 5. 第3个按钮：保存账户与权限 (定制薄荷绿，确认操作) */
+#viewUserModal .old-modal-footer button:nth-of-type(3) {
+    background: #D5EFE3 !important;
+    color: #4CBCA0 !important;
+}
+#viewUserModal .old-modal-footer button:nth-of-type(3):hover {
+    background: #bee5d3 !important;
+}
