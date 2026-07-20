@@ -17,26 +17,50 @@ function getCurrentDateTime() {
     return `${Y}-${M}-${D} ${h}:${m}`;
 }
 
-// 3. 智能单行文本动态缩放比例引擎 (横向防挤压)
-function calculateTextScale(text, targetLen = 15) {
+// 3. 智能单行文本动态缩放比例引擎 (像素级视觉权重版)
+function calculateTextScale(text, targetLen = 14) {
     if (!text) return 1;
     let currentLen = 0;
+    
     for(let i = 0; i < text.length; i++) {
-        // 🔥 核心修复：精准正则表达式捕获！
-        // 只有纯数字和纯英文字母算 0.55 宽度。汉字、+-*/、标点符号、空格统统算 1 宽度！
-        if (/[a-zA-Z0-9]/.test(text[i])) {
-            currentLen += 0.55;
-        } else {
-            currentLen += 1;
+        let char = text[i];
+        
+        // 1. 汉字及全角标点符号 (最宽，基准值为 1)
+        if (/[\u4e00-\u9fa5\u3000-\u303F\uFF00-\uFFEF]/.test(char)) {
+            currentLen += 1.0; 
+        } 
+        // 2. 大写英文字母 (精细拆分)
+        else if (/[A-Z]/.test(char)) {
+            if (/[WM]/.test(char)) currentLen += 0.95; // W和M极宽，几乎等同于汉字
+            else if (/[OQD]/.test(char)) currentLen += 0.85; 
+            else if (/[I]/.test(char)) currentLen += 0.45; // I特别瘦
+            else currentLen += 0.75; // 普通大写字母
+        } 
+        // 3. 小写英文字母 (精细拆分)
+        else if (/[a-z]/.test(char)) {
+            if (/[wm]/.test(char)) currentLen += 0.8; 
+            else if (/[iljt]/.test(char)) currentLen += 0.4; // 这些小写字母很瘦
+            else currentLen += 0.6; // 普通小写字母
+        } 
+        // 4. 数字 (精细拆分)
+        else if (/[0-9]/.test(char)) {
+            if (char === '1') currentLen += 0.45; // 1特别瘦
+            else currentLen += 0.65; // 0,8,9等数字偏宽
+        } 
+        // 5. 空格与其他半角符号
+        else {
+            if (char === ' ') currentLen += 0.3; 
+            else currentLen += 0.5; 
         }
     }
+    
     if (currentLen === 0) return 1;
     
-    // 计算缩放比例：基准长度 / 实际长度
+    // 计算缩放比例：基准长度 / 实际视觉长度
     let scale = targetLen / currentLen;
     
-    // 限制缩放范围：最大放大 1.4 倍（防止字太少变得像巨无霸），最小缩小 0.4 倍（保证长文本也能在一行显示全）
-    return Math.min(Math.max(scale, 0.4), 1.4);
+    // 限制缩放范围：最大放大 1.15 倍，最小缩小 0.35 倍（保证再极端的长文本也能缩得下）
+    return Math.min(Math.max(scale, 0.35), 1.15);
 }
 
 // 4. 兼容性剪贴板复制兜底工具

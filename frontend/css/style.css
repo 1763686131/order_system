@@ -481,3 +481,8 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
     background: #bee5d3 !important;
 }
 
+/* 彻底解除红色数字的固定边距死锁 */
+.text-red-large {
+    margin: 0 0.15em !important;
+    letter-spacing: 0.02em !important;
+}

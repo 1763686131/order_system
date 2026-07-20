@@ -316,10 +316,14 @@ async function fetchOrders() {
                 if (currentTab === 0) {
                     let frontGoodsHtml = '';
                     chunkLines.forEach(line => {
-                        let lineScale = calculateTextScale(line, 15);
-                        let renderScale = Math.min(lineScale, 1.15); 
-                        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large" style="font-size: calc(var(--red-size, 42px) * ${renderScale});">$1</span>`);
-                        frontGoodsHtml += `<div class="product-item" style="font-size: calc(var(--base-size, 24px) * ${renderScale}); white-space: nowrap; height: calc(var(--red-size, 42px) * 1.1); display: flex; align-items: center;">${formattedLine}</div>`;
+                        let lineScale = calculateTextScale(line, 14.5); 
+                        let renderScale = Math.min(lineScale, 1.15);
+                        
+                        // 🔥 移除内联的繁杂字号计算，直接套用纯净标签
+                        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large">$1</span>`);
+                        
+                        // 🔥 外层统一启用 zoom 进行“物理级”整体缩放，彻底无视浏览器 12px 封锁线！
+                        frontGoodsHtml += `<div class="product-item" style="zoom: ${renderScale}; white-space: nowrap; height: calc(var(--red-size, 42px) * 1.1); display: flex; align-items: center;">${formattedLine}</div>`;
                     });
 
                     let indicatorHtml = (!isMobile && isSplit) ? `<div class="card-part-indicator">${partLetter}</div>` : '';
@@ -405,8 +409,8 @@ async function fetchOrders() {
                 } 
                 else if (currentTab === 1) {
                     let frontGoodsHtml = '';
-                    chunkLines.forEach(line => { 
-                        let lineScale = calculateTextScale(line, 15);
+                    chunkLines.forEach(line => {
+                        let lineScale = calculateTextScale(line, 14.5);
                         let renderScale = Math.min(lineScale, 1.15);
                         frontGoodsHtml += `<div class="info-row text-red text-bold" style="font-size: calc(var(--base-size, 24px) * ${renderScale}); white-space: nowrap; flex-shrink: 0; height: calc(var(--base-size, 24px) * 1.4); display: flex; align-items: center;">${line}</div>`; 
                     });
@@ -674,7 +678,7 @@ function triggerStatusConfirm(orderId, targetStatus) {
     let goodsLines = (order.goods_name || '').split('\n').filter(l => l.trim() !== '');
     let goodsHtml = '';
     goodsLines.forEach(line => {
-        let lineScale = calculateTextScale(line, 15);
+        let lineScale = calculateTextScale(line, 13.5);
         let renderScale = Math.min(lineScale, 1.15);
         let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large" style="font-size: calc(24px * ${renderScale});">$1</span>`);
         goodsHtml += `<div class="modal-product" style="font-size: calc(16px * ${renderScale}); white-space: nowrap; height: 32px; display: flex; align-items: center;">${formattedLine}</div>`;
