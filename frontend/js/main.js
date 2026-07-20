@@ -125,7 +125,7 @@ async function fetchOrders() {
         if (currentTab === 2) {
             let shippedOrders = serverOrders.filter(o => o.status === 'shipped');
             
-            // 🔥 【核心范围过滤逻辑】：有范围则用范围，没范围则默认展示最近三天
+            // 【核心范围过滤逻辑】：有范围则用范围，没范围则默认展示最近三天
             if (nomiActiveFilterStart && nomiActiveFilterEnd) {
                 let startT = new Date(nomiActiveFilterStart.replace(/-/g, '/')).getTime();
                 let endT = new Date(nomiActiveFilterEnd.replace(/-/g, '/')).getTime() + 86400000 - 1; 
@@ -158,29 +158,37 @@ async function fetchOrders() {
                 return;
             }
             
+            // 完美恢复按日期分组的朋友圈时间线渲染逻辑
             let groups = {};
             shippedOrders.forEach(o => {
                 let day = o.shipped_date ? o.shipped_date.substring(0, 10) : (o.completed_date ? o.completed_date.substring(0, 10) : '未知日期');
-                if (!groups[day]) groups[day] = []; groups[day].push(o);
+                if (!groups[day]) groups[day] = []; 
+                groups[day].push(o);
             });
             
             let tHtml = '<div class="timeline-container">';
             
-            // 彻底移除了“清除筛选”按钮的代码，刷新即恢复默认！
-
-            // 🔥 完美修复：恢复按日期分组的朋友圈时间线渲染逻辑
+            // 日期大组倒序（最新的一天排在最上面）
             Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
                 tHtml += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="shipped-grid">`;
                 
-                // 🚀 【排版与视觉升级版】已出库订单卡片流逻辑
-                groups[date].forEach(o => {
+                // 🔴 🔥【核心修改点】：在循环渲染卡片前，先对当天内所有的卡片按出库发货时间重新进行一次高精度倒序排列
+                let sortedGroupOrders = groups[date].sort((itemA, itemB) => {
+                    let timeA = itemA.shipped_date || itemA.completed_date || '';
+                    let timeB = itemB.shipped_date || itemB.completed_date || '';
+                    // 字符串直接逆向比对，离当前时间最近（时间越大，比如14:00比10:00大）的排在最前面
+                    return timeB.localeCompare(timeA);
+                });
+
+                // 这里换成遍历我们精准倒序完的新数组sortedGroupOrders
+                sortedGroupOrders.forEach(o => {
                     let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
                     let typeText = o.type == 1 ? '绝缘订单' : '中固订单';
                     
                     let tagsHtml = '';
                     if (o.goods_packaging) tagsHtml += `<div class="s-tag s-tag-purple">包装:${o.goods_packaging}</div>`;
                     
-                    // 🔴 1. 【核心修改】将“件数”的位置提到了“货物总重量”的前面
+                    // 件数挪到货物重量位置前
                     if (o.goods_quantity) tagsHtml += `<div class="s-tag s-tag-green">件数:${o.goods_quantity}</div>`;
                     if (o.goods_weight) tagsHtml += `<div class="s-tag s-tag-cyan">货物总重量:${o.goods_weight}</div>`;
                     
@@ -198,23 +206,35 @@ async function fetchOrders() {
                         renderMethod = o.logistics_type; 
                     }
 
-                    // 沿用您的专属定制马卡龙色系角标
+                    // 沿用专属定制马卡龙色系角标
+                   // ==================================================
+                    // 🔴 终极升级：融入“有权手型点击，无权静默箭头”的安全判定机制
+                    // ==================================================
                     let isAudited = o.audit_state === 1; 
                     let ribbonHtml = '';
                     let clickEventStr = '';
 
                     if (isAudited) {
+                        // 1. 已发货状态：属于锁死状态，任何人都不能再点
                         ribbonHtml = `<div class="ribbon" style="background: #D5EFE3; color: #4CBCA0; border: none; font-weight: bold; box-shadow: none;">已发货</div>`;
                         clickEventStr = `style="cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死禁止修改"`;
                     } else {
+                        // 2. 未审核状态：克隆备注色系背景
                         ribbonHtml = `<div class="ribbon" style="background: #FDECEE; color: #F46E83; border: none; font-weight: bold; box-shadow: none;">未审核</div>`;
-                        clickEventStr = `onclick="triggerShippedActionModal(${o.id})" style="cursor: pointer;"`;
+                        
+                        // 🔥 核心逻辑：利用 hasPerm 精准拦截没有勾选权限的账户
+                        if (hasPerm('shipped.detail')) {
+                            // 【有权限】：鼠标悬浮变成手型，点击唤醒管理弹窗
+                            clickEventStr = `onclick="triggerShippedActionModal(${o.id})" style="cursor: pointer;"`;
+                        } else {
+                            // 【没有权限】：鼠标保持普通箭头样式 (default)，彻底抹除点击事件，点击静默无任何反应！
+                            clickEventStr = `style="cursor: default;"`;
+                        }
                     }
 
                     tHtml += `
                     <div class="shipped-card" ${clickEventStr}>
                         ${ribbonHtml}
-                        
                         <div class="shipped-left" style="display: flex; flex-direction: column;">
                             <div class="shipped-title">${o.goods_name || '无货物名称'}</div>
                             <div class="expand-list-text">展开列表</div>

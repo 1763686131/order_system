@@ -27,9 +27,9 @@ const PERMISSIONS_CONFIG = [
         ]
     },
     {
-        group: 'shipped_order', label: '已出库订单 (历史归档)',
+        group: 'shipped_order', label: '已出库订单',
         children: [
-            { key: 'shipped.detail', label: '显示：查看历史详细信息' }
+            { key: 'shipped.detail', label: '出库订单审核与撤销' }
         ]
     },
     {
