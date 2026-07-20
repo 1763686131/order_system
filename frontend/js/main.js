@@ -172,6 +172,7 @@ async function fetchOrders() {
             Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
                 tHtml += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="shipped-grid">`;
                 
+                // 从这里开始完全覆盖原有的卡片循环逻辑
                 groups[date].forEach(o => {
                     let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
                     let typeText = o.type == 1 ? '绝缘订单' : '中固订单';
@@ -183,6 +184,29 @@ async function fetchOrders() {
                     let detailBtnHtml = '';
                     if (hasPerm('shipped.detail')) detailBtnHtml = `<div class="s-detail-btn" onclick="openEditOrderModal(${o.id})">详情</div>`;
                     
+                    // ==================================================
+                    // ✅ 全新翻译引擎：把后端的纯数字索引，翻译成前端好看的中文
+                    // ==================================================
+                    let methodMap = {0: '物流', 1: '零担快运', 2: '快递', 3: '专车', 4: '其它'};
+                    let renderMethod = '其它'; // 遇到异常数据，默认兜底展示其它
+                    
+                    // 1. 如果有新版数字索引字段
+                    if (o.shipping_method !== undefined && o.shipping_method !== "") {
+                        renderMethod = methodMap[o.shipping_method] || '其它';
+                        // 如果选了其它(4)，并且手动打字了，就显示手动打的字
+                        if (o.shipping_method === 4 && o.shipping_custom) {
+                            renderMethod = o.shipping_custom;
+                        }
+                    } 
+                    // 2. 兼容昨天的测试数据
+                    else if (o.logistics_type) {
+                        renderMethod = o.logistics_type; 
+                    } 
+                    // 3. 兼容远古没有任何出库方式的旧数据
+                    else {
+                        renderMethod = '物流'; 
+                    }
+
                     tHtml += `
                     <div class="shipped-card">
                         <div class="ribbon">已出库</div>
@@ -191,10 +215,12 @@ async function fetchOrders() {
                             <div class="expand-list-text">展开列表</div>
                             <div class="s-tags-wrapper">${tagsHtml}</div>
                             ${o.remark ? `<div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:${o.remark}</div></div>` : ''}
+                            
                             <div class="s-tags-wrapper">
-                                <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">方式: ${o.logistics_type || '物流'}</div>
+                                <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">方式: ${renderMethod}</div>
                                 <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">单号/凭证: ${o.logistics_no || '暂无记录'}</div>
                             </div>
+                            
                             <div class="shipped-bottom">
                                 <div><div class="s-time-label">出库发货时间</div><div class="s-time-value">${o.shipped_date || o.completed_date || '未知'}</div></div>
                                 ${detailBtnHtml}
@@ -210,6 +236,7 @@ async function fetchOrders() {
                         </div>
                     </div>`;
                 });
+                // 到这里结束覆盖
                 
                 tHtml += `</div></div>`;
             });
@@ -579,14 +606,15 @@ async function submitShipOrder() {
     let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
     if (!logisticsNo) logisticsNo = '无单号记录'; 
 
-    // 🔥 终极升级点：放弃容易失效的 for 循环循环抓取，改用 querySelector 直接定位页面当前被选中的单选框
+    // 拿到被勾选的那个单选框
     const selectedRadio = document.querySelector('input[name="shipLogisticsType"]:checked');
-    let logisticsType = selectedRadio ? selectedRadio.value : '物流';
+    // 获取对应的值并转为数字类型，如果没拿到默认就是 0(物流)
+    let shippingMethodIdx = selectedRadio ? parseInt(selectedRadio.value) : 0; 
     
-    // 如果选中的是第二行独立 DIV 中的“自由填写”，则动态抓取右侧文本框内的自定义文案
-    if (logisticsType === '自由填写') {
-        const otherVal = document.getElementById('shipLogisticsTypeOther').value.trim();
-        logisticsType = otherVal ? otherVal : '其它发货方式';
+    // 如果选了4(其它)，顺便把输入框里的字也抓下来，免得丢失自定义信息
+    let customText = '';
+    if (shippingMethodIdx === 4) {
+        customText = document.getElementById('shipLogisticsTypeOther').value.trim();
     }
 
     const currentDateTime = getCurrentDateTime();
@@ -596,7 +624,8 @@ async function submitShipOrder() {
             headers: getHeaders(),
             body: JSON.stringify({ 
                 status: 'shipped', 
-                logistics_type: logisticsType, // ✅ 这里会百分之百打包你选中的真实参数上传
+                shipping_method: shippingMethodIdx, // ✅ 核心：上传索引数字 0,1,2,3,4
+                shipping_custom: customText,        // 辅助：上传手写补充文本
                 logistics_no: logisticsNo, 
                 shipped_date: currentDateTime, 
                 completed_date: currentDateTime 

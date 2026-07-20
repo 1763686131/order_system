@@ -185,7 +185,8 @@ def add_order():
         "date": ct, 
         "completed_date": "",
         "shipped_date": "",
-        "logistics_type": "",
+        "shipping_method": "",   # <--- 新增坑位：存放数字索引
+        "shipping_custom": "",   # <--- 新增坑位：存放手写补充信息
         "logistics_no": "",
         "order_client": req_data.get('order_client', ''),
         "receiver_name": req_data.get('receiver_name', ''),
@@ -223,11 +224,11 @@ def update_order_status(order_id):
             if ns == 'completed':
                 x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
             elif ns == 'shipped':
-                # ✅ 存入发货方式、发货单号和发货时间
-                x['logistics_type'] = req_data.get('logistics_type', '物流')
+                # ✅ 接受数字索引入库 (默认如果传错给4:其它)
+                x['shipping_method'] = req_data.get('shipping_method', 4)
+                x['shipping_custom'] = req_data.get('shipping_custom', '')
                 x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
                 x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
-                # 同时保留一份 completed_date 防止有些老数据报错
                 x['completed_date'] = x['shipped_date']
             elif ns == 'pending':
                 # 撤销回未完成时，清空时间和出库参数
