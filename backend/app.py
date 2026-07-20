@@ -224,12 +224,16 @@ def update_order_status(order_id):
             if ns == 'completed':
                 x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
             elif ns == 'shipped':
-                # ✅ 接受数字索引入库
+                # 🚨 侦探探头：在黑窗口打印收到的数据！
+                print(f"🚀 [后端监控] 接收到单号 {order_id} 的发货请求，数据包为: {req_data}")
+                
                 x['shipping_method'] = req_data.get('shipping_method', 4)
                 x['shipping_custom'] = req_data.get('shipping_custom', '')
                 x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
                 x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
                 x['completed_date'] = x['shipped_date']
+                
+                print(f"✅ [后端监控] 成功准备写入数据库的值：索引={x['shipping_method']}, 手写文本={x['shipping_custom']}")
             elif ns == 'pending':
                 # 撤销回未完成时，彻底清空时间和出库参数
                 x['completed_date'] = ""

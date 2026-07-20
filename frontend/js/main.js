@@ -599,11 +599,9 @@ async function submitShipOrder() {
     let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
     if (!logisticsNo) logisticsNo = '无单号记录'; 
 
-    // 🔥 终极防爆抓取：限定在发货弹窗内部寻找，绝对不会抓到被隐藏的旧代码！
+    // 强力抓取弹窗里当前选中的单选框
     const selectedRadio = document.querySelector('#shipOrderModal input[name="shipLogisticsType"]:checked');
-    
-    // 防呆设计：如果抓到了正常数字就用，抓不到或者抓到中文字符全部强制转为 4（其它）
-    let shippingMethodIdx = 4;
+    let shippingMethodIdx = 4; // 兜底默认给 4(其它)
     if (selectedRadio && !isNaN(parseInt(selectedRadio.value))) {
         shippingMethodIdx = parseInt(selectedRadio.value);
     }
@@ -614,18 +612,23 @@ async function submitShipOrder() {
     }
 
     const currentDateTime = getCurrentDateTime();
+    const payload = { 
+        status: 'shipped', 
+        shipping_method: shippingMethodIdx, // 绝对纯正的数字索引
+        shipping_custom: customText,        
+        logistics_no: logisticsNo, 
+        shipped_date: currentDateTime, 
+        completed_date: currentDateTime 
+    };
+
+    // 🚨 侦探探头：在浏览器控制台打印即将发送的包裹！
+    console.log("🚀 [前端监控] 准备发送给数据库的数据：", payload);
+
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({ 
-                status: 'shipped', 
-                shipping_method: shippingMethodIdx, // 绝对纯正的数字索引上传
-                shipping_custom: customText,        // 手写内容上传
-                logistics_no: logisticsNo, 
-                shipped_date: currentDateTime, 
-                completed_date: currentDateTime 
-            })
+            body: JSON.stringify(payload)
         });
         if (response.ok) { closeShipModal(); fetchOrders(); }
     } catch (e) { alert('发货出库网络通讯失败'); }
