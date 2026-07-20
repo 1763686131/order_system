@@ -188,3 +188,71 @@
     background: #bee5d3 !important;
     transform: scale(1.01) !important; /* 微弱的悬浮放大反馈 */
 }
+
+/* =========================================================
+   💊 NOMI 日历气泡底部双按钮并排等宽 UI 覆写
+   ========================================================= */
+
+/* 1. 按钮横向均分弹性容器 */
+.nomi-btn-group {
+    display: flex !important;
+    gap: 8px !important;
+    width: 100% !important;
+    margin-top: 4px !important;
+}
+
+/* 2. 🚀 新增：最近一周药丸按钮 (高端莫兰迪冷灰蓝系) */
+.nomi-btn-secondary {
+    flex: 1 !important; /* 核心：1比1平分下方整行 */
+    border-radius: 20px !important;
+    background: #E2E9F3 !important;
+    color: #5A738E !important;
+    border: none !important;
+    padding: 10px 0 !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    outline: none !important;
+    box-shadow: none !important;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.nomi-btn-secondary:hover {
+    background: #d0dae9 !important;
+    transform: scale(1.02) !important;
+}
+
+/* 3. 🚀 升级：开始筛选大药丸按钮 (从width:100%改为弹性平分) */
+.nomi-btn-confirm {
+    flex: 1 !important; /* 核心：1比1平分下方整行 */
+    border-radius: 20px !important;
+    background: #D5EFE3 !important;
+    color: #4CBCA0 !important;
+    border: none !important;
+    padding: 10px 0 !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    outline: none !important;
+    box-shadow: none !important;
+    margin-top: 0 !important; /* 清理掉旧版本的单行外边距 */
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.nomi-btn-confirm:hover {
+    background: #bee5d3 !important;
+    transform: scale(1.02) !important;
+}
+
+/* =========================================================
+   💊 修复 NOMI 气泡双按钮上下错位的 BUG
+   强制清空旧版垂直列表遗留的 margin-top 干扰
+   ========================================================= */
+.nomi-btn-group {
+    align-items: center !important; /* 确保容器内部绝对垂直居中对齐 */
+}
+
+.nomi-btn-group button {
+    margin: 0 !important; /* 核心：干掉所有导致错位的外部间距 */
+    height: 36px !important; /* 统一高度，彻底治愈强迫症 */
+    line-height: 36px !important;
+    padding: 0 !important;
+}

@@ -160,9 +160,9 @@ document.addEventListener('DOMContentLoaded', () => {
     window.triggerDateFilterSpeech = function(filterType = 'shipped') {
         if (!speechBubble) return;
 
-        let tipText = filterType === 'material' ? '主人，请选择要查看的【原材料】记录范围：' : '主人，请选择要查看的【出库单】范围：';
+        let tipText = filterType === 'material' ? '主人，请选择要查看的【原材料】范围：' : '主人，请选择要查看的【出库单】范围：';
 
-        // 🌟 核心修改区：纯净版 HTML 骨架，全面对接 nomi.css 的横向全圆角样式
+        // 🌟 结构优化：引入 nomi-btn-group 按钮组包裹两个按钮
         speechBubble.innerHTML = `
             <div id="nomiFilterArea" class="nomi-filter-area">
                 <span class="nomi-filter-title">${tipText}</span>
@@ -179,7 +179,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
 
-                <button id="btnNomiDateConfirm" class="nomi-btn-confirm">开始筛选</button>
+                <div class="nomi-btn-group">
+                    <button id="btnNomiPastWeek" class="nomi-btn-secondary">最近一周</button>
+                    <button id="btnNomiDateConfirm" class="nomi-btn-confirm">开始筛选</button>
+                </div>
             </div>
         `;
         
@@ -195,9 +198,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setTimeout(() => {
             const btnConfirm = document.getElementById('btnNomiDateConfirm');
+            const btnPastWeek = document.getElementById('btnNomiPastWeek');
             const dateStart = document.getElementById('nomiFilterStart');
             const dateEnd = document.getElementById('nomiFilterEnd');
             
+            // 💡 统一提炼底层数据提交过滤器逻辑
+            const executeFilter = (startVal, endVal) => {
+                if (filterType === 'material') {
+                    if (typeof window.executeMaterialDateFilter === 'function') {
+                        window.executeMaterialDateFilter(startVal, endVal);
+                    }
+                } else {
+                    if (typeof window.executeShippedDateFilter === 'function') {
+                        window.executeShippedDateFilter(startVal, endVal);
+                    }
+                }
+                speechBubble.classList.remove('show');
+                stopFilterTimer();
+            };
+
+            // 【功能 A】常规自定义输入框筛选
             if (btnConfirm && dateStart && dateEnd) {
                 btnConfirm.addEventListener('click', () => {
                     const startVal = dateStart.value;
@@ -206,18 +226,29 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!startVal || !endVal) return alert('请完整选择开始和结束日期哦！');
                     if (startVal > endVal) return alert('开始日期不能晚于结束日期！');
 
-                    if (filterType === 'material') {
-                        if (typeof window.executeMaterialDateFilter === 'function') {
-                            window.executeMaterialDateFilter(startVal, endVal);
-                        }
-                    } else {
-                        if (typeof window.executeShippedDateFilter === 'function') {
-                            window.executeShippedDateFilter(startVal, endVal);
-                        }
-                    }
-                    
-                    speechBubble.classList.remove('show');
-                    stopFilterTimer();
+                    executeFilter(startVal, endVal);
+                });
+            }
+
+            // 【功能 B】🚀 智能宏：自动锁定最近 7 天并执行筛选
+            if (btnPastWeek) {
+                btnPastWeek.addEventListener('click', () => {
+                    const formatDate = (d) => {
+                        const y = d.getFullYear();
+                        const m = String(d.getMonth() + 1).padStart(2, '0');
+                        const date = String(d.getDate()).padStart(2, '0');
+                        return `${y}-${m}-${date}`;
+                    };
+
+                    const today = new Date();
+                    const sevenDaysAgo = new Date();
+                    // 减去 6 天，刚好包含今天在内整整 7 天的数据
+                    sevenDaysAgo.setDate(today.getDate() - 6); 
+
+                    const startVal = formatDate(sevenDaysAgo);
+                    const endVal = formatDate(today);
+
+                    executeFilter(startVal, endVal);
                 });
             }
         }, 50);
