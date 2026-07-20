@@ -162,18 +162,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let tipText = filterType === 'material' ? '主人，请选择要查看的【原材料】记录范围：' : '主人，请选择要查看的【出库单】范围：';
 
+        // 🌟 核心修改区：纯净版 HTML 骨架，全面对接 nomi.css 的横向全圆角样式
         speechBubble.innerHTML = `
-            <div id="nomiFilterArea" style="display: flex; flex-direction: column; gap: 8px; font-size: 14px; text-align: left; pointer-events: auto;">
-                <span style="font-weight: bold; color: #333;">${tipText}</span>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                    <span style="color:#666;font-size:12px;white-space:nowrap;width:15px;">从</span>
-                    <input type="date" id="nomiFilterStart" style="padding: 2px 4px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; flex: 1; height: 26px; box-sizing: border-box;">
+            <div id="nomiFilterArea" class="nomi-filter-area">
+                <span class="nomi-filter-title">${tipText}</span>
+                
+                <div class="nomi-date-group">
+                    <div class="nomi-date-pill">
+                        <span class="nomi-date-label">从</span>
+                        <input type="date" id="nomiFilterStart" class="nomi-date-input">
+                    </div>
+                    
+                    <div class="nomi-date-pill">
+                        <span class="nomi-date-label">至</span>
+                        <input type="date" id="nomiFilterEnd" class="nomi-date-input">
+                    </div>
                 </div>
-                <div style="display: flex; gap: 6px; align-items: center;">
-                    <span style="color:#666;font-size:12px;white-space:nowrap;width:15px;">至</span>
-                    <input type="date" id="nomiFilterEnd" style="padding: 2px 4px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; outline: none; flex: 1; height: 26px; box-sizing: border-box;">
-                    <button id="btnNomiDateConfirm" style="background: #1890ff; color: #fff; border: none; padding: 0 10px; border-radius: 4px; height: 26px; font-size: 12px; cursor: pointer; font-weight: bold;">筛选</button>
-                </div>
+
+                <button id="btnNomiDateConfirm" class="nomi-btn-confirm">开始筛选</button>
             </div>
         `;
         

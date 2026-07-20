@@ -29,3 +29,162 @@
 .fab-container.active .eye.left { left: 16px; } .fab-container.active .eye.right { right: 16px; }
 .fab-container.active .mouth { width: 16px; height: 18px; top: 42px; left: 27px; border: 3px solid #ff4d4f; border-radius: 50%; }
 @keyframes jitter { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-1px, 1px); } 50% { transform: translate(1px, -1px); } 75% { transform: translate(-1px, -1px); } }
+
+/* =========================================================
+   💊 NOMI 小圆气泡 (aiSpeechBubble) 筛选菜单 UI 完美覆写
+   统一采用现代扁平化大药丸纵向列表，干掉粗糙的换行排版
+   ========================================================= */
+
+/* 1. 优化气泡本身的呼吸感与文字排版 */
+#aiSpeechBubble {
+    padding: 16px 20px !important;
+    border-radius: 16px !important;
+    line-height: 1.5 !important;
+    color: #555 !important;
+    font-weight: bold !important;
+    font-size: 14px !important;
+}
+
+/* 2. 强行干掉 JS 里可能生成的丑陋 <br> 标签，我们用 Margin 来控距 */
+#aiSpeechBubble br {
+    display: none !important;
+}
+
+/* 3. 统一所有筛选按钮为“等宽大药丸” */
+#aiSpeechBubble button {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    border-radius: 20px !important;
+    border: none !important;
+    background: #f0f2f5 !important; /* 高级冷灰色 */
+    color: #666 !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    height: 36px !important;
+    line-height: 36px !important;
+    padding: 0 !important;
+    margin: 0 0 10px 0 !important; /* 按钮之间的垂直间距 */
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    text-align: center !important;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+/* 4. 将第一颗按钮与上方的提示文字拉开距离 */
+#aiSpeechBubble button:first-of-type {
+    margin-top: 12px !important;
+}
+
+/* 5. 最后一颗按钮取消底部间距，保持气泡排版上下对称 */
+#aiSpeechBubble button:last-child {
+    margin-bottom: 0 !important;
+}
+
+/* 6. 悬浮交互：丝滑微距放大，并变成专属科技蓝 */
+#aiSpeechBubble button:hover {
+    background: #e6f7ff !important;
+    color: #1890ff !important;
+    transform: scale(1.02) !important;
+}
+
+/* =========================================================
+   💊 NOMI 专属日历筛选气泡 UI - 紧凑全圆角横向并排版
+   ========================================================= */
+
+/* 1. 优化气泡本身的呼吸感与精致宽度 */
+#aiSpeechBubble {
+    padding: 16px 18px !important;
+    border-radius: 16px !important;
+    line-height: 1.5 !important;
+    width: 290px !important; /* 稍微限定宽度，让横向并排的两个药丸比例更完美 */
+}
+
+/* 2. 气泡大框瀑布流：确保日期组在上面，按钮死死锁在下面 */
+.nomi-filter-area {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    font-size: 14px;
+    text-align: left;
+    pointer-events: auto;
+}
+
+/* 3. 提示标题文字 */
+.nomi-filter-title {
+    font-weight: bold;
+    color: #333;
+    font-size: 14px;
+}
+
+/* 4. 🚀 核心修改：强制让两个日期药丸并排“挤”在同一行 */
+.nomi-date-group {
+    display: flex;
+    flex-direction: row !important; /* 扭转为横向并排排列 */
+    gap: 8px !important;           /* 两个输入框之间的呼吸间距 */
+    width: 100% !important;
+}
+
+/* 5. 🚀 日期框完美圆角改造：100% 契合系统的扁平大药丸主题 */
+.nomi-date-pill {
+    display: flex;
+    align-items: center;
+    background: #f0f2f5;
+    border-radius: 20px !important; /* 换上最喜欢的高颜值全圆角 */
+    padding: 6px 10px !important;   /* 缩减内部边距，防止横向撑爆 */
+    flex: 1 !important;             /* 核心：两个药丸 1:1 完美平分整行 */
+    min-width: 0 !important;        /* 边缘防溢出锁 */
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+}
+
+/* 交互加分项：鼠标滑过或点击输入框时，药丸会亮起丝滑的科技蓝边框 */
+.nomi-date-pill:hover,
+.nomi-date-pill:focus-within {
+    background: #e6f7ff;
+    border-color: #1890ff;
+}
+
+/* 6. 日期内的小标签 (从/至) */
+.nomi-date-label {
+    color: #888;
+    font-size: 12px;
+    font-weight: bold;
+    margin-right: 6px;
+    flex-shrink: 0; /* 禁止被输入框无情挤压 */
+}
+
+/* 7. 彻底抹除原生浏览器丑陋的输入框白边框，使其透明隐藏于大药丸内部 */
+.nomi-date-input {
+    border: none !important;
+    background: transparent !important;
+    font-size: 12px !important; /* 微调字体大小契合单行 */
+    color: #333 !important;
+    outline: none !important;
+    flex: 1 !important;
+    min-width: 0 !important;
+    font-family: inherit;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* 8. 处于单行日期下方的——全宽薄荷绿大药丸确认按钮 */
+.nomi-btn-confirm {
+    width: 100%;
+    border-radius: 20px !important; /* 按钮也同步保持全圆角药丸 */
+    background: #D5EFE3 !important;
+    color: #4CBCA0 !important;
+    border: none !important;
+    padding: 10px 0 !important;
+    font-size: 13px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    outline: none !important;
+    box-shadow: none !important;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.nomi-btn-confirm:hover {
+    background: #bee5d3 !important;
+    transform: scale(1.01) !important; /* 微弱的悬浮放大反馈 */
+}
