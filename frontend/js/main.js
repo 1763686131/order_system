@@ -599,11 +599,15 @@ async function submitShipOrder() {
     let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
     if (!logisticsNo) logisticsNo = '无单号记录'; 
 
-    // 🔥 抓取单选框的数字值 (如果没有选中，兜底默认给 4：其它)
-    const selectedRadio = document.querySelector('input[name="shipLogisticsType"]:checked');
-    let shippingMethodIdx = selectedRadio ? parseInt(selectedRadio.value) : 4; 
+    // 🔥 终极防爆抓取：限定在发货弹窗内部寻找，绝对不会抓到被隐藏的旧代码！
+    const selectedRadio = document.querySelector('#shipOrderModal input[name="shipLogisticsType"]:checked');
     
-    // 如果选中的是 4(其它)，则抓取旁边输入框的字
+    // 防呆设计：如果抓到了正常数字就用，抓不到或者抓到中文字符全部强制转为 4（其它）
+    let shippingMethodIdx = 4;
+    if (selectedRadio && !isNaN(parseInt(selectedRadio.value))) {
+        shippingMethodIdx = parseInt(selectedRadio.value);
+    }
+    
     let customText = '';
     if (shippingMethodIdx === 4) {
         customText = document.getElementById('shipLogisticsTypeOther').value.trim();
@@ -616,8 +620,8 @@ async function submitShipOrder() {
             headers: getHeaders(),
             body: JSON.stringify({ 
                 status: 'shipped', 
-                shipping_method: shippingMethodIdx, // ✅ 核心：上传数字索引 0,1,2,3,4
-                shipping_custom: customText,        // ✅ 核心：上传手写补充文本
+                shipping_method: shippingMethodIdx, // 绝对纯正的数字索引上传
+                shipping_custom: customText,        // 手写内容上传
                 logistics_no: logisticsNo, 
                 shipped_date: currentDateTime, 
                 completed_date: currentDateTime 

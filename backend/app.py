@@ -231,11 +231,12 @@ def update_order_status(order_id):
                 x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
                 x['completed_date'] = x['shipped_date']
             elif ns == 'pending':
-                # 撤销回未完成时，清空时间和出库参数
+                # 撤销回未完成时，彻底清空时间和出库参数
                 x['completed_date'] = ""
                 x['shipped_date'] = ""
                 x['logistics_no'] = ""
-                x['logistics_type'] = ""
+                x['shipping_method'] = "" # <--- 清空新加的索引坑位
+                x['shipping_custom'] = "" # <--- 清空手写补充文本
             break
             
     orders_data['orders'] = orders_list
