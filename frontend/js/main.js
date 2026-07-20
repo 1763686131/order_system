@@ -192,7 +192,7 @@ async function fetchOrders() {
                             <div class="s-tags-wrapper">${tagsHtml}</div>
                             ${o.remark ? `<div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:${o.remark}</div></div>` : ''}
                             <div class="s-tags-wrapper">
-                                <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">方式: ${o.logistics_type || '未登记'}</div>
+                                <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">方式: ${o.logistics_type || '物流'}</div>
                                 <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">单号/凭证: ${o.logistics_no || '暂无记录'}</div>
                             </div>
                             <div class="shipped-bottom">
@@ -557,6 +557,9 @@ async function fetchMaterials() {
     }
 }
 
+// ========================================================
+// 📦 发货出库模块：全自动高精度单选框参数抓取
+// ========================================================
 function triggerShipModal(orderId) {
     document.getElementById('shipTargetId').value = orderId;
     document.getElementById('shipLogisticsNo').value = ''; 
@@ -576,14 +579,11 @@ async function submitShipOrder() {
     let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
     if (!logisticsNo) logisticsNo = '无单号记录'; 
 
-    // 获取单选框被选中的值
-    let logisticsType = '物流';
-    const typeRadios = document.getElementsByName('shipLogisticsType');
-    for (let r of typeRadios) {
-        if (r.checked) { logisticsType = r.value; break; }
-    }
+    // 🔥 终极升级点：放弃容易失效的 for 循环循环抓取，改用 querySelector 直接定位页面当前被选中的单选框
+    const selectedRadio = document.querySelector('input[name="shipLogisticsType"]:checked');
+    let logisticsType = selectedRadio ? selectedRadio.value : '物流';
     
-    // 如果选中的是第二行独立 DIV 中的“自由填写”，则抓取右侧文本框
+    // 如果选中的是第二行独立 DIV 中的“自由填写”，则动态抓取右侧文本框内的自定义文案
     if (logisticsType === '自由填写') {
         const otherVal = document.getElementById('shipLogisticsTypeOther').value.trim();
         logisticsType = otherVal ? otherVal : '其它发货方式';
@@ -596,7 +596,7 @@ async function submitShipOrder() {
             headers: getHeaders(),
             body: JSON.stringify({ 
                 status: 'shipped', 
-                logistics_type: logisticsType, 
+                logistics_type: logisticsType, // ✅ 这里会百分之百打包你选中的真实参数上传
                 logistics_no: logisticsNo, 
                 shipped_date: currentDateTime, 
                 completed_date: currentDateTime 

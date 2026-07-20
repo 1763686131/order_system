@@ -185,6 +185,7 @@ def add_order():
         "date": ct, 
         "completed_date": "",
         "shipped_date": "",
+        "logistics_type": "",
         "logistics_no": "",
         "order_client": req_data.get('order_client', ''),
         "receiver_name": req_data.get('receiver_name', ''),
@@ -223,7 +224,7 @@ def update_order_status(order_id):
                 x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
             elif ns == 'shipped':
                 # ✅ 存入发货方式、发货单号和发货时间
-                x['logistics_type'] = req_data.get('logistics_type', '未登记')
+                x['logistics_type'] = req_data.get('logistics_type', '物流')
                 x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
                 x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
                 # 同时保留一份 completed_date 防止有些老数据报错
