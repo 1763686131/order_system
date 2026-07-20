@@ -218,19 +218,22 @@ def update_order_status(order_id):
             x['status'] = ns
             
             # 依据不同状态精准存储数据，绝不误杀覆盖
+            # 依据不同状态精准存储数据，绝不误杀覆盖
             if ns == 'completed':
                 x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
             elif ns == 'shipped':
-                # ✅ 存入发货单号和发货时间
-                x['logistics_no'] = req_data.get('logistics_no', '专车配送/自提')
+                # ✅ 存入发货方式、发货单号和发货时间
+                x['logistics_type'] = req_data.get('logistics_type', '未登记')
+                x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
                 x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
                 # 同时保留一份 completed_date 防止有些老数据报错
                 x['completed_date'] = x['shipped_date']
             elif ns == 'pending':
-                # 撤销回未完成时，清空时间
+                # 撤销回未完成时，清空时间和出库参数
                 x['completed_date'] = ""
                 x['shipped_date'] = ""
                 x['logistics_no'] = ""
+                x['logistics_type'] = ""
             break
             
     orders_data['orders'] = orders_list

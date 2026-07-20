@@ -191,7 +191,10 @@ async function fetchOrders() {
                             <div class="expand-list-text">展开列表</div>
                             <div class="s-tags-wrapper">${tagsHtml}</div>
                             ${o.remark ? `<div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:${o.remark}</div></div>` : ''}
-                            <div class="s-tags-wrapper"><div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">物流单号:${o.logistics_no || '暂无单号'}</div></div>
+                            <div class="s-tags-wrapper">
+                                <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">方式: ${o.logistics_type || '未登记'}</div>
+                                <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">单号/凭证: ${o.logistics_no || '暂无记录'}</div>
+                            </div>
                             <div class="shipped-bottom">
                                 <div><div class="s-time-label">出库发货时间</div><div class="s-time-value">${o.shipped_date || o.completed_date || '未知'}</div></div>
                                 ${detailBtnHtml}
@@ -560,18 +563,68 @@ function triggerShipModal(orderId) {
     document.getElementById('shipOrderModal').style.display = 'flex';
 }
 
+window.toggleOtherInput = function() {
+    const typeRadios = document.getElementsByName('shipLogisticsType');
+    const otherInput = document.getElementById('shipLogisticsTypeOther');
+    let isOther = false;
+    for (let r of typeRadios) {
+        if (r.checked && r.value === '其它') {
+            isOther = true;
+            break;
+        }
+    }
+    if (isOther) {
+        otherInput.style.display = 'inline-block';
+        otherInput.focus();
+    } else {
+        otherInput.style.display = 'none';
+    }
+};
+
+function triggerShipModal(orderId) {
+    document.getElementById('shipTargetId').value = orderId;
+    document.getElementById('shipLogisticsNo').value = ''; 
+    // 初始化默认勾选“物流”选项
+    const typeRadios = document.getElementsByName('shipLogisticsType');
+    if (typeRadios.length > 0) typeRadios[0].checked = true;
+    // 清空其它文本框内容
+    document.getElementById('shipLogisticsTypeOther').value = '';
+
+    document.getElementById('shipOrderModal').style.display = 'flex';
+}
+
 function closeShipModal() { document.getElementById('shipOrderModal').style.display = 'none'; }
 
 async function submitShipOrder() {
     const id = document.getElementById('shipTargetId').value;
     let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
-    if (!logisticsNo) logisticsNo = '专车配送/自提'; 
+    if (!logisticsNo) logisticsNo = '无单号记录'; 
+
+    // 高效捕获单选发货类型
+    let logisticsType = '物流';
+    const typeRadios = document.getElementsByName('shipLogisticsType');
+    for (let r of typeRadios) {
+        if (r.checked) { logisticsType = r.value; break; }
+    }
+    
+    // 如果勾选的是“其它”，则从独立的文本框内动态抓取自定义文案
+    if (logisticsType === '其它') {
+        const otherVal = document.getElementById('shipLogisticsTypeOther').value.trim();
+        logisticsType = otherVal ? otherVal : '其它自定义发货';
+    }
+
     const currentDateTime = getCurrentDateTime();
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({ status: 'shipped', logistics_no: logisticsNo, shipped_date: currentDateTime, completed_date: currentDateTime })
+            body: JSON.stringify({ 
+                status: 'shipped', 
+                logistics_type: logisticsType, // 发送至后端入库
+                logistics_no: logisticsNo, 
+                shipped_date: currentDateTime, 
+                completed_date: currentDateTime 
+            })
         });
         if (response.ok) { closeShipModal(); fetchOrders(); }
     } catch (e) { alert('发货出库网络通讯失败'); }

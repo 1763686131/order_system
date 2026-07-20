@@ -90,7 +90,7 @@
   </div>
 
   <div id="shipOrderModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content" style="width: 420px;">
+    <div class="modal-content" style="width: 450px;">
       <div class="modal-close" onclick="closeShipModal()">
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
           <path d="M1 1L13 13M13 1L1 13" stroke="#ff4d4f" stroke-width="2" stroke-linecap="round"/>
@@ -98,12 +98,38 @@
       </div>
       <div class="modal-header">
         <div class="modal-title" id="shipModalTitle">完成订单发货</div>
-        <div class="modal-subtitle" id="shipModalSubtitle">录入配运单号以同步出库看板</div>
+        <div class="modal-subtitle" id="shipModalSubtitle">选择发货途径并录入凭证同步看板</div>
       </div>
       <div class="modal-body" style="padding: 24px 30px 32px 30px;">
+        
+        <div class="form-item" style="margin-bottom: 20px;">
+            <label style="font-weight: bold; color: #555; margin-bottom: 10px; display: block;">发货方式:</label>
+            <div style="display: flex; gap: 16px; flex-wrap: wrap; align-items: center; font-size: 15px; margin-bottom: 12px;">
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <input type="radio" name="shipLogisticsType" value="物流" checked> 物流
+                </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <input type="radio" name="shipLogisticsType" value="零担快运"> 零担快运
+                </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <input type="radio" name="shipLogisticsType" value="快递"> 快递
+                </label>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px;">
+                    <input type="radio" name="shipLogisticsType" value="专车"> 专车
+                </label>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 8px; font-size: 15px; margin-top: 12px; background: #f9f9f9; padding: 10px 14px; border-radius: 8px; border: 1px solid #e8e8e8; box-sizing: border-box; width: 100%;">
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; font-weight: bold; color: #555;">
+                    <input type="radio" name="shipLogisticsType" value="其它"> 其它方式：
+                </label>
+                <input id="shipLogisticsTypeOther" type="text" placeholder="自定义发货途径（如：自提、随货车带走等）" style="flex: 1; padding: 8px 12px; font-size: 14px; border: 1px solid #d9d9d9; border-radius: 6px; outline: none; background: #fff;" onfocus="document.querySelector('input[name=shipLogisticsType][value=其它]').checked = true;" />
+            </div>
+        </div>
+
         <div class="form-item">
-            <label for="shipLogisticsNo" style="font-weight: bold; color: #555; margin-bottom: 10px;">物流单号 / 物流凭证信息:</label>
-            <input id="shipLogisticsNo" placeholder="请输入物流单号(如顺丰/京东单号)，选填" style="width:100%; padding:14px; font-size:16px; border:1px solid #d9d9d9; border-radius:8px; outline:none;" />
+            <label for="shipLogisticsNo" style="font-weight: bold; color: #555; margin-bottom: 10px; display: block;">物流单号 / 运输凭证信息:</label>
+            <input id="shipLogisticsNo" placeholder="请输入单号或司机电话等凭证，选填" style="width:100%; padding:14px; font-size:16px; border:1px solid #d9d9d9; border-radius:8px; outline:none;" />
         </div>
       </div>
       <input id="shipTargetId" type="hidden" />
