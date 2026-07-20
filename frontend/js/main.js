@@ -560,34 +560,10 @@ async function fetchMaterials() {
 function triggerShipModal(orderId) {
     document.getElementById('shipTargetId').value = orderId;
     document.getElementById('shipLogisticsNo').value = ''; 
-    document.getElementById('shipOrderModal').style.display = 'flex';
-}
-
-window.toggleOtherInput = function() {
-    const typeRadios = document.getElementsByName('shipLogisticsType');
-    const otherInput = document.getElementById('shipLogisticsTypeOther');
-    let isOther = false;
-    for (let r of typeRadios) {
-        if (r.checked && r.value === '其它') {
-            isOther = true;
-            break;
-        }
-    }
-    if (isOther) {
-        otherInput.style.display = 'inline-block';
-        otherInput.focus();
-    } else {
-        otherInput.style.display = 'none';
-    }
-};
-
-function triggerShipModal(orderId) {
-    document.getElementById('shipTargetId').value = orderId;
-    document.getElementById('shipLogisticsNo').value = ''; 
-    // 初始化默认勾选“物流”选项
+    // 每次开启弹窗默认还原勾选到第一行的“物流”选项
     const typeRadios = document.getElementsByName('shipLogisticsType');
     if (typeRadios.length > 0) typeRadios[0].checked = true;
-    // 清空其它文本框内容
+    // 同时清空第二行独立输入框的内容
     document.getElementById('shipLogisticsTypeOther').value = '';
 
     document.getElementById('shipOrderModal').style.display = 'flex';
@@ -600,17 +576,17 @@ async function submitShipOrder() {
     let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
     if (!logisticsNo) logisticsNo = '无单号记录'; 
 
-    // 高效捕获单选发货类型
+    // 获取单选框被选中的值
     let logisticsType = '物流';
     const typeRadios = document.getElementsByName('shipLogisticsType');
     for (let r of typeRadios) {
         if (r.checked) { logisticsType = r.value; break; }
     }
     
-    // 如果勾选的是“其它”，则从独立的文本框内动态抓取自定义文案
-    if (logisticsType === '其它') {
+    // 如果选中的是第二行独立 DIV 中的“自由填写”，则抓取右侧文本框
+    if (logisticsType === '自由填写') {
         const otherVal = document.getElementById('shipLogisticsTypeOther').value.trim();
-        logisticsType = otherVal ? otherVal : '其它自定义发货';
+        logisticsType = otherVal ? otherVal : '其它发货方式';
     }
 
     const currentDateTime = getCurrentDateTime();
@@ -620,7 +596,7 @@ async function submitShipOrder() {
             headers: getHeaders(),
             body: JSON.stringify({ 
                 status: 'shipped', 
-                logistics_type: logisticsType, // 发送至后端入库
+                logistics_type: logisticsType, 
                 logistics_no: logisticsNo, 
                 shipped_date: currentDateTime, 
                 completed_date: currentDateTime 
