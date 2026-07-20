@@ -1,6 +1,7 @@
 /**
  * ========================================================
  * 🤖 NOMI (Xiao Yuan) 悬浮智能体驱动模块 (终极完整版)
+ * 包含：拖拽引擎、智能路由权限防误触、双开快捷筛选日历
  * ========================================================
  */
 
@@ -84,10 +85,58 @@ document.addEventListener('DOMContentLoaded', () => {
         fabMain.style.transition = 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)';
     }
 
+    // ==========================================================
+    // 🌟 新增智能微引擎：根据当前活动页面动态控制菜单权限（防误触）
+    // ==========================================================
+    function updateNomiMenuVisibility() {
+        const items = document.querySelectorAll('.fab-item');
+        let btnOrder = null;
+        let btnMaterial = null;
+
+        // 识别按钮
+        items.forEach(item => {
+            if (item.textContent.includes('录入订单') || item.textContent.includes('订单信息')) {
+                btnOrder = item;
+            }
+            if (item.textContent.includes('录入原材料') || item.textContent.includes('原材料数据')) {
+                btnMaterial = item;
+            }
+        });
+
+        // 识别当前激活的页面
+        let isUncompletedPage = false;
+        let isMaterialPage = false;
+        const allTabs = document.querySelectorAll('.tab-btn, .nav-link, .tab, .nav-item');
+        allTabs.forEach(tab => {
+            if (tab.classList.contains('active')) {
+                if (tab.textContent.includes('未完成')) {
+                    isUncompletedPage = true;
+                } else if (tab.textContent.includes('原材料')) {
+                    isMaterialPage = true;
+                }
+            }
+        });
+
+        // 动态隐藏/显示逻辑
+        if (isUncompletedPage) {
+            if (btnOrder) btnOrder.style.display = 'block';
+            if (btnMaterial) btnMaterial.style.display = 'none';
+        } else if (isMaterialPage) {
+            if (btnOrder) btnOrder.style.display = 'none';
+            if (btnMaterial) btnMaterial.style.display = 'block';
+        } else {
+            if (btnOrder) btnOrder.style.display = 'none';
+            if (btnMaterial) btnMaterial.style.display = 'none';
+        }
+    }
+
     // 监听 PC 端点击事件展开/收起菜单
     fabMain.addEventListener('click', function(e) {
         if (!hasDragged) {
             fabContainer.classList.toggle('active');
+            if (fabContainer.classList.contains('active')) {
+                updateNomiMenuVisibility();
+            }
         }
     });
 
@@ -99,6 +148,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const tapLength = currentTime - lastTapTime;
         if (tapLength > 0 && tapLength < 350) {
             fabContainer.classList.toggle('active');
+            if (fabContainer.classList.contains('active')) {
+                updateNomiMenuVisibility();
+            }
             e.preventDefault();
             lastTapTime = 0;   
         } else {
@@ -118,12 +170,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 4. 全局失焦隐藏
     function closeFabMenuOnOutsideClick(e) {
-        // ① NOMI 操作菜单的失焦秒关
         if (fabContainer.classList.contains('active') && !fabContainer.contains(e.target)) {
             fabContainer.classList.remove('active');
         }
 
-        // ② 交互气泡的失焦秒关
         if (speechBubble && speechBubble.classList.contains('show')) {
             if (speechBubble.contains(e.target)) return;
             speechBubble.classList.remove('show');
@@ -144,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // ==========================================================
-    // 🌟 范围日期筛选交互气泡引擎
+    // 🌟 范围日期筛选交互气泡引擎 (已升级: 纯净大药丸 + 最近一周)
     // ==========================================================
     function startFilterTimer() {
         if (filterTimeoutLock) clearTimeout(filterTimeoutLock);
@@ -162,7 +212,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let tipText = filterType === 'material' ? '主人，请选择要查看的【原材料】范围：' : '主人，请选择要查看的【出库单】范围：';
 
-        // 🌟 结构优化：引入 nomi-btn-group 按钮组包裹两个按钮
+        // 纯净 HTML 骨架，样式全部移交 nomi.css 接管
         speechBubble.innerHTML = `
             <div id="nomiFilterArea" class="nomi-filter-area">
                 <span class="nomi-filter-title">${tipText}</span>
@@ -202,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const dateStart = document.getElementById('nomiFilterStart');
             const dateEnd = document.getElementById('nomiFilterEnd');
             
-            // 💡 统一提炼底层数据提交过滤器逻辑
+            // 提炼执行筛选逻辑
             const executeFilter = (startVal, endVal) => {
                 if (filterType === 'material') {
                     if (typeof window.executeMaterialDateFilter === 'function') {
@@ -217,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 stopFilterTimer();
             };
 
-            // 【功能 A】常规自定义输入框筛选
+            // 按钮 A：常规确认筛选
             if (btnConfirm && dateStart && dateEnd) {
                 btnConfirm.addEventListener('click', () => {
                     const startVal = dateStart.value;
@@ -230,7 +280,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
             }
 
-            // 【功能 B】🚀 智能宏：自动锁定最近 7 天并执行筛选
+            // 按钮 B：一键拉取最近一周数据
             if (btnPastWeek) {
                 btnPastWeek.addEventListener('click', () => {
                     const formatDate = (d) => {
@@ -242,8 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     const today = new Date();
                     const sevenDaysAgo = new Date();
-                    // 减去 6 天，刚好包含今天在内整整 7 天的数据
-                    sevenDaysAgo.setDate(today.getDate() - 6); 
+                    sevenDaysAgo.setDate(today.getDate() - 6); // 包含今天一共 7 天
 
                     const startVal = formatDate(sevenDaysAgo);
                     const endVal = formatDate(today);
@@ -257,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==========================================================
-    // 💬 6. 定时 AI 语音闲聊气泡 (完美修复哑巴 BUG)
+    // 💬 6. 定时 AI 语音闲聊气泡
     // ==========================================================
     const aiPhrases = [
         "主人，我叫小圆，是你的智能小助手~", 
@@ -273,17 +322,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function triggerAiSpeech() {
         if (hasDragged || isMouseDownOnFab) return;
         
-        // 🔥 修复点 1：只要气泡现在是“显示”状态（无论是在选日期，还是正在说话），都不准打扰
         if (speechBubble.classList.contains('show')) return;
 
         const randomPhrase = aiPhrases[Math.floor(Math.random() * aiPhrases.length)];
         
-        // 🔥 修复点 2：直接用文字覆盖掉原本气泡里残留的隐藏 HTML（清除旧表单），彻底杜绝假死
         speechBubble.textContent = randomPhrase;
         speechBubble.classList.add('show');
         
         setTimeout(() => { 
-            // 🔥 修复点 3：过了 4 秒后，如果气泡里的内容还是这句话（说明中途主人没有点开表单），才自动收起它
             if (speechBubble.textContent === randomPhrase) {
                 speechBubble.classList.remove('show'); 
             }
