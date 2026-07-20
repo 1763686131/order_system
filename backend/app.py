@@ -209,6 +209,9 @@ def add_order():
 # ==========================================
 # 🔥 核心防御区域：精准分配时间与单号
 # ==========================================
+# ========================================================
+# 🛡️ 终极版：出库流转接口 (完美融入撤销、发货、及 audit_state 锁死状态)
+# ========================================================
 @app.route('/api/orders/<int:order_id>', methods=['PUT'])
 def update_order_status(order_id):
     req_data = request.json
@@ -219,28 +222,36 @@ def update_order_status(order_id):
         if x['id'] == order_id:
             x['status'] = ns
             
-            # 依据不同状态精准存储数据，绝不误杀覆盖
-            # 依据不同状态精准存储数据，绝不误杀覆盖
             if ns == 'completed':
+                # 🔴 机制：当被触发“撤销出库”推回到已完成时，清空发货时间和审核状态，还原为出库前的干净状态
                 x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                x['shipped_date'] = ""
+                x['shipping_method'] = ""
+                x['shipping_custom'] = ""
+                x['logistics_no'] = ""
+                x['audit_state'] = 0  # 撤销出库时重置为未审核 0
+                
             elif ns == 'shipped':
-                # 🚨 侦探探头：在黑窗口打印收到的数据！
-                print(f"🚀 [后端监控] 接收到单号 {order_id} 的发货请求，数据包为: {req_data}")
-                
-                x['shipping_method'] = req_data.get('shipping_method', 4)
-                x['shipping_custom'] = req_data.get('shipping_custom', '')
-                x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
-                x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
-                x['completed_date'] = x['shipped_date']
-                
-                print(f"✅ [后端监控] 成功准备写入数据库的值：索引={x['shipping_method']}, 手写文本={x['shipping_custom']}")
+                # 🔴 机制：如果已经是出库状态，本次请求是来更新“确认审核”的
+                if 'audit_state' in req_data:
+                    x['audit_state'] = req_data.get('audit_state', 0)
+                else:
+                    # 如果是刚从已完成点按钮刚发货过来的，接收数据包并初始化审核状态为 0
+                    x['shipping_method'] = req_data.get('shipping_method', 4)
+                    x['shipping_custom'] = req_data.get('shipping_custom', '')
+                    x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
+                    x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
+                    x['completed_date'] = x['shipped_date']
+                    x['audit_state'] = 0  # 发货出库第一瞬间，默认是未审核状态 0
+                    
             elif ns == 'pending':
-                # 撤销回未完成时，彻底清空时间和出库参数
+                # 撤销订单到最初未完成状态时，全盘洗牌清空
                 x['completed_date'] = ""
                 x['shipped_date'] = ""
                 x['logistics_no'] = ""
-                x['shipping_method'] = "" # <--- 清空新加的索引坑位
-                x['shipping_custom'] = "" # <--- 清空手写补充文本
+                x['shipping_method'] = ""
+                x['shipping_custom'] = ""
+                x['audit_state'] = 0
             break
             
     orders_data['orders'] = orders_list

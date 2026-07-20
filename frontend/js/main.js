@@ -172,7 +172,7 @@ async function fetchOrders() {
             Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
                 tHtml += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="shipped-grid">`;
                 
-                // 从这里开始完全覆盖原有的卡片循环逻辑
+                // 🚀 【视觉升级版】已出库订单卡片流逻辑 (极致贴合备注与出库原色样式)
                 groups[date].forEach(o => {
                     let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
                     let typeText = o.type == 1 ? '绝缘订单' : '中固订单';
@@ -181,39 +181,51 @@ async function fetchOrders() {
                     if (o.goods_weight) tagsHtml += `<div class="s-tag s-tag-cyan">货物总重量:${o.goods_weight}</div>`;
                     if (o.goods_quantity) tagsHtml += `<div class="s-tag s-tag-green">件数:${o.goods_quantity}</div>`;
                     
-                    let detailBtnHtml = '';
-                    if (hasPerm('shipped.detail')) detailBtnHtml = `<div class="s-detail-btn" onclick="openEditOrderModal(${o.id})">详情</div>`;
+                    let detailBtnHtml = ''; 
                     
-                    // ==================================================
-                    // ✅ 数字翻译字典与“默认其它”的兜底逻辑
-                    // ==================================================
+                    // 数字方式索引转换中文
                     let methodMap = {0: '物流', 1: '零担快运', 2: '快递', 3: '专车', 4: '其它'};
-                    let renderMethod = '其它'; // 🔥 当为空或者异常时，前端默认展示“其它”
-                    
-                    // 如果存在最新的数字索引
+                    let renderMethod = '其它'; 
                     if (o.shipping_method !== undefined && o.shipping_method !== "") {
                         renderMethod = methodMap[o.shipping_method] || '其它';
                         if (o.shipping_method === 4 && o.shipping_custom) {
-                            renderMethod = o.shipping_custom; // 如果手写了内容，展示手写内容
+                            renderMethod = o.shipping_custom; 
                         }
-                    } 
-                    // 兼容旧数据
-                    else if (o.logistics_type) {
+                    } else if (o.logistics_type) {
                         renderMethod = o.logistics_type; 
                     }
 
+                    // ==================================================
+                    // 🔴 视觉精准微调：依照指示完美同步备注与原版出库背景色
+                    // ==================================================
+                    let isAudited = o.audit_state === 1; 
+                    let ribbonHtml = '';
+                    let clickEventStr = '';
+
+                    if (isAudited) {
+                        // ✅ 已发货 (值为 1)：定制清新薄荷绿 (背景 #D5EFE3，字体 #4CBCA0)
+                        ribbonHtml = `<div class="ribbon" style="background: #D5EFE3; color: #4CBCA0; border: none; font-weight: bold; box-shadow: none;">已发货</div>`;
+                        clickEventStr = `style="cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死禁止修改"`;
+                    } else {
+                        // 🟠 未审核 (值为 0)：定制柔和水蜜桃粉 (背景 #FDECEE，字体 #F46E83)
+                        ribbonHtml = `<div class="ribbon" style="background: #FDECEE; color: #F46E83; border: none; font-weight: bold; box-shadow: none;">未审核</div>`;
+                        clickEventStr = `onclick="triggerShippedActionModal(${o.id})" style="cursor: pointer;"`;
+                    }
+
                     tHtml += `
-                    <div class="shipped-card">
-                        <div class="ribbon">已出库</div>
+                    <div class="shipped-card" ${clickEventStr}>
+                        ${ribbonHtml}
                         <div class="shipped-left">
                             <div class="shipped-title">${o.goods_name || '无货物名称'}</div>
                             <div class="expand-list-text">展开列表</div>
                             <div class="s-tags-wrapper">${tagsHtml}</div>
                             ${o.remark ? `<div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:${o.remark}</div></div>` : ''}
+                            
                             <div class="s-tags-wrapper">
-                                <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">方式: ${renderMethod}</div>
-                                <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">单号/凭证: ${o.logistics_no || '暂无记录'}</div>
+                                <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">发货方式: ${renderMethod}</div>
+                                <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">${o.logistics_no || '暂无记录'}</div>
                             </div>
+                            
                             <div class="shipped-bottom">
                                 <div><div class="s-time-label">出库发货时间</div><div class="s-time-value">${o.shipped_date || o.completed_date || '未知'}</div></div>
                                 ${detailBtnHtml}
@@ -229,7 +241,6 @@ async function fetchOrders() {
                         </div>
                     </div>`;
                 });
-                // 到这里结束覆盖
                 
                 tHtml += `</div></div>`;
             });
@@ -620,9 +631,6 @@ async function submitShipOrder() {
         shipped_date: currentDateTime, 
         completed_date: currentDateTime 
     };
-
-    // 🚨 侦探探头：在浏览器控制台打印即将发送的包裹！
-    console.log("🚀 [前端监控] 准备发送给数据库的数据：", payload);
 
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, {
@@ -1076,3 +1084,58 @@ async function deleteInlineMatRecord(id) {
         alert('网络通讯异常，删除失败');
     }
 }
+
+
+// ========================================================
+// 🛡️ 新增模块：已出库卡片审核与回滚撤销控制引擎
+// ========================================================
+window.triggerShippedActionModal = function(orderId) {
+    // 阻止或捕获当前订单ID记入隐藏域
+    document.getElementById('actionTargetOrderId').value = orderId;
+    document.getElementById('shippedOrderActionModal').style.display = 'flex';
+};
+
+window.closeShippedActionModal = function() {
+    document.getElementById('shippedOrderActionModal').style.display = 'none';
+};
+
+// 1. 撤销出库功能：将订单状态推回到已完成 (completed) 状态列表
+window.submitRevokeShipOrder = async function() {
+    const id = document.getElementById('actionTargetOrderId').value;
+    try {
+        const response = await fetch(`${API_BASE}/orders/${id}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ 
+                status: 'completed'  // 推回到已完成状态
+            })
+        });
+        if (response.ok) {
+            closeShippedActionModal();
+            fetchOrders(); // 刷新重新加载看板
+        }
+    } catch (e) {
+        alert('网络网络通讯失败，无法完成撤销出库指令');
+    }
+};
+
+// 2. 确认审核功能：更新数据库内 audit_state 字段为 1
+window.submitAuditShipOrder = async function() {
+    const id = document.getElementById('actionTargetOrderId').value;
+    try {
+        const response = await fetch(`${API_BASE}/orders/${id}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ 
+                status: 'shipped',
+                audit_state: 1  // 核心：回传审核锁定状态数字为 1
+            })
+        });
+        if (response.ok) {
+            closeShippedActionModal();
+            fetchOrders(); // 立即重新刷新卡片标签和点击事件
+        }
+    } catch (e) {
+        alert('网络通信异常，未能成功写入确认审核标识');
+    }
+};
