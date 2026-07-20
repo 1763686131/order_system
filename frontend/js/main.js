@@ -172,14 +172,17 @@ async function fetchOrders() {
             Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
                 tHtml += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="shipped-grid">`;
                 
-                // 🚀 【视觉升级版】已出库订单卡片流逻辑 (极致贴合备注与出库原色样式)
+                // 🚀 【排版与视觉升级版】已出库订单卡片流逻辑
                 groups[date].forEach(o => {
                     let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
                     let typeText = o.type == 1 ? '绝缘订单' : '中固订单';
+                    
                     let tagsHtml = '';
                     if (o.goods_packaging) tagsHtml += `<div class="s-tag s-tag-purple">包装:${o.goods_packaging}</div>`;
-                    if (o.goods_weight) tagsHtml += `<div class="s-tag s-tag-cyan">货物总重量:${o.goods_weight}</div>`;
+                    
+                    // 🔴 1. 【核心修改】将“件数”的位置提到了“货物总重量”的前面
                     if (o.goods_quantity) tagsHtml += `<div class="s-tag s-tag-green">件数:${o.goods_quantity}</div>`;
+                    if (o.goods_weight) tagsHtml += `<div class="s-tag s-tag-cyan">货物总重量:${o.goods_weight}</div>`;
                     
                     let detailBtnHtml = ''; 
                     
@@ -195,19 +198,15 @@ async function fetchOrders() {
                         renderMethod = o.logistics_type; 
                     }
 
-                    // ==================================================
-                    // 🔴 视觉精准微调：依照指示完美同步备注与原版出库背景色
-                    // ==================================================
+                    // 沿用您的专属定制马卡龙色系角标
                     let isAudited = o.audit_state === 1; 
                     let ribbonHtml = '';
                     let clickEventStr = '';
 
                     if (isAudited) {
-                        // ✅ 已发货 (值为 1)：定制清新薄荷绿 (背景 #D5EFE3，字体 #4CBCA0)
                         ribbonHtml = `<div class="ribbon" style="background: #D5EFE3; color: #4CBCA0; border: none; font-weight: bold; box-shadow: none;">已发货</div>`;
                         clickEventStr = `style="cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死禁止修改"`;
                     } else {
-                        // 🟠 未审核 (值为 0)：定制柔和水蜜桃粉 (背景 #FDECEE，字体 #F46E83)
                         ribbonHtml = `<div class="ribbon" style="background: #FDECEE; color: #F46E83; border: none; font-weight: bold; box-shadow: none;">未审核</div>`;
                         clickEventStr = `onclick="triggerShippedActionModal(${o.id})" style="cursor: pointer;"`;
                     }
@@ -215,22 +214,24 @@ async function fetchOrders() {
                     tHtml += `
                     <div class="shipped-card" ${clickEventStr}>
                         ${ribbonHtml}
-                        <div class="shipped-left">
+                        
+                        <div class="shipped-left" style="display: flex; flex-direction: column;">
                             <div class="shipped-title">${o.goods_name || '无货物名称'}</div>
                             <div class="expand-list-text">展开列表</div>
                             <div class="s-tags-wrapper">${tagsHtml}</div>
                             ${o.remark ? `<div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:${o.remark}</div></div>` : ''}
                             
-                            <div class="s-tags-wrapper">
+                            <div class="s-tags-wrapper" style="margin-top: auto; padding-top: 24px;">
                                 <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">发货方式: ${renderMethod}</div>
                                 <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">${o.logistics_no || '暂无记录'}</div>
                             </div>
                             
-                            <div class="shipped-bottom">
+                            <div class="shipped-bottom" style="margin-top: 12px;">
                                 <div><div class="s-time-label">出库发货时间</div><div class="s-time-value">${o.shipped_date || o.completed_date || '未知'}</div></div>
                                 ${detailBtnHtml}
                             </div>
                         </div>
+                        
                         <div class="shipped-right">
                             <div class="s-sub-title">${typeText}</div><div class="s-main-title">${o.order_client || '未命名'}</div>
                             <div class="s-info-list">
