@@ -5,6 +5,19 @@ import json
 import webbrowser
 from datetime import datetime
 from threading import Timer
+import uuid  # 新增：用于生成唯一短码
+import re    # 新增：用于清理文件名非法字符
+# ------------------------------------------------
+# 辅助函数：清理文件名中的非法字符（防崩溃核心）
+# 防止有人在收货人名字里写了 "王二/子" 导致系统建错文件夹
+# ------------------------------------------------
+def sanitize_filename(text):
+    if not text:
+        return "未知"
+    # 替换掉 Windows 和 Linux 中不能作为文件名的特殊符号
+    return re.sub(r'[\\/*?:"<>|\s]', "", str(text))
+
+
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type", "Username", "Role"]}})
@@ -392,3 +405,58 @@ def open_browser():
 if __name__ == '__main__':
     Timer(1.5, open_browser).start()
     app.run(host='0.0.0.0', port=7899, debug=False)
+
+
+@app.route('/api/orders/<int:order_id>/upload_receipt', methods=['POST'])
+def upload_receipt(order_id):
+    # 1. 获取前端传来的文件
+    file = request.files.get('receipt_image')
+    if not file:
+        return jsonify({"success": False, "message": "没有找到图片文件"}), 400
+
+    # 2. 从数据库中查询这个订单，获取名字信息
+    # (假设你内存里的订单列表变量叫 orders，请根据你实际的变量名修改)
+    order = next((o for o in orders if o.get('id') == order_id), None)
+    if not order:
+        return jsonify({"success": False, "message": "找不到该订单信息"}), 404
+
+    # 获取客户名和收货人，并过滤掉非法字符
+    client_name = sanitize_filename(order.get('order_client', '未知客户'))
+    receiver_name = sanitize_filename(order.get('receiver_name', '未知收货人'))
+
+    # 3. 准备时间数据
+    now = datetime.datetime.now()
+    month_folder = now.strftime("%Y-%m")      # 文件夹名，如 "2026-07"
+    date_str = now.strftime("%Y-%m-%d")       # 文件名里的日期，如 "2026-07-21"
+    
+    # 自动创建月份文件夹
+    base_upload_dir = '/app/uploads'
+    target_dir = os.path.join(base_upload_dir, month_folder)
+    os.makedirs(target_dir, exist_ok=True)
+    
+    # 4. 生成后缀编号 (代替单纯的 "01")
+    # 为什么不用 01？因为如果同一天给同一个人重新传了一张图，01 就会把之前的覆盖掉。
+    # 我们用当前时间的 "时分秒" 或 "随机短码" 代替，既像编号，又绝对安全防重复！
+    short_code = uuid.uuid4().hex[:4].upper() # 生成4位大写随机码，比如 "A3F2"
+    file_ext = os.path.splitext(file.filename)[1] or '.jpg'
+    
+    # 🎯 核心：拼装你想要的完美文件名
+    # 最终效果类似于： 王醒订单_王二_2026-07-21_A3F2.jpg
+    safe_filename = f"{client_name}订单_{receiver_name}_{date_str}_{short_code}{file_ext}"
+    
+    # 5. 保存文件
+    save_path = os.path.join(target_dir, safe_filename)
+    file.save(save_path)
+    
+    # 6. 生成数据库路径并保存
+    db_image_url = f"/uploads/{month_folder}/{safe_filename}"
+    
+    # 把图片路径存入订单，并保存到 JSON (调用你现有的保存函数)
+    order['receipt_img_url'] = db_image_url
+    save_orders_data() # (⚠️注意：请换成你 app.py 里面实际保存订单数据的函数名)
+    
+    return jsonify({
+        "success": True, 
+        "message": "图片上传并保存成功", 
+        "image_url": db_image_url
+    })

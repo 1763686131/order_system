@@ -13,9 +13,9 @@ docker build -t order-backend .
 echo ====================================
 echo 正在启动新的 Docker 容器...
 echo ====================================
-docker run -d -p 7899:7899 --name my_order_app -v %~dp0..\data:/app/data -v %~dp0..\frontend:/app/frontend order-backend
+docker run -d -p 7899:7899 --name my_order_app -v "%~dp0..\data":/app/data -v "%~dp0..\frontend":/app/frontend -v "%~dp0..\uploads":/app/uploads order-backend
 
 echo ====================================
-echo 启动成功！现在可以去刷新前端网页调试了！
+echo 启动成功！请手动打开浏览器访问 http://localhost:7899
 echo ====================================
 pause

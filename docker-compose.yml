@@ -9,6 +9,7 @@ services:
     volumes:
       - /vol2/1000/Docker/order_system/backend:/app
       - /vol2/1000/Docker/order_system/data:/app/data
+      - ./uploads:/app/uploads 
       - /vol2/1000/Docker/order_system/frontend:/app/frontend
     working_dir: /app
     # 🎯 核心新增：强行把容器内部的时区设定为亚洲/上海（即北京时间东八区）

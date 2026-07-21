@@ -1210,3 +1210,56 @@ window.submitAuditShipOrder = async function() {
         alert('网络通信异常，未能成功写入确认审核标识');
     }
 };
+
+// 3. 回单图片选择与本地预览
+window.previewReceiptImage = function(event) {
+    const file = event.target.files[0];
+    if (file) {
+        // 使用 FileReader 在前端直接读取并预览图片
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('receiptUploadPrompt').style.display = 'none';
+            const preview = document.getElementById('receiptImagePreview');
+            preview.src = e.target.result;
+            preview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+    }
+};
+
+// 4. 确认上传：发送图片到后端保存
+window.submitReceiptImage = async function() {
+    const id = document.getElementById('actionTargetOrderId').value;
+    const fileInput = document.getElementById('receiptImageInput');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        return alert("请先点击虚线框选择一张图片！");
+    }
+
+    // 使用 FormData 打包二进制文件
+    const formData = new FormData();
+    formData.append("receipt_image", file); // receipt_image 是后端接收的字段名
+    
+    try {
+        const response = await fetch(`${API_BASE}/orders/${id}/upload_receipt`, {
+            method: 'POST',
+            // 注意：使用 FormData 时，不要设置 'Content-Type' 头，浏览器会自动设置并加上边界 boundary
+            headers: { 
+                'Username': String(currentUser.username),
+                'Role': String(currentUser.role)
+            },
+            body: formData
+        });
+
+        if (response.ok) {
+            alert("图片上传成功！");
+            closeShippedActionModal();
+            fetchOrders(); // 刷新数据，准备渲染带图片的卡片
+        } else {
+            alert("上传失败，请检查网络或后端接口。");
+        }
+    } catch (e) {
+        alert("网络通信异常！");
+    }
+};
