@@ -1160,6 +1160,11 @@ window.triggerShippedActionModal = function(orderId, mode) {
     const btnReceiptDelete = document.getElementById('btnReceiptDelete');
     const btnReceiptUpload = document.getElementById('btnReceiptUpload');
 
+    const btnRealDelete = document.getElementById('btnRealDeleteReceipt');
+    const btnDownload = document.getElementById('btnDownloadReceipt');
+    if (btnRealDelete) btnRealDelete.style.display = 'none';
+    if (btnDownload) btnDownload.style.display = 'none';
+
     // 状态 A：进入【审核模式】
     if (mode === 'audit') {
         title.innerText = '已出库订单管理';
@@ -1389,3 +1394,4 @@ window.downloadReceiptImage = function() {
 // 🖱️ 唤醒桌面端专属：回单图片拖拽上传引擎
 // ========================================================
 window.enableDragAndDropUpload('receiptContent', 'receiptImageInput', window.previewReceiptImage);
+

@@ -148,16 +148,16 @@
 
       <div id="auditContent" style="display: block;"></div>
 
-      <div id="receiptContent" style="display: none; position: relative; width: 100%; height: 160px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 8px; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; margin-bottom: 8px; overflow: hidden;" onclick="document.getElementById('receiptImageInput').click()">
+      <div id="receiptContent" style="display: none; position: relative; width: 100%; height: 160px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 8px; flex-direction: column; justify-content: center; align-items: center; margin-bottom: 8px; overflow: hidden;">
           
           <input type="file" id="receiptImageInput" accept="image/*" style="display: none;" onchange="previewReceiptImage(event)">
           
-          <div id="receiptUploadPrompt" style="display: flex; flex-direction: column; align-items: center;">
+          <div id="receiptUploadPrompt" style="display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%; justify-content: center; cursor: pointer;" onclick="document.getElementById('receiptImageInput').click()">
               <div style="font-size: 48px; color: #ccc; line-height: 1; font-weight: 300;">+</div>
               <div style="color: #999; font-size: 13px; margin-top: 8px;">点击此处上传回单图片</div>
           </div>
 
-          <img id="receiptImagePreview" src="" style="display: none; width: 100%; height: 100%; object-fit: contain; background: #eee;" />
+          <img id="receiptImagePreview" src="" style="display: none; width: 100%; height: 100%; object-fit: contain; background: #eee; cursor: zoom-in;" onclick="openLargeImagePreview(this.src)" />
       </div>
 
       <div style="display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 24px; width: 100%;">

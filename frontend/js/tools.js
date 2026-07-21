@@ -213,4 +213,123 @@ window.enableDragAndDropUpload = function(dropZoneId, inputId, previewCallback) 
             }
         }, false);
     });
+    
+}
+// ========================================================
+// 🔍 优雅的全屏大图预览引擎 (Lightbox) - 附带3D旋转与悬浮操作台
+// ========================================================
+window.openLargeImagePreview = function(src) {
+    if (!src) return;
+    
+    // 1. 创建一层深色半透明的全屏遮罩
+    const overlay = document.createElement('div');
+    overlay.style.position = 'fixed';
+    overlay.style.top = '0';
+    overlay.style.left = '0';
+    overlay.style.width = '100vw';
+    overlay.style.height = '100vh';
+    overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.85)';
+    overlay.style.zIndex = '999999'; 
+    overlay.style.display = 'flex';
+    overlay.style.flexDirection = 'column'; // 垂直排版，上面图片，下面按钮
+    overlay.style.justifyContent = 'center';
+    overlay.style.alignItems = 'center';
+    overlay.style.opacity = '0';
+    overlay.style.transition = 'opacity 0.2s ease';
+
+    // 2. 创建大图 (采用 vmin 视口最小限制，保证旋转90度时绝不爆出屏幕)
+    const img = document.createElement('img');
+    img.src = src;
+    img.style.maxWidth = '85vmin'; 
+    img.style.maxHeight = '85vmin';
+    img.style.objectFit = 'contain';
+    img.style.borderRadius = '8px';
+    img.style.boxShadow = '0 10px 40px rgba(0,0,0,0.6)';
+    img.style.transform = 'scale(0.8) rotate(0deg)';
+    img.style.transition = 'transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'; // 极致丝滑的弹性动画
+
+    let currentRotation = 0; // 记录当前旋转角度
+
+    // 3. 创建底部悬浮毛玻璃操作台
+    const toolbar = document.createElement('div');
+    toolbar.style.marginTop = '35px';
+    toolbar.style.display = 'flex';
+    toolbar.style.gap = '20px';
+    toolbar.style.zIndex = '1000000';
+
+    // 🌀 旋转按钮
+    const rotateBtn = document.createElement('button');
+    rotateBtn.innerHTML = '↻ 旋转 90°';
+    rotateBtn.style.padding = '10px 28px';
+    rotateBtn.style.fontSize = '15px';
+    rotateBtn.style.fontWeight = 'bold';
+    rotateBtn.style.color = '#fff';
+    rotateBtn.style.background = 'rgba(255, 255, 255, 0.15)';
+    rotateBtn.style.border = '1px solid rgba(255, 255, 255, 0.3)';
+    rotateBtn.style.borderRadius = '30px';
+    rotateBtn.style.cursor = 'pointer';
+    rotateBtn.style.backdropFilter = 'blur(8px)'; // 毛玻璃特效
+    rotateBtn.style.transition = 'all 0.2s';
+    
+    rotateBtn.onmouseover = () => rotateBtn.style.background = 'rgba(255, 255, 255, 0.25)';
+    rotateBtn.onmouseout = () => rotateBtn.style.background = 'rgba(255, 255, 255, 0.15)';
+    
+    // 点击旋转逻辑 (阻止冒泡防止关闭弹窗)
+    rotateBtn.onclick = function(e) {
+        e.stopPropagation(); 
+        currentRotation += 90;
+        img.style.transform = `scale(1) rotate(${currentRotation}deg)`;
+    };
+
+    // ❌ 关闭按钮
+    const closeBtn = document.createElement('button');
+    closeBtn.innerHTML = '✕ 关闭预览';
+    closeBtn.style.padding = '10px 28px';
+    closeBtn.style.fontSize = '15px';
+    closeBtn.style.fontWeight = 'bold';
+    closeBtn.style.color = '#fff';
+    closeBtn.style.background = 'rgba(255, 77, 79, 0.8)';
+    closeBtn.style.border = '1px solid rgba(255, 77, 79, 0.5)';
+    closeBtn.style.borderRadius = '30px';
+    closeBtn.style.cursor = 'pointer';
+    closeBtn.style.transition = 'all 0.2s';
+    
+    closeBtn.onmouseover = () => closeBtn.style.background = 'rgba(255, 77, 79, 1)';
+    closeBtn.onmouseout = () => closeBtn.style.background = 'rgba(255, 77, 79, 0.8)';
+
+    // 统一的关闭函数
+    const closeOverlay = function() {
+        overlay.style.opacity = '0';
+        img.style.transform = `scale(0.8) rotate(${currentRotation}deg)`; // 保持当前角度缩小隐藏
+        setTimeout(() => {
+            if (document.body.contains(overlay)) {
+                document.body.removeChild(overlay);
+            }
+        }, 200);
+    };
+
+    closeBtn.onclick = function(e) {
+        e.stopPropagation();
+        closeOverlay();
+    };
+
+    toolbar.appendChild(rotateBtn);
+    toolbar.appendChild(closeBtn);
+
+    overlay.appendChild(img);
+    overlay.appendChild(toolbar);
+    document.body.appendChild(overlay);
+
+    // 4. 入场丝滑放大动画
+    requestAnimationFrame(() => {
+        overlay.style.opacity = '1';
+        img.style.transform = 'scale(1) rotate(0deg)';
+    });
+
+    // 5. 点击遮罩层的空白黑底区域，也能优雅关闭
+    overlay.onclick = function(e) {
+        if (e.target === overlay) {
+            closeOverlay();
+        }
+    };
 };
