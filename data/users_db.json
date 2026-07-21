@@ -13,6 +13,7 @@
         "permissions": [
             "pending.view_detail",
             "pending.complete",
+            "shipped.view_receipt",
             "material.add"
         ],
         "name": "千城"

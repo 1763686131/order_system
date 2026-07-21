@@ -5,6 +5,7 @@
  */
 
 // 🎯 全新细粒度权限配置树（映射每一个前端功能按钮）
+// 🎯 全新细粒度权限配置树（映射每一个前端功能按钮）
 const PERMISSIONS_CONFIG = [
     {
         group: 'pending_order', label: '未完成订单 (车间看板)',
@@ -28,18 +29,19 @@ const PERMISSIONS_CONFIG = [
     },
     {
         group: 'shipped',
-        name: '已出库订单栏目',
-        items: [
+        label: '已出库订单栏目', // 🔧 修复：由 name 改为 label
+        children: [             // 🔧 修复：由 items 改为 children
             { key: 'shipped.audit', label: '发货方式标签（出库审核与撤销）' },
             { key: 'shipped.view_receipt', label: '回单标签（查看与下载凭证）' },
-            { key: 'shipped.upload_receipt', label: '单号标签（上传与管理回单图片）' }
+            { key: 'shipped.upload_receipt', label: '单号标签（上传与管理回单图片）' },
+            { key: 'shipped.upload_receipt', label: '弹窗操作：允许上传回单图片' }, // 
+            { key: 'shipped.delete_receipt', label: '弹窗操作：允许删除回单图片' }
         ]
     },
-    
     {
         group: 'material',
-        name: '原材料数据模块',
-        items: [
+        label: '原材料数据模块', // 🔧 修复：由 name 改为 label
+        children: [             // 🔧 修复：由 items 改为 children
             { key: 'material.add', label: '录入原材料数据' },
             { key: 'material.edit', label: '行内就地修改数据' },
             { key: 'material.delete', label: '物理删除流水记录' }
@@ -47,8 +49,8 @@ const PERMISSIONS_CONFIG = [
     },
     {
         group: 'system',
-        name: '系统管理模块',
-        items: [
+        label: '系统管理模块',   // 🔧 修复：由 name 改为 label
+        children: [             // 🔧 修复：由 items 改为 children
             { key: 'system.user_manage', label: '账户与权限控制台' }
         ]
     }
@@ -101,6 +103,7 @@ function prepareCreateUser() {
     document.getElementById('btnSaveUser').style.display = 'inline-block';
     document.getElementById('detailRole').style.display = 'inline-block';
     document.getElementById('detailRoleText').style.display = 'none';
+    document.getElementById('permissionsWrapper').style.display = 'block';
     renderPermissionTree([]);
 }
 

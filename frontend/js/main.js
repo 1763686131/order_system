@@ -208,50 +208,35 @@ async function fetchOrders() {
 
                     // 沿用专属定制马卡龙色系角标
                    // ==================================================
-                    // 🛡️ 最终安全升级：发货方式、回单、单号三标签接入动态权限管控
+                    // 🛡️ 开放级卡片标签：所有人均可点击弹窗，由内部按钮控制功能
                     // ==================================================
                     let isAudited = o.audit_state === 1; 
                     let ribbonHtml = '';
-                    let methodTagAttr = ''; // 控制发货方式标签
-                    let logisticsNoTagAttr = ''; // 控制单号图片标签
+                    let methodTagAttr = ''; 
+                    let logisticsNoTagAttr = ''; 
 
                     if (isAudited) {
-                        // 【状态 1：已审核发货】
                         ribbonHtml = `<div class="ribbon" style="background: #D5EFE3; color: #4CBCA0; border: none; font-weight: bold; box-shadow: none;">已发货</div>`;
-                        
-                        // 发货方式标签：锁死（防误触）
                         methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死"`;
                         
-                        // 单号标签：激活（检查是否有 shipped.upload_receipt 权限）
-                        if (hasPerm('shipped.upload_receipt')) {
-                            logisticsNoTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'receipt')" style="background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; box-shadow: 0 2px 5px rgba(235,47,150,0.2); transition: all 0.2s;" title="点击上传或管理回单图片" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
-                        } else {
-                            logisticsNoTagAttr = `style="background:#f5f5f5; color:#bfbfbf; border:1px solid #d9d9d9; cursor: not-allowed; opacity: 0.7;" title="暂无权限管理或上传回单图片"`;
-                        }
-                        
+                        // 🎯 所有人都可以点击“单号”查看上传/管理弹窗
+                        logisticsNoTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'receipt')" style="background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; transition: all 0.2s;" title="点击管理回单图片" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
                     } else {
-                        // 【状态 2：未审核】
                         ribbonHtml = `<div class="ribbon" style="background: #FDECEE; color: #F46E83; border: none; font-weight: bold; box-shadow: none;">未审核</div>`;
                         
-                        // 发货方式标签：依靠权限判断激活（检查是否有 shipped.audit 权限）
+                        // 发货方式标签：依旧需要发货审核权限
                         if (hasPerm('shipped.audit')) {
-                            methodTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'audit')" style="background:#e6f4ff; color:#1677ff; border:1px solid #91caff; cursor: pointer; box-shadow: 0 2px 5px rgba(22,119,255,0.2); transition: all 0.2s;" title="点击此处进行审核或撤销出库" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
+                            methodTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'audit')" style="background:#e6f4ff; color:#1677ff; border:1px solid #91caff; cursor: pointer; transition: all 0.2s;" title="点击此处进行出库审核操作" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
                         } else {
                             methodTagAttr = `style="background:#f5f5f5; color:#bfbfbf; border:1px solid #d9d9d9; cursor: not-allowed; opacity: 0.7;" title="暂无权限进行出库审核操作"`;
                         }
-                        
-                        // 单号标签：未审核前无论如何均锁死
                         logisticsNoTagAttr = `style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff; cursor: not-allowed;" title="请先完成【确认审核】后再上传回单图片"`;
                     }
 
-                    // 🎯 回单绿标显示逻辑：检查是否有 shipped.view_receipt 权限
+                    // 🎯 所有人都可以点击绿色“回单”标签查看大图弹窗
                     let receiptTagHtml = '';
                     if (o.receipt_img_url && String(o.receipt_img_url).trim() !== '') {
-                        if (hasPerm('shipped.view_receipt')) {
-                            receiptTagHtml = `<span onclick="triggerShippedActionModal(${o.id}, 'view_receipt')" class="receipt-pure-tag" style="cursor: pointer;" title="点击查看回单大图">回单</span>`;
-                        } else {
-                            receiptTagHtml = `<span class="receipt-pure-tag" style="background: #f5f5f5; color: #bfbfbf; border: 1px solid #d9d9d9; cursor: not-allowed; opacity: 0.6;" title="暂无权限查看该回单凭证">回单</span>`;
-                        }
+                        receiptTagHtml = `<span onclick="triggerShippedActionModal(${o.id}, 'view_receipt')" class="receipt-pure-tag" style="cursor: pointer;" title="点击查看回单详情">回单</span>`;
                     }
 
                     tHtml += `
@@ -1204,6 +1189,20 @@ window.triggerShippedActionModal = function(orderId, mode) {
         btnAuditConfirm.style.display = 'none';
         btnReceiptDelete.style.display = 'block';
         btnReceiptUpload.style.display = 'block';
+        // 🛡️ 权限控制：将“删除图片”和“确认上传”按钮拆开，分别对应控制台的两个开关
+        if (hasPerm('shipped.delete_receipt')) {
+            btnReceiptDelete.style.display = 'inline-block';
+        } else {
+            btnReceiptDelete.style.display = 'none';
+        }
+
+        if (hasPerm('shipped.upload_receipt')) {
+            btnReceiptUpload.style.display = 'inline-block';
+        } else {
+            btnReceiptUpload.style.display = 'none';
+        }
+
+        
 
         // 🎯 修复点 1：动态绑定【清除图片】按钮点击事件，点击只做纯前端清除预览，不删数据库
         if (btnReceiptDelete) {
@@ -1211,6 +1210,7 @@ window.triggerShippedActionModal = function(orderId, mode) {
                 window.clearReceiptImage();
             };
         }
+        
 
         // 🎯 修复点 2：智能加载状态（如果该订单数据库已经有图则显图；如果没图，彻底清空上一张残留）
         const order = allOrdersLocal.find(o => o.id === orderId);
@@ -1252,7 +1252,15 @@ window.triggerShippedActionModal = function(orderId, mode) {
         const order = allOrdersLocal.find(o => o.id === orderId);
         const preview = document.getElementById('receiptImagePreview');
         const prompt = document.getElementById('receiptUploadPrompt');
+        // 🟢 下载按钮：无需权限，所有人点开都能看、都能下载
+        if (btnDownload) btnDownload.style.display = 'inline-block';
         
+        // 🛡️ 权限控制：仅针对查看模式下的“真删除”按钮进行删除权限隔离
+        if (hasPerm('shipped.delete_receipt')) {
+            if (btnRealDelete) btnRealDelete.style.display = 'inline-block';
+        } else {
+            if (btnRealDelete) btnRealDelete.style.display = 'none';
+        }
         if (order && order.receipt_img_url) {
             if (preview) {
                 preview.src = order.receipt_img_url;
