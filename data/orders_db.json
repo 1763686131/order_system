@@ -34,10 +34,10 @@
         {
             "id": 3,
             "title": "万可订单\n姓名：黄叶 19016926866 地址：湖北省黄冈市黄州区禹王街道桓武路16号\n阻燃剂  12450kg\n阻燃剂  12450kg\n阻燃剂  12450kg\n",
-            "status": "pending",
+            "status": "completed",
             "type": 0,
             "date": "2026-07-20 05:37",
-            "completed_date": "",
+            "completed_date": "2026-07-21 07:30",
             "shipped_date": "",
             "shipping_method": "",
             "shipping_custom": "",

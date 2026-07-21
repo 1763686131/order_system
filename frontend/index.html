@@ -139,47 +139,28 @@
   </div>
   <div id="shippedOrderActionModal" class="modal-overlay" style="display: none;">
     <div class="modal-content" style="width: 420px; border-radius: 12px; padding: 24px;">
-      <div class="modal-close" onclick="closeShippedActionModal()">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M1 1L13 13M13 1L1 13" stroke="#999" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </div>
       <div class="modal-header" style="margin-bottom: 20px;">
-        <div class="modal-title" style="font-size: 18px; font-weight: bold; color: #333;">已出库订单管理</div>
-        <div class="modal-subtitle" style="font-size: 13px; color: #777; margin-top: 4px;">请选择对当前出库订单的操作指令</div>
+        <div class="modal-title" id="actionModalTitle" style="font-size: 18px; font-weight: bold; color: #333;">已出库订单管理</div>
+        <div class="modal-subtitle" id="actionModalSubtitle" style="font-size: 13px; color: #777; margin-top: 4px;">请选择对当前出库订单的操作指令</div>
       </div>
       
       <input id="actionTargetOrderId" type="hidden" />
 
+      <div id="auditContent" style="display: block;"></div>
+
+      <div id="receiptContent" style="display: none; width: 100%; height: 160px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 8px; flex-direction: column; justify-content: center; align-items: center; cursor: pointer; margin-bottom: 8px; transition: all 0.3s;" onmouseover="this.style.borderColor='#1890ff'; this.style.background='#f0f7ff';" onmouseout="this.style.borderColor='#d9d9d9'; this.style.background='#fafafa';">
+          <div style="font-size: 48px; color: #ccc; line-height: 1; font-weight: 300;">+</div>
+          <div style="color: #999; font-size: 13px; margin-top: 8px;">点击此处上传图片</div>
+      </div>
+
       <div style="display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 24px; width: 100%;">
-        <button onclick="submitRevokeShipOrder()" style="flex: 1; height: 38px; border: 1px solid #ff4d4f; background: #fff; color: #ff4d4f; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;">撤销出库</button>
-        <button onclick="submitAuditShipOrder()" style="flex: 1; height: 38px; border: none; background: #1890ff; color: #fff; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;">确认审核</button>
+        <button id="btnAuditRevoke" onclick="submitRevokeShipOrder()" style="flex: 1; height: 38px; border: 1px solid #ff4d4f; background: #fff; color: #ff4d4f; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;">撤销出库</button>
+        <button id="btnAuditConfirm" onclick="submitAuditShipOrder()" style="flex: 1; height: 38px; border: none; background: #1890ff; color: #fff; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;">确认审核</button>
+        
+        <button id="btnReceiptDelete" onclick="" style="display: none; flex: 1; height: 38px; border: 1px solid #ff4d4f; background: #fff; color: #ff4d4f; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;">删除图片</button>
+        <button id="btnReceiptUpload" onclick="" style="display: none; flex: 1; height: 38px; border: none; background: #1890ff; color: #fff; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;">确认上传</button>
+        
         <button onclick="closeShippedActionModal()" style="flex: 1; height: 38px; border: 1px solid #d9d9d9; background: #f5f5f5; color: #555; border-radius: 6px; font-size: 14px; cursor: pointer; transition: all 0.3s;">返回</button>
-      </div>
-    </div>
-  </div>
-  <div id="receiptUploadModal" class="modal-overlay" style="display: none;">
-    <div class="modal-content" style="width: 420px; border-radius: 12px; padding: 24px;">
-      <div class="modal-close" onclick="closeReceiptUploadModal()">
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M1 1L13 13M13 1L1 13" stroke="#999" stroke-width="2" stroke-linecap="round"/>
-        </svg>
-      </div>
-      <div class="modal-header" style="margin-bottom: 20px;">
-        <div class="modal-title" style="font-size: 18px; font-weight: bold; color: #333;">回单凭证管理</div>
-        <div class="modal-subtitle" style="font-size: 13px; color: #777; margin-top: 4px;">请上传或管理该订单的发货回单图片</div>
-      </div>
-      
-      <input id="receiptTargetOrderId" type="hidden" />
-
-      <div style="width: 100%; height: 140px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 8px; display: flex; justify-content: center; align-items: center; color: #999; font-size: 13px; margin-bottom: 8px;">
-          【预留界面：后期在此添加上传组件与图片预览】
-      </div>
-
-      <div style="display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 24px; width: 100%;">
-        <button onclick="deleteReceiptImage()" style="flex: 1; height: 38px; border: 1px solid #ff4d4f; background: #fff; color: #ff4d4f; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;">删除图片</button>
-        <button onclick="submitReceiptImage()" style="flex: 1; height: 38px; border: none; background: #1890ff; color: #fff; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; transition: all 0.3s;">确认上传</button>
-        <button onclick="closeReceiptUploadModal()" style="flex: 1; height: 38px; border: 1px solid #d9d9d9; background: #f5f5f5; color: #555; border-radius: 6px; font-size: 14px; cursor: pointer; transition: all 0.3s;">返回</button>
       </div>
     </div>
   </div>

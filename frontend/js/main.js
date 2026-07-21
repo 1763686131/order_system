@@ -223,7 +223,7 @@ async function fetchOrders() {
                         methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死"`;
                         
                         // 单号标签：激活（允许上传图片，采用骚粉色猛男高亮样式区分）
-                        logisticsNoTagAttr = `onclick="triggerReceiptUploadModal(${o.id})" style="background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; box-shadow: 0 2px 5px rgba(235,47,150,0.2); transition: all 0.2s;" title="点击上传或管理回单图片" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
+                        logisticsNoTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'receipt')" style="background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; box-shadow: 0 2px 5px rgba(235,47,150,0.2); transition: all 0.2s;" title="点击上传或管理回单图片" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
                         
                     } else {
                         // 【状态 2：未审核】
@@ -231,7 +231,7 @@ async function fetchOrders() {
                         
                         // 发货标签：依靠权限判断激活（之前写好的逻辑）
                         if (hasPerm('shipped.detail')) {
-                            methodTagAttr = `onclick="triggerShippedActionModal(${o.id})" style="background:#e6f4ff; color:#1677ff; border:1px solid #91caff; cursor: pointer; box-shadow: 0 2px 5px rgba(22,119,255,0.2); transition: all 0.2s;" title="点击此处进行审核或撤销出库" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
+                            methodTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'audit')" style="background:#e6f4ff; color:#1677ff; border:1px solid #91caff; cursor: pointer; box-shadow: 0 2px 5px rgba(22,119,255,0.2); transition: all 0.2s;" title="点击此处进行审核或撤销出库" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
                         } else {
                             methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: default;"`;
                         }
@@ -1120,11 +1120,51 @@ async function deleteInlineMatRecord(id) {
 
 
 // ========================================================
-// 🛡️ 新增模块：已出库卡片审核与回滚撤销控制引擎
+// 🛡️ 状态驱动：已出库审核 & 回单凭证 多态融合控制引擎
 // ========================================================
-window.triggerShippedActionModal = function(orderId) {
-    // 阻止或捕获当前订单ID记入隐藏域
+window.triggerShippedActionModal = function(orderId, mode) {
     document.getElementById('actionTargetOrderId').value = orderId;
+    
+    // 获取文字和容器节点
+    const title = document.getElementById('actionModalTitle');
+    const subtitle = document.getElementById('actionModalSubtitle');
+    const auditContent = document.getElementById('auditContent');
+    const receiptContent = document.getElementById('receiptContent');
+    
+    // 获取按钮节点
+    const btnAuditRevoke = document.getElementById('btnAuditRevoke');
+    const btnAuditConfirm = document.getElementById('btnAuditConfirm');
+    const btnReceiptDelete = document.getElementById('btnReceiptDelete');
+    const btnReceiptUpload = document.getElementById('btnReceiptUpload');
+
+    // 状态 A：进入【审核模式】
+    if (mode === 'audit') {
+        title.innerText = '已出库订单管理';
+        subtitle.innerText = '请选择对当前出库订单的操作指令';
+        
+        auditContent.style.display = 'block';
+        receiptContent.style.display = 'none';
+        
+        btnAuditRevoke.style.display = 'block';
+        btnAuditConfirm.style.display = 'block';
+        btnReceiptDelete.style.display = 'none';
+        btnReceiptUpload.style.display = 'none';
+    } 
+    // 状态 B：进入【回单模式】
+    else if (mode === 'receipt') {
+        title.innerText = '回单凭证管理';
+        subtitle.innerText = '请上传或管理该订单的发货回单图片';
+        
+        auditContent.style.display = 'none';
+        receiptContent.style.display = 'flex'; // 显示图片上传大框
+        
+        btnAuditRevoke.style.display = 'none';
+        btnAuditConfirm.style.display = 'none';
+        btnReceiptDelete.style.display = 'block';
+        btnReceiptUpload.style.display = 'block';
+    }
+
+    // 设置好内部状态后，统一唤起弹窗
     document.getElementById('shippedOrderActionModal').style.display = 'flex';
 };
 
@@ -1139,13 +1179,11 @@ window.submitRevokeShipOrder = async function() {
         const response = await fetch(`${API_BASE}/orders/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({ 
-                status: 'completed'  // 推回到已完成状态
-            })
+            body: JSON.stringify({ status: 'completed' })
         });
         if (response.ok) {
             closeShippedActionModal();
-            fetchOrders(); // 刷新重新加载看板
+            fetchOrders(); 
         }
     } catch (e) {
         alert('网络网络通讯失败，无法完成撤销出库指令');
@@ -1161,35 +1199,14 @@ window.submitAuditShipOrder = async function() {
             headers: getHeaders(),
             body: JSON.stringify({ 
                 status: 'shipped',
-                audit_state: 1  // 核心：回传审核锁定状态数字为 1
+                audit_state: 1  
             })
         });
         if (response.ok) {
             closeShippedActionModal();
-            fetchOrders(); // 立即重新刷新卡片标签和点击事件
+            fetchOrders(); 
         }
     } catch (e) {
         alert('网络通信异常，未能成功写入确认审核标识');
     }
-};
-
-
-// ========================================================
-// 📸 预留模块：回单图片管理弹出层控制引擎 (暂无真实接口功能)
-// ========================================================
-window.triggerReceiptUploadModal = function(orderId) {
-    document.getElementById('receiptTargetOrderId').value = orderId;
-    document.getElementById('receiptUploadModal').style.display = 'flex';
-};
-
-window.closeReceiptUploadModal = function() {
-    document.getElementById('receiptUploadModal').style.display = 'none';
-};
-
-window.deleteReceiptImage = function() {
-    alert("预留功能：后期此处将调用接口删除服务器上的回单图片。");
-};
-
-window.submitReceiptImage = function() {
-    alert("预留功能：后期此处将上传新的回单图片到服务器并关联此订单。");
 };
