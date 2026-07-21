@@ -99,6 +99,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .expand-list-text { display: none; font-size: 13px; color: #8A7BFE; text-align: right; margin-top: 0; margin-bottom: 12px; cursor: pointer; font-weight: bold; position: relative; z-index: 11; }
 .s-tags-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
 .shipped-left .s-tags-wrapper:last-of-type { margin-bottom: 16px; }
+.receipt-pure-tag{ display: inline-flex; align-items: center; justify-content: center; padding: 3px 10px; font-size: 11px; font-weight: bold; background-color: #FDECEE; border: 1px solid #FDECEE; color: #F26E83; border-radius: 3px; user-select: none; }
 .s-tag { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
 .s-tag-purple { background-color: #EDEBFF; color: #8A7BFE; } .s-tag-cyan { background-color: #DDF8F6; color: #2BCBC7; } .s-tag-green { background-color: #E2F6ED; color: #69D5A5; } .s-tag-pink { background-color: #FDECEE; color: #F26E83; }
 .shipped-bottom { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; }

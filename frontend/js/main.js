@@ -236,7 +236,7 @@ async function fetchOrders() {
                             methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: default;"`;
                         }
                         
-                        // 单号标签：锁死（未审核前严禁上传图片）
+                        // 单号标签：锁死
                         logisticsNoTagAttr = `style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff; cursor: not-allowed;" title="请先完成【确认审核】后再上传回单图片"`;
                     }
 
@@ -251,6 +251,7 @@ async function fetchOrders() {
                             
                             <div class="s-tags-wrapper" style="margin-top: auto; padding-top: 24px;">
                                 <div class="s-tag" ${methodTagAttr}>发货方式: ${renderMethod}</div>
+                                ${o.receipt_img_url && String(o.receipt_img_url).trim() !== '' ? `<span class="receipt-pure-tag">回单</span>` : ''}
                                 <div class="s-tag" ${logisticsNoTagAttr}>单号: ${o.logistics_no || '暂无记录'}</div>
                             </div>
                             
