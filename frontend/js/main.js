@@ -208,33 +208,34 @@ async function fetchOrders() {
 
                     // 沿用专属定制马卡龙色系角标
                    // ==================================================
-                    // 🔴 终极升级：融入“有权手型点击，无权静默箭头”的安全判定机制
+                    // ==================================================
+                    // 🔴 审核弹窗触发机制转移：从整张卡片转移到“发货方式”标签
                     // ==================================================
                     let isAudited = o.audit_state === 1; 
                     let ribbonHtml = '';
-                    let clickEventStr = '';
+                    let methodTagAttr = ''; // 专门控制发货方式标签的点击与样式
 
                     if (isAudited) {
                         // 1. 已发货状态：属于锁死状态，任何人都不能再点
                         ribbonHtml = `<div class="ribbon" style="background: #D5EFE3; color: #4CBCA0; border: none; font-weight: bold; box-shadow: none;">已发货</div>`;
-                        clickEventStr = `style="cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死禁止修改"`;
+                        // 发货标签锁定样式
+                        methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死"`;
                     } else {
-                        // 2. 未审核状态：克隆备注色系背景
+                        // 2. 未审核状态
                         ribbonHtml = `<div class="ribbon" style="background: #FDECEE; color: #F46E83; border: none; font-weight: bold; box-shadow: none;">未审核</div>`;
                         
-                        // 🔥 核心逻辑：利用 hasPerm 精准拦截没有勾选权限的账户
+                        // 🔥 核心逻辑：判断权限并精准绑定给“发货方式”标签
                         if (hasPerm('shipped.detail')) {
-                            // 【有权限】：鼠标悬浮变成手型，点击唤醒管理弹窗
-                            clickEventStr = `onclick="triggerShippedActionModal(${o.id})" style="cursor: pointer;"`;
+                            // 【有权限】：赋予“发货方式”标签点击事件、高亮阴影和手指光标
+                            methodTagAttr = `onclick="triggerShippedActionModal(${o.id})" style="background:#e6f4ff; color:#1677ff; border:1px solid #91caff; cursor: pointer; box-shadow: 0 2px 5px rgba(22,119,255,0.2); transition: all 0.2s;" title="点击此处进行审核或撤销出库" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
                         } else {
-                            // 【没有权限】：鼠标保持普通箭头样式 (default)，彻底抹除点击事件，点击静默无任何反应！
-                            clickEventStr = `style="cursor: default;"`;
+                            // 【无权限】：普通样式，无点击事件
+                            methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: default;"`;
                         }
                     }
 
                     tHtml += `
-                    <div class="shipped-card" ${clickEventStr}>
-                        ${ribbonHtml}
+                    <div class="shipped-card"> ${ribbonHtml}
                         <div class="shipped-left" style="display: flex; flex-direction: column;">
                             <div class="shipped-title">${o.goods_name || '无货物名称'}</div>
                             <div class="expand-list-text">展开列表</div>
@@ -242,7 +243,7 @@ async function fetchOrders() {
                             ${o.remark ? `<div class="s-tags-wrapper"><div class="s-tag s-tag-pink">备注信息:${o.remark}</div></div>` : ''}
                             
                             <div class="s-tags-wrapper" style="margin-top: auto; padding-top: 24px;">
-                                <div class="s-tag" style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff;">发货方式: ${renderMethod}</div>
+                                <div class="s-tag" ${methodTagAttr}>发货方式: ${renderMethod}</div>
                                 <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">${o.logistics_no || '暂无记录'}</div>
                             </div>
                             
