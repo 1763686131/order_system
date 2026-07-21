@@ -208,34 +208,41 @@ async function fetchOrders() {
 
                     // 沿用专属定制马卡龙色系角标
                    // ==================================================
-                    // ==================================================
-                    // 🔴 审核弹窗触发机制转移：从整张卡片转移到“发货方式”标签
+                    // 🔴 交互升级：发货方式(审核前可点) 与 单号凭证(审核后可点) 互斥控制
                     // ==================================================
                     let isAudited = o.audit_state === 1; 
                     let ribbonHtml = '';
-                    let methodTagAttr = ''; // 专门控制发货方式标签的点击与样式
+                    let methodTagAttr = ''; // 控制发货方式标签
+                    let logisticsNoTagAttr = ''; // 控制单号图片标签
 
                     if (isAudited) {
-                        // 1. 已发货状态：属于锁死状态，任何人都不能再点
+                        // 【状态 1：已审核发货】
                         ribbonHtml = `<div class="ribbon" style="background: #D5EFE3; color: #4CBCA0; border: none; font-weight: bold; box-shadow: none;">已发货</div>`;
-                        // 发货标签锁定样式
+                        
+                        // 发货标签：锁死（防误触）
                         methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死"`;
+                        
+                        // 单号标签：激活（允许上传图片，采用骚粉色猛男高亮样式区分）
+                        logisticsNoTagAttr = `onclick="triggerReceiptUploadModal(${o.id})" style="background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; box-shadow: 0 2px 5px rgba(235,47,150,0.2); transition: all 0.2s;" title="点击上传或管理回单图片" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
+                        
                     } else {
-                        // 2. 未审核状态
+                        // 【状态 2：未审核】
                         ribbonHtml = `<div class="ribbon" style="background: #FDECEE; color: #F46E83; border: none; font-weight: bold; box-shadow: none;">未审核</div>`;
                         
-                        // 🔥 核心逻辑：判断权限并精准绑定给“发货方式”标签
+                        // 发货标签：依靠权限判断激活（之前写好的逻辑）
                         if (hasPerm('shipped.detail')) {
-                            // 【有权限】：赋予“发货方式”标签点击事件、高亮阴影和手指光标
                             methodTagAttr = `onclick="triggerShippedActionModal(${o.id})" style="background:#e6f4ff; color:#1677ff; border:1px solid #91caff; cursor: pointer; box-shadow: 0 2px 5px rgba(22,119,255,0.2); transition: all 0.2s;" title="点击此处进行审核或撤销出库" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
                         } else {
-                            // 【无权限】：普通样式，无点击事件
                             methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: default;"`;
                         }
+                        
+                        // 单号标签：锁死（未审核前严禁上传图片）
+                        logisticsNoTagAttr = `style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff; cursor: not-allowed;" title="请先完成【确认审核】后再上传回单图片"`;
                     }
 
                     tHtml += `
-                    <div class="shipped-card"> ${ribbonHtml}
+                    <div class="shipped-card">
+                        ${ribbonHtml}
                         <div class="shipped-left" style="display: flex; flex-direction: column;">
                             <div class="shipped-title">${o.goods_name || '无货物名称'}</div>
                             <div class="expand-list-text">展开列表</div>
@@ -244,7 +251,7 @@ async function fetchOrders() {
                             
                             <div class="s-tags-wrapper" style="margin-top: auto; padding-top: 24px;">
                                 <div class="s-tag" ${methodTagAttr}>发货方式: ${renderMethod}</div>
-                                <div class="s-tag s-tag-pink" style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff;">${o.logistics_no || '暂无记录'}</div>
+                                <div class="s-tag" ${logisticsNoTagAttr}>单号: ${o.logistics_no || '暂无记录'}</div>
                             </div>
                             
                             <div class="shipped-bottom" style="margin-top: 12px;">
@@ -1164,4 +1171,25 @@ window.submitAuditShipOrder = async function() {
     } catch (e) {
         alert('网络通信异常，未能成功写入确认审核标识');
     }
+};
+
+
+// ========================================================
+// 📸 预留模块：回单图片管理弹出层控制引擎 (暂无真实接口功能)
+// ========================================================
+window.triggerReceiptUploadModal = function(orderId) {
+    document.getElementById('receiptTargetOrderId').value = orderId;
+    document.getElementById('receiptUploadModal').style.display = 'flex';
+};
+
+window.closeReceiptUploadModal = function() {
+    document.getElementById('receiptUploadModal').style.display = 'none';
+};
+
+window.deleteReceiptImage = function() {
+    alert("预留功能：后期此处将调用接口删除服务器上的回单图片。");
+};
+
+window.submitReceiptImage = function() {
+    alert("预留功能：后期此处将上传新的回单图片到服务器并关联此订单。");
 };
