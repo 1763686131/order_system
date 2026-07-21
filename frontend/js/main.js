@@ -251,7 +251,7 @@ async function fetchOrders() {
                             
                             <div class="s-tags-wrapper" style="margin-top: auto; padding-top: 24px;">
                                 <div class="s-tag" ${methodTagAttr}>发货方式: ${renderMethod}</div>
-                                ${o.receipt_img_url && String(o.receipt_img_url).trim() !== '' ? `<span class="receipt-pure-tag">回单</span>` : ''}
+                                ${o.receipt_img_url && String(o.receipt_img_url).trim() !== '' ? `<span onclick="triggerShippedActionModal(${o.id}, 'view_receipt')" class="receipt-pure-tag">回单</span>` : ''}
                                 <div class="s-tag" ${logisticsNoTagAttr}>单号: ${o.logistics_no || '暂无记录'}</div>
                             </div>
                             
@@ -1209,6 +1209,39 @@ window.triggerShippedActionModal = function(orderId, mode) {
             window.clearReceiptImage();
         }
     }
+    // 状态 C：进入【已存回单查看与真删除模式】
+    else if (mode === 'view_receipt') {
+        title.innerText = '回单凭证详情';
+        subtitle.innerText = '您可以查看大图、下载图片或从系统中彻底删除该回单';
+        
+        auditContent.style.display = 'none';
+        receiptContent.style.display = 'flex';
+        
+        // 隐藏审核、上传按钮
+        btnAuditRevoke.style.display = 'none';
+        btnAuditConfirm.style.display = 'none';
+        btnReceiptUpload.style.display = 'none';
+        btnReceiptDelete.style.display = 'none'; // 隐藏原本的前端清空按钮
+        
+        // 唤醒【删除图片】和【下载图片】按钮
+        const btnRealDelete = document.getElementById('btnRealDeleteReceipt');
+        const btnDownload = document.getElementById('btnDownloadReceipt');
+        if (btnRealDelete) btnRealDelete.style.display = 'block';
+        if (btnDownload) btnDownload.style.display = 'block';
+
+        // 渲染已存在的图片回显
+        const order = allOrdersLocal.find(o => o.id === orderId);
+        const preview = document.getElementById('receiptImagePreview');
+        const prompt = document.getElementById('receiptUploadPrompt');
+        
+        if (order && order.receipt_img_url) {
+            if (preview) {
+                preview.src = order.receipt_img_url;
+                preview.style.display = 'block';
+            }
+            if (prompt) prompt.style.display = 'none';
+        }
+    }
 
     // 设置好内部状态后，统一唤起弹窗
     document.getElementById('shippedOrderActionModal').style.display = 'flex';
@@ -1312,7 +1345,46 @@ window.submitReceiptImage = async function() {
     }
 };
 
+// ========================================================
+// 🖼️ 赋予“回单”标签专属的【查看/下载/真删除】状态管理引擎
+// ========================================================
+window.deleteRealReceiptImage = async function() {
+    const id = document.getElementById('actionTargetOrderId').value;
+    if (!confirm("确定要从数据库和硬盘中【彻底删除】这张回单图片吗？此操作不可恢复！")) {
+        return;
+    }
+    
+    try {
+        const res = await fetch(`${API_BASE}/orders/${id}/receipt`, {
+            method: 'DELETE',
+            headers: getHeaders()
+        });
+        const data = await res.json();
+        if (data.success) {
+            alert("回单图片已彻底删除！");
+            closeShippedActionModal();
+            fetchOrders(); // 刷新卡片列表，小绿标会自动消失
+        } else {
+            alert(data.message || "删除失败");
+        }
+    } catch (e) {
+        console.error(e);
+        alert("网络错误，删除失败");
+    }
+};
 
+window.downloadReceiptImage = function() {
+    const preview = document.getElementById('receiptImagePreview');
+    if (!preview || !preview.src) {
+        return alert("没有可下载的图片");
+    }
+    const a = document.createElement('a');
+    a.href = preview.src;
+    a.download = `发货回单_${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+};
 // ========================================================
 // 🖱️ 唤醒桌面端专属：回单图片拖拽上传引擎
 // ========================================================

@@ -436,6 +436,37 @@ def upload_receipt(order_id):
         "image_url": db_image_url
     })
 
+
+# ==========================================
+# 🗑️ 新增接口：彻底删除订单的物理回单文件与数据库记录
+# ==========================================
+@app.route('/api/orders/<int:order_id>/receipt', methods=['DELETE'])
+def delete_order_receipt(order_id):
+    orders_data = read_orders()
+    orders_list = orders_data.get('orders', [])
+    order = next((o for o in orders_list if o.get('id') == order_id), None)
+    
+    if not order:
+        return jsonify({"success": False, "message": "找不到该订单"}), 404
+        
+    old_img_url = order.get('receipt_img_url')
+    if old_img_url and str(old_img_url).strip() != "":
+        if old_img_url.startswith('/uploads/'):
+            relative_path = old_img_url.replace('/uploads/', '', 1)
+            old_file_path = os.path.join(BASE_UPLOAD_DIR, relative_path)
+            if os.path.exists(old_file_path):
+                try:
+                    os.remove(old_file_path)
+                    print(f"🗑️ 已彻底粉碎物理回单文件: {old_file_path}")
+                except Exception as e:
+                    print(f"⚠️ 删除物理文件失败: {e}")
+                    
+    # 清空数据库中的回单路径值
+    order['receipt_img_url'] = ""
+    write_orders(orders_data)
+    
+    return jsonify({"success": True, "message": "回单图片已彻底删除"})
+
 # ==========================================
 # 🖼️ 新增回显接口：让前端能够读取刚才上传到 /app/uploads 的图片
 # ==========================================
