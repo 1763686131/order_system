@@ -27,24 +27,29 @@ const PERMISSIONS_CONFIG = [
         ]
     },
     {
-        group: 'shipped_order', label: '已出库订单',
-        children: [
-            { key: 'shipped.detail', label: '出库订单审核与撤销' }
+        group: 'shipped',
+        name: '已出库订单栏目',
+        items: [
+            { key: 'shipped.audit', label: '发货方式标签（出库审核与撤销）' },
+            { key: 'shipped.view_receipt', label: '回单标签（查看与下载凭证）' },
+            { key: 'shipped.upload_receipt', label: '单号标签（上传与管理回单图片）' }
+        ]
+    },
+    
+    {
+        group: 'material',
+        name: '原材料数据模块',
+        items: [
+            { key: 'material.add', label: '录入原材料数据' },
+            { key: 'material.edit', label: '行内就地修改数据' },
+            { key: 'material.delete', label: '物理删除流水记录' }
         ]
     },
     {
-        group: 'material', label: '原材料监控中心',
-        children: [
-            { key: 'material.add', label: '操作：录入消耗与产出' },
-            { key: 'material.edit', label: '操作：内页原地修改数据与备注' },
-            { key: 'material.delete', label: '操作：物理删除流水记录' },
-            { key: 'material.edit_stock', label: '隐藏接口：调整总物理库存' }
-        ]
-    },
-    {
-        group: 'system', label: '系统高级功能',
-        children: [
-            { key: 'system.user_manage', label: '显示：账户控制台 (悬浮球)' }
+        group: 'system',
+        name: '系统管理模块',
+        items: [
+            { key: 'system.user_manage', label: '账户与权限控制台' }
         ]
     }
 ];

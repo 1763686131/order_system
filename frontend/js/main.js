@@ -208,7 +208,7 @@ async function fetchOrders() {
 
                     // 沿用专属定制马卡龙色系角标
                    // ==================================================
-                    // 🔴 交互升级：发货方式(审核前可点) 与 单号凭证(审核后可点) 互斥控制
+                    // 🛡️ 最终安全升级：发货方式、回单、单号三标签接入动态权限管控
                     // ==================================================
                     let isAudited = o.audit_state === 1; 
                     let ribbonHtml = '';
@@ -219,25 +219,39 @@ async function fetchOrders() {
                         // 【状态 1：已审核发货】
                         ribbonHtml = `<div class="ribbon" style="background: #D5EFE3; color: #4CBCA0; border: none; font-weight: bold; box-shadow: none;">已发货</div>`;
                         
-                        // 发货标签：锁死（防误触）
+                        // 发货方式标签：锁死（防误触）
                         methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: not-allowed;" title="该订单已通过最终审核确认，系统已锁死"`;
                         
-                        // 单号标签：激活（允许上传图片，采用骚粉色猛男高亮样式区分）
-                        logisticsNoTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'receipt')" style="background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; box-shadow: 0 2px 5px rgba(235,47,150,0.2); transition: all 0.2s;" title="点击上传或管理回单图片" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
+                        // 单号标签：激活（检查是否有 shipped.upload_receipt 权限）
+                        if (hasPerm('shipped.upload_receipt')) {
+                            logisticsNoTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'receipt')" style="background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; box-shadow: 0 2px 5px rgba(235,47,150,0.2); transition: all 0.2s;" title="点击上传或管理回单图片" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
+                        } else {
+                            logisticsNoTagAttr = `style="background:#f5f5f5; color:#bfbfbf; border:1px solid #d9d9d9; cursor: not-allowed; opacity: 0.7;" title="暂无权限管理或上传回单图片"`;
+                        }
                         
                     } else {
                         // 【状态 2：未审核】
                         ribbonHtml = `<div class="ribbon" style="background: #FDECEE; color: #F46E83; border: none; font-weight: bold; box-shadow: none;">未审核</div>`;
                         
-                        // 发货标签：依靠权限判断激活（之前写好的逻辑）
-                        if (hasPerm('shipped.detail')) {
+                        // 发货方式标签：依靠权限判断激活（检查是否有 shipped.audit 权限）
+                        if (hasPerm('shipped.audit')) {
                             methodTagAttr = `onclick="triggerShippedActionModal(${o.id}, 'audit')" style="background:#e6f4ff; color:#1677ff; border:1px solid #91caff; cursor: pointer; box-shadow: 0 2px 5px rgba(22,119,255,0.2); transition: all 0.2s;" title="点击此处进行审核或撤销出库" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'"`;
                         } else {
-                            methodTagAttr = `style="background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: default;"`;
+                            methodTagAttr = `style="background:#f5f5f5; color:#bfbfbf; border:1px solid #d9d9d9; cursor: not-allowed; opacity: 0.7;" title="暂无权限进行出库审核操作"`;
                         }
                         
-                        // 单号标签：锁死
+                        // 单号标签：未审核前无论如何均锁死
                         logisticsNoTagAttr = `style="background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff; cursor: not-allowed;" title="请先完成【确认审核】后再上传回单图片"`;
+                    }
+
+                    // 🎯 回单绿标显示逻辑：检查是否有 shipped.view_receipt 权限
+                    let receiptTagHtml = '';
+                    if (o.receipt_img_url && String(o.receipt_img_url).trim() !== '') {
+                        if (hasPerm('shipped.view_receipt')) {
+                            receiptTagHtml = `<span onclick="triggerShippedActionModal(${o.id}, 'view_receipt')" class="receipt-pure-tag" style="cursor: pointer;" title="点击查看回单大图">回单</span>`;
+                        } else {
+                            receiptTagHtml = `<span class="receipt-pure-tag" style="background: #f5f5f5; color: #bfbfbf; border: 1px solid #d9d9d9; cursor: not-allowed; opacity: 0.6;" title="暂无权限查看该回单凭证">回单</span>`;
+                        }
                     }
 
                     tHtml += `
@@ -251,7 +265,7 @@ async function fetchOrders() {
                             
                             <div class="s-tags-wrapper" style="margin-top: auto; padding-top: 24px;">
                                 <div class="s-tag" ${methodTagAttr}>发货方式: ${renderMethod}</div>
-                                ${o.receipt_img_url && String(o.receipt_img_url).trim() !== '' ? `<span onclick="triggerShippedActionModal(${o.id}, 'view_receipt')" class="receipt-pure-tag">回单</span>` : ''}
+                                ${receiptTagHtml} 
                                 <div class="s-tag" ${logisticsNoTagAttr}>单号: ${o.logistics_no || '暂无记录'}</div>
                             </div>
                             
