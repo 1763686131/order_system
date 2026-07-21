@@ -374,7 +374,7 @@ def delete_material_record(record_id):
     return jsonify({"success": True})
 
 # ==========================================
-# 🚀 修复核心：提上来的回单上传接口（逃离底部黑洞，并接入正确的存储引擎）
+# 🚀 修复核心：带自动清理旧文件的回单上传引擎
 # ==========================================
 @app.route('/api/orders/<int:order_id>/upload_receipt', methods=['POST'])
 def upload_receipt(order_id):
@@ -382,7 +382,6 @@ def upload_receipt(order_id):
     if not file:
         return jsonify({"success": False, "message": "没有找到图片文件"}), 400
 
-    # 修复 1：使用标准数据抓取引擎，彻底解决变量未定义导致的崩溃
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
     order = next((o for o in orders_list if o.get('id') == order_id), None)
@@ -390,10 +389,28 @@ def upload_receipt(order_id):
     if not order:
         return jsonify({"success": False, "message": "找不到该订单信息"}), 404
 
+    # 🌟 ======= 新增核心：旧物理文件自动粉碎机 ======= 🌟
+    old_img_url = order.get('receipt_img_url')
+    if old_img_url and str(old_img_url).strip() != "":
+        # 数据库里的路径长这样：/uploads/2026-07/xxx.jpg
+        # 我们需要把它映射到后端的实际物理路径：/app/uploads/2026-07/xxx.jpg
+        if old_img_url.startswith('/uploads/'):
+            # 剥离前缀，拼接绝对路径
+            relative_path = old_img_url.replace('/uploads/', '', 1)
+            old_file_path = os.path.join(BASE_UPLOAD_DIR, relative_path)
+            
+            # 检查硬盘上是否存在这个文件，如果有，果断删除！
+            if os.path.exists(old_file_path):
+                try:
+                    os.remove(old_file_path)
+                    print(f"✅ 成功粉碎废弃旧回单: {old_file_path}")
+                except Exception as e:
+                    print(f"⚠️ 删除旧回单失败，可能已被占用或手动删除: {e}")
+    # 🌟 ================================================== 🌟
+
     client_name = sanitize_filename(order.get('order_client', '未知客户'))
     receiver_name = sanitize_filename(order.get('receiver_name', '未知收货人'))
 
-    # 修复 2：修正 datetime 的调用方法
     now = datetime.now() 
     month_folder = now.strftime("%Y-%m")      
     date_str = now.strftime("%Y-%m-%d")       
@@ -410,13 +427,12 @@ def upload_receipt(order_id):
     
     db_image_url = f"/uploads/{month_folder}/{safe_filename}"
     
-    # 修复 3：调用标准数据覆写引擎
     order['receipt_img_url'] = db_image_url
     write_orders(orders_data) 
     
     return jsonify({
         "success": True, 
-        "message": "图片上传并保存成功", 
+        "message": "新图片上传并保存成功，旧图片已清理", 
         "image_url": db_image_url
     })
 
