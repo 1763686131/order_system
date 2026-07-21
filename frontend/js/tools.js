@@ -145,3 +145,72 @@ function smartParse(prefix) {
         else document.getElementById(`${prefix}GoodsWeight`).value = '';
     }
 }
+
+
+
+// ========================================================
+// 🖱️ 万能图片拖拽上传引擎 (抽象工具类)
+// ========================================================
+/**
+ * 为指定的区域绑定拖拽上传功能
+ * @param {string} dropZoneId - 接收拖拽的容器 ID
+ * @param {string} inputId - 隐藏的 input[type="file"] 的 ID
+ * @param {function} previewCallback - 拿到文件后触发的预览回调函数
+ */
+window.enableDragAndDropUpload = function(dropZoneId, inputId, previewCallback) {
+    window.addEventListener('load', function() {
+        const dropZone = document.getElementById(dropZoneId);
+        const fileInput = document.getElementById(inputId);
+        if (!dropZone || !fileInput) return;
+
+        // 1. 阻止浏览器默认的全屏打开图片行为
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        // 2. 视觉反馈：拖入时泛起猛男粉
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.style.backgroundColor = '#fff0f6';
+                dropZone.style.borderRadius = '8px';
+                dropZone.style.border = '2px dashed #eb2f96';
+                dropZone.style.transition = 'all 0.2s';
+            }, false);
+        });
+
+        // 3. 视觉恢复：移开或松手后恢复原样
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.style.backgroundColor = '';
+                dropZone.style.border = '';
+            }, false);
+        });
+
+        // 4. 核心拦截：松手移交文件
+        dropZone.addEventListener('drop', function(e) {
+            const dt = e.dataTransfer;
+            const files = dt.files;
+
+            if (files && files.length > 0) {
+                const file = files[0];
+                if (!file.type.startsWith('image/')) {
+                    alert('安全拦截：请拖入有效的图片文件（如 jpg, png 等）！');
+                    return;
+                }
+                
+                // 把文件强制塞给隐藏的 input
+                fileInput.files = files; 
+                
+                // 触发回调函数进行本地预览渲染
+                if (typeof previewCallback === 'function') {
+                    previewCallback({ target: fileInput });
+                }
+            }
+        }, false);
+    });
+};

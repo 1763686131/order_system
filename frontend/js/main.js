@@ -550,69 +550,69 @@ async function fetchMaterials() {
         
         let html = '<div class="timeline-container">';
         
+        // 完美的日期大组倒序渲染
         Object.keys(groups).sort((a, b) => b.localeCompare(a)).forEach(date => {
             html += `<div class="timeline-group"><div class="timeline-date">${date}</div><div class="timeline-items">`;
             
-            // ... 上面是已有的排序和数据过滤逻辑 ...
-        groups[date].sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
-            let remarkText = r.remark ? r.remark : '无';
-            
-            html += `
-            <div class="material-card" id="mat-card-${r.id}" style="box-sizing: border-box; width: 100%;">
+            // 当天内的数据按高精度具体时间倒序排列
+            groups[date].sort((a, b) => b.date.localeCompare(a.date)).forEach(r => {
+                let remarkText = r.remark ? r.remark : '无';
                 
-                <div id="mat-view-${r.id}" style="display: flex; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px; box-sizing: border-box;">
-                    <div class="m-data-group">
-                        <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">${r.used} kg</span></div>
-                        <div class="m-item"><span class="m-label-black">成品：</span><span class="m-val-green">${r.produced} kg</span></div>
-                        <div class="m-item"><span class="m-label-blue">剩余树脂：</span><span class="m-val-blue">${r.remaining.toFixed(1)} kg</span></div>
-                    </div>
-                    <div style="flex-grow: 1; min-width: 10px;"></div>
-                    <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">${remarkText}</span></div>
-                    
-                    ${hasPerm('material.edit') ? `
-                    <div style="margin-left: auto; padding-left: 10px;">
-                        <button class="btn-default" style="padding: 6px 16px; font-size: 13px; border-radius: 20px; border: 1px solid #d9d9d9; height: 34px; font-weight: bold; cursor: pointer;" onclick="toggleInlineMatEdit(${r.id}, true)">修改</button>
-                    </div>
-                    ` : ''}
-                </div>
-
-                <div id="mat-edit-${r.id}" style="display: none; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px; box-sizing: border-box;">
-                    <div class="m-data-group" style="flex-wrap: wrap; gap: 8px;">
-                        <div class="m-item" style="display: flex; align-items: center;">
-                            <span class="m-label-black" style="font-size: 13px;">使用树脂：</span>
-                            <input id="inline-used-${r.id}" type="number" value="${r.used}" style="width: 70px; height: 28px; padding: 0 4px; border: 1px solid #eb2f96; border-radius: 8px; outline: none; font-weight: bold; color: #eb2f96; text-align: center; background: #fff0f6;" />
-                            <span class="m-val-pink" style="margin-left: 2px; font-size: 13px;">kg</span>
+                html += `
+                <div class="material-card" id="mat-card-${r.id}" style="box-sizing: border-box; width: 100%;">
+                    <div id="mat-view-${r.id}" style="display: flex; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px; box-sizing: border-box;">
+                        <div class="m-data-group">
+                            <div class="m-item"><span class="m-label-black">使用树脂：</span><span class="m-val-pink">${r.used} kg</span></div>
+                            <div class="m-item"><span class="m-label-black">成品：</span><span class="m-val-green">${r.produced} kg</span></div>
+                            <div class="m-item"><span class="m-label-blue">剩余树脂：</span><span class="m-val-blue">${r.remaining.toFixed(1)} kg</span></div>
                         </div>
-                        <div class="m-item" style="display: flex; align-items: center;">
-                            <span class="m-label-black" style="font-size: 13px;">成品：</span>
-                            <input id="inline-produced-${r.id}" type="number" value="${r.produced}" style="width: 70px; height: 28px; padding: 0 4px; border: 1px solid #52c41a; border-radius: 8px; outline: none; font-weight: bold; color: #52c41a; text-align: center; background: #f6ffed;" />
-                            <span class="m-val-green" style="margin-left: 2px; font-size: 13px;">kg</span>
+                        <div style="flex-grow: 1; min-width: 10px;"></div>
+                        <div class="m-note"><span class="m-note-label">备注：</span><span class="m-note-val">${remarkText}</span></div>
+                        
+                        ${hasPerm('material.edit') ? `
+                        <div style="margin-left: auto; padding-left: 10px;">
+                            <button class="btn-default" style="padding: 6px 16px; font-size: 13px; border-radius: 20px; border: 1px solid #d9d9d9; height: 34px; font-weight: bold; cursor: pointer;" onclick="toggleInlineMatEdit(${r.id}, true)">修改</button>
                         </div>
-                        <div class="m-item" style="font-size: 13px;">
-                            <span class="m-label-blue">剩余：</span>
-                            <span class="m-val-blue">${r.remaining.toFixed(1)} kg</span>
-                        </div>
-                    </div>
-                    <div style="flex-grow: 1; min-width: 10px;"></div>
-                    <div class="m-note" style="display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 260px;">
-                        <span class="m-note-label" style="white-space: nowrap; font-size: 13px;">备注：</span>
-                        <input id="inline-remark-${r.id}" type="text" value="${r.remark || ''}" placeholder="备注..." style="width: 100%; height: 28px; padding: 0 6px; border: 1px solid #b3d8ff; border-radius: 8px; outline: none; color: #111; font-size: 13px; background: #f0f7ff;" />
-                    </div>
-                    
-                    <div style="margin-left: auto; display: flex; align-items: center; gap: 6px; padding-left: 10px;">
-                        ${hasPerm('material.delete') ? `
-                        <button class="btn-danger" style="padding: 4px 14px; font-size: 12px; border-radius: 20px; border: none; height: 32px; font-weight: bold; color: white; cursor: pointer;" onclick="deleteInlineMatRecord(${r.id})">删除</button>
                         ` : ''}
-                        <button class="btn-default" style="padding: 4px 14px; font-size: 12px; border-radius: 20px; border: 1px solid #d9d9d9; height: 32px; font-weight: bold; cursor: pointer;" onclick="toggleInlineMatEdit(${r.id}, false)">取消</button>
-                        <button class="btn-primary" style="padding: 4px 16px; font-size: 12px; border-radius: 20px; border: none; height: 32px; font-weight: bold; background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); color: white; cursor: pointer;" onclick="submitInlineMatEdit(${r.id})">完成</button>
                     </div>
-                </div>
-                
-            </div>`;
-        });
-// ... 下面保持原样 ...
+
+                    <div id="mat-edit-${r.id}" style="display: none; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px; box-sizing: border-box;">
+                        <div class="m-data-group" style="flex-wrap: wrap; gap: 8px;">
+                            <div class="m-item" style="display: flex; align-items: center;">
+                                <span class="m-label-black" style="font-size: 13px;">使用树脂：</span>
+                                <input id="inline-used-${r.id}" type="number" value="${r.used}" style="width: 70px; height: 28px; padding: 0 4px; border: 1px solid #eb2f96; border-radius: 8px; outline: none; font-weight: bold; color: #eb2f96; text-align: center; background: #fff0f6;" />
+                                <span class="m-val-pink" style="margin-left: 2px; font-size: 13px;">kg</span>
+                            </div>
+                            <div class="m-item" style="display: flex; align-items: center;">
+                                <span class="m-label-black" style="font-size: 13px;">成品：</span>
+                                <input id="inline-produced-${r.id}" type="number" value="${r.produced}" style="width: 70px; height: 28px; padding: 0 4px; border: 1px solid #52c41a; border-radius: 8px; outline: none; font-weight: bold; color: #52c41a; text-align: center; background: #f6ffed;" />
+                                <span class="m-val-green" style="margin-left: 2px; font-size: 13px;">kg</span>
+                            </div>
+                            <div class="m-item" style="font-size: 13px;">
+                                <span class="m-label-blue">剩余：</span>
+                                <span class="m-val-blue">${r.remaining.toFixed(1)} kg</span>
+                            </div>
+                        </div>
+                        <div style="flex-grow: 1; min-width: 10px;"></div>
+                        <div class="m-note" style="display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 260px;">
+                            <span class="m-note-label" style="white-space: nowrap; font-size: 13px;">备注：</span>
+                            <input id="inline-remark-${r.id}" type="text" value="${r.remark || ''}" placeholder="备注..." style="width: 100%; height: 28px; padding: 0 6px; border: 1px solid #b3d8ff; border-radius: 8px; outline: none; color: #111; font-size: 13px; background: #f0f7ff;" />
+                        </div>
+                        
+                        <div style="margin-left: auto; display: flex; align-items: center; gap: 6px; padding-left: 10px;">
+                            ${hasPerm('material.delete') ? `
+                            <button class="btn-danger" style="padding: 4px 14px; font-size: 12px; border-radius: 20px; border: none; height: 32px; font-weight: bold; color: white; cursor: pointer;" onclick="deleteInlineMatRecord(${r.id})">删除</button>
+                            ` : ''}
+                            <button class="btn-default" style="padding: 4px 14px; font-size: 12px; border-radius: 20px; border: 1px solid #d9d9d9; height: 32px; font-weight: bold; cursor: pointer;" onclick="toggleInlineMatEdit(${r.id}, false)">取消</button>
+                            <button class="btn-primary" style="padding: 4px 16px; font-size: 12px; border-radius: 20px; border: none; height: 32px; font-weight: bold; background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); color: white; cursor: pointer;" onclick="submitInlineMatEdit(${r.id})">完成</button>
+                        </div>
+                    </div>
+                </div>`;
+            });
+
             html += `</div></div>`;
         });
+
         html += '</div>';
         targetContainer.innerHTML = html;
         
@@ -1120,6 +1120,28 @@ async function deleteInlineMatRecord(id) {
 
 
 // ========================================================
+// 🚀【新增核心修复】：纯前端图片选择与预览状态重置引擎
+// ========================================================
+window.clearReceiptImage = function() {
+    // 1. 清空隐藏的文件选择器值，这样下一次即便选择“同一张图”也能正常触发预览
+    const fileInput = document.getElementById('receiptImageInput');
+    if (fileInput) fileInput.value = "";
+    
+    // 2. 清空预览图片的地址并将其隐藏
+    const preview = document.getElementById('receiptImagePreview');
+    if (preview) {
+        preview.src = "";
+        preview.style.display = 'none';
+    }
+    
+    // 3. 重新将虚线框内部的“加号 / 点击选择图片”提示文字展示出来
+    const prompt = document.getElementById('receiptUploadPrompt');
+    if (prompt) {
+        prompt.style.display = 'block';
+    }
+};
+
+// ========================================================
 // 🛡️ 状态驱动：已出库审核 & 回单凭证 多态融合控制引擎
 // ========================================================
 window.triggerShippedActionModal = function(orderId, mode) {
@@ -1162,6 +1184,29 @@ window.triggerShippedActionModal = function(orderId, mode) {
         btnAuditConfirm.style.display = 'none';
         btnReceiptDelete.style.display = 'block';
         btnReceiptUpload.style.display = 'block';
+
+        // 🎯 修复点 1：动态绑定【清除图片】按钮点击事件，点击只做纯前端清除预览，不删数据库
+        if (btnReceiptDelete) {
+            btnReceiptDelete.onclick = function() {
+                window.clearReceiptImage();
+            };
+        }
+
+        // 🎯 修复点 2：智能加载状态（如果该订单数据库已经有图则显图；如果没图，彻底清空上一张残留）
+        const order = allOrdersLocal.find(o => o.id === orderId);
+        const preview = document.getElementById('receiptImagePreview');
+        const prompt = document.getElementById('receiptUploadPrompt');
+        
+        if (order && order.receipt_img_url) {
+            if (preview) {
+                preview.src = order.receipt_img_url;
+                preview.style.display = 'block';
+            }
+            if (prompt) prompt.style.display = 'none';
+        } else {
+            // 没有上传过回单的订单，启动干净的初试化
+            window.clearReceiptImage();
+        }
     }
 
     // 设置好内部状态后，统一唤起弹窗
@@ -1170,6 +1215,8 @@ window.triggerShippedActionModal = function(orderId, mode) {
 
 window.closeShippedActionModal = function() {
     document.getElementById('shippedOrderActionModal').style.display = 'none';
+    // 🎯 修复点 3：在点击“返回”或者关闭弹窗的瞬间，顺手执行一次全清理，消灭任何残影
+    window.clearReceiptImage();
 };
 
 // 1. 撤销出库功能：将订单状态推回到已完成 (completed) 状态列表
@@ -1263,3 +1310,9 @@ window.submitReceiptImage = async function() {
         alert("网络通信异常！");
     }
 };
+
+
+// ========================================================
+// 🖱️ 唤醒桌面端专属：回单图片拖拽上传引擎
+// ========================================================
+window.enableDragAndDropUpload('receiptContent', 'receiptImageInput', window.previewReceiptImage);

@@ -7,17 +7,14 @@ from datetime import datetime
 from threading import Timer
 import uuid  # 新增：用于生成唯一短码
 import re    # 新增：用于清理文件名非法字符
+
 # ------------------------------------------------
 # 辅助函数：清理文件名中的非法字符（防崩溃核心）
-# 防止有人在收货人名字里写了 "王二/子" 导致系统建错文件夹
 # ------------------------------------------------
 def sanitize_filename(text):
     if not text:
         return "未知"
-    # 替换掉 Windows 和 Linux 中不能作为文件名的特殊符号
     return re.sub(r'[\\/*?:"<>|\s]', "", str(text))
-
-
 
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type", "Username", "Role"]}})
@@ -25,6 +22,7 @@ CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type
 USERS_FILE = '/app/data/users_db.json'
 ORDERS_FILE = '/app/data/orders_db.json'
 MATERIALS_FILE = '/app/data/material_db.json' 
+BASE_UPLOAD_DIR = '/app/uploads' # 统一定义图片存储路径
 
 if os.path.exists('/app/frontend/index.html'):
     FRONTEND_DIR = '/app/frontend'
@@ -33,7 +31,6 @@ else:
     FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')
 
 FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
-
 
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
@@ -68,7 +65,6 @@ def read_materials():
 
 def write_materials(data):
     with open(MATERIALS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
-
 
 @app.route('/', methods=['GET'])
 def index():
@@ -198,8 +194,8 @@ def add_order():
         "date": ct, 
         "completed_date": "",
         "shipped_date": "",
-        "shipping_method": "",   # <--- 新增坑位：存放数字索引
-        "shipping_custom": "",   # <--- 新增坑位：存放手写补充信息
+        "shipping_method": "",
+        "shipping_custom": "",
         "logistics_no": "",
         "order_client": req_data.get('order_client', ''),
         "receiver_name": req_data.get('receiver_name', ''),
@@ -218,13 +214,6 @@ def add_order():
     write_orders(orders_data)
     return jsonify({"success": True, "data": new_order})
 
-
-# ==========================================
-# 🔥 核心防御区域：精准分配时间与单号
-# ==========================================
-# ========================================================
-# 🛡️ 终极版：出库流转接口 (完美融入撤销、发货、及 audit_state 锁死状态)
-# ========================================================
 @app.route('/api/orders/<int:order_id>', methods=['PUT'])
 def update_order_status(order_id):
     req_data = request.json
@@ -236,29 +225,25 @@ def update_order_status(order_id):
             x['status'] = ns
             
             if ns == 'completed':
-                # 🔴 机制：当被触发“撤销出库”推回到已完成时，清空发货时间和审核状态，还原为出库前的干净状态
                 x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
                 x['shipped_date'] = ""
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""
                 x['logistics_no'] = ""
-                x['audit_state'] = 0  # 撤销出库时重置为未审核 0
+                x['audit_state'] = 0
                 
             elif ns == 'shipped':
-                # 🔴 机制：如果已经是出库状态，本次请求是来更新“确认审核”的
                 if 'audit_state' in req_data:
                     x['audit_state'] = req_data.get('audit_state', 0)
                 else:
-                    # 如果是刚从已完成点按钮刚发货过来的，接收数据包并初始化审核状态为 0
                     x['shipping_method'] = req_data.get('shipping_method', 4)
                     x['shipping_custom'] = req_data.get('shipping_custom', '')
                     x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
                     x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
                     x['completed_date'] = x['shipped_date']
-                    x['audit_state'] = 0  # 发货出库第一瞬间，默认是未审核状态 0
+                    x['audit_state'] = 0 
                     
             elif ns == 'pending':
-                # 撤销订单到最初未完成状态时，全盘洗牌清空
                 x['completed_date'] = ""
                 x['shipped_date'] = ""
                 x['logistics_no'] = ""
@@ -270,7 +255,6 @@ def update_order_status(order_id):
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True})
-
 
 @app.route('/api/orders/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
@@ -338,10 +322,6 @@ def edit_order_content(order_id):
     write_orders(orders_data)
     return jsonify({"success": True})
 
-
-# ==========================================
-# 🛢️ 原材料持久化存储 API
-# ==========================================
 @app.route('/api/materials', methods=['GET'])
 def get_materials():
     return jsonify(read_materials())
@@ -393,8 +373,63 @@ def delete_material_record(record_id):
     write_materials(mat_data)
     return jsonify({"success": True})
 
+# ==========================================
+# 🚀 修复核心：提上来的回单上传接口（逃离底部黑洞，并接入正确的存储引擎）
+# ==========================================
+@app.route('/api/orders/<int:order_id>/upload_receipt', methods=['POST'])
+def upload_receipt(order_id):
+    file = request.files.get('receipt_image')
+    if not file:
+        return jsonify({"success": False, "message": "没有找到图片文件"}), 400
 
-# 🎯 文件万能通配拦截器
+    # 修复 1：使用标准数据抓取引擎，彻底解决变量未定义导致的崩溃
+    orders_data = read_orders()
+    orders_list = orders_data.get('orders', [])
+    order = next((o for o in orders_list if o.get('id') == order_id), None)
+    
+    if not order:
+        return jsonify({"success": False, "message": "找不到该订单信息"}), 404
+
+    client_name = sanitize_filename(order.get('order_client', '未知客户'))
+    receiver_name = sanitize_filename(order.get('receiver_name', '未知收货人'))
+
+    # 修复 2：修正 datetime 的调用方法
+    now = datetime.now() 
+    month_folder = now.strftime("%Y-%m")      
+    date_str = now.strftime("%Y-%m-%d")       
+    
+    target_dir = os.path.join(BASE_UPLOAD_DIR, month_folder)
+    os.makedirs(target_dir, exist_ok=True)
+    
+    short_code = uuid.uuid4().hex[:4].upper() 
+    file_ext = os.path.splitext(file.filename)[1] or '.jpg'
+    
+    safe_filename = f"{client_name}订单_{receiver_name}_{date_str}_{short_code}{file_ext}"
+    save_path = os.path.join(target_dir, safe_filename)
+    file.save(save_path)
+    
+    db_image_url = f"/uploads/{month_folder}/{safe_filename}"
+    
+    # 修复 3：调用标准数据覆写引擎
+    order['receipt_img_url'] = db_image_url
+    write_orders(orders_data) 
+    
+    return jsonify({
+        "success": True, 
+        "message": "图片上传并保存成功", 
+        "image_url": db_image_url
+    })
+
+# ==========================================
+# 🖼️ 新增回显接口：让前端能够读取刚才上传到 /app/uploads 的图片
+# ==========================================
+@app.route('/uploads/<path:filename>')
+def serve_uploads(filename):
+    return send_from_directory(BASE_UPLOAD_DIR, filename)
+
+# ==========================================
+# 🎯 文件万能通配拦截器 (必须垫在所有特定路由的最后面)
+# ==========================================
 @app.route('/<path:path>')
 def send_static_files(path): 
     return send_from_directory(FRONTEND_DIR, path)
@@ -402,61 +437,9 @@ def send_static_files(path):
 def open_browser():
     if not os.path.exists('/app/frontend/index.html'): webbrowser.open("http://localhost:7899")
 
+# ==========================================
+# 🛑 主引擎启动 (必须永远放在文件的绝对最末尾)
+# ==========================================
 if __name__ == '__main__':
     Timer(1.5, open_browser).start()
     app.run(host='0.0.0.0', port=7899, debug=False)
-
-
-@app.route('/api/orders/<int:order_id>/upload_receipt', methods=['POST'])
-def upload_receipt(order_id):
-    # 1. 获取前端传来的文件
-    file = request.files.get('receipt_image')
-    if not file:
-        return jsonify({"success": False, "message": "没有找到图片文件"}), 400
-
-    # 2. 从数据库中查询这个订单，获取名字信息
-    # (假设你内存里的订单列表变量叫 orders，请根据你实际的变量名修改)
-    order = next((o for o in orders if o.get('id') == order_id), None)
-    if not order:
-        return jsonify({"success": False, "message": "找不到该订单信息"}), 404
-
-    # 获取客户名和收货人，并过滤掉非法字符
-    client_name = sanitize_filename(order.get('order_client', '未知客户'))
-    receiver_name = sanitize_filename(order.get('receiver_name', '未知收货人'))
-
-    # 3. 准备时间数据
-    now = datetime.datetime.now()
-    month_folder = now.strftime("%Y-%m")      # 文件夹名，如 "2026-07"
-    date_str = now.strftime("%Y-%m-%d")       # 文件名里的日期，如 "2026-07-21"
-    
-    # 自动创建月份文件夹
-    base_upload_dir = '/app/uploads'
-    target_dir = os.path.join(base_upload_dir, month_folder)
-    os.makedirs(target_dir, exist_ok=True)
-    
-    # 4. 生成后缀编号 (代替单纯的 "01")
-    # 为什么不用 01？因为如果同一天给同一个人重新传了一张图，01 就会把之前的覆盖掉。
-    # 我们用当前时间的 "时分秒" 或 "随机短码" 代替，既像编号，又绝对安全防重复！
-    short_code = uuid.uuid4().hex[:4].upper() # 生成4位大写随机码，比如 "A3F2"
-    file_ext = os.path.splitext(file.filename)[1] or '.jpg'
-    
-    # 🎯 核心：拼装你想要的完美文件名
-    # 最终效果类似于： 王醒订单_王二_2026-07-21_A3F2.jpg
-    safe_filename = f"{client_name}订单_{receiver_name}_{date_str}_{short_code}{file_ext}"
-    
-    # 5. 保存文件
-    save_path = os.path.join(target_dir, safe_filename)
-    file.save(save_path)
-    
-    # 6. 生成数据库路径并保存
-    db_image_url = f"/uploads/{month_folder}/{safe_filename}"
-    
-    # 把图片路径存入订单，并保存到 JSON (调用你现有的保存函数)
-    order['receipt_img_url'] = db_image_url
-    save_orders_data() # (⚠️注意：请换成你 app.py 里面实际保存订单数据的函数名)
-    
-    return jsonify({
-        "success": True, 
-        "message": "图片上传并保存成功", 
-        "image_url": db_image_url
-    })
