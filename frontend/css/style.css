@@ -478,3 +478,20 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
     margin-left: auto !important;
     margin-right: auto !important;
 }
+
+
+/* ========================================================
+ * 🟠 状态驱动：绝缘订单 - 琥珀暖橙主题
+ * ======================================================== */
+.card-insulation {
+    background-color: #FFF7E6 !important;  /* 柔和的琥珀橙底色 */
+    border: 1px solid #FFD591 !important;  /* 稍微加深的橙色边框 */
+    box-shadow: 0 4px 16px rgba(250, 140, 22, 0.08) !important;
+    transition: all 0.3s ease;
+}
+.card-insulation .order-header {
+    border-bottom: 1px dashed #FFD591 !important;
+}
+.card-insulation .info-row[style*="border-top"] {
+    border-top-color: #FFD591 !important;
+}

@@ -239,8 +239,12 @@ async function fetchOrders() {
                         receiptTagHtml = `<span onclick="triggerShippedActionModal(${o.id}, 'view_receipt')" class="receipt-pure-tag" style="cursor: pointer;" title="点击查看回单详情">回单</span>`;
                     }
 
+                    // 🚦 智能开关：判断绝缘订单，赋予特殊背景类名
+                    let typeClass = (o.type == 1) ? 'card-insulation' : '';
+                    
                     tHtml += `
-                    <div class="shipped-card">
+                    <div class="shipped-card ${typeClass}">
+
                         ${ribbonHtml}
                         <div class="shipped-left" style="display: flex; flex-direction: column;">
                             <div class="shipped-title">${o.goods_name || '无货物名称'}</div>
@@ -320,6 +324,7 @@ async function fetchOrders() {
                 let partLetter = String.fromCharCode(65 + chunkIndex); 
 
                 let compactClass = (!isMobile && chunkLines.length >= 8) ? 'compact' : '';
+                let typeClass = (o.type == 1) ? 'card-insulation' : ''; // 🚦 绝缘背景状态开关
 
                 if (currentTab === 0) {
                     let frontGoodsHtml = '';
@@ -374,7 +379,7 @@ async function fetchOrders() {
                     html += `
                     <div class="flip-container">
                       <div class="flipper ${!isFirstCard ? 'no-flip' : ''}">
-                        <div class="order-card front">
+                        <div class="order-card front ${typeClass}">
                           <div class="order-title">${o.order_client || '未命名归属'}订单</div>
                           <div class="order-header"><span><strong>${typeName}</strong> 产品列表 ${!isFirstCard ? '(续集)' : ''}</span><span>${isFirstCard ? (o.date || '未知时间') : ''}</span></div>
                           
@@ -388,7 +393,7 @@ async function fetchOrders() {
                         </div>
                         
                         ${isFirstCard ? `
-                        <div class="order-card back">
+                        <div class="order-card back ${typeClass}">
                           <div class="order-title">${o.order_client || '未命名归属'}订单</div>
                           <div class="order-header"><span><strong>${typeName}</strong> 产品列表</span><span>${o.date || '未知时间'}</span></div>
                           <div class="product-list">
@@ -411,7 +416,7 @@ async function fetchOrders() {
                           </div>
                           <div class="actions-back">${backActs}</div>
                         </div>
-                        ` : `<div class="order-card back"></div>`}
+                        ` : `<div class="order-card back ${typeClass}"></div>`}
                       </div>
                     </div>`;
                 } 
@@ -435,7 +440,7 @@ async function fetchOrders() {
                     }
 
                     html += `
-                    <div class="completed-card" style="padding: 20px 24px; font-size: 15px;">
+                    <div class="completed-card ${typeClass}" style="padding: 20px 24px; font-size: 15px;">
                       <div class="order-title" style="font-size: 28px; margin-bottom: 8px;">${o.order_client || '未命名归属'}订单</div>
                       <div class="order-header" style="font-size: 15px; padding-bottom: 8px; margin-bottom: 12px;">
                         <span><strong>${typeName}</strong> 发货核对明细 ${!isFirstCard ? '(续)' : ''}</span>

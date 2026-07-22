@@ -1,0 +1,50 @@
+/* =========================================
+ * 🎨 订单管理系统 - 全局颜色主题库 (theme.css)
+ * ========================================= */
+
+:root {
+    /* 1. 主题/品牌色 */
+    --primary-color: #2F54EB;       /* 主按钮蓝 (极客蓝) */
+    --primary-hover: #597EF7;       /* 鼠标悬浮时的浅蓝 */
+
+    /* 2. 状态/警示色 (成功、警告、危险) */
+    --success-color: #52C41A;       /* 已完成/成功 绿 */
+    --warning-color: #FA8C16;       /* 待处理/警告 橙 */
+    --danger-color: #F06D82;        /* 删除/警示 红 */
+    --danger-bg: #FDECEE;           /* 警示按钮背景 (猛男粉) */
+
+    /* 3. 背景色库 */
+    --bg-page: #F0F2F5;             /* 整个网页的大背景灰 */
+    --bg-card: #FFFFFF;             /* 默认卡片纯白背景 */
+    --bg-insulation: #F0F5FF;       /* 绝缘订单专属淡蓝背景 */
+    --bg-amber: #FFF7E6;            /* 琥珀暖橙背景 (备选) */
+    --bg-amberorange: #FFF7E6;      /* 柔和的琥珀橙底色 */
+    --bg-lightgreen: #F6FFED;       /* 抹茶色背景 */
+    --bg-purple: #F9F0FF;           /* 淡雅的薰衣草 */
+
+
+
+    /* 4. 文字颜色库 */
+    --text-main: #333333;           /* 主要深色文字 */
+    --text-muted: #888888;          /* 次要/提示性浅色文字 */
+    --text-white: #FFFFFF;          /* 纯白文字 */
+
+
+    /* 5. 边框与分割线颜色 */
+    --border-light: #E8E8E8;        /* 默认浅色边框 */
+    --border-insulation: #ADC6FF;   /* 订单专属边框 */
+
+    /* 6. 文字和背景组合颜色 */
+    --text-danger: #F06D82;         /* 危险文字颜色 */
+    --bg-danger: #FDECEE;           /* 危险背景颜色 */
+
+    --text-morandi: #409EFF;        /* 莫兰迪蓝*/
+    --bg-morandi: #E8F4FF;          /* 莫兰迪天蓝*/
+
+    --text-lightgreen: #4CBCA0;;    /*薄荷绿*/
+    --bg-lightgreen: #D5EFE3;       /*薄荷绿*/
+
+    --text-gray: #555;              /*灰色*/
+    --bg-gray: #f5f5f5;             /*灰色*/
+
+}
