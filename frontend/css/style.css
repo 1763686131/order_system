@@ -504,7 +504,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
  * ======================================================== */
 .card-insulation {
     background-color: #FFF7E6 !important;  /* 柔和的琥珀橙底色 */
-    border: 1px solid #FFD591 !important;  /* 稍微加深的橙色边框 */
+    /* border: 1px solid #FFD591 !important;  稍微加深的橙色边框 */
     box-shadow: 0 4px 16px rgba(250, 140, 22, 0.08) !important;
     transition: all 0.3s ease;
 }

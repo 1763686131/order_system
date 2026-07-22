@@ -58,7 +58,8 @@ def write_orders(data):
 def read_materials():
     os.makedirs(os.path.dirname(MATERIALS_FILE), exist_ok=True)
     if not os.path.exists(MATERIALS_FILE):
-        d = {"total_stock": 5000.0, "records": []} 
+        # 🌟 数据库初始化时，增加 'remark_tags' 词库字段
+        d = {"total_stock": 5000.0, "records": [], "remark_tags": []} 
         write_materials(d)
         return d
     with open(MATERIALS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
@@ -331,17 +332,31 @@ def add_material_record():
     req_data = request.json
     mat_data = read_materials()
     records_list = mat_data.get('records', [])
+    
+    # 获取当前的词库，如果没有则给个空数组
+    remark_tags = mat_data.get('remark_tags', []) 
+    
     ct = datetime.now().strftime('%Y-%m-%d %H:%M')
     new_id = max([x['id'] for x in records_list], default=0) + 1
+    
+    # 提取前端传来的备注数据
+    remark_text = str(req_data.get('remark', '')).strip()
+    
     new_record = {
         "id": new_id,
         "used": float(req_data.get('used', 0)),
         "produced": float(req_data.get('produced', 0)),
         "date": ct,
-        "remark": req_data.get('remark', '') 
+        "remark": remark_text 
     }
     records_list.append(new_record)
     mat_data['records'] = records_list
+    
+    # 🌟 核心逻辑：如果用户输入了备注，且这个词没有在词库中，则自动收录进去！
+    if remark_text and remark_text not in remark_tags:
+        remark_tags.append(remark_text)
+        mat_data['remark_tags'] = remark_tags
+        
     write_materials(mat_data) 
     return jsonify({"success": True})
 

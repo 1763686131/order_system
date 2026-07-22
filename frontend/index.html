@@ -261,7 +261,14 @@
               <div class="upload-inputs-area">
                   <div class="form-item"><label for="materialInputUse" style="font-weight:bold; color:#ff4d4f;">今日消耗原材料 (kg):</label><input id="materialInputUse" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#fff; font-size:16px; font-weight:bold;" /></div>
                   <div class="form-item"><label for="materialInputProduct" style="font-weight:bold; color:#52c41a;">出货成品总数量 (kg):</label><input id="materialInputProduct" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputProduct')" style="background:#fff; font-size:16px; font-weight:bold;" /></div>
-              </div>
+                  
+                  <div class="form-item" style="margin-top: 15px;">
+                      <label for="materialInputRemark" style="font-weight:bold; color:#1890ff;">附加备注信息 (选填):</label>
+                      <input id="materialInputRemark" placeholder="可手动打字，或直接点击下方快捷标签" style="background:#fff; font-size:14px; border: 1px solid #d9d9d9; border-radius: 6px; padding: 10px 12px; width: 100%; box-sizing: border-box; outline: none; margin-top: 5px; color: #333;" />
+                      <div id="materialRemarkTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; min-height: 24px; align-items: center;">
+                          </div>
+                  </div>
+                  </div>
               <div class="touch-keyboard-panel">
                   <button class="key-btn" onclick="pressKey('1')">1</button><button class="key-btn" onclick="pressKey('2')">2</button><button class="key-btn" onclick="pressKey('3')">3</button><button class="key-btn" onclick="pressKey('4')">4</button><button class="key-btn" onclick="pressKey('5')">5</button><button class="key-btn" onclick="pressKey('6')">6</button><button class="key-btn" onclick="pressKey('7')">7</button><button class="key-btn" onclick="pressKey('8')">8</button><button class="key-btn" onclick="pressKey('9')">9</button><button class="key-btn" onclick="pressKey('.')">.</button><button class="key-btn" onclick="pressKey('0')">0</button><button class="key-btn key-backspace" onclick="pressKey('backspace')">←</button><button class="key-btn key-clear" onclick="pressKey('clear')" style="grid-column: span 3; font-size:13px; height: 35px; background:#f5f5f5; color:#666;">清空重输</button>
               </div>

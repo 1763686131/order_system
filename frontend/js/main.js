@@ -843,11 +843,34 @@ async function deleteOrderInEdit() {
     } catch (e) { alert('物理删除请求异常'); }
 }
 
-function openUploadMaterialModal() {
+async function openUploadMaterialModal() {
     toggleModal('uploadMaterialModal', true);
     setActiveKeyboardTarget('materialInputUse');
     document.getElementById('materialInputUse').value = '';
     document.getElementById('materialInputProduct').value = '';
+    
+    // 清空上次的输入记录，并给标签区放上加载提示
+    document.getElementById('materialInputRemark').value = ''; 
+    document.getElementById('materialRemarkTags').innerHTML = '<span style="color:#999; font-size:12px;">正在加载快捷词库...</span>';
+
+    try {
+        // 请求后台拉取数据库里的标签
+        const response = await fetch(`${API_BASE}/materials`, { method: 'GET', headers: getHeaders() });
+        const matData = await response.json();
+        const tags = matData.remark_tags || [];
+        const tagsContainer = document.getElementById('materialRemarkTags');
+        
+        if (tags.length > 0) {
+            // 如果有词库，渲染成美观的高亮药丸标签，点击后直接覆盖赋值到备注框内
+            tagsContainer.innerHTML = tags.map(t => 
+                `<span onclick="document.getElementById('materialInputRemark').value='${t}'" style="cursor: pointer; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; padding: 4px 10px; border-radius: 4px; font-size: 12px; transition: all 0.2s; user-select: none;" onmouseover="this.style.background='#bae0ff'" onmouseout="this.style.background='#e6f4ff'">${t}</span>`
+            ).join('');
+        } else {
+            tagsContainer.innerHTML = '<span style="color:#999; font-size:12px;">暂无历史词库，输入并提交后系统将自动收录为快捷标签</span>';
+        }
+    } catch(e) {
+        document.getElementById('materialRemarkTags').innerHTML = '<span style="color:#ff4d4f; font-size:12px;">网络异常，标签加载失败</span>';
+    }
 }
 
 function setActiveKeyboardTarget(id) {
@@ -868,17 +891,27 @@ function pressKey(key) {
 async function uploadMaterialRecord() {
     const usedVal = parseFloat(document.getElementById('materialInputUse').value);
     const productVal = parseFloat(document.getElementById('materialInputProduct').value);
+    const remarkVal = document.getElementById('materialInputRemark').value.trim(); // 🌟 抓取备注文字
+
     if (isNaN(usedVal) || isNaN(productVal)) return alert('录入失败：请完整输入耗材与产出量！');
 
     try {
-        const response = await fetch(`${API_BASE}/materials`, { method: 'POST', headers: getHeaders(), body: JSON.stringify({ used: usedVal, produced: productVal }) });
+        const response = await fetch(`${API_BASE}/materials`, { 
+            method: 'POST', 
+            headers: getHeaders(), 
+            // 🌟 将 remark 一起打包提交
+            body: JSON.stringify({ used: usedVal, produced: productVal, remark: remarkVal }) 
+        });
         if (response.ok) {
             toggleModal('uploadMaterialModal', false); 
-            document.getElementById('successNotifyDetail').innerText = `物料报表已存入：\n消耗: ${usedVal} kg\n产出: ${productVal} kg`;
+            // 在成功弹窗中也显示一下刚才填的备注
+            document.getElementById('successNotifyDetail').innerText = `物料报表已存入：\n消耗: ${usedVal} kg\n产出: ${productVal} kg${remarkVal ? '\n备注: ' + remarkVal : ''}`;
             toggleModal('uploadSuccessNotifyModal', true);
             if (currentTab === 3) fetchMaterials();
         }
-    } catch (e) {}
+    } catch (e) {
+        alert('网络通信异常，提交失败');
+    }
 }
 
 function toggleModal(modalId, show) {
