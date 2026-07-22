@@ -487,3 +487,58 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
     margin: 0 0.15em !important;
     letter-spacing: 0.02em !important;
 }
+
+
+/* =========================================================
+   🚑 终极修复：打破样式死锁，重塑回单上传结构与专属配色
+   ========================================================= */
+
+/* 1. 强行打破 nth-of-type(3) 的灰色死锁，赋予专属粉色配色 */
+#shippedOrderActionModal #btnReceiptDelete {
+    background-color: #FDECEE !important;
+    color: #F06D82 !important;
+    border: none !important; /* 强行抹除原带的红色边框 */
+}
+#shippedOrderActionModal #btnReceiptDelete:hover {
+    background-color: #fad3da !important;
+    color: #e55c71 !important;
+}
+
+/* 2. 拦截 JS 的 display: block，强行赋予 Flex 居中结构，彻底解决错位 */
+/* 当 JS 试图让它显示时，强行劫持并锁死为 flex，保证加号和图片永远完美居中！ */
+#receiptContent[style*="display: block"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+/* 3. 为图片加上绝对定位和物理约束，不管传多大的图都绝不撑爆弹窗 */
+#receiptContent img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+}
+
+
+/* 4. 彻底镇压 JS 导致的加号区域左上角错位，将其绝对锚定在正中心 */
+#receiptUploadPrompt {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important; /* X轴Y轴各退回50%，实现完美居中 */
+    width: 100% !important;
+    height: auto !important;
+    text-align: center !important; /* 确保内部的加号和文字水平居中 */
+}
+
+/* 防止内部 div 受到外部意外干扰 */
+#receiptUploadPrompt > div {
+    display: block !important;
+    text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
