@@ -124,6 +124,25 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 
 /* 📱 移动端绝对响应式解耦区域 (🌟 彻底移除破坏性代码，回归最原生拉伸伸展) */
 @media (max-width: 768px) {
+    /* ========================================================
+     📱 移动端专属：高规格动态交互增强（支持位移+透明度双重缓动）
+     ======================================================== */
+  .nav-bar {
+      /* 1. 强行激活全属性动画：为位移、透明度、阴影绑定专属的 0.4秒 灵动缓动曲线 */
+      transition: transform 0.4s cubic-bezier(0.3, 0.8, 0.3, 1), 
+                  opacity 0.4s cubic-bezier(0.3, 0.8, 0.3, 1), 
+                  box-shadow 0.4s ease !important;
+      opacity: 1;
+      pointer-events: auto;
+  }
+  
+  /* 当向上滑动屏幕触发隐藏状态时 */
+  .nav-bar.nav-bar-hidden {
+      transform: translateY(-100%) !important; /* 优雅地向上推回顶部 */
+      opacity: 0 !important;                    /* 🔥 新增：透明度慢慢降为 0，实现淡出特效 */
+      box-shadow: none !important;             /* 关掉阴影，消灭多余的边缘缝隙 */
+      pointer-events: none !important;         /* 🔥 核心安全锁：隐藏时彻底禁用点击，防止员工误触隐藏的导航项 */
+  }
   body { padding: 160px 16px 20px 16px !important; font-size: 15px !important; overflow-y: auto !important; overflow-x: hidden !important; }
   .nav-bar { flex-wrap: wrap !important; overflow: hidden !important; white-space: normal !important; padding: 12px 16px !important; gap: 12px !important; }
   .nav-item { font-size: 16px !important; padding: 12px 0 !important; flex: 1 1 45% !important; text-align: center !important; }

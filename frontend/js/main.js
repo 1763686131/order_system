@@ -888,6 +888,9 @@ function toggleModal(modalId, show) {
 }
 
 function switchTab(index) {
+    // 召回保险：切换 Tab 标签时，强制让导航栏浮现
+  const topNav = document.querySelector('.nav-bar');
+  if (topNav) topNav.classList.remove('nav-bar-hidden');
   const navItems = document.querySelectorAll('.nav-item');
   navItems.forEach(item => item.classList.remove('active'));
   navItems[index].classList.add('active');
@@ -1496,4 +1499,37 @@ window.rotateReceiptImage = function(e) {
     const preview = document.getElementById('receiptImagePreview');
     preview.src = canvas.toDataURL('image/jpeg', 0.95); 
 };
+
+// ========================================================
+// 📱 移动端专属：智能滚动流向检测与导航栏全自动隐显引擎
+// ========================================================
+let nomiLastMobileScrollTop = 0;
+
+window.addEventListener('scroll', function() {
+    // ⚡ 核心鉴权屏障：严格限制！只对移动端视口（宽度 <= 768px）生效，电脑端和触屏端绝对不碰
+    if (window.innerWidth > 768) return;
+
+    const navBar = document.querySelector('.nav-bar');
+    if (!navBar) return;
+
+    // 兼容抓取当前视口相对于网页顶部的物理滚动距离
+    let scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    
+    // 🛡️ iOS 橡皮筋回弹锁：当页面触顶或产生弹性负滚动时，强制归零，彻底消灭顶部的误判闪烁
+    if (scrollTop < 0) scrollTop = 0;
+
+    // 🛑 智能意图防抖锁：如果两次滚动的位移差小于 15px，说明只是手指轻微颤抖，直接拦截不做动作
+    if (Math.abs(scrollTop - nomiLastMobileScrollTop) <= 15) return;
+
+    if (scrollTop > nomiLastMobileScrollTop && scrollTop > 90) {
+        // 【核心动作 A】页面向下滚动（手指向上滑动屏幕） -> 丝滑隐藏导航栏，腾出全部车间看单空间
+        navBar.classList.add('nav-bar-hidden');
+    } else if (scrollTop < nomiLastMobileScrollTop) {
+        // 【核心动作 B】页面向上滚动（手指向下滑动屏幕） -> 瞬间召回顶部导航栏，方便随时切页
+        navBar.classList.remove('nav-bar-hidden');
+    }
+    
+    // 动态更新基准位移
+    nomiLastMobileScrollTop = scrollTop;
+}, { passive: true }); // passive: true 开启被动监听，提升移动端手势滑动的帧率与流利度
 
