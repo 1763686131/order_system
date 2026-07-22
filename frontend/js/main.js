@@ -1128,28 +1128,32 @@ async function deleteInlineMatRecord(id) {
 // 🚀【新增核心修复】：纯前端图片选择与预览状态重置引擎
 // ========================================================
 window.clearReceiptImage = function() {
-    // 1. 清空隐藏的文件选择器值，这样下一次即便选择“同一张图”也能正常触发预览
     const fileInput = document.getElementById('receiptImageInput');
     if (fileInput) fileInput.value = "";
     
-    // 2. 清空预览图片的地址并将其隐藏
     const preview = document.getElementById('receiptImagePreview');
     if (preview) {
         preview.src = "";
         preview.style.display = 'none';
     }
     
-    // 3. 重新将虚线框内部的“加号 / 点击选择图片”提示文字展示出来
     const prompt = document.getElementById('receiptUploadPrompt');
-    if (prompt) {
-        prompt.style.display = 'block';
-    }
+    if (prompt) prompt.style.display = 'block'; 
+
+    // 🌟 清空时，隐藏旋转按钮并彻底重置内存状态
+    const rotateBtn = document.getElementById('receiptRotateBtn');
+    if (rotateBtn) rotateBtn.style.display = 'none';
+    window.currentReceiptRotation = 0;
+    window.originalReceiptImg = new Image();
 };
 
 // ========================================================
 // 🛡️ 状态驱动：已出库审核 & 回单凭证 多态融合控制引擎
 // ========================================================
 window.triggerShippedActionModal = function(orderId, mode) {
+    // 丢在 triggerShippedActionModal 函数内的最顶部
+    const rotateBtn = document.getElementById('receiptRotateBtn');
+    if (rotateBtn) rotateBtn.style.display = 'none';
     document.getElementById('actionTargetOrderId').value = orderId;
     
     // 获取文字和容器节点
@@ -1328,13 +1332,24 @@ window.submitAuditShipOrder = async function() {
 window.previewReceiptImage = function(event) {
     const file = event.target.files[0];
     if (file) {
-        // 使用 FileReader 在前端直接读取并预览图片
         const reader = new FileReader();
         reader.onload = function(e) {
             document.getElementById('receiptUploadPrompt').style.display = 'none';
             const preview = document.getElementById('receiptImagePreview');
-            preview.src = e.target.result;
-            preview.style.display = 'block';
+            
+            // 重置旋转状态
+            window.currentReceiptRotation = 0;
+            
+            // 等待图片装载到内存中，以备 Canvas 提取
+            window.originalReceiptImg.onload = function() {
+                preview.src = e.target.result;
+                preview.style.display = 'block';
+                
+                // 🌟 唤醒正中央的磨砂玻璃旋转按钮
+                const rotateBtn = document.getElementById('receiptRotateBtn');
+                if (rotateBtn) rotateBtn.style.display = 'flex';
+            };
+            window.originalReceiptImg.src = e.target.result; // 注入图片源触发 onload
         };
         reader.readAsDataURL(file);
     }
@@ -1343,21 +1358,41 @@ window.previewReceiptImage = function(event) {
 // 上传图片
 window.submitReceiptImage = async function() {
     const id = document.getElementById('actionTargetOrderId').value;
-    const fileInput = document.getElementById('receiptImageInput');
-    const file = fileInput.files[0];
+    const preview = document.getElementById('receiptImagePreview');
     
-    if (!file) {
+    // 拦截判定：如果没有图或者图是隐藏的，不允许上传
+    if (!preview || !preview.src || preview.style.display === 'none') {
         return alert("请先点击虚线框选择一张图片！");
     }
 
-    // 使用 FormData 打包二进制文件
+    // 🌟 将 Base64 重绘为标准的 File 二进制对象，欺骗后端这就像是一个刚拍的正常文件
+    function dataURItoFile(dataURI, filename) {
+        const arr = dataURI.split(',');
+        const mime = arr[0].match(/:(.*?);/)[1];
+        const bstr = atob(arr[1]);
+        let n = bstr.length;
+        const u8arr = new Uint8Array(n);
+        while (n--) {
+            u8arr[n] = bstr.charCodeAt(n);
+        }
+        return new File([u8arr], filename, { type: mime });
+    }
+
+    let fileToUpload;
+    try {
+        // 利用系统时间戳给新图片命名，防止浏览器或后端缓存冲突
+        fileToUpload = dataURItoFile(preview.src, `receipt_${Date.now()}.jpg`);
+    } catch (error) {
+        return alert("图片数据解析异常，请重新选择图片！");
+    }
+
+    // 原样打包进 FormData (后端无感，依然用 receipt_image 字段接收)
     const formData = new FormData();
-    formData.append("receipt_image", file); // receipt_image 是后端接收的字段名
+    formData.append("receipt_image", fileToUpload); 
     
     try {
         const response = await fetch(`${API_BASE}/orders/${id}/upload_receipt`, {
             method: 'POST',
-            // 注意：使用 FormData 时，不要设置 'Content-Type' 头，浏览器会自动设置并加上边界 boundary
             headers: { 
                 'Username': String(currentUser.username),
                 'Role': String(currentUser.role)
@@ -1368,7 +1403,7 @@ window.submitReceiptImage = async function() {
         if (response.ok) {
             alert("图片上传成功！");
             closeShippedActionModal();
-            fetchOrders(); // 刷新数据，准备渲染带图片的卡片
+            fetchOrders(); 
         } else {
             alert("上传失败，请检查网络或后端接口。");
         }
@@ -1425,4 +1460,40 @@ window.downloadReceiptImage = function() {
 // 🖱️ 唤醒桌面端专属：回单图片拖拽上传引擎
 // ========================================================
 window.enableDragAndDropUpload('receiptContent', 'receiptImageInput', window.previewReceiptImage);
+
+// ========================================================
+// 🔄 HTML5 Canvas 物理级图像重绘与旋转引擎
+// ========================================================
+window.originalReceiptImg = new Image(); // 缓存干净的原始图片
+window.currentReceiptRotation = 0;       // 记录当前旋转角度
+
+window.rotateReceiptImage = function(e) {
+    // 阻止事件冒泡，防止点击旋转按钮时误触触发底部的“大图预览”
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    
+    // 每次点击顺时针累加旋转 90 度
+    window.currentReceiptRotation = (window.currentReceiptRotation + 90) % 360;
+    
+    // 创建虚拟画布重绘图片
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // 根据角度交换宽高（90度和270度时，宽高互换）
+    if (window.currentReceiptRotation === 90 || window.currentReceiptRotation === 270) {
+        canvas.width = window.originalReceiptImg.height;
+        canvas.height = window.originalReceiptImg.width;
+    } else {
+        canvas.width = window.originalReceiptImg.width;
+        canvas.height = window.originalReceiptImg.height;
+    }
+    
+    // 将画布中心点移动到正中 -> 旋转画布 -> 重新铺上图片
+    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.rotate(window.currentReceiptRotation * Math.PI / 180);
+    ctx.drawImage(window.originalReceiptImg, -window.originalReceiptImg.width / 2, -window.originalReceiptImg.height / 2);
+    
+    // 把物理重绘后的新图像，以高质量 Base64 重新渲染到预览框中
+    const preview = document.getElementById('receiptImagePreview');
+    preview.src = canvas.toDataURL('image/jpeg', 0.95); 
+};
 
