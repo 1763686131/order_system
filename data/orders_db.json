@@ -100,7 +100,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "加急",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/万可订单订单_黄叶_2026-07-22_5927.jpg"
+            "receipt_img_url": ""
         },
         {
             "id": 7,
@@ -147,7 +147,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/万可订单订单_黄叶_2026-07-21_EEA5.jpg"
+            "receipt_img_url": ""
         },
         {
             "id": 9,
@@ -171,7 +171,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/万可订单订单_黄叶_2026-07-22_7DBA.jpg"
+            "receipt_img_url": ""
         },
         {
             "id": 10,
