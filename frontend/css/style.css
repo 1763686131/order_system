@@ -333,31 +333,30 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 
 /* 确认上传 (经典蓝) */
 #btnReceiptUpload {
-    background: #1890ff;
-    color: #fff;
+    background: #E8F4FF;
+    color: #409EFF;
 }
 #btnReceiptUpload:hover { background: #40a9ff; }
-
 
 /* =========================================================
    查看回单凭证状态的专属按钮配色
    ========================================================= */
 
-/* 真实删除凭证 (采用强警示的莫兰迪浅红) */
-#btnReceiptRealDelete {
+/* 真实删除凭证 (莫兰迪浅红) */
+#btnRealDeleteReceipt {
     background: #FEF0F0;
     color: #F56C6C;
 }
-#btnReceiptRealDelete:hover { 
+#btnRealDeleteReceipt:hover { 
     background: #fde2e2; 
 }
 
-/* 下载凭证 (采用清新的莫兰迪天蓝) */
-#btnReceiptDownload {
+/* 下载凭证 (莫兰迪天蓝) */
+#btnDownloadReceipt {
     background: #E8F4FF;
     color: #409EFF;
 }
-#btnReceiptDownload:hover { 
+#btnDownloadReceipt:hover { 
     background: #d1e9ff; 
 }
 /* =========================================================

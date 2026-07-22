@@ -1204,7 +1204,7 @@ window.triggerShippedActionModal = function(orderId, mode) {
 
         
 
-        // 🎯 修复点 1：动态绑定【清除图片】按钮点击事件，点击只做纯前端清除预览，不删数据库
+        //【清除图片】按钮点击事件，点击只做纯前端清除预览，不删数据库
         if (btnReceiptDelete) {
             btnReceiptDelete.onclick = function() {
                 window.clearReceiptImage();
@@ -1335,7 +1335,7 @@ window.previewReceiptImage = function(event) {
     }
 };
 
-// 4. 确认上传：发送图片到后端保存
+// 上传图片
 window.submitReceiptImage = async function() {
     const id = document.getElementById('actionTargetOrderId').value;
     const fileInput = document.getElementById('receiptImageInput');
@@ -1373,8 +1373,10 @@ window.submitReceiptImage = async function() {
 };
 
 // ========================================================
-// 🖼️ 赋予“回单”标签专属的【查看/下载/真删除】状态管理引擎
+// 🖼赋予“回单”标签专属的【查看/下载/真删除】状态管理引擎
 // ========================================================
+
+//删除按钮
 window.deleteRealReceiptImage = async function() {
     const id = document.getElementById('actionTargetOrderId').value;
     if (!confirm("确定要从数据库和硬盘中【彻底删除】这张回单图片吗？此操作不可恢复！")) {
@@ -1400,6 +1402,8 @@ window.deleteRealReceiptImage = async function() {
     }
 };
 
+
+//下载按钮
 window.downloadReceiptImage = function() {
     const preview = document.getElementById('receiptImagePreview');
     if (!preview || !preview.src) {
