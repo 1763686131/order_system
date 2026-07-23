@@ -18,49 +18,38 @@ function getCurrentDateTime() {
 }
 
 // 3. 智能单行文本动态缩放比例引擎 (像素级视觉权重版)
-function calculateTextScale(text, targetLen = 14) {
+/* =========================================================
+ * 📏 智能视觉权重精算引擎 (融合局部放大翻倍补偿算法)
+ * ========================================================= */
+function calculateTextScale(text, maxChars = 12, isHighlightMode = false) {
     if (!text) return 1;
-    let currentLen = 0;
+    let len = 0;
     
-    for(let i = 0; i < text.length; i++) {
+    for (let i = 0; i < text.length; i++) {
         let char = text[i];
         
-        // 1. 汉字及全角标点符号 (最宽，基准值为 1)
-        if (/[\u4e00-\u9fa5\u3000-\u303F\uFF00-\uFFEF]/.test(char)) {
-            currentLen += 1.0; 
-        } 
-        // 2. 大写英文字母 (精细拆分)
-        else if (/[A-Z]/.test(char)) {
-            if (/[WM]/.test(char)) currentLen += 0.95; // W和M极宽，几乎等同于汉字
-            else if (/[OQD]/.test(char)) currentLen += 0.85; 
-            else if (/[I]/.test(char)) currentLen += 0.45; // I特别瘦
-            else currentLen += 0.75; // 普通大写字母
-        } 
-        // 3. 小写英文字母 (精细拆分)
-        else if (/[a-z]/.test(char)) {
-            if (/[wm]/.test(char)) currentLen += 0.8; 
-            else if (/[iljt]/.test(char)) currentLen += 0.4; // 这些小写字母很瘦
-            else currentLen += 0.6; // 普通小写字母
-        } 
-        // 4. 数字 (精细拆分)
-        else if (/[0-9]/.test(char)) {
-            if (char === '1') currentLen += 0.45; // 1特别瘦
-            else currentLen += 0.65; // 0,8,9等数字偏宽
-        } 
-        // 5. 空格与其他半角符号
+        // 1. 中文字符（不受影响，固定算 1 个单位）
+        if (char.match(/[\u4e00-\u9fa5]/)) {
+            len += 1;
+        }
+        // 2. 🌟 终极修复：如果处于放大模式，且匹配到了会被 CSS 放大的【英文/数字/小数点】
+        else if (isHighlightMode && char.match(/[a-zA-Z0-9.]/)) {
+            // 因为 CSS 把它们放大了，所以我们把它们的长度权重直接“翻倍”！
+            if (char.match(/[A-Z]/)) len += 1.8;      // 大写字母极宽，算1.8
+            else if (char.match(/[0-9]/)) len += 1.4; // 数字，算1.4
+            else len += 1.1;                          // 小写字母和点，算1.1
+        }
+        // 3. 普通模式下的英文字母和数字（未被放大）
         else {
-            if (char === ' ') currentLen += 0.3; 
-            else currentLen += 0.5; 
+            if (char.match(/[A-Z]/)) len += 0.9;
+            else if (char.match(/[0-9]/)) len += 0.7;
+            else len += 0.55;
         }
     }
-    
-    if (currentLen === 0) return 1;
-    
-    // 计算缩放比例：基准长度 / 实际视觉长度
-    let scale = targetLen / currentLen;
-    
-    // 限制缩放范围：最大放大 1.15 倍，最小缩小 0.35 倍（保证再极端的长文本也能缩得下）
-    return Math.min(Math.max(scale, 0.35), 1.15);
+
+    if (len <= maxChars) return 1;
+    let scale = maxChars / len;
+    return Math.max(scale, 0.35); // 最小缩放兜底，防看不清
 }
 
 // 4. 兼容性剪贴板复制兜底工具

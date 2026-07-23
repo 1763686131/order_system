@@ -303,6 +303,8 @@ async function fetchOrders() {
         let html = '';
         let isMobile = window.innerWidth <= 768; 
 
+
+        // 卡片分裂逻辑：每9行货物明细为一组，移动端不分裂，电脑端超过9行则分裂为多张卡片
         displayedOrders.forEach(o => {
             let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
             let typeName = o.type == 1 ? '绝缘订单' : '中固订单';
@@ -312,8 +314,8 @@ async function fetchOrders() {
             if (isMobile) {
                 chunks = [goodsLines];
             } else {
-                for (let i = 0; i < goodsLines.length; i += 12) {
-                    chunks.push(goodsLines.slice(i, i + 12));
+                for (let i = 0; i < goodsLines.length; i += 9) {
+                    chunks.push(goodsLines.slice(i, i + 9));
                 }
                 if (chunks.length === 0) chunks.push([]);
             }
@@ -329,14 +331,16 @@ async function fetchOrders() {
                 if (currentTab === 0) {
                     let frontGoodsHtml = '';
                     chunkLines.forEach(line => {
-                        let lineScale = calculateTextScale(line, 14.5); 
-                        let renderScale = Math.min(lineScale, 1.15);
-                        
-                        // 🔥 移除内联的繁杂字号计算，直接套用纯净标签
-                        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large">$1</span>`);
-                        
-                        // 🔥 外层统一启用 zoom 进行“物理级”整体缩放，彻底无视浏览器 12px 封锁线！
-                        frontGoodsHtml += `<div class="product-item" style="zoom: ${renderScale}; white-space: nowrap; height: calc(var(--red-size, 42px) * 1.1); display: flex; align-items: center;">${formattedLine}</div>`;
+                        if (isMobile) {
+                            // 📱 移动端：回归极简，纯文本自然折行，不缩放、不标红加粗
+                            frontGoodsHtml += `<div class="product-item" style="white-space: pre-wrap; word-break: break-all; line-height: 1.5; padding-bottom: 6px; color: #333;">${line}</div>`;
+                        } else {
+                            // 💻 电脑端：保留强大的精算缩放与高亮引擎
+                            let lineScale = calculateTextScale(line, 14.5, true); 
+                            let renderScale = Math.min(lineScale, 1.15);
+                            let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large">$1</span>`);
+                            frontGoodsHtml += `<div class="product-item" style="zoom: ${renderScale}; white-space: nowrap; height: calc(var(--red-size, 42px) * 1.1); display: flex; align-items: center;">${formattedLine}</div>`;
+                        }
                     });
 
                     let indicatorHtml = (!isMobile && isSplit) ? `<div class="card-part-indicator">${partLetter}</div>` : '';
