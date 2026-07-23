@@ -208,51 +208,123 @@
     </div>
   </div>
 
+
+  <!-- 发布订单窗口 -->
   <div id="createOrderModal" class="old-modal-mask hidden">
-      <div class="old-modal-box">
-          <div class="old-modal-header"><span>发布系统新订单</span><span class="old-close-x" onclick="toggleModal('createOrderModal', false)">&times;</span></div>
-          <div class="old-modal-body" style="padding: 20px;">
-              <div class="form-item"><label for="newOrderType">订单类型参数:</label><select id="newOrderType"><option value="0" selected>中固订单</option><option value="1">绝缘订单</option></select></div>
-              <div class="form-item">
-                  <label for="newOrderTitle">文本粘贴区 (请按格式粘贴):</label>
-                  <textarea id="newOrderTitle" class="textarea-tall" style="background:#f9f9f9;" placeholder="第一行: 客户名&#10;第二行: 收货人 电话 地址&#10;第三行起: 货物规格"></textarea>
-                  <button type="button" class="btn-success" style="width: 100%; margin-top: 8px; font-size: 14px; padding: 10px;" onclick="smartParse('new')">一键智能识别并填充下方表单</button>
+      <div class="old-modal-box" style="max-width: 880px; width: 92%;">
+          <div class="old-modal-header">
+              <span>发布系统新订单</span>
+              <span class="old-close-x" onclick="toggleModal('createOrderModal', false)">&times;</span>
+          </div>
+          <div class="old-modal-body order-modal-body" style="padding: 20px; display: flex; gap: 24px;">
+              
+              <div class="order-modal-left" style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
+                  <div class="form-item">
+                      <label for="newOrderType" style="font-weight: bold; color: #333; margin-bottom: 6px; display: block;">订单类型参数:</label>
+                      <select id="newOrderType" style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px;">
+                          <option value="0" selected>中固订单</option>
+                          <option value="1">绝缘订单</option>
+                      </select>
+                  </div>
+                  
+                  <div class="form-item" style="flex: 1; display: flex; flex-direction: column;">
+                      <label for="newOrderTitle" style="font-weight: bold; color: #333; margin-bottom: 6px; display: block;">文本粘贴区 (请按格式粘贴):</label>
+                      <textarea id="newOrderTitle" class="textarea-tall" style="background:#f9f9f9; flex: 1; min-height: 220px; padding: 12px; border: 1px solid #d9d9d9; border-radius: 6px; resize: none; font-size: 14px; line-height: 1.5;" placeholder="第一行: 客户名&#10;第二行: 收货人 电话 地址&#10;第三行起: 货物规格"></textarea>
+                  </div>
+
+                  <button type="button" class="btn-success" style="width: 100%; font-size: 15px; padding: 12px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(82,196,26,0.25);" onclick="smartParse('new')">⚡ 一键智能识别并填充右侧表单</button>
               </div>
-              <div style="padding: 10px; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 10px;">
-                  <div class="form-item"><label>制单归属 (如: 陶芸):</label><input id="newOrderClient" /></div>
-                  <div class="form-item"><label>收货姓名:</label><input id="newReceiverName" /></div>
-                  <div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="newReceiverPhone" placeholder="必须是11位手机或座机" /></div>
-                  <div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="newReceiverAddress" /></div>
-                  <div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><textarea id="newGoodsName" style="height:50px;"></textarea></div>
-                  <div style="display: flex; gap: 10px;"><div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="newGoodsWeight" placeholder="自动计算或手填" /></div><div class="form-item" style="flex:1;"><label>货物数量:</label><input id="newGoodsQuantity" placeholder="例如: 56件" /></div></div>
-                  <div class="form-item"><label>货物包装:</label><select id="newGoodsPackaging"><option value="桶装" selected>桶装</option><option value="袋装">袋装</option><option value="托盘">托盘</option></select></div>
-                  <div class="form-item"><label>物流服务:</label><select id="newLogisticsService"><option value="送货上门+回单拍照回传" selected>送货上门+回单拍照回传</option><option value="送货上门">送货上门</option><option value="用户自提">用户自提</option></select></div>
-                  <div class="form-item"><label>附加备注信息:</label><input id="newOrderRemark" placeholder="选填，例如：加急、替换等..." /></div>
+
+              <div class="order-modal-right" style="flex: 1.2; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+                  <div style="display: flex; gap: 10px;">
+                      <div class="form-item" style="flex: 1;"><label style="font-size: 13px; color: #666; font-weight: bold;">制单归属 (如: 陶芸):</label><input id="newOrderClient" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                      <div class="form-item" style="flex: 1;"><label style="font-size: 13px; color: #666; font-weight: bold;">收货姓名:</label><input id="newReceiverName" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                  </div>
+                  <div class="form-item"><label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 收货电话:</label><input id="newReceiverPhone" placeholder="11位手机或座机" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                  <div class="form-item"><label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 收货地址:</label><input id="newReceiverAddress" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                  <div class="form-item"><label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 货物名称:</label><textarea id="newGoodsName" style="height:48px; width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px; resize: none;"></textarea></div>
+                  
+                  <div style="display: flex; gap: 10px;">
+                      <div class="form-item" style="flex:1;"><label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 货物重量:</label><input id="newGoodsWeight" placeholder="自动计算或手填" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                      <div class="form-item" style="flex:1;"><label style="font-size: 13px; color: #666; font-weight: bold;">货物数量:</label><input id="newGoodsQuantity" placeholder="例如: 56件" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                  </div>
+                  
+                  <div style="display: flex; gap: 10px;">
+                      <div class="form-item" style="flex:1;"><label style="font-size: 13px; color: #666; font-weight: bold;">货物包装:</label><select id="newGoodsPackaging" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;"><option value="桶装" selected>桶装</option><option value="袋装">袋装</option><option value="托盘">托盘</option></select></div>
+                      <div class="form-item" style="flex:1;"><label style="font-size: 13px; color: #666; font-weight: bold;">物流服务:</label><select id="newLogisticsService" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;"><option value="送货上门+回单拍照回传" selected>送货上门+回单拍照回传</option><option value="送货上门">送货上门</option><option value="用户自提">用户自提</option></select></div>
+                  </div>
+                  <div class="form-item"><label style="font-size: 13px; color: #666; font-weight: bold;">附加备注信息:</label><input id="newOrderRemark" placeholder="选填，例如：加急、替换等..." style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
               </div>
           </div>
-          <div class="old-modal-footer"><button class="btn-default" onclick="toggleModal('createOrderModal', false)">取消</button><button class="btn-primary" onclick="createOrder()">上传并发布订单</button></div>
+          <div class="old-modal-footer">
+              <button class="btn-default" onclick="toggleModal('createOrderModal', false)">取消</button>
+              <button class="btn-primary" onclick="createOrder()">上传并发布订单</button>
+          </div>
       </div>
   </div>
 
+
   <div id="editOrderModal" class="old-modal-mask hidden">
-      <div class="old-modal-box">
-          <div class="old-modal-header"><span>修改订单信息</span><span class="old-close-x" onclick="toggleModal('editOrderModal', false)">&times;</span></div>
-          <div class="old-modal-body" style="padding: 20px;">
+      <div class="old-modal-box" style="max-width: 880px; width: 92%;">
+          <div class="old-modal-header">
+              <span>修改订单信息</span>
+              <span class="old-close-x" onclick="toggleModal('editOrderModal', false)">&times;</span>
+          </div>
+          <div class="old-modal-body order-modal-body" style="padding: 20px; display: flex; gap: 24px;">
               <input id="editOrderId" type="hidden" />
-              <div class="form-item"><label for="editOrderDate">创建生成时间:</label><input id="editOrderDate" type="text" style="background: #f5f5f5; color: #999;" readonly /></div>
-              <div class="form-item"><label for="editOrderType">订单类型参数:</label><select id="editOrderType"><option value="0">中固订单</option><option value="1">绝缘订单</option></select></div>
-              <div class="form-item"><label for="editOrderTitle">文本粘贴区:</label><textarea id="editOrderTitle" class="textarea-tall" style="background:#f9f9f9;" placeholder="重新粘贴规范文本重算下方数据..."></textarea><button type="button" class="btn-success" style="width: 100%; margin-top: 8px; font-size: 14px; padding: 10px;" onclick="smartParse('edit')">一键重新提取并填充下方表单</button></div>
-              <div style="padding: 10px; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 6px; margin-bottom: 10px;">
-                  <div class="form-item"><label>制单归属:</label><input id="editOrderClient" /></div><div class="form-item"><label>收货姓名:</label><input id="editReceiverName" /></div><div class="form-item"><label><span style="color:red;">*</span> 收货电话:</label><input id="editReceiverPhone" /></div><div class="form-item"><label><span style="color:red;">*</span> 收货地址:</label><input id="editReceiverAddress" /></div><div class="form-item"><label><span style="color:red;">*</span> 货物名称:</label><textarea id="editGoodsName" style="height:50px;"></textarea></div>
-                  <div style="display: flex; gap: 10px;"><div class="form-item" style="flex:1;"><label><span style="color:red;">*</span> 货物重量:</label><input id="editGoodsWeight" /></div><div class="form-item" style="flex:1;"><label>货物数量:</label><input id="editGoodsQuantity" /></div></div>
-                  <div class="form-item"><label>货物包装:</label><select id="editGoodsPackaging"><option value="桶装">桶装</option><option value="袋装">袋装</option><option value="托盘">托盘</option></select></div>
-                  <div class="form-item"><label>物流服务:</label><select id="editLogisticsService"><option value="送货上门+回单拍照回传">送货上门+回单拍照回传</option><option value="送货上门">送货上门</option><option value="用户自提">用户自提</option></select></div>
-                  <div class="form-item"><label>附加备注信息:</label><input id="editOrderRemark" /></div>
+
+              <div class="order-modal-left" style="flex: 1; display: flex; flex-direction: column; gap: 12px;">
+                  <div style="display: flex; gap: 10px;">
+                      <div class="form-item" style="flex: 1.2;">
+                          <label for="editOrderDate" style="font-weight: bold; color: #333; margin-bottom: 6px; display: block; font-size: 13px;">创建生成时间:</label>
+                          <input id="editOrderDate" type="text" style="width: 100%; background: #f5f5f5; color: #888; padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px;" readonly />
+                      </div>
+                      <div class="form-item" style="flex: 1;">
+                          <label for="editOrderType" style="font-weight: bold; color: #333; margin-bottom: 6px; display: block; font-size: 13px;">订单类型参数:</label>
+                          <select id="editOrderType" style="width: 100%; padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px;">
+                              <option value="0">中固订单</option>
+                              <option value="1">绝缘订单</option>
+                          </select>
+                      </div>
+                  </div>
+
+                  <div class="form-item" style="flex: 1; display: flex; flex-direction: column;">
+                      <label for="editOrderTitle" style="font-weight: bold; color: #333; margin-bottom: 6px; display: block;">文本粘贴区:</label>
+                      <textarea id="editOrderTitle" class="textarea-tall" style="background:#f9f9f9; flex: 1; min-height: 200px; padding: 12px; border: 1px solid #d9d9d9; border-radius: 6px; resize: none; font-size: 14px; line-height: 1.5;" placeholder="重新粘贴规范文本重算右侧数据..."></textarea>
+                  </div>
+
+                  <button type="button" class="btn-success" style="width: 100%; font-size: 15px; padding: 12px; border-radius: 8px; font-weight: bold; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(82,196,26,0.25);" onclick="smartParse('edit')">⚡ 一键重新提取并填充右侧表单</button>
+              </div>
+
+              <div class="order-modal-right" style="flex: 1.2; background: #f9fafc; border: 1px solid #e4e7ed; border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 10px;">
+                  <div style="display: flex; gap: 10px;">
+                      <div class="form-item" style="flex: 1;"><label style="font-size: 13px; color: #666; font-weight: bold;">制单归属:</label><input id="editOrderClient" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                      <div class="form-item" style="flex: 1;"><label style="font-size: 13px; color: #666; font-weight: bold;">收货姓名:</label><input id="editReceiverName" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                  </div>
+                  <div class="form-item"><label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 收货电话:</label><input id="editReceiverPhone" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                  <div class="form-item"><label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 收货地址:</label><input id="editReceiverAddress" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                  <div class="form-item"><label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 货物名称:</label><textarea id="editGoodsName" style="height:48px; width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px; resize: none;"></textarea></div>
+                  
+                  <div style="display: flex; gap: 10px;">
+                      <div class="form-item" style="flex:1;"><label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 货物重量:</label><input id="editGoodsWeight" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                      <div class="form-item" style="flex:1;"><label style="font-size: 13px; color: #666; font-weight: bold;">货物数量:</label><input id="editGoodsQuantity" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
+                  </div>
+                  
+                  <div style="display: flex; gap: 10px;">
+                      <div class="form-item" style="flex:1;"><label style="font-size: 13px; color: #666; font-weight: bold;">货物包装:</label><select id="editGoodsPackaging" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;"><option value="桶装">桶装</option><option value="袋装">袋装</option><option value="托盘">托盘</option></select></div>
+                      <div class="form-item" style="flex:1;"><label style="font-size: 13px; color: #666; font-weight: bold;">物流服务:</label><select id="editLogisticsService" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;"><option value="送货上门+回单拍照回传">送货上门+回单拍照回传</option><option value="送货上门">送货上门</option><option value="用户自提">用户自提</option></select></div>
+                  </div>
+                  <div class="form-item"><label style="font-size: 13px; color: #666; font-weight: bold;">附加备注信息:</label><input id="editOrderRemark" style="width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px;" /></div>
               </div>
           </div>
-          <div class="old-modal-footer"><button id="btnDeleteOrderInEdit" class="btn-danger" style="float: left; display: none;" onclick="deleteOrderInEdit()">删除订单</button><button class="btn-default" onclick="toggleModal('editOrderModal', false)">取消</button><button class="btn-primary" onclick="submitEditOrder()">确认修改</button></div>
+          <div class="old-modal-footer">
+              <button id="btnDeleteOrderInEdit" class="btn-danger" style="float: left; display: none;" onclick="deleteOrderInEdit()">删除订单</button>
+              <button class="btn-default" onclick="toggleModal('editOrderModal', false)">取消</button>
+              <button class="btn-primary" onclick="submitEditOrder()">确认修改</button>
+          </div>
       </div>
   </div>
+  
 <!-- 原材料录入弹窗代码 -->
   <div id="uploadMaterialModal" class="old-modal-mask hidden">
       <div class="old-modal-box" style="max-width: 760px;"> <div class="old-modal-header">

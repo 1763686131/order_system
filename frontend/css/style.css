@@ -515,7 +515,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
     border-top-color: #FFD591 !important;
 }
 /* =========================================================
-   ⌨️ 原材料录入弹窗：键盘样式与响应式布局
+   原材料录入弹窗：键盘样式与响应式布局
    ========================================================= */
 
 /* 左侧输入框激活时的呼吸光效 */
@@ -562,5 +562,31 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
     }
     .upload-inputs-area .form-item {
         margin-bottom: 12px !important;
+    }
+}
+
+
+/* =========================================================
+   📦 订单发布与修改弹窗：左右结构优化与响应式适配
+   ========================================================= */
+
+/* 输入框焦点高亮特效 */
+.order-modal-left textarea:focus,
+.order-modal-right input:focus,
+.order-modal-right select:focus,
+.order-modal-right textarea:focus {
+    border-color: #1890ff !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(24,144,255,0.15);
+}
+
+/* 📱 移动端防挤压：窄屏下自动切换回上下排版 */
+@media (max-width: 768px) {
+    .order-modal-body {
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    .order-modal-left textarea.textarea-tall {
+        min-height: 120px !important;
     }
 }
