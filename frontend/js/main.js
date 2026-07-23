@@ -684,6 +684,9 @@ async function submitShipOrder() {
     } catch (e) { alert('发货出库网络通讯失败'); }
 }
 
+/* =========================================================
+ * 🔘 状态流转确认与撤销弹窗 (大字号清晰版 + 超长双列防爆框)
+ * ========================================================= */
 function triggerStatusConfirm(orderId, targetStatus) {
     const order = allOrdersLocal.find(o => o.id === orderId);
     if (!order) return;
@@ -694,15 +697,41 @@ function triggerStatusConfirm(orderId, targetStatus) {
     
     let goodsLines = (order.goods_name || '').split('\n').filter(l => l.trim() !== '');
     let goodsHtml = '';
-    goodsLines.forEach(line => {
-        let lineScale = calculateTextScale(line, 13.5);
+    
+    // 🌟 核心渲染函数：加大基础字号与高亮字号
+    const renderLine = (line) => {
+        let lineScale = calculateTextScale(line, 13.5, true);
         let renderScale = Math.min(lineScale, 1.15);
-        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large" style="font-size: calc(24px * ${renderScale});">$1</span>`);
-        goodsHtml += `<div class="modal-product" style="font-size: calc(16px * ${renderScale}); white-space: nowrap; height: 32px; display: flex; align-items: center;">${formattedLine}</div>`;
-    });
-    if (goodsHtml === '') goodsHtml = '<div class="modal-product" style="color:#999;">无详细货物内容</div>';
+        
+        // 🔴 数字/英文高亮：从 24px 放大至 30px
+        let formattedLine = line.replace(/([a-zA-Z0-9.]+)/g, `<span class="text-red-large" style="font-size: calc(30px * ${renderScale}); font-weight: bold;">$1</span>`);
+        
+        // 📝 普通文本：从 16px 放大至 20px，行高同步提升到 40px 避免重叠
+        return `<div class="modal-product" style="font-size: calc(20px * ${renderScale}); font-weight: bold; white-space: nowrap; height: 40px; display: flex; align-items: center;">${formattedLine}</div>`;
+    };
+
+    if (goodsLines.length === 0) {
+        goodsHtml = '<div class="modal-product" style="color:#999; font-size: 18px;">无详细货物内容</div>';
+    } 
+    // 超过 7 行拆分双列，避免弹窗过长
+    else if (goodsLines.length > 7) {
+        let half = Math.ceil(goodsLines.length / 2);
+        let col1 = goodsLines.slice(0, half).map(renderLine).join('');
+        let col2 = goodsLines.slice(half).map(renderLine).join('');
+        
+        goodsHtml = `
+            <div style="display: flex; gap: 24px;">
+                <div style="flex: 1; border-right: 1px dashed #d9d9d9; padding-right: 16px; overflow: hidden;">${col1}</div>
+                <div style="flex: 1; overflow: hidden;">${col2}</div>
+            </div>
+        `;
+    } 
+    else {
+        goodsHtml = goodsLines.map(renderLine).join('');
+    }
     
     document.getElementById('newConfirmBody').innerHTML = goodsHtml;
+    
     const confirmBtn = document.querySelector('#confirmModal .modal-btn-confirm');
     if (targetStatus === 'pending') {
         confirmBtn.innerText = '确认撤销至未完成状态';
