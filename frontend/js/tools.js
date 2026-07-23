@@ -87,12 +87,63 @@ function validatePayload(payload) {
 }
 
 // 6. 订单长文本智能一键分词与表单填充引擎
+/* =========================================================
+ * ⚡ 智能订单解析引擎 (双模版：支持系统标准化复制 + 原有高级模糊算术引擎)
+ * ========================================================= */
 function smartParse(prefix) {
     const text = document.getElementById(`${prefix}OrderTitle`).value;
     if (!text.trim()) return alert('请先在上方输入框粘贴或填写内容，再点击识别！');
     const lines = text.split('\n').map(l => l.trim()).filter(l => l !== '');
     if (lines.length === 0) return;
-    
+
+    // =====================================================
+    // 🌟 模式 1：系统标准化复制文本 (完美精准逆向解析)
+    // =====================================================
+    if (text.startsWith('【中固订单】') || text.startsWith('【绝缘订单】')) {
+        // 1. 自动切换顶部的“订单类型”下拉框
+        const orderTypeSelect = document.getElementById(`${prefix}OrderType`);
+        if (orderTypeSelect) {
+            orderTypeSelect.value = text.startsWith('【中固订单】') ? "0" : "1";
+        }
+
+        // 2. 历遍剩下的每一行，通过冒号分割成字典 (兼容全角和半角冒号)
+        const dataMap = {};
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            const separatorIndex = line.includes('：') ? line.indexOf('：') : line.indexOf(':');
+            if (separatorIndex !== -1) {
+                const key = line.substring(0, separatorIndex).trim();
+                const val = line.substring(separatorIndex + 1).trim();
+                dataMap[key] = val;
+            }
+        }
+
+        // 3. 将字典中的值，精准填入右侧表单对应位置
+        const setVal = (idSuffix, val) => {
+            const el = document.getElementById(prefix + idSuffix);
+            if (el && val !== undefined) el.value = val;
+        };
+
+        setVal('ReceiverName', dataMap['姓名']);
+        setVal('ReceiverPhone', dataMap['电话']);
+        setVal('ReceiverAddress', dataMap['地址']);
+        setVal('GoodsName', dataMap['名称']);
+        setVal('GoodsWeight', dataMap['重量']);
+        setVal('GoodsQuantity', dataMap['件数']);
+        setVal('GoodsPackaging', dataMap['包装']);
+        setVal('LogisticsService', dataMap['服务']);
+
+        // 触发你之前要的“自动清洗算术符号”机制
+        const elGoodsName = document.getElementById(`${prefix}GoodsName`);
+        if (elGoodsName) elGoodsName.dispatchEvent(new Event('blur'));
+
+        alert("✅ 检测到标准化系统复制格式，表单已精准无缝填充！");
+        return; // 🛑 核心：如果是标准文本，到这里直接结束，不再执行下方的模糊解析
+    }
+
+    // =====================================================
+    // 🧠 模式 2：执行你原有的高级模糊提取与重量算术引擎
+    // =====================================================
     document.getElementById(`${prefix}OrderClient`).value = lines[0].replace(/[:：]$/, '').trim();
     if (lines.length > 1) {
         let line2 = lines[1];
@@ -143,6 +194,10 @@ function smartParse(prefix) {
         }
         if (totalWeight !== 0) document.getElementById(`${prefix}GoodsWeight`).value = (Math.round(totalWeight * 100) / 100) + 'kg';
         else document.getElementById(`${prefix}GoodsWeight`).value = '';
+
+        // 同样在模糊匹配结束后，触发挥发清洗功能
+        const elGoodsName = document.getElementById(`${prefix}GoodsName`);
+        if (elGoodsName) elGoodsName.dispatchEvent(new Event('blur'));
     }
 }
 

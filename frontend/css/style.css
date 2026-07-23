@@ -673,3 +673,13 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 #editOrderModal .old-modal-footer button:active {
     transform: scale(0.97) !important;
 }
+
+
+/* 允许“发布订单”与“修改订单”里的货物名称输入框上下拖拽变大 */
+#newGoodsName,
+#editGoodsName {
+    resize: vertical !important; /* 开启纵向上下拖拽拉伸 */
+    min-height: 48px !important;  /* 默认最小高度 */
+    max-height: 180px !important; /* 最大拖拽高度，防止把弹窗撑爆 */
+    overflow-y: auto !important;  /* 内容超过时显示滚动条 */
+}

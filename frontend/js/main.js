@@ -1566,3 +1566,34 @@ window.addEventListener('scroll', function() {
     nomiLastMobileScrollTop = scrollTop;
 }, { passive: true }); // passive: true 开启被动监听，提升移动端手势滑动的帧率与流利度
 
+
+
+/* =========================================================
+   🧹 货物名称自动清洗：智能过滤数学计算符号 (已修复回车吞噬BUG)
+   ========================================================= */
+function setupGoodsNameCleaner() {
+    // 监听新建订单和修改订单的货物名称输入框
+    const goodsInputs = ['newGoodsName', 'editGoodsName'];
+    
+    goodsInputs.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            // blur 事件：当光标离开输入框时触发清洗
+            el.addEventListener('blur', function() {
+                // 正则表达式：匹配加减乘除及等号 (包含中英文符号)
+                // 默认过滤： + - * / = ＋ － × ÷
+                this.value = this.value
+                    .replace(/[+\-*\/=＋－×÷]/g, ' ') // 1. 将数学符号替换为空格
+                    .replace(/[ \t]+/g, ' ')         // 2. 🌟 修复点：只合并连续的空格和Tab，绝对不碰换行符(\n)
+                    .trim();                         // 3. 清理首尾多余空格
+            });
+        }
+    });
+}
+
+// 确保在页面 DOM 加载完毕后挂载清洗器
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupGoodsNameCleaner);
+} else {
+    setupGoodsNameCleaner();
+}
