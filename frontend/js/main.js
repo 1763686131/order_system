@@ -1597,3 +1597,80 @@ if (document.readyState === 'loading') {
 } else {
     setupGoodsNameCleaner();
 }
+
+
+/* =========================================================
+   🧮 全局辅助计算器逻辑引擎
+   ========================================================= */
+let calcExpression = '';
+
+// 切换计算器显示/隐藏
+window.toggleSmartCalculator = function() {
+    const calcPanel = document.getElementById('smartCalculator');
+    if (calcPanel) {
+        calcPanel.classList.toggle('active');
+        // 每次打开时如果里面是错误或空，则初始化一下
+        if (calcPanel.classList.contains('active') && calcExpression === '') {
+            calcExpression = '';
+            document.getElementById('calcDisplay').innerText = '0';
+            document.getElementById('calcHistory').innerText = '';
+        }
+    }
+};
+
+// 按钮输入处理逻辑
+window.calcInput = function(val) {
+    const display = document.getElementById('calcDisplay');
+    const history = document.getElementById('calcHistory');
+
+    // 清空 (C)
+    if (val === 'clear') {
+        calcExpression = '';
+        display.innerText = '0';
+        history.innerText = '';
+        return;
+    }
+
+    // 退格 (←)
+    if (val === 'back') {
+        calcExpression = calcExpression.slice(0, -1);
+        display.innerText = calcExpression || '0';
+        return;
+    }
+
+    // 等于 (=) 触发运算
+    if (val === '=') {
+        if (!calcExpression) return;
+        try {
+            // 将视觉乘除符号替换为 JS 真实运算符号
+            let safeExpr = calcExpression.replace(/×/g, '*').replace(/÷/g, '/');
+            // 防止危险代码注入，仅允许数学符号和数字
+            if (/[^0-9+\-*/.]/.test(safeExpr)) throw new Error('Invalid');
+            
+            // 执行运算并解决 JS 浮点数精度痛点（例如 0.1+0.2=0.30000000000000004）
+            let result = new Function('return ' + safeExpr)();
+            let finalResult = Math.round(result * 10000) / 10000; 
+
+            history.innerText = calcExpression + ' =';
+            calcExpression = String(finalResult);
+            display.innerText = calcExpression;
+        } catch (e) {
+            display.innerText = '错误';
+            calcExpression = '';
+        }
+        return;
+    }
+
+    // 处理正常输入
+    let showVal = val;
+    if (val === '*') showVal = '×';
+    if (val === '/') showVal = '÷';
+
+    // 防止最开始直接输入加减乘除
+    if (calcExpression === '' && ['+','-','×','÷'].includes(showVal)) {
+        return;
+    }
+
+    calcExpression += showVal;
+    display.innerText = calcExpression;
+};

@@ -257,6 +257,7 @@
               </div>
           </div>
           <div class="old-modal-footer">
+              <button type="button" class="btn-calc" onclick="toggleSmartCalculator()">辅助计算</button>
               <button class="btn-default" onclick="toggleModal('createOrderModal', false)">取消</button>
               <button class="btn-primary" onclick="createOrder()">上传并发布订单</button>
           </div>
@@ -319,6 +320,7 @@
           </div>
           <div class="old-modal-footer">
               <button id="btnDeleteOrderInEdit" class="btn-danger" display: none;" onclick="deleteOrderInEdit()">删除订单</button>
+              <button type="button" class="btn-calc" onclick="toggleSmartCalculator()">辅助计算</button>
               <button class="btn-default" onclick="toggleModal('editOrderModal', false)">取消</button>
               <button class="btn-primary" onclick="submitEditOrder()">确认修改</button>
           </div>
@@ -382,7 +384,41 @@
   <div id="uploadSuccessNotifyModal" class="old-modal-mask hidden" style="z-index: 100000;">
       <div class="old-modal-box" style="max-width: 320px; text-align: center; background: #ffffff;"><div class="old-modal-body" style="padding: 30px;"><h3 style="color: #1890ff; font-size: 18px; margin-bottom: 8px;">物料数据上传成功</h3><p style="color: #666; font-size: 13px; line-height: 1.6; white-space: pre-line;" id="successNotifyDetail"></p><button class="btn-primary" style="margin-top: 20px; padding: 8px 30px; border-radius: 4px;" onclick="toggleModal('uploadSuccessNotifyModal', false)">我已知晓</button></div></div>
   </div>
+  <div id="smartCalculator" class="smart-calc-panel">
+    <div class="calc-header">
+      <!-- 辅助计算器 -->
+        <span>辅助计算器</span>
+        <span class="calc-close" onclick="toggleSmartCalculator()">&times;</span>
+    </div>
+    <div class="calc-screen">
+        <div id="calcHistory" class="calc-history"></div>
+        <div id="calcDisplay" class="calc-display">0</div>
+    </div>
+    <div class="calc-keys">
+        <button class="calc-btn calc-op-clear" onclick="calcInput('clear')">C</button>
+        <button class="calc-btn calc-op" onclick="calcInput('back')">←</button>
+        <button class="calc-btn calc-op" onclick="calcInput('/')">÷</button>
+        <button class="calc-btn calc-op" onclick="calcInput('*')">×</button>
 
+        <button class="calc-btn" onclick="calcInput('7')">7</button>
+        <button class="calc-btn" onclick="calcInput('8')">8</button>
+        <button class="calc-btn" onclick="calcInput('9')">9</button>
+        <button class="calc-btn calc-op" onclick="calcInput('-')">-</button>
+
+        <button class="calc-btn" onclick="calcInput('4')">4</button>
+        <button class="calc-btn" onclick="calcInput('5')">5</button>
+        <button class="calc-btn" onclick="calcInput('6')">6</button>
+        <button class="calc-btn calc-op" onclick="calcInput('+')">+</button>
+
+        <button class="calc-btn" onclick="calcInput('1')">1</button>
+        <button class="calc-btn" onclick="calcInput('2')">2</button>
+        <button class="calc-btn" onclick="calcInput('3')">3</button>
+        <button class="calc-btn calc-eq" style="grid-row: span 2;" onclick="calcInput('=')">=</button>
+
+        <button class="calc-btn" style="grid-column: span 2; border-radius: 18px;" onclick="calcInput('0')">0</button>
+        <button class="calc-btn" onclick="calcInput('.')">.</button>
+    </div>
+</div>
   <script src="js/tools.js"></script>
   <script src="js/main.js"></script>
   <script src="js/nomi.js"></script>

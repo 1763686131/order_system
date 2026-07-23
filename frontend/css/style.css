@@ -683,3 +683,129 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
     max-height: 180px !important; /* 最大拖拽高度，防止把弹窗撑爆 */
     overflow-y: auto !important;  /* 内容超过时显示滚动条 */
 }
+
+
+/* =========================================================
+   🧮 侧边智能计算器 UI & 专属按钮样式 (Z层级修复 & 移动端居中版)
+   ========================================================= */
+
+/* 【辅助计算】专属按钮配色 (温暖的高级橙黄) */
+#createOrderModal .old-modal-footer .btn-calc,
+#editOrderModal .old-modal-footer .btn-calc {
+    background: #FFF7E6 !important;
+    color: #FA8C16 !important;
+}
+#createOrderModal .old-modal-footer .btn-calc:hover,
+#editOrderModal .old-modal-footer .btn-calc:hover {
+    background: #FFE7BA !important;
+    transform: translateY(-1px);
+}
+
+/* 侧滑计算器面板：电脑端基础排版 (靠右滑出) */
+.smart-calc-panel {
+    position: fixed;
+    right: -320px; /* 默认隐藏在屏幕右侧外部 */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    background: #ffffff;
+    border-radius: 20px;
+    /* 🌟 加深悬浮阴影，质感更强 */
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25), 0 0 2px rgba(0,0,0,0.1); 
+    /* 🌟 核弹级层级：绝对盖过所有遮罩和弹窗 */
+    z-index: 999999 !important; 
+    padding: 16px;
+    transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* 激活状态：电脑端右侧悬浮 */
+.smart-calc-panel.active {
+    right: 24px;
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 📱 移动端自适应：取消右侧滑出，改为屏幕正中间放大弹出 */
+@media (max-width: 768px) {
+    .smart-calc-panel {
+        right: auto !important; /* 清除靠右设定 */
+        left: 50% !important;   /* 设定水平中心 */
+        top: 50% !important;    /* 设定垂直中心 */
+        transform: translate(-50%, -50%) scale(0.9) !important; /* 隐藏时：居中并轻微缩小 */
+        width: 85% !important;  /* 手机端占屏幕85%宽度 */
+        max-width: 320px !important;
+    }
+    .smart-calc-panel.active {
+        transform: translate(-50%, -50%) scale(1) !important; /* 弹出时：果冻感放大居中 */
+    }
+}
+
+/* --------- 以下为计算器内部屏幕与按键样式保持不变 --------- */
+.smart-calc-panel .calc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: #888;
+    font-weight: bold;
+}
+.smart-calc-panel .calc-close {
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    color: #999;
+}
+.smart-calc-panel .calc-close:hover { color: #ff4d4f; }
+
+.smart-calc-panel .calc-screen {
+    background: #f5f7fa;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    text-align: right;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+.smart-calc-panel .calc-history {
+    min-height: 18px;
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 4px;
+}
+.smart-calc-panel .calc-display {
+    font-size: 32px;
+    font-weight: bold;
+    color: #333;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow-x: auto;
+}
+
+.smart-calc-panel .calc-keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.smart-calc-panel .calc-btn {
+    height: 48px;
+    border: none;
+    border-radius: 50%;
+    font-size: 18px;
+    font-weight: bold;
+    background: #f0f2f5;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.smart-calc-panel .calc-btn:active { transform: scale(0.92); background: #e4e7ed; }
+
+.smart-calc-panel .calc-op { background: #e6f7ff; color: #1890ff; }
+.smart-calc-panel .calc-op:active { background: #bae0ff; }
+.smart-calc-panel .calc-op-clear { background: #fff1f0; color: #ff4d4f; }
+.smart-calc-panel .calc-eq { background: #1890ff; color: #fff; border-radius: 18px; }
+.smart-calc-panel .calc-eq:active { background: #096dd9; }
