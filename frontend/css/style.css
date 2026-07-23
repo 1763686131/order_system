@@ -514,3 +514,53 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .card-insulation .info-row[style*="border-top"] {
     border-top-color: #FFD591 !important;
 }
+/* =========================================================
+   ⌨️ 原材料录入弹窗：键盘样式与响应式布局
+   ========================================================= */
+
+/* 左侧输入框激活时的呼吸光效 */
+.upload-inputs-area .keyboard-target:focus, 
+.upload-inputs-area .keyboard-target:active {
+    border-color: #1890ff !important;
+    box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.15) !important;
+    background: #ffffff !important;
+}
+
+/* 右侧拟物化键盘按钮样式 */
+.upload-keyboard-area .key-btn {
+    height: 52px;
+    font-size: 20px;
+    font-weight: 800;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    border: none;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06), 0 1px 1px rgba(0,0,0,0.1);
+    color: #333;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+
+/* 键盘点击交互反馈 */
+.upload-keyboard-area .key-btn:active {
+    transform: translateY(2px) scale(0.96);
+    background: #e6f7ff;
+    color: #1890ff;
+    box-shadow: 0 0 2px rgba(0,0,0,0.1);
+}
+
+.upload-keyboard-area .key-clear:active {
+    background: #e4e7ed !important;
+    color: #333 !important;
+}
+
+/* 📱 移动端防爆框：遇到小屏幕时，智能折叠回上下排版 */
+@media (max-width: 768px) {
+    .upload-modal-body {
+        flex-direction: column !important;
+        gap: 20px !important;
+    }
+    .upload-inputs-area .form-item {
+        margin-bottom: 12px !important;
+    }
+}

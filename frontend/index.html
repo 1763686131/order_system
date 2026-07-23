@@ -255,25 +255,55 @@
   </div>
 <!-- 原材料录入弹窗代码 -->
   <div id="uploadMaterialModal" class="old-modal-mask hidden">
-      <div class="old-modal-box" style="max-width: 480px;">
-          <div class="old-modal-header"><span style="color:#1890ff; font-weight:bold;">原材料数据录入</span><span class="old-close-x" onclick="toggleModal('uploadMaterialModal', false)">&times;</span></div>
-          <div class="old-modal-body upload-modal-body" style="padding: 20px;">
-              <div class="upload-inputs-area">
-                  <div class="form-item"><label for="materialInputUse" style="font-weight:bold; color:#ff4d4f;">今日消耗原材料 (kg):</label><input id="materialInputUse" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#fff; font-size:16px; font-weight:bold;" /></div>
-                  <div class="form-item"><label for="materialInputProduct" style="font-weight:bold; color:#52c41a;">出货成品总数量 (kg):</label><input id="materialInputProduct" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputProduct')" style="background:#fff; font-size:16px; font-weight:bold;" /></div>
+      <div class="old-modal-box" style="max-width: 760px;"> <div class="old-modal-header">
+              <span style="color:#1890ff; font-weight:bold;">原材料数据录入</span>
+              <span class="old-close-x" onclick="toggleModal('uploadMaterialModal', false)">&times;</span>
+          </div>
+          
+          <div class="old-modal-body upload-modal-body" style="padding: 24px; display: flex; gap: 32px;">
+              
+              <div class="upload-inputs-area" style="flex: 1.2; display: flex; flex-direction: column; justify-content: space-between;">
+                  <div>
+                      <div class="form-item" style="margin-bottom: 20px;">
+                          <label for="materialInputUse" style="font-weight:bold; color:#ff4d4f; margin-bottom: 8px; display: block;">今日消耗原材料 (kg):</label>
+                          <input id="materialInputUse" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputUse')" style="background:#f9fafc; font-size:18px; font-weight:bold; padding: 12px 16px; border: 1px solid #e4e7ed; border-radius: 8px; width: 100%; box-sizing: border-box; outline: none;" />
+                      </div>
+                      <div class="form-item" style="margin-bottom: 20px;">
+                          <label for="materialInputProduct" style="font-weight:bold; color:#52c41a; margin-bottom: 8px; display: block;">出货成品总数量 (kg):</label>
+                          <input id="materialInputProduct" readonly placeholder="点击右侧键盘输入..." class="keyboard-target" onclick="setActiveKeyboardTarget('materialInputProduct')" style="background:#f9fafc; font-size:18px; font-weight:bold; padding: 12px 16px; border: 1px solid #e4e7ed; border-radius: 8px; width: 100%; box-sizing: border-box; outline: none;" />
+                      </div>
+                  </div>
                   
-                  <div class="form-item" style="margin-top: 15px;">
-                      <label for="materialInputRemark" style="font-weight:bold; color:#1890ff;">附加备注信息 (选填):</label>
-                      <input id="materialInputRemark" placeholder="可手动打字，或直接点击下方快捷标签" style="background:#fff; font-size:14px; border: 1px solid #d9d9d9; border-radius: 6px; padding: 10px 12px; width: 100%; box-sizing: border-box; outline: none; margin-top: 5px; color: #333;" />
-                      <div id="materialRemarkTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; min-height: 24px; align-items: center;">
-                          </div>
+                  <div class="form-item" style="margin-top: auto; padding-top: 10px; border-top: 1px dashed #eee;">
+                      <label for="materialInputRemark" style="font-weight:bold; color:#1890ff; display: block; margin-bottom: 8px;">附加备注信息 (选填):</label>
+                      <input id="materialInputRemark" placeholder="可手动打字，或直接点击下方快捷标签" style="background:#fff; font-size:14px; border: 1px solid #d9d9d9; border-radius: 6px; padding: 10px 12px; width: 100%; box-sizing: border-box; outline: none; color: #333;" />
+                      <div id="materialRemarkTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; min-height: 24px; align-items: center;"></div>
                   </div>
+              </div>
+
+              <div class="upload-keyboard-area" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
+                  <div class="touch-keyboard-panel" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
+                      <button class="key-btn" onclick="pressKey('1')">1</button>
+                      <button class="key-btn" onclick="pressKey('2')">2</button>
+                      <button class="key-btn" onclick="pressKey('3')">3</button>
+                      <button class="key-btn" onclick="pressKey('4')">4</button>
+                      <button class="key-btn" onclick="pressKey('5')">5</button>
+                      <button class="key-btn" onclick="pressKey('6')">6</button>
+                      <button class="key-btn" onclick="pressKey('7')">7</button>
+                      <button class="key-btn" onclick="pressKey('8')">8</button>
+                      <button class="key-btn" onclick="pressKey('9')">9</button>
+                      <button class="key-btn" onclick="pressKey('.')">.</button>
+                      <button class="key-btn" onclick="pressKey('0')">0</button>
+                      <button class="key-btn key-backspace" onclick="pressKey('backspace')">←</button>
+                      <button class="key-btn key-clear" onclick="pressKey('clear')" style="grid-column: span 3; font-size:15px; height: 42px; background:#f0f2f5; color:#555; font-weight: bold;">清空重输</button>
                   </div>
-              <div class="touch-keyboard-panel">
-                  <button class="key-btn" onclick="pressKey('1')">1</button><button class="key-btn" onclick="pressKey('2')">2</button><button class="key-btn" onclick="pressKey('3')">3</button><button class="key-btn" onclick="pressKey('4')">4</button><button class="key-btn" onclick="pressKey('5')">5</button><button class="key-btn" onclick="pressKey('6')">6</button><button class="key-btn" onclick="pressKey('7')">7</button><button class="key-btn" onclick="pressKey('8')">8</button><button class="key-btn" onclick="pressKey('9')">9</button><button class="key-btn" onclick="pressKey('.')">.</button><button class="key-btn" onclick="pressKey('0')">0</button><button class="key-btn key-backspace" onclick="pressKey('backspace')">←</button><button class="key-btn key-clear" onclick="pressKey('clear')" style="grid-column: span 3; font-size:13px; height: 35px; background:#f5f5f5; color:#666;">清空重输</button>
+                  
+                  <div class="old-modal-footer" style="padding: 0; border: none; display: flex; gap: 12px; justify-content: center; background: transparent;">
+                      <button class="btn-default" onclick="toggleModal('uploadMaterialModal', false)" style="flex: 1; border-radius: 8px; height: 46px; border: none; background: #f0f2f5; font-weight: bold; color: #666;">取消</button>
+                      <button class="btn-primary" onclick="uploadMaterialRecord()" style="flex: 1.5; border-radius: 8px; height: 46px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(24,144,255,0.3);">确认上传</button>
+                  </div>
               </div>
           </div>
-          <div class="old-modal-footer"><button class="btn-default" onclick="toggleModal('uploadMaterialModal', false)">取消</button><button class="btn-primary" onclick="uploadMaterialRecord()" style="padding:8px 24px;">确认上传</button></div>
       </div>
   </div>
 
