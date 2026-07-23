@@ -7,6 +7,9 @@
     --primary-color: #2F54EB;       /* 主按钮蓝 (极客蓝) */
     --primary-hover: #597EF7;       /* 鼠标悬浮时的浅蓝 */
 
+    --bg-lavender:   #F9F0FF;       /* 淡雅的薰衣草底色 */
+    --border-lavender: #D3ADF7;     /* 质感紫色边框 */
+
     /* 2. 状态/警示色 (成功、警告、危险) */
     --success-color: #52C41A;       /* 已完成/成功 绿 */
     --warning-color: #FA8C16;       /* 待处理/警告 橙 */
