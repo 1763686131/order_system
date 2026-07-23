@@ -768,7 +768,7 @@ function copyOrderInfo(orderId) {
     
     let isEmployee = currentUser.role === 'employee' || currentUser.role === 'operator';
     const typeText = (order.type == 1) ? '绝缘订单' : '中固订单';
-    let nameLimit = (order.type == 1) ? 8 : 5;
+    let nameLimit = (order.type == 1) ? 8 : 9;   //修改复制字符数量
     let shortGoodsName = (order.goods_name || '').replace(/\n/g, '').trim().substring(0, nameLimit);
     
     let clipText = `【${typeText}】\n`;

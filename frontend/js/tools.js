@@ -3,6 +3,24 @@
  * ========================================================
  * 封装与具体业务逻辑无关的纯净工具函数
  */
+// 1. 禁用右键菜单和触摸屏长按弹出的菜单
+document.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+});
+
+// 2. 禁用 F12, F5, Ctrl+R, Ctrl+Shift+I 等开发者快捷键
+document.addEventListener('keydown', function(e) {
+    if (
+        e.key === 'F12' || 
+        (e.ctrlKey && e.shiftKey && e.key === 'I') || // 开发者工具
+        e.key === 'F5' ||                             // 刷新
+        (e.ctrlKey && e.key === 'r') ||               // 刷新
+        (e.altKey && e.key === 'ArrowLeft') ||        // 快捷键后退
+        (e.altKey && e.key === 'ArrowRight')          // 快捷键前进
+    ) {
+        e.preventDefault();
+    }
+});
 
 // 1. 基础文本换行转义
 function formatTextWithBreaks(text) { 
