@@ -590,3 +590,86 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
         min-height: 120px !important;
     }
 }
+
+/* =========================================================
+   💊 新建与修改订单弹窗底部按钮（精致靠右版）
+   ========================================================= */
+
+/* 1. 底部容器：让所有内容靠右对齐 (flex-end) */
+#createOrderModal .old-modal-footer,
+#editOrderModal .old-modal-footer {
+    display: flex !important;
+    gap: 16px !important; /* 按钮之间的间距 */
+    justify-content: flex-end !important; /* 🌟 核心：全部推到最右边 */
+    align-items: center !important;
+    padding: 16px 24px !important;
+    background: #ffffff !important;
+    border-top: 1px solid #f0f2f5 !important;
+    border-bottom-left-radius: 12px !important;
+    border-bottom-right-radius: 12px !important;
+}
+
+/* 2. 统一底栏按钮外观：取消撑满，改为小巧精致的固定内边距 */
+#createOrderModal .old-modal-footer button,
+#editOrderModal .old-modal-footer button {
+    /* 删除了 flex: 1，按钮不再强行撑满全屏 */
+    padding: 0 24px !important; /* 🌟 左右留出舒适内边距，控制按钮大小 */
+    min-width: 96px !important; /* 保证字数少的按钮也不会太短 */
+    height: 38px !important; /* 高度调得更小巧秀气 */
+    border-radius: 19px !important; /* 完美的半圆药丸弧度 */
+    border: none !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    outline: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* 3. 【删除订单】按钮专属配色 (如果你想让它和取消/确认分开，防误触) */
+#editOrderModal .old-modal-footer #btnDeleteOrderInEdit {
+    background: #FDECEE !important;
+    color: #F46E83 !important;
+    margin-right: auto !important; /* 🌟 神奇魔法：自动把它推到弹窗的最左边，避免误点。如果不喜欢，删掉这行它就会去右边 */
+}
+#editOrderModal .old-modal-footer #btnDeleteOrderInEdit:hover {
+    background: #fbcdd1 !important;
+    transform: translateY(-1px);
+}
+
+/* 4. 【取消】按钮专属配色 (高级冷灰) */
+#createOrderModal .old-modal-footer .btn-default,
+#editOrderModal .old-modal-footer .btn-default {
+    background: #F0F2F5 !important;
+    color: #666666 !important;
+}
+#createOrderModal .old-modal-footer .btn-default:hover,
+#editOrderModal .old-modal-footer .btn-default:hover {
+    background: #e4e7ed !important;
+    color: #333333 !important;
+    transform: translateY(-1px);
+}
+
+/* 5. 【确认修改/发布】按钮专属配色 (品牌蓝+轻微阴影) */
+#createOrderModal .old-modal-footer .btn-primary,
+#editOrderModal .old-modal-footer .btn-primary {
+    background: #1890FF !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 12px rgba(24, 144, 255, 0.25) !important;
+}
+#createOrderModal .old-modal-footer .btn-primary:hover,
+#editOrderModal .old-modal-footer .btn-primary:hover {
+    background: #40a9ff !important;
+    box-shadow: 0 6px 16px rgba(24, 144, 255, 0.35) !important;
+    transform: translateY(-1px);
+}
+
+/* 点击反馈效果 */
+#createOrderModal .old-modal-footer button:active,
+#editOrderModal .old-modal-footer button:active {
+    transform: scale(0.97) !important;
+}
