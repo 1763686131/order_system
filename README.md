@@ -9,20 +9,24 @@
 ## ✨ 核心亮点 (Core Features)
 
 ### 🛡️ 1. 100% 纯本地运行，永不瘫痪
+
 * **零外网依赖**：彻底剥离所有外部 CDN（无外链 Vue/Axios/Bootstrap），纯原生 JavaScript + CSS 构建，厂区断网照样丝滑运行。
 * **原生 Python Flask 驱动**：极其轻量级的后端 JSON 文件读写引擎，数据响应低延迟，完美适配大小写敏感的 Linux/Docker 容器。
 
 ### 🎨 2. 次世代现代化交互 UI
+
 * **工业触摸屏调优 (Kiosk Ready)**：针对 1080P 车间显示屏深度像素级重构，彻底屏蔽浏览器双指缩放、右键菜单与长按误触。
 * **高颜值数据看板**：引入 3D 翻转卡片、朋友圈式物流时间线、高质感莫兰迪色系大药丸按钮。
 * **NOMI 智能悬浮球**：右下角常驻全局控制中枢，支持精细化的呼吸动画与点击失焦收起交互。
 
 ### 🚚 3. 智能物流与回单管理
+
 * **AI 记忆词云**：发货审核时分离“物流公司”与“物流单号”，系统自动记忆物流公司并生成快捷点击标签（智能判定“专车”模式并自动过滤防污染）。
 * **物理级图像矫正**：前端集成 Canvas 画布引擎，支持回单图片上传前直接通过中心磨砂按钮进行物理角度旋转矫正。
 * **画廊级安全预览**：支持高清回单无损放大预览（Lightbox），权限隔离下支持图片一键下载与真实的物理粉碎删除。
 
 ### ⚙️ 4. 动态数据驱动架构 (State-Driven)
+
 * **状态复用引擎**：弹窗底层逻辑全面重构，同一个容器可根据不同操作（如：审核模式 / 回单模式）无缝切换展示内部表单与控件结构，告别冗余 HTML。
 
 ---
@@ -48,11 +52,13 @@
 系统提供两种标准的部署方案，无论是一台普通旧电脑还是专业服务器均可完美胜任。
 
 ### 方案 A：Windows 本地快速启动 (适合小白)
+
 1. 确保电脑已安装 Python 3.8+ 环境和Docker Desktop软件。
 2. 进入 `backend` 文件夹。
 3. 双击运行 `run.bat`。系统将自动安装依赖并唤起默认浏览器全屏展示。
 
 ### 方案 B：NAS / 服务器 Docker 部署 (推荐工业级使用)
+
 推荐在 群晖 / 威联通 / 绿联 或 Linux 服务器上使用 Docker Compose 进行稳健部署：
 
 ```yaml
@@ -68,6 +74,7 @@ services:
       # ⚠️ 请将冒号前的路径修改为你服务器上对应的绝对物理路径
       - /your/path/order_system/backend:/app
       - /your/path/order_system/data:/app/data
+      - ./uploads:/app/uploads 
       - /your/path/order_system/frontend:/app/frontend
     working_dir: /app
     # 🎯 强力矫正：注入北京东八区时区，确保发单与完成时戳精确无误
@@ -76,6 +83,8 @@ services:
     command: sh -c "pip install flask flask-cors -i [https://pypi.tuna.tsinghua.edu.cn/simple](https://pypi.tuna.tsinghua.edu.cn/simple) && python app.py"
     restart: always
 ```
+
+### 文件结构
 
 ```Plaintext
 order_system/
