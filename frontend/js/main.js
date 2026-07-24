@@ -1254,16 +1254,30 @@ window.triggerShippedActionModal = function(orderId, mode) {
         btnReceiptDelete.style.display = 'none';
         btnReceiptUpload.style.display = 'none';
 
-        // 🎯 新增：打开审核窗口时，重置或加载单号输入框
+        // 🎯 1. 加载历史快捷标签
+        fetchCarrierTags();
+
+        // 🎯 2. 解析回显已有的单号数据（自动按短横线 - 拆分为物流公司和单号）
         const order = allOrdersLocal.find(o => o.id === orderId);
-        const auditLogisticsNo = document.getElementById('auditLogisticsNo');
-        if (auditLogisticsNo && order) {
-            // 如果单号是这些占位符，说明还没填过，直接清空方便录入
-            let currentNo = order.logistics_no || '';
-            if (currentNo === '暂未录入单号' || currentNo === '无单号记录' || currentNo === '暂无记录') {
-                currentNo = '';
+        const carrierInput = document.getElementById('auditCarrierName');
+        const noInput = document.getElementById('auditLogisticsNo');
+        
+        if (order) {
+            let fullNo = order.logistics_no || '';
+            // 清理掉占位字符
+            if (fullNo === '暂未录入单号' || fullNo === '无单号记录' || fullNo === '暂无记录') {
+                fullNo = '';
             }
-            auditLogisticsNo.value = currentNo;
+
+            if (fullNo.includes('-')) {
+                // 如果数据库中已经是 "安能物流-552546612" 格式，拆开回显
+                const parts = fullNo.split('-');
+                carrierInput.value = parts[0] || '';
+                noInput.value = parts.slice(1).join('-') || '';
+            } else {
+                carrierInput.value = '';
+                noInput.value = fullNo;
+            }
         }
     }
     // 状态 B：进入【回单模式】
@@ -1387,14 +1401,44 @@ window.submitRevokeShipOrder = async function() {
     }
 };
 
-// 2. 确认审核功能：更新数据库内 audit_state 字段为 1，并一并写入物流单号
+// 2. 确认审核功能：更新数据库内 audit_state 字段为 1，拼接输入框，并判定是否收录标签
+// 2. 确认审核功能：抓取物流名字和单号，拼接后统一提交
 window.submitAuditShipOrder = async function() {
     const id = document.getElementById('actionTargetOrderId').value;
     
-    // 🎯 抓取审核弹窗里的单号输入框
-    let logisticsNo = document.getElementById('auditLogisticsNo').value.trim();
-    if (!logisticsNo) logisticsNo = '无单号记录'; 
+    // 🎯 1. 同时抓取“物流公司”和“物流单号”两个输入框的内容
+    const carrierInput = document.getElementById('auditCarrierName');
+    const noInput = document.getElementById('auditLogisticsNo');
     
+    const carrierName = carrierInput ? carrierInput.value.trim() : '';
+    const logisticsNo = noInput ? noInput.value.trim() : '';
+    
+    // 🎯 2. 核心修复：把文字用减号拼接起来（例如：安能快运-552546612）
+    let finalLogisticsNo = '';
+    if (carrierName && logisticsNo) {
+        finalLogisticsNo = `${carrierName}-${logisticsNo}`; 
+    } else if (carrierName) {
+        finalLogisticsNo = carrierName;
+    } else if (logisticsNo) {
+        finalLogisticsNo = logisticsNo;
+    } else {
+        finalLogisticsNo = '无单号记录'; 
+    }
+
+    // 🎯 3. (可选) 保存历史标签：如果是专车(发货方式为3)则不记录到词库
+    const order = allOrdersLocal.find(o => o.id == id);
+    const isSpecialTruck = order && (order.shipping_method === 3 || order.shipping_method === '3');
+    if (!isSpecialTruck && carrierName !== '') {
+        try {
+            await fetch(`${API_BASE}/carrier_tags`, {
+                method: 'POST',
+                headers: getHeaders(),
+                body: JSON.stringify({ tag: carrierName })
+            });
+        } catch(e) { console.error('保存标签失败', e); }
+    }
+    
+    // 🎯 4. 提交给后端
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, {
             method: 'PUT',
@@ -1402,7 +1446,8 @@ window.submitAuditShipOrder = async function() {
             body: JSON.stringify({ 
                 status: 'shipped',
                 audit_state: 1,
-                logistics_no: logisticsNo  // 👈 提交时更新物流单号
+                // 👈 依然使用原有的 logistics_no 参数，但存入的是拼接好的完整字符串！
+                logistics_no: finalLogisticsNo  
             })
         });
         if (response.ok) {
@@ -1724,3 +1769,30 @@ window.calcInput = function(val) {
     calcExpression += showVal;
     display.innerText = calcExpression;
 };
+
+
+// 📦 加载并渲染物流公司历史快捷标签
+async function fetchCarrierTags() {
+    const tagsContainer = document.getElementById('auditCarrierTags');
+    if (!tagsContainer) return;
+    
+    tagsContainer.innerHTML = '<span style="color:#999; font-size:12px;">正在加载快捷词库...</span>';
+    
+    try {
+        const response = await fetch(`${API_BASE}/carrier_tags`, { method: 'GET', headers: getHeaders() });
+        if (response.ok) {
+            const tags = await response.json();
+            if (Array.isArray(tags) && tags.length > 0) {
+                tagsContainer.innerHTML = tags.map(t => 
+                    `<span onclick="document.getElementById('auditCarrierName').value='${t}'" style="cursor: pointer; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; transition: all 0.2s; user-select: none;" onmouseover="this.style.background='#bae0ff'" onmouseout="this.style.background='#e6f4ff'">${t}</span>`
+                ).join('');
+            } else {
+                tagsContainer.innerHTML = '<span style="color:#999; font-size:12px;">暂无历史词库（非专车提交后自动收录）</span>';
+            }
+        } else {
+            tagsContainer.innerHTML = '<span style="color:#999; font-size:12px;">暂无历史词库</span>';
+        }
+    } catch(e) {
+        tagsContainer.innerHTML = '<span style="color:#999; font-size:12px;">暂无历史词库</span>';
+    }
+}

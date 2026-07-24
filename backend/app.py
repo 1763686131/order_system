@@ -215,6 +215,43 @@ def add_order():
     write_orders(orders_data)
     return jsonify({"success": True, "data": new_order})
 
+# =========================================================
+# 📦 物流公司历史快捷标签 API (负责生成 carrier_tags.json)
+# =========================================================
+CARRIER_TAGS_FILE = os.path.join(os.path.dirname(ORDERS_FILE), 'carrier_tags.json')
+
+def load_carrier_tags():
+    if os.path.exists(CARRIER_TAGS_FILE):
+        try:
+            with open(CARRIER_TAGS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+def save_carrier_tags(tags):
+    with open(CARRIER_TAGS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(tags, f, ensure_ascii=False, indent=2)
+
+@app.route('/api/carrier_tags', methods=['GET'])
+def get_carrier_tags():
+    tags = load_carrier_tags()
+    return jsonify(tags)
+
+@app.route('/api/carrier_tags', methods=['POST'])
+def add_carrier_tag():
+    data = request.json or {}
+    new_tag = (data.get('tag') or '').strip()
+    if not new_tag:
+        return jsonify({'success': False, 'message': '标签不能为空'}), 400
+    
+    tags = load_carrier_tags()
+    if new_tag not in tags:
+        tags.insert(0, new_tag) # 最新输入的排在前面
+        save_carrier_tags(tags[:20]) # 永远只保留最常用的前20个，防止词库爆炸
+        
+    return jsonify({'success': True, 'tags': tags})
+
 @app.route('/api/orders/<int:order_id>', methods=['PUT'])
 def update_order_status(order_id):
     req_data = request.json
@@ -236,13 +273,16 @@ def update_order_status(order_id):
             elif ns == 'shipped':
                 if 'audit_state' in req_data:
                     x['audit_state'] = req_data.get('audit_state', 0)
+                    # 🎯 核心修复：在审核操作时，必须接住前端传来的物流单号并更新进数据库！
+                    if 'logistics_no' in req_data:
+                        x['logistics_no'] = req_data.get('logistics_no')
                 else:
                     x['shipping_method'] = req_data.get('shipping_method', 4)
                     x['shipping_custom'] = req_data.get('shipping_custom', '')
-                    x['logistics_no'] = req_data.get('logistics_no', '无单号记录')
+                    x['logistics_no'] = req_data.get('logistics_no', '暂未录入单号')
                     x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
                     x['completed_date'] = x['shipped_date']
-                    x['audit_state'] = 0 
+                    x['audit_state'] = 0
                     
             elif ns == 'pending':
                 x['completed_date'] = ""
@@ -256,6 +296,9 @@ def update_order_status(order_id):
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True})
+
+
+
 
 @app.route('/api/orders/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
@@ -505,3 +548,5 @@ def open_browser():
 if __name__ == '__main__':
     Timer(1.5, open_browser).start()
     app.run(host='0.0.0.0', port=7899, debug=False)
+
+
