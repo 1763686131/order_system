@@ -635,7 +635,6 @@ async function fetchMaterials() {
 // ========================================================
 function triggerShipModal(orderId) {
     document.getElementById('shipTargetId').value = orderId;
-    document.getElementById('shipLogisticsNo').value = ''; 
     // 每次开启弹窗默认还原勾选到第一行的“物流”选项
     const typeRadios = document.getElementsByName('shipLogisticsType');
     if (typeRadios.length > 0) typeRadios[0].checked = true;
@@ -649,8 +648,7 @@ function closeShipModal() { document.getElementById('shipOrderModal').style.disp
 
 async function submitShipOrder() {
     const id = document.getElementById('shipTargetId').value;
-    let logisticsNo = document.getElementById('shipLogisticsNo').value.trim();
-    if (!logisticsNo) logisticsNo = '无单号记录'; 
+    let logisticsNo = '暂未录入单号';
 
     // 强力抓取弹窗里当前选中的单选框
     const selectedRadio = document.querySelector('#shipOrderModal input[name="shipLogisticsType"]:checked');
@@ -1242,6 +1240,7 @@ window.triggerShippedActionModal = function(orderId, mode) {
     if (btnRealDelete) btnRealDelete.style.display = 'none';
     if (btnDownload) btnDownload.style.display = 'none';
 
+    
     // 状态 A：进入【审核模式】
     if (mode === 'audit') {
         title.innerText = '已出库订单管理';
@@ -1254,7 +1253,19 @@ window.triggerShippedActionModal = function(orderId, mode) {
         btnAuditConfirm.style.display = 'block';
         btnReceiptDelete.style.display = 'none';
         btnReceiptUpload.style.display = 'none';
-    } 
+
+        // 🎯 新增：打开审核窗口时，重置或加载单号输入框
+        const order = allOrdersLocal.find(o => o.id === orderId);
+        const auditLogisticsNo = document.getElementById('auditLogisticsNo');
+        if (auditLogisticsNo && order) {
+            // 如果单号是这些占位符，说明还没填过，直接清空方便录入
+            let currentNo = order.logistics_no || '';
+            if (currentNo === '暂未录入单号' || currentNo === '无单号记录' || currentNo === '暂无记录') {
+                currentNo = '';
+            }
+            auditLogisticsNo.value = currentNo;
+        }
+    }
     // 状态 B：进入【回单模式】
     else if (mode === 'receipt') {
         title.innerText = '回单凭证管理';
@@ -1376,16 +1387,22 @@ window.submitRevokeShipOrder = async function() {
     }
 };
 
-// 2. 确认审核功能：更新数据库内 audit_state 字段为 1
+// 2. 确认审核功能：更新数据库内 audit_state 字段为 1，并一并写入物流单号
 window.submitAuditShipOrder = async function() {
     const id = document.getElementById('actionTargetOrderId').value;
+    
+    // 🎯 抓取审核弹窗里的单号输入框
+    let logisticsNo = document.getElementById('auditLogisticsNo').value.trim();
+    if (!logisticsNo) logisticsNo = '无单号记录'; 
+    
     try {
         const response = await fetch(`${API_BASE}/orders/${id}`, {
             method: 'PUT',
             headers: getHeaders(),
             body: JSON.stringify({ 
                 status: 'shipped',
-                audit_state: 1  
+                audit_state: 1,
+                logistics_no: logisticsNo  // 👈 提交时更新物流单号
             })
         });
         if (response.ok) {
