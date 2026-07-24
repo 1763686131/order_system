@@ -604,14 +604,14 @@
         {
             "id": 31,
             "title": "【中固订单】\n姓名：李四\n电话：18888888888\n地址：北京市东城区东长安街天安门广场\n名称：棒棒糖\n重量：10kg\n件数：1件\n包装：桶装\n服务：送货上门+回单拍照回传\n备注：加急\n",
-            "status": "pending",
+            "status": "shipped",
             "type": 0,
             "date": "2026-07-24 02:47",
-            "completed_date": "",
-            "shipped_date": "",
-            "shipping_method": "",
+            "completed_date": "2026-07-24 10:55",
+            "shipped_date": "2026-07-24 10:55",
+            "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "",
+            "logistics_no": "安能快递-987484572",
             "order_client": "",
             "receiver_name": "李四",
             "receiver_phone": "18888888888",
@@ -621,7 +621,8 @@
             "goods_quantity": "1件",
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
-            "remark": ""
+            "remark": "",
+            "audit_state": 1
         }
     ]
 }

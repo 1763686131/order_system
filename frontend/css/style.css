@@ -821,3 +821,36 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .smart-calc-panel .calc-op-clear { background: #fff1f0; color: #ff4d4f; }
 .smart-calc-panel .calc-eq { background: #1890ff; color: #fff; border-radius: 18px; }
 .smart-calc-panel .calc-eq:active { background: #096dd9; }
+
+
+/* =========================================================
+   ✨ 完美融合主题的输入框 (Theme Input)
+   ========================================================= */
+.modern-input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 15px;
+    color: #333;
+    background-color: #ffffff; /* 👈 恢复纯净的纯白底色 */
+    border: 1px solid #d9d9d9; /* 👈 恢复与原系统一致的经典灰边框 */
+    border-radius: 8px;        /* 👈 恢复经典的 8px 圆角 */
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.3s;
+}
+
+/* 鼠标悬浮时，边框微微变蓝提示可点击 */
+.modern-input:hover {
+    border-color: #40a9ff; 
+}
+
+/* 🎯 获取焦点打字时，亮起与快捷标签同色系的主题蓝光晕 */
+.modern-input:focus {
+    border-color: #1677ff; 
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2); 
+}
+
+/* 占位符文字颜色 */
+.modern-input::placeholder {
+    color: #bfbfbf;
+}
