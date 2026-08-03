@@ -608,12 +608,12 @@ function performSearch() {
     }
 }
 
-// ================= 增量分页渲染引擎 =================
+// ================= 增量分页渲染引擎 (含4行自动分列与三大彩色标签) =================
 window.renderSearchPage = function() {
     const resultsContainer = document.getElementById('searchResults');
     if (!resultsContainer) return;
 
-    // 1. 移除旧的“加载更多”按钮（如果存在的话）
+    // 1. 移除旧的“加载更多”按钮
     const oldLoadMoreBtn = document.getElementById('loadMoreSearchBtnContainer');
     if (oldLoadMoreBtn) {
         oldLoadMoreBtn.remove();
@@ -621,7 +621,7 @@ window.renderSearchPage = function() {
 
     const keywordString = window.globalSearchKeyword;
     
-    // 2. 切片：从全局数据中，精准切出接下来要展示的 10 条数据
+    // 2. 切片：从全局数据中切出 10 条
     const dataToRender = window.globalFilteredSearchData.slice(
         window.searchRenderIndex, 
         window.searchRenderIndex + SEARCH_PAGE_SIZE
@@ -645,18 +645,70 @@ window.renderSearchPage = function() {
             `;
         }
         
+        // 基础信息：电话与地址
         let infoArr = [];
         if (item.receiver_phone) infoArr.push(`电话：${item.receiver_phone}`);
         if (item.receiver_address) infoArr.push(`地址：${item.receiver_address}`);
         const highlightedInfo = highlightKeyword(infoArr.join(' | '), keywordString);
 
-        let goodsText = item.goods_name ? `货物明细：\n${item.goods_name.trim()}` : '';
-        const highlightedGoods = highlightKeyword(goodsText, keywordString).replace(/\n/g, '<br>');
+        // ================= 🎯 亮点 1：三大属性彩色标签组装 =================
+        let tagsHtml = '';
+        let tagsList = [];
+        if (item.goods_weight && item.goods_weight.trim() !== '') {
+            const highlightedWeight = highlightKeyword(item.goods_weight, keywordString);
+            tagsList.push(`<span class="goods-tag tag-weight">重量/数量：${highlightedWeight}</span>`);
+        }
+        if (item.goods_quantity && item.goods_quantity.trim() !== '') {
+            const highlightedQty = highlightKeyword(item.goods_quantity, keywordString);
+            tagsList.push(`<span class="goods-tag tag-quantity">件数：${highlightedQty}</span>`);
+        }
+        if (item.goods_packaging && item.goods_packaging.trim() !== '') {
+            const highlightedPkg = highlightKeyword(item.goods_packaging, keywordString);
+            tagsList.push(`<span class="goods-tag tag-packaging">包装：${highlightedPkg}</span>`);
+        }
+        if (tagsList.length > 0) {
+            tagsHtml = `<div class="goods-info-tags">${tagsList.join('')}</div>`;
+        }
 
+        // ================= 🎯 亮点 2：货物明细每 4 行自动横向切列 =================
+        let goodsColumnsHtml = '';
+        if (item.goods_name && item.goods_name.trim() !== '') {
+            // 按换行符切分为数组，并过滤掉空行
+            const lines = item.goods_name.split('\n').map(l => l.trim()).filter(l => l);
+            
+            if (lines.length > 0) {
+                const chunkSize = 4; // 每列最多 4 行
+                const columns = [];
+                
+                // 每 4 行切片为一列
+                for (let i = 0; i < lines.length; i += chunkSize) {
+                    columns.push(lines.slice(i, i + chunkSize));
+                }
+
+                // 渲染各列
+                const colsInnerHtml = columns.map(colLines => {
+                    const colContent = colLines.map(line => highlightKeyword(line, keywordString)).join('<br>');
+                    return `<div class="goods-column">${colContent}</div>`;
+                }).join('');
+
+                goodsColumnsHtml = `
+                    <div class="goods-columns-wrapper">
+                        <div class="goods-columns-header">货物明细：</div>
+                        <div class="goods-columns-flex">
+                            ${colsInnerHtml}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // 组装左侧内部 HTML
         let leftContentHtml = '';
         if (highlightedInfo) leftContentHtml += `<div style="font-size: 15px; margin-top: 4px;">${highlightedInfo}</div>`;
-        if (highlightedGoods) leftContentHtml += `<div style="margin-top: 10px; padding: 10px 14px; background: rgba(241, 245, 249, 0.8); border-radius: 8px; border: 1px solid #e2e8f0; color: #475569; font-size: 14.5px;">${highlightedGoods}</div>`;
-        
+        if (tagsHtml) leftContentHtml += tagsHtml;             // 渲染彩色标签
+        if (goodsColumnsHtml) leftContentHtml += goodsColumnsHtml; // 渲染多列货物
+
+        // 状态与时间映射
         let statusText = "未知状态";
         let statusClass = "status-pending"; 
         let borderColor = "#94a3b8"; 
@@ -672,6 +724,7 @@ window.renderSearchPage = function() {
             borderColor = "#ef4444"; 
         }
 
+        // 组装剪贴板全量复制模板
         const typeText = (item.type == 1) ? '绝缘订单' : '中固订单';
         const shortGoodsName = (item.goods_name || '').replace(/\n/g, ' ').trim(); 
         
@@ -688,12 +741,12 @@ window.renderSearchPage = function() {
 
         const safeClipText = encodeURIComponent(clipText);
 
+        // 回单按钮判定
         let receiptBtnHtml = '';
         if (item.receipt_img_url && item.receipt_img_url.trim() !== '') {
             receiptBtnHtml = `<button class="btn-action-sm" onclick="viewSearchReceipt(event, ${item.id}, '${item.receipt_img_url}')">回单</button>`;
         }
 
-        // 让每次新加载的 10 条数据也有完美的出场级联动画
         const delay = (index % SEARCH_PAGE_SIZE) * 0.05; 
         
         htmlString += `
@@ -712,7 +765,7 @@ window.renderSearchPage = function() {
                     <div style="display: flex; align-items: center; gap: 8px;">
                         <button class="btn-action-sm" onclick="copyFullOrderInfo(event, '${safeClipText}')">复制</button>
                         ${receiptBtnHtml}
-                        <span class="item-status ${statusClass}" style="margin-left: 4px;">${statusText}</span>
+                        <span class="item-status ${statusClass}">${statusText}</span>
                     </div>
                     <div class="item-date" style="margin-top: 12px;">时间: ${displayDate}</div>
                 </div>
@@ -720,14 +773,12 @@ window.renderSearchPage = function() {
         `;
     });
 
-    // 4. 更新当前渲染索引
+    // 4. 更新渲染索引
     window.searchRenderIndex += dataToRender.length;
 
-    // 5. 智能判定是否需要生成“加载更多”按钮
+    // 5. 判定加载更多按钮
     if (window.searchRenderIndex < window.globalFilteredSearchData.length) {
-        // 计算还有多少条没渲染
         const remaining = window.globalFilteredSearchData.length - window.searchRenderIndex;
-        // 添加一个带动态缩放特效的莫兰迪蓝加载按钮
         htmlString += `
             <div id="loadMoreSearchBtnContainer" style="text-align: center; margin-top: 24px; margin-bottom: 24px;">
                 <button onclick="renderSearchPage()" style="background: #f8fafc; border: 1px solid #cbd5e1; color: #3b82f6; padding: 10px 32px; border-radius: 30px; font-size: 15px; font-weight: bold; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.1);" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f8fafc'">
@@ -737,12 +788,11 @@ window.renderSearchPage = function() {
         `;
     } else {
         htmlString += `
-            <div style="text-align: center; color: #94a3b8; margin-top: 24px; margin-bottom: 24px; font-size: 14px;">
+            <div style="text-align: center; color: #ffffff; margin-top: 24px; margin-bottom: 24px; font-size: 14px; opacity: 0.7; letter-spacing: 1px;">
                 到底啦！已加载所有 ${window.globalFilteredSearchData.length} 条相关数据...
             </div>
         `;
     }
 
-    // 6. 将生成的 HTML 追加到容器的末尾，而不是覆盖！
     resultsContainer.insertAdjacentHTML('beforeend', htmlString);
 };
