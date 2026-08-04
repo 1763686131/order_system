@@ -260,157 +260,236 @@
 
 
 
-/* ================= 全屏虚化搜索弹窗 ================= */
+/* ================= 全屏沉浸式搜索弹窗 ================= */
 
-/* 1. 全屏背景虚化蒙版 */
+/* 1. 全屏背景蒙版 (改为从顶部开始布局) */
 .search-modal-overlay {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
-    background-color: rgba(15, 23, 42, 0.55); /* 极简深色半透明 */
-    backdrop-filter: blur(14px);               /* 背景核心高斯虚化 */
-    -webkit-backdrop-filter: blur(14px);
+    background-color: rgba(15, 23, 42, 0.7); /* 加深一点背景，突出搜索结果 */
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     z-index: 9999;
     display: flex;
     justify-content: center;
-    align-items: center;
-    animation: fadeInBlur 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    align-items: flex-start; /* 关键：让内容贴着顶部对齐，而不是绝对居中 */
+    animation: fadeInBlur 0.3s ease;
 }
 
-@keyframes fadeInBlur {
-    from {
-        opacity: 0;
-        backdrop-filter: blur(0px);
-        -webkit-backdrop-filter: blur(0px);
-    }
-    to {
-        opacity: 1;
-        backdrop-filter: blur(14px);
-        -webkit-backdrop-filter: blur(14px);
-    }
-}
-
-/* 2. 屏幕中央悬浮卡片 */
+/* 2. 搜索页面的主容器 (撑满全屏，限制最大宽度) */
 .search-modal-wrapper {
-    position: relative;
-    width: 90%;
-    max-width: 720px;
-    background: rgba(255, 255, 255, 0.88); /* 轻薄微透卡片 */
-    backdrop-filter: blur(20px);
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    border-radius: 28px;
-    padding: 36px 32px 32px 32px;
-    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-    animation: slideUpCenter 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+    width: 95%;
+    max-width: 1400px; /* 超大尺寸，撑满屏幕 */
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
-@keyframes slideUpCenter {
-    from {
-        opacity: 0;
-        transform: translateY(24px) scale(0.96);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0) scale(1);
-    }
+/* 3. 顶部搜索栏区域 */
+.search-header-area {
+    width: 100%;
+    max-width: 800px; /* 搜索框的宽度 */
+    margin-top: 20px; /* 关键：离顶部固定 20px */
+    margin-bottom: 40px;
+    animation: slideDownTop 0.4s ease;
 }
 
-/* 3. 右上角关闭按钮 */
-.search-close-btn {
-    position: absolute;
-    top: 20px;
-    right: 24px;
-    font-size: 28px;
-    font-weight: 300;
-    color: #64748b;
-    cursor: pointer;
-    width: 36px;
-    height: 36px;
-    line-height: 32px;
-    text-align: center;
-    border-radius: 50%;
-    transition: all 0.2s ease;
+@keyframes slideDownTop {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.search-close-btn:hover {
-    background-color: rgba(0, 0, 0, 0.08);
-    color: #0f172a;
-}
-
-.search-modal-title {
-    text-align: center;
-    font-size: 22px;
-    font-weight: 600;
-    color: #1e293b;
-    margin-bottom: 24px;
-    letter-spacing: 1px;
-}
-
-/* 4. 椭圆/胶囊外框容器 */
+/* 4. 椭圆胶囊外框容器 */
 .search-input-pill-group {
     display: flex;
     align-items: center;
-    background: #ffffff;
-    border: 2px solid #e2e8f0;
-    border-radius: 50px; /* 完美椭圆胶囊造型 */
-    padding: 6px 8px 6px 24px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.95); /* 微透白 */
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 50px;
+    padding: 8px 10px 8px 28px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
     transition: all 0.3s ease;
 }
-
 .search-input-pill-group:focus-within {
     border-color: #3b82f6;
-    box-shadow: 0 6px 24px rgba(59, 130, 246, 0.25);
+    background: #ffffff;
+    box-shadow: 0 10px 40px rgba(59, 130, 246, 0.2);
 }
 
-/* 5. 椭圆形输入框 */
 .search-pill-input {
     flex: 1;
     border: none;
     outline: none;
     background: transparent;
-    font-size: 18px;
+    font-size: 20px; /* 字体加大 */
     color: #1e293b;
-    padding: 10px 0;
+    padding: 12px 0;
 }
+.search-pill-input::placeholder { color: #94a3b8; font-size: 18px; }
 
-.search-pill-input::placeholder {
-    color: #94a3b8;
-    font-size: 16px;
-}
-
-/* 6. 椭圆形搜索按钮 */
 .search-pill-btn {
     background: linear-gradient(135deg, #3b82f6, #2563eb);
     color: #ffffff;
     border: none;
     outline: none;
-    padding: 12px 32px;
-    font-size: 16px;
-    font-weight: 600;
-    border-radius: 40px; /* 椭圆按钮 */
+    padding: 14px 40px;
+    font-size: 18px;
+    font-weight: bold;
+    border-radius: 40px;
     cursor: pointer;
     box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
+}
+
+/* 5. 右上角关闭按钮 (固定在右上角) */
+.search-close-btn {
+    position: absolute;
+    top: 20px;
+    right: 30px;
+    font-size: 36px;
+    color: #ffffff;
+    cursor: pointer;
+    opacity: 0.7;
     transition: all 0.2s ease;
+}
+.search-close-btn:hover { opacity: 1; transform: scale(1.1); }
+
+/* ================= 搜索结果列表 (横条状) ================= */
+.search-results-list {
+    width: 100%;
+    max-width: 1000px; /* 列表占据的宽度 */
+    flex: 1; /* 占据剩下的垂直所有空间 */
+    overflow-y: auto; /* 超出可向下滚动 */
+    padding-bottom: 40px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px; /* 每条数据之间的间距 */
+}
+
+/* 隐藏滚动条让视觉更干净 */
+.search-results-list::-webkit-scrollbar { width: 0px; }
+
+/* 每一条数据的样式 */
+.search-result-item {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    padding: 20px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    border-left: 6px solid #3b82f6; /* 左侧科技蓝点缀条 */
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+    animation: fadeInItem 0.3s ease backwards;
+}
+.search-result-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+    background: #ffffff;
+}
+@keyframes fadeInItem {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* 条状数据的文字排版 */
+.item-left { display: flex; flex-direction: column; gap: 8px; }
+.item-title { font-size: 20px; font-weight: bold; color: #1e293b; }
+.item-subtitle { font-size: 16px; color: #64748b; }
+
+.item-right { text-align: right; }
+.item-status {
+    display: inline-block;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 15px;
+    font-weight: bold;
+}
+.status-pending { background: #fee2e2; color: #ef4444; }
+.status-completed { background: #dcfce3; color: #22c55e; }
+.item-date { color: #94a3b8; font-size: 14px; margin-top: 8px; }
+
+
+
+/* 搜索关键字高亮效果 */
+.highlight-matched {
+    color: #ef4444; /* 醒目的科技红 */
+    font-weight: bold;
+    background-color: rgba(239, 68, 68, 0.1); /* 淡淡的红底衬托 */
+    padding: 0 4px;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+}
+
+
+/* ================= 搜索结果：单号徽章与复制按钮 ================= */
+.logistics-badge {
+    display: inline-flex;
+    align-items: center;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 3px 4px 3px 12px;
+    font-size: 14.5px;
+    color: #475569;
+}
+
+.log-no-text {
+    /* font-family: monospace; 单号使用等宽字体，更显专业 */
+    font-weight: 600; /* 加粗一点，保持单号的显眼度 */
+    letter-spacing: 0.5px;
+    font-size: 14.5px;
+}
+
+.btn-copy-log {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 4px;
+    color: #3b82f6;
+    padding: 4px 10px;
+    margin-left: 10px;
+    font-size: 13px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-copy-log:hover {
+    background: #3b82f6;
+    color: #ffffff;
+    border-color: #3b82f6;
+}
+
+.btn-copy-log:active {
+    transform: scale(0.92); /* 点击时微缩动画 */
+}
+
+
+
+/* ================= 搜索结果：操作按钮 ================= */
+.btn-action-sm {
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    color: #475569;
+    padding: 4px 12px;
+    font-size: 13.5px;
+    font-weight: 600;
+    cursor: pointer;
     white-space: nowrap;
+    transition: all 0.2s ease;
 }
 
-.search-pill-btn:hover {
-    background: linear-gradient(135deg, #2563eb, #1d4ed8);
-    transform: translateY(-1px);
-    box-shadow: 0 6px 16px rgba(37, 99, 235, 0.4);
+.btn-action-sm:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #94a3b8;
 }
 
-.search-pill-btn:active {
-    transform: translateY(0);
-}
-
-/* 7. 搜索结果展示框 */
-.search-results-container {
-    margin-top: 24px;
-    max-height: 48vh;
-    overflow-y: auto;
-    padding-right: 4px;
+.btn-action-sm:active {
+    transform: scale(0.92);
 }

@@ -391,14 +391,253 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// 5. 执行搜索操作
+
+// ================= 全局辅助函数 =================
+// 搜索关键字高级高亮引擎（支持多关键字）
+function highlightKeyword(text, keywordString) {
+    if (!text || !keywordString) return text;
+    const keywords = keywordString.trim().split(/\s+/).filter(k => k);
+    if (keywords.length === 0) return text;
+    const escapedKeywords = keywords.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    const regex = new RegExp(`(${escapedKeywords.join('|')})`, 'gi');
+    return text.replace(regex, '<span class="highlight-matched">$1</span>');
+}
+
+// 工业级局部复制单号引擎 (保留给左侧物流单号用)
+window.copySearchLogisticsNo = function(e, logNo) {
+    // ...(这部分保留你之前的代码，或者用下面的简化版)
+    e.stopPropagation();
+    const btn = e.target;
+    const originalText = btn.innerText;
+    const showSuccess = () => {
+        btn.innerText = '✓ 已复制';
+        btn.style.background = '#22c55e'; btn.style.color = '#ffffff'; btn.style.borderColor = '#22c55e';
+        setTimeout(() => { btn.innerText = originalText; btn.style.background = ''; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(logNo).then(showSuccess);
+};
+
+// 【新增】一键复制完整订单信息引擎
+window.copyFullOrderInfo = function(e, encodedText) {
+    e.stopPropagation(); // 阻止事件冒泡
+    const btn = e.target;
+    const originalText = btn.innerText;
+    
+    // 把转码后的字符串还原成带换行符的原始文本
+    const textToCopy = decodeURIComponent(encodedText);
+
+    const showSuccess = () => {
+        btn.innerText = '✓ 复制成功';
+        btn.style.background = '#3b82f6'; // 复制成功变科技蓝
+        btn.style.color = '#ffffff';
+        btn.style.borderColor = '#3b82f6';
+        setTimeout(() => {
+            btn.innerText = originalText;
+            btn.style.background = '';
+            btn.style.color = '';
+            btn.style.borderColor = '';
+        }, 2000);
+    };
+
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(textToCopy).then(showSuccess).catch(err => {
+            console.error('复制失败:', err);
+            alert('复制失败，请手动操作');
+        });
+    } else {
+        // 兼容模式
+        let textArea = document.createElement("textarea");
+        textArea.value = textToCopy;
+        textArea.style.position = "fixed"; textArea.style.opacity = "0";
+        document.body.appendChild(textArea); textArea.focus(); textArea.select();
+        try { document.execCommand('copy'); showSuccess(); } catch (err) {}
+        textArea.remove();
+    }
+};
+
+// ================= 执行搜索 (带右侧操作矩阵与回单智能显隐) =================
 function performSearch() {
     const input = document.getElementById('searchInput');
-    const keyword = input ? input.value.trim() : '';
-    if (!keyword) return;
+    const keywordString = input ? input.value.trim() : '';
+    if (!keywordString) return;
     
     const resultsContainer = document.getElementById('searchResults');
     if (resultsContainer) {
-        resultsContainer.innerHTML = `<p style="text-align:center; color:#64748b; padding: 20px 0; font-size: 16px;">正在为您检索 "${keyword}" 的相关数据...</p>`;
+        resultsContainer.innerHTML = '';
+        
+        // 模拟数据库请求延迟
+        setTimeout(() => {
+            // 补充了 receipt_img_url 字段的模拟数据
+            const dbData = [
+                {
+                    "id": 7,
+                    "status": "shipped",
+                    "type": 0,
+                    "shipped_date": "2026-07-20 16:58",
+                    "logistics_no": "123456",
+                    "order_client": "万可订单",
+                    "receiver_name": "黄叶",
+                    "receiver_phone": "19016926866",
+                    "receiver_address": "湖北省黄冈市黄州区禹王街道桓武路16号",
+                    "goods_name": "阻燃剂  12450kg\n阻燃剂  12450kg\n阻燃剂  12450kg",
+                    "goods_weight": "100kg",
+                    "goods_quantity": "20件",
+                    "goods_packaging": "桶装",
+                    "logistics_service": "送货上门+回单拍照回传",
+                    "remark": "无",
+                    "receipt_img_url": "" // 模拟没有回单数据（空值）
+                },
+                {
+                    "id": 8,
+                    "status": "pending",
+                    "type": 0,
+                    "date": "2026-08-04 09:12", 
+                    "logistics_no": "", 
+                    "order_client": "中固测试单",
+                    "receiver_name": "张老板",
+                    "receiver_phone": "13800138000",
+                    "receiver_address": "广东省深圳市南山区",
+                    "goods_name": "绝缘体 200件\n耗材配件 50件",
+                    "goods_weight": "50kg",
+                    "goods_quantity": "5件",
+                    "goods_packaging": "木箱",
+                    "logistics_service": "物流自提",
+                    "remark": "",
+                    "receipt_img_url": null // 模拟没有回单数据（null）
+                },
+                {
+                    "id": 28,
+                    "status": "shipped",
+                    "type": 1,
+                    "date": "2026-07-23 09:29",
+                    "completed_date": "2026-08-04 11:41",
+                    "shipped_date": "2026-08-04 11:41",
+                    "logistics_no": "三志物流-4444444",
+                    "order_client": "张三",
+                    "receiver_name": "李四",
+                    "receiver_phone": "18888888888",
+                    "receiver_address": "北京市东城区东长安街天安门广场",
+                    "goods_name": "棒棒糖",
+                    "goods_weight": "10kg",
+                    "goods_quantity": "1件",
+                    "goods_packaging": "桶装",
+                    "logistics_service": "送货上门+回单拍照回传",
+                    "remark": "加急",
+                    "receipt_img_url": "/uploads/2026-08/张三订单_李四_2026-08-04_BF6A.jpg" // 模拟存在回单图片
+                }
+            ];
+
+            const searchTerms = keywordString.toLowerCase().split(/\s+/).filter(k => k);
+            
+            const filteredData = dbData.filter(item => {
+                const combinedCoreString = `${item.order_client || ''} ${item.receiver_name || ''} ${item.receiver_phone || ''} ${item.logistics_no || ''}`.toLowerCase();
+                return searchTerms.every(term => combinedCoreString.includes(term));
+            });
+
+            let htmlString = '';
+            
+            if (filteredData.length === 0) {
+                htmlString = `
+                    <div style="text-align: center; color: #94a3b8; margin-top: 60px;">
+                        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">📭</div>
+                        <div style="font-size: 18px;">未找到与 "<span style="color:#ef4444">${keywordString}</span>" 相关的核心订单信息</div>
+                    </div>
+                `;
+            } else {
+                filteredData.forEach((item, index) => {
+                    const titleText = `${item.order_client || '未知订单'} - ${item.receiver_name || '未知收件人'}`;
+                    const highlightedTitle = highlightKeyword(titleText, keywordString);
+
+                    let logisticsHtml = '';
+                    if (item.logistics_no) {
+                        const highlightedLogNo = highlightKeyword(item.logistics_no, keywordString);
+                        logisticsHtml = `
+                            <div class="logistics-badge">
+                                <span class="log-no-text">单号：${highlightedLogNo}</span>
+                                <button class="btn-copy-log" onclick="copySearchLogisticsNo(event, '${item.logistics_no}')">复制</button>
+                            </div>
+                        `;
+                    }
+                    
+                    let infoArr = [];
+                    if (item.receiver_phone) infoArr.push(`电话：${item.receiver_phone}`);
+                    if (item.receiver_address) infoArr.push(`地址：${item.receiver_address}`);
+                    const highlightedInfo = highlightKeyword(infoArr.join(' | '), keywordString);
+
+                    let goodsText = item.goods_name ? `货物明细：\n${item.goods_name.trim()}` : '';
+                    const highlightedGoods = highlightKeyword(goodsText, keywordString).replace(/\n/g, '<br>');
+
+                    let leftContentHtml = '';
+                    if (highlightedInfo) leftContentHtml += `<div style="font-size: 15px; margin-top: 4px;">${highlightedInfo}</div>`;
+                    if (highlightedGoods) leftContentHtml += `<div style="margin-top: 10px; padding: 10px 14px; background: rgba(241, 245, 249, 0.8); border-radius: 8px; border: 1px solid #e2e8f0; color: #475569; font-size: 14.5px;">${highlightedGoods}</div>`;
+                    
+                    let statusText = "未知状态";
+                    let statusClass = "status-pending"; 
+                    let borderColor = "#94a3b8"; 
+                    let displayDate = item.shipped_date || item.completed_date || item.date || "暂无时间";
+
+                    if (item.status === 'shipped' || item.status === 'completed') {
+                        statusText = item.status === 'shipped' ? "已出库" : "已完成";
+                        statusClass = "status-completed"; borderColor = "#22c55e"; 
+                    } else if (item.status === 'pending') {
+                        statusText = "未完成"; statusClass = "status-pending"; borderColor = "#ef4444"; 
+                    }
+
+                    // 组装全量复制模板
+                    const typeText = (item.type == 1) ? '绝缘订单' : '中固订单';
+                    const shortGoodsName = (item.goods_name || '').replace(/\n/g, ' ').trim(); 
+                    
+                    let clipText = `【${typeText}】\n`;
+                    clipText += `姓名：${item.receiver_name || ''}\n`;
+                    clipText += `电话：${item.receiver_phone || ''}\n`;
+                    clipText += `地址：${item.receiver_address || ''}\n`;
+                    clipText += `名称：${shortGoodsName}\n`;
+                    clipText += `重量：${item.goods_weight || ''}\n`;
+                    clipText += `件数：${item.goods_quantity || ''}\n`;
+                    clipText += `包装：${item.goods_packaging || ''}\n`;
+                    clipText += `服务：${item.logistics_service || ''}\n`;
+                    clipText += `备注：${item.remark || ''}\n`;
+
+                    const safeClipText = encodeURIComponent(clipText);
+
+                    // ================= 亮点：回单按钮智能判定 =================
+                    let receiptBtnHtml = '';
+                    // 只有当 receipt_img_url 存在且不为空字符串时，才渲染回单按钮
+                    if (item.receipt_img_url && item.receipt_img_url.trim() !== '') {
+                        receiptBtnHtml = `<button class="btn-action-sm" onclick="event.stopPropagation(); alert('唤起回单预览：${item.receipt_img_url}')">回单</button>`;
+                    }
+
+                    const delay = (index + 1) * 0.1;
+                    htmlString += `
+                        <div class="search-result-item" style="animation-delay: ${delay}s; border-left-color: ${borderColor}; align-items: flex-start;">
+                            <div class="item-left" style="flex: 1; padding-right: 20px;">
+                                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                                    <div class="item-title">${highlightedTitle}</div>
+                                    ${logisticsHtml}
+                                </div>
+                                <div class="item-subtitle" style="line-height: 1.6;">
+                                    ${leftContentHtml}
+                                </div>
+                            </div>
+                            
+                            <div class="item-right" style="min-width: 220px; display: flex; flex-direction: column; align-items: flex-end; margin-top: 4px;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <button class="btn-action-sm" onclick="copyFullOrderInfo(event, '${safeClipText}')">复制</button>
+                                    ${receiptBtnHtml} <span class="item-status ${statusClass}" style="margin-left: 4px;">${statusText}</span>
+                                </div>
+                                <div class="item-date" style="margin-top: 12px;">时间: ${displayDate}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                htmlString += `
+                    <div style="text-align: center; color: #94a3b8; margin-top: 20px; font-size: 14px;">
+                        没有更多数据了...
+                    </div>
+                `;
+            }
+            resultsContainer.innerHTML = htmlString;
+        }, 300);
     }
 }

@@ -399,19 +399,17 @@
 
   <!-- 搜索订单模态框 -->
     <div id="searchOrderModal" class="search-modal-overlay" style="display: none;">
+        <span class="search-close-btn" onclick="closeSearchModal()">&times;</span>
         <div class="search-modal-wrapper">
-            <span class="search-close-btn" onclick="closeSearchModal()">&times;</span>
-            
-            <div class="search-box-container">
-                <h2 class="search-modal-title">订单搜索</h2>
-                
+            <div class="search-header-area">
                 <div class="search-input-pill-group">
-                    <input type="text" id="searchInput" class="search-pill-input" placeholder="请输入订单号、客户姓名、电话或货物信息..." autocomplete="off" onkeyup="if(event.key==='Enter') performSearch()">
+                    <input type="text" id="searchInput" class="search-pill-input" placeholder="请输入订单号、客户姓名或电话..." autocomplete="off" onkeyup="if(event.key==='Enter') performSearch()">
                     <button class="search-pill-btn" onclick="performSearch()">搜索</button>
                 </div>
-                
-                <div id="searchResults" class="search-results-container"></div>
             </div>
+            
+            <div id="searchResults" class="search-results-list">
+                </div>
         </div>
     </div>
 
