@@ -524,7 +524,13 @@ window.viewSearchReceipt = function(e, orderId, imgUrl) {
     modal.style.zIndex = '10000'; 
 };
 
-// ================= 执行搜索 (直接对接真实后端数据库) =================
+// ================= 全局搜索状态变量 (用于分页引擎) =================
+window.globalFilteredSearchData = []; // 存放过滤并排序好的所有数据
+window.globalSearchKeyword = '';      // 存放当前搜索的关键字
+window.searchRenderIndex = 0;         // 记录当前已经渲染了多少条
+const SEARCH_PAGE_SIZE = 10;          // 每次点击加载的数量
+
+// ================= 执行搜索 (主数据获取引擎) =================
 function performSearch() {
     const input = document.getElementById('searchInput');
     const keywordString = input ? input.value.trim() : '';
@@ -533,160 +539,210 @@ function performSearch() {
     const resultsContainer = document.getElementById('searchResults');
     if (resultsContainer) {
         
-        // 1. 渲染优雅的 Loading 动画（在真实请求网络期间展示）
+        // 1. 渲染优雅的 Loading 动画
         resultsContainer.innerHTML = `
-            <div style="text-align: center; padding: 60px 0; color: #94a3b8;">
-                <div class="search-loading-spinner" style="display:inline-block; width:28px; height:28px; border:3px solid #e2e8f0; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:12px;"></div>
-                <div style="font-size: 15px; letter-spacing: 1px;">正在检索数据库，请稍候...</div>
+            <div style="text-align: center; padding: 60px 0; color: #ffffff;">
+                <div class="search-loading-spinner" style="display:inline-block; width:28px; height:28px; border:3px solid rgba(255,255,255,0.2); border-top-color:#ffffff; border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:12px;"></div>
+                <div style="font-size: 15px; letter-spacing: 1px; opacity: 0.9;">正在检索数据库，请稍候...</div>
             </div>
             <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
         `;
         
-        // 2. 发起真实的 API 请求，拉取后端 orders_db.json 里的数据
-        // 注意：/api/orders 是你系统里现成的获取所有订单的接口
+        // 2. 发起 API 请求获取全量数据
         fetch('/api/orders', {
             method: 'GET',
             headers: {
-                // 兼容系统的鉴权机制，如果没有 currentUser 也不会报错
                 'Username': typeof currentUser !== 'undefined' ? String(currentUser.username) : '',
                 'Role': typeof currentUser !== 'undefined' ? String(currentUser.role) : ''
             }
         })
         .then(response => response.json())
         .then(res => {
-            // 兼容不同的后端返回结构（有的接口返回 res.data，有的是直接返回数组）
             const dbData = Array.isArray(res) ? res : (res.data || []);
 
-            // 3. 【高级逻辑：多关键字联合搜索 (AND 匹配)】
+            // 3. 多关键字联合过滤 (AND 匹配)
             const searchTerms = keywordString.toLowerCase().split(/\s+/).filter(k => k);
             
-            const filteredData = dbData.filter(item => {
+            let filteredData = dbData.filter(item => {
                 const combinedCoreString = `${item.order_client || ''} ${item.receiver_name || ''} ${item.receiver_phone || ''} ${item.logistics_no || ''}`.toLowerCase();
-                // .every() 意味着每一个用空格隔开的关键词都必须被找到
                 return searchTerms.every(term => combinedCoreString.includes(term));
             });
 
-            let htmlString = '';
+            // 4. 按时间倒序排序 (最新在最上面)
+            filteredData.sort((a, b) => {
+                const timeA = new Date(a.shipped_date || a.completed_date || a.date || 0).getTime();
+                const timeB = new Date(b.shipped_date || b.completed_date || b.date || 0).getTime();
+                return timeB - timeA;
+            });
+
+            // 5. 【核心】：将清洗好的数据存入全局变量，将渲染权交接给分页引擎
+            window.globalFilteredSearchData = filteredData;
+            window.globalSearchKeyword = keywordString;
+            window.searchRenderIndex = 0;
+
+            resultsContainer.innerHTML = ''; // 清空 Loading 提示
             
-            // 4. 渲染判定
             if (filteredData.length === 0) {
-                htmlString = `
-                    <div style="text-align: center; color: #94a3b8; margin-top: 60px;">
-                        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">📭</div>
-                        <div style="font-size: 18px;">未找到与 "<span style="color:#ef4444">${keywordString}</span>" 相关的核心订单信息</div>
-                        <div style="font-size: 14px; margin-top: 8px;">(仅支持搜索：订单名、收件人、电话、物流单号)</div>
+                // 修改为白色字体，加强对比度
+                resultsContainer.innerHTML = `
+                    <div style="text-align: center; color: #ffffff; margin-top: 60px;">
+                        <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.8;">📭</div>
+                        <div style="font-size: 18px; font-weight: 500;">未找到与 "<span style="color:#ef4444; font-weight:bold;">${keywordString}</span>" 相关的核心订单信息</div>
+                        <div style="font-size: 14px; margin-top: 8px; opacity: 0.6;">(仅支持搜索：订单名、收件人、电话、物流单号)</div>
                     </div>
                 `;
             } else {
-                filteredData.forEach((item, index) => {
-                    const titleText = `${item.order_client || '未知订单'} - ${item.receiver_name || '未知收件人'}`;
-                    const highlightedTitle = highlightKeyword(titleText, keywordString);
-
-                    let logisticsHtml = '';
-                    if (item.logistics_no) {
-                        const highlightedLogNo = highlightKeyword(item.logistics_no, keywordString);
-                        logisticsHtml = `
-                            <div class="logistics-badge">
-                                <span class="log-no-text">单号：${highlightedLogNo}</span>
-                                <button class="btn-copy-log" onclick="copySearchLogisticsNo(event, '${item.logistics_no}')">复制</button>
-                            </div>
-                        `;
-                    }
-                    
-                    let infoArr = [];
-                    if (item.receiver_phone) infoArr.push(`电话：${item.receiver_phone}`);
-                    if (item.receiver_address) infoArr.push(`地址：${item.receiver_address}`);
-                    const highlightedInfo = highlightKeyword(infoArr.join(' | '), keywordString);
-
-                    let goodsText = item.goods_name ? `货物明细：\n${item.goods_name.trim()}` : '';
-                    const highlightedGoods = highlightKeyword(goodsText, keywordString).replace(/\n/g, '<br>');
-
-                    let leftContentHtml = '';
-                    if (highlightedInfo) leftContentHtml += `<div style="font-size: 15px; margin-top: 4px;">${highlightedInfo}</div>`;
-                    if (highlightedGoods) leftContentHtml += `<div style="margin-top: 10px; padding: 10px 14px; background: rgba(241, 245, 249, 0.8); border-radius: 8px; border: 1px solid #e2e8f0; color: #475569; font-size: 14.5px;">${highlightedGoods}</div>`;
-                    
-                    let statusText = "未知状态";
-                    let statusClass = "status-pending"; 
-                    let borderColor = "#94a3b8"; 
-                    let displayDate = item.shipped_date || item.completed_date || item.date || "暂无时间";
-
-                    if (item.status === 'shipped' || item.status === 'completed') {
-                        statusText = item.status === 'shipped' ? "已出库" : "已完成";
-                        statusClass = "status-completed"; borderColor = "#22c55e"; 
-                    } else if (item.status === 'pending') {
-                        statusText = "未完成"; statusClass = "status-pending"; borderColor = "#ef4444"; 
-                    }
-
-                    // 组装全量复制模板
-                    const typeText = (item.type == 1) ? '绝缘订单' : '中固订单';
-                    const shortGoodsName = (item.goods_name || '').replace(/\n/g, ' ').trim(); 
-                    
-                    let clipText = `【${typeText}】\n`;
-                    clipText += `姓名：${item.receiver_name || ''}\n`;
-                    clipText += `电话：${item.receiver_phone || ''}\n`;
-                    clipText += `地址：${item.receiver_address || ''}\n`;
-                    clipText += `名称：${shortGoodsName}\n`;
-                    clipText += `重量：${item.goods_weight || ''}\n`;
-                    clipText += `件数：${item.goods_quantity || ''}\n`;
-                    clipText += `包装：${item.goods_packaging || ''}\n`;
-                    clipText += `服务：${item.logistics_service || ''}\n`;
-                    clipText += `备注：${item.remark || ''}\n`;
-
-                    const safeClipText = encodeURIComponent(clipText);
-                    // 回单按钮智能判定
-                    let receiptBtnHtml = '';
-                    if (item.receipt_img_url && item.receipt_img_url.trim() !== '') {
-                        // 🎯 核心：传入 event, item.id 以及真实的图片 URL
-                        receiptBtnHtml = `<button class="btn-action-sm" onclick="viewSearchReceipt(event, ${item.id}, '${item.receipt_img_url}')">回单</button>`;
-                    }
-                    // 动画延迟（稍微调快了加载的观感）
-                    const delay = (index + 1) * 0.05; 
-                    
-                    htmlString += `
-                        <div class="search-result-item" style="animation-delay: ${delay}s; border-left-color: ${borderColor}; align-items: flex-start;">
-                            <div class="item-left" style="flex: 1; padding-right: 20px;">
-                                <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
-                                    <div class="item-title">${highlightedTitle}</div>
-                                    ${logisticsHtml}
-                                </div>
-                                <div class="item-subtitle" style="line-height: 1.6;">
-                                    ${leftContentHtml}
-                                </div>
-                            </div>
-                            
-                            <div class="item-right" style="min-width: 220px; display: flex; flex-direction: column; align-items: flex-end; margin-top: 4px;">
-                                <div style="display: flex; align-items: center; gap: 8px;">
-                                    <button class="btn-action-sm" onclick="copyFullOrderInfo(event, '${safeClipText}')">复制</button>
-                                    ${receiptBtnHtml}
-                                    <span class="item-status ${statusClass}" style="margin-left: 4px;">${statusText}</span>
-                                </div>
-                                <div class="item-date" style="margin-top: 12px;">时间: ${displayDate}</div>
-                            </div>
-                        </div>
-                    `;
-                });
-                
-                htmlString += `
-                    <div style="text-align: center; color: #94a3b8; margin-top: 20px; font-size: 14px;">
-                        到底啦！已加载所有相关数据...
-                    </div>
-                `;
+                // 触发分页渲染引擎的第一次加载
+                renderSearchPage();
             }
-            
-            // 一次性渲染进 DOM
-            resultsContainer.innerHTML = htmlString;
-            
         })
         .catch(error => {
-            // 5. 【超强容错】：如果后台没启动或者网络断开，给用户友好的报错提示
             console.error('搜索拉取数据库失败:', error);
             resultsContainer.innerHTML = `
                 <div style="text-align: center; color: #ef4444; margin-top: 60px;">
                     <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
                     <div style="font-size: 18px;">网络异常，无法连接到数据库</div>
-                    <div style="font-size: 14px; margin-top: 8px; color: #94a3b8;">请检查后台服务 (run.bat) 是否正常运行，或按 F5 刷新重试</div>
                 </div>
             `;
         });
     }
 }
+
+// ================= 增量分页渲染引擎 =================
+window.renderSearchPage = function() {
+    const resultsContainer = document.getElementById('searchResults');
+    if (!resultsContainer) return;
+
+    // 1. 移除旧的“加载更多”按钮（如果存在的话）
+    const oldLoadMoreBtn = document.getElementById('loadMoreSearchBtnContainer');
+    if (oldLoadMoreBtn) {
+        oldLoadMoreBtn.remove();
+    }
+
+    const keywordString = window.globalSearchKeyword;
+    
+    // 2. 切片：从全局数据中，精准切出接下来要展示的 10 条数据
+    const dataToRender = window.globalFilteredSearchData.slice(
+        window.searchRenderIndex, 
+        window.searchRenderIndex + SEARCH_PAGE_SIZE
+    );
+    
+    let htmlString = '';
+
+    // 3. 开始渲染这 10 条卡片
+    dataToRender.forEach((item, index) => {
+        const titleText = `${item.order_client || '未知订单'} - ${item.receiver_name || '未知收件人'}`;
+        const highlightedTitle = highlightKeyword(titleText, keywordString);
+
+        let logisticsHtml = '';
+        if (item.logistics_no) {
+            const highlightedLogNo = highlightKeyword(item.logistics_no, keywordString);
+            logisticsHtml = `
+                <div class="logistics-badge">
+                    <span class="log-no-text">单号：${highlightedLogNo}</span>
+                    <button class="btn-copy-log" onclick="copySearchLogisticsNo(event, '${item.logistics_no}')">复制</button>
+                </div>
+            `;
+        }
+        
+        let infoArr = [];
+        if (item.receiver_phone) infoArr.push(`电话：${item.receiver_phone}`);
+        if (item.receiver_address) infoArr.push(`地址：${item.receiver_address}`);
+        const highlightedInfo = highlightKeyword(infoArr.join(' | '), keywordString);
+
+        let goodsText = item.goods_name ? `货物明细：\n${item.goods_name.trim()}` : '';
+        const highlightedGoods = highlightKeyword(goodsText, keywordString).replace(/\n/g, '<br>');
+
+        let leftContentHtml = '';
+        if (highlightedInfo) leftContentHtml += `<div style="font-size: 15px; margin-top: 4px;">${highlightedInfo}</div>`;
+        if (highlightedGoods) leftContentHtml += `<div style="margin-top: 10px; padding: 10px 14px; background: rgba(241, 245, 249, 0.8); border-radius: 8px; border: 1px solid #e2e8f0; color: #475569; font-size: 14.5px;">${highlightedGoods}</div>`;
+        
+        let statusText = "未知状态";
+        let statusClass = "status-pending"; 
+        let borderColor = "#94a3b8"; 
+        let displayDate = item.shipped_date || item.completed_date || item.date || "暂无时间";
+
+        if (item.status === 'shipped' || item.status === 'completed') {
+            statusText = item.status === 'shipped' ? "已出库" : "已完成";
+            statusClass = "status-completed"; 
+            borderColor = "#22c55e"; 
+        } else if (item.status === 'pending') {
+            statusText = "未完成"; 
+            statusClass = "status-pending"; 
+            borderColor = "#ef4444"; 
+        }
+
+        const typeText = (item.type == 1) ? '绝缘订单' : '中固订单';
+        const shortGoodsName = (item.goods_name || '').replace(/\n/g, ' ').trim(); 
+        
+        let clipText = `【${typeText}】\n`;
+        clipText += `姓名：${item.receiver_name || ''}\n`;
+        clipText += `电话：${item.receiver_phone || ''}\n`;
+        clipText += `地址：${item.receiver_address || ''}\n`;
+        clipText += `名称：${shortGoodsName}\n`;
+        clipText += `重量：${item.goods_weight || ''}\n`;
+        clipText += `件数：${item.goods_quantity || ''}\n`;
+        clipText += `包装：${item.goods_packaging || ''}\n`;
+        clipText += `服务：${item.logistics_service || ''}\n`;
+        clipText += `备注：${item.remark || ''}\n`;
+
+        const safeClipText = encodeURIComponent(clipText);
+
+        let receiptBtnHtml = '';
+        if (item.receipt_img_url && item.receipt_img_url.trim() !== '') {
+            receiptBtnHtml = `<button class="btn-action-sm" onclick="viewSearchReceipt(event, ${item.id}, '${item.receipt_img_url}')">回单</button>`;
+        }
+
+        // 让每次新加载的 10 条数据也有完美的出场级联动画
+        const delay = (index % SEARCH_PAGE_SIZE) * 0.05; 
+        
+        htmlString += `
+            <div class="search-result-item" style="animation-delay: ${delay}s; border-left-color: ${borderColor}; align-items: flex-start;">
+                <div class="item-left" style="flex: 1; padding-right: 20px;">
+                    <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+                        <div class="item-title">${highlightedTitle}</div>
+                        ${logisticsHtml}
+                    </div>
+                    <div class="item-subtitle" style="line-height: 1.6;">
+                        ${leftContentHtml}
+                    </div>
+                </div>
+                
+                <div class="item-right" style="min-width: 220px; display: flex; flex-direction: column; align-items: flex-end; margin-top: 4px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <button class="btn-action-sm" onclick="copyFullOrderInfo(event, '${safeClipText}')">复制</button>
+                        ${receiptBtnHtml}
+                        <span class="item-status ${statusClass}" style="margin-left: 4px;">${statusText}</span>
+                    </div>
+                    <div class="item-date" style="margin-top: 12px;">时间: ${displayDate}</div>
+                </div>
+            </div>
+        `;
+    });
+
+    // 4. 更新当前渲染索引
+    window.searchRenderIndex += dataToRender.length;
+
+    // 5. 智能判定是否需要生成“加载更多”按钮
+    if (window.searchRenderIndex < window.globalFilteredSearchData.length) {
+        // 计算还有多少条没渲染
+        const remaining = window.globalFilteredSearchData.length - window.searchRenderIndex;
+        // 添加一个带动态缩放特效的莫兰迪蓝加载按钮
+        htmlString += `
+            <div id="loadMoreSearchBtnContainer" style="text-align: center; margin-top: 24px; margin-bottom: 24px;">
+                <button onclick="renderSearchPage()" style="background: #f8fafc; border: 1px solid #cbd5e1; color: #3b82f6; padding: 10px 32px; border-radius: 30px; font-size: 15px; font-weight: bold; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 10px rgba(59, 130, 246, 0.1);" onmouseover="this.style.background='#e2e8f0'" onmouseout="this.style.background='#f8fafc'">
+                    ⬇️ 点击加载更多 (还有 ${remaining} 条未展示)
+                </button>
+            </div>
+        `;
+    } else {
+        htmlString += `
+            <div style="text-align: center; color: #94a3b8; margin-top: 24px; margin-bottom: 24px; font-size: 14px;">
+                到底啦！已加载所有 ${window.globalFilteredSearchData.length} 条相关数据...
+            </div>
+        `;
+    }
+
+    // 6. 将生成的 HTML 追加到容器的末尾，而不是覆盖！
+    resultsContainer.insertAdjacentHTML('beforeend', htmlString);
+};
