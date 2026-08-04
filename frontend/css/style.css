@@ -5,12 +5,12 @@ html, body {
     /* 彻底禁用左右滑动返回上一页（边缘手势） */
     overscroll-behavior-x: none; 
     /* 禁用长按选中文字 */
-    user-select: none; 
-    -webkit-user-select: none;
+    /* user-select: none;  */
+    /* -webkit-user-select: none; */
     /* 禁用双指缩放，只允许上下平移滑动 */
-    touch-action: pan-y; 
+    /* touch-action: pan-y;  */
     /* 隐藏整个页面的系统默认长按高亮 */
-    -webkit-tap-highlight-color: transparent; 
+    /* -webkit-tap-highlight-color: transparent; s */
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }

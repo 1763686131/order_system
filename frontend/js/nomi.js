@@ -339,3 +339,66 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setInterval(triggerAiSpeech, 30000);
 });
+
+
+// 1. 点击小圆菜单中的“搜索订单”唤醒全屏虚化搜索弹窗
+document.getElementById('btn-search-order')?.addEventListener('click', function(e) {
+    e.stopPropagation();
+    
+    // 收起小圆菜单
+    const fabMenu = document.querySelector('.fab-menu');
+    if (fabMenu) fabMenu.classList.remove('active');
+    
+    // 恢复小圆表情
+    const nomiFace = document.querySelector('.nomi-face');
+    if (nomiFace) nomiFace.classList.remove('omg');
+    
+    // 展出全屏虚化搜索弹窗
+    const searchModal = document.getElementById('searchOrderModal');
+    if (searchModal) {
+        searchModal.style.display = 'flex';
+        // 自动聚焦到椭圆输入框
+        setTimeout(() => {
+            document.getElementById('searchInput')?.focus();
+        }, 150);
+    }
+});
+
+// 2. 关闭搜索弹窗
+function closeSearchModal() {
+    const searchModal = document.getElementById('searchOrderModal');
+    if (searchModal) {
+        searchModal.style.display = 'none';
+        // 清空输入框与搜索结果
+        const input = document.getElementById('searchInput');
+        if (input) input.value = '';
+        const results = document.getElementById('searchResults');
+        if (results) results.innerHTML = '';
+    }
+}
+
+// 3. 点击全屏虚化背景区域自动关闭弹窗
+document.getElementById('searchOrderModal')?.addEventListener('click', function(e) {
+    if (e.target === this) {
+        closeSearchModal();
+    }
+});
+
+// 4. 按下键盘 ESC 键快捷关闭搜索
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeSearchModal();
+    }
+});
+
+// 5. 执行搜索操作
+function performSearch() {
+    const input = document.getElementById('searchInput');
+    const keyword = input ? input.value.trim() : '';
+    if (!keyword) return;
+    
+    const resultsContainer = document.getElementById('searchResults');
+    if (resultsContainer) {
+        resultsContainer.innerHTML = `<p style="text-align:center; color:#64748b; padding: 20px 0; font-size: 16px;">正在为您检索 "${keyword}" 的相关数据...</p>`;
+    }
+}
