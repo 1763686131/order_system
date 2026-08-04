@@ -455,7 +455,76 @@ window.copyFullOrderInfo = function(e, encodedText) {
     }
 };
 
-// ================= 执行搜索 (带右侧操作矩阵与回单智能显隐) =================
+// 【新增】专属搜索结果的回单预览引擎（照搬状态 C 逻辑，并优化了索引方式）
+window.viewSearchReceipt = function(e, orderId, imgUrl) {
+    e.stopPropagation(); // 阻止事件冒泡
+
+    // 1. 获取弹窗实体 (你的出库订单管理弹窗)
+    const modal = document.getElementById('shippedOrderActionModal');
+    if (!modal) {
+        alert('系统错误：未找到回单操作弹窗！');
+        return;
+    }
+
+    // 获取内部各个节点
+    const title = modal.querySelector('.modal-title') || modal.querySelector('h2');
+    const subtitle = modal.querySelector('.modal-subtitle') || modal.querySelector('p');
+    const auditContent = document.getElementById('auditContent');
+    const receiptContent = document.getElementById('receiptContent');
+
+    const btnAuditRevoke = document.getElementById('btnAuditRevoke');
+    const btnAuditConfirm = document.getElementById('btnAuditConfirm');
+    const btnReceiptUpload = document.getElementById('btnReceiptUpload');
+    const btnReceiptDelete = document.getElementById('btnReceiptDelete');
+    
+    const btnRealDelete = document.getElementById('btnRealDeleteReceipt');
+    const btnDownload = document.getElementById('btnDownloadReceipt');
+
+    const preview = document.getElementById('receiptImagePreview');
+    const prompt = document.getElementById('receiptUploadPrompt');
+
+    // 2. 完全照搬你的【状态 C：view_receipt】逻辑
+    if (title) title.innerText = '回单凭证详情';
+    if (subtitle) subtitle.innerText = '您可以查看大图、下载图片或从系统中彻底删除该回单';
+
+    if (auditContent) auditContent.style.display = 'none';
+    if (receiptContent) receiptContent.style.display = 'flex';
+
+    if (btnAuditRevoke) btnAuditRevoke.style.display = 'none';
+    if (btnAuditConfirm) btnAuditConfirm.style.display = 'none';
+    if (btnReceiptUpload) btnReceiptUpload.style.display = 'none';
+    if (btnReceiptDelete) btnReceiptDelete.style.display = 'none'; // 隐藏前端清空按钮
+
+    // 唤醒【下载图片】按钮
+    if (btnDownload) btnDownload.style.display = 'inline-block';
+
+    // 🛡️ 权限控制：针对“真删除”
+    if (typeof hasPerm === 'function' && hasPerm('shipped.delete_receipt')) {
+        if (btnRealDelete) btnRealDelete.style.display = 'inline-block';
+    } else {
+        if (btnRealDelete) btnRealDelete.style.display = 'none';
+    }
+
+    // 3. 🎯 核心优化：抛弃 allOrdersLocal 遍历，直接使用传过来的 imgUrl！
+    if (imgUrl) {
+        if (preview) {
+            preview.src = imgUrl;
+            preview.style.display = 'block';
+        }
+        if (prompt) prompt.style.display = 'none';
+    }
+
+    // 4. 关键：把当前点击的 orderId 存入全局变量
+    // 这是为了让你弹窗里的【彻底删除】和【下载】按钮，知道是在操作哪笔订单
+    window.currentActionOrderId = orderId;
+    window.currentOrderId = orderId; 
+
+    // 5. 显示弹窗，并强行提升 CSS 层级（防止被全屏搜索框的黑屏遮挡）
+    modal.style.display = 'flex';
+    modal.style.zIndex = '10000'; 
+};
+
+// ================= 执行搜索 (直接对接真实后端数据库) =================
 function performSearch() {
     const input = document.getElementById('searchInput');
     const keywordString = input ? input.value.trim() : '';
@@ -463,84 +532,49 @@ function performSearch() {
     
     const resultsContainer = document.getElementById('searchResults');
     if (resultsContainer) {
-        resultsContainer.innerHTML = '';
         
-        // 模拟数据库请求延迟
-        setTimeout(() => {
-            // 补充了 receipt_img_url 字段的模拟数据
-            const dbData = [
-                {
-                    "id": 7,
-                    "status": "shipped",
-                    "type": 0,
-                    "shipped_date": "2026-07-20 16:58",
-                    "logistics_no": "123456",
-                    "order_client": "万可订单",
-                    "receiver_name": "黄叶",
-                    "receiver_phone": "19016926866",
-                    "receiver_address": "湖北省黄冈市黄州区禹王街道桓武路16号",
-                    "goods_name": "阻燃剂  12450kg\n阻燃剂  12450kg\n阻燃剂  12450kg",
-                    "goods_weight": "100kg",
-                    "goods_quantity": "20件",
-                    "goods_packaging": "桶装",
-                    "logistics_service": "送货上门+回单拍照回传",
-                    "remark": "无",
-                    "receipt_img_url": "" // 模拟没有回单数据（空值）
-                },
-                {
-                    "id": 8,
-                    "status": "pending",
-                    "type": 0,
-                    "date": "2026-08-04 09:12", 
-                    "logistics_no": "", 
-                    "order_client": "中固测试单",
-                    "receiver_name": "张老板",
-                    "receiver_phone": "13800138000",
-                    "receiver_address": "广东省深圳市南山区",
-                    "goods_name": "绝缘体 200件\n耗材配件 50件",
-                    "goods_weight": "50kg",
-                    "goods_quantity": "5件",
-                    "goods_packaging": "木箱",
-                    "logistics_service": "物流自提",
-                    "remark": "",
-                    "receipt_img_url": null // 模拟没有回单数据（null）
-                },
-                {
-                    "id": 28,
-                    "status": "shipped",
-                    "type": 1,
-                    "date": "2026-07-23 09:29",
-                    "completed_date": "2026-08-04 11:41",
-                    "shipped_date": "2026-08-04 11:41",
-                    "logistics_no": "三志物流-4444444",
-                    "order_client": "张三",
-                    "receiver_name": "李四",
-                    "receiver_phone": "18888888888",
-                    "receiver_address": "北京市东城区东长安街天安门广场",
-                    "goods_name": "棒棒糖",
-                    "goods_weight": "10kg",
-                    "goods_quantity": "1件",
-                    "goods_packaging": "桶装",
-                    "logistics_service": "送货上门+回单拍照回传",
-                    "remark": "加急",
-                    "receipt_img_url": "/uploads/2026-08/张三订单_李四_2026-08-04_BF6A.jpg" // 模拟存在回单图片
-                }
-            ];
+        // 1. 渲染优雅的 Loading 动画（在真实请求网络期间展示）
+        resultsContainer.innerHTML = `
+            <div style="text-align: center; padding: 60px 0; color: #94a3b8;">
+                <div class="search-loading-spinner" style="display:inline-block; width:28px; height:28px; border:3px solid #e2e8f0; border-top-color:#3b82f6; border-radius:50%; animation:spin 0.8s linear infinite; margin-bottom:12px;"></div>
+                <div style="font-size: 15px; letter-spacing: 1px;">正在检索数据库，请稍候...</div>
+            </div>
+            <style>@keyframes spin { 100% { transform: rotate(360deg); } }</style>
+        `;
+        
+        // 2. 发起真实的 API 请求，拉取后端 orders_db.json 里的数据
+        // 注意：/api/orders 是你系统里现成的获取所有订单的接口
+        fetch('/api/orders', {
+            method: 'GET',
+            headers: {
+                // 兼容系统的鉴权机制，如果没有 currentUser 也不会报错
+                'Username': typeof currentUser !== 'undefined' ? String(currentUser.username) : '',
+                'Role': typeof currentUser !== 'undefined' ? String(currentUser.role) : ''
+            }
+        })
+        .then(response => response.json())
+        .then(res => {
+            // 兼容不同的后端返回结构（有的接口返回 res.data，有的是直接返回数组）
+            const dbData = Array.isArray(res) ? res : (res.data || []);
 
+            // 3. 【高级逻辑：多关键字联合搜索 (AND 匹配)】
             const searchTerms = keywordString.toLowerCase().split(/\s+/).filter(k => k);
             
             const filteredData = dbData.filter(item => {
                 const combinedCoreString = `${item.order_client || ''} ${item.receiver_name || ''} ${item.receiver_phone || ''} ${item.logistics_no || ''}`.toLowerCase();
+                // .every() 意味着每一个用空格隔开的关键词都必须被找到
                 return searchTerms.every(term => combinedCoreString.includes(term));
             });
 
             let htmlString = '';
             
+            // 4. 渲染判定
             if (filteredData.length === 0) {
                 htmlString = `
                     <div style="text-align: center; color: #94a3b8; margin-top: 60px;">
                         <div style="font-size: 48px; margin-bottom: 16px; opacity: 0.5;">📭</div>
                         <div style="font-size: 18px;">未找到与 "<span style="color:#ef4444">${keywordString}</span>" 相关的核心订单信息</div>
+                        <div style="font-size: 14px; margin-top: 8px;">(仅支持搜索：订单名、收件人、电话、物流单号)</div>
                     </div>
                 `;
             } else {
@@ -599,15 +633,15 @@ function performSearch() {
                     clipText += `备注：${item.remark || ''}\n`;
 
                     const safeClipText = encodeURIComponent(clipText);
-
-                    // ================= 亮点：回单按钮智能判定 =================
+                    // 回单按钮智能判定
                     let receiptBtnHtml = '';
-                    // 只有当 receipt_img_url 存在且不为空字符串时，才渲染回单按钮
                     if (item.receipt_img_url && item.receipt_img_url.trim() !== '') {
-                        receiptBtnHtml = `<button class="btn-action-sm" onclick="event.stopPropagation(); alert('唤起回单预览：${item.receipt_img_url}')">回单</button>`;
+                        // 🎯 核心：传入 event, item.id 以及真实的图片 URL
+                        receiptBtnHtml = `<button class="btn-action-sm" onclick="viewSearchReceipt(event, ${item.id}, '${item.receipt_img_url}')">回单</button>`;
                     }
-
-                    const delay = (index + 1) * 0.1;
+                    // 动画延迟（稍微调快了加载的观感）
+                    const delay = (index + 1) * 0.05; 
+                    
                     htmlString += `
                         <div class="search-result-item" style="animation-delay: ${delay}s; border-left-color: ${borderColor}; align-items: flex-start;">
                             <div class="item-left" style="flex: 1; padding-right: 20px;">
@@ -623,7 +657,8 @@ function performSearch() {
                             <div class="item-right" style="min-width: 220px; display: flex; flex-direction: column; align-items: flex-end; margin-top: 4px;">
                                 <div style="display: flex; align-items: center; gap: 8px;">
                                     <button class="btn-action-sm" onclick="copyFullOrderInfo(event, '${safeClipText}')">复制</button>
-                                    ${receiptBtnHtml} <span class="item-status ${statusClass}" style="margin-left: 4px;">${statusText}</span>
+                                    ${receiptBtnHtml}
+                                    <span class="item-status ${statusClass}" style="margin-left: 4px;">${statusText}</span>
                                 </div>
                                 <div class="item-date" style="margin-top: 12px;">时间: ${displayDate}</div>
                             </div>
@@ -633,11 +668,25 @@ function performSearch() {
                 
                 htmlString += `
                     <div style="text-align: center; color: #94a3b8; margin-top: 20px; font-size: 14px;">
-                        没有更多数据了...
+                        到底啦！已加载所有相关数据...
                     </div>
                 `;
             }
+            
+            // 一次性渲染进 DOM
             resultsContainer.innerHTML = htmlString;
-        }, 300);
+            
+        })
+        .catch(error => {
+            // 5. 【超强容错】：如果后台没启动或者网络断开，给用户友好的报错提示
+            console.error('搜索拉取数据库失败:', error);
+            resultsContainer.innerHTML = `
+                <div style="text-align: center; color: #ef4444; margin-top: 60px;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+                    <div style="font-size: 18px;">网络异常，无法连接到数据库</div>
+                    <div style="font-size: 14px; margin-top: 8px; color: #94a3b8;">请检查后台服务 (run.bat) 是否正常运行，或按 F5 刷新重试</div>
+                </div>
+            `;
+        });
     }
 }
