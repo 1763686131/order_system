@@ -1,13 +1,31 @@
-# 忽略本地数据库文件夹（防止覆盖云端数据）
-data/
-
-# 忽略用户上传的图片回单（防止仓库体积爆炸）
-uploads/
-
-# 忽略 Python 运行产生的缓存文件
-__pycache__/
-*.pyc
-*.pyo
-
-# 忽略 Mac 系统生成的恶心隐藏文件
+node_modules
+dist
+dist-ssr
+*.local
 .DS_Store
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# OS
+Thumbs.db

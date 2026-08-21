@@ -1,0 +1,856 @@
+/* ==============================================================
+   🌟 主业务核心排版样式 (1080P 完美适配版)
+   ============================================================== */
+html, body {
+    /* 彻底禁用左右滑动返回上一页（边缘手势） */
+    overscroll-behavior-x: none; 
+    /* 禁用长按选中文字 */
+    user-select: none; 
+    -webkit-user-select: none;
+    /* 禁用双指缩放，只允许上下平移滑动 */
+    touch-action: pan-y; 
+    /* 隐藏整个页面的系统默认长按高亮 */
+    -webkit-tap-highlight-color: transparent; 
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; color: #333; padding: 160px 60px 80px 60px; font-size: 18px; overflow-x: hidden; }
+
+.nav-bar { position: fixed; top: 0; left: 0; width: 100%; z-index: 999; display: flex; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; white-space: nowrap; gap: 24px; background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); padding: 24px 60px; box-shadow: 0 4px 24px rgba(0,0,0,0.06); align-items: center; }
+.nav-bar::-webkit-scrollbar { height: 6px; }
+.nav-bar::-webkit-scrollbar-track { background: transparent; }
+.nav-bar::-webkit-scrollbar-thumb { background: #d9d9d9; border-radius: 4px; }
+.nav-item { font-size: 24px; font-weight: bold; padding: 16px 28px; cursor: pointer; border-radius: 10px; color: #666; transition: all 0.3s; flex-shrink: 0; }
+.nav-item.active { color: #1890ff; background-color: #e6f7ff; }
+
+.tab-pane { display: none; gap: 48px; align-items: flex-start; justify-content: flex-start; }
+.tab-pane.active { display: flex; }
+
+#tab-0, #tab-1 { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; height: calc(100vh - 280px); align-items: stretch; padding-top: 15px; padding-bottom: 32px; gap: 64px; -ms-overflow-style: none; scrollbar-width: none; }
+#tab-0::-webkit-scrollbar, #tab-1::-webkit-scrollbar { display: none; }
+#tab-0 .flip-container, #tab-1 .completed-card { flex: 0 0 calc((100vw - 312px) / 4); min-width: 380px; max-width: none; height: 100%; }
+
+.flipper { height: 100%; transition: 0.6s; transform-style: preserve-3d; position: relative; display: grid; }
+.flipper.flipped { transform: rotateY(180deg); }
+.flipper.no-flip { transform: none !important; }
+
+.order-card { background: #ffffff; border-radius: 24px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); padding: 28px 32px; border: 1px solid #ebedf0; display: flex; flex-direction: column; grid-area: 1 / 1; backface-visibility: hidden; height: 100%; overflow: hidden; }
+.front { transform: rotateY(0deg); z-index: 2; }
+.back { transform: rotateY(180deg); font-size: 15px; padding: 20px 24px; }
+
+.order-title { text-align: center; font-size: 34px; font-weight: 900; margin-bottom: 16px; flex-shrink: 0; }
+.back .order-title { font-size: 28px; margin-bottom: 8px; }
+.order-header { display: flex; justify-content: space-between; font-size: 18px; color: #888; border-bottom: 1px solid #f0f0f0; padding-bottom: 16px; margin-bottom: 12px; flex-shrink: 0; }
+.order-header strong { color: #333; font-size: 20px; }
+.back .order-header { font-size: 15px; padding-bottom: 8px; margin-bottom: 12px; }
+.back .order-header strong { font-size: 16px; }
+
+/* 核心防溢出设定，PC端严格在内部锁死 */
+.product-list { flex: 1 1 0; min-height: 0; padding-right: 2px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 16px; -ms-overflow-style: none; scrollbar-width: none; position: relative; }
+.product-list::-webkit-scrollbar { display: none; }
+.front .product-list { overflow: hidden; }
+.back .product-list { overflow-y: auto; gap: 10px; scrollbar-width: none; }
+.back .product-list::-webkit-scrollbar { display: none; }
+
+/* 🌟 智能微缩模式 (超过 6 行触发) */
+.product-list.compact { gap: 8px; }
+.product-list.compact .product-item { font-size: 20px; }
+.product-list.compact .text-red-large { font-size: 34px; }
+
+/* 🌟 卡片 A / B 专属右下角浮动水印 */
+.card-part-indicator { position: absolute; bottom: -10px; right: 0px; font-size: 100px; font-weight: 900; color: rgba(24, 144, 255, 0.08); pointer-events: none; user-select: none; line-height: 1; z-index: 0; }
+
+.product-item { font-size: 24px; font-weight: bold; line-height: 1.4; transition: font-size 0.2s ease; position: relative; z-index: 1; }
+.back .product-item { font-size: 18px; }
+.info-row { font-size: 18px; color: #666; line-height: 1.5; }
+.back .info-row { font-size: 15px; }
+.info-label { font-weight: bold; color: #333; }
+
+.text-red-large { color: #ff4d4f; font-size: 42px; font-weight: 900; font-family: Impact, Arial, sans-serif; margin: 0 6px; display: inline-block; letter-spacing: 1px; transition: font-size 0.2s ease; }
+.back .text-red-large { font-size: 28px; }
+.auto-fit-text { width: 100%; white-space: nowrap; overflow: hidden; }
+.text-red { color: #ff4d4f; }
+.text-bold { font-weight: bold; font-size: 18px; }
+.back .text-bold { font-size: 15px; }
+
+.tags-wrapper { flex-shrink: 0; margin-top: 10px; border-top: 1px dashed #f0f0f0; padding-top: 12px; width: 100%; position: relative; z-index: 2;}
+.tags-label { font-size: 16px; color: #888; margin-bottom: 6px; font-weight: bold; }
+.tags-container { display: flex; flex-wrap: wrap; gap: 8px; }
+.tag { font-size: 16px; padding: 6px 12px; border-radius: 6px; font-weight: bold; }
+.tag-blue { background-color: #e6f7ff; color: #1890ff; } .tag-cyan { background-color: #e6fffb; color: #13c2c2; } .tag-red { background-color: #fff1f0; color: #ff4d4f; } .tag-green { background-color: #f6ffed; color: #52c41a; }
+
+.actions { display: flex; justify-content: center; gap: 16px; margin-top: auto; padding-top: 16px; border-top: 1px solid #f0f0f0; flex-shrink: 0; position: relative; z-index: 2; }
+.actions-back { display: flex; justify-content: space-between; gap: 6px; margin-top: auto; padding-top: 12px; border-top: 1px solid #f0f0f0; flex-shrink: 0; width: 100%; }
+.actions-back .btn { flex: 1; padding: 8px 0; font-size: 13px; min-width: 0; text-align: center; white-space: nowrap; border-radius: 8px; }
+
+.btn { padding: 12px 24px; border-radius: 12px; border: none; font-size: 18px; cursor: pointer; font-weight: bold; transition: transform 0.1s; }
+.btn:active { transform: scale(0.95); }
+.btn-primary { background-color: #1890ff; color: white; } .btn-danger { background-color: #ff4d4f; color: white; } .btn-success { background-color: #52c41a; color: white; } .btn-default { background-color: #f5f5f5; color: #555; border: 1px solid #d9d9d9; }
+
+/* ================= Tab 1: 已完成订单 ================= */
+.completed-card { background: #ffffff; border-radius: 24px; box-shadow: 0 6px 24px rgba(0,0,0,0.06); padding: 28px 40px; display: flex; flex-direction: column; overflow: hidden; }
+.completed-card .product-list { overflow-y: auto; }
+.c-title { text-align: center; font-size: 34px; font-weight: 900; margin-bottom: 16px; color: #1A1A1A; letter-spacing: 1px; flex-shrink: 0; }
+.c-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; }
+.c-header-left strong { color: #333; font-size: 20px; margin-right: 8px; } .c-header-left span { color: #8C99A8; font-size: 18px; } .c-header-right { color: #8C99A8; font-size: 16px; }
+.c-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 24px; border-top: 1px solid #F0F2F5; flex-shrink: 0; }
+.c-btn { flex: 1; padding: 12px 0; border-radius: 12px; border: none; font-size: 16px; font-weight: bold; cursor: pointer; text-align: center; white-space: nowrap; transition: transform 0.1s; }
+.c-btn:active { transform: scale(0.95); }
+.c-btn-outline { background: #fff; border: 1px solid #D0D7DE; color: #8C99A8; } .c-btn-blue { background: #1890ff; color: #fff; box-shadow: 0 4px 12px rgba(24,144,255,0.35); } .c-btn-pink { background: #E84C68; color: #fff; box-shadow: 0 4px 12px rgba(232,76,104,0.35); } .c-btn-green { background: #4CC478; color: #fff; box-shadow: 0 4px 12px rgba(76,196,120,0.35); }
+
+/* ================= Tab 2: 已出库订单网格 ================= */
+#tab-2 { flex-wrap: wrap; height: auto; overflow: visible; gap: 32px; }
+.shipped-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 32px; width: 100%; }
+.shipped-card { display: flex; background: #ffffff; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden; position: relative; border: 1px solid #ebedf0; transition: transform 0.2s, box-shadow 0.2s; }
+.shipped-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
+.ribbon { position: absolute; top: 12px; right: -42px; background-color: #D5EFE3; color: #4CBCA0; padding: 4px 44px; font-size: 12px; font-weight: bold; transform: rotate(45deg); text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); z-index: 10; }
+.shipped-left { flex: 1.4; padding: 20px 24px; display: flex; flex-direction: column; border-right: 1px dashed #e8e8e8; min-width: 0; }
+.shipped-title { font-size: 18px; font-weight: 800; color: #111; margin-bottom: 8px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.shipped-title.expanded { white-space: normal; word-break: break-all; }
+.expand-list-text { display: none; font-size: 13px; color: #8A7BFE; text-align: right; margin-top: 0; margin-bottom: 12px; cursor: pointer; font-weight: bold; position: relative; z-index: 11; }
+.s-tags-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.shipped-left .s-tags-wrapper:last-of-type { margin-bottom: 16px; }
+.receipt-pure-tag{ display: inline-flex; align-items: center; justify-content: center; padding: 3px 10px; font-size: 11px; font-weight: bold; background-color: #FDECEE; border: 1px solid #FDECEE; color: #F26E83; border-radius: 3px; user-select: none; }
+.s-tag { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
+.s-tag-purple { background-color: #EDEBFF; color: #8A7BFE; } .s-tag-cyan { background-color: #DDF8F6; color: #2BCBC7; } .s-tag-green { background-color: #E2F6ED; color: #69D5A5; } .s-tag-pink { background-color: #FDECEE; color: #F26E83; }
+.shipped-bottom { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; }
+.s-time-label { font-size: 12px; color: #999; margin-bottom: 4px; } .s-time-value { font-size: 18px; font-weight: bold; color: #111; letter-spacing: 0.5px; }
+.s-detail-btn { background-color: #EDEBFF; color: #8A7BFE; padding: 6px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; } .s-detail-btn:hover { background-color: #E2E0FB; }
+.shipped-right { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; justify-content: center; background-color: #FAFAFA; }
+.s-sub-title { font-size: 13px; color: #8C99A8; text-align: center; font-weight: bold; margin-bottom: 6px; } .s-main-title { font-size: 20px; font-weight: bold; color: #222; text-align: center; margin-bottom: 16px; } .s-info-list { font-size: 14px; color: #666; line-height: 1.6; } .s-info-list div { margin-bottom: 4px; }
+
+/* ================= Tab 3: 原材料数据 ================= */
+#tab-3 { flex-wrap: wrap; height: auto; overflow: visible; gap: 32px; }
+.timeline-container { display: flex; flex-direction: column; gap: 40px; width: 100%; }
+.timeline-group { display: flex; flex-direction: column; }
+.timeline-date { font-size: 26px; font-weight: 900; color: #111; margin-bottom: 24px; display: flex; align-items: center; gap: 14px; }
+.timeline-date::before { content: ''; display: block; width: 8px; height: 28px; background-color: #1890ff; border-radius: 4px; }
+.timeline-items { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; }
+.material-card { display: flex; align-items: center; background: #ffffff; border-radius: 50px; box-shadow: 0 4px 16px rgba(0,0,0,0.03); padding: 24px 40px; width: 100%; border: 1px solid #f0f0f0; }
+.m-data-group { display: flex; align-items: center; gap: 40px; flex-wrap: wrap; }
+.m-item { font-size: 18px; letter-spacing: 0.5px; }
+.m-label-black { color: #111; font-weight: bold; } .m-label-blue { color: #1A4B84; font-weight: bold; }
+.m-val-pink { color: #F47B8B; font-weight:bold; } .m-val-green { color: #61D081; font-weight:bold; } .m-val-blue { color: #5C91C5; font-weight:bold; }
+.m-note { font-size: 18px; } .m-note-label { color: #111; } .m-note-val { color: #111; font-weight: bold; }
+
+/* 📱 移动端绝对响应式解耦区域 (🌟 彻底移除破坏性代码，回归最原生拉伸伸展) */
+@media (max-width: 768px) {
+    /* ========================================================
+     📱 移动端专属：高规格动态交互增强（支持位移+透明度双重缓动）
+     ======================================================== */
+  .nav-bar {
+      /* 1. 强行激活全属性动画：为位移、透明度、阴影绑定专属的 0.4秒 灵动缓动曲线 */
+      transition: transform 0.4s cubic-bezier(0.3, 0.8, 0.3, 1), 
+                  opacity 0.4s cubic-bezier(0.3, 0.8, 0.3, 1), 
+                  box-shadow 0.4s ease !important;
+      opacity: 1;
+      pointer-events: auto;
+  }
+  
+  /* 当向上滑动屏幕触发隐藏状态时 */
+  .nav-bar.nav-bar-hidden {
+      transform: translateY(-100%) !important; /* 优雅地向上推回顶部 */
+      opacity: 0 !important;                    /* 🔥 新增：透明度慢慢降为 0，实现淡出特效 */
+      box-shadow: none !important;             /* 关掉阴影，消灭多余的边缘缝隙 */
+      pointer-events: none !important;         /* 🔥 核心安全锁：隐藏时彻底禁用点击，防止员工误触隐藏的导航项 */
+  }
+  body { padding: 160px 16px 20px 16px !important; font-size: 15px !important; overflow-y: auto !important; overflow-x: hidden !important; }
+  .nav-bar { flex-wrap: wrap !important; overflow: hidden !important; white-space: normal !important; padding: 12px 16px !important; gap: 12px !important; }
+  .nav-item { font-size: 16px !important; padding: 12px 0 !important; flex: 1 1 45% !important; text-align: center !important; }
+  
+  #tab-0, #tab-1 { height: auto !important; flex-wrap: wrap !important; overflow: visible !important; padding-bottom: 0 !important; gap: 24px !important; }
+  #tab-0 .flip-container, #tab-1 .completed-card { flex: 1 1 100% !important; min-width: 100% !important; height: auto !important; }
+  
+  /* 完全拔除高度死锁，且决不触碰 overflow 破坏3D翻转！ */
+  .flipper { height: auto !important; }
+  .order-card { height: auto !important; min-height: 100% !important; padding-bottom: 24px !important; }
+  .product-list { flex: 1 1 auto !important; min-height: auto !important; height: auto !important; overflow: visible !important; }
+  .front .product-list, .back .product-list, .completed-card .product-list { overflow: visible !important; }
+  .card-part-indicator { display: none !important; }
+
+  .shipped-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
+  .shipped-card { flex-direction: column !important; }
+  .shipped-left { border-right: none !important; border-bottom: 1px dashed #e8e8e8 !important; padding: 16px !important; }
+  .shipped-right { padding: 16px !important; align-items: flex-start !important; }
+  .s-sub-title, .s-main-title { text-align: left !important; }
+  .ribbon { top: 10px !important; right: -40px !important; padding: 4px 44px !important; font-size: 11px !important; }
+  .shipped-title, .expand-list-text { margin-right: 65px !important; }
+
+  .timeline-items { grid-template-columns: 1fr !important; }
+  .material-card { flex-direction: column !important; align-items: flex-start !important; border-radius: 20px !important; padding: 24px !important; width: 100% !important; }
+  .m-data-group { flex-direction: column !important; align-items: flex-start !important; gap: 16px !important; }
+  .m-divider { width: 100% !important; height: 1px !important; margin: 20px 0 !important; }
+}
+
+/* ========================================================
+ * 🔒 电脑端 1920 物理锁（横纵向滑动轨道 + 终极末尾留白补丁）
+ * ======================================================== */
+@media screen and (min-width: 769px) {
+    body {
+        min-width: 1920px !important;
+        overflow: hidden !important; /* 彻底锁死整个网页的外层滚动条，把滑动权限交给内部轨道 */
+    }
+
+    /* flex 横向轨道布局，绝不换行 (nowrap) */
+    #tab-0.active, #tab-1.active {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important; /* 开启横向滚动 */
+        overflow-y: hidden !important;
+        gap: 30px !important;
+        
+        /* 核心修复：抵消 body 自带的 60px 边距，让轨道真正横跨全屏 */
+        width: 100vw !important; 
+        margin-left: -60px !important; 
+        
+        /* 间距调优：左右只留 20px 空间 */
+        padding: 0 20px 20px 20px !important; 
+        
+        box-sizing: border-box !important;
+        height: calc(100vh - 260px) !important;
+        align-items: stretch !important;
+        scrollbar-width: none; 
+        -ms-overflow-style: none;
+    }
+    
+    #tab-0.active::-webkit-scrollbar, #tab-1.active::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* 右侧隐形卡片同步缩小 */
+    #tab-0.active::after, #tab-1.active::after {
+        content: "" !important;
+        display: block !important;
+        flex: 0 0 20px !important; 
+        height: 100% !important;
+        pointer-events: none !important; 
+    }
+
+    /* 已出库页面 (Tab 2) 保持网格排列 */
+    .shipped-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, 440px) !important;
+        gap: 30px !important;
+        width: 1850px !important;
+        margin: 0 auto !important;
+    }
+
+    /* 严格锁死单张卡片的宽度为 440px */
+    .flip-container, .completed-card {
+        width: 440px !important;
+        flex: 0 0 440px !important; 
+        height: 100% !important; 
+        min-height: 520px !important; 
+    }
+
+    .order-card {
+        width: 100% !important;
+        height: 100% !important;
+    }
+
+    /* 内部缩放引擎空间 */
+    .product-list {
+        flex: 1 1 0 !important; 
+        height: auto !important;
+        min-height: 0 !important;
+        overflow: hidden !important; 
+    }
+
+    .shipped-card {
+        width: 440px !important;
+    }
+
+    /* 已出库页面 (Tab 2) 开启物理纵向滚动轨道 */
+    #tab-2.active {
+        display: flex !important;
+        height: calc(100vh - 220px) !important; 
+        overflow-y: auto !important;            
+        overflow-x: hidden !important;
+        width: 100vw !important;
+        margin-left: -60px !important;
+        padding: 0 20px 100px 20px !important; 
+        box-sizing: border-box !important;
+        scrollbar-width: none; 
+        -ms-overflow-style: none;
+    }
+
+    /* ========================================================
+     * 🚀 原材料专属轨道优化：卡片边缘到屏幕左右固定留白约 10px
+     * ======================================================== */
+    #tab-3.active {
+        display: flex !important;
+        height: calc(100vh - 220px) !important; 
+        overflow-y: auto !important;            
+        overflow-x: hidden !important;
+        
+        width: 100vw !important;
+        margin-left: -60px !important;
+        /* 左右留出 10px 的呼吸轨道空间 */
+        padding: 0 10px 100px 10px !important; 
+        
+        box-sizing: border-box !important;
+        scrollbar-width: none; 
+        -ms-overflow-style: none;
+    }
+
+    #tab-2.active::-webkit-scrollbar, #tab-3.active::-webkit-scrollbar {
+        display: none !important;
+    }
+
+    /* 🚀 终极样式修正：让网格系统精准控制为“一行只并排展示 2 个” */
+    #tab-3 .timeline-items {
+        display: grid !important;
+        grid-template-columns: repeat(2, 1fr) !important; /* 核心：平分整行，一行两个 */
+        gap: 16px !important; /* 卡片之间的间距 */
+        width: 100% !important;
+        box-sizing: border-box !important;
+    }
+
+    /* 让时间线大容器撑满 100% 视口 */
+    #tab-3 .timeline-container {
+        width: 100% !important; 
+        margin: 0 !important; 
+        box-sizing: border-box !important;
+    }
+}
+
+/* =========================================================
+   🧹 彻底告别“叠叠乐”：弹窗按钮统一重构与解耦
+   ========================================================= */
+
+/* 1. 抽取公共骨架：所有按钮统一的高、宽、圆角、字体（一次写好，全员生效） */
+.modal-btn-group button {
+    flex: 1;
+    height: 38px;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    /* 默认备用底色（给“返回”等普通按钮用） */
+    background: #f5f5f5; 
+    color: #555;
+}
+
+/* 默认悬浮加深效果 */
+.modal-btn-group button:hover {
+    filter: brightness(0.95);
+}
+
+/* 2. 精准分配独立皮肤：直接用 ID 赋色，绝对不需要 !important */
+
+/* 撤销出库 (水蜜桃粉) */
+#btnAuditRevoke {
+    background: #FDECEE;
+    color: #F46E83;
+}
+#btnAuditRevoke:hover { background: #fbcdd1; }
+
+/* 确认审核 (薄荷绿) */
+#btnAuditConfirm {
+    background: #D5EFE3;
+    color: #4CBCA0;
+}
+#btnAuditConfirm:hover { background: #bee5d3; }
+
+/* 清除图片 (高级柔和红) */
+#btnReceiptDelete {
+    background: #FDECEE;
+    color: #F06D82;
+}
+#btnReceiptDelete:hover { background: #fad3da; }
+
+/* 确认上传 (经典蓝) */
+#btnReceiptUpload {
+    background: #E8F4FF;
+    color: #409EFF;
+}
+#btnReceiptUpload:hover { background: #40a9ff; }
+
+/* =========================================================
+   查看回单凭证状态的专属按钮配色
+   ========================================================= */
+
+/* 真实删除凭证 (莫兰迪浅红) */
+#btnRealDeleteReceipt {
+    background: #FEF0F0;
+    color: #F56C6C;
+}
+#btnRealDeleteReceipt:hover { 
+    background: #fde2e2; 
+}
+
+/* 下载凭证 (莫兰迪天蓝) */
+#btnDownloadReceipt {
+    background: #E8F4FF;
+    color: #409EFF;
+}
+#btnDownloadReceipt:hover { 
+    background: #d1e9ff; 
+}
+/* =========================================================
+   💊 账户控制台弹窗 (viewUserModal) 底部按钮 UI 完美覆写
+   统一采用 Flex 等宽大药丸布局，彻底镇压旧版 float 浮动
+   ========================================================= */
+
+/* 1. 重构底部容器：等宽弹性盒子，告别左右乱飘 */
+#viewUserModal .old-modal-footer {
+    display: flex !important;
+    gap: 12px !important;
+    justify-content: center !important;
+    align-items: center !important;
+    padding: 20px !important;
+    border-top: 1px solid #f0f2f5 !important;
+}
+
+/* 2. 统一大药丸按钮基础样式 (彻底抹除旧版内联样式和浮动) */
+#viewUserModal .old-modal-footer button {
+    flex: 1 !important;
+    float: none !important; /* 核心：废除极其古老的左浮动 */
+    border-radius: 20px !important;
+    border: none !important;
+    font-weight: bold !important;
+    height: 40px !important;
+    padding: 0 !important;
+    margin: 0 !important; /* 强制覆盖可能存在的外边距 */
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    outline: none !important;
+    box-shadow: none !important;
+    font-size: 14px !important;
+}
+
+/* 3. 第1个按钮：物理注销该账户 (定制水蜜桃粉，高危操作) */
+#viewUserModal .old-modal-footer button:nth-of-type(1) {
+    background: #FDECEE !important;
+    color: #F46E83 !important;
+}
+#viewUserModal .old-modal-footer button:nth-of-type(1):hover {
+    background: #fbcdd1 !important;
+}
+
+/* 4. 第2个按钮：关闭 (高级冷灰) */
+#viewUserModal .old-modal-footer button:nth-of-type(2) {
+    background: #f0f2f5 !important;
+    color: #666 !important;
+}
+#viewUserModal .old-modal-footer button:nth-of-type(2):hover {
+    background: #e4e7ed !important;
+}
+
+/* 5. 第3个按钮：保存账户与权限 (定制薄荷绿，确认操作) */
+#viewUserModal .old-modal-footer button:nth-of-type(3) {
+    background: #D5EFE3 !important;
+    color: #4CBCA0 !important;
+}
+#viewUserModal .old-modal-footer button:nth-of-type(3):hover {
+    background: #bee5d3 !important;
+}
+
+/* 彻底解除红色数字的固定边距死锁 */
+.text-red-large {
+    margin: 0 0.15em !important;
+    letter-spacing: 0.02em !important;
+}
+
+
+/* =========================================================
+   🚑 终极修复：打破样式死锁，重塑回单上传结构与专属配色
+   ========================================================= */
+
+/* 1. 强行打破 nth-of-type(3) 的灰色死锁，赋予专属粉色配色 */
+#shippedOrderActionModal #btnReceiptDelete {
+    background-color: #FDECEE !important;
+    color: #F06D82 !important;
+    border: none !important; /* 强行抹除原带的红色边框 */
+}
+#shippedOrderActionModal #btnReceiptDelete:hover {
+    background-color: #fad3da !important;
+    color: #e55c71 !important;
+}
+
+/* 2. 拦截 JS 的 display: block，强行赋予 Flex 居中结构，彻底解决错位 */
+/* 当 JS 试图让它显示时，强行劫持并锁死为 flex，保证加号和图片永远完美居中！ */
+#receiptContent[style*="display: block"] {
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+/* 3. 为图片加上绝对定位和物理约束，不管传多大的图都绝不撑爆弹窗 */
+#receiptContent img {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: contain !important;
+}
+
+
+/* 4. 彻底镇压 JS 导致的加号区域左上角错位，将其绝对锚定在正中心 */
+#receiptUploadPrompt {
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important; /* X轴Y轴各退回50%，实现完美居中 */
+    width: 100% !important;
+    height: auto !important;
+    text-align: center !important; /* 确保内部的加号和文字水平居中 */
+}
+
+/* 防止内部 div 受到外部意外干扰 */
+#receiptUploadPrompt > div {
+    display: block !important;
+    text-align: center !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+
+/* ========================================================
+ * 🟠 状态驱动：绝缘订单 - 琥珀暖橙主题
+ * ======================================================== */
+.card-insulation {
+    background-color: #FFF7E6 !important;  /* 柔和的琥珀橙底色 */
+    /* border: 1px solid #FFD591 !important;  稍微加深的橙色边框 */
+    box-shadow: 0 4px 16px rgba(250, 140, 22, 0.08) !important;
+    transition: all 0.3s ease;
+}
+.card-insulation .order-header {
+    border-bottom: 1px dashed #FFD591 !important;
+}
+.card-insulation .info-row[style*="border-top"] {
+    border-top-color: #FFD591 !important;
+}
+/* =========================================================
+   原材料录入弹窗：键盘样式与响应式布局
+   ========================================================= */
+
+/* 左侧输入框激活时的呼吸光效 */
+.upload-inputs-area .keyboard-target:focus, 
+.upload-inputs-area .keyboard-target:active {
+    border-color: #1890ff !important;
+    box-shadow: 0 0 0 3px rgba(24, 144, 255, 0.15) !important;
+    background: #ffffff !important;
+}
+
+/* 右侧拟物化键盘按钮样式 */
+.upload-keyboard-area .key-btn {
+    height: 52px;
+    font-size: 20px;
+    font-weight: 800;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    border: none;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06), 0 1px 1px rgba(0,0,0,0.1);
+    color: #333;
+    cursor: pointer;
+    transition: all 0.1s ease;
+}
+
+/* 键盘点击交互反馈 */
+.upload-keyboard-area .key-btn:active {
+    transform: translateY(2px) scale(0.96);
+    background: #e6f7ff;
+    color: #1890ff;
+    box-shadow: 0 0 2px rgba(0,0,0,0.1);
+}
+
+.upload-keyboard-area .key-clear:active {
+    background: #e4e7ed !important;
+    color: #333 !important;
+}
+
+/* 📱 移动端防爆框：遇到小屏幕时，智能折叠回上下排版 */
+@media (max-width: 768px) {
+    .upload-modal-body {
+        flex-direction: column !important;
+        gap: 20px !important;
+    }
+    .upload-inputs-area .form-item {
+        margin-bottom: 12px !important;
+    }
+}
+
+
+/* =========================================================
+   📦 订单发布与修改弹窗：左右结构优化与响应式适配
+   ========================================================= */
+
+/* 输入框焦点高亮特效 */
+.order-modal-left textarea:focus,
+.order-modal-right input:focus,
+.order-modal-right select:focus,
+.order-modal-right textarea:focus {
+    border-color: #1890ff !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(24,144,255,0.15);
+}
+
+/* 📱 移动端防挤压：窄屏下自动切换回上下排版 */
+@media (max-width: 768px) {
+    .order-modal-body {
+        flex-direction: column !important;
+        gap: 16px !important;
+    }
+    .order-modal-left textarea.textarea-tall {
+        min-height: 120px !important;
+    }
+}
+
+/* =========================================================
+   💊 新建与修改订单弹窗底部按钮（精致靠右版）
+   ========================================================= */
+
+/* 1. 底部容器：让所有内容靠右对齐 (flex-end) */
+#createOrderModal .old-modal-footer,
+#editOrderModal .old-modal-footer {
+    display: flex !important;
+    gap: 16px !important; /* 按钮之间的间距 */
+    justify-content: flex-end !important; /* 🌟 核心：全部推到最右边 */
+    align-items: center !important;
+    padding: 16px 24px !important;
+    background: #ffffff !important;
+    border-top: 1px solid #f0f2f5 !important;
+    border-bottom-left-radius: 12px !important;
+    border-bottom-right-radius: 12px !important;
+}
+
+/* 2. 统一底栏按钮外观：取消撑满，改为小巧精致的固定内边距 */
+#createOrderModal .old-modal-footer button,
+#editOrderModal .old-modal-footer button {
+    /* 删除了 flex: 1，按钮不再强行撑满全屏 */
+    padding: 0 24px !important; /* 🌟 左右留出舒适内边距，控制按钮大小 */
+    min-width: 96px !important; /* 保证字数少的按钮也不会太短 */
+    height: 38px !important; /* 高度调得更小巧秀气 */
+    border-radius: 19px !important; /* 完美的半圆药丸弧度 */
+    border: none !important;
+    font-size: 14px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1) !important;
+    outline: none !important;
+    box-shadow: none !important;
+    margin: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* 3. 【删除订单】按钮专属配色 (如果你想让它和取消/确认分开，防误触) */
+#editOrderModal .old-modal-footer #btnDeleteOrderInEdit {
+    background: #FDECEE !important;
+    color: #F46E83 !important;
+    margin-right: auto !important; /* 🌟 神奇魔法：自动把它推到弹窗的最左边，避免误点。如果不喜欢，删掉这行它就会去右边 */
+}
+#editOrderModal .old-modal-footer #btnDeleteOrderInEdit:hover {
+    background: #fbcdd1 !important;
+    transform: translateY(-1px);
+}
+
+/* 4. 【取消】按钮专属配色 (高级冷灰) */
+#createOrderModal .old-modal-footer .btn-default,
+#editOrderModal .old-modal-footer .btn-default {
+    background: #F0F2F5 !important;
+    color: #666666 !important;
+}
+#createOrderModal .old-modal-footer .btn-default:hover,
+#editOrderModal .old-modal-footer .btn-default:hover {
+    background: #e4e7ed !important;
+    color: #333333 !important;
+    transform: translateY(-1px);
+}
+
+/* 5. 【确认修改/发布】按钮专属配色 (品牌蓝+轻微阴影) */
+#createOrderModal .old-modal-footer .btn-primary,
+#editOrderModal .old-modal-footer .btn-primary {
+    background: #1890FF !important;
+    color: #FFFFFF !important;
+    box-shadow: 0 4px 12px rgba(24, 144, 255, 0.25) !important;
+}
+#createOrderModal .old-modal-footer .btn-primary:hover,
+#editOrderModal .old-modal-footer .btn-primary:hover {
+    background: #40a9ff !important;
+    box-shadow: 0 6px 16px rgba(24, 144, 255, 0.35) !important;
+    transform: translateY(-1px);
+}
+
+/* 点击反馈效果 */
+#createOrderModal .old-modal-footer button:active,
+#editOrderModal .old-modal-footer button:active {
+    transform: scale(0.97) !important;
+}
+
+
+/* 允许“发布订单”与“修改订单”里的货物名称输入框上下拖拽变大 */
+#newGoodsName,
+#editGoodsName {
+    resize: vertical !important; /* 开启纵向上下拖拽拉伸 */
+    min-height: 48px !important;  /* 默认最小高度 */
+    max-height: 180px !important; /* 最大拖拽高度，防止把弹窗撑爆 */
+    overflow-y: auto !important;  /* 内容超过时显示滚动条 */
+}
+
+
+/* =========================================================
+   🧮 侧边智能计算器 UI & 专属按钮样式 (Z层级修复 & 移动端居中版)
+   ========================================================= */
+
+/* 【辅助计算】专属按钮配色 (温暖的高级橙黄) */
+#createOrderModal .old-modal-footer .btn-calc,
+#editOrderModal .old-modal-footer .btn-calc {
+    background: #FFF7E6 !important;
+    color: #FA8C16 !important;
+}
+#createOrderModal .old-modal-footer .btn-calc:hover,
+#editOrderModal .old-modal-footer .btn-calc:hover {
+    background: #FFE7BA !important;
+    transform: translateY(-1px);
+}
+
+/* 侧滑计算器面板：电脑端基础排版 (靠右滑出) */
+.smart-calc-panel {
+    position: fixed;
+    right: -320px; /* 默认隐藏在屏幕右侧外部 */
+    top: 50%;
+    transform: translateY(-50%);
+    width: 280px;
+    background: #ffffff;
+    border-radius: 20px;
+    /* 🌟 加深悬浮阴影，质感更强 */
+    box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25), 0 0 2px rgba(0,0,0,0.1); 
+    /* 🌟 核弹级层级：绝对盖过所有遮罩和弹窗 */
+    z-index: 999999 !important; 
+    padding: 16px;
+    transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+    opacity: 0;
+    visibility: hidden;
+}
+
+/* 激活状态：电脑端右侧悬浮 */
+.smart-calc-panel.active {
+    right: 24px;
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 📱 移动端自适应：取消右侧滑出，改为屏幕正中间放大弹出 */
+@media (max-width: 768px) {
+    .smart-calc-panel {
+        right: auto !important; /* 清除靠右设定 */
+        left: 50% !important;   /* 设定水平中心 */
+        top: 50% !important;    /* 设定垂直中心 */
+        transform: translate(-50%, -50%) scale(0.9) !important; /* 隐藏时：居中并轻微缩小 */
+        width: 85% !important;  /* 手机端占屏幕85%宽度 */
+        max-width: 320px !important;
+    }
+    .smart-calc-panel.active {
+        transform: translate(-50%, -50%) scale(1) !important; /* 弹出时：果冻感放大居中 */
+    }
+}
+
+/* --------- 以下为计算器内部屏幕与按键样式保持不变 --------- */
+.smart-calc-panel .calc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    font-size: 14px;
+    color: #888;
+    font-weight: bold;
+}
+.smart-calc-panel .calc-close {
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+    color: #999;
+}
+.smart-calc-panel .calc-close:hover { color: #ff4d4f; }
+
+.smart-calc-panel .calc-screen {
+    background: #f5f7fa;
+    border-radius: 12px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+    text-align: right;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+.smart-calc-panel .calc-history {
+    min-height: 18px;
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 4px;
+}
+.smart-calc-panel .calc-display {
+    font-size: 32px;
+    font-weight: bold;
+    color: #333;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow-x: auto;
+}
+
+.smart-calc-panel .calc-keys {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.smart-calc-panel .calc-btn {
+    height: 48px;
+    border: none;
+    border-radius: 50%;
+    font-size: 18px;
+    font-weight: bold;
+    background: #f0f2f5;
+    color: #333;
+    cursor: pointer;
+    transition: all 0.1s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.smart-calc-panel .calc-btn:active { transform: scale(0.92); background: #e4e7ed; }
+
+.smart-calc-panel .calc-op { background: #e6f7ff; color: #1890ff; }
+.smart-calc-panel .calc-op:active { background: #bae0ff; }
+.smart-calc-panel .calc-op-clear { background: #fff1f0; color: #ff4d4f; }
+.smart-calc-panel .calc-eq { background: #1890ff; color: #fff; border-radius: 18px; }
+.smart-calc-panel .calc-eq:active { background: #096dd9; }
+
+
+/* =========================================================
+   ✨ 完美融合主题的输入框 (Theme Input)
+   ========================================================= */
+.modern-input {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 15px;
+    color: #333;
+    background-color: #ffffff; /* 👈 恢复纯净的纯白底色 */
+    border: 1px solid #d9d9d9; /* 👈 恢复与原系统一致的经典灰边框 */
+    border-radius: 8px;        /* 👈 恢复经典的 8px 圆角 */
+    outline: none;
+    box-sizing: border-box;
+    transition: all 0.3s;
+}
+
+/* 鼠标悬浮时，边框微微变蓝提示可点击 */
+.modern-input:hover {
+    border-color: #40a9ff; 
+}
+
+/* 🎯 获取焦点打字时，亮起与快捷标签同色系的主题蓝光晕 */
+.modern-input:focus {
+    border-color: #1677ff; 
+    box-shadow: 0 0 0 2px rgba(22, 119, 255, 0.2); 
+}
+
+/* 占位符文字颜色 */
+.modern-input::placeholder {
+    color: #bfbfbf;
+}
