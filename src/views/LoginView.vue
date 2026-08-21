@@ -28,7 +28,6 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { login } from '@/api/auth'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -46,10 +45,9 @@ const handleLogin = async () => {
   loading.value = true
 
   try {
-    const resData = await login(username.value, password.value)
+    const resData = await userStore.login(username.value, password.value)
 
     if (resData.success) {
-      userStore.setUser(resData.user)
       router.push('/main')
     } else {
       alert(resData.message || '凭证错误，登录失败')

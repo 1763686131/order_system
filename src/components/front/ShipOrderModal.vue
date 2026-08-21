@@ -67,7 +67,9 @@
 
 <script setup>
 import { ref } from 'vue'
-import { shipOrder } from '@/api/orders'
+import { useOrderStore } from '@/stores/order'
+
+const orderStore = useOrderStore()
 
 const visible = ref(false)
 const loading = ref(false)
@@ -122,7 +124,7 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
-    await shipOrder(targetOrderId.value, payload)
+    await orderStore.updateOrderById(targetOrderId.value, payload)
     handleClose()
     window.dispatchEvent(new CustomEvent('refresh-orders'))
   } catch (error) {

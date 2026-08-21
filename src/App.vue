@@ -46,10 +46,9 @@
         class="tab-pane"
         :class="{ active: currentTab === 0 }"
       >
-        <OrderCardList
+        <OrderList
           :orders="pendingOrders"
           status-type="pending"
-          @refresh="fetchOrders"
           @complete="handleComplete"
           @edit="handleEdit"
           @copy="handleCopy"
@@ -62,10 +61,9 @@
         class="tab-pane"
         :class="{ active: currentTab === 1 }"
       >
-        <OrderCardList
+        <OrderList
           :orders="completedOrders"
           status-type="completed"
-          @refresh="fetchOrders"
           @uncomplete="handleUncomplete"
           @ship="handleShip"
           @delete="handleDelete"
@@ -113,7 +111,7 @@
       <EditOrderModal ref="editOrderModal" />
       <UploadMaterialModal ref="uploadMaterialModal" />
       <SearchOrderModal ref="searchOrderModal" />
-      <UserManageModal ref="userManageModal" />
+      <UserManage ref="userManageModal" />
       <SmartCalculator ref="smartCalculator" />
     </div>
   </div>
@@ -123,21 +121,19 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
-import { login } from '@/api/auth'
-import { getOrders } from '@/api/orders'
-import OrderCardList from '@/components/orders/OrderCardList.vue'
-import ShippedOrderList from '@/components/orders/ShippedOrderList.vue'
+import OrderList from '@/views/front/OrderList.vue'
+import ShippedOrderList from '@/views/front/ShippedOrderList.vue'
 import MaterialTimeline from '@/components/material/MaterialTimeline.vue'
 import NomiFloatingAI from '@/components/layout/NomiFloatingAI.vue'
-import ConfirmModal from '@/components/modals/ConfirmModal.vue'
-import ShipOrderModal from '@/components/modals/ShipOrderModal.vue'
-import ShippedOrderActionModal from '@/components/modals/ShippedOrderActionModal.vue'
-import CreateOrderModal from '@/components/modals/CreateOrderModal.vue'
-import EditOrderModal from '@/components/modals/EditOrderModal.vue'
-import UploadMaterialModal from '@/components/modals/UploadMaterialModal.vue'
-import SmartCalculator from '@/components/modals/SmartCalculator.vue'
-import SearchOrderModal from '@/components/modals/SearchOrderModal.vue'
-import UserManageModal from '@/components/modals/UserManageModal.vue'
+import ConfirmModal from '@/components/common/ConfirmModal.vue'
+import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
+import SearchOrderModal from '@/components/common/SearchOrderModal.vue'
+import SmartCalculator from '@/components/common/SmartCalculator.vue'
+import ShipOrderModal from '@/components/front/ShipOrderModal.vue'
+import CreateOrderModal from '@/components/front/CreateOrderModal.vue'
+import EditOrderModal from '@/components/front/EditOrderModal.vue'
+import UploadMaterialModal from '@/components/front/UploadMaterialModal.vue'
+import UserManage from '@/views/admin/UserManage.vue'
 
 const userStore = useUserStore()
 const orderStore = useOrderStore()
@@ -219,11 +215,9 @@ const handleLogin = async () => {
   }
 
   try {
-    const resData = await login(loginForm.value.username, loginForm.value.password)
+    const resData = await userStore.login(loginForm.value.username, loginForm.value.password)
 
     if (resData.success) {
-      userStore.setUser(resData.user)
-
       // 清空 tab 数据缓存
       const tabPanes = document.querySelectorAll('.tab-pane')
       tabPanes.forEach(el => {
@@ -266,8 +260,7 @@ const fetchOrders = async () => {
   if (currentTab.value !== 0 && currentTab.value !== 1 && currentTab.value !== 2) return
 
   try {
-    const serverOrders = await getOrders()
-    orderStore.setOrders(serverOrders)
+    await orderStore.fetchOrders()
   } catch (error) {
     console.error('Failed to fetch orders:', error)
   }
@@ -437,20 +430,7 @@ onMounted(() => {
     }
 
     try {
-      const response = await fetch(`/api/orders/${orderId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Username': String(userStore.user.username),
-          'Role': String(userStore.user.role)
-        }
-      })
-
-      if (response.ok) {
-        fetchOrders()
-      } else {
-        alert('删除失败')
-      }
+      await orderStore.deleteOrderById(orderId)
     } catch (error) {
       alert('网络异常，删除失败')
     }

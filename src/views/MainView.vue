@@ -49,7 +49,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useOrderStore } from '@/stores/order'
-import { getOrders } from '@/api/orders'
+import { useOrderStore } from '@/stores/order'
+
+const orderStore = useOrderStore()
 import NavBar from '@/components/layout/NavBar.vue'
 import OrderList from '@/components/orders/OrderList.vue'
 import MaterialTimeline from '@/components/material/MaterialTimeline.vue'
@@ -65,10 +67,7 @@ const handleSwitchTab = (index) => {
 
 const loadOrders = async () => {
   try {
-    const res = await getOrders()
-    if (res.success) {
-      orderStore.setOrders(res.data || [])
-    }
+    await orderStore.fetchOrders()
   } catch (error) {
     console.error('Failed to load orders:', error)
   }

@@ -34,7 +34,9 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { updateOrderStatus } from '@/api/orders'
+import { useOrderStore } from '@/stores/order'
+
+const orderStore = useOrderStore()
 
 const visible = ref(false)
 const modalTitle = ref('')
@@ -125,7 +127,7 @@ const handleClose = () => {
 // 确认操作
 const handleConfirm = async () => {
   try {
-    await updateOrderStatus(targetOrderId.value, targetStatus.value)
+    await orderStore.updateOrderById(targetOrderId.value, { status: targetStatus.value })
     handleClose()
     window.dispatchEvent(new CustomEvent('refresh-orders'))
   } catch (error) {

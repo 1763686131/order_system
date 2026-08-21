@@ -122,7 +122,9 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { createOrder } from '@/api/orders'
+import { useOrderStore } from '@/stores/order'
+
+const orderStore = useOrderStore()
 
 const visible = ref(false)
 const loading = ref(false)
@@ -241,7 +243,7 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
-    await createOrder(payload)
+    await orderStore.createOrder(payload)
     handleClose()
     window.dispatchEvent(new CustomEvent('refresh-orders'))
     window.dispatchEvent(new CustomEvent('switch-tab', { detail: { index: 0 } }))

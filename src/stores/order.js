@@ -1,4 +1,6 @@
 import { defineStore } from 'pinia'
+import request from '@/api/request'
+import { useUserStore } from './user'
 
 export const useOrderStore = defineStore('order', {
   state: () => ({
@@ -32,6 +34,7 @@ export const useOrderStore = defineStore('order', {
   },
 
   actions: {
+    // 基础数据操作
     setOrders(orders) {
       this.allOrders = orders
     },
@@ -76,6 +79,133 @@ export const useOrderStore = defineStore('order', {
     clearMaterialDateFilter() {
       this.nomiMaterialFilterStart = null
       this.nomiMaterialFilterEnd = null
+    },
+
+    // API 请求方法
+    async fetchOrders() {
+      try {
+        const response = await request({ url: '/orders', method: 'GET' })
+        this.setOrders(response)
+        return response
+      } catch (error) {
+        console.error('Failed to fetch orders:', error)
+        throw error
+      }
+    },
+
+    async createOrder(orderData) {
+      try {
+        const response = await request({
+          url: '/orders',
+          method: 'POST',
+          data: orderData
+        })
+        if (response.success) {
+          await this.fetchOrders()
+        }
+        return response
+      } catch (error) {
+        console.error('Failed to create order:', error)
+        throw error
+      }
+    },
+
+    async updateOrderById(orderId, updates) {
+      try {
+        const response = await request({
+          url: `/orders/${orderId}`,
+          method: 'PUT',
+          data: updates
+        })
+        if (response.success || response.ok !== false) {
+          await this.fetchOrders()
+        }
+        return response
+      } catch (error) {
+        console.error('Failed to update order:', error)
+        throw error
+      }
+    },
+
+    async deleteOrderById(orderId) {
+      try {
+        const response = await request({
+          url: `/orders/${orderId}`,
+          method: 'DELETE'
+        })
+        if (response.success || response.ok !== false) {
+          this.deleteOrder(orderId)
+        }
+        return response
+      } catch (error) {
+        console.error('Failed to delete order:', error)
+        throw error
+      }
+    },
+
+    async uploadReceipt(orderId, formData) {
+      try {
+        // 使用原生fetch，因为需要发送FormData
+        const userStore = useUserStore()
+        const response = await fetch(`/api/orders/${orderId}/upload_receipt`, {
+          method: 'POST',
+          headers: {
+            'Username': String(userStore.username),
+            'Role': String(userStore.role)
+          },
+          body: formData
+        })
+
+        if (response.ok) {
+          await this.fetchOrders()
+          return { success: true }
+        } else {
+          return { success: false }
+        }
+      } catch (error) {
+        console.error('Failed to upload receipt:', error)
+        throw error
+      }
+    },
+
+    async deleteReceipt(orderId) {
+      try {
+        const response = await request({
+          url: `/orders/${orderId}/receipt`,
+          method: 'DELETE'
+        })
+        if (response.success) {
+          await this.fetchOrders()
+        }
+        return response
+      } catch (error) {
+        console.error('Failed to delete receipt:', error)
+        throw error
+      }
+    },
+
+    async fetchCarrierTags() {
+      try {
+        const response = await request({ url: '/carrier_tags', method: 'GET' })
+        return Array.isArray(response) ? response : []
+      } catch (error) {
+        console.error('Failed to fetch carrier tags:', error)
+        return []
+      }
+    },
+
+    async saveCarrierTag(tag) {
+      try {
+        const response = await request({
+          url: '/carrier_tags',
+          method: 'POST',
+          data: { tag }
+        })
+        return response
+      } catch (error) {
+        console.error('Failed to save carrier tag:', error)
+        throw error
+      }
     }
   }
 })

@@ -220,7 +220,7 @@ const props = defineProps({
   }
 })
 
-defineEmits(['refresh', 'complete', 'uncomplete', 'ship', 'delete', 'edit', 'copy'])
+defineEmits(['complete', 'uncomplete', 'ship', 'delete', 'edit', 'copy'])
 
 const userStore = useUserStore()
 

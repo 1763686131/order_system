@@ -138,7 +138,9 @@
 import { ref } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
-import { updateOrder, deleteOrder } from '@/api/orders'
+import { useOrderStore } from '@/stores/order'
+
+const orderStore = useOrderStore()
 
 const userStore = useUserStore()
 const orderStore = useOrderStore()
@@ -261,7 +263,7 @@ const handleSubmit = async () => {
   loading.value = true
 
   try {
-    await updateOrder(targetOrderId.value, payload)
+    await orderStore.updateOrderById(targetOrderId.value, payload)
     handleClose()
     window.dispatchEvent(new CustomEvent('refresh-orders'))
   } catch (error) {
@@ -278,7 +280,7 @@ const handleDelete = async () => {
   }
 
   try {
-    await deleteOrder(targetOrderId.value)
+    await orderStore.deleteOrderById(targetOrderId.value)
     handleClose()
     window.dispatchEvent(new CustomEvent('refresh-orders'))
   } catch (error) {
