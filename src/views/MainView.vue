@@ -49,13 +49,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useOrderStore } from '@/stores/order'
-import { useOrderStore } from '@/stores/order'
-
-const orderStore = useOrderStore()
-import NavBar from '@/components/layout/NavBar.vue'
-import OrderList from '@/components/orders/OrderList.vue'
-import MaterialTimeline from '@/components/material/MaterialTimeline.vue'
-import FloatingMenu from '@/components/layout/FloatingMenu.vue'
+import OrderList from '@/views/front/OrderList.vue'
 
 const orderStore = useOrderStore()
 const currentTab = ref(0)

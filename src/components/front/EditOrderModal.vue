@@ -138,9 +138,6 @@
 import { ref } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
-import { useOrderStore } from '@/stores/order'
-
-const orderStore = useOrderStore()
 
 const userStore = useUserStore()
 const orderStore = useOrderStore()
