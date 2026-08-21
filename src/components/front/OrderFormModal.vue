@@ -81,7 +81,10 @@
 
             <div class="form-item">
               <label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 货物名称:</label>
-              <textarea v-model="formData.goods_name" style="height:48px; width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px; resize: none;"></textarea>
+              <textarea
+                v-model="formData.goods_name"
+                style="min-height:48px; max-height:180px; width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px; resize: vertical;"
+              ></textarea>
             </div>
 
             <div style="display: flex; gap: 10px;">
@@ -165,34 +168,42 @@ const formData = ref({
   title: ''
 })
 
-// 计算文本粘贴区中的数学表达式
+// 计算文本粘贴区中的数学表达式并累加总和
 const calculatedSum = computed(() => {
   if (!pasteText.value) return ''
 
-  // 匹配所有包含数学运算的行
   const lines = pasteText.value.split('\n')
-  const results = []
+  let totalSum = 0
+  const calculations = []
 
   for (const line of lines) {
-    // 匹配数学表达式（支持 +、-、*、/）
-    const mathMatch = line.match(/[\d.]+[\s]*[+\-*/][\s]*[\d.]+/)
+    // 匹配包含数学运算的行（支持 +、-、*、/）
+    const mathMatch = line.match(/([\d.]+[\s]*[+\-*/][\s]*[\d.]+[\s]*[+\-*/\s\d.]*)/g)
+
     if (mathMatch) {
-      try {
-        // 安全计算表达式
-        const expr = line.match(/([\d.+\-*/\s()]+)/)?.[0]
-        if (expr) {
-          const result = Function('"use strict"; return (' + expr + ')')()
+      mathMatch.forEach(expr => {
+        try {
+          // 安全计算表达式
+          const cleanExpr = expr.trim()
+          // 使用 Function 构造函数安全计算
+          const result = Function('"use strict"; return (' + cleanExpr + ')')()
+
           if (!isNaN(result) && isFinite(result)) {
-            results.push(`${expr.trim()} = ${result}`)
+            totalSum += result
+            calculations.push(`${cleanExpr} = ${result}`)
           }
+        } catch (e) {
+          // 忽略计算错误
         }
-      } catch (e) {
-        // 忽略计算错误
-      }
+      })
     }
   }
 
-  return results.length > 0 ? results.join(' | ') : ''
+  if (calculations.length > 0) {
+    return `总计: ${totalSum.toFixed(2)} kg (${calculations.join(', ')})`
+  }
+
+  return ''
 })
 
 // 获取当前日期
@@ -230,15 +241,47 @@ const smartParse = () => {
 
   // 第二行：收货人 电话 地址
   if (lines[1]) {
-    const parts = lines[1].split(/\s+/)
-    if (parts.length >= 1) formData.value.receiver_name = parts[0]
-    if (parts.length >= 2) formData.value.receiver_phone = parts[1]
-    if (parts.length >= 3) formData.value.receiver_address = parts.slice(2).join(' ')
+    const contactLine = lines[1]
+
+    // 提取电话号码（手机号或座机）
+    const phoneMatch = contactLine.match(/1[3-9]\d{9}|\d{3,4}-?\d{7,8}/)
+    if (phoneMatch) {
+      formData.value.receiver_phone = phoneMatch[0]
+
+      // 电话前面的是姓名
+      const beforePhone = contactLine.substring(0, contactLine.indexOf(phoneMatch[0])).trim()
+      if (beforePhone) {
+        formData.value.receiver_name = beforePhone
+      }
+
+      // 电话后面的是地址
+      const afterPhone = contactLine.substring(contactLine.indexOf(phoneMatch[0]) + phoneMatch[0].length).trim()
+      if (afterPhone) {
+        formData.value.receiver_address = afterPhone
+      }
+    }
   }
 
   // 第三行起：货物规格
   if (lines.length > 2) {
-    formData.value.goods_name = lines.slice(2).join('\n')
+    const goodsLines = lines.slice(2)
+
+    // 清洗货物名称：移除数学符号，保留换行
+    const cleanedGoods = goodsLines.map(line => {
+      return line.replace(/[+\-*\/=＋－×÷]/g, ' ')  // 将数学符号替换为空格
+                 .replace(/[ \t]+/g, ' ')              // 合并连续空格，保留换行
+                 .trim()
+    }).join('\n')
+
+    formData.value.goods_name = cleanedGoods
+  }
+
+  // 自动计算重量：如果有计算结果，自动填充到重量字段
+  if (calculatedSum.value) {
+    const totalMatch = calculatedSum.value.match(/总计:\s*([\d.]+)/)
+    if (totalMatch && totalMatch[1]) {
+      formData.value.goods_weight = totalMatch[1] + ' kg'
+    }
   }
 }
 
