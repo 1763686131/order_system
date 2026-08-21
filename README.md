@@ -34,31 +34,32 @@ npm run preview
 
 ```
 src/
-├── App.vue                          # 根组件
+├── App.vue                          # 根组件（路由容器）
 ├── main.js                          # 入口文件
 ├── router/
 │   └── index.js                     # 路由配置
 ├── stores/                          # 状态管理 (Pinia)
 │   ├── user.js                      # 用户状态 + API
 │   ├── order.js                     # 订单状态 + API
-│   └── material.js                  # 原材料状态 + API
+│   ├── material.js                  # 原材料状态 + API
+│   └── nomi.js                      # 小圆智能助手状态
 ├── views/                           # 页面级组件
 │   ├── LoginView.vue                # 登录页面
-│   ├── MainView.vue                 # 主界面
+│   ├── MainView.vue                 # 主界面（业务逻辑容器）
 │   ├── front/                       # 前台页面
 │   │   ├── OrderList.vue            # 订单列表（未完成+已完成）
 │   │   └── ShippedOrderList.vue     # 已出库订单列表
 │   └── admin/                       # 后台管理页面
 │       └── UserManage.vue           # 用户权限管理
 ├── components/                      # 组件
-│   ├── common/                      # 公共弹窗组件
+│   ├── common/                      # 公共组件
 │   │   ├── ConfirmModal.vue         # 确认弹窗
 │   │   ├── SearchOrderModal.vue     # 搜索订单
 │   │   ├── ShippedOrderActionModal.vue  # 已出库订单操作
-│   │   └── SmartCalculator.vue      # 智能计算器
+│   │   ├── SmartCalculator.vue      # 智能计算器
+│   │   └── NomiFloatingAI.vue       # 小圆智能助手
 │   └── front/                       # 前台专用弹窗
-│       ├── CreateOrderModal.vue     # 创建订单
-│       ├── EditOrderModal.vue       # 编辑订单
+│       ├── OrderFormModal.vue       # 订单表单（新增/编辑）
 │       ├── ShipOrderModal.vue       # 发货出库
 │       └── UploadMaterialModal.vue  # 录入原材料
 ├── api/

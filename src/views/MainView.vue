@@ -76,8 +76,7 @@
     <ConfirmModal ref="confirmModal" />
     <ShipOrderModal ref="shipOrderModal" />
     <ShippedOrderActionModal ref="shippedActionModal" />
-    <CreateOrderModal ref="createOrderModal" />
-    <EditOrderModal ref="editOrderModal" />
+    <OrderFormModal ref="orderFormModal" />
     <UploadMaterialModal ref="uploadMaterialModal" />
     <SearchOrderModal ref="searchOrderModal" />
     <UserManage ref="userManageModal" />
@@ -86,10 +85,13 @@
     <!-- 小圆智能助手 -->
     <NomiFloatingAI
       :current-tab="getCurrentTabName()"
+      :user-role="userStore.role"
+      :has-user-manage-perm="userStore.hasPerm('user.manage') || userStore.role === 'super_admin' || userStore.role === 'admin'"
       @create-order="handleCreateOrder"
       @create-material="handleCreateMaterial"
       @search="handleSearchOrder"
       @date-filter="handleDateFilter"
+      @user-manage="handleUserManage"
     />
   </div>
 </template>
@@ -97,6 +99,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useOrderStore } from '@/stores/order'
+import { useUserStore } from '@/stores/user'
 import OrderList from '@/views/front/OrderList.vue'
 import ShippedOrderList from '@/views/front/ShippedOrderList.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
@@ -104,13 +107,13 @@ import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal
 import SearchOrderModal from '@/components/common/SearchOrderModal.vue'
 import SmartCalculator from '@/components/common/SmartCalculator.vue'
 import ShipOrderModal from '@/components/front/ShipOrderModal.vue'
-import CreateOrderModal from '@/components/front/CreateOrderModal.vue'
-import EditOrderModal from '@/components/front/EditOrderModal.vue'
+import OrderFormModal from '@/components/front/OrderFormModal.vue'
 import UploadMaterialModal from '@/components/front/UploadMaterialModal.vue'
 import UserManage from '@/views/admin/UserManage.vue'
 import NomiFloatingAI from '@/components/common/NomiFloatingAI.vue'
 
 const orderStore = useOrderStore()
+const userStore = useUserStore()
 
 const currentTab = ref(0)
 const navBarHidden = ref(false)
@@ -119,8 +122,7 @@ const navBarHidden = ref(false)
 const confirmModal = ref(null)
 const shipOrderModal = ref(null)
 const shippedActionModal = ref(null)
-const createOrderModal = ref(null)
-const editOrderModal = ref(null)
+const orderFormModal = ref(null)
 const uploadMaterialModal = ref(null)
 const searchOrderModal = ref(null)
 const userManageModal = ref(null)
@@ -256,7 +258,7 @@ const getCurrentTabName = () => {
 
 // 小圆组件：创建订单
 const handleCreateOrder = () => {
-  createOrderModal.value?.open()
+  orderFormModal.value?.open()
 }
 
 // 小圆组件：创建原材料
@@ -278,6 +280,11 @@ const handleDateFilter = ({ type, startDate, endDate }) => {
     // 原材料筛选逻辑（待实现）
     console.log('Material filter:', startDate, endDate)
   }
+}
+
+// 小圆组件：账户管理
+const handleUserManage = () => {
+  userManageModal.value?.open()
 }
 
 // 移动端导航栏隐藏逻辑
@@ -339,7 +346,7 @@ onMounted(() => {
     shippedActionModal.value?.open(orderId, mode)
   }
   window.openEditOrderModal = (orderId) => {
-    editOrderModal.value?.open(orderId)
+    orderFormModal.value?.openEdit(orderId)
   }
   window.openUploadMaterialModal = () => {
     uploadMaterialModal.value?.open()

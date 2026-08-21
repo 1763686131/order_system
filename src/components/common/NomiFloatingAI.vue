@@ -60,6 +60,14 @@
       >
         筛选原材料
       </div>
+
+      <div
+        v-if="hasUserManagePerm"
+        class="fab-item"
+        @click="handleUserManage"
+      >
+        账户管理
+      </div>
     </div>
 
     <!-- 气泡提示 -->
@@ -110,6 +118,14 @@ const props = defineProps({
   currentTab: {
     type: String,
     default: 'pending'
+  },
+  userRole: {
+    type: String,
+    default: ''
+  },
+  hasUserManagePerm: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -117,7 +133,8 @@ const emit = defineEmits([
   'create-order',
   'create-material',
   'search',
-  'date-filter'
+  'date-filter',
+  'user-manage'
 ])
 
 const nomiStore = useNomiStore()
@@ -225,6 +242,12 @@ const handleSearch = () => {
 const handleDateFilter = (type) => {
   nomiStore.closeMenu()
   nomiStore.showDateFilterBubble(type)
+}
+
+// 账户管理
+const handleUserManage = () => {
+  nomiStore.closeMenu()
+  emit('user-manage')
 }
 
 // 格式化日期
