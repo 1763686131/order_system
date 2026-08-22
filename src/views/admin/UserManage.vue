@@ -4,117 +4,133 @@
       v-if="visible"
       id="viewUserModal"
       class="old-modal-mask"
+      :class="{ hidden: !visible }"
     >
-      <div class="old-modal-box" style="max-width: 900px; width: 92%;">
+      <div class="old-modal-box" style="width: 850px; max-width: 95%;">
         <div class="old-modal-header">
           <span>系统账户与权限管理控制台</span>
           <span class="old-close-x" @click="handleClose">&times;</span>
         </div>
 
-        <div class="old-modal-body" style="padding: 24px; display: flex; gap: 24px; min-height: 400px;">
-          <!-- 左侧用户列表 -->
-          <div style="flex: 1; border-right: 1px solid #f0f0f0; padding-right: 24px;">
-            <div style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-              <h3 style="margin: 0; font-size: 16px; color: #333;">账户列表</h3>
-              <button class="btn-success" @click="prepareCreateUser" style="padding: 6px 12px; font-size: 13px;">+ 新建账户</button>
-            </div>
-            <div id="userListContainer" style="max-height: 450px; overflow-y: auto;">
-              <div
-                v-for="user in users"
-                :key="user.username"
-                class="user-list-item"
-                :class="{ active: currentEditUser?.username === user.username }"
-                @click="loadUserDetail(user)"
-              >
-                <div style="display:flex; justify-content:space-between; align-items:center;">
-                  <span style="font-size: 15px; font-weight: bold; color: #333;">
-                    {{ user.name || user.username }}
-                    <span style="font-size:12px;color:#999;font-weight:normal;">({{ user.username }})</span>
-                  </span>
-                  <span
-                    :style="{
-                      fontSize: '12px',
-                      background: getRoleColor(user.role) + '20',
-                      color: getRoleColor(user.role),
-                      padding: '2px 8px',
-                      borderRadius: '12px',
-                      fontWeight: 'bold'
-                    }"
-                  >
-                    {{ getRoleName(user.role) }}
-                  </span>
+        <div class="old-modal-body" style="padding: 20px;">
+          <div class="user-manage-container">
+            <!-- 左侧用户列表 -->
+            <div class="user-list-panel">
+              <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                <strong style="color:#606266; font-size: 15px;">员工名单</strong>
+                <button class="btn-primary" style="padding: 6px 12px; font-size: 12px;" @click="prepareCreateUser">+ 新增员工</button>
+              </div>
+              <div id="userListContainer">
+                <div
+                  v-for="user in users"
+                  :key="user.username"
+                  class="user-list-item"
+                  :class="{ active: currentEditUser?.username === user.username }"
+                  @click="loadUserDetail(user)"
+                >
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+                    <strong style="color:#303133; font-size: 15px;">{{ user.name || user.username }}</strong>
+                    <span
+                      :style="{
+                        fontSize: '11px',
+                        background: getRoleColor(user.role) + '15',
+                        color: getRoleColor(user.role),
+                        padding: '3px 8px',
+                        borderRadius: '10px',
+                        fontWeight: 'bold'
+                      }"
+                    >
+                      {{ getRoleName(user.role) }}
+                    </span>
+                  </div>
+                  <div style="font-size:12px; color:#909399;">账号: {{ user.username }}</div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- 右侧详情面板 -->
-          <div id="userDetailPanel" v-show="showDetailPanel" style="flex: 1.5;">
-            <h3 id="detailTitle" style="margin: 0 0 20px 0; font-size: 18px; color: #1890ff;">{{ detailTitle }}</h3>
+            <!-- 右侧详情面板 -->
+            <div class="user-detail-panel" id="userDetailPanel" v-show="showDetailPanel">
+              <h4 id="detailTitle" style="margin-top:0; color:#303133; border-bottom: 1px solid #ebeef5; padding-bottom:12px; margin-bottom: 15px;">
+                {{ detailTitle }}
+              </h4>
 
-            <div class="form-item" style="margin-bottom: 16px;">
-              <label style="font-weight: bold; color: #555; margin-bottom: 6px; display: block;">登录账号:</label>
-              <input
-                v-model="formData.username"
-                id="detailUsername"
-                :disabled="isEditMode"
-                placeholder="用于登录的唯一标识"
-                style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px;"
-              />
-            </div>
+              <div class="form-item" id="createUsernameGroup">
+                <label>系统登录账号:</label>
+                <input
+                  v-model="formData.username"
+                  id="detailUsername"
+                  :disabled="isEditMode"
+                  placeholder="输入账号名称"
+                />
+              </div>
 
-            <div class="form-item" style="margin-bottom: 16px;">
-              <label style="font-weight: bold; color: #555; margin-bottom: 6px; display: block;">显示姓名:</label>
-              <input
-                v-model="formData.name"
-                id="detailName"
-                placeholder="在系统中展示的真实姓名"
-                style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px;"
-              />
-            </div>
+              <div class="form-item" style="margin-top: 16px;">
+                <label>员工真实姓名:</label>
+                <input
+                  v-model="formData.name"
+                  id="detailName"
+                  placeholder="输入员工的中文全名"
+                />
+              </div>
 
-            <div class="form-item" style="margin-bottom: 16px;">
-              <label style="font-weight: bold; color: #555; margin-bottom: 6px; display: block;">登录密码:</label>
-              <input
-                v-model="formData.password"
-                id="detailPassword"
-                type="password"
-                :placeholder="isEditMode ? '留空则不修改密码' : '设置初始密码'"
-                style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px;"
-              />
-            </div>
+              <div class="form-item">
+                <label>账户安全密码:</label>
+                <div style="display:flex; gap:10px;">
+                  <input
+                    v-model="formData.password"
+                    id="detailPassword"
+                    type="password"
+                    :placeholder="isEditMode ? '留空则不修改密码' : '输入登录密码'"
+                    style="flex:1;"
+                  />
+                </div>
+              </div>
 
-            <div class="form-item" style="margin-bottom: 16px;">
-              <label style="font-weight: bold; color: #555; margin-bottom: 6px; display: block;">账户角色:</label>
-              <select
-                v-model="formData.role"
-                id="detailRole"
-                :disabled="!userStore.hasPerm('system.user_manage')"
-                style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px;"
-              >
-                <option value="employee">员工（只读）</option>
-                <option value="operator">操作员（编辑）</option>
-                <option value="admin">管理员（全部）</option>
-                <option v-if="userStore.role === 'super_admin'" value="super_admin">超级管理员</option>
-              </select>
-            </div>
+              <div class="form-item">
+                <label>系统岗位级别:</label>
+                <select
+                  v-model="formData.role"
+                  id="detailRole"
+                  :disabled="!userStore.hasPerm('system.user_manage')"
+                >
+                  <option value="employee">普通员工</option>
+                  <option value="operator">操作员</option>
+                  <option value="admin">管理员</option>
+                  <option v-if="userStore.role === 'super_admin'" value="super_admin">超级管理员</option>
+                </select>
+              </div>
 
-            <div class="form-item">
-              <label style="font-weight: bold; color: #555; margin-bottom: 8px; display: block;">细粒度权限:</label>
-              <div style="font-size: 12px; color: #999; margin-bottom: 12px;">（仅当角色为"员工"或"操作员"时生效）</div>
-              <div style="max-height: 200px; overflow-y: auto; border: 1px solid #f0f0f0; border-radius: 6px; padding: 12px;">
-                <div v-for="group in permissionsConfig" :key="group.group" style="margin-bottom: 16px;">
-                  <div style="font-weight: bold; color: #333; margin-bottom: 8px;">{{ group.label }}</div>
-                  <div v-for="perm in group.children" :key="perm.key" style="margin-bottom: 6px;">
-                    <label style="cursor: pointer; display: flex; align-items: center;">
+              <div id="permissionsWrapper">
+                <label style="font-weight: bold; display:block; margin-top:15px; color:#606266;">
+                  模块功能权限分配 (勾选即刻赋权):
+                </label>
+                <div class="perm-tree" id="permTreeContainer">
+                  <div
+                    v-for="group in permissionsConfig"
+                    :key="group.group"
+                    class="perm-group"
+                  >
+                    <label>
                       <input
                         type="checkbox"
-                        :value="perm.key"
-                        v-model="formData.permissions"
-                        style="margin-right: 8px;"
+                        :checked="isGroupChecked(group)"
+                        @change="toggleGroupPerms(group, $event)"
                       />
-                      <span style="font-size: 13px; color: #666;">{{ perm.label }}</span>
+                      {{ group.label }}
                     </label>
+                    <div class="perm-children">
+                      <label
+                        v-for="perm in group.children"
+                        :key="perm.key"
+                      >
+                        <input
+                          type="checkbox"
+                          :value="perm.key"
+                          v-model="formData.permissions"
+                        />
+                        {{ perm.label }}
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -219,14 +235,38 @@ const permissionsConfig = [
 ]
 
 const isEditMode = computed(() => currentEditUser.value !== null)
-const detailTitle = computed(() => (isEditMode.value ? '编辑账户信息' : '新建系统账户'))
+const detailTitle = computed(() => (isEditMode.value ? '用户信息配置' : '用户信息配置'))
+
+// 检查分组是否全选
+const isGroupChecked = (group) => {
+  return group.children.every(perm => formData.value.permissions.includes(perm.key))
+}
+
+// 切换分组权限
+const toggleGroupPerms = (group, event) => {
+  const checked = event.target.checked
+  if (checked) {
+    group.children.forEach(perm => {
+      if (!formData.value.permissions.includes(perm.key)) {
+        formData.value.permissions.push(perm.key)
+      }
+    })
+  } else {
+    group.children.forEach(perm => {
+      const index = formData.value.permissions.indexOf(perm.key)
+      if (index > -1) {
+        formData.value.permissions.splice(index, 1)
+      }
+    })
+  }
+}
 
 // 获取角色名称
 const getRoleName = (role) => {
   const roleMap = {
-    super_admin: '超级管理员',
-    admin: '管理员',
-    operator: '操作员',
+    super_admin: '超管',
+    admin: '管理',
+    operator: '操作',
     employee: '员工'
   }
   return roleMap[role] || '未知'
@@ -281,41 +321,56 @@ const loadUserDetail = (user) => {
 
 // 保存用户数据
 const saveUserData = async () => {
-  if (!formData.value.username.trim()) {
-    return alert('登录账号不能为空')
-  }
+  if (!isEditMode.value) {
+    // 新建用户
+    const username = formData.value.username.trim()
+    const password = formData.value.password.trim()
+    if (!username || !password) {
+      return alert('账号密码不能为空！')
+    }
 
-  if (!isEditMode.value && !formData.value.password.trim()) {
-    return alert('新建账户必须设置初始密码')
-  }
-
-  loading.value = true
-
-  try {
     const payload = {
-      username: formData.value.username,
-      name: formData.value.name,
+      username: username,
+      name: formData.value.name.trim(),
+      password: password,
       role: formData.value.role,
       permissions: formData.value.permissions
     }
 
-    if (formData.value.password.trim()) {
-      payload.password = formData.value.password
+    loading.value = true
+    try {
+      const res = await request({ url: '/users', method: 'POST', data: payload })
+      if (res) {
+        window.location.reload()
+      }
+    } catch (error) {
+      alert('账号已存在或无权限！')
+    } finally {
+      loading.value = false
+    }
+  } else {
+    // 编辑现有用户权限
+    const payload = {
+      name: formData.value.name.trim(),
+      permissions: formData.value.permissions,
+      role: formData.value.role
     }
 
-    if (isEditMode.value) {
-      await request({ url: `/users/${formData.value.username}`, method: 'PUT', data: payload })
-    } else {
-      await request({ url: '/users', method: 'POST', data: payload })
+    loading.value = true
+    try {
+      const res = await request({
+        url: `/users/${currentEditUser.value.username}/permissions`,
+        method: 'PUT',
+        data: payload
+      })
+      if (res) {
+        window.location.reload()
+      }
+    } catch (error) {
+      alert('更新失败，权限不足')
+    } finally {
+      loading.value = false
     }
-
-    alert('保存成功')
-    showDetailPanel.value = false
-    await refreshUserList()
-  } catch (error) {
-    alert('保存失败')
-  } finally {
-    loading.value = false
   }
 }
 
@@ -364,19 +419,310 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.user-list-item {
-  padding: 14px;
+/* 通用隐藏类 */
+.hidden {
+  display: none !important;
+}
+
+/* 弹窗遮罩层 */
+.old-modal-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 100000;
+}
+
+/* 弹窗容器 */
+.old-modal-box {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  max-height: 90vh;
+  width: 95%;
+  max-width: 700px;
+  animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes scaleUp {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* 弹窗头部 */
+.old-modal-header {
+  padding: 20px 32px;
   border-bottom: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 20px;
+  font-weight: bold;
+  background: #fafafa;
+}
+
+/* 关闭按钮 */
+.old-close-x {
   cursor: pointer;
-  transition: background 0.2s;
+  font-size: 28px;
+  color: #999;
+  line-height: 1;
+  transition: color 0.2s;
+}
+
+.old-close-x:hover {
+  color: #ff4d4f;
+}
+
+/* 弹窗内容区 */
+.old-modal-body {
+  overflow-y: auto;
+  padding: 32px;
+}
+
+/* 弹窗底部 */
+.old-modal-footer {
+  padding: 20px 32px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  background: #fafafa;
+}
+
+/* 用户管理容器 */
+.user-manage-container {
+  display: flex;
+  gap: 24px;
+  min-height: 450px;
+}
+
+/* 左侧用户列表面板 */
+.user-list-panel {
+  width: 35%;
+  border-right: 1px solid #eee;
+  padding-right: 20px;
+  overflow-y: auto;
+  max-height: 500px;
+}
+
+/* 右侧用户详情面板 */
+.user-detail-panel {
+  width: 65%;
+  padding-left: 10px;
+}
+
+/* 用户列表项 */
+.user-list-item {
+  padding: 16px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: 0.2s;
+  background: #fff;
 }
 
 .user-list-item:hover {
-  background: #f5f5f5;
+  border-color: #1890ff;
+  background: #f0f7ff;
 }
 
 .user-list-item.active {
-  background: #e6f4ff;
-  border-left: 3px solid #1890ff;
+  border-color: #1890ff;
+  background: #e6f7ff;
+  box-shadow: 0 2px 8px rgba(24, 144, 255, 0.1);
+}
+
+/* 表单项 */
+.form-item {
+  margin-bottom: 20px;
+  width: 100%;
+  text-align: left;
+}
+
+.form-item label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 16px;
+  color: #555;
+  font-weight: bold;
+}
+
+.form-item input,
+.form-item select,
+.form-item textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  outline: none;
+  font-size: 16px;
+  font-family: inherit;
+}
+
+.form-item input:focus,
+.form-item select:focus {
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+/* 权限树 */
+.perm-tree {
+  margin-top: 20px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 20px;
+  background: #f9f9f9;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* 权限分组 */
+.perm-group {
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px dashed #e4e7ed;
+}
+
+.perm-group:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+  padding-bottom: 0;
+}
+
+.perm-group > label {
+  font-weight: bold;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  margin-bottom: 12px;
+  cursor: pointer;
+}
+
+/* 权限子项 */
+.perm-children {
+  margin-left: 32px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.perm-children label {
+  font-size: 15px;
+  color: #666;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+/* 按钮样式 */
+.btn-primary {
+  background: #1890ff;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.btn-primary:hover {
+  background: #40a9ff;
+}
+
+.btn-default {
+  background: #f0f2f5;
+  color: #666;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn-default:hover {
+  background: #e4e7ed;
+  color: #333;
+}
+
+.btn-success {
+  background: #52c41a;
+  color: #fff;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.btn-success:hover {
+  background: #73d13d;
+}
+
+.btn-success:disabled {
+  background: #d9d9d9;
+  color: #999;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  background: #fdecee;
+  color: #f46e83;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.btn-danger:hover {
+  background: #fbcdd1;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .user-manage-container {
+    flex-direction: column;
+  }
+
+  .user-list-panel {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid #eee;
+    padding-right: 0;
+    padding-bottom: 20px;
+    margin-bottom: 20px;
+    max-height: 250px;
+  }
+
+  .user-detail-panel {
+    width: 100%;
+    padding-left: 0;
+  }
 }
 </style>

@@ -3,7 +3,26 @@
         "username": "1",
         "password": "741200",
         "role": "super_admin",
-        "permissions": [],
+        "permissions": [
+            "pending.add",
+            "pending.view_detail",
+            "pending.complete",
+            "pending.edit",
+            "pending.copy",
+            "pending.delete",
+            "completed.ship",
+            "completed.uncomplete",
+            "completed.copy",
+            "completed.delete",
+            "shipped.audit",
+            "shipped.view_receipt",
+            "shipped.upload_receipt",
+            "shipped.delete_receipt",
+            "material.add",
+            "material.edit",
+            "material.delete",
+            "system.user_manage"
+        ],
         "name": "千城"
     },
     {
@@ -27,9 +46,28 @@
     },
     {
         "username": "222",
-        "name": "千城",
+        "name": "45",
         "password": "123456",
         "role": "admin",
-        "permissions": []
+        "permissions": [
+            "completed.ship",
+            "completed.uncomplete",
+            "completed.copy",
+            "completed.delete",
+            "shipped.audit",
+            "shipped.view_receipt",
+            "shipped.upload_receipt",
+            "shipped.delete_receipt",
+            "material.add",
+            "material.edit",
+            "material.delete",
+            "system.user_manage",
+            "pending.add",
+            "pending.view_detail",
+            "pending.complete",
+            "pending.edit",
+            "pending.copy",
+            "pending.delete"
+        ]
     }
 ]

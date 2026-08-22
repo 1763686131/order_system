@@ -99,26 +99,8 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 .c-btn:active { transform: scale(0.95); }
 .c-btn-outline { background: #fff; border: 1px solid #D0D7DE; color: #8C99A8; } .c-btn-blue { background: #1890ff; color: #fff; box-shadow: 0 4px 12px rgba(24,144,255,0.35); } .c-btn-pink { background: #E84C68; color: #fff; box-shadow: 0 4px 12px rgba(232,76,104,0.35); } .c-btn-green { background: #4CC478; color: #fff; box-shadow: 0 4px 12px rgba(76,196,120,0.35); }
 
-/* ================= Tab 2: 已出库订单网格 ================= */
+/* ================= Tab 2: 已出库订单 ================= */
 #tab-2 { flex-wrap: wrap; height: auto; overflow: visible; gap: 32px; }
-.shipped-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(480px, 1fr)); gap: 32px; width: 100%; }
-.shipped-card { display: flex; background: #ffffff; border-radius: 16px; box-shadow: 0 4px 16px rgba(0,0,0,0.04); overflow: hidden; position: relative; border: 1px solid #ebedf0; transition: transform 0.2s, box-shadow 0.2s; }
-.shipped-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); transform: translateY(-2px); }
-.ribbon { position: absolute; top: 12px; right: -42px; background-color: #D5EFE3; color: #4CBCA0; padding: 4px 44px; font-size: 12px; font-weight: bold; transform: rotate(45deg); text-align: center; box-shadow: 0 2px 4px rgba(0,0,0,0.05); z-index: 10; }
-.shipped-left { flex: 1.4; padding: 20px 24px; display: flex; flex-direction: column; border-right: 1px dashed #e8e8e8; min-width: 0; }
-.shipped-title { font-size: 18px; font-weight: 800; color: #111; margin-bottom: 8px; line-height: 1.5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.shipped-title.expanded { white-space: normal; word-break: break-all; }
-.expand-list-text { display: none; font-size: 13px; color: #8A7BFE; text-align: right; margin-top: 0; margin-bottom: 12px; cursor: pointer; font-weight: bold; position: relative; z-index: 11; }
-.s-tags-wrapper { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.shipped-left .s-tags-wrapper:last-of-type { margin-bottom: 16px; }
-.receipt-pure-tag{ display: inline-flex; align-items: center; justify-content: center; padding: 3px 10px; font-size: 11px; font-weight: bold; background-color: #FDECEE; border: 1px solid #FDECEE; color: #F26E83; border-radius: 3px; user-select: none; }
-.s-tag { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; }
-.s-tag-purple { background-color: #EDEBFF; color: #8A7BFE; } .s-tag-cyan { background-color: #DDF8F6; color: #2BCBC7; } .s-tag-green { background-color: #E2F6ED; color: #69D5A5; } .s-tag-pink { background-color: #FDECEE; color: #F26E83; }
-.shipped-bottom { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; }
-.s-time-label { font-size: 12px; color: #999; margin-bottom: 4px; } .s-time-value { font-size: 18px; font-weight: bold; color: #111; letter-spacing: 0.5px; }
-.s-detail-btn { background-color: #EDEBFF; color: #8A7BFE; padding: 6px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; transition: background-color 0.2s; } .s-detail-btn:hover { background-color: #E2E0FB; }
-.shipped-right { flex: 1; padding: 20px 24px; display: flex; flex-direction: column; justify-content: center; background-color: #FAFAFA; }
-.s-sub-title { font-size: 13px; color: #8C99A8; text-align: center; font-weight: bold; margin-bottom: 6px; } .s-main-title { font-size: 20px; font-weight: bold; color: #222; text-align: center; margin-bottom: 16px; } .s-info-list { font-size: 14px; color: #666; line-height: 1.6; } .s-info-list div { margin-bottom: 4px; }
 
 /* ================= Tab 3: 原材料数据 ================= */
 #tab-3 { flex-wrap: wrap; height: auto; overflow: visible; gap: 32px; }
@@ -161,21 +143,13 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
   
   #tab-0, #tab-1 { height: auto !important; flex-wrap: wrap !important; overflow: visible !important; padding-bottom: 0 !important; gap: 24px !important; }
   #tab-0 .flip-container, #tab-1 .completed-card { flex: 1 1 100% !important; min-width: 100% !important; height: auto !important; }
-  
+
   /* 完全拔除高度死锁，且决不触碰 overflow 破坏3D翻转！ */
   .flipper { height: auto !important; }
   .order-card { height: auto !important; min-height: 100% !important; padding-bottom: 24px !important; }
   .product-list { flex: 1 1 auto !important; min-height: auto !important; height: auto !important; overflow: visible !important; }
   .front .product-list, .back .product-list, .completed-card .product-list { overflow: visible !important; }
   .card-part-indicator { display: none !important; }
-
-  .shipped-grid { grid-template-columns: 1fr !important; gap: 16px !important; }
-  .shipped-card { flex-direction: column !important; }
-  .shipped-left { border-right: none !important; border-bottom: 1px dashed #e8e8e8 !important; padding: 16px !important; }
-  .shipped-right { padding: 16px !important; align-items: flex-start !important; }
-  .s-sub-title, .s-main-title { text-align: left !important; }
-  .ribbon { top: 10px !important; right: -40px !important; padding: 4px 44px !important; font-size: 11px !important; }
-  .shipped-title, .expand-list-text { margin-right: 65px !important; }
 
   .timeline-items { grid-template-columns: 1fr !important; }
   .material-card { flex-direction: column !important; align-items: flex-start !important; border-radius: 20px !important; padding: 24px !important; width: 100% !important; }

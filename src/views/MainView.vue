@@ -67,8 +67,8 @@
       class="tab-pane"
       :class="{ active: currentTab === 3 }"
     >
-      <div style="padding: 20px; text-align: center; color: #999;">
-        原材料数据模块
+      <div style="padding: 40px 20px;">
+        <MaterialDisplay />
       </div>
     </div>
 
@@ -102,6 +102,7 @@ import { useOrderStore } from '@/stores/order'
 import { useUserStore } from '@/stores/user'
 import OrderList from '@/views/front/OrderList.vue'
 import ShippedOrderList from '@/views/front/ShippedOrderList.vue'
+import MaterialDisplay from '@/views/front/MaterialDisplay.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import SearchOrderModal from '@/components/common/SearchOrderModal.vue'
@@ -277,8 +278,10 @@ const handleDateFilter = ({ type, startDate, endDate }) => {
     orderStore.nomiActiveFilterStart = startDate
     orderStore.nomiActiveFilterEnd = endDate
   } else if (type === 'material') {
-    // 原材料筛选逻辑（待实现）
-    console.log('Material filter:', startDate, endDate)
+    // 触发原材料日期筛选事件
+    window.dispatchEvent(new CustomEvent('filter-material-date', {
+      detail: { startDate, endDate }
+    }))
   }
 }
 

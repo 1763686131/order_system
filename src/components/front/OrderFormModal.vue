@@ -177,13 +177,13 @@ const calculatedSum = computed(() => {
   const calculations = []
 
   for (const line of lines) {
-    // 匹配包含数学运算的行（支持 +、-、*、/）
-    const mathMatch = line.match(/([\d.]+[\s]*[+\-*/][\s]*[\d.]+[\s]*[+\-*/\s\d.]*)/g)
-
-    if (mathMatch) {
-      mathMatch.forEach(expr => {
-        try {
-          // 安全计算表达式
+    // 匹配包含数字和运算符的表达式（更宽松的匹配）
+    // 只要行中包含数字和运算符就尝试计算
+    if (/[\d.]+/.test(line) && /[+\-*/]/.test(line)) {
+      try {
+        // 提取所有数字和运算符组成的表达式
+        const expr = line.match(/([\d.+\-*/\s()]+)/)?.[0]
+        if (expr) {
           const cleanExpr = expr.trim()
           // 使用 Function 构造函数安全计算
           const result = Function('"use strict"; return (' + cleanExpr + ')')()
@@ -192,10 +192,10 @@ const calculatedSum = computed(() => {
             totalSum += result
             calculations.push(`${cleanExpr} = ${result}`)
           }
-        } catch (e) {
-          // 忽略计算错误
         }
-      })
+      } catch (e) {
+        // 忽略计算错误
+      }
     }
   }
 
