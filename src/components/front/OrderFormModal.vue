@@ -421,9 +421,9 @@ const submitOrder = async () => {
 
   try {
     if (isEditMode.value) {
-      // 修改订单
+      // 修改订单 - 使用专门的编辑端点
       await request({
-        url: `/orders/${currentOrderId.value}`,
+        url: `/orders/${currentOrderId.value}/edit`,
         method: 'PUT',
         data: formData.value
       })

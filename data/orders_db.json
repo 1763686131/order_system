@@ -419,7 +419,7 @@
             "id": 166,
             "title": "",
             "status": "pending",
-            "type": 0,
+            "type": 1,
             "date": "2026-08-21 09:41",
             "completed_date": "",
             "shipped_date": "",
@@ -431,7 +431,7 @@
             "receiver_phone": "18888888888",
             "receiver_address": "北京市",
             "goods_name": "棒棒糖 +50kg",
-            "goods_weight": "",
+            "goods_weight": "550",
             "goods_quantity": "",
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
@@ -619,14 +619,14 @@
         {
             "id": 175,
             "title": "",
-            "status": "pending",
+            "status": "shipped",
             "type": 0,
             "date": "2026-08-24 16:06",
-            "completed_date": "",
-            "shipped_date": "",
-            "shipping_method": "",
+            "completed_date": "2026-08-25 00:31",
+            "shipped_date": "2026-08-25 00:31",
+            "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "",
+            "logistics_no": "暂未录入单号",
             "order_client": "李四",
             "receiver_name": "李四",
             "receiver_phone": "18888888888",
@@ -636,7 +636,8 @@
             "goods_quantity": "",
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
-            "remark": ""
+            "remark": "",
+            "audit_state": 0
         },
         {
             "id": 176,
@@ -660,6 +661,28 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 0
+        },
+        {
+            "id": 177,
+            "title": "",
+            "status": "pending",
+            "type": 1,
+            "date": "2026-08-24 16:30",
+            "completed_date": "",
+            "shipped_date": "",
+            "shipping_method": "",
+            "shipping_custom": "",
+            "logistics_no": "",
+            "order_client": "李四",
+            "receiver_name": "李四",
+            "receiver_phone": "18888888888",
+            "receiver_address": "北京市",
+            "goods_name": "棒棒糖 +50kg",
+            "goods_weight": "50kg",
+            "goods_quantity": "",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": ""
         }
     ]
 }
