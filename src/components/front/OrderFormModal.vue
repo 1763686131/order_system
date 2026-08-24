@@ -291,7 +291,7 @@ const smartParse = () => {
     formData.value.type = text.startsWith('【中固订单】') ? 0 : 1
 
     const dataMap = {}
-    for (let i = 1; i < lines.length; i++) {
+    for (let i = 0; i < lines.length; i++) {
       const line = lines[i]
       const separatorIndex = line.includes('：') ? line.indexOf('：') : line.indexOf(':')
       if (separatorIndex !== -1) {
@@ -301,6 +301,7 @@ const smartParse = () => {
       }
     }
 
+    formData.value.order_client = dataMap['制单归属'] || ''
     formData.value.receiver_name = dataMap['姓名'] || ''
     formData.value.receiver_phone = dataMap['电话'] || ''
     formData.value.receiver_address = dataMap['地址'] || ''
@@ -427,6 +428,11 @@ const submitOrder = async () => {
         data: formData.value
       })
       alert('订单修改成功！')
+      handleClose()
+      // 延迟100ms后刷新，确保后端数据已更新
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('refresh-orders'))
+      }, 100)
     } else {
       // 新建订单
       await request({
@@ -435,10 +441,9 @@ const submitOrder = async () => {
         data: formData.value
       })
       alert('订单发布成功！')
+      handleClose()
+      window.dispatchEvent(new CustomEvent('refresh-orders'))
     }
-
-    handleClose()
-    window.dispatchEvent(new CustomEvent('refresh-orders'))
   } catch (error) {
     alert('操作失败：' + (error.message || '未知错误'))
   }

@@ -647,12 +647,14 @@ const closeLargePreview = () => {
 
 // 旋转按钮悬停效果
 const handleRotateBtnHover = (event, isHover) => {
+  // 确保获取到的是按钮本身，而不是SVG子元素
+  const btn = event.currentTarget
   if (isHover) {
-    event.target.style.transform = 'scale(1.1)'
-    event.target.style.background = 'rgba(255, 255, 255, 0.4)'
+    btn.style.transform = 'translate(-50%, -50%) scale(1.1)'
+    btn.style.background = 'rgba(255, 255, 255, 0.4)'
   } else {
-    event.target.style.transform = 'scale(1)'
-    event.target.style.background = 'rgba(255, 255, 255, 0.25)'
+    btn.style.transform = 'translate(-50%, -50%) scale(1)'
+    btn.style.background = 'rgba(255, 255, 255, 0.25)'
   }
 }
 

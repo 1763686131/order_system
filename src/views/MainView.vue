@@ -360,11 +360,6 @@ onMounted(() => {
 
   // 监听刷新事件
   window.addEventListener('refresh-orders', fetchOrders)
-  window.addEventListener('refresh-materials', () => {
-    if (nomiStore.currentTab === 3) {
-      window.location.reload()
-    }
-  })
 
   // 监听切换 tab 事件
   window.addEventListener('switch-tab', (e) => {

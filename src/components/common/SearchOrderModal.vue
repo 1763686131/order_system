@@ -230,6 +230,7 @@ const renderSearchPage = () => {
     clipText += `包装：${item.goods_packaging || ''}\n`
     clipText += `服务：${item.logistics_service || ''}\n`
     clipText += `备注：${item.remark || ''}\n`
+    clipText += `制单归属：${item.order_client || ''}\n`
 
     const safeClipText = encodeURIComponent(clipText)
 
@@ -239,7 +240,7 @@ const renderSearchPage = () => {
       receiptBtnHtml = `<button class="btn-action-sm" onclick="window.viewSearchReceipt(event, ${item.id}, '${item.receipt_img_url}')" style="background-color: #FDECEE; color: #F26E83; border: 1px solid #FDECEE;">回单</button>`
     } else {
       // 没有回单，显示上传按钮
-      receiptBtnHtml = `<button class="btn-action-sm" onclick="window.uploadSearchReceipt(event, ${item.id})" style="background-color: #FDECEE; color: #F26E83; border: 1px solid #FDECEE;">上传回单</button>`
+      receiptBtnHtml = `<button class="btn-action-sm" onclick="window.uploadSearchReceipt(event, ${item.id})">上传回单</button>`
     }
 
     const delay = (index % SEARCH_PAGE_SIZE) * 0.05
