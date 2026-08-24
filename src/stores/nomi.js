@@ -21,6 +21,7 @@ export const useNomiStore = defineStore('nomi', () => {
   const showSpeechBubble = ref(false)
   const speechBubbleType = ref('text') // 'text' | 'filter'
   const filterType = ref('shipped') // 'shipped' | 'material'
+  const currentTab = ref(0) // 0: 未完成订单, 1: 已完成订单, 2: 已出库订单, 3: 原材料数据
 
   // 定时器
   let speechTimer = null
@@ -42,6 +43,18 @@ export const useNomiStore = defineStore('nomi', () => {
 
     const randomPhrase = aiPhrases[Math.floor(Math.random() * aiPhrases.length)]
     speechBubbleContent.value = randomPhrase
+    speechBubbleType.value = 'text'
+    showSpeechBubble.value = true
+
+    if (speechTimer) clearTimeout(speechTimer)
+    speechTimer = setTimeout(() => {
+      hideSpeechBubble()
+    }, 4000)
+  }
+
+  // 显示指定文本气泡（登录欢迎语等），4 秒后自动隐藏
+  const showWelcomeMessage = (text) => {
+    speechBubbleContent.value = text
     speechBubbleType.value = 'text'
     showSpeechBubble.value = true
 
@@ -92,12 +105,14 @@ export const useNomiStore = defineStore('nomi', () => {
     showSpeechBubble,
     speechBubbleType,
     filterType,
+    currentTab,
     aiPhrases,
 
     // 方法
     toggleMenu,
     closeMenu,
     showRandomSpeech,
+    showWelcomeMessage,
     hideSpeechBubble,
     showDateFilterBubble,
     startFilterTimer,

@@ -62,8 +62,20 @@
         <div
           id="receiptContent"
           v-show="mode === 'receipt' || mode === 'view_receipt'"
-          style="display: none; position: relative; width: 100%; height: 160px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 8px; margin-bottom: 8px; overflow: hidden;"
-          @dragover.prevent
+          :style="{
+            position: 'relative',
+            width: '100%',
+            height: '160px',
+            background: isDragging ? '#fff0f6' : '#fafafa',
+            border: isDragging ? '2px dashed #eb2f96' : '1px dashed #d9d9d9',
+            borderRadius: '8px',
+            marginBottom: '8px',
+            overflow: 'hidden',
+            transition: 'all 0.2s'
+          }"
+          @dragenter.prevent="handleDragEnter"
+          @dragover.prevent="handleDragOver"
+          @dragleave.prevent="handleDragLeave"
           @drop.prevent="handleDrop"
         >
           <input
@@ -78,7 +90,18 @@
           <div
             id="receiptUploadPrompt"
             v-show="!previewSrc"
-            style="position: absolute; top: 0; left: 0; display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%; justify-content: center; cursor: pointer;"
+            :style="{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              width: '100%',
+              height: '100%',
+              justifyContent: 'center',
+              cursor: 'pointer'
+            }"
             @click="$refs.receiptImageInput.click()"
           >
             <div style="font-size: 48px; color: #ccc; line-height: 1; font-weight: 300;">+</div>
@@ -87,19 +110,48 @@
 
           <img
             id="receiptImagePreview"
+            ref="receiptImagePreview"
             :src="previewSrc"
             v-show="previewSrc"
-            style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; background: #eee; cursor: zoom-in;"
+            :style="{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              background: '#eee',
+              cursor: 'zoom-in'
+            }"
             @click="openLargeImagePreview"
           />
 
           <div
             id="receiptRotateBtn"
             v-show="previewSrc && mode === 'receipt'"
-            style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 50%; cursor: pointer; z-index: 10; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.4); transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);"
+            :style="{
+              display: previewSrc && mode === 'receipt' ? 'flex' : 'none',
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              transform: 'translate(-50%, -50%)',
+              width: '56px',
+              height: '56px',
+              background: 'rgba(255, 255, 255, 0.25)',
+              backdropFilter: 'blur(10px)',
+              WebkitBackdropFilter: 'blur(10px)',
+              borderRadius: '50%',
+              cursor: 'pointer',
+              zIndex: 10,
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+              border: '1px solid rgba(255,255,255,0.4)',
+              transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'
+            }"
             @click.stop="rotateReceiptImage"
-            @mouseover="$event.target.style.background='rgba(255,255,255,0.4)'; $event.target.style.transform='translate(-50%, -50%) scale(1.1)'"
-            @mouseout="$event.target.style.background='rgba(255,255,255,0.25)'; $event.target.style.transform='translate(-50%, -50%) scale(1)'"
+            @mouseover="handleRotateBtnHover($event, true)"
+            @mouseout="handleRotateBtnHover($event, false)"
           >
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1890ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 2v6h-6"></path>
@@ -147,7 +199,7 @@
           <!-- 回单查看模式按钮 -->
           <button
             id="btnRealDeleteReceipt"
-            v-show="mode === 'view_receipt' && userStore.hasPerm('shipped.delete_receipt')"
+            v-show="mode === 'view_receipt' && previewSrc && userStore.hasPerm('shipped.delete_receipt')"
             @click="deleteRealReceiptImage"
             style="display: none;"
           >
@@ -155,17 +207,54 @@
           </button>
           <button
             id="btnDownloadReceipt"
-            v-show="mode === 'view_receipt'"
+            v-show="mode === 'view_receipt' && previewSrc"
             @click="downloadReceiptImage"
             style="display: none;"
           >
             下载凭证
+          </button>
+          <button
+            id="btnUploadReceiptInView"
+            v-show="mode === 'view_receipt' && !previewSrc && userStore.hasPerm('shipped.upload_receipt')"
+            @click="switchToUploadMode"
+            style="display: none;"
+          >
+            上传回单
           </button>
 
           <!-- 返回按钮（所有模式都显示） -->
           <button id="btnModalReturn" @click="closeShippedActionModal">返回</button>
         </div>
       </div>
+    </div>
+
+    <!-- 大图预览模态框 -->
+    <div
+      v-if="showLargePreview"
+      :style="{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100vw',
+        height: '100vh',
+        background: 'rgba(0, 0, 0, 0.9)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 100001,
+        cursor: 'zoom-out'
+      }"
+      @click="closeLargePreview"
+    >
+      <img
+        :src="previewSrc"
+        :style="{
+          maxWidth: '90%',
+          maxHeight: '90%',
+          objectFit: 'contain'
+        }"
+        @click.stop
+      />
     </div>
   </teleport>
 </template>
@@ -195,6 +284,8 @@ const previewSrc = ref('')
 const originalReceiptImg = ref(new Image())
 const currentReceiptRotation = ref(0)
 const receiptImageInput = ref(null)
+const isDragging = ref(false)
+const showLargePreview = ref(false)
 
 // 加载物流公司标签
 const fetchCarrierTags = async () => {
@@ -281,6 +372,14 @@ const open = (orderId, modalMode) => {
   }
 
   visible.value = true
+}
+
+// 从查看模式切换到上传模式
+const switchToUploadMode = () => {
+  mode.value = 'receipt'
+  modalTitle.value = '回单凭证管理'
+  modalSubtitle.value = '请上传或管理该订单的发货回单图片'
+  clearReceiptImage()
 }
 
 // 关闭弹窗
@@ -383,6 +482,7 @@ const previewReceiptImage = (event) => {
 
 // 拖拽上传
 const handleDrop = (event) => {
+  isDragging.value = false
   if (mode.value !== 'receipt') return
 
   const file = event.dataTransfer.files[0]
@@ -396,6 +496,8 @@ const handleDrop = (event) => {
       originalReceiptImg.value.src = e.target.result
     }
     reader.readAsDataURL(file)
+  } else if (file) {
+    alert('安全拦截：请拖入有效的图片文件（如 jpg, png 等）！')
   }
 }
 
@@ -434,11 +536,11 @@ const submitReceiptImage = async () => {
   formData.append('receipt_image', fileToUpload)
 
   try {
-    const response = await fetch(`/api/orders/${id}/upload_receipt`, {
+    const response = await fetch('/api/orders/' + id + '/upload_receipt', {
       method: 'POST',
       headers: {
-        'Username': String(userStore.user.username),
-        'Role': String(userStore.user.role)
+        'Username': String(userStore.user?.username || ''),
+        'Role': String(userStore.user?.role || '')
       },
       body: formData
     })
@@ -451,6 +553,7 @@ const submitReceiptImage = async () => {
       alert('上传失败，请检查网络或后端接口。')
     }
   } catch (e) {
+    console.error('上传错误:', e)
     alert('网络通信异常！')
   }
 }
@@ -533,7 +636,23 @@ const rotateReceiptImage = (e) => {
 // 查看大图预览
 const openLargeImagePreview = () => {
   if (previewSrc.value) {
-    window.open(previewSrc.value, '_blank')
+    showLargePreview.value = true
+  }
+}
+
+// 关闭大图预览
+const closeLargePreview = () => {
+  showLargePreview.value = false
+}
+
+// 旋转按钮悬停效果
+const handleRotateBtnHover = (event, isHover) => {
+  if (isHover) {
+    event.target.style.transform = 'scale(1.1)'
+    event.target.style.background = 'rgba(255, 255, 255, 0.4)'
+  } else {
+    event.target.style.transform = 'scale(1)'
+    event.target.style.background = 'rgba(255, 255, 255, 0.25)'
   }
 }
 

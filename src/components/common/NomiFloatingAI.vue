@@ -23,19 +23,19 @@
     <!-- 菜单项 -->
     <div class="fab-menu">
       <div
-        v-if="currentTab === 'pending'"
+        v-if="showAddMaterial"
         class="fab-item"
-        @click="$emit('create-order')"
+        @click="handleCreateMaterial"
       >
-        录入订单
+        录入原材料数据
       </div>
 
       <div
-        v-if="currentTab === 'materials'"
+        v-if="showAddOrder"
         class="fab-item"
-        @click="$emit('create-material')"
+        @click="handleCreateOrder"
       >
-        录入原材料
+        录入订单信息
       </div>
 
       <div
@@ -46,33 +46,26 @@
       </div>
 
       <div
-        v-if="currentTab === 'shipped'"
-        class="fab-item"
-        @click="handleDateFilter('shipped')"
-      >
-        筛选出库单
-      </div>
-
-      <div
-        v-if="currentTab === 'materials'"
-        class="fab-item"
-        @click="handleDateFilter('material')"
-      >
-        筛选原材料
-      </div>
-
-      <div
-        v-if="hasUserManagePerm"
+        v-if="userStore.hasPerm('system.user_manage')"
         class="fab-item"
         @click="handleUserManage"
       >
-        账户管理
+        账户控制
+      </div>
+
+      <div
+        class="fab-item"
+        style="color: #ff4d4f;"
+        @click="handleLogout"
+      >
+        退出登录
       </div>
     </div>
 
     <!-- 气泡提示 -->
     <div
       v-if="nomiStore.showSpeechBubble"
+      id="aiSpeechBubble"
       ref="speechBubble"
       class="ai-speech-bubble show"
       @mouseenter="nomiStore.stopFilterTimer"
@@ -111,14 +104,12 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useNomiStore } from '@/stores/nomi'
+import { useUserStore } from '@/stores/user'
 
 const props = defineProps({
-  currentTab: {
-    type: String,
-    default: 'pending'
-  },
   userRole: {
     type: String,
     default: ''
@@ -133,11 +124,32 @@ const emit = defineEmits([
   'create-order',
   'create-material',
   'search',
-  'date-filter',
   'user-manage'
 ])
 
+const router = useRouter()
+const route = useRoute()
 const nomiStore = useNomiStore()
+const userStore = useUserStore()
+
+// 根据权限和当前tab控制菜单项显示
+const showAddOrder = computed(() => {
+  // 在原材料页面隐藏（防止用户点错，不分权限）
+  // Tab 3: 原材料数据
+  if (nomiStore.currentTab === 3) return false
+
+  // 其他页面根据权限显示
+  return userStore.hasPerm('pending.add')
+})
+
+const showAddMaterial = computed(() => {
+  // 在订单页面（未完成、已完成、已出库）隐藏（防止用户点错，不分权限）
+  // Tab 0: 未完成订单, Tab 1: 已完成订单, Tab 2: 已出库订单
+  if (nomiStore.currentTab === 0 || nomiStore.currentTab === 1 || nomiStore.currentTab === 2) return false
+
+  // 其他页面根据权限显示
+  return userStore.hasPerm('material.add')
+})
 
 // 拖拽相关状态
 const fabContainer = ref(null)
@@ -232,22 +244,37 @@ const handleClickOutside = (e) => {
   }
 }
 
+// 录入原材料
+const handleCreateMaterial = () => {
+  nomiStore.closeMenu()
+  emit('create-material')
+}
+
+// 录入订单
+const handleCreateOrder = () => {
+  nomiStore.closeMenu()
+  emit('create-order')
+}
+
 // 搜索
 const handleSearch = () => {
   nomiStore.closeMenu()
   emit('search')
 }
 
-// 日期筛选
-const handleDateFilter = (type) => {
-  nomiStore.closeMenu()
-  nomiStore.showDateFilterBubble(type)
-}
-
 // 账户管理
 const handleUserManage = () => {
   nomiStore.closeMenu()
   emit('user-manage')
+}
+
+// 退出登录
+const handleLogout = () => {
+  nomiStore.closeMenu()
+  if (confirm('确定要退出登录吗？')) {
+    userStore.logout()
+    window.location.reload()
+  }
 }
 
 // 格式化日期
@@ -287,11 +314,13 @@ const handleConfirmFilter = () => {
 
 // 执行筛选
 const executeFilter = () => {
-  emit('date-filter', {
-    type: nomiStore.filterType,
-    startDate: filterStartDate.value,
-    endDate: filterEndDate.value
-  })
+  window.dispatchEvent(new CustomEvent('date-filter', {
+    detail: {
+      type: nomiStore.filterType,
+      startDate: filterStartDate.value,
+      endDate: filterEndDate.value
+    }
+  }))
   nomiStore.hideSpeechBubble()
 }
 
@@ -397,18 +426,18 @@ onUnmounted(() => {
   right: 85px;
   bottom: 12px;
   background: #ffffff;
-  padding: 16px 20px;
-  border-radius: 16px 16px 0 16px;
+  padding: 18px 20px;
+  border-radius: 16px;
   box-shadow: 0 6px 20px rgba(0,0,0,0.1);
   font-size: 15px;
   font-weight: bold;
   color: #1A4B84;
-  white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
   transform: translateX(15px);
   transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  min-width: 360px;
 }
 
 .ai-speech-bubble::after {
@@ -544,7 +573,8 @@ onUnmounted(() => {
   font-size: 14px;
   text-align: left;
   pointer-events: auto;
-  width: 290px;
+  width: 100%;
+  max-width: 340px;
 }
 
 .nomi-filter-title {

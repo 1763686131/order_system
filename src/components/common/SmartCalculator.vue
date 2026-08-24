@@ -3,43 +3,42 @@
     v-show="visible"
     id="smartCalculator"
     :class="{ active: visible }"
-    style="position: fixed; bottom: 20px; right: 20px; width: 300px; background: white; border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); z-index: 9999; transform: translateY(0); transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);"
   >
     <!-- 标题栏 -->
-    <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 14px 16px; border-radius: 12px 12px 0 0; display: flex; justify-content: space-between; align-items: center;">
-      <div style="font-weight: bold; font-size: 16px;">🧮 计算器</div>
-      <button @click="close" style="background: rgba(255,255,255,0.2); border: none; color: white; width: 28px; height: 28px; border-radius: 50%; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; transition: all 0.2s;">×</button>
+    <div class="calc-header">
+      <div class="calc-title">🧮 计算器</div>
+      <button @click="close" class="calc-close">×</button>
     </div>
 
     <!-- 显示区 -->
-    <div style="padding: 16px; background: #f5f5f5;">
-      <div id="calcHistory" style="min-height: 20px; font-size: 13px; color: #999; text-align: right; margin-bottom: 6px;">{{ history }}</div>
-      <div id="calcDisplay" style="font-size: 32px; font-weight: bold; color: #333; text-align: right; min-height: 40px; word-break: break-all;">{{ display }}</div>
+    <div class="calc-display-area">
+      <div id="calcHistory" class="calc-history">{{ history }}</div>
+      <div id="calcDisplay" class="calc-display">{{ display }}</div>
     </div>
 
     <!-- 按键区 -->
-    <div style="padding: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
-      <button @click="handleInput('clear')" class="calc-btn" style="background: #ff4d4f; color: white;">C</button>
-      <button @click="handleInput('back')" class="calc-btn" style="background: #faad14; color: white;">←</button>
-      <button @click="handleInput('/')" class="calc-btn calc-operator">÷</button>
-      <button @click="handleInput('*')" class="calc-btn calc-operator">×</button>
+    <div class="calc-buttons">
+      <button @click="handleInput('clear')" class="calc-btn calc-op calc-op-clear">C</button>
+      <button @click="handleInput('back')" class="calc-btn calc-op">←</button>
+      <button @click="handleInput('/')" class="calc-btn calc-op">÷</button>
+      <button @click="handleInput('*')" class="calc-btn calc-op">×</button>
 
       <button @click="handleInput('7')" class="calc-btn">7</button>
       <button @click="handleInput('8')" class="calc-btn">8</button>
       <button @click="handleInput('9')" class="calc-btn">9</button>
-      <button @click="handleInput('-')" class="calc-btn calc-operator">-</button>
+      <button @click="handleInput('-')" class="calc-btn calc-op">-</button>
 
       <button @click="handleInput('4')" class="calc-btn">4</button>
       <button @click="handleInput('5')" class="calc-btn">5</button>
       <button @click="handleInput('6')" class="calc-btn">6</button>
-      <button @click="handleInput('+')" class="calc-btn calc-operator">+</button>
+      <button @click="handleInput('+')" class="calc-btn calc-op">+</button>
 
       <button @click="handleInput('1')" class="calc-btn">1</button>
       <button @click="handleInput('2')" class="calc-btn">2</button>
       <button @click="handleInput('3')" class="calc-btn">3</button>
-      <button @click="handleInput('=')" class="calc-btn" style="background: #52c41a; color: white; grid-row: span 2;">=</button>
+      <button @click="handleInput('=')" class="calc-btn calc-eq">=</button>
 
-      <button @click="handleInput('0')" class="calc-btn" style="grid-column: span 2;">0</button>
+      <button @click="handleInput('0')" class="calc-btn calc-zero">0</button>
       <button @click="handleInput('.')" class="calc-btn">.</button>
     </div>
   </div>
@@ -141,37 +140,149 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.calc-btn {
+#smartCalculator {
+  position: fixed;
+  right: -300px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 280px;
+  background: #ffffff;
+  border-radius: 20px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.25), 0 0 2px rgba(0,0,0,0.1);
+  z-index: 999999;
   padding: 16px;
-  font-size: 18px;
-  font-weight: bold;
-  border: none;
-  border-radius: 8px;
-  background: white;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  transition: all 0.35s cubic-bezier(0.25, 0.8, 0.25, 1);
+  opacity: 0;
+  visibility: hidden;
 }
 
-.calc-btn:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+#smartCalculator.active {
+  right: 24px;
+  opacity: 1;
+  visibility: visible;
+}
+
+@media (max-width: 768px) {
+  #smartCalculator {
+    right: auto !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) scale(0.9) !important;
+    width: 85% !important;
+    max-width: 320px !important;
+  }
+  #smartCalculator.active {
+    transform: translate(-50%, -50%) scale(1) !important;
+  }
+}
+
+.calc-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #888;
+  font-weight: bold;
+}
+
+.calc-title {
+  font-size: 14px;
+  color: #888;
+  font-weight: bold;
+}
+
+.calc-close {
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  color: #999;
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.calc-close:hover {
+  color: #ff4d4f;
+}
+
+.calc-display-area {
+  background: #f5f7fa;
+  border-radius: 12px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  text-align: right;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.calc-history {
+  min-height: 18px;
+  font-size: 13px;
+  color: #888;
+  margin-bottom: 4px;
+}
+
+.calc-display {
+  font-size: 32px;
+  font-weight: bold;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow-x: auto;
+}
+
+.calc-buttons {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+}
+
+.calc-btn {
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: bold;
+  background: #f0f2f5;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.1s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .calc-btn:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+  transform: scale(0.92);
+  background: #e4e7ed;
 }
 
-.calc-operator {
-  background: #e6f4ff;
+.calc-op {
+  background: #e6f7ff;
   color: #1890ff;
-  font-weight: bold;
 }
 
-#smartCalculator:not(.active) {
-  transform: translateY(400px);
-  opacity: 0;
-  pointer-events: none;
+.calc-op:active {
+  background: #bae0ff;
+}
+
+.calc-op-clear {
+  background: #fff1f0;
+  color: #ff4d4f;
+}
+
+.calc-eq {
+  background: #1890ff;
+  color: #fff;
+  border-radius: 18px;
+  grid-row: span 2;
+  height: auto;
+}
+
+.calc-eq:active {
+  background: #096dd9;
+}
+
+.calc-zero {
+  grid-column: span 2;
 }
 </style>

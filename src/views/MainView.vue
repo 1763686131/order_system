@@ -6,7 +6,7 @@
         v-for="(tab, index) in tabs"
         :key="index"
         class="nav-item"
-        :class="{ active: currentTab === index }"
+        :class="{ active: nomiStore.currentTab === index }"
         @click="switchTab(index)"
       >
         {{ tab.label }}
@@ -17,7 +17,7 @@
     <div
       id="tab-0"
       class="tab-pane"
-      :class="{ active: currentTab === 0 }"
+      :class="{ active: nomiStore.currentTab === 0 }"
     >
       <OrderList
         :orders="pendingOrders"
@@ -32,7 +32,7 @@
     <div
       id="tab-1"
       class="tab-pane"
-      :class="{ active: currentTab === 1 }"
+      :class="{ active: nomiStore.currentTab === 1 }"
     >
       <OrderList
         :orders="completedOrders"
@@ -48,7 +48,7 @@
     <div
       id="tab-2"
       class="tab-pane"
-      :class="{ active: currentTab === 2 }"
+      :class="{ active: nomiStore.currentTab === 2 }"
     >
       <ShippedOrderList
         :orders="shippedOrders"
@@ -65,7 +65,7 @@
     <div
       id="tab-3"
       class="tab-pane"
-      :class="{ active: currentTab === 3 }"
+      :class="{ active: nomiStore.currentTab === 3 }"
     >
       <div style="padding: 40px 20px;">
         <MaterialDisplay />
@@ -84,13 +84,11 @@
 
     <!-- 小圆智能助手 -->
     <NomiFloatingAI
-      :current-tab="getCurrentTabName()"
       :user-role="userStore.role"
-      :has-user-manage-perm="userStore.hasPerm('user.manage') || userStore.role === 'super_admin' || userStore.role === 'admin'"
+      :has-user-manage-perm="userStore.role === 'super_admin' || userStore.role === 'admin'"
       @create-order="handleCreateOrder"
       @create-material="handleCreateMaterial"
       @search="handleSearchOrder"
-      @date-filter="handleDateFilter"
       @user-manage="handleUserManage"
     />
   </div>
@@ -100,6 +98,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useOrderStore } from '@/stores/order'
 import { useUserStore } from '@/stores/user'
+import { useNomiStore } from '@/stores/nomi'
 import OrderList from '@/views/front/OrderList.vue'
 import ShippedOrderList from '@/views/front/ShippedOrderList.vue'
 import MaterialDisplay from '@/views/front/MaterialDisplay.vue'
@@ -115,8 +114,8 @@ import NomiFloatingAI from '@/components/common/NomiFloatingAI.vue'
 
 const orderStore = useOrderStore()
 const userStore = useUserStore()
+const nomiStore = useNomiStore()
 
-const currentTab = ref(0)
 const navBarHidden = ref(false)
 
 // 弹窗引用
@@ -138,7 +137,9 @@ const tabs = [
 
 // 计算属性：根据状态筛选订单
 const pendingOrders = computed(() => {
-  return orderStore.allOrders.filter(o => o.status === 'pending')
+  return orderStore.allOrders
+    .filter(o => o.status === 'pending')
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
 })
 
 const completedOrders = computed(() => {
@@ -181,17 +182,28 @@ const shippedOrders = computed(() => {
 
 // 切换 Tab
 const switchTab = (index) => {
-  currentTab.value = index
+  nomiStore.currentTab = index
   orderStore.setCurrentTab(index)
 
   if (index === 0 || index === 1 || index === 2) {
     fetchOrders()
   }
+
+  // 自动触发日期筛选气泡
+  if (index === 2) {
+    setTimeout(() => {
+      window.triggerDateFilterSpeech?.('shipped')
+    }, 100)
+  } else if (index === 3) {
+    setTimeout(() => {
+      window.triggerDateFilterSpeech?.('material')
+    }, 100)
+  }
 }
 
 // 获取订单数据
 const fetchOrders = async () => {
-  if (currentTab.value !== 0 && currentTab.value !== 1 && currentTab.value !== 2) return
+  if (nomiStore.currentTab !== 0 && nomiStore.currentTab !== 1 && nomiStore.currentTab !== 2) return
 
   try {
     await orderStore.fetchOrders()
@@ -254,7 +266,7 @@ const handleViewReceipt = (orderId) => {
 // 获取当前 Tab 名称（供小圆组件使用）
 const getCurrentTabName = () => {
   const tabNames = ['pending', 'completed', 'shipped', 'materials']
-  return tabNames[currentTab.value] || 'pending'
+  return tabNames[nomiStore.currentTab] || 'pending'
 }
 
 // 小圆组件：创建订单
@@ -320,13 +332,36 @@ onMounted(() => {
   // 加载订单数据
   fetchOrders()
 
+  // 3秒自动轮询
+  const pollingInterval = setInterval(() => {
+    fetchOrders()
+  }, 3000)
+
   // 监听滚动事件
   window.addEventListener('scroll', handleScroll, { passive: true })
+
+  // 🖱️ 鼠标滚轮横向滚动 (Tab 0 和 Tab 1)
+  const tab0 = document.getElementById('tab-0')
+  const tab1 = document.getElementById('tab-1')
+
+  const handleHorizontalScroll = (e) => {
+    if (e.deltaY !== 0) {
+      e.preventDefault()
+      e.currentTarget.scrollLeft += e.deltaY
+    }
+  }
+
+  if (tab0) {
+    tab0.addEventListener('wheel', handleHorizontalScroll, { passive: false })
+  }
+  if (tab1) {
+    tab1.addEventListener('wheel', handleHorizontalScroll, { passive: false })
+  }
 
   // 监听刷新事件
   window.addEventListener('refresh-orders', fetchOrders)
   window.addEventListener('refresh-materials', () => {
-    if (currentTab.value === 3) {
+    if (nomiStore.currentTab === 3) {
       window.location.reload()
     }
   })
@@ -348,6 +383,9 @@ onMounted(() => {
   window.triggerShippedActionModal = (orderId, mode) => {
     shippedActionModal.value?.open(orderId, mode)
   }
+  window.openShippedOrderActionModal = (orderId, mode, imgUrl) => {
+    shippedActionModal.value?.open(orderId, mode)
+  }
   window.openEditOrderModal = (orderId) => {
     orderFormModal.value?.openEdit(orderId)
   }
@@ -364,32 +402,73 @@ onMounted(() => {
     smartCalculator.value?.toggle()
   }
 
+  // 日期筛选气泡触发
+  window.triggerDateFilterSpeech = (filterType) => {
+    const nomiStore = useNomiStore()
+    nomiStore.showDateFilterBubble(filterType)
+  }
+
   // 复制订单信息到剪贴板
   window.copyOrderInfo = (orderId) => {
     const order = orderStore.allOrders.find(o => o.id === orderId)
     if (!order) return
 
-    let copyText = `订单归属: ${order.order_client || '未命名'}\n`
-    copyText += `订单日期: ${order.date || '未知'}\n`
-    copyText += `收货人: ${order.receiver_name || '未填'}\n`
-    copyText += `电话: ${order.receiver_phone || '未填'}\n`
-    copyText += `地址: ${order.receiver_address || '未填'}\n`
-    copyText += `货物:\n${order.goods_name || '无'}\n`
-    copyText += `包装: ${order.goods_packaging || '无'}\n`
-    copyText += `重量: ${order.goods_weight || '无'}\n`
-    copyText += `件数: ${order.goods_quantity || '无'}\n`
-    copyText += `备注: ${order.remark || '无'}`
+    // 判断是否是员工角色
+    const isEmployee = userStore.role === 'employee' || userStore.role === 'operator'
 
-    navigator.clipboard.writeText(copyText).then(() => {
-      alert('订单信息已复制到剪贴板！')
-    }).catch(() => {
+    // 订单类型文本
+    const typeText = (order.type == 1) ? '绝缘订单' : '中固订单'
+
+    // 名称字符数量限制
+    let nameLimit = (order.type == 1) ? 8 : 9
+    let shortGoodsName = (order.goods_name || '').replace(/\n/g, '').trim().substring(0, nameLimit)
+
+    // 构建复制文本（原生格式）
+    let clipText = `【${typeText}】\n`
+    if (order.receiver_name) clipText += `姓名：${order.receiver_name}\n`
+    if (!isEmployee && order.receiver_phone) clipText += `电话：${order.receiver_phone}\n`
+    if (order.receiver_address) clipText += `地址：${order.receiver_address}\n`
+    if (shortGoodsName) clipText += `名称：${shortGoodsName}\n`
+    if (order.goods_weight) clipText += `重量：${order.goods_weight}\n`
+    if (order.goods_quantity) clipText += `件数：${order.goods_quantity}\n`
+    if (order.goods_packaging) clipText += `包装：${order.goods_packaging}\n`
+    if (!isEmployee && order.logistics_service) clipText += `服务：${order.logistics_service}\n`
+    if (order.remark) clipText += `备注：${order.remark}\n`
+
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(clipText).then(() => {
+        alert('✅ 极简物流信息已成功复制！')
+      }).catch(() => {
+        fallbackCopyTextToClipboard(clipText)
+      })
+    } else {
+      fallbackCopyTextToClipboard(clipText)
+    }
+  }
+
+  // 降级复制方案
+  const fallbackCopyTextToClipboard = (text) => {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.style.position = 'fixed'
+    textArea.style.top = '0'
+    textArea.style.left = '0'
+    textArea.style.opacity = '0'
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+    try {
+      document.execCommand('copy')
+      alert('✅ 极简物流信息已成功复制！')
+    } catch (err) {
       alert('复制失败，请手动复制')
-    })
+    }
+    document.body.removeChild(textArea)
   }
 
   // 删除订单
   window.deleteOrder = async (orderId) => {
-    if (!confirm('安全警告：您确定要彻底物理删除这条订单记录吗？此操作无法撤销！')) {
+    if (!confirm('严重安全警告：您确定要彻底物理删除这条订单记录吗？此操作无法撤销！')) {
       return
     }
 
@@ -400,37 +479,132 @@ onMounted(() => {
       alert('网络异常，删除失败')
     }
   }
-})
 
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll)
+  // 清理函数
+  onUnmounted(() => {
+    clearInterval(pollingInterval)
+    window.removeEventListener('scroll', handleScroll)
+  })
 })
 </script>
+
+<style>
+/* 全局body样式重置 */
+body {
+  background-color: #EDF5FC !important;
+  overflow-x: hidden !important;
+  padding: 160px 60px 80px 60px !important;
+  font-size: 18px !important;
+}
+
+/* 电脑端横向滚动 */
+@media screen and (min-width: 769px) {
+  body {
+    min-width: 1920px !important;
+    overflow: hidden !important;
+  }
+}
+
+/* 移动端padding调整 */
+@media (max-width: 768px) {
+  body {
+    padding: 160px 16px 20px 16px !important;
+    font-size: 15px !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+  }
+}
+</style>
 
 <style scoped>
 #mainSection {
   width: 100%;
   min-height: 100vh;
-  background: #f5f7fa;
+  background: #EDF5FC;
+  margin: -160px -60px -80px -60px;
+  padding: 160px 60px 80px 60px;
 }
 
 .tab-pane {
   display: none;
-  animation: fadeIn 0.3s ease-in-out;
 }
 
 .tab-pane.active {
-  display: block;
+  display: flex;
+  gap: 48px;
+  align-items: flex-start;
+  justify-content: flex-start;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+/* Tab 0 和 Tab 1 横向滚动布局 */
+#tab-0, #tab-1 {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  overflow-y: hidden;
+  height: calc(100vh - 280px);
+  align-items: stretch;
+  padding-top: 15px;
+  padding-bottom: 32px;
+  gap: 64px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+#tab-0::-webkit-scrollbar,
+#tab-1::-webkit-scrollbar {
+  display: none;
+}
+
+/* 电脑端横向滚动增强 */
+@media screen and (min-width: 769px) {
+  #tab-0.active, #tab-1.active {
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    gap: 30px !important;
+    width: 100vw !important;
+    margin-left: -60px !important;
+    padding: 0 20px 20px 20px !important;
+    box-sizing: border-box !important;
+    height: calc(100vh - 260px) !important;
+    align-items: stretch !important;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  #tab-0.active::-webkit-scrollbar,
+  #tab-1.active::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  /* 右侧隐形卡片留白 */
+  #tab-0.active::after,
+  #tab-1.active::after {
+    content: "" !important;
+    display: block !important;
+    flex: 0 0 20px !important;
+    height: 100% !important;
+    pointer-events: none !important;
+  }
+}
+
+/* Tab 2 和 Tab 3 保持默认布局 */
+#tab-2, #tab-3 {
+  flex-wrap: wrap;
+  height: auto;
+  overflow: visible;
+  gap: 32px;
+}
+
+/* 移动端响应 */
+@media (max-width: 768px) {
+  #tab-0, #tab-1 {
+    height: auto !important;
+    flex-wrap: wrap !important;
+    overflow: visible !important;
+    padding-bottom: 0 !important;
+    gap: 24px !important;
   }
 }
 </style>

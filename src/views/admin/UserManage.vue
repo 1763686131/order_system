@@ -59,7 +59,7 @@
                 <input
                   v-model="formData.username"
                   id="detailUsername"
-                  :disabled="isEditMode"
+                  :disabled="isEditMode || isSuperAdminLocked"
                   placeholder="输入账号名称"
                 />
               </div>
@@ -69,6 +69,7 @@
                 <input
                   v-model="formData.name"
                   id="detailName"
+                  :disabled="isSuperAdminLocked"
                   placeholder="输入员工的中文全名"
                 />
               </div>
@@ -80,9 +81,20 @@
                     v-model="formData.password"
                     id="detailPassword"
                     type="password"
+                    :disabled="isSuperAdminLocked"
                     :placeholder="isEditMode ? '留空则不修改密码' : '输入登录密码'"
                     style="flex:1;"
                   />
+                  <button
+                    v-if="isEditMode"
+                    class="btn-primary"
+                    id="btnUpdatePwd"
+                    :disabled="isSuperAdminLocked"
+                    @click="updateUserPassword"
+                    style="padding: 6px 16px; white-space: nowrap;"
+                  >
+                    立即改密
+                  </button>
                 </div>
               </div>
 
@@ -91,13 +103,19 @@
                 <select
                   v-model="formData.role"
                   id="detailRole"
-                  :disabled="!userStore.hasPerm('system.user_manage')"
+                  :disabled="isSuperAdminLocked"
+                  :style="{ display: isEditMode ? 'none' : 'block' }"
                 >
                   <option value="employee">普通员工</option>
-                  <option value="operator">操作员</option>
                   <option value="admin">管理员</option>
-                  <option v-if="userStore.role === 'super_admin'" value="super_admin">超级管理员</option>
                 </select>
+                <span
+                  v-if="isEditMode"
+                  id="detailRoleText"
+                  style="display: inline-block; padding: 12px 16px; background: #f5f5f5; border-radius: 6px; color: #666; font-size: 16px;"
+                >
+                  {{ getRoleName(formData.role) }}
+                </span>
               </div>
 
               <div id="permissionsWrapper">
@@ -114,6 +132,7 @@
                       <input
                         type="checkbox"
                         :checked="isGroupChecked(group)"
+                        :disabled="isSuperAdminLocked || (formData.role === 'admin' && isAdminRestrictedGroup(group))"
                         @change="toggleGroupPerms(group, $event)"
                       />
                       {{ group.label }}
@@ -126,6 +145,7 @@
                         <input
                           type="checkbox"
                           :value="perm.key"
+                          :disabled="isSuperAdminLocked || (formData.role === 'admin' && isAdminRestrictedPerm(perm.key))"
                           v-model="formData.permissions"
                         />
                         {{ perm.label }}
@@ -236,6 +256,7 @@ const permissionsConfig = [
 
 const isEditMode = computed(() => currentEditUser.value !== null)
 const detailTitle = computed(() => (isEditMode.value ? '用户信息配置' : '用户信息配置'))
+const isSuperAdminLocked = computed(() => isEditMode.value && formData.value.role === 'super_admin')
 
 // 检查分组是否全选
 const isGroupChecked = (group) => {
@@ -270,6 +291,18 @@ const getRoleName = (role) => {
     employee: '员工'
   }
   return roleMap[role] || '未知'
+}
+
+// 检查分组是否被管理员角色限制
+const isAdminRestrictedGroup = (group) => {
+  const restrictedGroups = ['system']
+  return restrictedGroups.includes(group.group)
+}
+
+// 检查权限是否被管理员角色限制
+const isAdminRestrictedPerm = (permKey) => {
+  const restrictedPerms = ['system.user_manage', 'system.settings']
+  return restrictedPerms.includes(permKey)
 }
 
 // 获取角色颜色
@@ -374,11 +407,38 @@ const saveUserData = async () => {
   }
 }
 
+// 立即改密
+const updateUserPassword = async () => {
+  if (!currentEditUser.value) return
+
+  const newPassword = formData.value.password.trim()
+  if (!newPassword) {
+    return alert('请输入新密码！')
+  }
+
+  loading.value = true
+  try {
+    const res = await request({
+      url: `/users/${currentEditUser.value.username}/password`,
+      method: 'PUT',
+      data: { password: newPassword }
+    })
+    if (res) {
+      formData.value.password = ''
+      window.location.reload()
+    }
+  } catch (error) {
+    alert('密码修改失败，权限不足')
+  } finally {
+    loading.value = false
+  }
+}
+
 // 删除当前用户
 const deleteCurrentUser = async () => {
   if (!currentEditUser.value) return
 
-  if (!confirm(`确定要物理删除账户 "${currentEditUser.value.username}" 吗？此操作无法撤销！`)) {
+  if (!confirm(`确定要彻底物理删除账户 [${currentEditUser.value.username}] 吗？`)) {
     return
   }
 
