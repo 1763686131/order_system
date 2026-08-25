@@ -5,6 +5,7 @@ dist-ssr
 .DS_Store
 
 uploads
+frontend
 
 # Editor
 .vscode/*
