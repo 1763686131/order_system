@@ -4,14 +4,15 @@
       v-if="visible"
       id="shippedOrderActionModal"
       class="modal-overlay"
-      @click.self="handleClose"
+      style="display: flex;"
+      @click.self="closeShippedActionModal"
     >
       <div class="modal-content" style="width: 420px; border-radius: 12px; padding: 24px;">
         <div class="modal-header" style="margin-bottom: 20px;">
-          <div class="modal-title" id="actionModalTitle" style="font-size: 18px; font-weight: bold; color: #333;">
+          <div id="actionModalTitle" style="font-size: 18px; font-weight: bold; color: #333;">
             {{ modalTitle }}
           </div>
-          <div class="modal-subtitle" id="actionModalSubtitle" style="font-size: 13px; color: #777; margin-top: 4px;">
+          <div id="actionModalSubtitle" style="font-size: 13px; color: #777; margin-top: 4px;">
             {{ modalSubtitle }}
           </div>
         </div>
@@ -19,7 +20,7 @@
         <input id="actionTargetOrderId" type="hidden" :value="targetOrderId" />
 
         <!-- 审核填写物流单号窗口 -->
-        <div id="auditContent" v-show="mode === 'audit'" style="display: block;">
+        <div id="auditContent" style="display: block;">
           <div class="form-item" style="margin-bottom: 20px;">
             <label for="auditCarrierName" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
               物流公司 / 承运车队名称
@@ -61,25 +62,13 @@
         <!-- 回单内容区 -->
         <div
           id="receiptContent"
-          v-show="mode === 'receipt' || mode === 'view_receipt'"
-          :style="{
-            position: 'relative',
-            width: '100%',
-            height: '160px',
-            background: isDragging ? '#fff0f6' : '#fafafa',
-            border: isDragging ? '2px dashed #eb2f96' : '1px dashed #d9d9d9',
-            borderRadius: '8px',
-            marginBottom: '8px',
-            overflow: 'hidden',
-            transition: 'all 0.2s'
-          }"
+          style="display: none; position: relative; width: 100%; height: 160px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 8px; margin-bottom: 8px; overflow: hidden;"
           @dragenter.prevent="handleDragEnter"
           @dragover.prevent="handleDragOver"
           @dragleave.prevent="handleDragLeave"
           @drop.prevent="handleDrop"
         >
           <input
-            ref="receiptImageInput"
             id="receiptImageInput"
             type="file"
             accept="image/*"
@@ -89,20 +78,8 @@
 
           <div
             id="receiptUploadPrompt"
-            v-show="!previewSrc"
-            :style="{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              width: '100%',
-              height: '100%',
-              justifyContent: 'center',
-              cursor: 'pointer'
-            }"
-            @click="$refs.receiptImageInput.click()"
+            style="position: absolute; top: 0; left: 0; display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%; justify-content: center; cursor: pointer;"
+            @click="triggerFileInput"
           >
             <div style="font-size: 48px; color: #ccc; line-height: 1; font-weight: 300;">+</div>
             <div style="color: #999; font-size: 13px; margin-top: 8px;">点击此处上传回单图片</div>
@@ -110,45 +87,14 @@
 
           <img
             id="receiptImagePreview"
-            ref="receiptImagePreview"
-            :src="previewSrc"
-            v-show="previewSrc"
-            :style="{
-              position: 'absolute',
-              top: 0,
-              left: 0,
-              width: '100%',
-              height: '100%',
-              objectFit: 'contain',
-              background: '#eee',
-              cursor: 'zoom-in'
-            }"
+            src=""
+            style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; background: #eee; cursor: zoom-in;"
             @click="openLargeImagePreview"
           />
 
           <div
             id="receiptRotateBtn"
-            v-show="previewSrc && mode === 'receipt'"
-            :style="{
-              display: previewSrc && mode === 'receipt' ? 'flex' : 'none',
-              position: 'absolute',
-              top: '50%',
-              left: '50%',
-              transform: 'translate(-50%, -50%)',
-              width: '56px',
-              height: '56px',
-              background: 'rgba(255, 255, 255, 0.25)',
-              backdropFilter: 'blur(10px)',
-              WebkitBackdropFilter: 'blur(10px)',
-              borderRadius: '50%',
-              cursor: 'pointer',
-              zIndex: 10,
-              alignItems: 'center',
-              justifyContent: 'center',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
-              border: '1px solid rgba(255,255,255,0.4)',
-              transition: 'all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)'
-            }"
+            style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 50%; cursor: pointer; z-index: 10; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.4); transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);"
             @click.stop="rotateReceiptImage"
             @mouseover="handleRotateBtnHover($event, true)"
             @mouseout="handleRotateBtnHover($event, false)"
@@ -162,67 +108,12 @@
 
         <!-- 按钮组 -->
         <div class="modal-btn-group" style="display: flex; gap: 12px; justify-content: center; margin-top: 24px; width: 100%;">
-          <!-- 审核模式按钮 -->
-          <button
-            id="btnAuditRevoke"
-            v-show="mode === 'audit'"
-            @click="submitRevokeShipOrder"
-          >
-            撤销出库
-          </button>
-          <button
-            id="btnAuditConfirm"
-            v-show="mode === 'audit'"
-            @click="submitAuditShipOrder"
-          >
-            确认审核
-          </button>
-
-          <!-- 回单上传模式按钮 -->
-          <button
-            id="btnReceiptDelete"
-            v-show="mode === 'receipt' && userStore.hasPerm('shipped.delete_receipt')"
-            @click="clearReceiptImage"
-            style="display: none;"
-          >
-            清除图片
-          </button>
-          <button
-            id="btnReceiptUpload"
-            v-show="mode === 'receipt' && userStore.hasPerm('shipped.upload_receipt')"
-            @click="submitReceiptImage"
-            style="display: none;"
-          >
-            确认上传
-          </button>
-
-          <!-- 回单查看模式按钮 -->
-          <button
-            id="btnRealDeleteReceipt"
-            v-show="mode === 'view_receipt' && previewSrc && userStore.hasPerm('shipped.delete_receipt')"
-            @click="deleteRealReceiptImage"
-            style="display: none;"
-          >
-            删除凭证
-          </button>
-          <button
-            id="btnDownloadReceipt"
-            v-show="mode === 'view_receipt' && previewSrc"
-            @click="downloadReceiptImage"
-            style="display: none;"
-          >
-            下载凭证
-          </button>
-          <button
-            id="btnUploadReceiptInView"
-            v-show="mode === 'view_receipt' && !previewSrc && userStore.hasPerm('shipped.upload_receipt')"
-            @click="switchToUploadMode"
-            style="display: none;"
-          >
-            上传回单
-          </button>
-
-          <!-- 返回按钮（所有模式都显示） -->
+          <button id="btnAuditRevoke" @click="submitRevokeShipOrder">撤销出库</button>
+          <button id="btnAuditConfirm" @click="submitAuditShipOrder">确认审核</button>
+          <button id="btnReceiptDelete" @click="clearReceiptImage">清除图片</button>
+          <button id="btnReceiptUpload" @click="submitReceiptImage">确认上传</button>
+          <button id="btnRealDeleteReceipt" @click="deleteRealReceiptImage">删除凭证</button>
+          <button id="btnDownloadReceipt" @click="downloadReceiptImage">下载凭证</button>
           <button id="btnModalReturn" @click="closeShippedActionModal">返回</button>
         </div>
       </div>
@@ -231,28 +122,12 @@
     <!-- 大图预览模态框 -->
     <div
       v-if="showLargePreview"
-      :style="{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        width: '100vw',
-        height: '100vh',
-        background: 'rgba(0, 0, 0, 0.9)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 100001,
-        cursor: 'zoom-out'
-      }"
+      style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; z-index: 100001; cursor: zoom-out;"
       @click="closeLargePreview"
     >
       <img
-        :src="previewSrc"
-        :style="{
-          maxWidth: '90%',
-          maxHeight: '90%',
-          objectFit: 'contain'
-        }"
+        :src="largePreviewSrc"
+        style="max-width: 90%; max-height: 90%; object-fit: contain;"
         @click.stop
       />
     </div>
@@ -260,7 +135,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, nextTick } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
 import request from '@/api/request'
@@ -269,7 +144,6 @@ const userStore = useUserStore()
 const orderStore = useOrderStore()
 
 const visible = ref(false)
-const mode = ref('audit')
 const targetOrderId = ref(null)
 const modalTitle = ref('已出库订单管理')
 const modalSubtitle = ref('请选择对当前出库订单的操作指令')
@@ -280,12 +154,13 @@ const logisticsNo = ref('')
 const carrierTags = ref([])
 
 // 回单相关
-const previewSrc = ref('')
-const originalReceiptImg = ref(new Image())
-const currentReceiptRotation = ref(0)
-const receiptImageInput = ref(null)
-const isDragging = ref(false)
 const showLargePreview = ref(false)
+const largePreviewSrc = ref('')
+const originalReceiptImg = new Image()
+let currentReceiptRotation = 0
+
+// 全局变量，用于存储当前所有订单（照搬原生）
+let allOrdersLocal = []
 
 // 加载物流公司标签
 const fetchCarrierTags = async () => {
@@ -303,97 +178,193 @@ const fetchCarrierTags = async () => {
 
 // 清除回单图片
 const clearReceiptImage = () => {
-  if (receiptImageInput.value) {
-    receiptImageInput.value.value = ''
+  const input = document.getElementById('receiptImageInput')
+  const preview = document.getElementById('receiptImagePreview')
+  const prompt = document.getElementById('receiptUploadPrompt')
+  const rotateBtn = document.getElementById('receiptRotateBtn')
+
+  if (input) input.value = ''
+  if (preview) {
+    preview.src = ''
+    preview.style.display = 'none'
   }
-  previewSrc.value = ''
-  currentReceiptRotation.value = 0
-  originalReceiptImg.value = new Image()
+  if (prompt) prompt.style.display = 'flex'
+  if (rotateBtn) rotateBtn.style.display = 'none'
+
+  currentReceiptRotation = 0
 }
 
-// 打开弹窗
-const open = (orderId, modalMode) => {
-  // 重置旋转按钮
-  currentReceiptRotation.value = 0
-
+// 打开弹窗 - 完全照搬原生逻辑
+const open = (orderId, mode) => {
   targetOrderId.value = orderId
-  mode.value = modalMode
 
-  const order = orderStore.allOrders.find(o => o.id === orderId)
+  // 同步本地订单数据
+  allOrdersLocal = orderStore.allOrders
 
-  // 状态 A：进入【审核模式】
-  if (modalMode === 'audit') {
-    modalTitle.value = '已出库订单管理'
-    modalSubtitle.value = '请选择对当前出库订单的操作指令'
+  const title = document.getElementById('actionModalTitle')
+  const subtitle = document.getElementById('actionModalSubtitle')
+  const auditContent = document.getElementById('auditContent')
+  const receiptContent = document.getElementById('receiptContent')
 
-    // 加载历史快捷标签
-    fetchCarrierTags()
+  const btnAuditRevoke = document.getElementById('btnAuditRevoke')
+  const btnAuditConfirm = document.getElementById('btnAuditConfirm')
+  const btnReceiptDelete = document.getElementById('btnReceiptDelete')
+  const btnReceiptUpload = document.getElementById('btnReceiptUpload')
+  const btnRealDelete = document.getElementById('btnRealDeleteReceipt')
+  const btnDownload = document.getElementById('btnDownloadReceipt')
 
-    // 解析回显已有的单号数据
-    if (order) {
-      let fullNo = order.logistics_no || ''
-      // 清理掉占位字符
-      if (fullNo === '暂未录入单号' || fullNo === '无单号记录' || fullNo === '暂无记录') {
-        fullNo = ''
-      }
-
-      if (fullNo.includes('-')) {
-        // 如果数据库中已经是 "安能物流-552546612" 格式，拆开回显
-        const parts = fullNo.split('-')
-        carrierName.value = parts[0] || ''
-        logisticsNo.value = parts.slice(1).join('-') || ''
-      } else {
-        carrierName.value = ''
-        logisticsNo.value = fullNo
-      }
-    }
-  }
-  // 状态 B：进入【回单模式】
-  else if (modalMode === 'receipt') {
-    modalTitle.value = '回单凭证管理'
-    modalSubtitle.value = '请上传或管理该订单的发货回单图片'
-
-    // 智能加载状态（如果该订单数据库已经有图则显图；如果没图，彻底清空上一张残留）
-    if (order && order.receipt_img_url) {
-      previewSrc.value = order.receipt_img_url
-    } else {
-      clearReceiptImage()
-    }
-  }
-  // 状态 C：进入【已存回单查看与真删除模式】
-  else if (modalMode === 'view_receipt') {
-    modalTitle.value = '回单凭证详情'
-    modalSubtitle.value = '您可以查看大图、下载图片或从系统中彻底删除该回单'
-
-    // 渲染已存在的图片回显
-    if (order && order.receipt_img_url) {
-      previewSrc.value = order.receipt_img_url
-    }
-  }
-
+  // 先显示弹窗
   visible.value = true
-}
 
-// 从查看模式切换到上传模式
-const switchToUploadMode = () => {
-  mode.value = 'receipt'
-  modalTitle.value = '回单凭证管理'
-  modalSubtitle.value = '请上传或管理该订单的发货回单图片'
-  clearReceiptImage()
+  // 等待DOM渲染
+  nextTick(() => {
+    // 重新获取DOM元素
+    const titleEl = document.getElementById('actionModalTitle')
+    const subtitleEl = document.getElementById('actionModalSubtitle')
+    const auditContentEl = document.getElementById('auditContent')
+    const receiptContentEl = document.getElementById('receiptContent')
+    const btnAuditRevokeEl = document.getElementById('btnAuditRevoke')
+    const btnAuditConfirmEl = document.getElementById('btnAuditConfirm')
+    const btnReceiptDeleteEl = document.getElementById('btnReceiptDelete')
+    const btnReceiptUploadEl = document.getElementById('btnReceiptUpload')
+    const btnRealDeleteEl = document.getElementById('btnRealDeleteReceipt')
+    const btnDownloadEl = document.getElementById('btnDownloadReceipt')
+
+    if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'none'
+    if (btnDownloadEl) btnDownloadEl.style.display = 'none'
+
+    // 状态 A：进入【审核模式】
+    if (mode === 'audit') {
+      modalTitle.value = '已出库订单管理'
+      modalSubtitle.value = '请选择对当前出库订单的操作指令'
+
+      auditContentEl.style.display = 'block'
+      receiptContentEl.style.display = 'none'
+
+      btnAuditRevokeEl.style.display = 'block'
+      btnAuditConfirmEl.style.display = 'block'
+      btnReceiptDeleteEl.style.display = 'none'
+      btnReceiptUploadEl.style.display = 'none'
+
+      // 加载历史快捷标签
+      fetchCarrierTags()
+
+      // 解析回显已有的单号数据
+      const order = allOrdersLocal.find(o => o.id === orderId)
+      if (order) {
+        let fullNo = order.logistics_no || ''
+        if (fullNo === '暂未录入单号' || fullNo === '无单号记录' || fullNo === '暂无记录') {
+          fullNo = ''
+        }
+
+        if (fullNo.includes('-')) {
+          const parts = fullNo.split('-')
+          carrierName.value = parts[0] || ''
+          logisticsNo.value = parts.slice(1).join('-') || ''
+        } else {
+          carrierName.value = ''
+          logisticsNo.value = fullNo
+        }
+      }
+    }
+    // 状态 B：进入【回单模式】
+    else if (mode === 'receipt') {
+      modalTitle.value = '回单凭证管理'
+      modalSubtitle.value = '请上传或管理该订单的发货回单图片'
+
+      auditContentEl.style.display = 'none'
+      receiptContentEl.style.display = 'flex'
+
+      btnAuditRevokeEl.style.display = 'none'
+      btnAuditConfirmEl.style.display = 'none'
+      btnReceiptDeleteEl.style.display = 'block'
+      btnReceiptUploadEl.style.display = 'block'
+
+      // 权限控制
+      if (userStore.hasPerm('shipped.delete_receipt')) {
+        btnReceiptDeleteEl.style.display = 'inline-block'
+      } else {
+        btnReceiptDeleteEl.style.display = 'none'
+      }
+
+      if (userStore.hasPerm('shipped.upload_receipt')) {
+        btnReceiptUploadEl.style.display = 'inline-block'
+      } else {
+        btnReceiptUploadEl.style.display = 'none'
+      }
+
+      // 清除图片按钮点击事件
+      if (btnReceiptDeleteEl) {
+        btnReceiptDeleteEl.onclick = function() {
+          clearReceiptImage()
+        }
+      }
+
+      // 智能加载状态
+      const order = allOrdersLocal.find(o => o.id === orderId)
+      const preview = document.getElementById('receiptImagePreview')
+      const prompt = document.getElementById('receiptUploadPrompt')
+
+      if (order && order.receipt_img_url) {
+        if (preview) {
+          preview.src = order.receipt_img_url
+          preview.style.display = 'block'
+        }
+        if (prompt) prompt.style.display = 'none'
+      } else {
+        clearReceiptImage()
+      }
+    }
+    // 状态 C：进入【已存回单查看与真删除模式】
+    else if (mode === 'view_receipt') {
+      modalTitle.value = '回单凭证详情'
+      modalSubtitle.value = '您可以查看大图、下载图片或从系统中彻底删除该回单'
+
+      auditContentEl.style.display = 'none'
+      receiptContentEl.style.display = 'flex'
+
+      btnAuditRevokeEl.style.display = 'none'
+      btnAuditConfirmEl.style.display = 'none'
+      btnReceiptUploadEl.style.display = 'none'
+      btnReceiptDeleteEl.style.display = 'none'
+
+      if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'block'
+      if (btnDownloadEl) btnDownloadEl.style.display = 'block'
+
+      // 渲染已存在的图片回显
+      const order = allOrdersLocal.find(o => o.id === orderId)
+      const preview = document.getElementById('receiptImagePreview')
+      const prompt = document.getElementById('receiptUploadPrompt')
+
+      if (btnDownloadEl) btnDownloadEl.style.display = 'inline-block'
+
+      if (userStore.hasPerm('shipped.delete_receipt')) {
+        if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'inline-block'
+      } else {
+        if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'none'
+      }
+
+      if (order && order.receipt_img_url) {
+        if (preview) {
+          preview.src = order.receipt_img_url
+          preview.style.display = 'block'
+        }
+        if (prompt) prompt.style.display = 'none'
+      }
+    }
+
+    // 统一唤起弹窗
+    document.getElementById('shippedOrderActionModal').style.display = 'flex'
+  })
 }
 
 // 关闭弹窗
 const closeShippedActionModal = () => {
   visible.value = false
-  // 在点击"返回"或者关闭弹窗的瞬间，顺手执行一次全清理，消灭任何残影
   clearReceiptImage()
 }
 
-const handleClose = () => {
-  closeShippedActionModal()
-}
-
-// 1. 撤销出库功能：将订单状态推回到已完成 (completed) 状态列表
+// 1. 撤销出库
 const submitRevokeShipOrder = async () => {
   const id = targetOrderId.value
   try {
@@ -409,14 +380,13 @@ const submitRevokeShipOrder = async () => {
   }
 }
 
-// 2. 确认审核功能：抓取物流名字和单号，拼接后统一提交
+// 2. 确认审核
 const submitAuditShipOrder = async () => {
   const id = targetOrderId.value
 
   const carrier = carrierName.value.trim()
   const no = logisticsNo.value.trim()
 
-  // 核心修复：把文字用减号拼接起来（例如：安能快运-552546612）
   let finalLogisticsNo = ''
   if (carrier && no) {
     finalLogisticsNo = `${carrier}-${no}`
@@ -428,8 +398,8 @@ const submitAuditShipOrder = async () => {
     finalLogisticsNo = '无单号记录'
   }
 
-  // (可选) 保存历史标签：如果是专车(发货方式为3)则不记录到词库
-  const order = orderStore.allOrders.find(o => o.id == id)
+  // 保存历史标签
+  const order = allOrdersLocal.find(o => o.id == id)
   const isSpecialTruck = order && (order.shipping_method === 3 || order.shipping_method === '3')
   if (!isSpecialTruck && carrier !== '') {
     try {
@@ -461,39 +431,61 @@ const submitAuditShipOrder = async () => {
   }
 }
 
-// 3. 回单图片选择与本地预览
-const previewReceiptImage = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      // 重置旋转状态
-      currentReceiptRotation.value = 0
+// 触发文件选择
+const triggerFileInput = () => {
+  const input = document.getElementById('receiptImageInput')
+  if (input) input.click()
+}
 
-      // 等待图片装载到内存中，以备 Canvas 提取
-      originalReceiptImg.value.onload = () => {
-        previewSrc.value = e.target.result
-      }
-      originalReceiptImg.value.src = e.target.result
-    }
-    reader.readAsDataURL(file)
+// 拖拽上传处理
+const handleDragEnter = (event) => {
+  const receiptContent = document.getElementById('receiptContent')
+  if (receiptContent) {
+    receiptContent.style.background = '#fff0f6'
+    receiptContent.style.border = '2px dashed #eb2f96'
   }
 }
 
-// 拖拽上传
+const handleDragOver = (event) => {
+  const receiptContent = document.getElementById('receiptContent')
+  if (receiptContent) {
+    receiptContent.style.background = '#fff0f6'
+    receiptContent.style.border = '2px dashed #eb2f96'
+  }
+}
+
+const handleDragLeave = (event) => {
+  const receiptContent = document.getElementById('receiptContent')
+  if (receiptContent) {
+    receiptContent.style.background = '#fafafa'
+    receiptContent.style.border = '1px dashed #d9d9d9'
+  }
+}
+
 const handleDrop = (event) => {
-  isDragging.value = false
-  if (mode.value !== 'receipt') return
+  const receiptContent = document.getElementById('receiptContent')
+  if (receiptContent) {
+    receiptContent.style.background = '#fafafa'
+    receiptContent.style.border = '1px dashed #d9d9d9'
+  }
 
   const file = event.dataTransfer.files[0]
   if (file && file.type.startsWith('image/')) {
     const reader = new FileReader()
-    reader.onload = (e) => {
-      currentReceiptRotation.value = 0
-      originalReceiptImg.value.onload = () => {
-        previewSrc.value = e.target.result
+    reader.onload = function(e) {
+      document.getElementById('receiptUploadPrompt').style.display = 'none'
+      const preview = document.getElementById('receiptImagePreview')
+
+      currentReceiptRotation = 0
+
+      originalReceiptImg.onload = function() {
+        preview.src = e.target.result
+        preview.style.display = 'block'
+
+        const rotateBtn = document.getElementById('receiptRotateBtn')
+        if (rotateBtn) rotateBtn.style.display = 'flex'
       }
-      originalReceiptImg.value.src = e.target.result
+      originalReceiptImg.src = e.target.result
     }
     reader.readAsDataURL(file)
   } else if (file) {
@@ -501,16 +493,39 @@ const handleDrop = (event) => {
   }
 }
 
+// 3. 回单图片选择与本地预览
+const previewReceiptImage = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    const reader = new FileReader()
+    reader.onload = function(e) {
+      document.getElementById('receiptUploadPrompt').style.display = 'none'
+      const preview = document.getElementById('receiptImagePreview')
+
+      currentReceiptRotation = 0
+
+      originalReceiptImg.onload = function() {
+        preview.src = e.target.result
+        preview.style.display = 'block'
+
+        const rotateBtn = document.getElementById('receiptRotateBtn')
+        if (rotateBtn) rotateBtn.style.display = 'flex'
+      }
+      originalReceiptImg.src = e.target.result
+    }
+    reader.readAsDataURL(file)
+  }
+}
+
 // 上传图片
 const submitReceiptImage = async () => {
   const id = targetOrderId.value
+  const preview = document.getElementById('receiptImagePreview')
 
-  // 拦截判定：如果没有图或者图是隐藏的，不允许上传
-  if (!previewSrc.value) {
+  if (!preview || !preview.src || preview.style.display === 'none') {
     return alert('请先点击虚线框选择一张图片！')
   }
 
-  // 将 Base64 重绘为标准的 File 二进制对象
   function dataURItoFile(dataURI, filename) {
     const arr = dataURI.split(',')
     const mime = arr[0].match(/:(.*?);/)[1]
@@ -525,18 +540,16 @@ const submitReceiptImage = async () => {
 
   let fileToUpload
   try {
-    // 利用系统时间戳给新图片命名，防止浏览器或后端缓存冲突
-    fileToUpload = dataURItoFile(previewSrc.value, `receipt_${Date.now()}.jpg`)
+    fileToUpload = dataURItoFile(preview.src, `receipt_${Date.now()}.jpg`)
   } catch (error) {
     return alert('图片数据解析异常，请重新选择图片！')
   }
 
-  // 原样打包进 FormData
   const formData = new FormData()
   formData.append('receipt_image', fileToUpload)
 
   try {
-    const response = await fetch('/api/orders/' + id + '/upload_receipt', {
+    const response = await fetch(`http://localhost:3000/api/orders/${id}/upload_receipt`, {
       method: 'POST',
       headers: {
         'Username': String(userStore.user?.username || ''),
@@ -585,57 +598,54 @@ const deleteRealReceiptImage = async () => {
 
 // 下载按钮
 const downloadReceiptImage = () => {
-  if (!previewSrc.value) {
+  const preview = document.getElementById('receiptImagePreview')
+  if (!preview || !preview.src) {
     return alert('没有可下载的图片')
   }
   const a = document.createElement('a')
-  a.href = previewSrc.value
+  a.href = preview.src
   a.download = `发货回单_${Date.now()}.jpg`
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
 }
 
-// HTML5 Canvas 物理级图像重绘与旋转引擎
+// 旋转图片
 const rotateReceiptImage = (e) => {
-  // 阻止事件冒泡，防止点击旋转按钮时误触触发底部的"大图预览"
   if (e) {
     e.stopPropagation()
     e.preventDefault()
   }
 
-  // 每次点击顺时针累加旋转 90 度
-  currentReceiptRotation.value = (currentReceiptRotation.value + 90) % 360
+  currentReceiptRotation = (currentReceiptRotation + 90) % 360
 
-  // 创建虚拟画布重绘图片
   const canvas = document.createElement('canvas')
   const ctx = canvas.getContext('2d')
+  const img = originalReceiptImg
 
-  // 根据角度交换宽高（90度和270度时，宽高互换）
-  if (currentReceiptRotation.value === 90 || currentReceiptRotation.value === 270) {
-    canvas.width = originalReceiptImg.value.height
-    canvas.height = originalReceiptImg.value.width
+  if (currentReceiptRotation === 90 || currentReceiptRotation === 270) {
+    canvas.width = img.height
+    canvas.height = img.width
   } else {
-    canvas.width = originalReceiptImg.value.width
-    canvas.height = originalReceiptImg.value.height
+    canvas.width = img.width
+    canvas.height = img.height
   }
 
-  // 将画布中心点移动到正中 -> 旋转画布 -> 重新铺上图片
   ctx.translate(canvas.width / 2, canvas.height / 2)
-  ctx.rotate((currentReceiptRotation.value * Math.PI) / 180)
-  ctx.drawImage(
-    originalReceiptImg.value,
-    -originalReceiptImg.value.width / 2,
-    -originalReceiptImg.value.height / 2
-  )
+  ctx.rotate((currentReceiptRotation * Math.PI) / 180)
+  ctx.drawImage(img, -img.width / 2, -img.height / 2)
 
-  // 把物理重绘后的新图像，以高质量 Base64 重新渲染到预览框中
-  previewSrc.value = canvas.toDataURL('image/jpeg', 0.95)
+  const preview = document.getElementById('receiptImagePreview')
+  if (preview) {
+    preview.src = canvas.toDataURL('image/jpeg', 0.95)
+  }
 }
 
-// 查看大图预览
+// 打开大图预览
 const openLargeImagePreview = () => {
-  if (previewSrc.value) {
+  const preview = document.getElementById('receiptImagePreview')
+  if (preview && preview.src) {
+    largePreviewSrc.value = preview.src
     showLargePreview.value = true
   }
 }
@@ -647,7 +657,6 @@ const closeLargePreview = () => {
 
 // 旋转按钮悬停效果
 const handleRotateBtnHover = (event, isHover) => {
-  // 确保获取到的是按钮本身，而不是SVG子元素
   const btn = event.currentTarget
   if (isHover) {
     btn.style.transform = 'translate(-50%, -50%) scale(1.1)'
@@ -658,108 +667,6 @@ const handleRotateBtnHover = (event, isHover) => {
   }
 }
 
-// 监听模式变化，同步显示样式
-watch(
-  () => mode.value,
-  (newMode) => {
-    // 强制更新 receiptContent 的 display 样式
-    setTimeout(() => {
-      const receiptContent = document.getElementById('receiptContent')
-      if (receiptContent) {
-        if (newMode === 'receipt' || newMode === 'view_receipt') {
-          receiptContent.style.display = 'flex'
-        } else {
-          receiptContent.style.display = 'none'
-        }
-      }
-
-      // 旋转按钮显示控制
-      const rotateBtn = document.getElementById('receiptRotateBtn')
-      if (rotateBtn) {
-        if (previewSrc.value && newMode === 'receipt') {
-          rotateBtn.style.display = 'flex'
-        } else {
-          rotateBtn.style.display = 'none'
-        }
-      }
-
-      // 按钮显示控制
-      const btnAuditRevoke = document.getElementById('btnAuditRevoke')
-      const btnAuditConfirm = document.getElementById('btnAuditConfirm')
-      const btnReceiptDelete = document.getElementById('btnReceiptDelete')
-      const btnReceiptUpload = document.getElementById('btnReceiptUpload')
-      const btnRealDelete = document.getElementById('btnRealDeleteReceipt')
-      const btnDownload = document.getElementById('btnDownloadReceipt')
-
-      if (newMode === 'audit') {
-        if (btnAuditRevoke) btnAuditRevoke.style.display = 'block'
-        if (btnAuditConfirm) btnAuditConfirm.style.display = 'block'
-        if (btnReceiptDelete) btnReceiptDelete.style.display = 'none'
-        if (btnReceiptUpload) btnReceiptUpload.style.display = 'none'
-        if (btnRealDelete) btnRealDelete.style.display = 'none'
-        if (btnDownload) btnDownload.style.display = 'none'
-      } else if (newMode === 'receipt') {
-        if (btnAuditRevoke) btnAuditRevoke.style.display = 'none'
-        if (btnAuditConfirm) btnAuditConfirm.style.display = 'none'
-        if (btnReceiptDelete && userStore.hasPerm('shipped.delete_receipt')) {
-          btnReceiptDelete.style.display = 'inline-block'
-        }
-        if (btnReceiptUpload && userStore.hasPerm('shipped.upload_receipt')) {
-          btnReceiptUpload.style.display = 'inline-block'
-        }
-        if (btnRealDelete) btnRealDelete.style.display = 'none'
-        if (btnDownload) btnDownload.style.display = 'none'
-      } else if (newMode === 'view_receipt') {
-        if (btnAuditRevoke) btnAuditRevoke.style.display = 'none'
-        if (btnAuditConfirm) btnAuditConfirm.style.display = 'none'
-        if (btnReceiptDelete) btnReceiptDelete.style.display = 'none'
-        if (btnReceiptUpload) btnReceiptUpload.style.display = 'none'
-        if (btnDownload) btnDownload.style.display = 'inline-block'
-        if (btnRealDelete && userStore.hasPerm('shipped.delete_receipt')) {
-          btnRealDelete.style.display = 'inline-block'
-        }
-      }
-    }, 0)
-  },
-  { immediate: true }
-)
-
-// 监听预览图变化，控制旋转按钮显示
-watch(
-  () => previewSrc.value,
-  (newSrc) => {
-    setTimeout(() => {
-      const rotateBtn = document.getElementById('receiptRotateBtn')
-      const preview = document.getElementById('receiptImagePreview')
-      const prompt = document.getElementById('receiptUploadPrompt')
-
-      if (rotateBtn) {
-        if (newSrc && mode.value === 'receipt') {
-          rotateBtn.style.display = 'flex'
-        } else {
-          rotateBtn.style.display = 'none'
-        }
-      }
-
-      if (preview) {
-        if (newSrc) {
-          preview.style.display = 'block'
-        } else {
-          preview.style.display = 'none'
-        }
-      }
-
-      if (prompt) {
-        if (newSrc) {
-          prompt.style.display = 'none'
-        } else {
-          prompt.style.display = 'flex'
-        }
-      }
-    }, 0)
-  }
-)
-
 // 暴露方法
 defineExpose({
   open
@@ -767,6 +674,28 @@ defineExpose({
 </script>
 
 <style scoped>
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  max-width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
 .modern-input {
   width: 100%;
   padding: 10px 14px;
@@ -781,5 +710,20 @@ defineExpose({
 .modern-input:focus {
   border-color: #1890ff;
   box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+}
+
+.modal-btn-group button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+  background: #1890ff;
+  color: white;
+}
+
+.modal-btn-group button:hover {
+  opacity: 0.8;
 }
 </style>

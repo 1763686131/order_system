@@ -4,6 +4,8 @@ dist-ssr
 *.local
 .DS_Store
 
+uploads
+
 # Editor
 .vscode/*
 !.vscode/extensions.json

@@ -116,7 +116,7 @@
               <label style="font-size: 13px; color: #666; font-weight: bold;"><span style="color:red;">*</span> 货物名称:</label>
               <textarea
                 v-model="formData.goods_name"
-                style="height:48px; width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px; resize: none;"
+                style="min-height:48px; width:100%; padding: 6px 10px; border:1px solid #d9d9d9; border-radius: 4px; resize: vertical;"
               ></textarea>
             </div>
 
