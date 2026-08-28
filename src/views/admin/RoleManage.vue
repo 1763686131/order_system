@@ -12,7 +12,7 @@
           <tr>
             <th>角色名称</th>
             <th>角色ID</th>
-            <th>状态</th>
+            <th>权限</th>
             <th>备注</th>
             <th>创建时间</th>
             <th>操作</th>
@@ -23,8 +23,8 @@
             <td>{{ role.name }}</td>
             <td>{{ role.username }}</td>
             <td>
-              <span class="status-badge" :class="role.status === 'active' ? 'status-active' : 'status-disabled'">
-                {{ role.status === 'active' ? '已启用' : '已禁用' }}
+              <span class="status-badge" :class="getRoleClass(role.role)">
+                {{ getRoleName(role.role) }}
               </span>
             </td>
             <td>{{ role.description || '-' }}</td>
@@ -33,7 +33,14 @@
               <div class="action-buttons">
                 <button class="btn-link btn-modify" @click="openEditModal(role)">修改</button>
                 <button class="btn-link btn-detail" @click="openPermissionDrawer(role)">详情</button>
-                <button class="btn-link btn-delete" @click="deleteRole(role)">删除</button>
+                <button
+                  class="btn-link btn-delete"
+                  @click="deleteRole(role)"
+                  :disabled="!canDelete(role)"
+                  :style="{ opacity: !canDelete(role) ? 0.5 : 1, cursor: !canDelete(role) ? 'not-allowed' : 'pointer' }"
+                >
+                  删除
+                </button>
               </div>
             </td>
           </tr>
@@ -85,35 +92,27 @@
             </div>
 
             <div class="form-item-inline">
-              <label>状态</label>
-              <div class="status-toggle">
-                <button
-                  :class="['toggle-btn', { active: currentRole.status === 'active' }]"
-                  @click="currentRole.status = 'active'"
-                >
-                  已启用
-                </button>
-                <button
-                  :class="['toggle-btn', { active: currentRole.status === 'disabled' }]"
-                  @click="currentRole.status = 'disabled'"
-                >
-                  已禁用
-                </button>
-              </div>
+              <label><span class="required">*</span> 权限</label>
+              <select v-model="currentRole.role" :disabled="isEditMode && currentRole.role === 'super_admin'">
+                <option value="employee">普通员工</option>
+                <option value="operator">操作员</option>
+                <option value="admin">管理员</option>
+                <option value="super_admin" v-if="userStore.user?.role === 'super_admin'">超级管理员</option>
+              </select>
+            </div>
+
+            <div class="form-item-inline">
+              <label>创建时间</label>
+              <input
+                v-model="currentRole.createdAt"
+                :placeholder="isEditMode ? '请输入创建时间' : '自动生成当前时间'"
+                :disabled="!isEditMode"
+              />
             </div>
 
             <div class="form-item-full">
               <label>备注</label>
               <input v-model="currentRole.description" placeholder="请输入" />
-            </div>
-
-            <div class="form-item-inline">
-              <label>创建时间</label>
-              <div class="date-range">
-                <input type="date" v-model="currentRole.createdDate" placeholder="开始日期" />
-                <span>-</span>
-                <input type="date" v-model="currentRole.createdEndDate" placeholder="结束日期" />
-              </div>
             </div>
           </div>
 
@@ -233,10 +232,9 @@ const showPermissionDrawer = ref(false)
 const currentRole = ref({
   username: '',
   name: '',
-  status: 'active',
+  role: 'employee',
   description: '',
-  createdDate: '',
-  createdEndDate: '',
+  createdAt: '',
   permissions: []
 })
 const isEditMode = ref(false)
@@ -304,10 +302,9 @@ const openCreateModal = () => {
   currentRole.value = {
     username: '',
     name: '',
-    status: 'active',
+    role: 'employee',
     description: '',
-    createdDate: '',
-    createdEndDate: '',
+    createdAt: '',
     permissions: []
   }
   showPermissionDrawer.value = true
@@ -437,8 +434,41 @@ const saveRole = async () => {
   }
 }
 
+// 判断是否可以删除
+const canDelete = (role) => {
+  // 不能删除自己
+  if (role.username === userStore.username) {
+    return false
+  }
+
+  // 超管可以删除除了自己以外的所有人
+  if (userStore.role === 'super_admin') {
+    return true
+  }
+
+  // 管理员不能删除同级管理员和超管
+  if (userStore.role === 'admin') {
+    return role.role !== 'admin' && role.role !== 'super_admin'
+  }
+
+  // 其他角色不能删除
+  return false
+}
+
 // 删除角色
 const deleteRole = async (role) => {
+  if (!canDelete(role)) {
+    const currentUser = userStore.user
+    if (role.username === currentUser?.username) {
+      alert('不能删除自己的账号！')
+    } else if (currentUser?.role === 'admin') {
+      alert('管理员只能删除普通员工和操作员！')
+    } else {
+      alert('权限不足，无法删除此角色！')
+    }
+    return
+  }
+
   if (!confirm(`确定要删除角色 ${role.name} 吗？`)) {
     return
   }
@@ -455,6 +485,28 @@ const deleteRole = async (role) => {
 // 格式化日期
 const formatDate = (dateStr) => {
   return dateStr || '-'
+}
+
+// 获取角色名称
+const getRoleName = (role) => {
+  const roleMap = {
+    super_admin: '超管',
+    admin: '管理',
+    operator: '操作',
+    employee: '员工'
+  }
+  return roleMap[role] || '未知'
+}
+
+// 获取角色样式类名
+const getRoleClass = (role) => {
+  const classMap = {
+    super_admin: 'role-super-admin',
+    admin: 'role-admin',
+    operator: 'role-operator',
+    employee: 'role-employee'
+  }
+  return classMap[role] || 'role-default'
 }
 </script>
 
@@ -536,12 +588,27 @@ const formatDate = (dateStr) => {
   font-weight: 500;
 }
 
-.status-active {
+.role-super-admin {
+  background: rgba(255, 77, 79, 0.2);
+  color: #ff4d4f;
+}
+
+.role-admin {
+  background: rgba(250, 173, 20, 0.2);
+  color: #faad14;
+}
+
+.role-operator {
   background: rgba(24, 144, 255, 0.2);
   color: #1890ff;
 }
 
-.status-disabled {
+.role-employee {
+  background: rgba(82, 196, 26, 0.2);
+  color: #52c41a;
+}
+
+.role-default {
   background: rgba(160, 164, 170, 0.2);
   color: #a0a4aa;
 }

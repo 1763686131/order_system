@@ -143,18 +143,19 @@ def update_user_password(username):
 def update_user_permissions(username):
     req_role = request.headers.get('Role')
     if req_role not in ['super_admin', 'admin']: return jsonify({"message": "权限不足"}), 403
-    
+
     req_data = request.json
     perms = req_data.get('permissions', [])
     new_role = req_data.get('role')
-    new_name = req_data.get('name') 
-    
+    new_name = req_data.get('name')
+    new_created_at = req_data.get('createdAt')  # 新增：支持修改创建时间
+
     users_data = read_users()
     for u in users_data:
         if str(u['username']) == str(username):
             if req_role == 'admin' and u['role'] in ['super_admin', 'admin']:
                 return jsonify({"message": "越权：无权修改高级别账户"}), 403
-            
+
             if req_role == 'admin':
                 admin_restricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete']
                 old_perms = set(u.get('permissions', []))
@@ -166,12 +167,16 @@ def update_user_permissions(username):
 
             u['permissions'] = perms
             if new_name is not None:
-                u['name'] = new_name 
-                
+                u['name'] = new_name
+
+            # 新增：支持修改创建时间
+            if new_created_at is not None:
+                u['createdAt'] = new_created_at
+
             if new_role and req_role == 'super_admin' and u['role'] != 'super_admin':
                 u['role'] = new_role
             break
-            
+
     write_users(users_data)
     return jsonify({"success": True})
 
