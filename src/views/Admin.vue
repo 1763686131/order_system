@@ -16,7 +16,7 @@
                 :class="['nav-item', { active: currentPath === item.path }]"
                 @click="navigateTo(item.path)"
               >
-                <span class="nav-icon">{{ item.icon }}</span>
+                <span class="nav-icon" v-html="item.icon"></span>
                 <span class="nav-label">{{ item.label }}</span>
               </li>
 
@@ -29,7 +29,7 @@
                   }]"
                   @click="toggleMenu(index)"
                 >
-                  <span class="nav-icon">{{ item.icon }}</span>
+                  <span class="nav-icon" v-html="item.icon"></span>
                   <span class="nav-label">{{ item.label }}</span>
                   <span class="nav-arrow">
                     <svg
@@ -55,6 +55,7 @@
                     :class="['nav-subitem', { active: currentPath === child.path }]"
                     @click="navigateTo(child.path)"
                   >
+                    <span v-if="child.icon" class="nav-subicon" v-html="child.icon"></span>
                     {{ child.label }}
                   </li>
                 </ul>
@@ -144,15 +145,27 @@ const handleRefresh = () => {
   }
 }
 
+// SVG 图标定义
+const icons = {
+  home: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
+  package: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+  cart: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>',
+  chart: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
+  trending: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+  users: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  dollar: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>'
+}
+
 const menuItems = ref([
   {
     label: '首页',
-    icon: '🏠',
+    icon: icons.home,
     path: '/admin/dashboard'
   },
   {
     label: '商品',
-    icon: '📦',
+    icon: icons.package,
     children: [
       { label: '商品列表', path: '/admin/products' },
       { label: '商品分类', path: '/admin/categories' },
@@ -161,7 +174,7 @@ const menuItems = ref([
   },
   {
     label: '订单',
-    icon: '🛒',
+    icon: icons.cart,
     children: [
       { label: '订单列表', path: '/admin/orders' },
       { label: '物流订单列表', path: '/admin/orders/logistics' },
@@ -170,7 +183,7 @@ const menuItems = ref([
   },
   {
     label: '库存',
-    icon: '📊',
+    icon: icons.chart,
     children: [
       { label: '库存管理', path: '/admin/stock' },
       { label: '入库记录', path: '/admin/stock/in' },
@@ -179,7 +192,7 @@ const menuItems = ref([
   },
   {
     label: '运营',
-    icon: '📈',
+    icon: icons.trending,
     children: [
       { label: '数据统计', path: '/admin/analytics' },
       { label: '营销活动', path: '/admin/marketing' }
@@ -187,7 +200,7 @@ const menuItems = ref([
   },
   {
     label: '客户列表',
-    icon: '👥',
+    icon: icons.users,
     children: [
       { label: '客户管理', path: '/admin/customers' },
       { label: '客户分组', path: '/admin/customers/groups' }
@@ -195,7 +208,7 @@ const menuItems = ref([
   },
   {
     label: '财务',
-    icon: '💰',
+    icon: icons.dollar,
     children: [
       { label: '财务报表', path: '/admin/finance' },
       { label: '收支明细', path: '/admin/finance/transactions' }
@@ -203,10 +216,11 @@ const menuItems = ref([
   },
   {
     label: '设置',
-    icon: '⚙️',
+    icon: icons.settings,
     children: [
       { label: '系统设置', path: '/admin/settings' },
-      { label: '用户管理', path: '/admin/users' }
+      { label: '用户管理', path: '/admin/users' },
+      { label: '角色管理', path: '/admin/roles' }
     ]
   }
 ])
@@ -238,7 +252,7 @@ const currentMenuLabel = computed(() => {
   for (const item of menuItems.value) {
     if (item.children) {
       const child = item.children.find(c => c.path === currentPath.value)
-      if (child) return child.label
+      if (child) return `${item.label}/${child.label}`
     }
   }
   // 再尝试从主菜单中查找
@@ -396,6 +410,18 @@ const logout = () => {
   color: #95a5a6;
   font-size: 13px;
   border-left: 3px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.nav-subicon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
 }
 
 .nav-subitem:hover {

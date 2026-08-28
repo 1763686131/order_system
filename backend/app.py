@@ -21,7 +21,7 @@ CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type
 
 USERS_FILE = '/app/data/users_db.json'
 ORDERS_FILE = '/app/data/orders_db.json'
-MATERIALS_FILE = '/app/data/material_db.json' 
+MATERIALS_FILE = '/app/data/material_db.json'
 BASE_UPLOAD_DIR = '/app/uploads' # 统一定义图片存储路径
 
 if os.path.exists('/app/frontend/index.html'):
@@ -113,7 +113,8 @@ def add_user():
         "name": req_data.get('name', req_data.get('username')),
         "password": req_data.get('password'),
         "role": target_role,
-        "permissions": req_data.get('permissions', [])
+        "permissions": req_data.get('permissions', []),
+        "createdAt": datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     })
     write_users(users_data)
     return jsonify({"success": True})
@@ -536,8 +537,13 @@ def serve_uploads(filename):
 # 🎯 文件万能通配拦截器 (必须垫在所有特定路由的最后面)
 # ==========================================
 @app.route('/<path:path>')
-def send_static_files(path): 
-    return send_from_directory(FRONTEND_DIR, path)
+def send_static_files(path):
+    # 如果请求的是静态文件（有扩展名），则直接返回文件
+    if '.' in path:
+        return send_from_directory(FRONTEND_DIR, path)
+    # 否则返回 index.html，让 Vue Router 处理路由
+    else:
+        return send_from_directory(FRONTEND_DIR, 'index.html')
 
 def open_browser():
     if not os.path.exists('/app/frontend/index.html'): webbrowser.open("http://localhost:7899")

@@ -53,6 +53,12 @@ const routes = [
         name: 'admin-users',
         component: () => import('@/views/admin/UserManage.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'roles',
+        name: 'admin-roles',
+        component: () => import('@/views/admin/RoleManage.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   }

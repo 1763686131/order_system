@@ -418,7 +418,8 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 1
+            "audit_state": 1,
+            "receipt_img_url": "/uploads/2026-08/李四订单_李四_2026-08-28_BCA7.jpg"
         },
         {
             "id": 167,

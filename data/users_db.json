@@ -69,5 +69,27 @@
             "pending.copy",
             "pending.delete"
         ]
+    },
+    {
+        "username": "54545",
+        "name": "4545",
+        "password": "123456",
+        "role": "employee",
+        "permissions": []
+    },
+    {
+        "username": "5454554",
+        "name": "454454",
+        "password": "123456",
+        "role": "employee",
+        "permissions": []
+    },
+    {
+        "username": "545455454",
+        "name": "445",
+        "password": "123456",
+        "role": "employee",
+        "permissions": [],
+        "createdAt": "2026-08-28 14:03:05"
     }
 ]
