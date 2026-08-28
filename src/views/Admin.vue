@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-container">
+  <div class="admin-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
     <!-- 左侧边栏 -->
     <aside class="sidebar">
       <div class="sidebar-header">
@@ -71,6 +71,14 @@
       <!-- 顶部栏 -->
       <header class="top-header">
         <div class="header-left">
+          <button class="sidebar-toggle-btn" @click="toggleSidebar" :title="isSidebarCollapsed ? '展开菜单' : '收起菜单'">
+            <span v-if="!isSidebarCollapsed" class="hamburger-icon">
+              <span class="line"></span>
+              <span class="line"></span>
+              <span class="line"></span>
+            </span>
+            <span v-else class="arrow-icon">←</span>
+          </button>
           <h2 class="header-page-title">{{ currentMenuLabel }}</h2>
         </div>
 
@@ -84,8 +92,8 @@
               <i class="bell-icon">🔔</i>
               <span class="badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
             </div>
-            <div class="icon-item cart">
-              <i class="cart-icon">🛒</i>
+            <div class="user-info">
+              <span class="user-name">{{ userStore.name || userStore.username || '用户' }}</span>
             </div>
             <button class="logout-btn" @click="logout">退出系统</button>
           </div>
@@ -116,6 +124,14 @@ const route = useRoute()
 const userStore = useUserStore()
 
 const notificationCount = ref(3)
+
+// 侧边栏折叠状态
+const isSidebarCollapsed = ref(false)
+
+// 切换侧边栏
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
 
 // 弹窗引用
 const shippedActionModal = ref(null)
@@ -176,9 +192,9 @@ const menuItems = ref([
     label: '订单',
     icon: icons.cart,
     children: [
-      { label: '订单列表', path: '/admin/orders' },
-      { label: '物流订单列表', path: '/admin/orders/logistics' },
-      { label: '已完成订单', path: '/admin/orders/completed' }
+      { label: '销售订单', path: '/admin/orders' },
+      { label: '物流列表', path: '/admin/orders/logistics' },
+      { label: '退货订单', path: '/admin/orders/completed' }
     ]
   },
   {
@@ -285,6 +301,16 @@ const logout = () => {
   bottom: 0;
 }
 
+/* 侧边栏折叠状态 */
+.admin-container.sidebar-collapsed .sidebar {
+  width: 0;
+  overflow: hidden;
+}
+
+.admin-container.sidebar-collapsed .main-wrapper {
+  margin-left: 0;
+}
+
 /* 左侧边栏样式 */
 .sidebar {
   width: 240px;
@@ -293,6 +319,7 @@ const logout = () => {
   display: flex;
   flex-direction: column;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  transition: width 0.3s ease;
 }
 
 .sidebar-header {
@@ -459,6 +486,40 @@ const logout = () => {
   display: flex;
   align-items: center;
   gap: 20px;
+}
+
+.sidebar-toggle-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.sidebar-toggle-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
+.hamburger-icon {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 18px;
+}
+
+.hamburger-icon .line {
+  width: 100%;
+  height: 2px;
+  background-color: #374151;
+  border-radius: 2px;
+  transition: all 0.3s;
 }
 
 .header-page-title {

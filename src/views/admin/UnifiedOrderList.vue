@@ -103,6 +103,7 @@
 
             <!-- 物流模式列 -->
             <template v-if="mode === 'logistics'">
+              <th class="col-weight">重量</th>
               <th class="col-shipping">发货方式</th>
               <th class="col-tracking">单号</th>
               <th class="col-receipt">回单</th>
@@ -114,7 +115,7 @@
         </thead>
         <tbody>
           <tr
-            v-for="order in filteredOrders"
+            v-for="order in paginatedOrders"
             :key="order.id"
             :class="{
               selected: isSelected(order.id),
@@ -173,6 +174,9 @@
 
             <!-- 物流模式列 -->
             <template v-if="mode === 'logistics'">
+              <td class="col-weight">
+                <span class="weight-text">{{ order.goods_weight || '-' }}</span>
+              </td>
               <td class="col-shipping">
                 <span
                   class="shipping-tag clickable"
@@ -244,7 +248,30 @@
     <!-- 分页 -->
     <div class="pagination">
       <div class="pagination-info">
-        共 {{ totalOrders }} 条记录，每页显示 {{ pageSize }} 条
+        <span>共 {{ totalOrders }} 条记录</span>
+        <div class="page-size-selector">
+          <span>每页显示</span>
+          <div class="page-size-tabs">
+            <button
+              :class="['page-size-tab', { active: !showAll && pageSize === 20 }]"
+              @click="changePageSize(20)"
+            >
+              20条
+            </button>
+            <button
+              :class="['page-size-tab', { active: !showAll && pageSize === 50 }]"
+              @click="changePageSize(50)"
+            >
+              50条
+            </button>
+            <button
+              :class="['page-size-tab', { active: showAll }]"
+              @click="changePageSize('all')"
+            >
+              全部
+            </button>
+          </div>
+        </div>
       </div>
       <div class="pagination-controls">
         <button class="page-btn" :disabled="currentPage === 1" @click="prevPage">
@@ -273,7 +300,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject, h } from 'vue'
+import { ref, computed, onMounted, inject, h, watch } from 'vue'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
 
@@ -337,6 +364,12 @@ onMounted(() => {
 
   fetchOrdersData()
 })
+
+// 监听 mode 变化，重新获取数据
+watch(() => props.mode, () => {
+  fetchOrdersData()
+})
+
 // 订单数据
 const orders = ref([])
 const loading = ref(false)
@@ -365,7 +398,8 @@ const expandModal = ref({
 
 // 分页
 const currentPage = ref(1)
-const pageSize = ref(50)
+const pageSize = ref(20)
+const showAll = ref(false) // 是否显示全部
 
 // 计算属性
 const pageTitle = computed(() => {
@@ -520,9 +554,16 @@ const filteredOrders = computed(() => {
 const totalOrders = computed(() => filteredOrders.value.length)
 const totalPages = computed(() => Math.ceil(totalOrders.value / pageSize.value))
 
+// 分页后的订单数据
+const paginatedOrders = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredOrders.value.slice(start, end)
+})
+
 const isAllSelected = computed(() => {
-  return filteredOrders.value.length > 0 &&
-    filteredOrders.value.every(order => selectedOrders.value.includes(order.id))
+  return paginatedOrders.value.length > 0 &&
+    paginatedOrders.value.every(order => selectedOrders.value.includes(order.id))
 })
 
 // 方法
@@ -766,6 +807,17 @@ const nextPage = () => {
   if (currentPage.value < totalPages.value) {
     currentPage.value++
   }
+}
+
+const changePageSize = (size) => {
+  if (size === 'all') {
+    showAll.value = true
+    pageSize.value = totalOrders.value || 9999 // 设置一个足够大的数字
+  } else {
+    showAll.value = false
+    pageSize.value = size
+  }
+  currentPage.value = 1 // 切换每页显示数量时重置到第一页
 }
 </script>
 
@@ -1316,8 +1368,48 @@ const nextPage = () => {
 }
 
 .pagination-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   font-size: 14px;
   color: #6b7280;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-size-tabs {
+  display: flex;
+  gap: 4px;
+  background: #f3f4f6;
+  padding: 2px;
+  border-radius: 6px;
+}
+
+.page-size-tab {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+.page-size-tab:hover {
+  color: #374151;
+  background: #e5e7eb;
+}
+
+.page-size-tab.active {
+  color: #fff;
+  background: #3b82f6;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
 }
 
 .pagination-controls {
