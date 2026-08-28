@@ -13,7 +13,6 @@
             <th>角色名称</th>
             <th>角色ID</th>
             <th>权限</th>
-            <th>备注</th>
             <th>创建时间</th>
             <th>操作</th>
           </tr>
@@ -27,12 +26,10 @@
                 {{ getRoleName(role.role) }}
               </span>
             </td>
-            <td>{{ role.description || '-' }}</td>
             <td>{{ formatDate(role.createdAt) }}</td>
             <td>
               <div class="action-buttons">
                 <button class="btn-link btn-modify" @click="openEditModal(role)">修改</button>
-                <button class="btn-link btn-detail" @click="openPermissionDrawer(role)">详情</button>
                 <button
                   class="btn-link btn-delete"
                   @click="deleteRole(role)"
@@ -99,6 +96,15 @@
                 <option value="admin">管理员</option>
                 <option value="super_admin" v-if="userStore.user?.role === 'super_admin'">超级管理员</option>
               </select>
+            </div>
+
+            <div class="form-item-inline">
+              <label><span class="required" v-if="!isEditMode">*</span> 密码</label>
+              <input
+                v-model="currentRole.password"
+                type="password"
+                :placeholder="isEditMode ? '留空表示不修改' : '请输入密码'"
+              />
             </div>
 
             <div class="form-item-inline">
@@ -233,6 +239,7 @@ const currentRole = ref({
   username: '',
   name: '',
   role: 'employee',
+  password: '',
   description: '',
   createdAt: '',
   permissions: []
@@ -303,6 +310,7 @@ const openCreateModal = () => {
     username: '',
     name: '',
     role: 'employee',
+    password: '',
     description: '',
     createdAt: '',
     permissions: []
@@ -315,6 +323,7 @@ const openEditModal = (role) => {
   isEditMode.value = true
   currentRole.value = {
     ...role,
+    password: '', // 编辑时密码为空，表示不修改
     permissions: role.permissions || []
   }
   showPermissionDrawer.value = true
@@ -387,14 +396,20 @@ const saveRole = async () => {
     // 新建角色（使用用户管理的新增员工接口）
     const username = currentRole.value.username.trim()
     const name = currentRole.value.name.trim()
+    const password = currentRole.value.password.trim()
+
     if (!username || !name) {
       return alert('角色ID和角色名称不能为空！')
+    }
+
+    if (!password) {
+      return alert('密码不能为空！')
     }
 
     const payload = {
       username: username,
       name: name,
-      password: '123456', // 默认密码
+      password: password,
       role: currentRole.value.role || 'employee',
       permissions: currentRole.value.permissions
     }
@@ -414,7 +429,8 @@ const saveRole = async () => {
     const payload = {
       name: currentRole.value.name.trim(),
       permissions: currentRole.value.permissions,
-      role: currentRole.value.role || 'employee'
+      role: currentRole.value.role || 'employee',
+      createdAt: currentRole.value.createdAt // 新增：发送创建时间
     }
 
     try {
@@ -423,6 +439,16 @@ const saveRole = async () => {
         method: 'PUT',
         data: payload
       })
+
+      // 如果填写了密码，调用修改密码接口
+      if (currentRole.value.password.trim()) {
+        await request({
+          url: `/users/${currentRole.value.username}/password`,
+          method: 'PUT',
+          data: { password: currentRole.value.password.trim() }
+        })
+      }
+
       if (res) {
         alert('角色更新成功')
         await loadRoles()
