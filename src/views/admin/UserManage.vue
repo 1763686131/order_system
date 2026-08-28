@@ -1,19 +1,11 @@
 <template>
-  <teleport to="body">
-    <div
-      v-if="visible"
-      id="viewUserModal"
-      class="old-modal-mask"
-      :class="{ hidden: !visible }"
-    >
-      <div class="old-modal-box" style="width: 850px; max-width: 95%;">
-        <div class="old-modal-header">
-          <span>系统账户与权限管理控制台</span>
-          <span class="old-close-x" @click="handleClose">&times;</span>
-        </div>
+  <div class="user-manage-page">
+    <div class="page-header">
+      <h2 class="page-title">系统账户与权限管理控制台</h2>
+    </div>
 
-        <div class="old-modal-body" style="padding: 20px;">
-          <div class="user-manage-container">
+    <div class="page-content">
+      <div class="user-manage-container">
             <!-- 左侧用户列表 -->
             <div class="user-list-panel">
               <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
@@ -156,42 +148,47 @@
               </div>
             </div>
           </div>
-        </div>
 
-        <div class="old-modal-footer">
-          <button
-            v-if="isEditMode && userStore.hasPerm('system.user_manage')"
-            class="btn-danger"
-            id="btnDeleteUser"
-            style="float:left;"
-            @click="deleteCurrentUser"
-          >
-            物理注销该账户
-          </button>
-          <button class="btn-default" @click="handleClose">关闭</button>
-          <button
-            v-if="showDetailPanel"
-            class="btn-success"
-            id="btnSaveUser"
-            @click="saveUserData"
-            :disabled="loading"
-          >
-            {{ loading ? '保存中...' : '保存账户与权限' }}
-          </button>
+          <div class="action-buttons" v-if="showDetailPanel">
+            <button
+              v-if="isEditMode && userStore.hasPerm('system.user_manage')"
+              class="btn-danger"
+              id="btnDeleteUser"
+              @click="deleteCurrentUser"
+            >
+              物理注销该账户
+            </button>
+            <button
+              class="btn-success"
+              id="btnSaveUser"
+              @click="saveUserData"
+              :disabled="loading"
+            >
+              {{ loading ? '保存中...' : '保存账户与权限' }}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  </teleport>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, inject } from 'vue'
 import { useUserStore } from '@/stores/user'
 import request from '@/api/request'
 
 const userStore = useUserStore()
 
-const visible = ref(false)
+// 注入 Admin 组件提供的方法
+const setHeaderActions = inject('setHeaderActions', null)
+
+// 用户管理页面不需要顶部按钮，清空
+onMounted(async () => {
+  if (setHeaderActions) {
+    setHeaderActions(null)
+  }
+  await refreshUserList()
+})
+
 const loading = ref(false)
 const users = ref([])
 const currentEditUser = ref(null)
@@ -326,6 +323,11 @@ const refreshUserList = async () => {
   }
 }
 
+// 初始化加载用户列表
+onMounted(async () => {
+  await refreshUserList()
+})
+
 // 准备创建用户
 const prepareCreateUser = () => {
   currentEditUser.value = null
@@ -452,123 +454,48 @@ const deleteCurrentUser = async () => {
     alert('删除失败')
   }
 }
-
-// 打开弹窗
-const open = async () => {
-  visible.value = true
-  showDetailPanel.value = false
-  await refreshUserList()
-}
-
-// 关闭弹窗
-const handleClose = () => {
-  visible.value = false
-}
-
-// 暴露方法
-defineExpose({
-  open
-})
-
-// 监听全局事件
-onMounted(() => {
-  window.addEventListener('open-user-manage-modal', () => {
-    open()
-  })
-})
 </script>
 
 <style scoped>
-/* 通用隐藏类 */
-.hidden {
-  display: none !important;
+/* 页面容器 */
+.user-manage-page {
+  width: 100%;
+  height: 100%;
 }
 
-/* 弹窗遮罩层 */
-.old-modal-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 100000;
+.page-header {
+  margin-bottom: 20px;
 }
 
-/* 弹窗容器 */
-.old-modal-box {
-  background: #ffffff;
-  border-radius: 16px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  max-height: 90vh;
-  width: 95%;
-  max-width: 700px;
-  animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+.page-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0;
 }
 
-@keyframes scaleUp {
-  from {
-    transform: scale(0.95);
-    opacity: 0;
-  }
-  to {
-    transform: scale(1);
-    opacity: 1;
-  }
+.page-content {
+  background: #fff;
+  border-radius: 8px;
+  padding: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-/* 弹窗头部 */
-.old-modal-header {
-  padding: 20px 32px;
-  border-bottom: 1px solid #f0f0f0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 20px;
-  font-weight: bold;
-  background: #fafafa;
-}
-
-/* 关闭按钮 */
-.old-close-x {
-  cursor: pointer;
-  font-size: 28px;
-  color: #999;
-  line-height: 1;
-  transition: color 0.2s;
-}
-
-.old-close-x:hover {
-  color: #ff4d4f;
-}
-
-/* 弹窗内容区 */
-.old-modal-body {
-  overflow-y: auto;
-  padding: 32px;
-}
-
-/* 弹窗底部 */
-.old-modal-footer {
-  padding: 20px 32px;
-  border-top: 1px solid #f0f0f0;
+/* 操作按钮区 */
+.action-buttons {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
   display: flex;
   justify-content: flex-end;
-  gap: 16px;
-  background: #fafafa;
+  gap: 12px;
 }
 
 /* 用户管理容器 */
 .user-manage-container {
   display: flex;
   gap: 24px;
-  min-height: 450px;
+  min-height: 500px;
 }
 
 /* 左侧用户列表面板 */

@@ -46,14 +46,6 @@
       </div>
 
       <div
-        v-if="userStore.hasPerm('system.user_manage')"
-        class="fab-item"
-        @click="handleUserManage"
-      >
-        账户控制
-      </div>
-
-      <div
         class="fab-item"
         style="color: #ff4d4f;"
         @click="handleLogout"
@@ -123,8 +115,7 @@ const props = defineProps({
 const emit = defineEmits([
   'create-order',
   'create-material',
-  'search',
-  'user-manage'
+  'search'
 ])
 
 const router = useRouter()
@@ -260,12 +251,6 @@ const handleCreateOrder = () => {
 const handleSearch = () => {
   nomiStore.closeMenu()
   emit('search')
-}
-
-// 账户管理
-const handleUserManage = () => {
-  nomiStore.closeMenu()
-  emit('user-manage')
 }
 
 // 退出登录

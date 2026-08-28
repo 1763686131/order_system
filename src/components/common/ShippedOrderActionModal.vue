@@ -7,8 +7,22 @@
       style="display: flex;"
       @click.self="closeShippedActionModal"
     >
-      <div class="modal-content" style="width: 420px; border-radius: 12px; padding: 24px;">
-        <div class="modal-header" style="margin-bottom: 20px;">
+      <div
+        class="modal-content"
+        :class="{ 'is-dragging': isDragging }"
+        :style="{
+          width: '420px',
+          borderRadius: '12px',
+          padding: '24px',
+          transform: `translate(${modalX}px, ${modalY}px)`,
+          cursor: isDragging ? 'grabbing' : 'default'
+        }"
+        @mousedown="handleMouseDown"
+      >
+        <div
+          class="modal-header"
+          style="margin-bottom: 20px; cursor: grab;"
+        >
           <div id="actionModalTitle" style="font-size: 18px; font-weight: bold; color: #333;">
             {{ modalTitle }}
           </div>
@@ -131,6 +145,18 @@
         @click.stop
       />
     </div>
+
+    <!-- 顶部消息提示 -->
+    <transition name="message-slide">
+      <div
+        v-if="messageVisible"
+        class="message-toast"
+        :class="`message-${messageType}`"
+      >
+        <span class="message-icon">{{ messageType === 'success' ? '✓' : '✕' }}</span>
+        <span class="message-text">{{ messageText }}</span>
+      </div>
+    </transition>
   </teleport>
 </template>
 
@@ -143,10 +169,103 @@ import request from '@/api/request'
 const userStore = useUserStore()
 const orderStore = useOrderStore()
 
+const emit = defineEmits(['refresh'])
+
 const visible = ref(false)
 const targetOrderId = ref(null)
 const modalTitle = ref('已出库订单管理')
 const modalSubtitle = ref('请选择对当前出库订单的操作指令')
+
+// 消息提示状态
+const messageVisible = ref(false)
+const messageText = ref('')
+const messageType = ref('success')
+
+// 拖动相关状态
+const isDragging = ref(false)
+const dragStartX = ref(0)
+const dragStartY = ref(0)
+const modalX = ref(0)
+const modalY = ref(0)
+
+// 显示顶部消息提示
+const showMessage = (text, type = 'success') => {
+  messageText.value = text
+  messageType.value = type
+  messageVisible.value = true
+
+  setTimeout(() => {
+    messageVisible.value = false
+  }, 3000)
+}
+
+// 从本地存储加载弹窗位置
+const loadModalPosition = () => {
+  try {
+    const savedPosition = localStorage.getItem('shippedActionModalPosition')
+    if (savedPosition) {
+      const { x, y } = JSON.parse(savedPosition)
+      modalX.value = x
+      modalY.value = y
+    } else {
+      // 默认居中
+      modalX.value = 0
+      modalY.value = 0
+    }
+  } catch (e) {
+    console.error('加载弹窗位置失败', e)
+    modalX.value = 0
+    modalY.value = 0
+  }
+}
+
+// 保存弹窗位置到本地存储
+const saveModalPosition = () => {
+  try {
+    localStorage.setItem('shippedActionModalPosition', JSON.stringify({
+      x: modalX.value,
+      y: modalY.value
+    }))
+  } catch (e) {
+    console.error('保存弹窗位置失败', e)
+  }
+}
+
+// 开始拖动
+const handleMouseDown = (event) => {
+  // 只允许点击头部区域拖动
+  if (!event.target.closest('.modal-header')) return
+
+  isDragging.value = true
+  dragStartX.value = event.clientX - modalX.value
+  dragStartY.value = event.clientY - modalY.value
+
+  document.addEventListener('mousemove', handleMouseMove)
+  document.addEventListener('mouseup', handleMouseUp)
+
+  event.preventDefault()
+}
+
+// 拖动中
+const handleMouseMove = (event) => {
+  if (!isDragging.value) return
+
+  modalX.value = event.clientX - dragStartX.value
+  modalY.value = event.clientY - dragStartY.value
+
+  event.preventDefault()
+}
+
+// 结束拖动
+const handleMouseUp = () => {
+  if (isDragging.value) {
+    isDragging.value = false
+    saveModalPosition()
+
+    document.removeEventListener('mousemove', handleMouseMove)
+    document.removeEventListener('mouseup', handleMouseUp)
+  }
+}
 
 // 审核相关
 const carrierName = ref('')
@@ -215,6 +334,9 @@ const open = (orderId, mode) => {
 
   // 先显示弹窗
   visible.value = true
+
+  // 加载保存的位置
+  loadModalPosition()
 
   // 等待DOM渲染
   nextTick(() => {
@@ -373,10 +495,11 @@ const submitRevokeShipOrder = async () => {
       method: 'PUT',
       data: { status: 'completed' }
     })
+    showMessage('已撤销出库', 'success')
     closeShippedActionModal()
-    window.dispatchEvent(new CustomEvent('refresh-orders'))
+    emit('refresh')
   } catch (e) {
-    alert('网络通讯失败，无法完成撤销出库指令')
+    showMessage('网络通讯失败，无法完成撤销出库指令', 'error')
   }
 }
 
@@ -424,10 +547,11 @@ const submitAuditShipOrder = async () => {
         logistics_no: finalLogisticsNo
       }
     })
+    showMessage('物流信息录入成功！', 'success')
     closeShippedActionModal()
-    window.dispatchEvent(new CustomEvent('refresh-orders'))
+    emit('refresh')
   } catch (e) {
-    alert('网络通信异常，未能成功写入确认审核标识')
+    showMessage('网络通信异常，未能成功写入确认审核标识', 'error')
   }
 }
 
@@ -559,22 +683,24 @@ const submitReceiptImage = async () => {
     })
 
     if (response.ok) {
-      alert('图片上传成功！')
+      showMessage('图片上传成功！', 'success')
       closeShippedActionModal()
-      window.dispatchEvent(new CustomEvent('refresh-orders'))
+      emit('refresh')
     } else {
-      alert('上传失败，请检查网络或后端接口。')
+      showMessage('上传失败，请检查网络或后端接口', 'error')
     }
   } catch (e) {
     console.error('上传错误:', e)
-    alert('网络通信异常！')
+    showMessage('网络通信异常！', 'error')
   }
 }
 
 // 删除按钮
 const deleteRealReceiptImage = async () => {
   const id = targetOrderId.value
-  if (!confirm('确定要从数据库和硬盘中【彻底删除】这张回单图片吗？此操作不可恢复！')) {
+
+  // 使用自定义确认对话框（如果有）或简单提示
+  if (!window.confirm('确定要从数据库和硬盘中【彻底删除】这张回单图片吗？此操作不可恢复！')) {
     return
   }
 
@@ -584,15 +710,15 @@ const deleteRealReceiptImage = async () => {
       method: 'DELETE'
     })
     if (res.success) {
-      alert('回单图片已彻底删除！')
+      showMessage('回单图片已彻底删除！', 'success')
       closeShippedActionModal()
-      window.dispatchEvent(new CustomEvent('refresh-orders'))
+      emit('refresh')
     } else {
-      alert(res.message || '删除失败')
+      showMessage(res.message || '删除失败', 'error')
     }
   } catch (e) {
     console.error(e)
-    alert('网络错误，删除失败')
+    showMessage('网络错误，删除失败', 'error')
   }
 }
 
@@ -694,6 +820,21 @@ defineExpose({
   max-width: 90%;
   max-height: 90vh;
   overflow-y: auto;
+  user-select: none;
+}
+
+.modal-content.is-dragging {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  cursor: grabbing !important;
+}
+
+.modal-header {
+  cursor: grab;
+  user-select: none;
+}
+
+.modal-header:active {
+  cursor: grabbing;
 }
 
 .modern-input {
@@ -725,5 +866,54 @@ defineExpose({
 
 .modal-btn-group button:hover {
   opacity: 0.8;
+}
+
+/* 顶部消息提示样式 */
+.message-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 100002;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.message-success {
+  background: #f0f9ff;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.message-error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.message-icon {
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.message-slide-enter-active,
+.message-slide-leave-active {
+  transition: all 0.3s ease;
+}
+
+.message-slide-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
+}
+
+.message-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-20px);
 }
 </style>

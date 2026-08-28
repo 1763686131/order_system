@@ -79,17 +79,14 @@
     <OrderFormModal ref="orderFormModal" />
     <UploadMaterialModal ref="uploadMaterialModal" />
     <SearchOrderModal ref="searchOrderModal" />
-    <UserManage ref="userManageModal" />
     <SmartCalculator ref="smartCalculator" />
 
     <!-- 小圆智能助手 -->
     <NomiFloatingAI
       :user-role="userStore.role"
-      :has-user-manage-perm="userStore.role === 'super_admin' || userStore.role === 'admin'"
       @create-order="handleCreateOrder"
       @create-material="handleCreateMaterial"
       @search="handleSearchOrder"
-      @user-manage="handleUserManage"
     />
   </div>
 </template>

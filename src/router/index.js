@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import LoginView from '@/views/LoginView.vue'
 import MainView from '@/views/MainView.vue'
+import Admin from '@/views/Admin.vue'
 
 const routes = [
   {
@@ -19,6 +20,41 @@ const routes = [
     name: 'main',
     component: MainView,
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin',
+    name: 'admin',
+    component: Admin,
+    meta: { requiresAuth: true },
+    redirect: '/admin/dashboard',
+    children: [
+      {
+        path: 'dashboard',
+        name: 'admin-dashboard',
+        component: () => import('@/views/admin/Dashboard.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'orders',
+        name: 'admin-orders',
+        component: () => import('@/views/admin/UnifiedOrderList.vue'),
+        props: { mode: 'finance' },
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'orders/logistics',
+        name: 'admin-orders-logistics',
+        component: () => import('@/views/admin/UnifiedOrderList.vue'),
+        props: { mode: 'logistics' },
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'users',
+        name: 'admin-users',
+        component: () => import('@/views/admin/UserManage.vue'),
+        meta: { requiresAuth: true }
+      }
+    ]
   }
 ]
 
