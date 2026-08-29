@@ -1,5 +1,13 @@
 <template>
   <teleport to="body">
+    <!-- 顶部消息提示 -->
+    <div
+      v-if="messageVisible"
+      :class="['top-message', `message-${messageType}`]"
+    >
+      {{ messageText }}
+    </div>
+
     <div
       v-if="visible"
       id="shipOrderModal"
@@ -69,6 +77,8 @@
 import { ref } from 'vue'
 import { useOrderStore } from '@/stores/order'
 
+const emit = defineEmits(['refresh'])
+
 const orderStore = useOrderStore()
 
 const visible = ref(false)
@@ -76,6 +86,22 @@ const loading = ref(false)
 const targetOrderId = ref(null)
 const shippingMethod = ref('0')
 const customMethod = ref('')
+
+// 消息提示状态
+const messageVisible = ref(false)
+const messageText = ref('')
+const messageType = ref('success')
+
+// 显示顶部消息提示
+const showMessage = (text, type = 'success') => {
+  messageText.value = text
+  messageType.value = type
+  messageVisible.value = true
+
+  setTimeout(() => {
+    messageVisible.value = false
+  }, 3000)
+}
 
 // 获取当前时间
 const getCurrentDateTime = () => {
@@ -125,10 +151,14 @@ const handleSubmit = async () => {
 
   try {
     await orderStore.updateOrderById(targetOrderId.value, payload)
+    showMessage('✓ 出库成功！', 'success')
     handleClose()
+    emit('refresh')
+
+    // 同时触发全局刷新事件（兼容其他组件）
     window.dispatchEvent(new CustomEvent('refresh-orders'))
   } catch (error) {
-    alert('发货出库网络通讯失败')
+    showMessage('发货出库网络通讯失败', 'error')
   } finally {
     loading.value = false
   }
@@ -141,5 +171,41 @@ defineExpose({
 </script>
 
 <style scoped>
-/* 样式已在全局 CSS 中定义 */
+/* 顶部消息提示样式 */
+.top-message {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  z-index: 10001;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  animation: slideDown 0.3s ease;
+}
+
+.message-success {
+  background: #f0fdf4;
+  color: #15803d;
+  border: 1px solid #86efac;
+}
+
+.message-error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fca5a5;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
 </style>
