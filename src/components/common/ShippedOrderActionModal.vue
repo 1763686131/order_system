@@ -487,6 +487,29 @@ const open = (orderId, mode) => {
           carrierName.value = ''
           logisticsNo.value = fullNo
         }
+
+        // 加载运费数据
+        if (order.freight_costs && Array.isArray(order.freight_costs)) {
+          // 重置运费数据
+          freightCost.value = 0
+          otherCosts.value = []
+
+          // 解析运费数据
+          order.freight_costs.forEach(item => {
+            if (item.type === 'freight') {
+              freightCost.value = item.amount || 0
+            } else if (item.type === 'other') {
+              otherCosts.value.push({
+                note: item.note || '',
+                amount: item.amount || 0
+              })
+            }
+          })
+        } else {
+          // 没有运费数据时重置
+          freightCost.value = 0
+          otherCosts.value = []
+        }
       }
     }
     // 状态 B：进入【回单模式】
@@ -621,6 +644,29 @@ const submitAuditShipOrder = async () => {
     finalLogisticsNo = '无单号记录'
   }
 
+  // 构建运费数据数组
+  const freightData = []
+
+  // 添加运费项
+  if (freightCost.value && Number(freightCost.value) > 0) {
+    freightData.push({
+      type: 'freight',
+      note: '运费',
+      amount: Number(freightCost.value)
+    })
+  }
+
+  // 添加其它费用项
+  otherCosts.value.forEach(item => {
+    if (item.amount && Number(item.amount) > 0) {
+      freightData.push({
+        type: 'other',
+        note: item.note.trim() || '其它费用',
+        amount: Number(item.amount)
+      })
+    }
+  })
+
   // 保存历史标签
   const order = allOrdersLocal.find(o => o.id == id)
   const isSpecialTruck = order && (order.shipping_method === 3 || order.shipping_method === '3')
@@ -644,7 +690,8 @@ const submitAuditShipOrder = async () => {
       data: {
         status: 'shipped',
         audit_state: 1,
-        logistics_no: finalLogisticsNo
+        logistics_no: finalLogisticsNo,
+        freight_costs: freightData
       }
     })
     showMessage('物流信息录入成功！', 'success')

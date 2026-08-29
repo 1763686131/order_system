@@ -280,7 +280,7 @@ def update_order_status(order_id):
     for x in orders_list:
         if x['id'] == order_id:
             x['status'] = ns
-            
+
             if ns == 'completed':
                 x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
                 x['shipped_date'] = ""
@@ -288,13 +288,16 @@ def update_order_status(order_id):
                 x['shipping_custom'] = ""
                 x['logistics_no'] = ""
                 x['audit_state'] = 0
-                
+
             elif ns == 'shipped':
                 if 'audit_state' in req_data:
                     x['audit_state'] = req_data.get('audit_state', 0)
                     # 🎯 核心修复：在审核操作时，必须接住前端传来的物流单号并更新进数据库！
                     if 'logistics_no' in req_data:
                         x['logistics_no'] = req_data.get('logistics_no')
+                    # 保存运费数据
+                    if 'freight_costs' in req_data:
+                        x['freight_costs'] = req_data.get('freight_costs', [])
                 else:
                     x['shipping_method'] = req_data.get('shipping_method', 4)
                     x['shipping_custom'] = req_data.get('shipping_custom', '')
@@ -302,7 +305,10 @@ def update_order_status(order_id):
                     x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
                     x['completed_date'] = x['shipped_date']
                     x['audit_state'] = 0
-                    
+                    # 保存运费数据
+                    if 'freight_costs' in req_data:
+                        x['freight_costs'] = req_data.get('freight_costs', [])
+
             elif ns == 'pending':
                 x['completed_date'] = ""
                 x['shipped_date'] = ""
@@ -311,7 +317,7 @@ def update_order_status(order_id):
                 x['shipping_custom'] = ""
                 x['audit_state'] = 0
             break
-            
+
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True})
