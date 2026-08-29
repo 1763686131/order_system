@@ -12,16 +12,12 @@
             全部
           </div>
           <div
-            :class="['category-tab', { active: filters.category === '中固订单' }]"
-            @click="filters.category = '中固订单'"
+            v-for="store in stores"
+            :key="store.id"
+            :class="['category-tab', { active: filters.category === store.name + '订单' }]"
+            @click="filters.category = store.name + '订单'"
           >
-            中固订单
-          </div>
-          <div
-            :class="['category-tab', { active: filters.category === '绝缘订单' }]"
-            @click="filters.category = '绝缘订单'"
-          >
-            绝缘订单
+            {{ store.name }}订单
           </div>
         </div>
 
@@ -134,7 +130,7 @@
             :key="order.id"
             :class="{
               selected: isSelected(order.id),
-              'insulation-row': order.type == 1
+              'insulation-row': isInsulationStore(order)
             }"
           >
             <td class="col-checkbox">
@@ -400,6 +396,7 @@ import { ref, computed, onMounted, onUnmounted, inject, h, watch } from 'vue'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
 import { formatOrderForCopy } from '@/utils/tools'
+import { getStores } from '@/utils/storeHelper'
 
 const props = defineProps({
   mode: {
@@ -483,9 +480,23 @@ watch(() => props.mode, () => {
 // 订单数据
 const orders = ref([])
 const loading = ref(false)
+const stores = ref([])
 
 // 排序状态
 const sortOrder = ref('desc') // 'desc' = 最近到远, 'asc' = 最远到近
+
+// 根据 store_id 或 type 获取门店名称
+const getStoreName = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store ? store.name : '未知门店'
+}
+
+// 根据 store_id 或 type 判断是否为绝缘（用于样式）
+const isInsulationStore = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  return storeId === 1
+}
 
 // 筛选条件
 const filters = ref({
@@ -568,20 +579,26 @@ const columnCount = computed(() => {
 const fetchOrdersData = async () => {
   loading.value = true
   try {
-    const response = await request({
-      url: '/orders',
-      method: 'GET'
-    })
+    // 并行加载订单和门店数据
+    const [ordersResponse, storesData] = await Promise.all([
+      request({
+        url: '/orders',
+        method: 'GET'
+      }),
+      getStores()
+    ])
 
-    if (response && Array.isArray(response)) {
+    stores.value = storesData
+
+    if (ordersResponse && Array.isArray(ordersResponse)) {
       // 更新 orderStore 的所有订单数据
-      orderStore.setOrders(response)
+      orderStore.setOrders(ordersResponse)
 
       // 物流模式只显示已出库订单
       if (props.mode === 'logistics') {
-        orders.value = response.filter(order => order.status === 'shipped')
+        orders.value = ordersResponse.filter(order => order.status === 'shipped')
       } else {
-        orders.value = response
+        orders.value = ordersResponse
       }
     } else {
       orders.value = []
@@ -604,7 +621,7 @@ const formatDate = (order) => {
 
 // 获取分类文本
 const getCategoryText = (order) => {
-  return order.type == 1 ? '绝缘订单' : '中固订单'
+  return getStoreName(order) + '订单'
 }
 
 // 获取发货方式文本
@@ -645,11 +662,10 @@ const filteredOrders = computed(() => {
 
   // 分类筛选
   if (filters.value.category) {
-    if (filters.value.category === '绝缘订单') {
-      result = result.filter(order => order.type == 1)
-    } else if (filters.value.category === '中固订单') {
-      result = result.filter(order => order.type != 1)
-    }
+    result = result.filter(order => {
+      const orderCategory = getCategoryText(order)
+      return orderCategory === filters.value.category
+    })
   }
 
   // 发货方式筛选（仅物流模式）

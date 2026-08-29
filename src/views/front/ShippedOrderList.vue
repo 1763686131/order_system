@@ -11,7 +11,8 @@
           v-for="order in group.orders"
           :key="order.id"
           class="shipped-card"
-          :class="{ 'card-insulation': order.type == 1 }"
+          :class="{ 'card-insulation': isInsulationStore(order) }"
+        >
         >
           <!-- 右上角状态标签 -->
           <div
@@ -80,7 +81,7 @@
 
           <!-- 右侧区域 -->
           <div class="shipped-right">
-            <div class="s-sub-title">{{ order.type == 1 ? '绝缘订单' : '中固订单' }}</div>
+            <div class="s-sub-title">{{ getStoreName(order) }}订单</div>
             <div class="s-main-title">{{ order.order_client || '未命名' }}</div>
             <div class="s-info-list">
               <div>收货姓名：{{ order.receiver_name || '未填' }}</div>
@@ -103,8 +104,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { getStores } from '@/utils/storeHelper'
 
 const props = defineProps({
   orders: {
@@ -124,10 +126,35 @@ const props = defineProps({
 const emit = defineEmits(['refresh', 'view-detail', 'view-receipt', 'audit', 'manage-receipt'])
 
 const userStore = useUserStore()
+const stores = ref([])
 
 const isEmployee = computed(() => {
   return userStore.role === 'employee' || userStore.role === 'operator'
 })
+
+// 加载门店列表
+onMounted(async () => {
+  try {
+    stores.value = await getStores()
+    console.log('ShippedOrderList - 门店数据加载完成:', stores.value)
+    console.log('ShippedOrderList - 订单数据:', props.orders)
+  } catch (error) {
+    console.error('ShippedOrderList - 加载门店失败:', error)
+  }
+})
+
+// 根据 store_id 或 type 获取门店名称
+const getStoreName = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store ? store.name : '未知门店'
+}
+
+// 根据 store_id 或 type 判断是否为绝缘（用于样式）
+const isInsulationStore = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  return storeId === 1
+}
 
 // 空数据提示信息
 const emptyMessage = computed(() => {

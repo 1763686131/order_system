@@ -29,6 +29,7 @@ USERS_FILE = '/app/data/users_db.json'
 ORDERS_FILE = '/app/data/orders_db.json'
 MATERIALS_FILE = '/app/data/material_db.json'
 FREIGHT_RECORDS_FILE = '/app/data/freight_records_db.json'
+STORES_FILE = '/app/data/stores_db.json'  # 新增：门店数据库
 BASE_UPLOAD_DIR = '/app/uploads' # 统一定义图片存储路径
 
 if os.path.exists('/app/frontend/index.html'):
@@ -96,6 +97,39 @@ def write_freight_records(data):
     with freight_records_lock:
         with open(FREIGHT_RECORDS_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
+
+def read_stores():
+    """读取门店数据库"""
+    os.makedirs(os.path.dirname(STORES_FILE), exist_ok=True)
+    if not os.path.exists(STORES_FILE):
+        # 初始化两个门店：绝缘和中固
+        initial_stores = [
+            {
+                "id": 1,
+                "code": "insulation",
+                "name": "绝缘",
+                "status": "active",
+                "remark": "绝缘材料门店",
+                "created_at": datetime.now().strftime('%Y-%m-%d')
+            },
+            {
+                "id": 2,
+                "code": "zhonggu",
+                "name": "中固",
+                "status": "active",
+                "remark": "中固材料门店",
+                "created_at": datetime.now().strftime('%Y-%m-%d')
+            }
+        ]
+        write_stores(initial_stores)
+        return initial_stores
+    with open(STORES_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+def write_stores(data):
+    """写入门店数据库"""
+    with open(STORES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
 
 @app.route('/', methods=['GET'])
 def index():
@@ -741,6 +775,97 @@ def update_order_paid_amount(order_id):
         write_orders(data)
 
     return jsonify({'success': True, 'order': order})
+
+# ==========================================
+# 🏪 门店管理 API
+# ==========================================
+@app.route('/api/stores', methods=['GET'])
+def get_stores():
+    """获取所有门店"""
+    stores = read_stores()
+    return jsonify(stores)
+
+@app.route('/api/stores/<int:store_id>', methods=['GET'])
+def get_store(store_id):
+    """获取单个门店"""
+    stores = read_stores()
+    store = next((s for s in stores if s['id'] == store_id), None)
+    if not store:
+        return jsonify({'error': '门店不存在'}), 404
+    return jsonify(store)
+
+@app.route('/api/stores', methods=['POST'])
+def create_store():
+    """创建门店"""
+    req_data = request.json
+    stores = read_stores()
+
+    code = req_data.get('code', '').strip()
+    name = req_data.get('name', '').strip()
+
+    if not code or not name:
+        return jsonify({'error': '门店编码和名称不能为空'}), 400
+
+    # 检查编码是否重复
+    if any(s['code'] == code for s in stores):
+        return jsonify({'error': '门店编码已存在'}), 400
+
+    # 生成新ID
+    new_id = max([s['id'] for s in stores], default=0) + 1
+
+    new_store = {
+        'id': new_id,
+        'code': code,
+        'name': name,
+        'status': req_data.get('status', 'active'),
+        'remark': req_data.get('remark', ''),
+        'created_at': datetime.now().strftime('%Y-%m-%d')
+    }
+
+    stores.append(new_store)
+    write_stores(stores)
+
+    return jsonify({'success': True, 'store': new_store})
+
+@app.route('/api/stores/<int:store_id>', methods=['PUT'])
+def update_store(store_id):
+    """更新门店"""
+    req_data = request.json
+    stores = read_stores()
+
+    store_index = next((i for i, s in enumerate(stores) if s['id'] == store_id), None)
+    if store_index is None:
+        return jsonify({'error': '门店不存在'}), 404
+
+    name = req_data.get('name', '').strip()
+    if not name:
+        return jsonify({'error': '门店名称不能为空'}), 400
+
+    # 更新门店信息
+    stores[store_index]['name'] = name
+    stores[store_index]['status'] = req_data.get('status', stores[store_index]['status'])
+    stores[store_index]['remark'] = req_data.get('remark', '')
+    stores[store_index]['updated_at'] = datetime.now().strftime('%Y-%m-%d')
+
+    write_stores(stores)
+
+    return jsonify({'success': True, 'store': stores[store_index]})
+
+@app.route('/api/stores/<int:store_id>', methods=['DELETE'])
+def delete_store(store_id):
+    """删除门店"""
+    stores = read_stores()
+
+    store_index = next((i for i, s in enumerate(stores) if s['id'] == store_id), None)
+    if store_index is None:
+        return jsonify({'error': '门店不存在'}), 404
+
+    # TODO: 检查是否有关联的订单
+
+    stores.pop(store_index)
+    write_stores(stores)
+
+    return jsonify({'success': True, 'message': '删除成功'})
 
 # ==========================================
 # 🎯 文件万能通配拦截器 (必须垫在所有特定路由的最后面)

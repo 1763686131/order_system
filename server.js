@@ -1,12 +1,12 @@
-const express = require('express')
-const cors = require('cors')
-const bodyParser = require('body-parser')
-const fs = require('fs').promises
-const path = require('path')
+import express from 'express'
+import cors from 'cors'
+import bodyParser from 'body-parser'
+import fs from 'fs/promises'
+import path from 'path'
+import { fileURLToPath } from 'url'
 
-// 导入API模块
-const storesAPI = require('./server/stores')
-const freightRecordsAPI = require('./server/freightRecords')
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const app = express()
 const PORT = 7899
@@ -28,6 +28,40 @@ app.use((req, res, next) => {
 // 数据库路径
 const ordersDbPath = path.join(__dirname, 'data/orders_db.json')
 const materialsDbPath = path.join(__dirname, 'data/materials_db.json')
+const storesDbPath = path.join(__dirname, 'data/stores_db.json')
+const freightDbPath = path.join(__dirname, 'data/freight_records_db.json')
+
+// ==================== 辅助函数 ====================
+
+// 读取门店数据库
+async function readStoresDB() {
+  try {
+    const data = await fs.readFile(storesDbPath, 'utf8')
+    return JSON.parse(data)
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      const initialData = [
+        { id: 1, code: 'insulation', name: '绝缘', status: 'active', remark: '绝缘材料门店', created_at: new Date().toISOString().split('T')[0] },
+        { id: 2, code: 'zhonggu', name: '中固', status: 'active', remark: '中固材料门店', created_at: new Date().toISOString().split('T')[0] }
+      ]
+      await fs.writeFile(storesDbPath, JSON.stringify(initialData, null, 2))
+      return initialData
+    }
+    return []
+  }
+}
+
+// 写入门店数据库
+async function writeStoresDB(data) {
+  await fs.writeFile(storesDbPath, JSON.stringify(data, null, 2), 'utf8')
+}
+
+// 生成门店ID
+function generateStoreId(stores) {
+  if (stores.length === 0) return 1
+  const maxId = Math.max(...stores.map(s => s.id))
+  return maxId + 1
+}
 
 // ==================== 订单相关API ====================
 
@@ -163,19 +197,263 @@ app.post('/api/materials', async (req, res) => {
 
 // ==================== 门店管理API ====================
 
-app.get('/api/stores', storesAPI.getStores)
-app.get('/api/stores/:id', storesAPI.getStoreById)
-app.post('/api/stores', storesAPI.createStore)
-app.put('/api/stores/:id', storesAPI.updateStore)
-app.delete('/api/stores/:id', storesAPI.deleteStore)
+// 获取所有门店
+app.get('/api/stores', async (req, res) => {
+  try {
+    const stores = await readStoresDB()
+    res.json(stores)
+  } catch (error) {
+    console.error('获取门店列表失败:', error)
+    res.status(500).json({ error: '获取门店列表失败' })
+  }
+})
+
+// 获取单个门店
+app.get('/api/stores/:id', async (req, res) => {
+  try {
+    const stores = await readStoresDB()
+    const store = stores.find(s => s.id === parseInt(req.params.id))
+    if (!store) {
+      return res.status(404).json({ error: '门店不存在' })
+    }
+    res.json(store)
+  } catch (error) {
+    console.error('获取门店信息失败:', error)
+    res.status(500).json({ error: '获取门店信息失败' })
+  }
+})
+
+// 创建门店
+app.post('/api/stores', async (req, res) => {
+  try {
+    const stores = await readStoresDB()
+    const { code, name, status, remark } = req.body
+
+    if (!code || !name) {
+      return res.status(400).json({ error: '门店编码和名称不能为空' })
+    }
+
+    const existingStore = stores.find(s => s.code === code)
+    if (existingStore) {
+      return res.status(400).json({ error: '门店编码已存在' })
+    }
+
+    const newStore = {
+      id: generateStoreId(stores),
+      code: code.trim(),
+      name: name.trim(),
+      status: status || 'active',
+      remark: remark || '',
+      created_at: new Date().toISOString().split('T')[0]
+    }
+
+    stores.push(newStore)
+    await writeStoresDB(stores)
+
+    res.json({ success: true, store: newStore })
+  } catch (error) {
+    console.error('创建门店失败:', error)
+    res.status(500).json({ error: '创建门店失败' })
+  }
+})
+
+// 更新门店
+app.put('/api/stores/:id', async (req, res) => {
+  try {
+    const stores = await readStoresDB()
+    const storeId = parseInt(req.params.id)
+    const { code, name, status, remark } = req.body
+
+    const storeIndex = stores.findIndex(s => s.id === storeId)
+    if (storeIndex === -1) {
+      return res.status(404).json({ error: '门店不存在' })
+    }
+
+    if (!name) {
+      return res.status(400).json({ error: '门店名称不能为空' })
+    }
+
+    if (code && code !== stores[storeIndex].code) {
+      const existingStore = stores.find(s => s.code === code && s.id !== storeId)
+      if (existingStore) {
+        return res.status(400).json({ error: '门店编码已存在' })
+      }
+    }
+
+    stores[storeIndex] = {
+      ...stores[storeIndex],
+      name: name.trim(),
+      status: status || stores[storeIndex].status,
+      remark: remark || '',
+      updated_at: new Date().toISOString().split('T')[0]
+    }
+
+    if (code && code !== stores[storeIndex].code) {
+      stores[storeIndex].code = code.trim()
+    }
+
+    await writeStoresDB(stores)
+
+    res.json({ success: true, store: stores[storeIndex] })
+  } catch (error) {
+    console.error('更新门店失败:', error)
+    res.status(500).json({ error: '更新门店失败' })
+  }
+})
+
+// 删除门店
+app.delete('/api/stores/:id', async (req, res) => {
+  try {
+    const stores = await readStoresDB()
+    const storeId = parseInt(req.params.id)
+
+    const storeIndex = stores.findIndex(s => s.id === storeId)
+    if (storeIndex === -1) {
+      return res.status(404).json({ error: '门店不存在' })
+    }
+
+    stores.splice(storeIndex, 1)
+    await writeStoresDB(stores)
+
+    res.json({ success: true, message: '删除成功' })
+  } catch (error) {
+    console.error('删除门店失败:', error)
+    res.status(500).json({ error: '删除门店失败' })
+  }
+})
 
 // ==================== 运费记录API ====================
 
-app.get('/api/freight-records', freightRecordsAPI.getFreightRecords)
-app.post('/api/freight-records', freightRecordsAPI.createFreightRecord)
-app.get('/api/freight-records/reserve-fund', freightRecordsAPI.getReserveFunds)
-app.post('/api/freight-records/reserve-fund', freightRecordsAPI.createReserveFund)
-app.get('/api/freight-records/reserve-fund/latest', freightRecordsAPI.getLatestReserveFund)
+// 读取运费记录数据库
+async function readFreightDB() {
+  try {
+    const data = await fs.readFile(freightDbPath, 'utf8')
+    return JSON.parse(data)
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      const initialData = { freight_records: [], reserve_funds: [] }
+      await fs.writeFile(freightDbPath, JSON.stringify(initialData, null, 2))
+      return initialData
+    }
+    return { freight_records: [], reserve_funds: [] }
+  }
+}
+
+// 写入运费记录数据库
+async function writeFreightDB(data) {
+  await fs.writeFile(freightDbPath, JSON.stringify(data, null, 2), 'utf8')
+}
+
+// 生成ID
+function generateId() {
+  return Date.now() + Math.random().toString(36).substr(2, 9)
+}
+
+app.get('/api/freight-records', async (req, res) => {
+  try {
+    const db = await readFreightDB()
+    res.json(db.freight_records || [])
+  } catch (error) {
+    res.status(500).json({ error: '获取运费记录失败' })
+  }
+})
+
+app.post('/api/freight-records', async (req, res) => {
+  try {
+    const db = await readFreightDB()
+    const { type, year, month, period, orders, totalAmount, reserveFund } = req.body
+
+    const record = {
+      id: generateId(),
+      type,
+      year,
+      month,
+      period,
+      orders,
+      totalAmount,
+      reserveFund,
+      createdAt: new Date().toISOString(),
+      createdBy: req.user?.username || '管理员'
+    }
+
+    db.freight_records.push(record)
+    await writeFreightDB(db)
+
+    res.json({ success: true, record })
+  } catch (error) {
+    console.error('创建运费记录失败:', error)
+    res.status(500).json({ error: '创建运费记录失败' })
+  }
+})
+
+app.get('/api/freight-records/reserve-fund', async (req, res) => {
+  try {
+    const db = await readFreightDB()
+    const { type, startDate, endDate } = req.query
+
+    let funds = db.reserve_funds || []
+
+    if (type) {
+      funds = funds.filter(f => f.type === type)
+    }
+
+    if (startDate && endDate) {
+      funds = funds.filter(f => {
+        const fundDate = f.date || ''
+        return fundDate >= startDate && fundDate <= endDate
+      })
+    }
+
+    res.json(funds)
+  } catch (error) {
+    res.status(500).json({ error: '获取备用金记录失败' })
+  }
+})
+
+app.post('/api/freight-records/reserve-fund', async (req, res) => {
+  try {
+    const db = await readFreightDB()
+    const { type, date, amount, note } = req.body
+
+    const fund = {
+      id: generateId(),
+      type,
+      date: date || new Date().toISOString().split('T')[0],
+      amount: parseFloat(amount),
+      note: note || '',
+      createdAt: new Date().toISOString(),
+      createdBy: req.user?.username || '管理员'
+    }
+
+    db.reserve_funds.push(fund)
+    await writeFreightDB(db)
+
+    res.json({ success: true, fund })
+  } catch (error) {
+    console.error('录入备用金失败:', error)
+    res.status(500).json({ error: '录入备用金失败' })
+  }
+})
+
+app.get('/api/freight-records/reserve-fund/latest', async (req, res) => {
+  try {
+    const { type } = req.query
+    const db = await readFreightDB()
+
+    const funds = db.reserve_funds.filter(f => f.type === type)
+
+    if (funds.length === 0) {
+      return res.json({ balance: 0 })
+    }
+
+    const balance = funds.reduce((sum, fund) => sum + fund.amount, 0)
+
+    res.json({ balance })
+  } catch (error) {
+    console.error('获取备用金余额失败:', error)
+    res.status(500).json({ error: '获取备用金余额失败' })
+  }
+})
 
 // 更新备用金金额
 app.put('/api/freight-records/reserve-fund/:id', async (req, res) => {
@@ -219,4 +497,4 @@ app.listen(PORT, () => {
   console.log(`========================================`)
 })
 
-module.exports = app
+export default app

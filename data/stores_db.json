@@ -1,18 +1,27 @@
 [
-  {
-    "id": 1,
-    "code": "insulation",
-    "name": "绝缘",
-    "status": "active",
-    "remark": "绝缘材料门店",
-    "created_at": "2024-01-01"
-  },
-  {
-    "id": 2,
-    "code": "zhonggu",
-    "name": "中固",
-    "status": "active",
-    "remark": "中固材料门店",
-    "created_at": "2024-01-01"
-  }
+    {
+        "id": 1,
+        "code": "insulation",
+        "name": "绝啥",
+        "status": "active",
+        "remark": "绝缘材料门店",
+        "created_at": "2024-01-01",
+        "updated_at": "2026-08-29"
+    },
+    {
+        "id": 2,
+        "code": "zhonggu",
+        "name": "中固",
+        "status": "active",
+        "remark": "中固材料门店",
+        "created_at": "2024-01-01"
+    },
+    {
+        "id": 3,
+        "code": "dada",
+        "name": "阿毛",
+        "status": "active",
+        "remark": "",
+        "created_at": "2026-08-29"
+    }
 ]

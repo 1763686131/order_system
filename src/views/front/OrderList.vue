@@ -206,8 +206,9 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
+import { getStores } from '@/utils/storeHelper'
 
 const props = defineProps({
   orders: {
@@ -223,10 +224,29 @@ const props = defineProps({
 defineEmits(['complete', 'uncomplete', 'ship', 'delete', 'edit', 'copy'])
 
 const userStore = useUserStore()
+const stores = ref([])
 
 const isEmployee = computed(() => {
   return userStore.role === 'employee' || userStore.role === 'operator'
 })
+
+// 加载门店列表
+onMounted(async () => {
+  stores.value = await getStores()
+})
+
+// 根据 store_id 或 type 获取门店名称
+const getStoreName = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store ? store.name : '未知门店'
+}
+
+// 根据 store_id 或 type 获取样式类名
+const getStoreClass = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  return storeId === 1 ? 'card-insulation' : ''
+}
 
 // 处理订单数据，拆分卡片
 const processedOrders = computed(() => {
@@ -252,8 +272,8 @@ const processedOrders = computed(() => {
       const isSplit = chunks.length > 1
       const partLetter = String.fromCharCode(65 + chunkIndex)
       const compactClass = (!isMobile && chunkLines.length >= 8) ? 'compact' : ''
-      const typeClass = (order.type == 1) ? 'card-insulation' : ''
-      const typeName = order.type == 1 ? '绝缘订单' : '中固订单'
+      const typeClass = getStoreClass(order)
+      const typeName = getStoreName(order) + '订单'
       const shortDate = order.completed_date ? order.completed_date.split(' ')[0] : '未知日期'
 
       result.push({
