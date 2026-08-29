@@ -9,100 +9,112 @@
 
       <!-- 弹窗内容 -->
       <div class="modal-body">
-        <div class="form-group">
-          <label class="required">门店编码:</label>
-          <input
-            v-model="formData.code"
-            type="text"
-            placeholder="请输入门店编码（如：insulation）"
-            class="form-input"
-            :disabled="isEdit"
-          />
-          <span class="form-tip">编码用于系统识别，创建后不可修改</span>
-        </div>
-
-        <div class="form-group">
-          <label class="required">门店名称:</label>
-          <input
-            v-model="formData.name"
-            type="text"
-            placeholder="请输入门店名称（如：绝缘）"
-            class="form-input"
-          />
-        </div>
-
-        <div class="form-group">
-          <label>状态:</label>
-          <div class="radio-group">
-            <label class="radio-item">
-              <input type="radio" v-model="formData.status" value="active" />
-              <span class="radio-label">启用</span>
-            </label>
-            <label class="radio-item">
-              <input type="radio" v-model="formData.status" value="inactive" />
-              <span class="radio-label">停用</span>
-            </label>
+        <div class="form-row">
+          <label class="form-label required">门店编码:</label>
+          <div class="form-control">
+            <input
+              v-model="formData.code"
+              type="text"
+              placeholder="请输入门店编码（如：insulation）"
+              class="form-input"
+              :disabled="isEdit"
+            />
+            <span class="form-tip">编码用于系统识别，创建后不可修改</span>
           </div>
         </div>
 
-        <div class="form-group">
-          <label>背景颜色:</label>
-          <div style="display: flex; align-items: center; gap: 10px;">
+        <div class="form-row">
+          <label class="form-label required">门店名称:</label>
+          <div class="form-control">
             <input
-              v-model="formData.color"
-              type="color"
-              class="form-color-input"
-              style="width: 60px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer;"
-            />
-            <input
-              v-model="formData.color"
+              v-model="formData.name"
               type="text"
-              placeholder="#e3f2fd"
+              placeholder="请输入门店名称（如：绝缘）"
               class="form-input"
-              style="flex: 1;"
             />
-            <div
-              style="width: 100px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px;"
-              :style="{ backgroundColor: formData.color }"
-            ></div>
           </div>
-          <span class="form-tip">用于订单卡片的背景颜色</span>
         </div>
 
-        <div class="form-group">
-          <label>字体颜色:</label>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <input
-              v-model="formData.textColor"
-              type="color"
-              class="form-color-input"
-              style="width: 60px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer;"
-            />
-            <input
-              v-model="formData.textColor"
-              type="text"
-              placeholder="#333333"
-              class="form-input"
-              style="flex: 1;"
-            />
-            <div
-              style="width: 100px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold;"
-              :style="{ backgroundColor: formData.color, color: formData.textColor }"
-            >
-              示例文本
+        <div class="form-row">
+          <label class="form-label">状态:</label>
+          <div class="form-control">
+            <div class="radio-group">
+              <label class="radio-item">
+                <input type="radio" v-model="formData.status" value="active" />
+                <span class="radio-label">启用</span>
+              </label>
+              <label class="radio-item">
+                <input type="radio" v-model="formData.status" value="inactive" />
+                <span class="radio-label">停用</span>
+              </label>
             </div>
           </div>
-          <span class="form-tip">用于订单卡片的文字颜色</span>
         </div>
 
-        <div class="form-group">
-          <label>备注:</label>
-          <textarea
-            v-model="formData.remark"
-            placeholder="请输入备注信息"
-            class="form-textarea"
-            rows="3"
-          ></textarea>
+        <div class="form-row">
+          <label class="form-label">背景颜色:</label>
+          <div class="form-control">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <input
+                v-model="formData.color"
+                type="color"
+                class="form-color-input"
+                style="width: 60px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer;"
+              />
+              <input
+                v-model="formData.color"
+                type="text"
+                placeholder="#e3f2fd"
+                class="form-input"
+                style="flex: 1; max-width: 200px;"
+              />
+              <div
+                style="width: 100px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px;"
+                :style="{ backgroundColor: formData.color }"
+              ></div>
+            </div>
+            <span class="form-tip">用于订单卡片的背景颜色</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">字体颜色:</label>
+          <div class="form-control">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <input
+                v-model="formData.textColor"
+                type="color"
+                class="form-color-input"
+                style="width: 60px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer;"
+              />
+              <input
+                v-model="formData.textColor"
+                type="text"
+                placeholder="#333333"
+                class="form-input"
+                style="flex: 1; max-width: 200px;"
+              />
+              <div
+                style="width: 100px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;"
+                :style="{ backgroundColor: formData.color, color: formData.textColor }"
+              >
+                示例文本
+              </div>
+            </div>
+            <span class="form-tip">用于订单卡片的文字颜色</span>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <label class="form-label">备注:</label>
+          <div class="form-control">
+            <textarea
+              v-model="formData.remark"
+              placeholder="请输入备注信息"
+              class="form-textarea"
+              rows="3"
+            ></textarea>
+          </div>
         </div>
       </div>
 
@@ -269,6 +281,37 @@ defineExpose({
   flex: 1;
   padding: 24px;
   overflow-y: auto;
+}
+
+/* 表单行 - 左右布局 */
+.form-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.form-label {
+  width: 100px;
+  text-align: right;
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+  padding-top: 8px;
+  flex-shrink: 0;
+}
+
+.form-label.required::before {
+  content: '*';
+  color: #ef4444;
+  margin-right: 4px;
+}
+
+.form-control {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .form-group {
