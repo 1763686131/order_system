@@ -245,8 +245,8 @@
                 },
                 {
                     "type": "other",
-                    "note": "专车",
-                    "amount": 5000
+                    "note": "货拉拉",
+                    "amount": 200
                 }
             ]
         },
@@ -311,12 +311,18 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 5000
+                    "amount": 5000,
+                    "paid_amount": 5000.0,
+                    "updated_at": "2026-08-29 08:55:47",
+                    "updated_by": "admin"
                 },
                 {
                     "type": "other",
-                    "note": "45",
-                    "amount": 455
+                    "note": "货拉拉-浙CFNNN0",
+                    "amount": 455,
+                    "paid_amount": 455.0,
+                    "updated_at": "2026-08-29 08:55:55",
+                    "updated_by": "admin"
                 }
             ]
         },
@@ -376,7 +382,10 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 455
+                    "amount": 455,
+                    "paid_amount": 455.0,
+                    "updated_at": "2026-08-29 08:40:19",
+                    "updated_by": "admin"
                 }
             ]
         },
@@ -406,7 +415,10 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 466
+                    "amount": 466,
+                    "paid_amount": 466.0,
+                    "updated_at": "2026-08-29 08:45:04",
+                    "updated_by": "admin"
                 }
             ]
         },
@@ -476,11 +488,11 @@
             "status": "shipped",
             "type": 1,
             "date": "2026-08-29 04:32",
-            "completed_date": "2026-08-29 12:33",
-            "shipped_date": "2026-08-29 12:33",
-            "shipping_method": 0,
+            "completed_date": "2026-08-29 16:54",
+            "shipped_date": "2026-08-29 16:54",
+            "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "运满满-浙CCC555",
             "order_client": "雷安电气",
             "receiver_name": "王雪萍",
             "receiver_phone": "13968497998",
@@ -491,7 +503,14 @@
             "goods_packaging": "托盘",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 0
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 500
+                }
+            ]
         },
         {
             "id": 180,

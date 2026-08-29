@@ -60,53 +60,51 @@
           <template v-for="(item, index) in mergedOrdersAndFunds" :key="item.type === 'order' ? `order-${item.id}-${item.freightCostIndex}` : `fund-${item.id}`">
             <!-- 订单行 -->
             <tr v-if="item.type === 'order'" :class="getRowClass(item)">
-              <td class="col-index">{{ index + 1 }}</td>
-              <td class="col-date">{{ formatDate(item.completed_date) }}</td>
-              <td class="col-name">
-                {{ item.order_client || '-' }}
-                <span v-if="item.isMultiFreight" class="freight-index">-{{ getFreightLabel(item.currentFreightCost) }}</span>
-              </td>
-              <td class="col-quantity">{{ getTotalWeight(item) }}</td>
-              <td class="col-address">
+              <!-- 只在第一笔运费时显示前面的列，使用 rowspan 合并 -->
+              <template v-if="item.freightCostIndex === 0">
+                <td class="col-index" :rowspan="item.freightCostTotal">{{ index + 1 }}</td>
+                <td class="col-date" :rowspan="item.freightCostTotal">{{ formatDate(item.completed_date) }}</td>
+                <td class="col-name" :rowspan="item.freightCostTotal">{{ item.order_client || '-' }}</td>
+                <td class="col-quantity" :rowspan="item.freightCostTotal">{{ getTotalWeight(item) }}</td>
+                <td class="col-address" :rowspan="item.freightCostTotal">
+                  <span
+                    v-if="item.receiver_address && item.receiver_address.length > 6"
+                    class="address-text clickable"
+                    @click="showAddressDetail(item.receiver_address)"
+                  >
+                    {{ item.receiver_address.substring(0, 6) }}...
+                  </span>
+                  <span v-else>{{ item.receiver_address || '-' }}</span>
+                </td>
+              </template>
+              <!-- 从渠道开始，每笔运费都显示 -->
+              <td class="col-channel">{{ getChannelName(item) }}</td>
+              <td class="col-logistics-no">{{ getLogisticsNumber(item) }}</td>
+              <td class="col-price">¥ {{ getFreightAmountForRow(item).toFixed(2) }}</td>
+              <td class="col-paid">
+                <!-- 编辑状态 -->
+                <input
+                  v-if="editingOrderId === item.id && editingFreightIndex === item.freightCostIndex"
+                  type="number"
+                  class="input-paid"
+                  v-model.number="editingPaidAmount"
+                  @keyup.enter="savePaidAmount(item)"
+                  @blur="cancelOrderEdit"
+                />
+                <!-- 显示状态 -->
                 <span
-                  v-if="item.receiver_address && item.receiver_address.length > 6"
-                  class="address-text clickable"
-                  @click="showAddressDetail(item.receiver_address)"
-              >
-                {{ item.receiver_address.substring(0, 6) }}...
-              </span>
-              <span v-else>{{ item.receiver_address || '-' }}</span>
-            </td>
-            <td class="col-channel">{{ getShippingMethodText(item) }}</td>
-            <td class="col-logistics-no">
-              <span v-if="item.logistics_no">{{ item.logistics_no }}</span>
-              <span v-else>-</span>
-            </td>
-            <td class="col-price">¥ {{ getFreightAmountForRow(item).toFixed(2) }}</td>
-            <td class="col-paid">
-              <!-- 编辑状态 -->
-              <input
-                v-if="editingOrderId === item.id && editingFreightIndex === item.freightCostIndex"
-                type="number"
-                class="input-paid"
-                v-model.number="editingPaidAmount"
-                @keyup.enter="savePaidAmount(item)"
-                @blur="cancelOrderEdit"
-              />
-              <!-- 显示状态 -->
-              <span
-                v-else
-                class="paid-amount-text"
-                @dblclick="startEditOrder(item)"
-              >
-                {{ getPaidAmount(item) || '-' }}
-              </span>
-            </td>
-            <td class="col-balance">¥ {{ calculateBalance(index).toFixed(2) }}</td>
-            <td class="col-memo"></td>
-            <td class="col-return">{{ hasReceipt(item) ? '已传' : '' }}</td>
-            <td class="col-remark"></td>
-          </tr>
+                  v-else
+                  class="paid-amount-text"
+                  @dblclick="startEditOrder(item)"
+                >
+                  {{ getPaidAmount(item) || '-' }}
+                </span>
+              </td>
+              <td class="col-balance">¥ {{ calculateBalance(index).toFixed(2) }}</td>
+              <td class="col-memo"></td>
+              <td class="col-return">{{ hasReceipt(item) ? '已传' : '' }}</td>
+              <td class="col-remark"></td>
+            </tr>
 
           <!-- 备用金行 -->
           <tr v-else-if="item.type === 'fund'" class="row-fund-entry">
@@ -763,6 +761,49 @@ const getFreightLabel = (freightCost) => {
   return freightCost.note || '运费'
 }
 
+// 拆分物流信息：获取渠道名称（-号之前）
+const getChannelName = (item) => {
+  // 优先从 freight_costs 的 note 中获取
+  if (item.currentFreightCost && item.currentFreightCost.note) {
+    const parts = item.currentFreightCost.note.split('-')
+    if (parts.length > 1) {
+      return parts[0].trim()
+    }
+  }
+
+  // 如果 note 没有，从 logistics_no 中获取
+  if (item.logistics_no) {
+    const parts = item.logistics_no.split('-')
+    if (parts.length > 1) {
+      return parts[0].trim()
+    }
+    return item.logistics_no
+  }
+
+  return '-'
+}
+
+// 拆分物流信息：获取单号（-号之后）
+const getLogisticsNumber = (item) => {
+  // 优先从 freight_costs 的 note 中获取
+  if (item.currentFreightCost && item.currentFreightCost.note) {
+    const parts = item.currentFreightCost.note.split('-')
+    if (parts.length > 1) {
+      return parts.slice(1).join('-').trim()
+    }
+  }
+
+  // 如果 note 没有，从 logistics_no 中获取
+  if (item.logistics_no) {
+    const parts = item.logistics_no.split('-')
+    if (parts.length > 1) {
+      return parts.slice(1).join('-').trim()
+    }
+  }
+
+  return '-'
+}
+
 // 获取当前行的运费金额
 const getFreightAmountForRow = (item) => {
   if (item.currentFreightCost) {
@@ -861,7 +902,7 @@ const savePaidAmount = async (item) => {
     }
 
     // 同时更新原始订单列表中的数据
-    const order = allOrders.value.find(o => o.id === item.id)
+    const order = orders.value.find(o => o.id === item.id)
     if (order && order.freight_costs && order.freight_costs[item.freightCostIndex]) {
       order.freight_costs[item.freightCostIndex].paid_amount = newAmount
     }

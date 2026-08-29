@@ -118,11 +118,11 @@
             "id": "0e58a4d3-37e4-4edb-8d69-43d857e050eb",
             "type": "logistics-truck",
             "date": "2026-08-27",
-            "amount": 100.0,
+            "amount": 1000.0,
             "note": "",
             "createdAt": "2026-08-29 06:50:45",
             "createdBy": "1",
-            "updatedAt": "2026-08-29 07:54:35",
+            "updatedAt": "2026-08-29 08:39:49",
             "updatedBy": "admin"
         },
         {
