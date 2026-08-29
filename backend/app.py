@@ -12,6 +12,7 @@ import re    # 新增：用于清理文件名非法字符
 orders_lock = Lock()
 users_lock = Lock()
 materials_lock = Lock()
+freight_records_lock = Lock()
 
 # ------------------------------------------------
 # 辅助函数：清理文件名中的非法字符（防崩溃核心）
@@ -27,6 +28,7 @@ CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type
 USERS_FILE = '/app/data/users_db.json'
 ORDERS_FILE = '/app/data/orders_db.json'
 MATERIALS_FILE = '/app/data/material_db.json'
+FREIGHT_RECORDS_FILE = '/app/data/freight_records_db.json'
 BASE_UPLOAD_DIR = '/app/uploads' # 统一定义图片存储路径
 
 if os.path.exists('/app/frontend/index.html'):
@@ -79,6 +81,21 @@ def read_materials():
 
 def write_materials(data):
     with open(MATERIALS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+
+def read_freight_records():
+    with freight_records_lock:
+        os.makedirs(os.path.dirname(FREIGHT_RECORDS_FILE), exist_ok=True)
+        if not os.path.exists(FREIGHT_RECORDS_FILE):
+            d = {"freight_records": [], "reserve_funds": []}
+            write_freight_records(d)
+            return d
+        with open(FREIGHT_RECORDS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+def write_freight_records(data):
+    with freight_records_lock:
+        with open(FREIGHT_RECORDS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
 
 @app.route('/', methods=['GET'])
 def index():
@@ -564,6 +581,95 @@ def delete_order_receipt(order_id):
 @app.route('/uploads/<path:filename>')
 def serve_uploads(filename):
     return send_from_directory(BASE_UPLOAD_DIR, filename)
+
+# ==========================================
+# 💰 运费记录相关接口
+# ==========================================
+@app.route('/api/freight-records', methods=['GET'])
+def get_freight_records():
+    """获取所有运费记录"""
+    data = read_freight_records()
+    return jsonify(data.get('freight_records', []))
+
+@app.route('/api/freight-records', methods=['POST'])
+def create_freight_record():
+    """创建运费记录（审核时）"""
+    req_data = request.json
+    data = read_freight_records()
+
+    record = {
+        'id': str(uuid.uuid4()),
+        'type': req_data.get('type'),
+        'year': req_data.get('year'),
+        'month': req_data.get('month'),
+        'period': req_data.get('period'),
+        'orders': req_data.get('orders', []),
+        'totalAmount': req_data.get('totalAmount'),
+        'reserveFund': req_data.get('reserveFund'),
+        'createdAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'createdBy': request.headers.get('Username', '管理员')
+    }
+
+    data['freight_records'].append(record)
+    write_freight_records(data)
+
+    return jsonify({'success': True, 'record': record})
+
+@app.route('/api/freight-records/reserve-fund', methods=['GET'])
+def get_reserve_funds():
+    """获取备用金记录（支持按类型和日期范围筛选）"""
+    data = read_freight_records()
+    funds = data.get('reserve_funds', [])
+
+    # 按类型筛选
+    fund_type = request.args.get('type')
+    if fund_type:
+        funds = [f for f in funds if f.get('type') == fund_type]
+
+    # 按日期范围筛选
+    start_date = request.args.get('startDate')
+    end_date = request.args.get('endDate')
+    if start_date and end_date:
+        funds = [f for f in funds if f.get('date', '') >= start_date and f.get('date', '') <= end_date]
+
+    return jsonify(funds)
+
+@app.route('/api/freight-records/reserve-fund', methods=['POST'])
+def create_reserve_fund():
+    """录入备用金"""
+    req_data = request.json
+    data = read_freight_records()
+
+    fund = {
+        'id': str(uuid.uuid4()),
+        'type': req_data.get('type'),
+        'date': req_data.get('date', datetime.now().strftime('%Y-%m-%d')),
+        'amount': float(req_data.get('amount', 0)),
+        'note': req_data.get('note', ''),
+        'createdAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'createdBy': request.headers.get('Username', '管理员')
+    }
+
+    data['reserve_funds'].append(fund)
+    write_freight_records(data)
+
+    return jsonify({'success': True, 'fund': fund})
+
+@app.route('/api/freight-records/reserve-fund/latest', methods=['GET'])
+def get_latest_reserve_fund():
+    """获取最新备用金余额"""
+    data = read_freight_records()
+    funds = data.get('reserve_funds', [])
+
+    # 按类型筛选
+    fund_type = request.args.get('type')
+    if fund_type:
+        funds = [f for f in funds if f.get('type') == fund_type]
+
+    # 计算总额
+    balance = sum(f.get('amount', 0) for f in funds)
+
+    return jsonify({'balance': balance})
 
 # ==========================================
 # 🎯 文件万能通配拦截器 (必须垫在所有特定路由的最后面)

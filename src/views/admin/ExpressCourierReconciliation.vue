@@ -60,6 +60,18 @@
             <td></td>
           </tr>
 
+          <!-- 本期录入的备用金记录行 -->
+          <tr v-for="(fund, fundIndex) in periodFundsList" :key="`fund-${fund.id}`" class="row-balance-transfer">
+            <td class="col-index">{{ fundIndex + 2 }}</td>
+            <td class="col-date">{{ formatDate(fund.date) }}</td>
+            <td colspan="7" class="balance-label">备用金录入{{ fund.note ? `（${fund.note}）` : '' }}</td>
+            <td class="balance-amount positive">¥ {{ fund.amount.toFixed(2) }}</td>
+            <td class="balance-amount positive">¥ {{ calculateRunningBalance(fundIndex).toFixed(2) }}</td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+
           <!-- 数据行 -->
           <tr v-for="(order, index) in paginatedOrders" :key="order.id" :class="getRowClass(order)">
             <td class="col-index">{{ getRowIndex(index) }}</td>
@@ -223,6 +235,9 @@ const fundNote = ref('')
 // 本期汇入的备用金
 const periodReserveFund = ref(0)
 
+// 本期备用金列表（用于渲染独立行）
+const periodFundsList = ref([])
+
 // 当前期数文本
 const currentPeriodText = computed(() => {
   return `${selectedYear.value}年${selectedMonth.value}月对账单`
@@ -350,6 +365,15 @@ const formatDate = (dateStr) => {
   return date
 }
 
+// 计算累计余额（上期余额 + 当前及之前所有备用金）
+const calculateRunningBalance = (fundIndex) => {
+  let balance = previousBalance.value
+  for (let i = 0; i <= fundIndex; i++) {
+    balance += periodFundsList.value[i].amount
+  }
+  return balance
+}
+
 // 获取第一条数据的日期
 const getFirstDate = () => {
   if (paginatedOrders.value.length === 0) return '-'
@@ -433,6 +457,7 @@ const fetchPeriodReserveFund = async () => {
     })
 
     if (response && Array.isArray(response)) {
+      periodFundsList.value = response
       periodReserveFund.value = response.reduce((sum, fund) => sum + fund.amount, 0)
     }
   } catch (error) {
@@ -507,7 +532,18 @@ const auditCurrentPeriod = async () => {
   }
 
   try {
-    const orderIds = filteredOrders.value.map(order => order.id)
+    // 构建完整的订单信息数组
+    const orderDetails = filteredOrders.value.map(order => ({
+      id: order.id,
+      date: order.completed_date,
+      client: order.order_client || '-',
+      weight: order.goods_weight || '-',
+      address: order.receiver_address || '-',
+      channel: getShippingMethodText(order),
+      logisticsNo: order.logistics_no || '-',
+      freight: getFreightAmount(order),
+      hasReceipt: hasReceipt(order)
+    }))
 
     const response = await request({
       url: '/freight-records',
@@ -517,9 +553,11 @@ const auditCurrentPeriod = async () => {
         year: selectedYear.value,
         month: selectedMonth.value,
         period: null,
-        orders: orderIds,
+        orders: orderDetails,
         totalAmount: totalFreight.value,
-        reserveFund: finalBalance.value
+        reserveFund: finalBalance.value,
+        orderCount: totalOrders.value,
+        periodFund: periodReserveFund.value
       }
     })
 

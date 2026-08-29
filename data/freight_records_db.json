@@ -1,4 +1,118 @@
 {
-  "freight_records": [],
-  "reserve_funds": []
+    "freight_records": [
+        {
+            "id": "93eccba2-1e7d-4d41-b086-45730546061a",
+            "type": "logistics-truck",
+            "year": 2026,
+            "month": 8,
+            "period": "21-31",
+            "orders": [
+                158,
+                160,
+                162,
+                177,
+                159,
+                150,
+                178
+            ],
+            "totalAmount": 15863,
+            "reserveFund": -5863,
+            "createdAt": "2026-08-29 06:35:16",
+            "createdBy": "1"
+        },
+        {
+            "id": "0abbec4b-1747-4b7d-ae82-779db98692f0",
+            "type": "logistics-truck",
+            "year": 2026,
+            "month": 8,
+            "period": "21-31",
+            "orders": [
+                {
+                    "id": 158,
+                    "date": "2026-08-21 11:15",
+                    "client": "弘立德",
+                    "weight": "180kg",
+                    "address": "新疆哈密市伊州区新星市黄田农场兔喜生活附近自取",
+                    "channel": "物流",
+                    "logisticsNo": "三志物流-987484572",
+                    "freight": 5000
+                },
+                {
+                    "id": 160,
+                    "date": "2026-08-21 11:15",
+                    "client": "陶芸",
+                    "weight": "720kg",
+                    "address": "广东省珠海市金湾区三灶镇珠海国际健康港园区14栋",
+                    "channel": "物流",
+                    "logisticsNo": "三志物流-4545",
+                    "freight": 455
+                },
+                {
+                    "id": 162,
+                    "date": "2026-08-24 21:33",
+                    "client": "马姚丰",
+                    "weight": "360kg",
+                    "address": "浙江省嘉兴市海宁市盐官镇",
+                    "channel": "物流",
+                    "logisticsNo": "三志物流-444",
+                    "freight": 466
+                },
+                {
+                    "id": 177,
+                    "date": "2026-08-28 17:51",
+                    "client": "夏华平",
+                    "weight": "44",
+                    "address": "湖北省武汉市东西湖区团结村646仓库",
+                    "channel": "物流",
+                    "logisticsNo": "安能快递",
+                    "freight": 554
+                },
+                {
+                    "id": 159,
+                    "date": "2026-08-28 17:54",
+                    "client": "熊芳芳",
+                    "weight": "320",
+                    "address": "长沙南湖五金机电市场12栋11号",
+                    "channel": "物流",
+                    "logisticsNo": "安能快递-987484572",
+                    "freight": 77
+                },
+                {
+                    "id": 150,
+                    "date": "2026-08-29 11:26",
+                    "client": "雷安电气",
+                    "weight": "2150kg",
+                    "address": "楚门镇南兴东路190号浙江雷安电气有限公司",
+                    "channel": "物流",
+                    "logisticsNo": "三志物流-455",
+                    "freight": 8755
+                },
+                {
+                    "id": 178,
+                    "date": "2026-08-29 12:27",
+                    "client": "雷安",
+                    "weight": "2150kg",
+                    "address": "楚门镇南兴东路190号浙江雷安电气有限公司",
+                    "channel": "物流",
+                    "logisticsNo": "三志物流-385-388",
+                    "freight": 556
+                }
+            ],
+            "totalAmount": 15863,
+            "reserveFund": -5863,
+            "createdAt": "2026-08-29 06:39:31",
+            "createdBy": "1"
+        }
+    ],
+    "reserve_funds": [
+        {
+            "id": "ef291cc3-ed32-45cf-9160-da35caf5d665",
+            "type": "logistics-truck",
+            "date": "2026-08-25",
+            "amount": 10000.0,
+            "note": "",
+            "createdAt": "2026-08-29 06:34:58",
+            "createdBy": "1"
+        }
+    ]
 }
