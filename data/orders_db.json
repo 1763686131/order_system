@@ -355,7 +355,10 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 77
+                    "amount": 77,
+                    "paid_amount": 77.0,
+                    "updated_at": "2026-08-29 13:18:29",
+                    "updated_by": "admin"
                 }
             ]
         },
@@ -484,7 +487,10 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 556
+                    "amount": 556,
+                    "paid_amount": 556.0,
+                    "updated_at": "2026-08-29 13:18:34",
+                    "updated_by": "admin"
                 }
             ]
         },
@@ -514,7 +520,10 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 500
+                    "amount": 500,
+                    "paid_amount": 500.0,
+                    "updated_at": "2026-08-29 13:18:38",
+                    "updated_by": "admin"
                 }
             ]
         },
@@ -530,6 +539,29 @@
             "shipping_custom": "",
             "logistics_no": "暂未录入单号",
             "order_client": "雷安",
+            "receiver_name": "王雪萍",
+            "receiver_phone": "13968497998",
+            "receiver_address": "楚门镇南兴东路190号浙江雷安电气有限公司",
+            "goods_name": "树脂：2103A",
+            "goods_weight": "2150kg",
+            "goods_quantity": "7件",
+            "goods_packaging": "托盘",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 0
+        },
+        {
+            "id": 181,
+            "title": "",
+            "status": "completed",
+            "type": 1,
+            "date": "2026-08-29 13:17",
+            "completed_date": "2026-08-29 13:17",
+            "shipped_date": "",
+            "shipping_method": "",
+            "shipping_custom": "",
+            "logistics_no": "",
+            "order_client": "雷安电器",
             "receiver_name": "王雪萍",
             "receiver_phone": "13968497998",
             "receiver_address": "楚门镇南兴东路190号浙江雷安电气有限公司",

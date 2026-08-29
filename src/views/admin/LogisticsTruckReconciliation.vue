@@ -68,14 +68,16 @@
                 <td class="col-goods" :rowspan="item.freightCostTotal">{{ getGoodsName(item) }}</td>
                 <td class="col-quantity" :rowspan="item.freightCostTotal">{{ getTotalWeight(item) }}</td>
                 <td class="col-address" :rowspan="item.freightCostTotal">
-                  <span
-                    v-if="item.receiver_address && item.receiver_address.length > 6"
-                    class="address-text clickable"
-                    @click="showAddressDetail(item.receiver_address)"
-                  >
-                    {{ item.receiver_address.substring(0, 6) }}...
-                  </span>
-                  <span v-else>{{ item.receiver_address || '-' }}</span>
+                  <div class="expandable-cell">
+                    <span class="cell-text">{{ (item.receiver_address || '-').substring(0, 6) }}</span>
+                    <span
+                      v-if="item.receiver_address && item.receiver_address.length > 6"
+                      class="expand-icon"
+                      @click="showAddressDetail(item.receiver_address)"
+                    >
+                      ▼
+                    </span>
+                  </div>
                 </td>
               </template>
               <!-- 从渠道开始，每笔运费都显示 -->
@@ -259,7 +261,7 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
 import request from '@/api/request'
-import * as XLSX from 'xlsx'
+import { exportFreightRecords } from '@/utils/excelExport'
 
 const API_BASE_URL = '/api'
 
@@ -462,14 +464,19 @@ const mergedOrdersAndFunds = computed(() => {
 
 // 统计数据
 const totalFreight = computed(() => {
-  return filteredOrders.value.reduce((sum, order) => sum + getFreightAmount(order), 0)
+  return filteredOrders.value.reduce((sum, order) => {
+    // 计算所有运费的总和，而不是只计算第一笔
+    if (!order.freight_costs || !Array.isArray(order.freight_costs)) return sum
+    const orderTotal = order.freight_costs.reduce((freightSum, cost) => freightSum + (cost.amount || 0), 0)
+    return sum + orderTotal
+  }, 0)
 })
 
 const finalBalance = computed(() => {
   return periodReserveFund.value - totalFreight.value
 })
 
-// 获取运费金额
+// 获取运费金额（用于向后兼容，但不再用于统计总额）
 const getFreightAmount = (order) => {
   if (!order.freight_costs || !Array.isArray(order.freight_costs)) return 0
   const freightItem = order.freight_costs.find(item => item.type === 'freight')
@@ -622,189 +629,22 @@ const nextPage = () => {
 
 // 导出数据
 const exportData = () => {
-  // 准备导出数据
-  const exportRows = []
-
-  // 添加标题行
-  exportRows.push(['运费记录单'])
-  exportRows.push([]) // 空行
-
-  // 添加日期信息
-  exportRows.push([`日期: ${currentPeriodText.value}`])
-  exportRows.push([]) // 空行
-
-  // 添加表头
-  const headerRow = [
-    '序号', '日期', '客户', '货物信息', '数量 (kg)', '收货地址',
-    '渠道', '车牌号/单号', '价格 (¥)', '已支付', '备用金合计', '回单回传', '备注'
-  ]
-  exportRows.push(headerRow)
-
-  const dataStartRow = exportRows.length // 记录数据开始行号
-
-  // 添加数据行
-  mergedOrdersAndFunds.value.forEach((item, index) => {
-    if (item.itemType === 'order') {
-      // 只在第一笔运费时添加完整信息
-      if (item.freightCostIndex === 0) {
-        const row = [
-          getDisplayIndex(index),
-          formatDate(item.completed_date),
-          item.order_client || '-',
-          getGoodsName(item),
-          getTotalWeight(item),
-          item.receiver_address || '-',
-          getChannelName(item),
-          getLogisticsNumber(item),
-          getFreightAmountForRow(item),
-          getPaidAmount(item),
-          `¥ ${calculateBalance(index).toFixed(2)}`,
-          hasReceipt(item) ? '✓' : '',
-          item.remark || ''
-        ]
-        exportRows.push(row)
-      } else {
-        // 多笔运费的后续行，只显示运费相关列
-        const row = [
-          '', '', '', '', '', '',
-          getChannelName(item),
-          getLogisticsNumber(item),
-          getFreightAmountForRow(item),
-          getPaidAmount(item),
-          '',
-          hasReceipt(item) ? '✓' : '',
-          item.remark || ''
-        ]
-        exportRows.push(row)
-      }
-    } else if (item.itemType === 'fund') {
-      // 备用金行
-      const row = [
-        getDisplayIndex(index),
-        formatDate(item.date),
-        '备用金转入' + (item.note ? `（${item.note}）` : ''),
-        '', '', '', '', '',
-        '',
-        item.amount >= 0 ? '+ ' + item.amount.toFixed(2) : item.amount.toFixed(2),
-        `¥ ${calculateBalance(index).toFixed(2)}`,
-        '',
-        ''
-      ]
-      exportRows.push(row)
-    }
+  exportFreightRecords({
+    periodText: currentPeriodText.value,
+    mergedData: mergedOrdersAndFunds.value,
+    totalFreight: totalFreight.value,
+    finalBalance: finalBalance.value,
+    getDisplayIndex,
+    formatDate,
+    getGoodsName,
+    getTotalWeight,
+    getChannelName,
+    getLogisticsNumber,
+    getFreightAmountForRow,
+    getPaidAmount,
+    calculateBalance,
+    hasReceipt
   })
-
-  // 添加空行和汇总
-  exportRows.push([])
-  const summaryRow = ['合计', '', '', '', '', '', '', '',
-    `¥ ${totalFreight.value.toFixed(2)}`, '',
-    `备用金: ¥ ${finalBalance.value.toFixed(2)}`, '', '']
-  exportRows.push(summaryRow)
-
-  // 创建工作簿和工作表
-  const wb = XLSX.utils.book_new()
-  const ws = XLSX.utils.aoa_to_sheet(exportRows)
-
-  // 设置列宽
-  ws['!cols'] = [
-    { wch: 6 },  // 序号
-    { wch: 12 }, // 日期
-    { wch: 15 }, // 客户
-    { wch: 15 }, // 货物信息
-    { wch: 12 }, // 数量
-    { wch: 30 }, // 收货地址
-    { wch: 12 }, // 渠道
-    { wch: 15 }, // 车牌号/单号
-    { wch: 12 }, // 价格
-    { wch: 12 }, // 已支付
-    { wch: 15 }, // 备用金合计
-    { wch: 10 }, // 回单回传
-    { wch: 20 }  // 备注
-  ]
-
-  // 设置行高
-  ws['!rows'] = []
-  ws['!rows'][0] = { hpt: 30 } // 标题行高度
-
-  // 样式定义
-  const titleStyle = {
-    font: { name: '微软雅黑', sz: 16, bold: true },
-    alignment: { horizontal: 'center', vertical: 'center' }
-  }
-
-  const headerStyle = {
-    font: { name: '微软雅黑', sz: 11, bold: true, color: { rgb: 'FFFFFF' } },
-    fill: { fgColor: { rgb: '4472C4' } },
-    alignment: { horizontal: 'center', vertical: 'center' },
-    border: {
-      top: { style: 'thin', color: { rgb: '000000' } },
-      bottom: { style: 'thin', color: { rgb: '000000' } },
-      left: { style: 'thin', color: { rgb: '000000' } },
-      right: { style: 'thin', color: { rgb: '000000' } }
-    }
-  }
-
-  const dataStyle = {
-    font: { name: '微软雅黑', sz: 10 },
-    alignment: { horizontal: 'center', vertical: 'center' },
-    border: {
-      top: { style: 'thin', color: { rgb: 'D0D0D0' } },
-      bottom: { style: 'thin', color: { rgb: 'D0D0D0' } },
-      left: { style: 'thin', color: { rgb: 'D0D0D0' } },
-      right: { style: 'thin', color: { rgb: 'D0D0D0' } }
-    }
-  }
-
-  const summaryStyle = {
-    font: { name: '微软雅黑', sz: 11, bold: true },
-    alignment: { horizontal: 'center', vertical: 'center' },
-    fill: { fgColor: { rgb: 'F2F2F2' } },
-    border: {
-      top: { style: 'medium', color: { rgb: '000000' } },
-      bottom: { style: 'medium', color: { rgb: '000000' } },
-      left: { style: 'thin', color: { rgb: '000000' } },
-      right: { style: 'thin', color: { rgb: '000000' } }
-    }
-  }
-
-  // 应用样式到单元格
-  const range = XLSX.utils.decode_range(ws['!ref'])
-
-  for (let R = range.s.r; R <= range.e.r; ++R) {
-    for (let C = range.s.c; C <= range.e.c; ++C) {
-      const cellAddress = XLSX.utils.encode_cell({ r: R, c: C })
-      if (!ws[cellAddress]) continue
-
-      // 标题行样式
-      if (R === 0) {
-        ws[cellAddress].s = titleStyle
-      }
-      // 表头样式
-      else if (R === 4) {
-        ws[cellAddress].s = headerStyle
-      }
-      // 汇总行样式
-      else if (R === exportRows.length - 1) {
-        ws[cellAddress].s = summaryStyle
-      }
-      // 数据行样式
-      else if (R >= dataStartRow) {
-        ws[cellAddress].s = dataStyle
-      }
-    }
-  }
-
-  // 合并标题单元格
-  ws['!merges'] = [
-    { s: { r: 0, c: 0 }, e: { r: 0, c: 12 } } // 合并标题行
-  ]
-
-  // 添加工作表到工作簿
-  XLSX.utils.book_append_sheet(wb, ws, '运费记录')
-
-  // 导出文件
-  const fileName = `物流对账_${currentPeriodText.value}.xlsx`
-  XLSX.writeFile(wb, fileName, { bookType: 'xlsx', type: 'binary', cellStyles: true })
 }
 
 // 获取备用金余额
@@ -1473,15 +1313,34 @@ onMounted(() => {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
-/* 地址可点击 */
-.address-text.clickable {
-  color: #3b82f6;
-  cursor: pointer;
-  text-decoration: underline;
+/* 可展开单元格样式 */
+.expandable-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: center;
 }
 
-.address-text.clickable:hover {
+.cell-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.expand-icon {
+  color: #3b82f6;
+  cursor: pointer;
+  font-size: 12px;
+  padding: 2px 4px;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.expand-icon:hover {
   color: #2563eb;
+  background: #f3f4f6;
+  border-radius: 3px;
 }
 
 /* 特殊行样式 */
