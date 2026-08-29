@@ -118,37 +118,45 @@
             "id": "0e58a4d3-37e4-4edb-8d69-43d857e050eb",
             "type": "logistics-truck",
             "date": "2026-08-27",
-            "amount": 10000.0,
+            "amount": 100.0,
             "note": "",
             "createdAt": "2026-08-29 06:50:45",
-            "createdBy": "1"
+            "createdBy": "1",
+            "updatedAt": "2026-08-29 07:54:35",
+            "updatedBy": "admin"
         },
         {
             "id": "dc252a80-52b9-418f-b7a7-a816fb33a0d5",
             "type": "logistics-truck",
             "date": "2026-08-22",
-            "amount": 10000.0,
+            "amount": 1000.0,
             "note": "",
             "createdAt": "2026-08-29 07:14:09",
-            "createdBy": "1"
+            "createdBy": "1",
+            "updatedAt": "2026-08-29 07:54:27",
+            "updatedBy": "admin"
         },
         {
             "id": "1239aad8-55dd-4c66-b4c3-fb8cab3e8bf6",
             "type": "logistics-truck",
             "date": "2026-08-21",
-            "amount": 20000.0,
+            "amount": 200.0,
             "note": "",
             "createdAt": "2026-08-29 07:36:16",
-            "createdBy": "1"
+            "createdBy": "1",
+            "updatedAt": "2026-08-29 08:16:43",
+            "updatedBy": "admin"
         },
         {
             "id": "ae543877-dff7-49d2-a80d-b9b87e03a252",
             "type": "logistics-truck",
             "date": "2026-08-21",
-            "amount": -10000.0,
+            "amount": 100.0,
             "note": "",
             "createdAt": "2026-08-29 07:36:59",
-            "createdBy": "1"
+            "createdBy": "1",
+            "updatedAt": "2026-08-29 08:26:58",
+            "updatedBy": "admin"
         }
     ]
 }

@@ -51,24 +51,24 @@ def write_users(data):
     with open(USERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
 def read_orders():
-    with orders_lock:
-        os.makedirs(os.path.dirname(ORDERS_FILE), exist_ok=True)
-        if not os.path.exists(ORDERS_FILE):
-            ct = datetime.now().strftime('%Y-%m-%d %H:%M')
-            d = {"orders": [{"id": 1, "title": "测试订单", "status": "pending", "type": 0, "date": ct, "completed_date": ""}]}
-            write_orders(d)
-            return d
-        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
+    # 注意：此函数不加锁，由调用者负责加锁
+    os.makedirs(os.path.dirname(ORDERS_FILE), exist_ok=True)
+    if not os.path.exists(ORDERS_FILE):
+        ct = datetime.now().strftime('%Y-%m-%d %H:%M')
+        d = {"orders": [{"id": 1, "title": "测试订单", "status": "pending", "type": 0, "date": ct, "completed_date": ""}]}
+        write_orders(d)
+        return d
+    with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+        return json.load(f)
 
 def write_orders(data):
-    with orders_lock:
-        # 先写入临时文件，然后重命名，避免写入过程中文件损坏
-        temp_file = ORDERS_FILE + '.tmp'
-        with open(temp_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-        # 原子操作：重命名替换
-        os.replace(temp_file, ORDERS_FILE)
+    # 注意：调用此函数前应该已经获取了 orders_lock
+    # 先写入临时文件，然后重命名，避免写入过程中文件损坏
+    temp_file = ORDERS_FILE + '.tmp'
+    with open(temp_file, 'w', encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+    # 原子操作：重命名替换
+    os.replace(temp_file, ORDERS_FILE)
 
 def read_materials():
     os.makedirs(os.path.dirname(MATERIALS_FILE), exist_ok=True)
@@ -698,6 +698,49 @@ def update_reserve_fund(fund_id):
     write_freight_records(data)
 
     return jsonify({'success': True, 'fund': funds[fund_index]})
+
+@app.route('/api/orders/<int:order_id>/paid-amount', methods=['PUT'])
+def update_order_paid_amount(order_id):
+    """更新订单的已支付金额"""
+    req_data = request.json
+
+    with orders_lock:
+        data = read_orders()
+        orders = data.get('orders', [])
+
+        # 查找对应的订单
+        order_index = None
+        for i, order in enumerate(orders):
+            if order.get('id') == order_id:
+                order_index = i
+                break
+
+        if order_index is None:
+            return jsonify({'success': False, 'message': '订单不存在'}), 404
+
+        order = orders[order_index]
+
+        # 确保 freight_costs 数组存在
+        if 'freight_costs' not in order or not isinstance(order['freight_costs'], list):
+            order['freight_costs'] = []
+
+        freight_cost_index = req_data.get('freightCostIndex', 0)
+        paid_amount = float(req_data.get('paidAmount', 0))
+
+        # 如果对应的运费记录不存在，创建一个
+        if freight_cost_index >= len(order['freight_costs']):
+            return jsonify({'success': False, 'message': '运费记录索引超出范围'}), 400
+
+        # 更新已支付金额
+        order['freight_costs'][freight_cost_index]['paid_amount'] = paid_amount
+        order['freight_costs'][freight_cost_index]['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        order['freight_costs'][freight_cost_index]['updated_by'] = request.headers.get('Username', 'admin')
+
+        orders[order_index] = order
+        data['orders'] = orders
+        write_orders(data)
+
+    return jsonify({'success': True, 'order': order})
 
 # ==========================================
 # 🎯 文件万能通配拦截器 (必须垫在所有特定路由的最后面)

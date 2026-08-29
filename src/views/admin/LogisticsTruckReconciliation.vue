@@ -57,12 +57,15 @@
         </thead>
         <tbody>
           <!-- 混合显示订单和备用金记录（按日期排序） -->
-          <template v-for="(item, index) in mergedOrdersAndFunds" :key="item.id || item.fundId">
+          <template v-for="(item, index) in mergedOrdersAndFunds" :key="item.type === 'order' ? `order-${item.id}-${item.freightCostIndex}` : `fund-${item.id}`">
             <!-- 订单行 -->
             <tr v-if="item.type === 'order'" :class="getRowClass(item)">
               <td class="col-index">{{ index + 1 }}</td>
               <td class="col-date">{{ formatDate(item.completed_date) }}</td>
-              <td class="col-name">{{ item.order_client || '-' }}</td>
+              <td class="col-name">
+                {{ item.order_client || '-' }}
+                <span v-if="item.isMultiFreight" class="freight-index">-{{ getFreightLabel(item.currentFreightCost) }}</span>
+              </td>
               <td class="col-quantity">{{ getTotalWeight(item) }}</td>
               <td class="col-address">
                 <span
@@ -79,9 +82,25 @@
               <span v-if="item.logistics_no">{{ item.logistics_no }}</span>
               <span v-else>-</span>
             </td>
-            <td class="col-price">¥ {{ getFreightAmount(item).toFixed(2) }}</td>
+            <td class="col-price">¥ {{ getFreightAmountForRow(item).toFixed(2) }}</td>
             <td class="col-paid">
-              <input type="text" class="input-paid" placeholder="-" />
+              <!-- 编辑状态 -->
+              <input
+                v-if="editingOrderId === item.id && editingFreightIndex === item.freightCostIndex"
+                type="number"
+                class="input-paid"
+                v-model.number="editingPaidAmount"
+                @keyup.enter="savePaidAmount(item)"
+                @blur="cancelOrderEdit"
+              />
+              <!-- 显示状态 -->
+              <span
+                v-else
+                class="paid-amount-text"
+                @dblclick="startEditOrder(item)"
+              >
+                {{ getPaidAmount(item) || '-' }}
+              </span>
             </td>
             <td class="col-balance">¥ {{ calculateBalance(index).toFixed(2) }}</td>
             <td class="col-memo"></td>
@@ -242,8 +261,10 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import request from '@/api/request'
+
+const API_BASE_URL = '/api'
 
 // 年份和月份选项
 const currentDate = new Date()
@@ -288,6 +309,12 @@ const fundType = ref('current') // 'previous' 上期备用金转入, 'current' �
 const editingFundId = ref(null)
 const editingFundAmount = ref(0)
 const fundAmountInput = ref(null)
+
+// 编辑订单已支付金额
+const editingOrderId = ref(null)
+const editingFreightIndex = ref(null)
+const editingPaidAmount = ref(0)
+const isSaving = ref(false)
 
 // 本期汇入的备用金
 const periodReserveFund = ref(0)
@@ -385,12 +412,35 @@ const mergedOrdersAndFunds = computed(() => {
   const merged = []
 
   // 添加订单（标记为 order 类型）
+  // 如果订单有多笔运费，则拆分成多行
   paginatedOrders.value.forEach(order => {
-    merged.push({
-      ...order,
-      type: 'order',
-      sortDate: order.completed_date || ''
-    })
+    const freightCosts = order.freight_costs || []
+
+    if (freightCosts.length > 0) {
+      // 有运费记录，每笔运费一行
+      freightCosts.forEach((cost, costIndex) => {
+        merged.push({
+          ...order,
+          type: 'order',
+          sortDate: order.completed_date || '',
+          freightCostIndex: costIndex, // 标记是第几笔运费
+          currentFreightCost: cost, // 当前这笔运费的详情
+          isMultiFreight: freightCosts.length > 1, // 是否有多笔运费
+          freightCostTotal: freightCosts.length // 总共几笔运费
+        })
+      })
+    } else {
+      // 没有运费记录，显示一行
+      merged.push({
+        ...order,
+        type: 'order',
+        sortDate: order.completed_date || '',
+        freightCostIndex: 0,
+        currentFreightCost: null,
+        isMultiFreight: false,
+        freightCostTotal: 0
+      })
+    }
   })
 
   // 添加备用金记录（标记为 fund 类型）
@@ -648,9 +698,11 @@ const startEditFund = (fund) => {
   editingFundAmount.value = fund.amount
   // 等待DOM更新后聚焦输入框
   nextTick(() => {
-    if (fundAmountInput.value) {
-      fundAmountInput.value.focus()
-      fundAmountInput.value.select()
+    // 查找对应的输入框元素并聚焦
+    const inputElement = document.querySelector(`input[type="number"].input-paid`)
+    if (inputElement) {
+      inputElement.focus()
+      inputElement.select()
     }
   })
 }
@@ -671,12 +723,14 @@ const saveFundAmount = async (fund) => {
   }
 
   try {
+    const username = localStorage.getItem('username') || 'admin'
+
     // 调用API更新备用金金额
     const response = await fetch(`${API_BASE_URL}/freight-records/reserve-fund/${fund.id}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/json',
-        'Username': localStorage.getItem('username') || '管理员'
+        'Username': encodeURIComponent(username)
       },
       body: JSON.stringify({
         amount: newAmount
@@ -690,8 +744,8 @@ const saveFundAmount = async (fund) => {
     // 更新本地数据
     fund.amount = newAmount
 
-    // 重新加载数据
-    await loadFreightRecords()
+    // 只重新加载备用金数据，不重新加载订单
+    await fetchPeriodReserveFund()
 
     cancelFundEdit()
 
@@ -700,6 +754,132 @@ const saveFundAmount = async (fund) => {
     console.error('保存备用金金额失败:', error)
     alert('保存失败，请重试')
     cancelFundEdit()
+  }
+}
+
+// 获取运费标签（物流、货拉拉等）
+const getFreightLabel = (freightCost) => {
+  if (!freightCost) return ''
+  return freightCost.note || '运费'
+}
+
+// 获取当前行的运费金额
+const getFreightAmountForRow = (item) => {
+  if (item.currentFreightCost) {
+    return item.currentFreightCost.amount || 0
+  }
+  return getFreightAmount(item)
+}
+
+// 获取已支付金额
+const getPaidAmount = (item) => {
+  if (item.currentFreightCost && item.currentFreightCost.paid_amount !== undefined) {
+    return item.currentFreightCost.paid_amount.toFixed(2)
+  }
+  return ''
+}
+
+// 开始编辑订单已支付金额
+const startEditOrder = (item) => {
+  console.log('开始编辑订单:', item.id, '运费索引:', item.freightCostIndex)
+  editingOrderId.value = item.id
+  editingFreightIndex.value = item.freightCostIndex
+  editingPaidAmount.value = item.currentFreightCost?.paid_amount || 0
+
+  // 等待DOM更新后聚焦输入框
+  nextTick(() => {
+    const inputElement = document.querySelector(`input[type="number"].input-paid`)
+    if (inputElement) {
+      inputElement.focus()
+      inputElement.select()
+      console.log('输入框已聚焦')
+    } else {
+      console.error('未找到输入框')
+    }
+  })
+}
+
+// 取消编辑订单已支付金额
+const cancelOrderEdit = () => {
+  console.log('取消编辑')
+  editingOrderId.value = null
+  editingFreightIndex.value = null
+  editingPaidAmount.value = 0
+}
+
+// 保存订单已支付金额
+const savePaidAmount = async (item) => {
+  console.log('保存已支付金额:', editingPaidAmount.value)
+  const newAmount = editingPaidAmount.value
+
+  if (newAmount === item.currentFreightCost?.paid_amount) {
+    console.log('金额未变化，取消编辑')
+    cancelOrderEdit()
+    return
+  }
+
+  // 防止重复提交
+  if (isSaving.value) {
+    console.log('正在保存中，忽略重复请求')
+    return
+  }
+  isSaving.value = true
+
+  try {
+    const username = localStorage.getItem('username') || 'admin'
+    console.log('调用API更新...')
+
+    // 添加超时控制
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), 8000) // 8秒超时
+
+    // 调用API更新订单的已支付金额
+    const response = await fetch(`${API_BASE_URL}/orders/${item.id}/paid-amount`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Username': encodeURIComponent(username)
+      },
+      body: JSON.stringify({
+        freightCostIndex: item.freightCostIndex,
+        paidAmount: newAmount
+      }),
+      signal: controller.signal
+    })
+
+    clearTimeout(timeoutId)
+    console.log('API响应状态:', response.status)
+
+    if (!response.ok) {
+      const errorData = await response.json()
+      throw new Error(errorData.message || '更新失败')
+    }
+
+    // 更新本地数据（不重新加载）
+    if (item.currentFreightCost) {
+      item.currentFreightCost.paid_amount = newAmount
+    }
+
+    // 同时更新原始订单列表中的数据
+    const order = allOrders.value.find(o => o.id === item.id)
+    if (order && order.freight_costs && order.freight_costs[item.freightCostIndex]) {
+      order.freight_costs[item.freightCostIndex].paid_amount = newAmount
+    }
+
+    cancelOrderEdit()
+
+    console.log('保存成功')
+    alert('修改成功')
+  } catch (error) {
+    console.error('保存已支付金额失败:', error)
+    if (error.name === 'AbortError') {
+      alert('保存超时，请检查网络连接')
+    } else {
+      alert('保存失败：' + error.message)
+    }
+    cancelOrderEdit()
+  } finally {
+    isSaving.value = false
   }
 }
 
@@ -1308,6 +1488,22 @@ onMounted(() => {
 .radio-label span {
   font-size: 14px;
   color: #374151;
+}
+
+.freight-index {
+  font-size: 12px;
+  color: #6b7280;
+  font-weight: normal;
+}
+
+.paid-amount-text {
+  cursor: pointer;
+}
+
+.paid-amount-text:hover {
+  background: #f3f4f6;
+  padding: 2px 4px;
+  border-radius: 3px;
 }
 
 .form-input {
