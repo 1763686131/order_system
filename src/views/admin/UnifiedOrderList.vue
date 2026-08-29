@@ -31,14 +31,27 @@
           :placeholder="searchPlaceholder"
           class="search-input"
         />
-        <select v-if="mode === 'logistics'" v-model="filters.shippingMethod" class="filter-select">
-          <option value="">全部发货方式</option>
-          <option value="物流">物流</option>
-          <option value="零担快运">零担快运</option>
-          <option value="快递">快递</option>
-          <option value="专车">专车</option>
-          <option value="其它">其它</option>
-        </select>
+        <div v-if="mode === 'logistics'" class="shipping-method-filter">
+          <div class="filter-label" @click="toggleShippingDropdown">
+            <span>{{ selectedShippingMethodText }}</span>
+            <span class="dropdown-arrow" :class="{ open: shippingDropdownOpen }">▼</span>
+          </div>
+          <div v-if="shippingDropdownOpen" class="shipping-dropdown">
+            <label
+              v-for="method in shippingMethods"
+              :key="method"
+              class="shipping-option"
+            >
+              <input
+                type="checkbox"
+                :value="method"
+                :checked="filters.shippingMethods.includes(method)"
+                @change="toggleShippingMethod(method)"
+              />
+              <span>{{ method }}</span>
+            </label>
+          </div>
+        </div>
         <input
           v-model="filters.startDate"
           type="date"
@@ -194,10 +207,10 @@
                   class="tracking-number clickable"
                   :title="'点击复制单号'"
                   @click="copyLogisticsNo(order)"
+                  v-html="order.logistics_no.replace(/-/g, '<br>')"
                 >
-                  {{ order.logistics_no }}
                 </span>
-                <span class="no-tracking" v-else></span>
+                <span class="no-tracking" v-else>-</span>
               </td>
               <td class="col-receipt">
                 <span
@@ -314,7 +327,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject, h, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, h, watch } from 'vue'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
 
@@ -381,7 +394,15 @@ onMounted(() => {
     fetchOrdersData()
   }
 
+  // 添加点击外部关闭下拉框的监听
+  document.addEventListener('click', handleClickOutside)
+
   fetchOrdersData()
+})
+
+onUnmounted(() => {
+  // 清理事件监听
+  document.removeEventListener('click', handleClickOutside)
 })
 
 // 监听 mode 变化，重新获取数据
@@ -400,9 +421,39 @@ const sortOrder = ref('desc') // 'desc' = 最近到远, 'asc' = 最远到近
 const filters = ref({
   keyword: '',
   category: '',
-  shippingMethod: '',
+  shippingMethods: [], // 改为数组以支持多选
   startDate: '',
   endDate: ''
+})
+
+// 发货方式选项
+const shippingMethods = ['物流', '零担快运', '快递', '专车', '其它']
+const shippingDropdownOpen = ref(false)
+
+// 切换发货方式下拉框
+const toggleShippingDropdown = () => {
+  shippingDropdownOpen.value = !shippingDropdownOpen.value
+}
+
+// 切换发货方式选中状态
+const toggleShippingMethod = (method) => {
+  const index = filters.value.shippingMethods.indexOf(method)
+  if (index > -1) {
+    filters.value.shippingMethods.splice(index, 1)
+  } else {
+    filters.value.shippingMethods.push(method)
+  }
+}
+
+// 计算选中的发货方式显示文本
+const selectedShippingMethodText = computed(() => {
+  if (filters.value.shippingMethods.length === 0) {
+    return '全部发货方式'
+  } else if (filters.value.shippingMethods.length === shippingMethods.length) {
+    return '全部发货方式'
+  } else {
+    return `已选 ${filters.value.shippingMethods.length} 项`
+  }
 })
 
 // 选中的订单
@@ -534,10 +585,10 @@ const filteredOrders = computed(() => {
   }
 
   // 发货方式筛选（仅物流模式）
-  if (props.mode === 'logistics' && filters.value.shippingMethod) {
+  if (props.mode === 'logistics' && filters.value.shippingMethods.length > 0) {
     result = result.filter(order => {
       const method = getShippingMethodText(order)
-      return method === filters.value.shippingMethod
+      return filters.value.shippingMethods.includes(method)
     })
   }
 
@@ -634,7 +685,7 @@ const handleReset = () => {
   filters.value = {
     keyword: '',
     category: '',
-    shippingMethod: '',
+    shippingMethods: [], // 改为数组
     startDate: '',
     endDate: ''
   }
@@ -787,6 +838,14 @@ const getStatusClass = (order) => {
     return 'status-completed'
   } else {
     return 'status-pending'
+  }
+}
+
+// 点击外部关闭下拉框
+const handleClickOutside = (event) => {
+  const target = event.target
+  if (!target.closest('.shipping-method-filter')) {
+    shippingDropdownOpen.value = false
   }
 }
 
@@ -1168,6 +1227,12 @@ const changePageSize = (size) => {
 
 .col-tracking {
   width: 140px;
+  text-align: center;
+}
+
+.tracking-number {
+  white-space: pre-line;
+  line-height: 1.5;
 }
 
 .col-receipt {
@@ -1287,6 +1352,84 @@ const changePageSize = (size) => {
 
 .btn-ship:hover {
   background: #bfdbfe;
+}
+
+/* 发货方式多选筛选 */
+.shipping-method-filter {
+  position: relative;
+  min-width: 160px;
+}
+
+.filter-label {
+  padding: 9px 16px;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  font-size: 14px;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.filter-label:hover {
+  border-color: #2563eb;
+  background: #f8fafc;
+}
+
+.dropdown-arrow {
+  font-size: 10px;
+  color: #666;
+  transition: transform 0.2s;
+  margin-left: 8px;
+}
+
+.dropdown-arrow.open {
+  transform: rotate(180deg);
+}
+
+.shipping-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  padding: 8px;
+}
+
+.shipping-option {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.2s;
+  font-size: 14px;
+  user-select: none;
+}
+
+.shipping-option:hover {
+  background: #f1f5f9;
+}
+
+.shipping-option input[type="checkbox"] {
+  margin: 0;
+  margin-right: 8px;
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.shipping-option span {
+  flex: 1;
+  color: #333;
 }
 
 /* 表格元素样式 */
