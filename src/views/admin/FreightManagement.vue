@@ -1,33 +1,5 @@
 <template>
   <div class="freight-management">
-    <!-- 标题栏 -->
-    <div class="page-header">
-      <h1 class="page-title">运费记录单</h1>
-    </div>
-
-    <!-- 信息栏 -->
-    <div class="info-bar">
-      <div class="info-left">
-        <span class="info-label">制单人：</span>
-        <span class="info-value">{{ currentUser }}</span>
-      </div>
-      <div class="info-right">
-        <span class="info-label">日期：</span>
-        <input v-model="filters.startDate" type="date" class="date-input" />
-        <span class="date-separator">-</span>
-        <input v-model="filters.endDate" type="date" class="date-input" />
-      </div>
-    </div>
-
-    <!-- 操作按钮栏 -->
-    <div class="action-bar">
-      <button class="btn-action btn-unpaid">货拉拉</button>
-      <button class="btn-action btn-logistics">物流</button>
-      <button class="btn-action btn-full">运满满</button>
-      <button class="btn-reset" @click="resetFilters">重置</button>
-      <button class="btn-export">导出</button>
-    </div>
-
     <!-- 数据表格 -->
     <div class="table-container">
       <table class="freight-table">
@@ -64,17 +36,31 @@
           <!-- 数据行 -->
           <tr v-for="(order, index) in paginatedOrders" :key="order.id" :class="getRowClass(order)">
             <td class="col-index">{{ getRowIndex(index) }}</td>
-            <td class="col-date">{{ formatDate(order.shipped_date) }}</td>
-            <td class="col-name">{{ getOrderName(order) }}</td>
-            <td class="col-quantity">{{ getOrderQuantity(order) }}</td>
-            <td class="col-address">{{ order.receiver_address || '-' }}</td>
-            <td class="col-channel">{{ getChannel(order) }}</td>
-            <td class="col-logistics-no">{{ order.logistics_no || '-' }}</td>
+            <td class="col-date">{{ formatDate(order.completed_date) }}</td>
+            <td class="col-name">{{ order.order_client || '-' }}</td>
+            <td class="col-quantity">{{ getTotalWeight(order) }}</td>
+            <td class="col-address">
+              <span
+                v-if="order.receiver_address && order.receiver_address.length > 6"
+                class="address-text clickable"
+                @click="showAddressDetail(order.receiver_address)"
+              >
+                {{ order.receiver_address.substring(0, 6) }}...
+              </span>
+              <span v-else>{{ order.receiver_address || '-' }}</span>
+            </td>
+            <td class="col-channel">{{ getShippingMethodText(order) }}</td>
+            <td class="col-logistics-no">
+              <span v-if="order.logistics_no">{{ order.logistics_no }}</span>
+              <span v-else>-</span>
+            </td>
             <td class="col-price">¥ {{ getFreightAmount(order).toFixed(2) }}</td>
-            <td class="col-paid">¥ {{ getFreightAmount(order).toFixed(2) }}</td>
+            <td class="col-paid">
+              <input type="text" class="input-paid" placeholder="-" />
+            </td>
             <td class="col-balance">¥ {{ getRunningBalance(index).toFixed(2) }}</td>
             <td class="col-memo"></td>
-            <td class="col-return"></td>
+            <td class="col-return">{{ hasReceipt(order) ? '已传' : '' }}</td>
             <td class="col-remark"></td>
           </tr>
 
@@ -167,13 +153,13 @@ const filteredOrders = computed(() => {
   // 日期筛选
   if (filters.value.startDate) {
     result = result.filter(order => {
-      const orderDate = order.shipped_date ? order.shipped_date.split(' ')[0] : ''
+      const orderDate = order.completed_date ? order.completed_date.split(' ')[0] : ''
       return orderDate >= filters.value.startDate
     })
   }
   if (filters.value.endDate) {
     result = result.filter(order => {
-      const orderDate = order.shipped_date ? order.shipped_date.split(' ')[0] : ''
+      const orderDate = order.completed_date ? order.completed_date.split(' ')[0] : ''
       return orderDate <= filters.value.endDate
     })
   }
@@ -181,15 +167,15 @@ const filteredOrders = computed(() => {
   // 渠道筛选
   if (filters.value.channel) {
     result = result.filter(order => {
-      const channel = getChannel(order)
+      const channel = getShippingMethodText(order)
       return channel === filters.value.channel
     })
   }
 
   // 按日期排序
   result.sort((a, b) => {
-    const dateA = a.shipped_date || ''
-    const dateB = b.shipped_date || ''
+    const dateA = a.completed_date || ''
+    const dateB = b.completed_date || ''
     return dateA.localeCompare(dateB)
   })
 
@@ -212,31 +198,36 @@ const getFreightAmount = (order) => {
   return freightItem ? (freightItem.amount || 0) : 0
 }
 
-// 获取订单名称（从货物信息中提取）
-const getOrderName = (order) => {
-  if (!order.goods || !Array.isArray(order.goods) || order.goods.length === 0) {
-    return '-'
-  }
-  return order.goods[0].name || '-'
+// 获取总重量
+const getTotalWeight = (order) => {
+  return order.goods_weight || '-'
 }
 
-// 获取订单数量
-const getOrderQuantity = (order) => {
-  if (!order.goods || !Array.isArray(order.goods) || order.goods.length === 0) {
-    return '-'
+// 获取发货方式
+// 获取发货方式（与物流列表保持一致）
+const getShippingMethodText = (order) => {
+  const methodMap = { 0: '物流', 1: '零担快运', 2: '快递', 3: '专车', 4: '其它' }
+
+  if (order.shipping_method !== undefined && order.shipping_method !== '') {
+    let method = methodMap[order.shipping_method] || '其它'
+    if (order.shipping_method === 4 && order.shipping_custom) {
+      method = order.shipping_custom
+    }
+    return method
+  } else if (order.logistics_type) {
+    return order.logistics_type
   }
-  const totalWeight = order.goods.reduce((sum, item) => sum + (item.quantity || 0), 0)
-  return totalWeight > 0 ? `${totalWeight}kg` : '-'
+  return '其它'
 }
 
-// 获取渠道（从发货方式推断）
-const getChannel = (order) => {
-  const method = order.shipping_method
-  if (method === 1) return '货拉拉'
-  if (method === 2) return '物流'
-  if (method === 3) return '运满满'
-  if (method === 4 && order.shipping_custom) return order.shipping_custom
-  return '运满满'
+// 判断是否有回单
+const hasReceipt = (order) => {
+  return order.receipt_img_url && order.receipt_img_url.trim() !== ''
+}
+
+// 显示地址详情
+const showAddressDetail = (address) => {
+  alert(`收货地址：\n${address}`)
 }
 
 // 格式化日期
@@ -272,8 +263,8 @@ const getRunningBalance = (index) => {
 
 // 获取行样式类
 const getRowClass = (order) => {
-  const name = getOrderName(order)
-  if (name.includes('余总')) {
+  const clientName = order.order_client || ''
+  if (clientName.includes('余总')) {
     return 'row-highlight-red'
   }
   return ''
@@ -494,6 +485,34 @@ onMounted(() => {
 .col-memo { width: 80px; }
 .col-return { width: 100px; }
 .col-remark { width: 120px; }
+
+/* 输入框 */
+.input-paid {
+  width: 80px;
+  padding: 4px 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+  outline: none;
+  transition: all 0.3s;
+}
+
+.input-paid:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* 地址可点击 */
+.address-text.clickable {
+  color: #3b82f6;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.address-text.clickable:hover {
+  color: #2563eb;
+}
 
 /* 特殊行样式 */
 .row-balance-transfer {

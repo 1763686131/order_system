@@ -73,9 +73,15 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
-        path: 'finance/freight',
-        name: 'admin-finance-freight',
-        component: () => import('@/views/admin/FreightManagement.vue'),
+        path: 'finance/logistics-truck',
+        name: 'admin-finance-logistics-truck',
+        component: () => import('@/views/admin/LogisticsTruckReconciliation.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'finance/express-courier',
+        name: 'admin-finance-express-courier',
+        component: () => import('@/views/admin/ExpressCourierReconciliation.vue'),
         meta: { requiresAuth: true }
       }
     ]
