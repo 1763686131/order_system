@@ -59,6 +59,24 @@ const routes = [
         name: 'admin-roles',
         component: () => import('@/views/admin/RoleManage.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'finance/receivables',
+        name: 'admin-finance-receivables',
+        component: () => import('@/views/admin/Receivables.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'finance/payment-history',
+        name: 'admin-finance-payment-history',
+        component: () => import('@/views/admin/PaymentHistory.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'finance/freight',
+        name: 'admin-finance-freight',
+        component: () => import('@/views/admin/FreightManagement.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   }

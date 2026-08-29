@@ -240,8 +240,9 @@ const menuItems = ref([
     label: '财务',
     icon: icons.dollar,
     children: [
-      { label: '财务报表', path: '/admin/finance' },
-      { label: '收支明细', path: '/admin/finance/transactions' }
+      { label: '应收欠款', path: '/admin/finance/receivables' },
+      { label: '收款历史', path: '/admin/finance/payment-history' },
+      { label: '运费', path: '/admin/finance/freight' }
     ]
   },
   {
