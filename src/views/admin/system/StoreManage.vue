@@ -16,6 +16,8 @@
             <th class="col-code">门店编码</th>
             <th class="col-name">门店名称</th>
             <th class="col-status">状态</th>
+            <th class="col-color">背景颜色</th>
+            <th class="col-text-color">字体颜色</th>
             <th class="col-create-time">创建时间</th>
             <th class="col-remark">备注</th>
             <th class="col-actions">操作</th>
@@ -30,6 +32,26 @@
               <span :class="['status-badge', store.status === 'active' ? 'status-active' : 'status-inactive']">
                 {{ store.status === 'active' ? '启用' : '停用' }}
               </span>
+            </td>
+            <td class="col-color">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div
+                  style="width: 40px; height: 24px; border: 1px solid #d9d9d9; border-radius: 4px;"
+                  :style="{ backgroundColor: store.color || '#f5f5f5' }"
+                ></div>
+                <span style="font-size: 12px; color: #666;">{{ store.color || '#f5f5f5' }}</span>
+              </div>
+            </td>
+            <td class="col-text-color">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <div
+                  style="width: 60px; height: 24px; border: 1px solid #d9d9d9; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold;"
+                  :style="{ backgroundColor: store.color || '#f5f5f5', color: store.textColor || '#333333' }"
+                >
+                  示例
+                </div>
+                <span style="font-size: 12px; color: #666;">{{ store.textColor || '#333333' }}</span>
+              </div>
             </td>
             <td class="col-create-time">{{ store.created_at || '-' }}</td>
             <td class="col-remark">{{ store.remark || '-' }}</td>

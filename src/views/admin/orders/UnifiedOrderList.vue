@@ -129,9 +129,9 @@
             v-for="order in paginatedOrders"
             :key="order.id"
             :class="{
-              selected: isSelected(order.id),
-              'insulation-row': isInsulationStore(order)
+              selected: isSelected(order.id)
             }"
+            :style="{ backgroundColor: getStoreColor(order), color: getStoreTextColor(order) }"
           >
             <td class="col-checkbox">
               <input
@@ -492,7 +492,21 @@ const getStoreName = (order) => {
   return store ? store.name : '未知门店'
 }
 
-// 根据 store_id 或 type 判断是否为绝缘（用于样式）
+// 根据 store_id 或 type 获取门店背景颜色
+const getStoreColor = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store?.color || '#f5f5f5'
+}
+
+// 根据 store_id 或 type 获取门店字体颜色
+const getStoreTextColor = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store?.textColor || '#333333'
+}
+
+// 根据 store_id 或 type 判断是否为绝缘（用于样式，已废弃）
 const isInsulationStore = (order) => {
   const storeId = order.store_id || (order.type === 1 ? 1 : 2)
   return storeId === 1
@@ -588,7 +602,8 @@ const fetchOrdersData = async () => {
       getStores()
     ])
 
-    stores.value = storesData
+    // 只显示状态为 active 的门店
+    stores.value = storesData.filter(store => store.status === 'active')
 
     if (ordersResponse && Array.isArray(ordersResponse)) {
       // 更新 orderStore 的所有订单数据

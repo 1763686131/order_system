@@ -33,8 +33,7 @@
                   v-model="formData.type"
                   style="width: 100%; padding: 6px 10px; border: 1px solid #d9d9d9; border-radius: 4px;"
                 >
-                  <option :value="0">中固订单</option>
-                  <option :value="1">绝缘订单</option>
+                  <option v-for="store in stores" :key="store.id" :value="store.id">{{ store.name }}订单</option>
                 </select>
               </div>
             </div>
@@ -46,8 +45,7 @@
                 v-model="formData.type"
                 style="width: 100%; padding: 8px 12px; border: 1px solid #d9d9d9; border-radius: 6px;"
               >
-                <option :value="0" selected>中固订单</option>
-                <option :value="1">绝缘订单</option>
+                <option v-for="store in stores" :key="store.id" :value="store.id">{{ store.name }}订单</option>
               </select>
             </div>
 
@@ -198,10 +196,11 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
 import request from '@/api/request'
+import { getStores } from '@/utils/storeHelper'
 
 const userStore = useUserStore()
 const orderStore = useOrderStore()
@@ -210,6 +209,14 @@ const visible = ref(false)
 const isEditMode = ref(false)
 const currentOrderId = ref(null)
 const pasteText = ref('')
+const stores = ref([])
+
+// 加载门店列表
+onMounted(async () => {
+  const allStores = await getStores()
+  // 只显示状态为 active 的门店
+  stores.value = allStores.filter(store => store.status === 'active')
+})
 
 const formData = ref({
   type: 0,

@@ -11,8 +11,7 @@
           v-for="order in group.orders"
           :key="order.id"
           class="shipped-card"
-          :class="{ 'card-insulation': isInsulationStore(order) }"
-        >
+          :style="{ backgroundColor: getStoreColor(order), color: getStoreTextColor(order) }"
         >
           <!-- 右上角状态标签 -->
           <div
@@ -150,7 +149,21 @@ const getStoreName = (order) => {
   return store ? store.name : '未知门店'
 }
 
-// 根据 store_id 或 type 判断是否为绝缘（用于样式）
+// 根据 store_id 或 type 获取门店背景颜色
+const getStoreColor = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store?.color || '#f5f5f5'
+}
+
+// 根据 store_id 或 type 获取门店字体颜色
+const getStoreTextColor = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store?.textColor || '#333333'
+}
+
+// 根据 store_id 或 type 判断是否为绝缘（用于样式，已废弃）
 const isInsulationStore = (order) => {
   const storeId = order.store_id || (order.type === 1 ? 1 : 2)
   return storeId === 1

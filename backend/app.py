@@ -109,6 +109,8 @@ def read_stores():
                 "code": "insulation",
                 "name": "绝缘",
                 "status": "active",
+                "color": "#e3f2fd",
+                "textColor": "#1565c0",
                 "remark": "绝缘材料门店",
                 "created_at": datetime.now().strftime('%Y-%m-%d')
             },
@@ -117,6 +119,8 @@ def read_stores():
                 "code": "zhonggu",
                 "name": "中固",
                 "status": "active",
+                "color": "#fff3e0",
+                "textColor": "#e65100",
                 "remark": "中固材料门店",
                 "created_at": datetime.now().strftime('%Y-%m-%d')
             }
@@ -818,6 +822,8 @@ def create_store():
         'code': code,
         'name': name,
         'status': req_data.get('status', 'active'),
+        'color': req_data.get('color', '#f5f5f5'),
+        'textColor': req_data.get('textColor', '#333333'),
         'remark': req_data.get('remark', ''),
         'created_at': datetime.now().strftime('%Y-%m-%d')
     }
@@ -844,6 +850,8 @@ def update_store(store_id):
     # 更新门店信息
     stores[store_index]['name'] = name
     stores[store_index]['status'] = req_data.get('status', stores[store_index]['status'])
+    stores[store_index]['color'] = req_data.get('color', stores[store_index].get('color', '#f5f5f5'))
+    stores[store_index]['textColor'] = req_data.get('textColor', stores[store_index].get('textColor', '#333333'))
     stores[store_index]['remark'] = req_data.get('remark', '')
     stores[store_index]['updated_at'] = datetime.now().strftime('%Y-%m-%d')
 

@@ -4,7 +4,7 @@
     <div v-if="statusType === 'pending'" class="flip-container">
       <div class="flipper" :class="{ 'no-flip': !order.isFirstCard }">
         <!-- 正面 -->
-        <div class="order-card front" :class="order.typeClass">
+        <div class="order-card front" :style="{ backgroundColor: order.storeColor, color: order.storeTextColor }">
           <div class="order-title">{{ order.order_client || '未命名归属' }}订单</div>
           <div class="order-header">
             <span><strong>{{ order.typeName }}</strong> 产品列表 {{ order.isFirstCard ? '' : '(续集)' }}</span>
@@ -51,7 +51,7 @@
         </div>
 
         <!-- 背面 -->
-        <div v-if="order.isFirstCard" class="order-card back" :class="order.typeClass">
+        <div v-if="order.isFirstCard" class="order-card back" :style="{ backgroundColor: order.storeColor, color: order.storeTextColor }">
           <div class="order-title">{{ order.order_client || '未命名归属' }}订单</div>
           <div class="order-header">
             <span><strong>{{ order.typeName }}</strong> 产品列表</span>
@@ -122,7 +122,7 @@
     </div>
 
     <!-- 已完成订单卡片 (Tab 1) -->
-    <div v-else-if="statusType === 'completed'" class="completed-card" :class="order.typeClass" style="padding: 20px 24px; font-size: 15px;">
+    <div v-else-if="statusType === 'completed'" class="completed-card" :style="{ backgroundColor: order.storeColor, color: order.storeTextColor, padding: '20px 24px', fontSize: '15px' }">
       <div class="order-title" style="font-size: 28px; margin-bottom: 8px;">{{ order.order_client || '未命名归属' }}订单</div>
       <div class="order-header" style="font-size: 15px; padding-bottom: 8px; margin-bottom: 12px;">
         <span><strong>{{ order.typeName }}</strong> 发货核对明细 {{ order.isFirstCard ? '' : '(续)' }}</span>
@@ -242,7 +242,21 @@ const getStoreName = (order) => {
   return store ? store.name : '未知门店'
 }
 
-// 根据 store_id 或 type 获取样式类名
+// 根据 store_id 或 type 获取门店背景颜色
+const getStoreColor = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store?.color || '#f5f5f5'
+}
+
+// 根据 store_id 或 type 获取门店字体颜色
+const getStoreTextColor = (order) => {
+  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const store = stores.value.find(s => s.id === storeId)
+  return store?.textColor || '#333333'
+}
+
+// 根据 store_id 或 type 获取样式类名（已废弃，保留用于兼容）
 const getStoreClass = (order) => {
   const storeId = order.store_id || (order.type === 1 ? 1 : 2)
   return storeId === 1 ? 'card-insulation' : ''
@@ -273,6 +287,8 @@ const processedOrders = computed(() => {
       const partLetter = String.fromCharCode(65 + chunkIndex)
       const compactClass = (!isMobile && chunkLines.length >= 8) ? 'compact' : ''
       const typeClass = getStoreClass(order)
+      const storeColor = getStoreColor(order)
+      const storeTextColor = getStoreTextColor(order)
       const typeName = getStoreName(order) + '订单'
       const shortDate = order.completed_date ? order.completed_date.split(' ')[0] : '未知日期'
 
@@ -286,6 +302,8 @@ const processedOrders = computed(() => {
         partLetter,
         compactClass,
         typeClass,
+        storeColor,
+        storeTextColor,
         typeName,
         shortDate,
         isMobile,

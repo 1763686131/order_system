@@ -46,6 +46,56 @@
         </div>
 
         <div class="form-group">
+          <label>背景颜色:</label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input
+              v-model="formData.color"
+              type="color"
+              class="form-color-input"
+              style="width: 60px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer;"
+            />
+            <input
+              v-model="formData.color"
+              type="text"
+              placeholder="#e3f2fd"
+              class="form-input"
+              style="flex: 1;"
+            />
+            <div
+              style="width: 100px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px;"
+              :style="{ backgroundColor: formData.color }"
+            ></div>
+          </div>
+          <span class="form-tip">用于订单卡片的背景颜色</span>
+        </div>
+
+        <div class="form-group">
+          <label>字体颜色:</label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <input
+              v-model="formData.textColor"
+              type="color"
+              class="form-color-input"
+              style="width: 60px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; cursor: pointer;"
+            />
+            <input
+              v-model="formData.textColor"
+              type="text"
+              placeholder="#333333"
+              class="form-input"
+              style="flex: 1;"
+            />
+            <div
+              style="width: 100px; height: 40px; border: 1px solid #d9d9d9; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-weight: bold;"
+              :style="{ backgroundColor: formData.color, color: formData.textColor }"
+            >
+              示例文本
+            </div>
+          </div>
+          <span class="form-tip">用于订单卡片的文字颜色</span>
+        </div>
+
+        <div class="form-group">
           <label>备注:</label>
           <textarea
             v-model="formData.remark"
@@ -76,6 +126,8 @@ const formData = reactive({
   code: '',
   name: '',
   status: 'active',
+  color: '#e3f2fd',
+  textColor: '#333333',
   remark: ''
 })
 
@@ -111,6 +163,8 @@ const resetForm = () => {
     code: '',
     name: '',
     status: 'active',
+    color: '#e3f2fd',
+    textColor: '#333333',
     remark: ''
   })
 }
