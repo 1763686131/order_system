@@ -106,7 +106,7 @@ import SmartCalculator from '@/components/common/SmartCalculator.vue'
 import ShipOrderModal from '@/components/front/ShipOrderModal.vue'
 import OrderFormModal from '@/components/front/OrderFormModal.vue'
 import UploadMaterialModal from '@/components/front/UploadMaterialModal.vue'
-import UserManage from '@/views/admin/UserManage.vue'
+import UserManage from '@/views/admin/system/UserManage.vue'
 import NomiFloatingAI from '@/components/common/NomiFloatingAI.vue'
 
 const orderStore = useOrderStore()

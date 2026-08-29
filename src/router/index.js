@@ -37,51 +37,51 @@ const routes = [
       {
         path: 'orders',
         name: 'admin-orders',
-        component: () => import('@/views/admin/UnifiedOrderList.vue'),
+        component: () => import('@/views/admin/orders/UnifiedOrderList.vue'),
         props: { mode: 'finance' },
         meta: { requiresAuth: true }
       },
       {
         path: 'orders/logistics',
         name: 'admin-orders-logistics',
-        component: () => import('@/views/admin/UnifiedOrderList.vue'),
+        component: () => import('@/views/admin/orders/UnifiedOrderList.vue'),
         props: { mode: 'logistics' },
         meta: { requiresAuth: true }
       },
       {
         path: 'users',
         name: 'admin-users',
-        component: () => import('@/views/admin/UserManage.vue'),
+        component: () => import('@/views/admin/system/UserManage.vue'),
         meta: { requiresAuth: true }
       },
       {
         path: 'roles',
         name: 'admin-roles',
-        component: () => import('@/views/admin/RoleManage.vue'),
+        component: () => import('@/views/admin/system/RoleManage.vue'),
         meta: { requiresAuth: true }
       },
       {
         path: 'finance/receivables',
         name: 'admin-finance-receivables',
-        component: () => import('@/views/admin/Receivables.vue'),
+        component: () => import('@/views/admin/finance/Receivables.vue'),
         meta: { requiresAuth: true }
       },
       {
         path: 'finance/payment-history',
         name: 'admin-finance-payment-history',
-        component: () => import('@/views/admin/PaymentHistory.vue'),
+        component: () => import('@/views/admin/finance/PaymentHistory.vue'),
         meta: { requiresAuth: true }
       },
       {
         path: 'finance/logistics-truck',
         name: 'admin-finance-logistics-truck',
-        component: () => import('@/views/admin/LogisticsTruckReconciliation.vue'),
+        component: () => import('@/views/admin/finance/LogisticsTruckReconciliation.vue'),
         meta: { requiresAuth: true }
       },
       {
         path: 'finance/express-courier',
         name: 'admin-finance-express-courier',
-        component: () => import('@/views/admin/ExpressCourierReconciliation.vue'),
+        component: () => import('@/views/admin/finance/ExpressCourierReconciliation.vue'),
         meta: { requiresAuth: true }
       }
     ]
