@@ -279,6 +279,14 @@ def update_order_status(order_id):
     orders_list = orders_data.get('orders', [])
     for x in orders_list:
         if x['id'] == order_id:
+            # 如果只是更新物流单号和运费，不改变状态
+            if 'logistics_no' in req_data and 'status' not in req_data:
+                x['logistics_no'] = req_data.get('logistics_no')
+                if 'freight_costs' in req_data:
+                    x['freight_costs'] = req_data.get('freight_costs', [])
+                break
+
+            # 正常的状态更新流程
             x['status'] = ns
 
             if ns == 'completed':

@@ -22,7 +22,14 @@
             "logistics_service": "送货上门",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/孙路鸣订单订单_冯总_2026-08-28_FFAA.jpg"
+            "receipt_img_url": "/uploads/2026-08/孙路鸣订单订单_冯总_2026-08-28_FFAA.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 4555
+                }
+            ]
         },
         {
             "id": 148,
@@ -46,7 +53,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李必年订单_李必年_2026-08-28_F08C.jpg"
+            "receipt_img_url": "/uploads/2026-08/李必年订单_李必年_2026-08-28_F08C.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 4555
+                }
+            ]
         },
         {
             "id": 149,
@@ -70,7 +84,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/锦州森源订单_刘爽_2026-08-28_F902.jpg"
+            "receipt_img_url": "/uploads/2026-08/锦州森源订单_刘爽_2026-08-28_F902.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 5777
+                }
+            ]
         },
         {
             "id": 150,
@@ -117,7 +138,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_杨总_2026-08-19_1CE3.jpg"
+            "receipt_img_url": "/uploads/2026-08/李超订单_杨总_2026-08-19_1CE3.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 47
+                }
+            ]
         },
         {
             "id": 152,
@@ -141,30 +169,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/高小宝订单_高小宝_2026-08-28_FB5C.jpg"
-        },
-        {
-            "id": 153,
-            "title": "【绝缘订单】\n姓名：采购部\n电话：18957001895\n地址：浙江省衢州市开化县工业园区池淮路6号嘉诚电力\n名称：树脂1101A 5000kg  固化剂1101B 5000kg 阻燃剂 500kg\n重量：10500kg\n件数：11件\n包装：桶装\n服务：送货上门+回单拍照回传\n备注：\n",
-            "status": "shipped",
-            "type": 1,
-            "date": "2026-08-18 15:31",
-            "completed_date": "2026-08-29 00:12",
-            "shipped_date": "2026-08-29 00:12",
-            "shipping_method": 0,
-            "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "order_client": "嘉诚电力",
-            "receiver_name": "采购部",
-            "receiver_phone": "18957001895",
-            "receiver_address": "浙江省衢州市开化县工业园区池淮路6号嘉诚电力",
-            "goods_name": "树脂2103A 300kg \n固化剂2103B 270kg \n阻燃剂 75kg",
-            "goods_weight": "645kg",
-            "goods_quantity": "1件",
-            "goods_packaging": "托盘",
-            "logistics_service": "送货上门+回单拍照回传",
-            "remark": "",
-            "audit_state": 1
+            "receipt_img_url": "/uploads/2026-08/高小宝订单_高小宝_2026-08-28_FB5C.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 555
+                }
+            ]
         },
         {
             "id": 154,
@@ -188,7 +200,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_吴昌力_2026-08-28_B481.jpg"
+            "receipt_img_url": "/uploads/2026-08/李超订单_吴昌力_2026-08-28_B481.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 455
+                }
+            ]
         },
         {
             "id": 155,
@@ -200,7 +219,7 @@
             "shipped_date": "2026-08-19 18:01",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "安能-987484572",
             "order_client": "李超",
             "receiver_name": "夏雨",
             "receiver_phone": "15551899176",
@@ -211,7 +230,14 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单邮回",
             "remark": "",
-            "audit_state": 0
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 7777
+                }
+            ]
         },
         {
             "id": 156,
@@ -223,7 +249,7 @@
             "shipped_date": "2026-08-20 15:28",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "三志物流-987484572",
             "order_client": "万可",
             "receiver_name": "万可",
             "receiver_phone": "13286841341",
@@ -234,7 +260,19 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 0
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 5000
+                },
+                {
+                    "type": "other",
+                    "note": "专车",
+                    "amount": 5000
+                }
+            ]
         },
         {
             "id": 157,
@@ -246,7 +284,7 @@
             "shipped_date": "2026-08-20 15:28",
             "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "安能快递-987484572",
             "order_client": "李超",
             "receiver_name": "朱",
             "receiver_phone": "15957183024",
@@ -257,7 +295,19 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 0
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 1000
+                },
+                {
+                    "type": "other",
+                    "note": "货拉拉",
+                    "amount": 150
+                }
+            ]
         },
         {
             "id": 158,
@@ -280,7 +330,19 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 1
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 5000
+                },
+                {
+                    "type": "other",
+                    "note": "45",
+                    "amount": 455
+                }
+            ]
         },
         {
             "id": 159,
@@ -292,7 +354,7 @@
             "shipped_date": "2026-08-28 17:54",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "安能快递-987484572",
             "order_client": "熊芳芳",
             "receiver_name": "熊芳芳",
             "receiver_phone": "18108431810",
@@ -303,7 +365,14 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 0
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 77
+                }
+            ]
         },
         {
             "id": 160,
@@ -315,7 +384,7 @@
             "shipped_date": "2026-08-21 11:15",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "三志物流-4545",
             "order_client": "陶芸",
             "receiver_name": "郭余金",
             "receiver_phone": "13925348680",
@@ -326,7 +395,14 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 0
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 455
+                }
+            ]
         },
         {
             "id": 162,
@@ -349,7 +425,14 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 1
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 466
+                }
+            ]
         },
         {
             "id": 164,
@@ -361,7 +444,7 @@
             "shipped_date": "",
             "shipping_method": "",
             "shipping_custom": "",
-            "logistics_no": "安能快递",
+            "logistics_no": "安能快递-5555",
             "order_client": "李四",
             "receiver_name": "李四",
             "receiver_phone": "18888888888",
@@ -373,7 +456,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李四订单_李四_2026-08-28_52B9.jpg"
+            "receipt_img_url": "/uploads/2026-08/李四订单_李四_2026-08-28_52B9.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 50
+                }
+            ]
         },
         {
             "id": 177,
@@ -396,7 +486,14 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 1
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 554
+                }
+            ]
         }
     ]
 }

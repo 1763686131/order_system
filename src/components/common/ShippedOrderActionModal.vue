@@ -198,6 +198,7 @@
         <div class="modal-btn-group" style="display: flex; gap: 12px; justify-content: center; margin-top: 24px; width: 100%;">
           <button id="btnAuditRevoke" @click="submitRevokeShipOrder">撤销出库</button>
           <button id="btnAuditConfirm" @click="submitAuditShipOrder">确认审核</button>
+          <button id="btnEditConfirm" @click="submitEditShipOrder">修改完成</button>
           <button id="btnReceiptDelete" @click="clearReceiptImage">清除图片</button>
           <button id="btnReceiptUpload" @click="submitReceiptImage">确认上传</button>
           <button id="btnRealDeleteReceipt" @click="deleteRealReceiptImage">删除凭证</button>
@@ -235,7 +236,7 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
 import request from '@/api/request'
@@ -455,6 +456,9 @@ const open = (orderId, mode) => {
     if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'none'
     if (btnDownloadEl) btnDownloadEl.style.display = 'none'
 
+    // 获取修改完成按钮
+    const btnEditConfirm = document.getElementById('btnEditConfirm')
+
     // 状态 A：进入【审核模式】
     if (mode === 'audit') {
       modalTitle.value = '已出库订单管理'
@@ -467,6 +471,7 @@ const open = (orderId, mode) => {
       btnAuditConfirmEl.style.display = 'block'
       btnReceiptDeleteEl.style.display = 'none'
       btnReceiptUploadEl.style.display = 'none'
+      if (btnEditConfirm) btnEditConfirm.style.display = 'none'
 
       // 加载历史快捷标签
       fetchCarrierTags()
@@ -512,7 +517,67 @@ const open = (orderId, mode) => {
         }
       }
     }
-    // 状态 B：进入【回单模式】
+    // 状态 B：进入【编辑模式】
+    else if (mode === 'edit') {
+      modalTitle.value = '修改物流与运费信息'
+      modalSubtitle.value = '修改物流单号和运费信息'
+
+      auditContentEl.style.display = 'block'
+      receiptContentEl.style.display = 'none'
+
+      btnAuditRevokeEl.style.display = 'none'
+      btnAuditConfirmEl.style.display = 'none'
+      btnReceiptDeleteEl.style.display = 'none'
+      btnReceiptUploadEl.style.display = 'none'
+
+      // 显示修改完成按钮
+      const btnEditConfirm = document.getElementById('btnEditConfirm')
+      if (btnEditConfirm) btnEditConfirm.style.display = 'inline-block'
+
+      // 加载历史快捷标签
+      fetchCarrierTags()
+
+      // 加载订单数据
+      const order = allOrdersLocal.find(o => o.id === orderId)
+
+      if (order) {
+        let fullNo = order.logistics_no || ''
+
+        if (fullNo === '暂未录入单号' || fullNo === '无单号记录' || fullNo === '暂无记录') {
+          fullNo = ''
+        }
+
+        if (fullNo.includes('-')) {
+          const parts = fullNo.split('-')
+          carrierName.value = parts[0] || ''
+          logisticsNo.value = parts.slice(1).join('-') || ''
+        } else {
+          carrierName.value = ''
+          logisticsNo.value = fullNo
+        }
+
+        // 加载运费数据
+        if (order.freight_costs && Array.isArray(order.freight_costs)) {
+          freightCost.value = 0
+          otherCosts.value = []
+
+          order.freight_costs.forEach(item => {
+            if (item.type === 'freight') {
+              freightCost.value = item.amount || 0
+            } else if (item.type === 'other') {
+              otherCosts.value.push({
+                note: item.note || '',
+                amount: item.amount || 0
+              })
+            }
+          })
+        } else {
+          freightCost.value = 0
+          otherCosts.value = []
+        }
+      }
+    }
+    // 状态 C：进入【回单模式】
     else if (mode === 'receipt') {
       modalTitle.value = '回单凭证管理'
       modalSubtitle.value = '请上传或管理该订单的发货回单图片'
@@ -524,6 +589,7 @@ const open = (orderId, mode) => {
       btnAuditConfirmEl.style.display = 'none'
       btnReceiptDeleteEl.style.display = 'block'
       btnReceiptUploadEl.style.display = 'block'
+      if (btnEditConfirm) btnEditConfirm.style.display = 'none'
 
       // 权限控制
       if (userStore.hasPerm('shipped.delete_receipt')) {
@@ -699,6 +765,65 @@ const submitAuditShipOrder = async () => {
     emit('refresh')
   } catch (e) {
     showMessage('网络通信异常，未能成功写入确认审核标识', 'error')
+  }
+}
+
+// 3. 修改物流和运费信息
+const submitEditShipOrder = async () => {
+  const id = targetOrderId.value
+
+  const carrier = carrierName.value.trim()
+  const no = logisticsNo.value.trim()
+
+  let finalLogisticsNo = ''
+  if (carrier && no) {
+    finalLogisticsNo = `${carrier}-${no}`
+  } else if (carrier) {
+    finalLogisticsNo = carrier
+  } else if (no) {
+    finalLogisticsNo = no
+  } else {
+    finalLogisticsNo = '无单号记录'
+  }
+
+  // 构建运费数据数组
+  const freightData = []
+
+  // 添加运费项
+  if (freightCost.value && Number(freightCost.value) > 0) {
+    freightData.push({
+      type: 'freight',
+      note: '运费',
+      amount: Number(freightCost.value)
+    })
+  }
+
+  // 添加其它费用项
+  otherCosts.value.forEach(item => {
+    if (item.amount && Number(item.amount) > 0) {
+      freightData.push({
+        type: 'other',
+        note: item.note.trim() || '其它费用',
+        amount: Number(item.amount)
+      })
+    }
+  })
+
+  // 提交给后端
+  try {
+    await request({
+      url: `/orders/${id}`,
+      method: 'PUT',
+      data: {
+        logistics_no: finalLogisticsNo,
+        freight_costs: freightData
+      }
+    })
+    showMessage('物流与运费信息修改成功！', 'success')
+    closeShippedActionModal()
+    emit('refresh')
+  } catch (e) {
+    showMessage('网络通信异常，未能成功修改', 'error')
   }
 }
 
@@ -943,6 +1068,20 @@ const handleRotateBtnHover = (event, isHover) => {
 // 暴露方法
 defineExpose({
   open
+})
+
+// 监听来自UnifiedOrderList的编辑事件
+onMounted(() => {
+  const handleEditEvent = (event) => {
+    const { orderId, mode } = event.detail
+    open(orderId, mode)
+  }
+  window.addEventListener('open-shipped-action-modal', handleEditEvent)
+
+  // 清理事件监听
+  onUnmounted(() => {
+    window.removeEventListener('open-shipped-action-modal', handleEditEvent)
+  })
 })
 </script>
 

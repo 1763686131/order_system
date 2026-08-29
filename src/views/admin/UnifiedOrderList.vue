@@ -123,6 +123,7 @@
             </template>
 
             <th v-if="mode === 'finance'" class="col-status">状态</th>
+            <th v-if="mode === 'logistics'" class="col-freight">运费</th>
             <th class="col-remark">备注</th>
             <th class="col-actions">操作</th>
           </tr>
@@ -219,7 +220,7 @@
                   :title="'点击查看回单'"
                   @click="handleReceiptClick(order)"
                 >
-                  ✅ 已上传
+                  回单
                 </span>
               </td>
             </template>
@@ -228,6 +229,17 @@
               <span :class="['status-tag', getStatusClass(order)]">
                 {{ getStatusText(order) }}
               </span>
+            </td>
+            <td v-if="mode === 'logistics'" class="col-freight">
+              <span
+                v-if="getFreightTotal(order) > 0"
+                class="freight-amount"
+                @click="showFreightDetail(order)"
+                :title="'点击查看运费明细'"
+              >
+                ¥{{ getFreightTotal(order).toFixed(2) }}
+              </span>
+              <span v-else class="freight-empty">-</span>
             </td>
             <td class="col-remark">
               <span class="remark-text" :title="order.remark || ''">{{ order.remark || '-' }}</span>
@@ -248,7 +260,7 @@
                   @click="handleShippingClick(order)"
                   title="录入物流信息"
                 >
-                  录入物流
+                  录入
                 </button>
                 <button
                   v-if="mode === 'logistics'"
@@ -259,6 +271,7 @@
                   复制
                 </button>
                 <button
+                  v-if="mode === 'logistics' && hasLogistics(order)"
                   class="btn-action btn-edit"
                   @click="handleEdit(order)"
                   title="修改信息"
@@ -328,6 +341,42 @@
         </div>
         <div class="expand-modal-body">
           <p>{{ expandModal.content }}</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- 运费明细弹窗 -->
+    <div v-if="freightDetailVisible" class="expand-modal-overlay" @click="closeFreightDetail">
+      <div class="freight-detail-modal" @click.stop>
+        <div class="freight-modal-header">
+          <h3>运费明细</h3>
+          <button class="modal-close-btn" @click="closeFreightDetail">✕</button>
+        </div>
+        <div class="freight-modal-body">
+          <div class="freight-info">
+            <div class="info-row">
+              <span class="label">订单编号：</span>
+              <span class="value">{{ freightDetailData?.orderId }}</span>
+            </div>
+            <div class="info-row">
+              <span class="label">订单归属：</span>
+              <span class="value">{{ freightDetailData?.orderClient }}</span>
+            </div>
+          </div>
+          <div class="freight-items">
+            <div
+              v-for="(item, index) in freightDetailData?.costs"
+              :key="index"
+              class="freight-item"
+            >
+              <div class="item-note">{{ item.note }}</div>
+              <div class="item-amount">¥{{ item.amount.toFixed(2) }}</div>
+            </div>
+          </div>
+          <div class="freight-total">
+            <span class="total-label">合计：</span>
+            <span class="total-amount">¥{{ freightDetailData?.total.toFixed(2) }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -507,25 +556,23 @@ const columnCount = computed(() => {
 const fetchOrdersData = async () => {
   loading.value = true
   try {
-    console.log('开始获取订单数据...')
     const response = await request({
       url: '/orders',
       method: 'GET'
     })
 
-    console.log('API响应:', response)
-
     if (response && Array.isArray(response)) {
+      // 更新 orderStore 的所有订单数据
+      orderStore.setOrders(response)
+
       // 物流模式只显示已出库订单
       if (props.mode === 'logistics') {
         orders.value = response.filter(order => order.status === 'shipped')
       } else {
         orders.value = response
       }
-      console.log('成功加载订单:', orders.value.length, '条')
     } else {
       orders.value = []
-      console.warn('响应数据不是数组:', response)
     }
   } catch (error) {
     console.error('获取订单失败:', error)
@@ -705,7 +752,51 @@ const handleAdd = () => {
 }
 
 const handleEdit = (order) => {
-  console.log('编辑订单', order)
+  // 触发打开已出库订单管理弹窗，模式为编辑
+  window.dispatchEvent(new CustomEvent('open-shipped-action-modal', {
+    detail: { orderId: order.id, mode: 'edit' }
+  }))
+}
+
+// 计算运费总额
+const getFreightTotal = (order) => {
+  if (!order.freight_costs || !Array.isArray(order.freight_costs)) {
+    return 0
+  }
+  return order.freight_costs.reduce((sum, item) => {
+    return sum + (Number(item.amount) || 0)
+  }, 0)
+}
+
+// 显示运费明细
+const freightDetailVisible = ref(false)
+const freightDetailData = ref(null)
+
+const showFreightDetail = (order) => {
+  if (!order.freight_costs || order.freight_costs.length === 0) {
+    return
+  }
+  freightDetailData.value = {
+    orderId: order.id,
+    orderClient: order.order_client,
+    costs: order.freight_costs,
+    total: getFreightTotal(order)
+  }
+  freightDetailVisible.value = true
+}
+
+const closeFreightDetail = () => {
+  freightDetailVisible.value = false
+  freightDetailData.value = null
+}
+
+// 判断订单是否已录入物流单号
+const hasLogistics = (order) => {
+  const logistics = order.logistics_no || ''
+  return logistics &&
+         logistics !== '暂未录入单号' &&
+         logistics !== '无单号记录' &&
+         logistics !== '暂无记录'
 }
 
 // 复制物流极简信息
@@ -1831,5 +1922,137 @@ const changePageSize = (size) => {
   color: #374151;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 运费列样式 */
+.col-freight {
+  width: 100px;
+  text-align: center;
+}
+
+.freight-amount {
+  color: #1890ff;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.freight-amount:hover {
+  background: #e6f4ff;
+  text-decoration: underline;
+}
+
+.freight-empty {
+  color: #999;
+}
+
+/* 运费明细弹窗样式 */
+.freight-detail-modal {
+  background: white;
+  border-radius: 12px;
+  padding: 24px;
+  width: 500px;
+  max-width: 90vw;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+}
+
+.freight-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #f0f0f0;
+}
+
+.freight-modal-header h3 {
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  margin: 0;
+}
+
+.freight-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.freight-info {
+  background: #f5f5f5;
+  padding: 12px 16px;
+  border-radius: 8px;
+}
+
+.info-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.info-row:last-child {
+  margin-bottom: 0;
+}
+
+.info-row .label {
+  font-weight: bold;
+  color: #666;
+  min-width: 100px;
+}
+
+.info-row .value {
+  color: #333;
+}
+
+.freight-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.freight-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #fafafa;
+  border-radius: 8px;
+  border-left: 4px solid #1890ff;
+}
+
+.item-note {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.item-amount {
+  font-size: 16px;
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.freight-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: #e6f4ff;
+  border-radius: 8px;
+  border: 2px solid #91caff;
+}
+
+.total-label {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.total-amount {
+  font-size: 20px;
+  font-weight: bold;
+  color: #1890ff;
 }
 </style>
