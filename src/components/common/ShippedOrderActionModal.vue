@@ -5,13 +5,12 @@
       id="shippedOrderActionModal"
       class="modal-overlay"
       style="display: flex;"
-      @click.self="closeShippedActionModal"
     >
       <div
         class="modal-content"
         :class="{ 'is-dragging': isDragging }"
         :style="{
-          width: '420px',
+          width: '520px',
           borderRadius: '12px',
           padding: '24px',
           transform: `translate(${modalX}px, ${modalY}px)`,
@@ -35,41 +34,116 @@
 
         <!-- 审核填写物流单号窗口 -->
         <div id="auditContent" style="display: block;">
-          <div class="form-item" style="margin-bottom: 20px;">
-            <label for="auditCarrierName" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
-              物流公司 / 承运车队名称
-            </label>
-            <input
-              id="auditCarrierName"
-              v-model="carrierName"
-              class="modern-input"
-              placeholder="如：三志物流、顺丰快递、安能快运..."
-            />
+          <!-- 快捷点击标签 -->
+          <div id="auditCarrierTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; min-height: 24px; align-items: center;">
+            <span
+              v-for="tag in carrierTags"
+              :key="tag"
+              @click="carrierName = tag"
+              style="cursor: pointer; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; transition: all 0.2s; user-select: none;"
+              @mouseover="$event.target.style.background='#bae0ff'"
+              @mouseout="$event.target.style.background='#e6f4ff'"
+            >
+              {{ tag }}
+            </span>
+          </div>
 
-            <div id="auditCarrierTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; min-height: 24px; align-items: center;">
-              <span
-                v-for="tag in carrierTags"
-                :key="tag"
-                @click="carrierName = tag"
-                style="cursor: pointer; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; transition: all 0.2s; user-select: none;"
-                @mouseover="$event.target.style.background='#bae0ff'"
-                @mouseout="$event.target.style.background='#e6f4ff'"
-              >
-                {{ tag }}
-              </span>
+          <!-- 第一行：物流公司和物流单号 -->
+          <div style="display: flex; gap: 12px; margin-bottom: 20px;">
+            <div class="form-item" style="flex: 1;">
+              <label for="auditCarrierName" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
+                物流公司 / 承运车队名称
+              </label>
+              <input
+                id="auditCarrierName"
+                v-model="carrierName"
+                class="modern-input"
+                placeholder="如：三志物流、顺丰快递、安能快运..."
+              />
+            </div>
+
+            <div class="form-item" style="flex: 1;">
+              <label for="auditLogisticsNo" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
+                物流单号 / 运输凭证信息 <span style="color:#999; font-weight:normal; font-size: 12px;">(选填)</span>
+              </label>
+              <input
+                id="auditLogisticsNo"
+                v-model="logisticsNo"
+                class="modern-input"
+                placeholder="请输入运单号、司机电话等凭证"
+              />
             </div>
           </div>
 
-          <div class="form-item" style="margin-bottom: 24px;">
-            <label for="auditLogisticsNo" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
-              物流单号 / 运输凭证信息 <span style="color:#999; font-weight:normal; font-size: 12px;">(选填)</span>
+          <!-- 运费输入 -->
+          <div class="form-item" style="margin-bottom: 20px;">
+            <label for="freightCost" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
+              运费
             </label>
             <input
-              id="auditLogisticsNo"
-              v-model="logisticsNo"
+              id="freightCost"
+              v-model.number="freightCost"
+              type="number"
               class="modern-input"
-              placeholder="请输入运单号、司机电话等凭证"
+              placeholder="请输入运费金额"
+              step="0.01"
+              min="0"
             />
+          </div>
+
+          <!-- 其它费用列表 -->
+          <div class="form-item" style="margin-bottom: 20px;">
+            <label style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
+              其它费用
+            </label>
+
+            <!-- 已添加的其它费用项 -->
+            <div v-for="(item, index) in otherCosts" :key="index" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
+              <input
+                v-model="item.note"
+                type="text"
+                class="modern-input"
+                placeholder="如：货拉拉、车牌号等"
+                style="flex: 1.5;"
+              />
+              <input
+                v-model.number="item.amount"
+                type="number"
+                class="modern-input"
+                placeholder="金额"
+                step="0.01"
+                min="0"
+                style="flex: 1;"
+              />
+              <button
+                @click="removeOtherCost(index)"
+                style="padding: 8px 12px; background: #ff4d4f; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;"
+                @mouseover="$event.target.style.background='#ff7875'"
+                @mouseout="$event.target.style.background='#ff4d4f'"
+              >
+                删除
+              </button>
+            </div>
+
+            <!-- 添加其它费用按钮 -->
+            <button
+              @click="addOtherCost"
+              style="width: 100%; padding: 10px; background: #e6f4ff; color: #1677ff; border: 1px dashed #91caff; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s;"
+              @mouseover="$event.target.style.background='#bae0ff'"
+              @mouseout="$event.target.style.background='#e6f4ff'"
+            >
+              + 添加其它费用
+            </button>
+          </div>
+
+          <!-- 总金额显示 -->
+          <div class="form-item" style="margin-bottom: 24px;">
+            <label style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
+              总金额
+            </label>
+            <div style="padding: 12px 16px; background: #f5f5f5; border-radius: 8px; font-size: 18px; font-weight: bold; color: #1890ff;">
+              ¥ {{ totalCost.toFixed(2) }}
+            </div>
           </div>
         </div>
 
@@ -161,7 +235,7 @@
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
 import request from '@/api/request'
@@ -271,6 +345,32 @@ const handleMouseUp = () => {
 const carrierName = ref('')
 const logisticsNo = ref('')
 const carrierTags = ref([])
+
+// 运费相关
+const freightCost = ref(0)
+const otherCosts = ref([]) // 其它费用数组
+
+// 添加其它费用项
+const addOtherCost = () => {
+  otherCosts.value.push({
+    note: '',
+    amount: 0
+  })
+}
+
+// 删除其它费用项
+const removeOtherCost = (index) => {
+  otherCosts.value.splice(index, 1)
+}
+
+// 计算总金额
+const totalCost = computed(() => {
+  const freight = Number(freightCost.value) || 0
+  const othersSum = otherCosts.value.reduce((sum, item) => {
+    return sum + (Number(item.amount) || 0)
+  }, 0)
+  return freight + othersSum
+})
 
 // 回单相关
 const showLargePreview = ref(false)

@@ -153,7 +153,7 @@
             "shipped_date": "2026-08-29 00:12",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "无单号记录",
             "order_client": "嘉诚电力",
             "receiver_name": "采购部",
             "receiver_phone": "18957001895",
@@ -164,7 +164,7 @@
             "goods_packaging": "托盘",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 0
+            "audit_state": 1
         },
         {
             "id": 154,
