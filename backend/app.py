@@ -262,11 +262,12 @@ def add_order():
     new_id = max([x['id'] for x in orders_list], default=0) + 1
     
     new_order = {
-        "id": new_id, 
-        "title": req_data.get('title', ''), 
-        "status": "pending", 
-        "type": req_data.get('type', 0), 
-        "date": ct, 
+        "id": new_id,
+        "title": req_data.get('title', ''),
+        "status": "pending",
+        "type": req_data.get('type', 1),
+        "store_id": req_data.get('type', 1),
+        "date": ct,
         "completed_date": "",
         "shipped_date": "",
         "shipping_method": "",
@@ -281,7 +282,7 @@ def add_order():
         "goods_quantity": req_data.get('goods_quantity', ''),
         "goods_packaging": req_data.get('goods_packaging', ''),
         "logistics_service": req_data.get('logistics_service', ''),
-        "remark": req_data.get('remark', '') 
+        "remark": req_data.get('remark', '')
     }
     
     orders_list.append(new_order)
@@ -437,7 +438,8 @@ def edit_order_content(order_id):
     for x in orders_list:
         if x['id'] == order_id:
             x['title'] = req_data.get('title', '')
-            x['type'] = req_data.get('type', 0)
+            x['type'] = req_data.get('type', 1)
+            x['store_id'] = req_data.get('type', 1)
             x['date'] = req_data.get('date', '')
             x['order_client'] = req_data.get('order_client', '')
             x['receiver_name'] = req_data.get('receiver_name', '')

@@ -219,7 +219,7 @@ onMounted(async () => {
 })
 
 const formData = ref({
-  type: 0,
+  type: 1,
   date: '',
   order_client: '',
   receiver_name: '',

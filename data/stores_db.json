@@ -6,7 +6,9 @@
         "status": "active",
         "remark": "绝缘材料门店",
         "created_at": "2024-01-01",
-        "updated_at": "2026-08-29"
+        "updated_at": "2026-08-29",
+        "color": "#FFF7E6",
+        "textColor": "#333333"
     },
     {
         "id": 2,
@@ -14,7 +16,10 @@
         "name": "中固",
         "status": "active",
         "remark": "中固材料门店",
-        "created_at": "2024-01-01"
+        "created_at": "2024-01-01",
+        "color": "#f5f5f5",
+        "textColor": "#333333",
+        "updated_at": "2026-08-29"
     },
     {
         "id": 3,
@@ -23,6 +28,8 @@
         "status": "active",
         "remark": "",
         "created_at": "2026-08-29",
-        "updated_at": "2026-08-29"
+        "updated_at": "2026-08-29",
+        "color": "#e2fde7",
+        "textColor": "#333333"
     }
 ]
