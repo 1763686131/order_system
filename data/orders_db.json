@@ -119,7 +119,10 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 8755
+                    "amount": 8755,
+                    "paid_amount": 8755.0,
+                    "updated_at": "2026-08-29 10:02:43",
+                    "updated_by": "admin"
                 }
             ]
         },
