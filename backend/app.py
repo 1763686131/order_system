@@ -671,6 +671,34 @@ def get_latest_reserve_fund():
 
     return jsonify({'balance': balance})
 
+@app.route('/api/freight-records/reserve-fund/<fund_id>', methods=['PUT'])
+def update_reserve_fund(fund_id):
+    """更新备用金金额"""
+    req_data = request.json
+    data = read_freight_records()
+    funds = data.get('reserve_funds', [])
+
+    # 查找对应的备用金记录
+    fund_index = None
+    for i, fund in enumerate(funds):
+        if fund.get('id') == fund_id:
+            fund_index = i
+            break
+
+    if fund_index is None:
+        return jsonify({'success': False, 'message': '备用金记录不存在'}), 404
+
+    # 更新金额
+    new_amount = float(req_data.get('amount', 0))
+    funds[fund_index]['amount'] = new_amount
+    funds[fund_index]['updatedAt'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    funds[fund_index]['updatedBy'] = request.headers.get('Username', '管理员')
+
+    data['reserve_funds'] = funds
+    write_freight_records(data)
+
+    return jsonify({'success': True, 'fund': funds[fund_index]})
+
 # ==========================================
 # 🎯 文件万能通配拦截器 (必须垫在所有特定路由的最后面)
 # ==========================================

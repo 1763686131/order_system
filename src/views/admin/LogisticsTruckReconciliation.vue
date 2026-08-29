@@ -38,7 +38,10 @@
         <thead>
           <tr>
             <th class="col-index">序号</th>
-            <th class="col-date">日期</th>
+            <th class="col-date sortable" @click="toggleDateSort">
+              日期
+              <span class="sort-icon">{{ getSortIcon() }}</span>
+            </th>
             <th class="col-name">名称</th>
             <th class="col-quantity">数量 (kg)</th>
             <th class="col-address">收货地址</th>
@@ -53,60 +56,71 @@
           </tr>
         </thead>
         <tbody>
-          <!-- 上期备用金转入行 -->
-          <tr v-if="paginatedOrders.length > 0" class="row-balance-transfer">
-            <td class="col-index">1</td>
-            <td class="col-date">{{ getFirstDate() }}</td>
-            <td colspan="7" class="balance-label">上期备用金转入</td>
-            <td class="balance-amount negative">¥ {{ previousBalance.toFixed(2) }}</td>
-            <td class="balance-amount negative">¥ {{ previousBalance.toFixed(2) }}</td>
-            <td></td>
-            <td></td>
-            <td></td>
-          </tr>
-
-          <!-- 本期录入的备用金记录行 -->
-          <tr v-for="(fund, fundIndex) in periodFundsList" :key="`fund-${fund.id}`" class="row-balance-transfer">
-            <td class="col-index">{{ fundIndex + 2 }}</td>
-            <td class="col-date">{{ formatDate(fund.date) }}</td>
-            <td colspan="7" class="balance-label">备用金录入{{ fund.note ? `（${fund.note}）` : '' }}</td>
-            <td class="balance-amount positive">¥ {{ fund.amount.toFixed(2) }}</td>
-            <td class="balance-amount positive">¥ {{ calculateRunningBalance(fundIndex).toFixed(2) }}</td>
-            <td></td>
-            <td></td>
-            <td></td>
-          </tr>
-
-          <!-- 数据行 -->
-          <tr v-for="(order, index) in paginatedOrders" :key="order.id" :class="getRowClass(order)">
-            <td class="col-index">{{ getRowIndex(index) }}</td>
-            <td class="col-date">{{ formatDate(order.completed_date) }}</td>
-            <td class="col-name">{{ order.order_client || '-' }}</td>
-            <td class="col-quantity">{{ getTotalWeight(order) }}</td>
-            <td class="col-address">
-              <span
-                v-if="order.receiver_address && order.receiver_address.length > 6"
-                class="address-text clickable"
-                @click="showAddressDetail(order.receiver_address)"
+          <!-- 混合显示订单和备用金记录（按日期排序） -->
+          <template v-for="(item, index) in mergedOrdersAndFunds" :key="item.id || item.fundId">
+            <!-- 订单行 -->
+            <tr v-if="item.type === 'order'" :class="getRowClass(item)">
+              <td class="col-index">{{ index + 1 }}</td>
+              <td class="col-date">{{ formatDate(item.completed_date) }}</td>
+              <td class="col-name">{{ item.order_client || '-' }}</td>
+              <td class="col-quantity">{{ getTotalWeight(item) }}</td>
+              <td class="col-address">
+                <span
+                  v-if="item.receiver_address && item.receiver_address.length > 6"
+                  class="address-text clickable"
+                  @click="showAddressDetail(item.receiver_address)"
               >
-                {{ order.receiver_address.substring(0, 6) }}...
+                {{ item.receiver_address.substring(0, 6) }}...
               </span>
-              <span v-else>{{ order.receiver_address || '-' }}</span>
+              <span v-else>{{ item.receiver_address || '-' }}</span>
             </td>
-            <td class="col-channel">{{ getShippingMethodText(order) }}</td>
+            <td class="col-channel">{{ getShippingMethodText(item) }}</td>
             <td class="col-logistics-no">
-              <span v-if="order.logistics_no">{{ order.logistics_no }}</span>
+              <span v-if="item.logistics_no">{{ item.logistics_no }}</span>
               <span v-else>-</span>
             </td>
-            <td class="col-price">¥ {{ getFreightAmount(order).toFixed(2) }}</td>
+            <td class="col-price">¥ {{ getFreightAmount(item).toFixed(2) }}</td>
             <td class="col-paid">
               <input type="text" class="input-paid" placeholder="-" />
             </td>
-            <td class="col-balance">¥ {{ getRunningBalance(index).toFixed(2) }}</td>
+            <td class="col-balance">¥ {{ calculateBalance(index).toFixed(2) }}</td>
             <td class="col-memo"></td>
-            <td class="col-return">{{ hasReceipt(order) ? '已传' : '' }}</td>
+            <td class="col-return">{{ hasReceipt(item) ? '已传' : '' }}</td>
             <td class="col-remark"></td>
           </tr>
+
+          <!-- 备用金行 -->
+          <tr v-else-if="item.type === 'fund'" class="row-fund-entry">
+            <td class="col-index">{{ index + 1 }}</td>
+            <td class="col-date">{{ formatDate(item.date) }}</td>
+            <td colspan="6" class="fund-label">备用金转入{{ item.note ? `（${item.note}）` : '' }}</td>
+            <td class="fund-amount" :class="{ negative: item.amount < 0 }">
+              <!-- 编辑状态 -->
+              <input
+                v-if="editingFundId === item.id"
+                type="number"
+                class="input-paid"
+                v-model.number="editingFundAmount"
+                @keyup.enter="saveFundAmount(item)"
+                @blur="cancelFundEdit"
+                ref="fundAmountInput"
+              />
+              <!-- 显示状态 -->
+              <span
+                v-else
+                class="fund-amount-text"
+                @dblclick="startEditFund(item)"
+              >
+                {{ item.amount >= 0 ? '+ ' + item.amount.toFixed(2) : item.amount.toFixed(2) }}
+              </span>
+            </td>
+            <td></td>
+            <td class="col-balance">¥ {{ calculateBalance(index).toFixed(2) }}</td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+        </template>
 
           <tr v-if="paginatedOrders.length === 0">
             <td colspan="13" class="empty-state">
@@ -166,6 +180,29 @@
           <button class="btn-close" @click="closeFundModal">×</button>
         </div>
         <div class="modal-body">
+          <div class="form-group">
+            <label>类型</label>
+            <div class="radio-group">
+              <label class="radio-label">
+                <input
+                  type="radio"
+                  v-model="fundType"
+                  value="previous"
+                  @change="onFundTypeChange"
+                />
+                <span>上期备用金转入</span>
+              </label>
+              <label class="radio-label">
+                <input
+                  type="radio"
+                  v-model="fundType"
+                  value="current"
+                  @change="onFundTypeChange"
+                />
+                <span>备用金录入</span>
+              </label>
+            </div>
+          </div>
           <div class="form-group">
             <label>日期</label>
             <input
@@ -245,12 +282,21 @@ const showFundModal = ref(false)
 const fundDate = ref('')
 const fundAmount = ref('')
 const fundNote = ref('')
+const fundType = ref('current') // 'previous' 上期备用金转入, 'current' 备用金录入
+
+// 编辑备用金金额
+const editingFundId = ref(null)
+const editingFundAmount = ref(0)
+const fundAmountInput = ref(null)
 
 // 本期汇入的备用金
 const periodReserveFund = ref(0)
 
 // 本期备用金列表（用于渲染独立行）
 const periodFundsList = ref([])
+
+// 日期排序状态：'asc' 升序，'desc' 降序，null 不排序
+const dateSortOrder = ref('asc')
 
 // 当前期数文本
 const currentPeriodText = computed(() => {
@@ -308,11 +354,19 @@ const filteredOrders = computed(() => {
   })
 
   // 按日期排序
-  result.sort((a, b) => {
-    const dateA = a.completed_date || ''
-    const dateB = b.completed_date || ''
-    return dateA.localeCompare(dateB)
-  })
+  if (dateSortOrder.value === 'asc') {
+    result.sort((a, b) => {
+      const dateA = a.completed_date || ''
+      const dateB = b.completed_date || ''
+      return dateA.localeCompare(dateB)
+    })
+  } else if (dateSortOrder.value === 'desc') {
+    result.sort((a, b) => {
+      const dateA = a.completed_date || ''
+      const dateB = b.completed_date || ''
+      return dateB.localeCompare(dateA)
+    })
+  }
 
   return result
 })
@@ -324,6 +378,39 @@ const paginatedOrders = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
   return filteredOrders.value.slice(start, end)
+})
+
+// 合并订单和备用金记录（按日期排序）
+const mergedOrdersAndFunds = computed(() => {
+  const merged = []
+
+  // 添加订单（标记为 order 类型）
+  paginatedOrders.value.forEach(order => {
+    merged.push({
+      ...order,
+      type: 'order',
+      sortDate: order.completed_date || ''
+    })
+  })
+
+  // 添加备用金记录（标记为 fund 类型）
+  periodFundsList.value.forEach(fund => {
+    merged.push({
+      ...fund,
+      type: 'fund',
+      fundId: fund.id,
+      sortDate: fund.date || ''
+    })
+  })
+
+  // 根据排序状态排序
+  if (dateSortOrder.value === 'asc') {
+    merged.sort((a, b) => a.sortDate.localeCompare(b.sortDate))
+  } else if (dateSortOrder.value === 'desc') {
+    merged.sort((a, b) => b.sortDate.localeCompare(a.sortDate))
+  }
+
+  return merged
 })
 
 // 统计数据
@@ -393,6 +480,24 @@ const calculateRunningBalance = (fundIndex) => {
   return balance
 }
 
+// 切换日期排序
+const toggleDateSort = () => {
+  if (dateSortOrder.value === null) {
+    dateSortOrder.value = 'asc'
+  } else if (dateSortOrder.value === 'asc') {
+    dateSortOrder.value = 'desc'
+  } else {
+    dateSortOrder.value = null
+  }
+}
+
+// 获取排序图标
+const getSortIcon = () => {
+  if (dateSortOrder.value === 'asc') return '↑'
+  if (dateSortOrder.value === 'desc') return '↓'
+  return '↕'
+}
+
 // 获取第一条数据的日期
 const getFirstDate = () => {
   if (paginatedOrders.value.length === 0) return '-'
@@ -410,6 +515,25 @@ const getRunningBalance = (index) => {
   for (let i = 0; i <= index; i++) {
     balance -= getFreightAmount(paginatedOrders.value[i])
   }
+  return balance
+}
+
+// 计算混合列表中的累计余额
+const calculateBalance = (index) => {
+  let balance = previousBalance.value
+
+  // 遍历到当前索引，计算累计余额
+  for (let i = 0; i <= index; i++) {
+    const item = mergedOrdersAndFunds.value[i]
+    if (item.type === 'order') {
+      // 订单：扣除运费
+      balance -= getFreightAmount(item)
+    } else if (item.type === 'fund') {
+      // 备用金：增加金额
+      balance += item.amount
+    }
+  }
+
   return balance
 }
 
@@ -486,6 +610,9 @@ const fetchPeriodReserveFund = async () => {
 
 // 显示录入备用金弹窗
 const showAddFundModal = () => {
+  // 默认选择"备用金录入"
+  fundType.value = 'current'
+  // 设置日期为今天
   const today = new Date()
   const year = today.getFullYear()
   const month = String(today.getMonth() + 1).padStart(2, '0')
@@ -494,6 +621,86 @@ const showAddFundModal = () => {
   fundAmount.value = ''
   fundNote.value = ''
   showFundModal.value = true
+}
+
+// 备用金类型切换处理
+const onFundTypeChange = () => {
+  if (fundType.value === 'previous') {
+    // 上期备用金转入：设置为当前期数的第一天
+    const [startDay] = selectedPeriod.value.split('-').map(Number)
+    const year = selectedYear.value
+    const month = String(selectedMonth.value).padStart(2, '0')
+    const day = String(startDay).padStart(2, '0')
+    fundDate.value = `${year}-${month}-${day}`
+  } else {
+    // 备用金录入：设置为今天
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    const day = String(today.getDate()).padStart(2, '0')
+    fundDate.value = `${year}-${month}-${day}`
+  }
+}
+
+// 开始编辑备用金金额
+const startEditFund = (fund) => {
+  editingFundId.value = fund.id
+  editingFundAmount.value = fund.amount
+  // 等待DOM更新后聚焦输入框
+  nextTick(() => {
+    if (fundAmountInput.value) {
+      fundAmountInput.value.focus()
+      fundAmountInput.value.select()
+    }
+  })
+}
+
+// 取消编辑备用金金额
+const cancelFundEdit = () => {
+  editingFundId.value = null
+  editingFundAmount.value = 0
+}
+
+// 保存备用金金额
+const saveFundAmount = async (fund) => {
+  const newAmount = editingFundAmount.value
+
+  if (newAmount === fund.amount) {
+    cancelFundEdit()
+    return
+  }
+
+  try {
+    // 调用API更新备用金金额
+    const response = await fetch(`${API_BASE_URL}/freight-records/reserve-fund/${fund.id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Username': localStorage.getItem('username') || '管理员'
+      },
+      body: JSON.stringify({
+        amount: newAmount
+      })
+    })
+
+    if (!response.ok) {
+      throw new Error('更新失败')
+    }
+
+    // 更新本地数据
+    fund.amount = newAmount
+
+    // 重新加载数据
+    await loadFreightRecords()
+
+    cancelFundEdit()
+
+    alert('修改成功')
+  } catch (error) {
+    console.error('保存备用金金额失败:', error)
+    alert('保存失败，请重试')
+    cancelFundEdit()
+  }
 }
 
 // 关闭备用金弹窗
@@ -752,11 +959,30 @@ onMounted(() => {
   border-bottom: 2px solid #e5e7eb;
 }
 
+/* 可排序的表头 */
+.freight-table th.sortable {
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+
+.freight-table th.sortable:hover {
+  background: #f3f4f6;
+}
+
+.sort-icon {
+  margin-left: 4px;
+  font-size: 12px;
+  color: #9ca3af;
+}
+
 .freight-table td {
   padding: 10px 16px;
   font-size: 13px;
   color: #1f2937;
   border-bottom: 1px solid #e5e7eb;
+  border-left: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
   text-align: center;
 }
 
@@ -809,12 +1035,38 @@ onMounted(() => {
 
 /* 特殊行样式 */
 .row-balance-transfer {
-  background: #dbeafe;
+  background: #ffffff;
   font-weight: 600;
 }
 
 .row-balance-transfer:hover {
-  background: #bfdbfe;
+  background: #f9fafb;
+}
+
+/* 备用金录入行样式 */
+.row-fund-entry {
+  background: #ffffff;
+  font-weight: 500;
+}
+
+.row-fund-entry:hover {
+  background: #f9fafb;
+}
+
+.row-fund-entry td {
+  border-left: 1px solid #e5e7eb;
+  border-right: 1px solid #e5e7eb;
+}
+
+.fund-label {
+  text-align: center;
+  color: #1f2937;
+}
+
+.fund-amount {
+  color: #10b981;
+  font-weight: 600;
+  text-align: center;
 }
 
 .row-highlight-red {
@@ -1033,6 +1285,29 @@ onMounted(() => {
   font-weight: 500;
   color: #374151;
   margin-bottom: 8px;
+}
+
+.radio-group {
+  display: flex;
+  gap: 20px;
+  margin-top: 8px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: normal;
+}
+
+.radio-label input[type="radio"] {
+  margin-right: 6px;
+  cursor: pointer;
+}
+
+.radio-label span {
+  font-size: 14px;
+  color: #374151;
 }
 
 .form-input {
