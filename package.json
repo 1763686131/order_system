@@ -6,14 +6,19 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "server": "node server.js",
+    "migrate": "node scripts/migrate_order_type_to_store_id.js"
   },
   "dependencies": {
     "axios": "^1.6.0",
     "pinia": "^2.1.7",
     "vue": "^3.4.0",
     "vue-router": "^4.2.5",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "body-parser": "^1.20.2"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^6.0.0",

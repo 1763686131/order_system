@@ -154,11 +154,15 @@
         </select>
       </div>
     </div>
+
+    <!-- 商品表单弹窗 -->
+    <ProductFormModal ref="productFormModal" @save="handleSaveProduct" @refresh="loadProducts" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import ProductFormModal from '@/components/admin/ProductFormModal.vue'
 
 // 筛选条件
 const filters = ref({
@@ -174,6 +178,7 @@ const selectAll = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(30)
 const jumpPage = ref(1)
+const productFormModal = ref(null)
 
 // 模拟数据
 const mockProducts = [
@@ -210,7 +215,9 @@ const handleBatch = () => {
 }
 
 const handleNew = () => {
-  console.log('新增商品')
+  if (productFormModal.value) {
+    productFormModal.value.open()
+  }
 }
 
 const handleImport = () => {
@@ -219,6 +226,31 @@ const handleImport = () => {
 
 const handleExport = () => {
   console.log('导出')
+}
+
+const handleSaveProduct = (productData) => {
+  // 保存商品数据
+  const newProduct = {
+    id: products.value.length + 1,
+    name: productData.name,
+    code: productData.specification,
+    stock: 0,
+    unit: productData.unit,
+    price: 0,
+    category: productData.category,
+    warehouse: productData.warehouse || '无',
+    notes: productData.notes || '-',
+    selected: false,
+    disabled: productData.status === 'disabled'
+  }
+
+  products.value.unshift(newProduct)
+  console.log('商品已保存', newProduct)
+}
+
+const loadProducts = () => {
+  // 重新加载商品列表
+  console.log('重新加载商品列表')
 }
 
 const handleSettings = () => {

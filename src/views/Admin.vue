@@ -250,6 +250,7 @@ const menuItems = ref([
     label: '设置',
     icon: icons.settings,
     children: [
+      { label: '门店管理', path: '/admin/stores' },
       { label: '系统设置', path: '/admin/settings' },
       { label: '用户管理', path: '/admin/users' },
       { label: '角色管理', path: '/admin/roles' }

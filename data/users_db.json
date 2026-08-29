@@ -4,101 +4,107 @@
         "password": "741200",
         "role": "super_admin",
         "permissions": [
-            "pending.add",
-            "pending.view_detail",
-            "pending.complete",
-            "pending.edit",
-            "pending.copy",
-            "pending.delete",
-            "completed.ship",
-            "completed.uncomplete",
-            "completed.copy",
-            "completed.delete",
-            "shipped.audit",
-            "shipped.view_receipt",
-            "shipped.upload_receipt",
-            "shipped.delete_receipt",
-            "material.add",
-            "material.edit",
-            "material.delete",
-            "system.user_manage"
+            "pending.copy"
         ],
-        "name": "千城",
-        "createdAt": "2026-08-25 14:03:05"
+        "name": "王醒"
     },
     {
         "username": "11",
         "password": "123456",
-        "role": "admin",
+        "role": "employee",
         "permissions": [
             "pending.view_detail",
             "pending.complete",
+            "material.add"
+        ],
+        "name": "车间设备"
+    },
+    {
+        "username": "8",
+        "password": "123456",
+        "role": "admin",
+        "permissions": [
+            "pending.copy",
+            "completed.copy",
             "shipped.view_receipt",
             "material.add"
         ],
-        "name": "千城",
-        "createdAt": "2026-08-25 14:03:05"
+        "name": "柯晓"
     },
     {
         "username": "111",
-        "name": "千城",
+        "password": "123456",
+        "role": "employee",
+        "permissions": [
+            "pending.view_detail",
+            "pending.complete",
+            "material.add"
+        ],
+        "name": "向光洪"
+    },
+    {
+        "username": "88",
+        "name": "臧小余",
         "password": "123456",
         "role": "admin",
         "permissions": [
             "pending.add",
-            "pending.view_detail",
-            "pending.complete",
-            "pending.edit",
             "pending.copy",
-            "pending.delete",
-            "shipped.audit",
-            "shipped.view_receipt",
-            "shipped.upload_receipt",
-            "shipped.delete_receipt",
-            "completed.ship",
-            "completed.uncomplete",
             "completed.copy",
-            "completed.delete",
-            "material.add",
-            "material.edit",
-            "material.delete",
-            "system.user_manage"
-        ],
-        "createdAt": "2026-08-25 14:03:05"
+            "shipped.view_receipt",
+            "shipped.upload_receipt"
+        ]
+    },
+    {
+        "username": "112",
+        "name": "向光敏",
+        "password": "123456",
+        "role": "employee",
+        "permissions": []
     },
     {
         "username": "222",
-        "name": "45",
+        "name": "管礼灶",
         "password": "123456",
-        "role": "admin",
+        "role": "employee",
         "permissions": [
-            "completed.ship",
-            "completed.uncomplete",
+            "pending.complete",
+            "material.add"
+        ]
+    },
+    {
+        "username": "333",
+        "name": "唐果",
+        "password": "123456",
+        "role": "employee",
+        "permissions": [
+            "pending.complete"
+        ]
+    },
+    {
+        "username": "555",
+        "name": "何家辉",
+        "password": "123456",
+        "role": "employee",
+        "permissions": [
+            "pending.complete",
+            "material.add"
+        ]
+    },
+    {
+        "username": "888",
+        "name": "臧不荒",
+        "password": "123456",
+        "role": "employee",
+        "permissions": [
+            "pending.view_detail",
+            "pending.edit",
+            "pending.copy",
             "completed.copy",
-            "completed.delete",
             "shipped.audit",
             "shipped.view_receipt",
             "shipped.upload_receipt",
-            "shipped.delete_receipt",
-            "material.add",
-            "material.edit",
-            "material.delete",
-            "system.user_manage",
-            "pending.add",
-            "pending.view_detail",
-            "pending.complete",
-            "pending.edit",
-            "pending.copy",
-            "pending.delete"
-        ],
-        "createdAt": "2026-08-25 14:03:05"
-    },
-    {
-        "username": "54545",
-        "name": "4545",
-        "password": "123456",
-        "role": "employee",
-        "permissions": [],
-        "createdAt": "2026-08-25 14:03:05"
+            "shipped.upload_receipt"
+        ]
     }
 ]

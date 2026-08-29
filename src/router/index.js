@@ -35,6 +35,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'products',
+        name: 'admin-products',
+        component: () => import('@/views/admin/products/ProductList.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'orders',
         name: 'admin-orders',
         component: () => import('@/views/admin/orders/UnifiedOrderList.vue'),
@@ -58,6 +64,12 @@ const routes = [
         path: 'roles',
         name: 'admin-roles',
         component: () => import('@/views/admin/system/RoleManage.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'stores',
+        name: 'admin-stores',
+        component: () => import('@/views/admin/system/StoreManage.vue'),
         meta: { requiresAuth: true }
       },
       {
