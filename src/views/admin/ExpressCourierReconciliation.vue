@@ -93,8 +93,6 @@
             <td class="col-logistics-no">
               <span v-if="order.logistics_no">{{ order.logistics_no }}</span>
               <span v-else>-</span>
-              </span>
-              <span v-else>{{ item.receiver_address || '-' }}</span>
             </td>
             <td class="col-channel">{{ getShippingMethodText(item) }}</td>
             <td class="col-logistics-no">
