@@ -109,6 +109,7 @@
               <th class="col-receipt">回单</th>
             </template>
 
+            <th v-if="mode === 'finance'" class="col-status">状态</th>
             <th class="col-remark">备注</th>
             <th class="col-actions">操作</th>
           </tr>
@@ -210,11 +211,24 @@
               </td>
             </template>
 
+            <td v-if="mode === 'finance'" class="col-status">
+              <span :class="['status-tag', getStatusClass(order)]">
+                {{ getStatusText(order) }}
+              </span>
+            </td>
             <td class="col-remark">
               <span class="remark-text" :title="order.remark || ''">{{ order.remark || '-' }}</span>
             </td>
             <td class="col-actions">
               <div class="action-buttons">
+                <button
+                  v-if="mode === 'finance' && order.status === 'completed'"
+                  class="btn-action btn-ship"
+                  @click="handleShipOrder(order)"
+                  title="出库发货"
+                >
+                  出库
+                </button>
                 <button
                   v-if="mode === 'logistics' && order.audit_state !== 1"
                   class="btn-action btn-logistics"
@@ -312,7 +326,12 @@ const props = defineProps({
   }
 })
 
+const emit = defineEmits(['ship', 'refresh'])
+
 const orderStore = useOrderStore()
+
+// 从父组件注入 handleShip 方法
+const handleShipFromParent = inject('handleShip', null)
 
 // 注入 Admin 组件提供的方法
 const setHeaderActions = inject('setHeaderActions', null)
@@ -743,6 +762,45 @@ const showCopyMessage = (text, type = 'success') => {
 // 切换排序
 const toggleSort = () => {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+}
+
+// 获取订单状态文本
+const getStatusText = (order) => {
+  if (order.status === 'shipped' && order.audit_state === 1) {
+    return '已发货'
+  } else if (order.status === 'shipped') {
+    return '已出库'
+  } else if (order.status === 'completed') {
+    return '已完成'
+  } else {
+    return '未完成'
+  }
+}
+
+// 获取订单状态样式类
+const getStatusClass = (order) => {
+  if (order.status === 'shipped' && order.audit_state === 1) {
+    return 'status-shipped'
+  } else if (order.status === 'shipped') {
+    return 'status-out'
+  } else if (order.status === 'completed') {
+    return 'status-completed'
+  } else {
+    return 'status-pending'
+  }
+}
+
+// 处理出库发货
+const handleShipOrder = (order) => {
+  // 更新 orderStore 数据
+  orderStore.allOrders = orders.value
+
+  // 使用注入的方法或者 emit
+  if (handleShipFromParent) {
+    handleShipFromParent(order.id)
+  } else {
+    emit('ship', order.id)
+  }
 }
 
 const handleViewReceipt = (order) => {
@@ -1186,6 +1244,49 @@ const changePageSize = (size) => {
 
 .btn-delete:hover {
   background: #fecaca;
+}
+
+.col-status {
+  width: 90px;
+  text-align: center;
+}
+
+.status-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.status-completed {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.status-out {
+  background: #e0e7ff;
+  color: #6366f1;
+}
+
+.status-shipped {
+  background: #d1fae5;
+  color: #059669;
+}
+
+.btn-ship {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.btn-ship:hover {
+  background: #bfdbfe;
 }
 
 /* 表格元素样式 */

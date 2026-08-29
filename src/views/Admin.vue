@@ -110,6 +110,7 @@
 
     <!-- 弹窗组件 -->
     <ShippedOrderActionModal ref="shippedActionModal" @refresh="handleRefresh" />
+    <ShipOrderModal ref="shipOrderModal" @refresh="handleRefresh" />
   </div>
 </template>
 
@@ -118,12 +119,15 @@ import { ref, computed, provide, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
+import ShipOrderModal from '@/components/front/ShipOrderModal.vue'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 
 const notificationCount = ref(3)
+const shippedActionModal = ref(null)
+const shipOrderModal = ref(null)
 
 // 侧边栏折叠状态
 const isSidebarCollapsed = ref(false)
@@ -132,9 +136,6 @@ const isSidebarCollapsed = ref(false)
 const toggleSidebar = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
-
-// 弹窗引用
-const shippedActionModal = ref(null)
 
 // 用于子组件注入的按钮操作
 const headerActions = ref(null)
@@ -151,6 +152,12 @@ onMounted(() => {
       shippedActionModal.value.open(orderId, action)
     }
   }
+
+  window.triggerShipOrderModal = (orderId) => {
+    if (shipOrderModal.value) {
+      shipOrderModal.value.open(orderId)
+    }
+  }
 })
 
 // 处理刷新事件
@@ -160,6 +167,13 @@ const handleRefresh = () => {
     window.refreshUnifiedOrderList()
   }
 }
+
+// 提供给子组件的 ship 方法
+provide('handleShip', (orderId) => {
+  if (shipOrderModal.value) {
+    shipOrderModal.value.open(orderId)
+  }
+})
 
 // SVG 图标定义
 const icons = {
