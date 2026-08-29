@@ -251,6 +251,14 @@
                   录入物流
                 </button>
                 <button
+                  v-if="mode === 'logistics'"
+                  class="btn-action btn-copy"
+                  @click="handleCopyOrderInfo(order)"
+                  title="复制物流信息"
+                >
+                  复制
+                </button>
+                <button
                   class="btn-action btn-edit"
                   @click="handleEdit(order)"
                   title="修改信息"
@@ -330,6 +338,7 @@
 import { ref, computed, onMounted, onUnmounted, inject, h, watch } from 'vue'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
+import { formatOrderForCopy } from '@/utils/tools'
 
 const props = defineProps({
   mode: {
@@ -697,6 +706,18 @@ const handleAdd = () => {
 
 const handleEdit = (order) => {
   console.log('编辑订单', order)
+}
+
+// 复制物流极简信息
+const handleCopyOrderInfo = async (order) => {
+  try {
+    const textToCopy = formatOrderForCopy(order)
+    await navigator.clipboard.writeText(textToCopy)
+    showCopyMessage('复制成功')
+  } catch (error) {
+    console.error('复制失败:', error)
+    alert('复制失败，请手动复制')
+  }
 }
 
 const handleUploadReceipt = (order) => {
@@ -1318,6 +1339,15 @@ const changePageSize = (size) => {
 
 .btn-edit:hover {
   background: #fde68a;
+}
+
+.btn-copy {
+  background: #e0e7ff;
+  color: #4f46e5;
+}
+
+.btn-copy:hover {
+  background: #c7d2fe;
 }
 
 .btn-delete {

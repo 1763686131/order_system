@@ -289,20 +289,30 @@ export async function copyToClipboard(text) {
 /**
  * 格式化订单信息为可复制的文本
  * @param {object} order - 订单对象
+ * @param {boolean} isEmployee - 是否为员工（员工不显示电话和服务）
  * @returns {string}
  */
-export function formatOrderForCopy(order) {
-  let text = `订单归属: ${order.order_client || '未命名'}\n`
-  text += `订单日期: ${order.date || '未知'}\n`
-  text += `收货人: ${order.receiver_name || '未填'}\n`
-  text += `电话: ${order.receiver_phone || '未填'}\n`
-  text += `地址: ${order.receiver_address || '未填'}\n`
-  text += `货物:\n${order.goods_name || '无'}\n`
-  text += `包装: ${order.goods_packaging || '无'}\n`
-  text += `重量: ${order.goods_weight || '无'}\n`
-  text += `件数: ${order.goods_quantity || '无'}\n`
-  text += `备注: ${order.remark || '无'}`
-  return text
+export function formatOrderForCopy(order, isEmployee = false) {
+  // 订单类型文本
+  const typeText = (order.type == 1) ? '绝缘订单' : '中固订单'
+
+  // 名称字符数量限制
+  let nameLimit = (order.type == 1) ? 8 : 9
+  let shortGoodsName = (order.goods_name || '').replace(/\n/g, '').trim().substring(0, nameLimit)
+
+  // 构建复制文本（原生格式）
+  let clipText = `【${typeText}】\n`
+  if (order.receiver_name) clipText += `姓名：${order.receiver_name}\n`
+  if (!isEmployee && order.receiver_phone) clipText += `电话：${order.receiver_phone}\n`
+  if (order.receiver_address) clipText += `地址：${order.receiver_address}\n`
+  if (shortGoodsName) clipText += `名称：${shortGoodsName}\n`
+  if (order.goods_weight) clipText += `重量：${order.goods_weight}\n`
+  if (order.goods_quantity) clipText += `件数：${order.goods_quantity}\n`
+  if (order.goods_packaging) clipText += `包装：${order.goods_packaging}\n`
+  if (!isEmployee && order.logistics_service) clipText += `服务：${order.logistics_service}\n`
+  if (order.remark) clipText += `备注：${order.remark}\n`
+
+  return clipText
 }
 
 // ============================================
