@@ -148,37 +148,6 @@
             ]
         },
         {
-            "id": 152,
-            "title": "【中固订单】\n姓名：高小宝\n电话：18872365156\n地址：福建省厦门市海沧区青礁村大路社128-5\n名称：碳板胶（磐鑫包装）160公斤 粘钢胶（中固包装）40公斤\n重量：300kg\n件数：15件\n包装：桶装\n服务：送货上门+回单拍照回传\n备注：\n",
-            "status": "shipped",
-            "type": 0,
-            "date": "2026-08-18 15:30",
-            "completed_date": "2026-08-28 23:18",
-            "shipped_date": "2026-08-28 23:18",
-            "shipping_method": 0,
-            "shipping_custom": "",
-            "logistics_no": "蜜风物流-444",
-            "order_client": "高小宝",
-            "receiver_name": "高小宝",
-            "receiver_phone": "18872365156",
-            "receiver_address": "福建省厦门市海沧区青礁村大路社128-5",
-            "goods_name": "碳板胶（磐鑫包装）160公斤 \n粘钢胶（中固包装）40公斤\n封口胶（中固包装）40公斤",
-            "goods_weight": "240kg",
-            "goods_quantity": "12件",
-            "goods_packaging": "桶装",
-            "logistics_service": "送货上门+回单拍照回传",
-            "remark": "",
-            "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/高小宝订单_高小宝_2026-08-28_FB5C.jpg",
-            "freight_costs": [
-                {
-                    "type": "freight",
-                    "note": "运费",
-                    "amount": 555
-                }
-            ]
-        },
-        {
             "id": 154,
             "title": "李超\n 13566631900 吴昌力 浙江省宁波市鄞州区中车路与南北大道交叉口东北方向214米左右\n\n赛文支装胶2箱。",
             "status": "shipped",
@@ -494,6 +463,29 @@
                     "amount": 554
                 }
             ]
+        },
+        {
+            "id": 178,
+            "title": "",
+            "status": "shipped",
+            "type": 1,
+            "date": "2026-08-29 04:27",
+            "completed_date": "2026-08-29 12:27",
+            "shipped_date": "2026-08-29 12:27",
+            "shipping_method": 0,
+            "shipping_custom": "",
+            "logistics_no": "暂未录入单号",
+            "order_client": "雷安",
+            "receiver_name": "王雪萍",
+            "receiver_phone": "13968497998",
+            "receiver_address": "楚门镇南兴东路190号浙江雷安电气有限公司",
+            "goods_name": "树脂：2103A",
+            "goods_weight": "2150kg",
+            "goods_quantity": "7件",
+            "goods_packaging": "托盘",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 0
         }
     ]
 }

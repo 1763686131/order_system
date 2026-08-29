@@ -242,7 +242,15 @@
               <span v-else class="freight-empty">-</span>
             </td>
             <td class="col-remark">
-              <span class="remark-text" :title="order.remark || ''">{{ order.remark || '-' }}</span>
+              <span
+                v-if="order.remark && order.remark.length > 2"
+                class="remark-text clickable"
+                @click="showExpandModal('备注信息', order.remark)"
+                :title="'点击查看完整备注'"
+              >
+                {{ order.remark.substring(0, 2) }}...
+              </span>
+              <span v-else class="remark-text">{{ order.remark || '-' }}</span>
             </td>
             <td class="col-actions">
               <div class="action-buttons">
@@ -320,6 +328,10 @@
             </button>
           </div>
         </div>
+      </div>
+      <div v-if="mode === 'logistics'" class="freight-summary">
+        <span class="freight-label">当前页运费合计：</span>
+        <span class="freight-total">¥{{ currentPageFreightTotal.toFixed(2) }}</span>
       </div>
       <div class="pagination-controls">
         <button class="page-btn" :disabled="currentPage === 1" @click="prevPage">
@@ -690,6 +702,13 @@ const paginatedOrders = computed(() => {
 const isAllSelected = computed(() => {
   return paginatedOrders.value.length > 0 &&
     paginatedOrders.value.every(order => selectedOrders.value.includes(order.id))
+})
+
+// 计算当前页运费总额
+const currentPageFreightTotal = computed(() => {
+  return paginatedOrders.value.reduce((sum, order) => {
+    return sum + getFreightTotal(order)
+  }, 0)
 })
 
 // 方法
@@ -1793,6 +1812,25 @@ const changePageSize = (size) => {
   color: #fff;
   background: #3b82f6;
   box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+}
+
+.freight-summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.freight-label {
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.freight-total {
+  font-size: 14px;
+  font-weight: 600;
+  color: #059669;
 }
 
 .pagination-controls {

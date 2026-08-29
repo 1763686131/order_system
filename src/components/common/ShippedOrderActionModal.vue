@@ -198,7 +198,7 @@
         <div class="modal-btn-group" style="display: flex; gap: 12px; justify-content: center; margin-top: 24px; width: 100%;">
           <button id="btnAuditRevoke" @click="submitRevokeShipOrder">撤销出库</button>
           <button id="btnAuditConfirm" @click="submitAuditShipOrder">确认审核</button>
-          <button id="btnEditConfirm" @click="submitEditShipOrder">修改完成</button>
+          <button id="btnEditConfirm" @click="submitEditShipOrder" style="display: none;">修改完成</button>
           <button id="btnReceiptDelete" @click="clearReceiptImage">清除图片</button>
           <button id="btnReceiptUpload" @click="submitReceiptImage">确认上传</button>
           <button id="btnRealDeleteReceipt" @click="deleteRealReceiptImage">删除凭证</button>
