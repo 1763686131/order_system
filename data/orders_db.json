@@ -245,7 +245,7 @@
                 },
                 {
                     "type": "other",
-                    "note": "货拉拉",
+                    "note": "货拉拉-浙cccccc",
                     "amount": 200
                 }
             ]
@@ -312,16 +312,16 @@
                     "type": "freight",
                     "note": "运费",
                     "amount": 5000,
-                    "paid_amount": 5000.0,
-                    "updated_at": "2026-08-29 08:55:47",
+                    "paid_amount": 50.0,
+                    "updated_at": "2026-08-29 09:12:17",
                     "updated_by": "admin"
                 },
                 {
                     "type": "other",
                     "note": "货拉拉-浙CFNNN0",
                     "amount": 455,
-                    "paid_amount": 455.0,
-                    "updated_at": "2026-08-29 08:55:55",
+                    "paid_amount": 40.0,
+                    "updated_at": "2026-08-29 09:12:25",
                     "updated_by": "admin"
                 }
             ]
@@ -383,8 +383,8 @@
                     "type": "freight",
                     "note": "运费",
                     "amount": 455,
-                    "paid_amount": 455.0,
-                    "updated_at": "2026-08-29 08:40:19",
+                    "paid_amount": 50.0,
+                    "updated_at": "2026-08-29 09:12:33",
                     "updated_by": "admin"
                 }
             ]
@@ -416,8 +416,8 @@
                     "type": "freight",
                     "note": "运费",
                     "amount": 466,
-                    "paid_amount": 466.0,
-                    "updated_at": "2026-08-29 08:45:04",
+                    "paid_amount": 400.0,
+                    "updated_at": "2026-08-29 09:12:50",
                     "updated_by": "admin"
                 }
             ]
@@ -448,7 +448,10 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 554
+                    "amount": 554,
+                    "paid_amount": 20.0,
+                    "updated_at": "2026-08-29 09:04:53",
+                    "updated_by": "admin"
                 }
             ]
         },

@@ -42,7 +42,8 @@
               日期
               <span class="sort-icon">{{ getSortIcon() }}</span>
             </th>
-            <th class="col-name">名称</th>
+            <th class="col-name">客户</th>
+            <th class="col-goods">货物信息</th>
             <th class="col-quantity">数量 (kg)</th>
             <th class="col-address">收货地址</th>
             <th class="col-channel">渠道</th>
@@ -50,21 +51,21 @@
             <th class="col-price">价格 (¥)</th>
             <th class="col-paid">已支付</th>
             <th class="col-balance">备用金合计</th>
-            <th class="col-memo">货跟</th>
             <th class="col-return">回单回传</th>
             <th class="col-remark">备注</th>
           </tr>
         </thead>
         <tbody>
           <!-- 混合显示订单和备用金记录（按日期排序） -->
-          <template v-for="(item, index) in mergedOrdersAndFunds" :key="item.type === 'order' ? `order-${item.id}-${item.freightCostIndex}` : `fund-${item.id}`">
+          <template v-for="(item, index) in mergedOrdersAndFunds" :key="item.itemType === 'order' ? `order-${item.id}-${item.freightCostIndex}` : `fund-${item.id}`">
             <!-- 订单行 -->
-            <tr v-if="item.type === 'order'" :class="getRowClass(item)">
+            <tr v-if="item.itemType === 'order'" :class="getRowClass(item)">
               <!-- 只在第一笔运费时显示前面的列，使用 rowspan 合并 -->
               <template v-if="item.freightCostIndex === 0">
-                <td class="col-index" :rowspan="item.freightCostTotal">{{ index + 1 }}</td>
+                <td class="col-index" :rowspan="item.freightCostTotal">{{ getDisplayIndex(index) }}</td>
                 <td class="col-date" :rowspan="item.freightCostTotal">{{ formatDate(item.completed_date) }}</td>
                 <td class="col-name" :rowspan="item.freightCostTotal">{{ item.order_client || '-' }}</td>
+                <td class="col-goods" :rowspan="item.freightCostTotal">{{ getGoodsName(item) }}</td>
                 <td class="col-quantity" :rowspan="item.freightCostTotal">{{ getTotalWeight(item) }}</td>
                 <td class="col-address" :rowspan="item.freightCostTotal">
                   <span
@@ -101,16 +102,15 @@
                 </span>
               </td>
               <td class="col-balance">¥ {{ calculateBalance(index).toFixed(2) }}</td>
-              <td class="col-memo"></td>
               <td class="col-return">{{ hasReceipt(item) ? '已传' : '' }}</td>
               <td class="col-remark"></td>
             </tr>
 
           <!-- 备用金行 -->
-          <tr v-else-if="item.type === 'fund'" class="row-fund-entry">
+          <tr v-else-if="item.itemType === 'fund'" class="row-fund-entry">
             <td class="col-index">{{ index + 1 }}</td>
             <td class="col-date">{{ formatDate(item.date) }}</td>
-            <td colspan="6" class="fund-label">备用金转入{{ item.note ? `（${item.note}）` : '' }}</td>
+            <td colspan="7" class="fund-label">备用金转入{{ item.note ? `（${item.note}）` : '' }}</td>
             <td class="fund-amount" :class="{ negative: item.amount < 0 }">
               <!-- 编辑状态 -->
               <input
@@ -131,9 +131,7 @@
                 {{ item.amount >= 0 ? '+ ' + item.amount.toFixed(2) : item.amount.toFixed(2) }}
               </span>
             </td>
-            <td></td>
             <td class="col-balance">¥ {{ calculateBalance(index).toFixed(2) }}</td>
-            <td></td>
             <td></td>
             <td></td>
           </tr>
@@ -419,7 +417,7 @@ const mergedOrdersAndFunds = computed(() => {
       freightCosts.forEach((cost, costIndex) => {
         merged.push({
           ...order,
-          type: 'order',
+          itemType: 'order',  // 改为 itemType，避免覆盖订单的 type 字段
           sortDate: order.completed_date || '',
           freightCostIndex: costIndex, // 标记是第几笔运费
           currentFreightCost: cost, // 当前这笔运费的详情
@@ -431,7 +429,7 @@ const mergedOrdersAndFunds = computed(() => {
       // 没有运费记录，显示一行
       merged.push({
         ...order,
-        type: 'order',
+        itemType: 'order',  // 改为 itemType
         sortDate: order.completed_date || '',
         freightCostIndex: 0,
         currentFreightCost: null,
@@ -445,7 +443,7 @@ const mergedOrdersAndFunds = computed(() => {
   periodFundsList.value.forEach(fund => {
     merged.push({
       ...fund,
-      type: 'fund',
+      itemType: 'fund',  // 改为 itemType
       fundId: fund.id,
       sortDate: fund.date || ''
     })
@@ -568,16 +566,17 @@ const getRunningBalance = (index) => {
 
 // 计算混合列表中的累计余额
 const calculateBalance = (index) => {
-  let balance = previousBalance.value
+  let balance = 0  // 从0开始，不使用上期余额
 
   // 遍历到当前索引，计算累计余额
   for (let i = 0; i <= index; i++) {
     const item = mergedOrdersAndFunds.value[i]
-    if (item.type === 'order') {
-      // 订单：扣除运费
-      balance -= getFreightAmount(item)
-    } else if (item.type === 'fund') {
-      // 备用金：增加金额
+    if (item.itemType === 'order') {
+      // 订单：从余额中减去已支付金额
+      const paidAmount = getPaidAmountNumber(item)
+      balance -= paidAmount
+    } else if (item.itemType === 'fund') {
+      // 备用金：增加金额（可能是正数或负数）
       balance += item.amount
     }
   }
@@ -585,12 +584,23 @@ const calculateBalance = (index) => {
   return balance
 }
 
+// 获取已支付金额数值（用于计算）
+const getPaidAmountNumber = (item) => {
+  if (item.currentFreightCost && item.currentFreightCost.paid_amount !== undefined) {
+    return item.currentFreightCost.paid_amount
+  }
+  return 0
+}
+
 // 获取行样式类
 const getRowClass = (order) => {
-  const clientName = order.order_client || ''
-  if (clientName.includes('余总')) {
-    return 'row-highlight-red'
+  // 根据订单类型判断：type == 1 为绝缘订单，显示红色字体
+  console.log('完整订单对象:', order)
+  console.log('订单ID:', order.id, 'type:', order.type, '是否绝缘:', order.type == 1)
+  if (order.type == 1) {
+    return 'row-insulation'
   }
+
   return ''
 }
 
@@ -755,10 +765,29 @@ const saveFundAmount = async (fund) => {
   }
 }
 
+// 获取货物名称（截取前6个字符）
+const getGoodsName = (item) => {
+  if (!item.goods_name) return '-'
+  return item.goods_name.length > 6 ? item.goods_name.substring(0, 6) + '...' : item.goods_name
+}
+
 // 获取运费标签（物流、货拉拉等）
 const getFreightLabel = (freightCost) => {
   if (!freightCost) return ''
   return freightCost.note || '运费'
+}
+
+// 计算显示序号（考虑rowspan合并）
+const getDisplayIndex = (index) => {
+  let displayIndex = 0
+  for (let i = 0; i <= index; i++) {
+    const item = mergedOrdersAndFunds.value[i]
+    // 只有第一笔运费或备用金行才计数
+    if (item.itemType !== 'order' || item.freightCostIndex === 0) {
+      displayIndex++
+    }
+  }
+  return displayIndex
 }
 
 // 拆分物流信息：获取渠道名称（-号之前）
@@ -979,18 +1008,35 @@ const auditCurrentPeriod = async () => {
   }
 
   try {
-    // 构建完整的订单信息数组
-    const orderDetails = filteredOrders.value.map(order => ({
-      id: order.id,
-      date: order.completed_date,
-      client: order.order_client || '-',
-      weight: order.goods_weight || '-',
-      address: order.receiver_address || '-',
-      channel: getShippingMethodText(order),
-      logisticsNo: order.logistics_no || '-',
-      freight: getFreightAmount(order),
-      hasReceipt: hasReceipt(order)
-    }))
+    // 构建完整的订单信息数组（包含已支付金额）
+    const orderDetails = filteredOrders.value.map(order => {
+      // 获取订单的所有运费记录及其已支付金额
+      const freightDetails = []
+      if (order.freight_costs && Array.isArray(order.freight_costs)) {
+        order.freight_costs.forEach((freightCost, index) => {
+          freightDetails.push({
+            freightIndex: index,
+            amount: freightCost.amount || 0,
+            paidAmount: freightCost.paid_amount || 0,
+            note: freightCost.note || '',
+            type: freightCost.type || 'freight'
+          })
+        })
+      }
+
+      return {
+        id: order.id,
+        date: order.completed_date,
+        client: order.order_client || '-',
+        weight: order.goods_weight || '-',
+        address: order.receiver_address || '-',
+        channel: getShippingMethodText(order),
+        logisticsNo: order.logistics_no || '-',
+        freight: getFreightAmount(order),
+        hasReceipt: hasReceipt(order),
+        freightCosts: freightDetails  // 新增：运费明细和已支付金额
+      }
+    })
 
     const response = await request({
       url: '/freight-records',
@@ -1004,7 +1050,8 @@ const auditCurrentPeriod = async () => {
         totalAmount: totalFreight.value,
         reserveFund: finalBalance.value,
         orderCount: totalOrders.value,
-        periodFund: periodReserveFund.value
+        periodFund: periodReserveFund.value,
+        reserveFundRecords: periodFundsList.value  // 新增：备用金记录
       }
     })
 
@@ -1277,6 +1324,15 @@ onMounted(() => {
 .row-fund-entry td {
   border-left: 1px solid #e5e7eb;
   border-right: 1px solid #e5e7eb;
+}
+
+/* 绝缘订单行 - 红色字体 */
+.freight-table .row-insulation {
+  color: #dc2626 !important;
+}
+
+.freight-table .row-insulation td {
+  color: #dc2626 !important;
 }
 
 .fund-label {
