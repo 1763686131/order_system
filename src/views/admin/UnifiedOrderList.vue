@@ -883,17 +883,35 @@ const handleDelete = async (order) => {
 }
 
 const handleBatchDelete = async () => {
+  if (selectedOrders.value.length === 0) {
+    alert('请先选择要删除的订单')
+    return
+  }
+
   if (confirm(`确定要删除选中的 ${selectedOrders.value.length} 个订单吗？`)) {
     try {
-      await Promise.all(
+      console.log('开始批量删除订单:', selectedOrders.value)
+
+      const results = await Promise.allSettled(
         selectedOrders.value.map(id =>
           request({ url: `/orders/${id}`, method: 'DELETE' })
         )
       )
+
+      const failed = results.filter(r => r.status === 'rejected')
+
+      if (failed.length > 0) {
+        console.error('部分删除失败:', failed)
+        alert(`删除完成，但有 ${failed.length} 个订单删除失败`)
+      } else {
+        alert('删除成功')
+      }
+
       selectedOrders.value = []
       await fetchOrdersData()
     } catch (error) {
-      alert('批量删除失败')
+      console.error('批量删除失败:', error)
+      alert('批量删除失败: ' + (error.message || '未知错误'))
     }
   }
 }

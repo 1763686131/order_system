@@ -4,9 +4,14 @@ import os
 import json
 import webbrowser
 from datetime import datetime
-from threading import Timer
+from threading import Timer, Lock
 import uuid  # 新增：用于生成唯一短码
 import re    # 新增：用于清理文件名非法字符
+
+# 文件锁，防止并发写入导致数据损坏
+orders_lock = Lock()
+users_lock = Lock()
+materials_lock = Lock()
 
 # ------------------------------------------------
 # 辅助函数：清理文件名中的非法字符（防崩溃核心）
@@ -44,16 +49,24 @@ def write_users(data):
     with open(USERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
 
 def read_orders():
-    os.makedirs(os.path.dirname(ORDERS_FILE), exist_ok=True)
-    if not os.path.exists(ORDERS_FILE):
-        ct = datetime.now().strftime('%Y-%m-%d %H:%M')
-        d = {"orders": [{"id": 1, "title": "测试订单", "status": "pending", "type": 0, "date": ct, "completed_date": ""}]}
-        write_orders(d)
-        return d
-    with open(ORDERS_FILE, 'r', encoding='utf-8') as f: return json.load(f)
+    with orders_lock:
+        os.makedirs(os.path.dirname(ORDERS_FILE), exist_ok=True)
+        if not os.path.exists(ORDERS_FILE):
+            ct = datetime.now().strftime('%Y-%m-%d %H:%M')
+            d = {"orders": [{"id": 1, "title": "测试订单", "status": "pending", "type": 0, "date": ct, "completed_date": ""}]}
+            write_orders(d)
+            return d
+        with open(ORDERS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
 
 def write_orders(data):
-    with open(ORDERS_FILE, 'w', encoding='utf-8') as f: json.dump(data, f, ensure_ascii=False, indent=4)
+    with orders_lock:
+        # 先写入临时文件，然后重命名，避免写入过程中文件损坏
+        temp_file = ORDERS_FILE + '.tmp'
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+        # 原子操作：重命名替换
+        os.replace(temp_file, ORDERS_FILE)
 
 def read_materials():
     os.makedirs(os.path.dirname(MATERIALS_FILE), exist_ok=True)
