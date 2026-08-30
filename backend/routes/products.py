@@ -186,12 +186,12 @@ def add_product():
         'code': req_data.get('code', ''),
         'name': req_data.get('name', ''),
         'specification': req_data.get('specification', ''),
-        'category': req_data.get('category', ''),
+        'category': req_data.get('categoryId', ''),
         'unitId': req_data.get('unitId'),
         'enableMultiUnit': req_data.get('enableMultiUnit', False),
         'notes': req_data.get('notes', ''),
         'enabled': req_data.get('enabled', True),
-        'warehouseId': req_data.get('warehouse'),
+        'warehouseId': req_data.get('warehouseId'),
         'storeIds': req_data.get('storeIds', []),
         'warehouseCategories': req_data.get('warehouseCategories', {}),
         'unitConversions': req_data.get('unitConversions', []),
@@ -218,12 +218,12 @@ def update_product(product_id):
             product['code'] = req_data.get('code', '')
             product['name'] = req_data.get('name', '')
             product['specification'] = req_data.get('specification', '')
-            product['category'] = req_data.get('category', '')
+            product['category'] = req_data.get('categoryId', '')
             product['unitId'] = req_data.get('unitId')
             product['enableMultiUnit'] = req_data.get('enableMultiUnit', False)
             product['notes'] = req_data.get('notes', '')
             product['enabled'] = req_data.get('enabled', True)
-            product['warehouseId'] = req_data.get('warehouse')
+            product['warehouseId'] = req_data.get('warehouseId')
             product['storeIds'] = req_data.get('storeIds', [])
             product['warehouseCategories'] = req_data.get('warehouseCategories', {})
             product['unitConversions'] = req_data.get('unitConversions', [])

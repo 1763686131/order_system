@@ -424,7 +424,26 @@ const handleView = (product) => {
 }
 
 const handleCopy = (product) => {
-  console.log('修改', product)
+  // 打开编辑弹窗，传入商品数据
+  if (productFormModal.value) {
+    // 需要将商品数据转换为表单需要的格式
+    const formData = {
+      id: product.id,
+      code: product.code || '',
+      name: product.name || '',
+      specification: product.specification || '',
+      warehouse: product.warehouseId || '',
+      category: product.categoryId || product.category || '',
+      unitId: product.unitId || null,
+      notes: product.notes || '',
+      enabled: product.enabled !== false,
+      storeIds: product.storeIds || [],
+      unitConversions: product.unitConversions || [],
+      enableAttributes: product.enableAttributes || false,
+      attributeCombinations: product.attributeCombinations || []
+    }
+    productFormModal.value.open(formData)
+  }
 }
 
 const handleCopyProduct = (product) => {
