@@ -242,9 +242,6 @@
                       <span style="color: #9ca3af; font-size: 14px; cursor: help;" title="启用属性后可以设置商品的不同规格">?</span>
                     </div>
                     <div style="display: flex; gap: 16px;">
-                      <button type="button" class="btn-text-link-refresh" @click="clearAllAttributes">
-                        🔄 刷新属性
-                      </button>
                       <button type="button" class="btn-text-link-add" @click="addNewAttribute">
                         + 新增属性
                       </button>
@@ -260,14 +257,24 @@
                           属性名称
                         </div>
                         <div style="display: flex; flex-direction: column; gap: 8px;">
-                          <label
+                          <div
                             v-for="attr in attributesList"
                             :key="attr.id"
                             :class="['attribute-checkbox-item', { checked: attr.selected }]"
                           >
                             <input type="checkbox" v-model="attr.selected" class="checkbox-green" />
-                            <span>{{ attr.name }}</span>
-                          </label>
+                            <span
+                              @dblclick="editAttributeName(attr)"
+                              style="flex: 1; cursor: text;"
+                              :title="'双击编辑'"
+                            >{{ attr.name }}</span>
+                            <button
+                              type="button"
+                              class="btn-delete-attr"
+                              @click="deleteAttributeById(attr.id)"
+                              title="删除属性"
+                            >×</button>
+                          </div>
                         </div>
                       </div>
 
@@ -275,8 +282,8 @@
                       <div>
                         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                           <span style="font-size: 13px; color: #6b7280; font-weight: 600;">属性选项</span>
-                          <button type="button" class="btn-text-link-cancel" @click="clearSelectedOptions">
-                            全部取消
+                          <button type="button" class="btn-text-link-cancel" @click="addAttributeOption">
+                            + 新增属性选项
                           </button>
                         </div>
 
@@ -298,7 +305,16 @@
                                 :class="['option-checkbox-tag', { checked: option.selected }]"
                               >
                                 <input type="checkbox" v-model="option.selected" style="display: none;" />
-                                <span>{{ option.name }}</span>
+                                <span
+                                  @dblclick="editAttributeOption(attr, option)"
+                                  :title="'双击编辑'"
+                                >{{ option.name }}</span>
+                                <button
+                                  type="button"
+                                  class="btn-delete-option"
+                                  @click.stop="deleteAttributeOption(attr.id, option.id)"
+                                  title="删除选项"
+                                >×</button>
                               </label>
                             </div>
                           </div>
@@ -770,18 +786,121 @@ const clearSelectedOptions = () => {
   })
 }
 
-// 删除属性
-const deleteAttribute = () => {
-  const selectedAttr = attributesList.value.find(attr => attr.selected)
-  if (!selectedAttr) {
-    alert('请先选择要删除的属性')
+// 双击编辑属性选项
+const editAttributeOption = async (attr, option) => {
+  const newName = prompt('修改选项名称：', option.name)
+  if (!newName || !newName.trim() || newName === option.name) return
+
+  try {
+    // 更新选项列表
+    const updatedOptions = attr.options.map(opt =>
+      opt.id === option.id ? { ...opt, name: newName.trim() } : opt
+    )
+
+    const response = await request({
+      url: `/products/attributes/${attr.id}`,
+      method: 'PUT',
+      data: { options: updatedOptions }
+    })
+    if (response.success) {
+      option.name = newName.trim()
+    }
+  } catch (error) {
+    alert('修改失败：' + (error.response?.data?.message || error.message))
+  }
+}
+
+// 删除属性选项
+const deleteAttributeOption = async (attrId, optionId) => {
+  if (!confirm('确定要删除这个选项吗？')) return
+
+  try {
+    const response = await request({
+      url: `/products/attributes/${attrId}/options/${optionId}`,
+      method: 'DELETE'
+    })
+    if (response.success) {
+      await loadAttributes()
+    }
+  } catch (error) {
+    alert('删除失败：' + (error.response?.data?.message || error.message))
+  }
+}
+
+// 双击编辑属性名称
+const editAttributeName = async (attr) => {
+  const newName = prompt('修改属性名称：', attr.name)
+  if (!newName || !newName.trim() || newName === attr.name) return
+
+  try {
+    const response = await request({
+      url: `/products/attributes/${attr.id}`,
+      method: 'PUT',
+      data: { name: newName.trim() }
+    })
+    if (response.success) {
+      attr.name = newName.trim()
+    }
+  } catch (error) {
+    alert('修改失败：' + (error.response?.data?.message || error.message))
+  }
+}
+
+// 删除属性（通过ID）
+const deleteAttributeById = async (attrId) => {
+  const attr = attributesList.value.find(a => a.id === attrId)
+  if (!attr) return
+
+  if (!confirm(`确定要删除属性"${attr.name}"吗？`)) return
+
+  try {
+    const response = await request({
+      url: `/products/attributes/${attrId}`,
+      method: 'DELETE'
+    })
+    if (response.success) {
+      await loadAttributes()
+    }
+  } catch (error) {
+    alert('删除失败：' + (error.response?.data?.message || error.message))
+  }
+}
+
+// 刷新属性（重新加载）
+const deleteAttribute = async () => {
+  if (confirm('确定要刷新属性列表吗？这将重新加载所有属性数据。')) {
+    await loadAttributes()
+  }
+}
+
+// 新增属性选项
+const addAttributeOption = async () => {
+  const selected = selectedAttributes.value
+  if (selected.length === 0) {
+    alert('请先选择一个属性')
     return
   }
-  if (confirm(`确定要删除属性"${selectedAttr.name}"吗？`)) {
-    const index = attributesList.value.findIndex(attr => attr.id === selectedAttr.id)
-    if (index > -1) {
-      attributesList.value.splice(index, 1)
+  if (selected.length > 1) {
+    alert('请只选择一个属性来添加选项')
+    return
+  }
+
+  const attr = selected[0]
+  const optionName = prompt(`为"${attr.name}"添加新选项：`)
+  if (!optionName || !optionName.trim()) return
+
+  try {
+    const response = await request({
+      url: `/products/attributes/${attr.id}/options`,
+      method: 'POST',
+      data: { name: optionName.trim() }
+    })
+    if (response.success) {
+      alert('选项添加成功')
+      await loadAttributes()
     }
+  } catch (error) {
+    alert('添加选项失败：' + (error.response?.data?.message || error.message))
   }
 }
 
@@ -953,35 +1072,138 @@ const handleDeleteCategory = (warehouseId, categoryId) => {
 }
 
 // 保存
-const handleSave = () => {
-  if (!formData.name) {
-    alert('请输入商品名称')
-    return
-  }
-
+const handleSave = async () => {
+  // 验证必填项
   if (!formData.storeIds || formData.storeIds.length === 0) {
     alert('请至少选择一个门店')
     return
   }
 
-  emit('save', { ...formData })
-  handleClose()
+  if (!formData.warehouse) {
+    alert('请选择仓库')
+    return
+  }
+
+  if (!formData.category) {
+    alert('请选择分类')
+    return
+  }
+
+  if (!formData.name) {
+    alert('请输入商品名称')
+    return
+  }
+
+  if (!formData.unitId) {
+    alert('请选择单位')
+    return
+  }
+
+  try {
+    // 准备提交数据
+    const submitData = {
+      storeIds: formData.storeIds,
+      warehouse: formData.warehouse,
+      category: formData.category,
+      name: formData.name,
+      code: formData.code,
+      specification: formData.specification,
+      notes: formData.notes,
+      unitId: formData.unitId,
+      unitConversions: formData.unitConversions,
+      enableAttributes: formData.enableAttributes,
+      enabled: formData.enabled
+    }
+
+    // 如果启用了属性，添加属性组合数据
+    if (formData.enableAttributes && selectedAttributeCombinations.value.length > 0) {
+      submitData.attributeCombinations = selectedAttributeCombinations.value
+    }
+
+    // 调用API保存
+    const url = isEdit.value ? `/products/${formData.id}` : '/products'
+    const method = isEdit.value ? 'PUT' : 'POST'
+
+    const response = await request({
+      url,
+      method,
+      data: submitData
+    })
+
+    if (response.success) {
+      alert(isEdit.value ? '更新成功' : '添加成功')
+      emit('save', response.product)
+      handleClose()
+    }
+  } catch (error) {
+    alert('保存失败：' + (error.response?.data?.message || error.message))
+  }
 }
 
 // 保存并继续新增
-const handleSaveAndContinue = () => {
-  if (!formData.name) {
-    alert('请输入商品名称')
-    return
-  }
-
+const handleSaveAndContinue = async () => {
+  // 验证必填项
   if (!formData.storeIds || formData.storeIds.length === 0) {
     alert('请至少选择一个门店')
     return
   }
 
-  emit('save', { ...formData })
-  resetForm()
+  if (!formData.warehouse) {
+    alert('请选择仓库')
+    return
+  }
+
+  if (!formData.category) {
+    alert('请选择分类')
+    return
+  }
+
+  if (!formData.name) {
+    alert('请输入商品名称')
+    return
+  }
+
+  if (!formData.unitId) {
+    alert('请选择单位')
+    return
+  }
+
+  try {
+    // 准备提交数据
+    const submitData = {
+      storeIds: formData.storeIds,
+      warehouse: formData.warehouse,
+      category: formData.category,
+      name: formData.name,
+      code: formData.code,
+      specification: formData.specification,
+      notes: formData.notes,
+      unitId: formData.unitId,
+      unitConversions: formData.unitConversions,
+      enableAttributes: formData.enableAttributes,
+      enabled: formData.enabled
+    }
+
+    // 如果启用了属性，添加属性组合数据
+    if (formData.enableAttributes && selectedAttributeCombinations.value.length > 0) {
+      submitData.attributeCombinations = selectedAttributeCombinations.value
+    }
+
+    // 调用API保存
+    const response = await request({
+      url: '/products',
+      method: 'POST',
+      data: submitData
+    })
+
+    if (response.success) {
+      alert('添加成功')
+      emit('save', response.product)
+      resetForm()
+    }
+  } catch (error) {
+    alert('保存失败：' + (error.response?.data?.message || error.message))
+  }
 }
 
 defineExpose({
@@ -1805,7 +2027,6 @@ defineExpose({
   background: white;
   border: 1px solid #e5e7eb;
   border-radius: 6px;
-  cursor: pointer;
   transition: all 0.3s;
   font-size: 14px;
   color: #374151;
@@ -1821,9 +2042,36 @@ defineExpose({
   background: #f0fdf4;
 }
 
+.btn-delete-attr {
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: #ef4444;
+  font-size: 18px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  opacity: 0;
+}
+
+.attribute-checkbox-item:hover .btn-delete-attr {
+  opacity: 1;
+}
+
+.btn-delete-attr:hover {
+  color: #dc2626;
+  transform: scale(1.2);
+}
+
 .option-checkbox-tag {
   display: inline-flex;
   align-items: center;
+  gap: 6px;
   padding: 6px 14px;
   background: white;
   border: 1px solid #d1d5db;
@@ -1833,6 +2081,7 @@ defineExpose({
   font-size: 13px;
   color: #374151;
   user-select: none;
+  position: relative;
 }
 
 .option-checkbox-tag:hover {
@@ -1845,6 +2094,37 @@ defineExpose({
   background: #10b981;
   color: white;
   font-weight: 500;
+}
+
+.btn-delete-option {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: #ef4444;
+  color: white;
+  font-size: 14px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  opacity: 0;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.option-checkbox-tag:hover .btn-delete-option {
+  opacity: 1;
+}
+
+.btn-delete-option:hover {
+  background: #dc2626;
+  transform: scale(1.1);
 }
 
 .btn-text-link-refresh {
