@@ -117,8 +117,8 @@
             <td class="col-stock">{{ product.stock || '-' }}</td>
             <td class="col-unit">{{ product.unit || '-' }}</td>
             <td class="col-price">{{ product.price ? product.price.toFixed(2) : '0.00' }}</td>
-            <td class="col-category">{{ product.category || '-' }}</td>
-            <td class="col-team">{{ product.warehouse || '-' }}</td>
+            <td class="col-category">{{ product.categoryName || '-' }}</td>
+            <td class="col-team">{{ product.warehouseName || '-' }}</td>
             <td class="col-notes">{{ product.notes || '-' }}</td>
             <td class="col-actions">
               <button class="btn-action btn-edit" @click="handleCopy(product)">修改</button>
@@ -278,8 +278,8 @@ const loadProducts = async () => {
         return {
           ...product,
           selected: false,
-          warehouse: warehouseName,
-          category: categoryName,
+          warehouseName: warehouseName,  // 添加仓库名称字段
+          categoryName: categoryName,    // 添加分类名称字段
           unit: unitName,
           stores: storeNames,
           stock: 0, // 库存需要从库存表获取

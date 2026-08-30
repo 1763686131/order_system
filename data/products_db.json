@@ -70,12 +70,12 @@
             "code": "01",
             "name": "粘钢胶",
             "specification": "40kg/组",
-            "category": 201,
+            "category": 401,
             "unitId": 1,
             "enableMultiUnit": false,
             "notes": "",
             "enabled": true,
-            "warehouseId": 2,
+            "warehouseId": 4,
             "storeIds": [
                 1
             ],
@@ -90,14 +90,88 @@
             "enableAttributes": true,
             "attributeCombinations": [],
             "createdAt": "2026-08-30 08:32:03",
-            "updatedAt": "2026-08-30 12:25:45"
+            "updatedAt": "2026-08-30 12:51:38"
         },
         {
             "id": 2,
             "code": "001",
             "name": "树脂",
             "specification": "1101A",
-            "category": 201,
+            "category": 101,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": 1,
+            "storeIds": [
+                2
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [],
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-30 08:39:10",
+            "updatedAt": "2026-08-30 12:43:55"
+        },
+        {
+            "id": 3,
+            "code": "001",
+            "name": "粘钢胶",
+            "specification": "40kg/组",
+            "category": 101,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": 1,
+            "storeIds": [
+                2
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [
+                {
+                    "fromUnitId": 5,
+                    "splits": [],
+                    "value": 20
+                }
+            ],
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-30 11:54:40",
+            "updatedAt": "2026-08-30 12:38:35"
+        },
+        {
+            "id": 4,
+            "code": "001",
+            "name": "粘钢胶",
+            "specification": "40kg/组",
+            "category": 101,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": 1,
+            "storeIds": [
+                2
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [
+                {
+                    "fromUnitId": 5,
+                    "splits": [],
+                    "value": 20
+                }
+            ],
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-30 12:38:25"
+        },
+        {
+            "id": 5,
+            "code": "GHJ-001",
+            "name": "固化剂",
+            "specification": "1101A",
+            "category": 202,
             "unitId": 1,
             "enableMultiUnit": false,
             "notes": "",
@@ -110,34 +184,53 @@
             "unitConversions": [],
             "enableAttributes": false,
             "attributeCombinations": [],
-            "createdAt": "2026-08-30 08:39:10",
-            "updatedAt": "2026-08-30 12:28:02"
+            "createdAt": "2026-08-30 12:47:24"
         },
         {
-            "id": 3,
-            "code": "001",
+            "id": 6,
+            "code": "01",
             "name": "粘钢胶",
             "specification": "40kg/组",
-            "category": "",
+            "category": 401,
             "unitId": 1,
             "enableMultiUnit": false,
             "notes": "",
             "enabled": true,
-            "warehouseId": null,
+            "warehouseId": 4,
             "storeIds": [
-                2
+                1
             ],
             "warehouseCategories": {},
             "unitConversions": [
                 {
                     "fromUnitId": 5,
-                    "value": 20,
-                    "splits": []
+                    "splits": [],
+                    "value": 20
                 }
             ],
+            "enableAttributes": true,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-30 12:58:01"
+        },
+        {
+            "id": 7,
+            "code": "GHJ-001",
+            "name": "固化剂",
+            "specification": "1101B",
+            "category": 202,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": 2,
+            "storeIds": [
+                1
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [],
             "enableAttributes": false,
             "attributeCombinations": [],
-            "createdAt": "2026-08-30 11:54:40"
+            "createdAt": "2026-08-30 12:58:46"
         }
     ]
 }

@@ -11,7 +11,7 @@
         "categories": [
             {
                 "id": 101,
-                "name": "原材料",
+                "name": "成品",
                 "code": "CAT101",
                 "created_at": "2026-08-30"
             },
@@ -79,6 +79,36 @@
                 "id": 302,
                 "name": "成品",
                 "code": "CAT302",
+                "created_at": "2026-08-30"
+            }
+        ]
+    },
+    {
+        "id": 4,
+        "code": "5",
+        "name": "仓库A",
+        "storeId": 1,
+        "remark": "",
+        "status": "active",
+        "created_at": "2026-08-30",
+        "updated_at": "2026-08-30",
+        "categories": [
+            {
+                "id": 401,
+                "name": "成品",
+                "code": "CAT401",
+                "created_at": "2026-08-30"
+            },
+            {
+                "id": 402,
+                "name": "原材料",
+                "code": "CAT402",
+                "created_at": "2026-08-30"
+            },
+            {
+                "id": 403,
+                "name": "包装",
+                "code": "CAT403",
                 "created_at": "2026-08-30"
             }
         ]

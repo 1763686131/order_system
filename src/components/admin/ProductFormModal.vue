@@ -53,7 +53,6 @@
                 class="form-select"
                 :disabled="!formData.storeIds || formData.storeIds.length === 0"
               >
-                <option value="">请选择默认仓库</option>
                 <option
                   v-for="warehouse in filteredWarehouses"
                   :key="warehouse.id"
@@ -70,7 +69,6 @@
                 class="form-select"
                 :disabled="!formData.warehouse"
               >
-                <option value="">请选择商品分类</option>
                 <option
                   v-for="category in filteredCategories"
                   :key="category.id"
@@ -619,17 +617,30 @@ watch(() => formData.storeIds, (newStoreIds, oldStoreIds) => {
   if (JSON.stringify(newStoreIds) !== JSON.stringify(oldStoreIds)) {
     // 门店变化时，如果当前选择的仓库不在新的筛选结果中，则清空
     const filteredIds = filteredWarehouses.value.map(w => w.id)
-    if (formData.warehouse && !filteredIds.find(w => w.id === formData.warehouse)) {
+    if (formData.warehouse && !filteredIds.includes(formData.warehouse)) {
       formData.warehouse = ''
       formData.category = ''
+    }
+    // 仅在新增模式下，如果仓库为空且有可选仓库，自动选择第一个
+    if (!isEdit.value && !formData.warehouse && filteredWarehouses.value.length > 0) {
+      formData.warehouse = filteredWarehouses.value[0].id
     }
   }
 })
 
 // 监听仓库选择变化，清空分类选择
 watch(() => formData.warehouse, (newWarehouse, oldWarehouse) => {
-  if (newWarehouse !== oldWarehouse) {
-    formData.category = ''
+  if (newWarehouse !== oldWarehouse && oldWarehouse !== undefined) {
+    // 仅在用户主动切换仓库时才清空分类
+    const newCategories = filteredCategories.value.map(c => c.id)
+    // 如果当前分类不在新仓库的分类列表中，才清空
+    if (formData.category && !newCategories.includes(formData.category)) {
+      formData.category = ''
+      // 仅在新增模式下，如果分类为空且有可选分类，自动选择第一个
+      if (!isEdit.value && filteredCategories.value.length > 0) {
+        formData.category = filteredCategories.value[0].id
+      }
+    }
   }
 })
 
@@ -938,7 +949,28 @@ const open = (product = null) => {
 
   if (product) {
     isEdit.value = true
-    Object.assign(formData, product)
+    // 编辑模式：需要正确映射字段名
+    formData.id = product.id
+    formData.code = product.code || ''
+    formData.name = product.name || ''
+    formData.specification = product.specification || ''
+    formData.notes = product.notes || ''
+    formData.enabled = product.enabled !== false
+    formData.storeIds = product.storeIds || []
+    formData.warehouseCategories = product.warehouseCategories || {}
+    formData.unitConversions = product.unitConversions || []
+    formData.enableAttributes = product.enableAttributes || false
+    formData.attributeCombinations = product.attributeCombinations || []
+    formData.unitId = product.unitId || null
+
+    // 延迟设置仓库和分类，等待数据加载完成
+    setTimeout(() => {
+      formData.warehouse = product.warehouse || product.warehouseId || ''
+      // 再延迟设置分类，确保仓库已设置
+      setTimeout(() => {
+        formData.category = product.category || product.categoryId || ''
+      }, 50)
+    }, 50)
   } else {
     isEdit.value = false
     resetForm()
