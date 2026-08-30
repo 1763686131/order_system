@@ -88,9 +88,28 @@
                 }
             ],
             "enableAttributes": true,
-            "attributeCombinations": [],
+            "attributeCombinations": [
+                {
+                    "id": 0,
+                    "name": "黑色",
+                    "purchasePrice": "",
+                    "wholesalePrice": "",
+                    "retailPrice": 30,
+                    "barcode": "",
+                    "enabled": true
+                },
+                {
+                    "id": 1,
+                    "name": "灰色",
+                    "purchasePrice": "",
+                    "wholesalePrice": "",
+                    "retailPrice": 20,
+                    "barcode": "",
+                    "enabled": true
+                }
+            ],
             "createdAt": "2026-08-30 08:32:03",
-            "updatedAt": "2026-08-30 12:51:38"
+            "updatedAt": "2026-08-30 14:45:36"
         },
         {
             "id": 2,
@@ -351,7 +370,52 @@
             "unitConversions": [],
             "enableAttributes": false,
             "attributeCombinations": [],
-            "createdAt": "2026-08-30 13:15:21"
+            "createdAt": "2026-08-30 14:10:04"
+        },
+        {
+            "id": 14,
+            "code": "01",
+            "name": "粘钢胶",
+            "specification": "40kg/组",
+            "category": 401,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": 4,
+            "storeIds": [
+                1
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [
+                {
+                    "fromUnitId": 5,
+                    "splits": [],
+                    "value": 20
+                }
+            ],
+            "enableAttributes": true,
+            "attributeCombinations": [
+                {
+                    "id": 0,
+                    "name": "黑色",
+                    "purchasePrice": "",
+                    "wholesalePrice": "",
+                    "retailPrice": 30,
+                    "barcode": "",
+                    "enabled": true
+                },
+                {
+                    "id": 1,
+                    "name": "灰色",
+                    "purchasePrice": "",
+                    "wholesalePrice": "",
+                    "retailPrice": 20,
+                    "barcode": "",
+                    "enabled": true
+                }
+            ],
+            "createdAt": "2026-08-30 14:45:44"
         }
     ]
 }

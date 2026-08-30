@@ -583,14 +583,32 @@ const selectedAttributeCombinations = computed(() => {
 
   return combinations.map((combo, index) => {
     const name = combo.map(opt => opt.name).join(' / ')
-    return {
-      id: index,
-      name: name,
-      purchasePrice: '',
-      wholesalePrice: '',
-      retailPrice: '',
-      barcode: '',
-      enabled: true
+
+    // 尝试从已有的 attributeCombinations 中查找匹配的组合
+    const existingCombo = formData.attributeCombinations.find(c => c.name === name)
+
+    if (existingCombo) {
+      // 如果存在，保留原有的价格和条码数据
+      return {
+        id: existingCombo.id !== undefined ? existingCombo.id : index,
+        name: name,
+        purchasePrice: existingCombo.purchasePrice || '',
+        wholesalePrice: existingCombo.wholesalePrice || '',
+        retailPrice: existingCombo.retailPrice || '',
+        barcode: existingCombo.barcode || '',
+        enabled: existingCombo.enabled !== undefined ? existingCombo.enabled : true
+      }
+    } else {
+      // 如果不存在，创建新的空组合
+      return {
+        id: index,
+        name: name,
+        purchasePrice: '',
+        wholesalePrice: '',
+        retailPrice: '',
+        barcode: '',
+        enabled: true
+      }
     }
   })
 })
@@ -964,7 +982,6 @@ const open = (product = null) => {
     formData.warehouseCategories = product.warehouseCategories || {}
     formData.unitConversions = product.unitConversions || []
     formData.enableAttributes = product.enableAttributes || false
-    formData.attributeCombinations = product.attributeCombinations || []
     formData.unitId = product.unitId || null
 
     // 延迟设置仓库和分类，等待数据加载完成
@@ -973,6 +990,14 @@ const open = (product = null) => {
       // 再延迟设置分类，确保仓库已设置
       setTimeout(() => {
         formData.category = product.category || product.categoryId || ''
+
+        // 恢复属性组合数据
+        if (product.enableAttributes && product.attributeCombinations) {
+          formData.attributeCombinations = product.attributeCombinations
+
+          // 恢复属性选择状态
+          restoreAttributeSelections(product.attributeCombinations)
+        }
       }, 50)
     }, 50)
   } else {
@@ -981,9 +1006,45 @@ const open = (product = null) => {
   }
 }
 
+// 恢复属性选择状态
+const restoreAttributeSelections = (combinations) => {
+  if (!combinations || combinations.length === 0) return
+
+  // 从属性组合中提取所有使用的属性和选项
+  const usedAttributes = new Set()
+  const usedOptions = new Set()
+
+  combinations.forEach(combo => {
+    // 属性组合名称格式：颜色 / 尺寸
+    const parts = combo.name.split(' / ')
+    parts.forEach(part => {
+      usedOptions.add(part.trim())
+    })
+  })
+
+  // 遍历属性列表，标记选中状态
+  attributesList.value.forEach(attr => {
+    let hasSelectedOption = false
+
+    attr.options.forEach(option => {
+      if (usedOptions.has(option.name)) {
+        option.selected = true
+        hasSelectedOption = true
+      }
+    })
+
+    // 如果该属性有选中的选项，则选中该属性
+    if (hasSelectedOption) {
+      attr.selected = true
+    }
+  })
+}
+
 // 关闭弹窗
 const handleClose = () => {
   visible.value = false
+  // 清除属性选择状态
+  clearAttributeSelections()
 }
 
 // 点击遮罩层关闭
@@ -999,12 +1060,28 @@ const resetForm = () => {
     specification: '',
     category: '',
     unit: '',
+    unitId: null,
     enableMultiUnit: false,
     notes: '',
     enabled: true,
     warehouse: '',
     storeIds: [],
-    warehouseCategories: {}
+    warehouseCategories: {},
+    unitConversions: [],
+    enableAttributes: false,
+    attributeCombinations: []
+  })
+  // 清除属性选择状态
+  clearAttributeSelections()
+}
+
+// 清除所有属性选择状态
+const clearAttributeSelections = () => {
+  attributesList.value.forEach(attr => {
+    attr.selected = false
+    attr.options.forEach(opt => {
+      opt.selected = false
+    })
   })
 }
 

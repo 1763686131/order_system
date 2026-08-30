@@ -79,11 +79,12 @@
             <th class="col-checkbox">
               <input type="checkbox" v-model="selectAll" @change="handleSelectAll" />
             </th>
+            <th class="col-id">ID</th>
             <th class="col-name sortable" @click="handleSort('name')">
               商品名称
               <span class="sort-icon">⇅</span>
             </th>
-            <th class="col-code sortable" @click="handleSort('code')">
+            <th class="col-spec sortable">
               规格型号
               <span class="sort-icon">⇅</span>
             </th>
@@ -91,6 +92,13 @@
             <th class="col-unit sortable" @click="handleSort('unit')">
               单位
               <span class="sort-icon">⇅</span>
+            </th>
+            <th class="col-code sortable" @click="handleSort('code')">
+              编号
+              <span class="sort-icon">⇅</span>
+            </th>
+            <th class="col-attributes">
+              商品属性
             </th>
             <th class="col-price sortable" @click="handleSort('price')">
               零售价格
@@ -110,13 +118,30 @@
             <td class="col-checkbox">
               <input type="checkbox" v-model="product.selected" />
             </td>
+            <td class="col-id">{{ product.id }}</td>
             <td class="col-name">
               <a href="#" class="product-link" @click.prevent="handleView(product)">{{ product.name }}</a>
             </td>
-            <td class="col-code">{{ product.specification || '-' }}</td>
+            <td class="col-spec">{{ product.specification || '-' }}</td>
             <td class="col-stock">{{ product.stock || '-' }}</td>
             <td class="col-unit">{{ product.unit || '-' }}</td>
-            <td class="col-price">{{ product.price ? product.price.toFixed(2) : '0.00' }}</td>
+            <td class="col-code">{{ product.code || '-' }}</td>
+            <td class="col-attributes">
+              <div v-if="product.enableAttributes && product.attributeCombinations && product.attributeCombinations.length > 0">
+                <div v-for="(combo, index) in product.attributeCombinations" :key="index" class="attribute-row">
+                  {{ combo.name }}
+                </div>
+              </div>
+              <span v-else>-</span>
+            </td>
+            <td class="col-price">
+              <div v-if="product.enableAttributes && product.attributeCombinations && product.attributeCombinations.length > 0">
+                <div v-for="(combo, index) in product.attributeCombinations" :key="index" class="price-row">
+                  {{ combo.retailPrice ? combo.retailPrice.toFixed(2) : '0.00' }} 元
+                </div>
+              </div>
+              <span v-else>{{ product.price ? product.price.toFixed(2) : '0.00' }} 元</span>
+            </td>
             <td class="col-category">{{ product.categoryName || '-' }}</td>
             <td class="col-team">{{ product.warehouseName || '-' }}</td>
             <td class="col-notes">{{ product.notes || '-' }}</td>
@@ -834,6 +859,52 @@ onMounted(async () => {
 
 .product-link:hover {
   text-decoration: underline;
+}
+
+.product-code {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 4px;
+}
+
+.attribute-row {
+  padding: 4px 0;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #374151;
+}
+
+.attribute-row:last-child {
+  border-bottom: none;
+}
+
+.price-row {
+  padding: 4px 0;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.price-row:last-child {
+  border-bottom: none;
+}
+
+.product-attributes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.attribute-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  background: #dbeafe;
+  color: #1e40af;
+  font-size: 12px;
+  border-radius: 4px;
+  white-space: nowrap;
 }
 
 .btn-action {
