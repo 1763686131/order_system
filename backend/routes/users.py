@@ -1,5 +1,6 @@
 """
 用户管理 API 路由
+100%从旧代码移植
 """
 from flask import Blueprint, request, jsonify
 from utils.db_helper import read_users, write_users
@@ -10,19 +11,18 @@ users_bp = Blueprint('users', __name__, url_prefix='/api/users')
 def login():
     """用户登录"""
     req_data = request.json
-    username = req_data.get('username')
-    password = req_data.get('password')
-
-    users = read_users()
-    for user in users:
-        if str(user['username']) == str(username) and user['password'] == password:
+    users_data = read_users()
+    for u in users_data:
+        if str(u['username']) == str(req_data.get('username')) and u['password'] == req_data.get('password'):
             return jsonify({
                 "success": True,
-                "username": user['username'],
-                "name": user.get('name', user['username']),
-                "role": user.get('role', 'employee')
+                "user": {
+                    "username": u['username'],
+                    "name": u.get('name', u['username']),
+                    "role": u['role'],
+                    "permissions": u.get('permissions', [])
+                }
             })
-
     return jsonify({"success": False, "message": "账号或密码错误"}), 401
 
 @users_bp.route('', methods=['GET'])
@@ -59,37 +59,6 @@ def add_user():
     write_users(users_data)
     return jsonify({"success": True, "message": "用户创建成功"})
 
-@users_bp.route('/<username>', methods=['PUT'])
-def update_user(username):
-    """更新用户信息"""
-    req_role = request.headers.get('Role')
-    if req_role not in ['super_admin', 'admin']:
-        return jsonify({"message": "权限不足"}), 403
-
-    req_data = request.json
-    users_data = read_users()
-
-    for u in users_data:
-        if str(u['username']) == str(username):
-            target_role = req_data.get('role', u.get('role'))
-
-            if req_role == 'admin' and target_role in ['super_admin', 'admin']:
-                return jsonify({"message": "越权操作：管理员不能修改管理员/超管账号"}), 403
-
-            u['name'] = req_data.get('name', u.get('name'))
-            u['role'] = target_role
-
-            if 'password' in req_data and req_data['password']:
-                u['password'] = req_data['password']
-
-            if 'permissions' in req_data:
-                u['permissions'] = req_data['permissions']
-
-            write_users(users_data)
-            return jsonify({"success": True, "message": "用户更新成功"})
-
-    return jsonify({"message": "用户不存在"}), 404
-
 @users_bp.route('/<username>', methods=['DELETE'])
 def delete_user(username):
     """删除用户"""
@@ -109,3 +78,62 @@ def delete_user(username):
             return jsonify({"success": True, "message": "用户删除成功"})
 
     return jsonify({"message": "用户不存在"}), 404
+
+@users_bp.route('/<username>/password', methods=['PUT'])
+def update_user_password(username):
+    """更新用户密码"""
+    if request.headers.get('Role') not in ['super_admin', 'admin']:
+        return jsonify({"message": "权限不足"}), 403
+    req_data = request.json
+    users_data = read_users()
+    for u in users_data:
+        if str(u['username']) == str(username):
+            u['password'] = req_data.get('password')
+            break
+    write_users(users_data)
+    return jsonify({"success": True})
+
+@users_bp.route('/<username>/permissions', methods=['PUT'])
+def update_user_permissions(username):
+    """更新用户权限"""
+    req_role = request.headers.get('Role')
+    if req_role not in ['super_admin', 'admin']:
+        return jsonify({"message": "权限不足"}), 403
+
+    req_data = request.json
+    perms = req_data.get('permissions', [])
+    new_role = req_data.get('role')
+    new_name = req_data.get('name')
+    new_created_at = req_data.get('createdAt')  # 新增：支持修改创建时间
+
+    users_data = read_users()
+    for u in users_data:
+        if str(u['username']) == str(username):
+            if req_role == 'admin' and u['role'] in ['super_admin', 'admin']:
+                return jsonify({"message": "越权：无权修改高级别账户"}), 403
+
+            if req_role == 'admin':
+                admin_restricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete']
+                old_perms = set(u.get('permissions', []))
+                new_perms = set(perms)
+                for restricted in admin_restricted:
+                    if restricted in old_perms:
+                        new_perms.add(restricted)
+                    else:
+                        new_perms.discard(restricted)
+                perms = list(new_perms)
+
+            u['permissions'] = perms
+            if new_name is not None:
+                u['name'] = new_name
+
+            # 新增：支持修改创建时间
+            if new_created_at is not None:
+                u['createdAt'] = new_created_at
+
+            if new_role and req_role == 'super_admin' and u['role'] != 'super_admin':
+                u['role'] = new_role
+            break
+
+    write_users(users_data)
+    return jsonify({"success": True})

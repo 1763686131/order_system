@@ -1,29 +1,43 @@
 """
 订单管理 API 路由
+100%从旧代码移植
 """
-from flask import Blueprint, request, jsonify, send_from_directory
+from flask import Blueprint, request, jsonify
+from utils.db_helper import read_orders, write_orders, read_users
 from datetime import datetime
 import os
 import uuid
-import re
-from utils.db_helper import read_orders, write_orders, read_users, orders_lock
+import json
+import threading
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
-BASE_UPLOAD_DIR = '/app/uploads'
+# 文件上传目录
+if os.path.exists('/app/uploads'):
+    BASE_UPLOAD_DIR = '/app/uploads'
+else:
+    BASE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'uploads')
 
-def sanitize_filename(text):
-    """清理文件名中的非法字符"""
-    if not text:
-        return "未知"
-    return re.sub(r'[\\/*?:"<>|\s]', "", str(text))
+# 运营商标签文件路径
+if os.path.exists('/app/data/carrier_tags.json'):
+    CARRIER_TAGS_FILE = '/app/data/carrier_tags.json'
+else:
+    CARRIER_TAGS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'data', 'carrier_tags.json')
+
+# 线程锁
+orders_lock = threading.Lock()
+
+def sanitize_filename(name):
+    """文件名清理函数"""
+    forbidden = ['<', '>', ':', '"', '/', '\\', '|', '?', '*']
+    for ch in forbidden:
+        name = name.replace(ch, '_')
+    return name[:50]
 
 def load_carrier_tags():
-    """加载承运商标签"""
-    CARRIER_TAGS_FILE = '/app/data/carrier_tags.json'
+    """加载运营商标签"""
     if os.path.exists(CARRIER_TAGS_FILE):
         try:
-            import json
             with open(CARRIER_TAGS_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
         except Exception:
@@ -31,11 +45,13 @@ def load_carrier_tags():
     return []
 
 def save_carrier_tags(tags):
-    """保存承运商标签"""
-    import json
-    CARRIER_TAGS_FILE = '/app/data/carrier_tags.json'
+    """保存运营商标签"""
     with open(CARRIER_TAGS_FILE, 'w', encoding='utf-8') as f:
         json.dump(tags, f, ensure_ascii=False, indent=2)
+
+# ==========================================
+# 订单接口
+# ==========================================
 
 @orders_bp.route('', methods=['GET'])
 def get_orders():
@@ -45,7 +61,7 @@ def get_orders():
 
 @orders_bp.route('', methods=['POST'])
 def add_order():
-    """新增订单"""
+    """创建新订单"""
     req_data = request.json
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
@@ -68,19 +84,16 @@ def add_order():
         "receiver_name": req_data.get('receiver_name', ''),
         "receiver_phone": req_data.get('receiver_phone', ''),
         "receiver_address": req_data.get('receiver_address', ''),
-        "items": req_data.get('items', []),
-        "note": req_data.get('note', ''),
+        "order_remark": req_data.get('order_remark', ''),
+        "remark": req_data.get('remark', ''),
+        "receipt_img_url": "",
         "audit_state": 0,
-        "creator": request.headers.get('Username', ''),
-        "freight_costs": [],
-        "receipt_url": "",
-        "paid_amount": 0.0
+        "freight_costs": []
     }
-
     orders_list.append(new_order)
     orders_data['orders'] = orders_list
     write_orders(orders_data)
-    return jsonify({"id": new_id, "order": new_order})
+    return jsonify({"success": True, "id": new_id})
 
 @orders_bp.route('/<int:order_id>', methods=['PUT'])
 def update_order_status(order_id):
@@ -89,7 +102,6 @@ def update_order_status(order_id):
     ns = req_data.get('status')
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
-
     for x in orders_list:
         if x['id'] == order_id:
             # 如果只是更新物流单号和运费，不改变状态
@@ -108,31 +120,27 @@ def update_order_status(order_id):
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""
                 x['logistics_no'] = ""
+                x['receipt_img_url'] = ""
                 x['audit_state'] = 0
 
-            elif ns == 'shipped':
-                if 'audit_state' in req_data:
-                    x['audit_state'] = req_data.get('audit_state', 0)
-                    if 'logistics_no' in req_data:
-                        x['logistics_no'] = req_data.get('logistics_no')
-                    if 'freight_costs' in req_data:
-                        x['freight_costs'] = req_data.get('freight_costs', [])
-                else:
-                    x['shipping_method'] = req_data.get('shipping_method', 4)
-                    x['shipping_custom'] = req_data.get('shipping_custom', '')
-                    x['logistics_no'] = req_data.get('logistics_no', '暂未录入单号')
-                    x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
-                    x['completed_date'] = x['shipped_date']
-                    x['audit_state'] = 0
-                    if 'freight_costs' in req_data:
-                        x['freight_costs'] = req_data.get('freight_costs', [])
+            if ns == 'shipped':
+                x['shipped_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                x['shipping_method'] = req_data.get('shipping_method', '')
+                x['shipping_custom'] = req_data.get('shipping_custom', '')
+                x['logistics_no'] = req_data.get('logistics_no', '')
+                x['audit_state'] = req_data.get('audit_state', 0)
 
-            elif ns == 'pending':
+                # 保存运费记录
+                if 'freight_costs' in req_data:
+                    x['freight_costs'] = req_data.get('freight_costs', [])
+
+            if ns == 'pending':
                 x['completed_date'] = ""
                 x['shipped_date'] = ""
-                x['logistics_no'] = ""
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""
+                x['logistics_no'] = ""
+                x['receipt_img_url'] = ""
                 x['audit_state'] = 0
             break
 
@@ -150,22 +158,19 @@ def delete_order(order_id):
     orders_list = orders_data.get('orders', [])
 
     target_order = next((o for o in orders_list if o['id'] == order_id), None)
-    if not target_order:
-        return jsonify({"message": "找不到订单"}), 404
+    if not target_order: return jsonify({"message": "找不到订单"}), 404
 
     needed_perm = 'completed.delete' if target_order['status'] == 'completed' else 'pending.delete'
 
     has_p = False
-    if req_role == 'super_admin':
-        has_p = True
+    if req_role == 'super_admin': has_p = True
     else:
         for u in read_users():
             if str(u['username']) == str(req_username):
                 has_p = needed_perm in u.get('permissions', [])
                 break
 
-    if not has_p:
-        return jsonify({"message": "底层权限不足，拦截删除操作"}), 403
+    if not has_p: return jsonify({"message": "底层权限不足，拦截删除操作"}), 403
 
     orders_list = [x for x in orders_list if x['id'] != order_id]
     orders_data['orders'] = orders_list
@@ -179,33 +184,30 @@ def edit_order_content(order_id):
     req_username = request.headers.get('Username')
 
     has_p = False
-    if req_role == 'super_admin':
-        has_p = True
+    if req_role == 'super_admin': has_p = True
     else:
         for u in read_users():
             if str(u['username']) == str(req_username):
-                has_p = 'completed.edit' in u.get('permissions', [])
+                has_p = 'pending.edit' in u.get('permissions', [])
                 break
 
-    if not has_p:
-        return jsonify({"message": "权限不足"}), 403
+    if not has_p: return jsonify({"message": "底层权限不足，拦截修改操作"}), 403
 
     req_data = request.json
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
-
     for x in orders_list:
         if x['id'] == order_id:
-            x['title'] = req_data.get('title', x.get('title', ''))
-            x['order_client'] = req_data.get('order_client', x.get('order_client', ''))
-            x['receiver_name'] = req_data.get('receiver_name', x.get('receiver_name', ''))
-            x['receiver_phone'] = req_data.get('receiver_phone', x.get('receiver_phone', ''))
-            x['receiver_address'] = req_data.get('receiver_address', x.get('receiver_address', ''))
-            x['items'] = req_data.get('items', x.get('items', []))
-            x['note'] = req_data.get('note', x.get('note', ''))
-            if 'type' in req_data:
-                x['type'] = req_data['type']
-                x['store_id'] = req_data['type']
+            x['title'] = req_data.get('title', '')
+            x['type'] = req_data.get('type', 1)
+            x['store_id'] = req_data.get('type', 1)
+            x['date'] = req_data.get('date', '')
+            x['order_client'] = req_data.get('order_client', '')
+            x['receiver_name'] = req_data.get('receiver_name', '')
+            x['receiver_phone'] = req_data.get('receiver_phone', '')
+            x['receiver_address'] = req_data.get('receiver_address', '')
+            x['order_remark'] = req_data.get('order_remark', '')
+            x['remark'] = req_data.get('remark', '')
             break
 
     orders_data['orders'] = orders_list
@@ -215,91 +217,148 @@ def edit_order_content(order_id):
 @orders_bp.route('/<int:order_id>/upload_receipt', methods=['POST'])
 def upload_receipt(order_id):
     """上传订单回单"""
-    if 'receipt' not in request.files:
-        return jsonify({"success": False, "message": "未找到上传文件"}), 400
-
-    file = request.files['receipt']
-    if file.filename == '':
-        return jsonify({"success": False, "message": "未选择文件"}), 400
+    file = request.files.get('receipt_image')
+    if not file:
+        return jsonify({"success": False, "message": "没有找到图片文件"}), 400
 
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
-    target_order = next((o for o in orders_list if o['id'] == order_id), None)
+    order = next((o for o in orders_list if o.get('id') == order_id), None)
 
-    if not target_order:
-        return jsonify({"success": False, "message": "订单不存在"}), 404
+    if not order:
+        return jsonify({"success": False, "message": "找不到该订单信息"}), 404
 
-    # 生成文件名
-    ext = os.path.splitext(file.filename)[1]
-    order_title = sanitize_filename(target_order.get('title', ''))
-    short_uuid = str(uuid.uuid4())[:8]
-    filename = f"{order_id}_{order_title}_{short_uuid}{ext}"
+    # 🌟 ======= 新增核心：旧物理文件自动粉碎机 ======= 🌟
+    old_img_url = order.get('receipt_img_url')
+    if old_img_url and str(old_img_url).strip() != "":
+        # 数据库里的路径长这样：/uploads/2026-07/xxx.jpg
+        # 我们需要把它映射到后端的实际物理路径：/app/uploads/2026-07/xxx.jpg
+        if old_img_url.startswith('/uploads/'):
+            # 剥离前缀，拼接绝对路径
+            relative_path = old_img_url.replace('/uploads/', '', 1)
+            old_file_path = os.path.join(BASE_UPLOAD_DIR, relative_path)
 
-    # 保存文件
-    upload_dir = os.path.join(BASE_UPLOAD_DIR, 'receipts')
-    os.makedirs(upload_dir, exist_ok=True)
-    filepath = os.path.join(upload_dir, filename)
-    file.save(filepath)
+            # 检查硬盘上是否存在这个文件，如果有，果断删除！
+            if os.path.exists(old_file_path):
+                try:
+                    os.remove(old_file_path)
+                    print(f"✅ 成功粉碎废弃旧回单: {old_file_path}")
+                except Exception as e:
+                    print(f"⚠️ 删除旧回单失败，可能已被占用或手动删除: {e}")
+    # 🌟 ================================================== 🌟
 
-    # 更新订单
-    target_order['receipt_url'] = f"/uploads/receipts/{filename}"
+    client_name = sanitize_filename(order.get('order_client', '未知客户'))
+    receiver_name = sanitize_filename(order.get('receiver_name', '未知收货人'))
+
+    now = datetime.now()
+    month_folder = now.strftime("%Y-%m")
+    date_str = now.strftime("%Y-%m-%d")
+
+    target_dir = os.path.join(BASE_UPLOAD_DIR, month_folder)
+    os.makedirs(target_dir, exist_ok=True)
+
+    short_code = uuid.uuid4().hex[:4].upper()
+    file_ext = os.path.splitext(file.filename)[1] or '.jpg'
+
+    safe_filename = f"{client_name}订单_{receiver_name}_{date_str}_{short_code}{file_ext}"
+    save_path = os.path.join(target_dir, safe_filename)
+    file.save(save_path)
+
+    db_image_url = f"/uploads/{month_folder}/{safe_filename}"
+
+    order['receipt_img_url'] = db_image_url
     write_orders(orders_data)
 
-    return jsonify({"success": True, "url": target_order['receipt_url']})
+    return jsonify({
+        "success": True,
+        "message": "新图片上传并保存成功，旧图片已清理",
+        "image_url": db_image_url
+    })
 
 @orders_bp.route('/<int:order_id>/receipt', methods=['DELETE'])
-def delete_receipt(order_id):
+def delete_order_receipt(order_id):
     """删除订单回单"""
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
-    target_order = next((o for o in orders_list if o['id'] == order_id), None)
+    order = next((o for o in orders_list if o.get('id') == order_id), None)
 
-    if not target_order:
-        return jsonify({"success": False, "message": "订单不存在"}), 404
+    if not order:
+        return jsonify({"success": False, "message": "找不到该订单"}), 404
 
-    receipt_url = target_order.get('receipt_url', '')
-    if receipt_url:
-        filepath = os.path.join('/app', receipt_url.lstrip('/'))
-        if os.path.exists(filepath):
-            try:
-                os.remove(filepath)
-            except Exception:
-                pass
+    old_img_url = order.get('receipt_img_url')
+    if old_img_url and str(old_img_url).strip() != "":
+        if old_img_url.startswith('/uploads/'):
+            relative_path = old_img_url.replace('/uploads/', '', 1)
+            old_file_path = os.path.join(BASE_UPLOAD_DIR, relative_path)
+            if os.path.exists(old_file_path):
+                try:
+                    os.remove(old_file_path)
+                    print(f"🗑️ 已彻底粉碎物理回单文件: {old_file_path}")
+                except Exception as e:
+                    print(f"⚠️ 删除物理文件失败: {e}")
 
-    target_order['receipt_url'] = ""
+    # 清空数据库中的回单路径值
+    order['receipt_img_url'] = ""
     write_orders(orders_data)
 
-    return jsonify({"success": True})
+    return jsonify({"success": True, "message": "回单图片已彻底删除"})
 
 @orders_bp.route('/<int:order_id>/paid-amount', methods=['PUT'])
-def update_paid_amount(order_id):
-    """更新订单已付款金额"""
+def update_order_paid_amount(order_id):
+    """更新订单的已支付金额"""
     req_data = request.json
-    paid_amount = req_data.get('paid_amount', 0.0)
 
-    orders_data = read_orders()
-    orders_list = orders_data.get('orders', [])
+    with orders_lock:
+        data = read_orders()
+        orders = data.get('orders', [])
 
-    for order in orders_list:
-        if order['id'] == order_id:
-            order['paid_amount'] = float(paid_amount)
-            break
+        # 查找对应的订单
+        order_index = None
+        for i, order in enumerate(orders):
+            if order.get('id') == order_id:
+                order_index = i
+                break
 
-    orders_data['orders'] = orders_list
-    write_orders(orders_data)
+        if order_index is None:
+            return jsonify({'success': False, 'message': '订单不存在'}), 404
 
-    return jsonify({"success": True})
+        order = orders[order_index]
 
-# 承运商标签相关
-@orders_bp.route('/carrier_tags', methods=['GET'])
+        # 确保 freight_costs 数组存在
+        if 'freight_costs' not in order or not isinstance(order['freight_costs'], list):
+            order['freight_costs'] = []
+
+        freight_cost_index = req_data.get('freightCostIndex', 0)
+        paid_amount = float(req_data.get('paidAmount', 0))
+
+        # 如果对应的运费记录不存在，创建一个
+        if freight_cost_index >= len(order['freight_costs']):
+            return jsonify({'success': False, 'message': '运费记录索引超出范围'}), 400
+
+        # 更新已支付金额
+        order['freight_costs'][freight_cost_index]['paid_amount'] = paid_amount
+        order['freight_costs'][freight_cost_index]['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        order['freight_costs'][freight_cost_index]['updated_by'] = request.headers.get('Username', 'admin')
+
+        orders[order_index] = order
+        data['orders'] = orders
+        write_orders(data)
+
+    return jsonify({'success': True, 'order': order})
+
+# ==========================================
+# 运营商标签接口
+# ==========================================
+
+@orders_bp.route('/carrier_tags', methods=['GET'], endpoint='get_carrier_tags')
 def get_carrier_tags():
-    """获取承运商标签"""
+    """获取运营商标签"""
     tags = load_carrier_tags()
     return jsonify(tags)
 
-@orders_bp.route('/carrier_tags', methods=['POST'])
+@orders_bp.route('/carrier_tags', methods=['POST'], endpoint='add_carrier_tag')
 def add_carrier_tag():
-    """添加承运商标签"""
+    """添加运营商标签"""
     data = request.json or {}
     new_tag = (data.get('tag') or '').strip()
     if not new_tag:
@@ -307,7 +366,7 @@ def add_carrier_tag():
 
     tags = load_carrier_tags()
     if new_tag not in tags:
-        tags.insert(0, new_tag)
-        save_carrier_tags(tags[:20])
+        tags.insert(0, new_tag)  # 最新输入的排在前面
+        save_carrier_tags(tags[:20])  # 永远只保留最常用的前20个，防止词库爆炸
 
     return jsonify({'success': True, 'tags': tags})

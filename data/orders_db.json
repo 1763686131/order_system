@@ -3954,7 +3954,8 @@
             "audit_state": 1,
             "receipt_img_url": "/uploads/2026-08/马姚丰订单_王建国_2026-08-26_1958.jpg",
             "freight_costs": [],
-            "store_id": 2
+            "store_id": 2,
+            "receipt_url": ""
         },
         {
             "id": 172,
@@ -4151,7 +4152,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_url": "/uploads/receipts/179_未知_414f8676.jpg"
         },
         {
             "id": 180,
@@ -4223,7 +4225,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 1
+            "store_id": 1,
+            "receipt_url": "/uploads/receipts/182_明斯特钟师傅13974125780浙江省嘉兴市平湖市独山港镇聚福西路211号两创中心1号楼树脂+20000kg_e5f254c7.jpg"
         },
         {
             "id": 183,
@@ -4296,8 +4299,9 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/浙江义友订单_朱峰峰_2026-08-28_76BC.jpg",
-            "store_id": 1
+            "receipt_img_url": "/uploads/2026-08/浙江义友订单_朱峰峰_2026-08-30_DC68.jpg",
+            "store_id": 1,
+            "receipt_url": ""
         },
         {
             "id": 186,
@@ -4321,7 +4325,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 1
+            "store_id": 1,
+            "receipt_img_url": "/uploads/2026-08/锦州森源订单_刘爽_2026-08-30_AEA5.jpg"
         },
         {
             "id": 187,
@@ -4465,7 +4470,8 @@
             "logistics_service": "送货上门",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_url": "/uploads/receipts/192_钟波庭毛经理18810878472，山东省济宁市汶上县花园路汶上县第一实验小学东南侧约130米中都市场粮局。天固浸渍胶，共60kg。植筋胶，共60kg。_cef7a846.jpg"
         },
         {
             "id": 193,
