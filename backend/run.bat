@@ -17,12 +17,7 @@ if %errorlevel% neq 0 (
 echo ====================================
 echo 正在启动新的 Docker 容器...
 echo ====================================
-docker run -d -p 7899:7899 --name my_order_app ^
-  -v "%~dp0..\data":/app/data ^
-  -v "%~dp0..\frontend":/app/frontend ^
-  -v "%~dp0..\uploads":/app/uploads ^
-  -v "%~dp0app.py":/app/app.py ^
-  order-backend
+docker run -d -p 7899:7899 --name my_order_app -v "%~dp0..\data":/app/data -v "%~dp0..\frontend":/app/frontend -v "%~dp0..\uploads":/app/uploads -v "%~dp0":/app order-backend
 
 if %errorlevel% equ 0 (
     echo ====================================
