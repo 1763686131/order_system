@@ -43,10 +43,10 @@
           </div>
           <div class="warehouse-actions">
             <button class="btn-icon" @click="handleEditWarehouse(warehouse)" title="修改仓库">
-              <span>✏️</span>
+              <span>编辑</span>
             </button>
             <button class="btn-icon btn-danger" @click="handleDeleteWarehouse(warehouse.id)" title="删除仓库">
-              <span>🗑️</span>
+              <span>×</span>
             </button>
           </div>
         </div>
@@ -68,7 +68,7 @@
               <span class="category-name">{{ category.name }}</span>
               <div class="category-actions">
                 <button class="btn-icon-sm" @click="handleEditCategory(warehouse.id, category)" title="修改分类">
-                  ✏️
+                  编辑
                 </button>
                 <button class="btn-icon-sm btn-danger" @click="handleDeleteCategory(warehouse.id, category.id)" title="删除分类">
                   ×
@@ -556,23 +556,23 @@ const handleDeleteCategory = async (warehouseId, categoryId) => {
 
 .btn-icon {
   padding: 8px 12px;
-  background: #f9fafb;
-  border: 1px solid #d1d5db;
+  background: transparent;
+  border: none;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.2s;
   font-size: 16px;
+  color: #333333;
 }
 
 .btn-icon:hover {
-  background: #f3f4f6;
-  border-color: #9ca3af;
+  background: rgba(0, 0, 0, 0.05);
   transform: scale(1.05);
 }
 
 .btn-icon.btn-danger:hover {
-  background: #fee2e2;
-  border-color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
 }
 
 .category-section {
