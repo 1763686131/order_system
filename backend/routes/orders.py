@@ -84,16 +84,18 @@ def add_order():
         "receiver_name": req_data.get('receiver_name', ''),
         "receiver_phone": req_data.get('receiver_phone', ''),
         "receiver_address": req_data.get('receiver_address', ''),
-        "order_remark": req_data.get('order_remark', ''),
-        "remark": req_data.get('remark', ''),
-        "receipt_img_url": "",
-        "audit_state": 0,
-        "freight_costs": []
+        "goods_name": req_data.get('goods_name', ''),
+        "goods_weight": req_data.get('goods_weight', ''),
+        "goods_quantity": req_data.get('goods_quantity', ''),
+        "goods_packaging": req_data.get('goods_packaging', ''),
+        "logistics_service": req_data.get('logistics_service', ''),
+        "remark": req_data.get('remark', '')
     }
+
     orders_list.append(new_order)
     orders_data['orders'] = orders_list
     write_orders(orders_data)
-    return jsonify({"success": True, "id": new_id})
+    return jsonify({"success": True, "data": new_order})
 
 @orders_bp.route('/<int:order_id>', methods=['PUT'])
 def update_order_status(order_id):
@@ -120,27 +122,34 @@ def update_order_status(order_id):
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""
                 x['logistics_no'] = ""
-                x['receipt_img_url'] = ""
                 x['audit_state'] = 0
 
-            if ns == 'shipped':
-                x['shipped_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
-                x['shipping_method'] = req_data.get('shipping_method', '')
-                x['shipping_custom'] = req_data.get('shipping_custom', '')
-                x['logistics_no'] = req_data.get('logistics_no', '')
-                x['audit_state'] = req_data.get('audit_state', 0)
+            elif ns == 'shipped':
+                if 'audit_state' in req_data:
+                    x['audit_state'] = req_data.get('audit_state', 0)
+                    # 🎯 核心修复：在审核操作时，必须接住前端传来的物流单号并更新进数据库！
+                    if 'logistics_no' in req_data:
+                        x['logistics_no'] = req_data.get('logistics_no')
+                    # 保存运费数据
+                    if 'freight_costs' in req_data:
+                        x['freight_costs'] = req_data.get('freight_costs', [])
+                else:
+                    x['shipping_method'] = req_data.get('shipping_method', 4)
+                    x['shipping_custom'] = req_data.get('shipping_custom', '')
+                    x['logistics_no'] = req_data.get('logistics_no', '暂未录入单号')
+                    x['shipped_date'] = req_data.get('shipped_date', datetime.now().strftime('%Y-%m-%d %H:%M'))
+                    x['completed_date'] = x['shipped_date']
+                    x['audit_state'] = 0
+                    # 保存运费数据
+                    if 'freight_costs' in req_data:
+                        x['freight_costs'] = req_data.get('freight_costs', [])
 
-                # 保存运费记录
-                if 'freight_costs' in req_data:
-                    x['freight_costs'] = req_data.get('freight_costs', [])
-
-            if ns == 'pending':
+            elif ns == 'pending':
                 x['completed_date'] = ""
                 x['shipped_date'] = ""
+                x['logistics_no'] = ""
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""
-                x['logistics_no'] = ""
-                x['receipt_img_url'] = ""
                 x['audit_state'] = 0
             break
 
@@ -206,10 +215,13 @@ def edit_order_content(order_id):
             x['receiver_name'] = req_data.get('receiver_name', '')
             x['receiver_phone'] = req_data.get('receiver_phone', '')
             x['receiver_address'] = req_data.get('receiver_address', '')
-            x['order_remark'] = req_data.get('order_remark', '')
+            x['goods_name'] = req_data.get('goods_name', '')
+            x['goods_weight'] = req_data.get('goods_weight', '')
+            x['goods_quantity'] = req_data.get('goods_quantity', '')
+            x['goods_packaging'] = req_data.get('goods_packaging', '')
+            x['logistics_service'] = req_data.get('logistics_service', '')
             x['remark'] = req_data.get('remark', '')
             break
-
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True})

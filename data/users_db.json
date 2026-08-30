@@ -82,16 +82,6 @@
         ]
     },
     {
-        "username": "555",
-        "name": "何家辉",
-        "password": "123456",
-        "role": "employee",
-        "permissions": [
-            "pending.complete",
-            "material.add"
-        ]
-    },
-    {
         "username": "888",
         "name": "臧不荒",
         "password": "123456",

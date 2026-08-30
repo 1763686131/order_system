@@ -4128,7 +4128,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 2000
+                }
+            ]
         },
         {
             "id": 179,
@@ -4274,7 +4281,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/嘉诚电力订单_采购部_2026-08-28_7477.jpg",
+            "receipt_img_url": "",
             "store_id": 1
         },
         {
@@ -4350,7 +4357,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_刘东_2026-08-30_3BF1.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 500
+                }
+            ]
         },
         {
             "id": 188,
@@ -4480,10 +4495,10 @@
             "type": 1,
             "date": "2026-08-28 14:12",
             "completed_date": "2026-08-29 09:17",
-            "shipped_date": "2026-08-29 09:17",
-            "shipping_method": 0,
+            "shipped_date": "2026-08-30 05:15",
+            "shipping_method": "",
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "申诉书-545",
             "order_client": "锦州森源",
             "receiver_name": "刘爽",
             "receiver_phone": "18604161611",
@@ -4494,20 +4509,21 @@
             "goods_packaging": "托盘",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "audit_state": 0,
-            "store_id": 1
+            "audit_state": 1,
+            "store_id": 1,
+            "freight_costs": []
         },
         {
             "id": 194,
             "title": "",
-            "status": "completed",
+            "status": "shipped",
             "type": 2,
             "date": "2026-08-29 09:17",
             "completed_date": "2026-08-29 16:23",
-            "shipped_date": "",
+            "shipped_date": "2026-08-30 04:53",
             "shipping_method": "",
             "shipping_custom": "",
-            "logistics_no": "",
+            "logistics_no": "三志物流-500258197389",
             "order_client": "李超",
             "receiver_name": "王纪省",
             "receiver_phone": "18369388079",
@@ -4518,8 +4534,15 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单邮回",
             "remark": "",
-            "audit_state": 0,
-            "store_id": 2
+            "audit_state": 1,
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 5000
+                }
+            ]
         },
         {
             "id": 195,
@@ -4528,10 +4551,10 @@
             "type": 3,
             "date": "2026-08-29 15:55",
             "completed_date": "2026-08-30 00:23",
-            "shipped_date": "2026-08-30 00:23",
-            "shipping_method": 0,
+            "shipped_date": "2026-08-30 04:54",
+            "shipping_method": "",
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "安能物流-44",
             "order_client": "sdasd ",
             "receiver_name": "朱峰峰",
             "receiver_phone": "15395265192",
@@ -4543,7 +4566,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "store_id": 3,
-            "audit_state": 0
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 400
+                }
+            ]
         },
         {
             "id": 197,
@@ -4568,6 +4598,127 @@
             "remark": "",
             "store_id": 3,
             "audit_state": 0
+        },
+        {
+            "id": 198,
+            "title": "",
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-08-30 05:06",
+            "completed_date": "2026-08-30 05:06",
+            "shipped_date": "2026-08-30 05:07",
+            "shipping_method": "",
+            "shipping_custom": "",
+            "logistics_no": "蜜风物流-1111",
+            "order_client": "陶云",
+            "receiver_name": "朱峰峰",
+            "receiver_phone": "15395265192",
+            "receiver_address": "浙江省温州市乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
+            "goods_name": "树脂 1101A",
+            "goods_weight": "10000kg",
+            "goods_quantity": "10件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "receipt_img_url": "",
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 500
+                }
+            ]
+        },
+        {
+            "id": 199,
+            "title": "",
+            "status": "shipped",
+            "type": 1,
+            "store_id": 1,
+            "date": "2026-08-30 05:07",
+            "completed_date": "2026-08-30 05:12",
+            "shipped_date": "2026-08-30 05:12",
+            "shipping_method": "",
+            "shipping_custom": "",
+            "logistics_no": "安能-4545",
+            "order_client": "大苏打是的",
+            "receiver_name": "朱峰峰d是",
+            "receiver_phone": "15395265190",
+            "receiver_address": "浙江省温州市天赋和乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
+            "goods_name": "树脂 1101A4545",
+            "goods_weight": "1040kg",
+            "goods_quantity": "14件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "order_remark": "",
+            "receipt_img_url": "",
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 411
+                }
+            ]
+        },
+        {
+            "id": 200,
+            "title": "",
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-08-30 05:39",
+            "completed_date": "2026-08-30 13:42",
+            "shipped_date": "2026-08-30 13:42",
+            "shipping_method": 0,
+            "shipping_custom": "",
+            "logistics_no": "蜜风物流-444",
+            "order_client": "大苏打啊",
+            "receiver_name": "朱峰峰",
+            "receiver_phone": "15395265192",
+            "receiver_address": "浙江省温州市乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
+            "goods_name": "树脂 1101A",
+            "goods_weight": "10000kg",
+            "goods_quantity": "10件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 1,
+            "freight_costs": []
+        },
+        {
+            "id": 201,
+            "title": "",
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-08-30 05:42",
+            "completed_date": "2026-08-30 13:43",
+            "shipped_date": "2026-08-30 13:43",
+            "shipping_method": 1,
+            "shipping_custom": "",
+            "logistics_no": "安能物流-4455",
+            "order_client": "奥运",
+            "receiver_name": "朱峰峰",
+            "receiver_phone": "15395265192",
+            "receiver_address": "浙江省温州市乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
+            "goods_name": "树脂 1101A",
+            "goods_weight": "10000kg",
+            "goods_quantity": "10件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 500
+                }
+            ]
         }
     ]
 }
