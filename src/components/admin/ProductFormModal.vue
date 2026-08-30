@@ -948,9 +948,13 @@ const open = (product = null) => {
   currentTab.value = 0
 
   if (product) {
-    isEdit.value = true
-    // 编辑模式：需要正确映射字段名
-    formData.id = product.id
+    // 判断是编辑还是复制：有ID则为编辑，无ID则为复制（新增）
+    isEdit.value = !!product.id
+
+    // 填充表单数据
+    if (product.id) {
+      formData.id = product.id
+    }
     formData.code = product.code || ''
     formData.name = product.name || ''
     formData.specification = product.specification || ''

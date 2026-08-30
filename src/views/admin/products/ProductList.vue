@@ -447,7 +447,26 @@ const handleCopy = (product) => {
 }
 
 const handleCopyProduct = (product) => {
-  console.log('复制', product)
+  // 打开新增弹窗，填充商品数据（不包含ID）
+  if (productFormModal.value) {
+    // 复制商品数据，但不包含ID，这样保存时会作为新增
+    const formData = {
+      // 不传 id，这样会作为新增模式
+      code: product.code || '',
+      name: product.name || '',
+      specification: product.specification || '',
+      warehouse: product.warehouseId || '',
+      category: product.categoryId || product.category || '',
+      unitId: product.unitId || null,
+      notes: product.notes || '',
+      enabled: product.enabled !== false,
+      storeIds: product.storeIds || [],
+      unitConversions: product.unitConversions || [],
+      enableAttributes: product.enableAttributes || false,
+      attributeCombinations: product.attributeCombinations || []
+    }
+    productFormModal.value.open(formData)
+  }
 }
 
 const handleDelete = (product) => {
