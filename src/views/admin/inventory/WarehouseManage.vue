@@ -117,12 +117,16 @@
           </div>
           <div class="form-group">
             <label class="form-label">所属门店:</label>
-            <input
-              :value="getStoreName(selectedStoreId)"
-              type="text"
+            <select
+              v-model="warehouseForm.storeId"
               class="form-input"
-              disabled
-            />
+              :disabled="!isEditMode"
+            >
+              <option value="">请选择门店</option>
+              <option v-for="store in stores" :key="store.id" :value="store.id">
+                {{ store.name }}
+              </option>
+            </select>
           </div>
         </div>
         <div class="modal-footer">
@@ -187,7 +191,7 @@ const filteredWarehouses = computed(() => {
   if (!selectedStoreId.value) {
     return warehouses.value
   }
-  return warehouses.value.filter(w => w.storeId === selectedStoreId.value)
+  return warehouses.value.filter(w => w.storeId === parseInt(selectedStoreId.value))
 })
 
 // 获取门店名称
@@ -285,6 +289,7 @@ const saveWarehouse = async () => {
 
 onMounted(() => {
   loadStores()
+  loadWarehouses()
 })
 
 // 修改仓库

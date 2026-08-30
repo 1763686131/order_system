@@ -1,86 +1,73 @@
 [
-  {
-    "id": 1,
-    "code": "WH001",
-    "name": "A仓库",
-    "storeId": 1,
-    "remark": "绝缘门店主仓库",
-    "status": "active",
-    "created_at": "2024-01-01",
-    "updated_at": "2024-01-01",
-    "categories": [
-      {
-        "id": 101,
-        "name": "原材料分类",
-        "code": "CAT001",
-        "created_at": "2024-01-01"
-      },
-      {
-        "id": 102,
-        "name": "半成品分类",
-        "code": "CAT002",
-        "created_at": "2024-01-01"
-      },
-      {
-        "id": 103,
-        "name": "成品分类",
-        "code": "CAT003",
-        "created_at": "2024-01-01"
-      }
-    ]
-  },
-  {
-    "id": 2,
-    "code": "WH002",
-    "name": "B仓库",
-    "storeId": 1,
-    "remark": "绝缘门店副仓库",
-    "status": "active",
-    "created_at": "2024-01-01",
-    "updated_at": "2024-01-01",
-    "categories": [
-      {
-        "id": 201,
-        "name": "原材料分类",
-        "code": "CAT101",
-        "created_at": "2024-01-01"
-      },
-      {
-        "id": 202,
-        "name": "半成品分类",
-        "code": "CAT102",
-        "created_at": "2024-01-01"
-      }
-    ]
-  },
-  {
-    "id": 3,
-    "code": "WH003",
-    "name": "C仓库",
-    "storeId": 2,
-    "remark": "中固门店主仓库",
-    "status": "active",
-    "created_at": "2024-01-01",
-    "updated_at": "2024-01-01",
-    "categories": [
-      {
-        "id": 301,
-        "name": "原材料分类",
-        "code": "CAT201",
-        "created_at": "2024-01-01"
-      },
-      {
-        "id": 302,
-        "name": "半成品分类",
-        "code": "CAT202",
-        "created_at": "2024-01-01"
-      },
-      {
-        "id": 303,
-        "name": "成品分类",
-        "code": "CAT203",
-        "created_at": "2024-01-01"
-      }
-    ]
-  }
+    {
+        "id": 1,
+        "code": "1",
+        "name": "大仓库",
+        "storeId": 1,
+        "remark": "",
+        "status": "active",
+        "created_at": "2026-08-30",
+        "updated_at": "2026-08-30",
+        "categories": [
+            {
+                "id": 101,
+                "name": "原材料",
+                "code": "CAT101",
+                "created_at": "2026-08-30"
+            },
+            {
+                "id": 102,
+                "name": "成品",
+                "code": "CAT102",
+                "created_at": "2026-08-30"
+            },
+            {
+                "id": 103,
+                "name": "包装",
+                "code": "CAT103",
+                "created_at": "2026-08-30"
+            }
+        ]
+    },
+    {
+        "id": 2,
+        "code": "2",
+        "name": "小仓库",
+        "storeId": 1,
+        "remark": "",
+        "status": "active",
+        "created_at": "2026-08-30",
+        "updated_at": "2026-08-30",
+        "categories": [
+            {
+                "id": 201,
+                "name": "原材料",
+                "code": "CAT201",
+                "created_at": "2026-08-30"
+            },
+            {
+                "id": 202,
+                "name": "成品",
+                "code": "CAT202",
+                "created_at": "2026-08-30"
+            },
+            {
+                "id": 203,
+                "name": "包装",
+                "code": "CAT203",
+                "created_at": "2026-08-30"
+            }
+        ]
+    },
+    {
+        "id": 3,
+        "code": "3",
+        "name": "长仓库",
+        "storeId": 3,
+        "remark": "",
+        "status": "active",
+        "created_at": "2026-08-30",
+        "updated_at": "2026-08-30",
+        "categories": []
+    }
 ]
