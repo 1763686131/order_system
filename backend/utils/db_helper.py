@@ -12,6 +12,7 @@ materials_lock = Lock()
 freight_records_lock = Lock()
 warehouses_lock = Lock()
 stores_lock = Lock()
+products_lock = Lock()
 
 # 数据库文件路径
 USERS_FILE = '/app/data/users_db.json'
@@ -20,6 +21,7 @@ MATERIALS_FILE = '/app/data/material_db.json'
 FREIGHT_RECORDS_FILE = '/app/data/freight_records_db.json'
 STORES_FILE = '/app/data/stores_db.json'
 WAREHOUSES_FILE = '/app/data/warehouses_db.json'
+PRODUCTS_FILE = '/app/data/products_db.json'
 
 def read_users():
     os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
@@ -110,4 +112,19 @@ def read_warehouses():
 def write_warehouses(data):
     with warehouses_lock:
         with open(WAREHOUSES_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+def read_products():
+    with products_lock:
+        os.makedirs(os.path.dirname(PRODUCTS_FILE), exist_ok=True)
+        if not os.path.exists(PRODUCTS_FILE):
+            d = {"units": [], "products": []}
+            write_products(d)
+            return d
+        with open(PRODUCTS_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+def write_products(data):
+    with products_lock:
+        with open(PRODUCTS_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)

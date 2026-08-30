@@ -44,7 +44,45 @@
             </div>
           </div>
 
-          <!-- 第二行：商品名称 + 编号 -->
+          <!-- 第二行：仓库 + 分类 -->
+          <div class="form-row">
+            <div class="form-group half">
+              <label class="required">仓库:</label>
+              <select
+                v-model="formData.warehouse"
+                class="form-select"
+                :disabled="!formData.storeIds || formData.storeIds.length === 0"
+              >
+                <option value="">请选择默认仓库</option>
+                <option
+                  v-for="warehouse in filteredWarehouses"
+                  :key="warehouse.id"
+                  :value="warehouse.id"
+                >
+                  {{ warehouse.name }}
+                </option>
+              </select>
+            </div>
+            <div class="form-group half">
+              <label class="required">分类:</label>
+              <select
+                v-model="formData.category"
+                class="form-select"
+                :disabled="!formData.warehouse"
+              >
+                <option value="">请选择商品分类</option>
+                <option
+                  v-for="category in filteredCategories"
+                  :key="category.id"
+                  :value="category.id"
+                >
+                  {{ category.name }}
+                </option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 第三行：商品名称 + 编号 -->
           <div class="form-row">
             <div class="form-group half">
               <label class="required">商品名称:</label>
@@ -66,21 +104,8 @@
             </div>
           </div>
 
-          <!-- 第三行：分类 + 规格型号 -->
+          <!-- 第四行：规格型号 + 备注 -->
           <div class="form-row">
-            <div class="form-group half">
-              <label>分类:</label>
-              <div class="input-with-link">
-                <select v-model="formData.category" class="form-select">
-                  <option value="">请选择商品分类</option>
-                  <option value="成品">成品</option>
-                  <option value="半成品">半成品</option>
-                  <option value="原材料">原材料</option>
-                  <option value="其他">其他</option>
-                </select>
-                <a href="#" class="link-new" @click.prevent="handleNewCategory">新增</a>
-              </div>
-            </div>
             <div class="form-group half">
               <label>规格型号:</label>
               <input
@@ -90,50 +115,274 @@
                 class="form-input"
               />
             </div>
-          </div>
-
-          <!-- 第四行：单位 + 仓库 -->
-          <div class="form-row">
             <div class="form-group half">
-              <label>单位:</label>
-              <div class="unit-group">
-                <select v-model="formData.unit" class="form-select">
-                  <option value="">请选择单位</option>
-                  <option value="公斤">公斤</option>
-                  <option value="吨">吨</option>
-                  <option value="米">米</option>
-                  <option value="个">个</option>
-                  <option value="件">件</option>
-                  <option value="箱">箱</option>
-                </select>
-                <label class="checkbox-inline">
-                  <input type="checkbox" v-model="formData.enableMultiUnit" />
-                  <span>启用多单位</span>
-                </label>
-              </div>
-            </div>
-            <div class="form-group half">
-              <label>仓库:</label>
-              <select v-model="formData.warehouse" class="form-select">
-                <option value="">请选择默认仓库</option>
-                <option value="主仓库">主仓库</option>
-                <option value="副仓库">副仓库</option>
-                <option value="仓库A">仓库A</option>
-                <option value="仓库B">仓库B</option>
-              </select>
+              <label>备注:</label>
+              <input
+                v-model="formData.notes"
+                type="text"
+                placeholder="请输入备注"
+                class="form-input"
+              />
             </div>
           </div>
 
-          <!-- 第五行：备注 -->
+          <!-- 第五行：单位 -->
           <div class="form-row">
             <div class="form-group full">
-              <label>备注:</label>
-              <textarea
-                v-model="formData.notes"
-                placeholder="请输入备注"
-                class="form-textarea"
-                rows="3"
-              ></textarea>
+              <label class="required">单位:</label>
+              <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                <label
+                  v-for="unit in units"
+                  :key="unit.id"
+                  :class="['unit-tag', { active: formData.unitId === unit.id }]"
+                  @click="formData.unitId = unit.id"
+                >
+                  {{ unit.name }}
+                </label>
+                <button type="button" class="btn-add-unit" @click="handleAddUnit">+ 新增</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 第六行：添加多单位 -->
+          <div class="form-row">
+            <div class="form-group full">
+              <label>添加多单位:</label>
+              <div style="display: flex; flex-direction: column; gap: 16px;">
+                <!-- 已添加的多单位列表 -->
+                <div
+                  v-for="(conversion, index) in formData.unitConversions"
+                  :key="index"
+                  style="display: flex; flex-direction: column; gap: 10px; padding: 12px; border: 1px solid #e5e7eb; border-radius: 8px; background: #f9fafb;"
+                >
+                  <!-- 第一行：单位换算 -->
+                  <div style="display: flex; align-items: center; gap: 10px;">
+                    <select v-model="conversion.fromUnitId" class="form-select" style="width: 150px;">
+                      <option value="">请选择单位</option>
+                      <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.name }}</option>
+                    </select>
+                    <span>=</span>
+                    <input
+                      v-model="conversion.value"
+                      type="number"
+                      step="0.01"
+                      placeholder="数量"
+                      class="form-input"
+                      style="width: 120px;"
+                    />
+                    <span>{{ getUnitName(formData.unitId) }}</span>
+                    <button type="button" class="btn-delete-conversion" @click="removeUnitConversion(index)" title="删除">×</button>
+                  </div>
+
+                  <!-- 分裂区域 -->
+                  <div v-if="conversion.fromUnitId" style="margin-left: 20px; display: flex; flex-direction: column; gap: 8px;">
+                    <div style="font-size: 13px; color: #6b7280; font-weight: 500;">
+                      分裂（1{{ getUnitName(conversion.fromUnitId) }} 可分裂成）:
+                    </div>
+
+                    <!-- 分裂项列表 -->
+                    <div
+                      v-for="(split, idx) in conversion.splits"
+                      :key="idx"
+                      style="display: flex; align-items: center; gap: 10px;"
+                    >
+                      <input
+                        v-model="split.quantity"
+                        type="number"
+                        step="1"
+                        placeholder="数量"
+                        class="form-input"
+                        style="width: 100px;"
+                      />
+                      <select v-model="split.unitId" class="form-select" style="width: 120px;">
+                        <option value="">请选择单位</option>
+                        <option v-for="unit in units" :key="unit.id" :value="unit.id">{{ unit.name }}</option>
+                      </select>
+                      <button type="button" class="btn-delete-split" @click="removeSplit(index, idx)">×</button>
+                    </div>
+
+                    <!-- 添加分裂项按钮 -->
+                    <button type="button" class="btn-add-split" @click="addSplit(index)">+ 添加分裂项</button>
+                  </div>
+                </div>
+
+                <!-- 添加多单位按钮 -->
+                <button
+                  type="button"
+                  class="btn-add-conversion"
+                  @click="addUnitConversion"
+                  :disabled="!formData.unitId"
+                >
+                  + 继续添加单位
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 属性展开区域 -->
+          <div class="form-row">
+            <div class="form-group full">
+              <div class="attributes-section">
+                <!-- 展开/收起按钮 -->
+                <div class="attributes-toggle" @click="toggleAttributes">
+                  <span style="color: #3b82f6; font-size: 14px;">属性</span>
+                  <span style="color: #3b82f6; font-size: 12px; margin-left: 6px;">{{ attributesExpanded ? '▲' : '▼' }}</span>
+                </div>
+
+                <!-- 属性内容区（可展开） -->
+                <div v-if="attributesExpanded" class="attributes-content">
+                  <!-- 顶部标题栏 -->
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                      <span style="font-size: 15px; font-weight: 600; color: #374151;">属性</span>
+                      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+                        <input type="checkbox" v-model="formData.enableAttributes" class="checkbox-green" id="enableAttr" />
+                        <span style="font-size: 14px; color: #10b981;">启用属性</span>
+                      </label>
+                      <span style="color: #9ca3af; font-size: 14px; cursor: help;" title="启用属性后可以设置商品的不同规格">?</span>
+                    </div>
+                    <div style="display: flex; gap: 16px;">
+                      <button type="button" class="btn-text-link-refresh" @click="clearAllAttributes">
+                        🔄 刷新属性
+                      </button>
+                      <button type="button" class="btn-text-link-add" @click="addNewAttribute">
+                        + 新增属性
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- 属性配置区域（只有启用后才显示） -->
+                  <div v-if="formData.enableAttributes">
+                    <div style="display: grid; grid-template-columns: 220px 1fr; gap: 30px; margin-bottom: 20px;">
+                      <!-- 左侧：属性名称 -->
+                      <div>
+                        <div style="font-size: 13px; color: #6b7280; font-weight: 600; margin-bottom: 12px;">
+                          属性名称
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                          <label
+                            v-for="attr in attributesList"
+                            :key="attr.id"
+                            :class="['attribute-checkbox-item', { checked: attr.selected }]"
+                          >
+                            <input type="checkbox" v-model="attr.selected" class="checkbox-green" />
+                            <span>{{ attr.name }}</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <!-- 右侧：属性选项 -->
+                      <div>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                          <span style="font-size: 13px; color: #6b7280; font-weight: 600;">属性选项</span>
+                          <button type="button" class="btn-text-link-cancel" @click="clearSelectedOptions">
+                            全部取消
+                          </button>
+                        </div>
+
+                        <!-- 显示已选属性的选项 -->
+                        <div v-if="selectedAttributes.length === 0" style="color: #9ca3af; font-size: 13px; padding: 40px 20px; text-align: center; background: #f9fafb; border: 1px dashed #d1d5db; border-radius: 6px;">
+                          请先在左侧选择属性名称
+                        </div>
+                        <div v-else style="display: flex; flex-direction: column; gap: 16px;">
+                          <div
+                            v-for="attr in selectedAttributes"
+                            :key="attr.id"
+                            style="display: flex; flex-direction: column; gap: 8px;"
+                          >
+                            <div style="font-size: 13px; font-weight: 600; color: #374151;">{{ attr.name }}</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                              <label
+                                v-for="option in attr.options"
+                                :key="option.id"
+                                :class="['option-checkbox-tag', { checked: option.selected }]"
+                              >
+                                <input type="checkbox" v-model="option.selected" style="display: none;" />
+                                <span>{{ option.name }}</span>
+                              </label>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 价格&条码表格 -->
+                    <div v-if="selectedAttributeCombinations.length > 0" style="margin-top: 30px; border-top: 1px solid #e5e7eb; padding-top: 20px;">
+                      <div style="font-size: 15px; font-weight: 600; color: #374151; margin-bottom: 16px;">价格&条码</div>
+
+                      <div style="overflow-x: auto;">
+                        <table class="attribute-price-table">
+                          <thead>
+                            <tr>
+                              <th style="min-width: 150px;">属性名称</th>
+                              <th style="min-width: 120px;">
+                                进货价
+                                <button type="button" class="btn-batch-link">批量</button>
+                              </th>
+                              <th style="min-width: 120px;">
+                                批发价
+                                <button type="button" class="btn-batch-link">批量</button>
+                              </th>
+                              <th style="min-width: 120px;">
+                                零售价
+                                <button type="button" class="btn-batch-link">批量</button>
+                              </th>
+                              <th style="min-width: 120px;">
+                                条形码
+                                <button type="button" class="btn-batch-link">批量</button>
+                              </th>
+                              <th style="width: 80px;">启用</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr v-for="(combo, index) in selectedAttributeCombinations" :key="index">
+                              <td>{{ combo.name }}</td>
+                              <td>
+                                <input
+                                  v-model="combo.purchasePrice"
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="进货价"
+                                  class="table-input"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  v-model="combo.wholesalePrice"
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="批发价"
+                                  class="table-input"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  v-model="combo.retailPrice"
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="零售价"
+                                  class="table-input"
+                                />
+                              </td>
+                              <td>
+                                <input
+                                  v-model="combo.barcode"
+                                  type="text"
+                                  placeholder="条形码"
+                                  class="table-input"
+                                />
+                              </td>
+                              <td style="text-align: center;">
+                                <input type="checkbox" v-model="combo.enabled" class="checkbox-green" />
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -237,7 +486,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import request from '@/api/request'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 
@@ -245,34 +494,10 @@ const visible = ref(false)
 const isEdit = ref(false)
 const currentTab = ref(0)
 const stores = ref([])
-const warehouses = ref([
-  {
-    id: 1,
-    name: 'A仓库',
-    categories: [
-      { id: 101, name: '原材料分类' },
-      { id: 102, name: '半成品分类' },
-      { id: 103, name: '成品分类' }
-    ]
-  },
-  {
-    id: 2,
-    name: 'B仓库',
-    categories: [
-      { id: 201, name: '原材料分类' },
-      { id: 202, name: '半成品分类' },
-      { id: 203, name: '成品分类' }
-    ]
-  },
-  {
-    id: 3,
-    name: 'C仓库',
-    categories: [
-      { id: 301, name: '原材料分类' },
-      { id: 302, name: '半成品分类' }
-    ]
-  }
-])
+const allWarehouses = ref([]) // 所有仓库数据
+const units = ref([]) // 单位列表
+const attributesExpanded = ref(false) // 属性区域是否展开
+const attributesList = ref([]) // 属性列表（从数据库加载）
 
 const tabs = ['基本信息', '仓库', '价格&条码', '库存设置']
 
@@ -281,16 +506,116 @@ const formData = reactive({
   name: '',
   specification: '',
   category: '',
-  unit: '',
+  unitId: null,
   enableMultiUnit: false,
   notes: '',
   enabled: true,
   warehouse: '',
   storeIds: [],
-  warehouseCategories: {} // 格式: { 仓库ID: [分类ID数组] }
+  warehouseCategories: {}, // 格式: { 仓库ID: [分类ID数组] }
+  unitConversions: [], // 单位换算关系: [{ fromUnitId: 1, value: 10 }] 表示 1个fromUnit = 10个baseUnit
+  enableAttributes: false, // 是否启用属性
+  attributes: [] // 选中的属性和选项
 })
 
 const emit = defineEmits(['save', 'refresh'])
+
+// 根据选择的门店筛选仓库
+const filteredWarehouses = computed(() => {
+  if (!formData.storeIds || formData.storeIds.length === 0) {
+    return []
+  }
+
+  // 筛选属于选中门店的仓库
+  return allWarehouses.value.filter(warehouse =>
+    formData.storeIds.includes(warehouse.storeId)
+  )
+})
+
+// 根据选择的仓库获取分类列表
+const filteredCategories = computed(() => {
+  if (!formData.warehouse) {
+    return []
+  }
+
+  // 找到选中的仓库
+  const selectedWarehouse = allWarehouses.value.find(w => w.id === formData.warehouse)
+  return selectedWarehouse?.categories || []
+})
+
+// 用于"库存设置" Tab 的仓库列表（和以前一样）
+const warehouses = computed(() => filteredWarehouses.value)
+
+// 已选中的属性
+const selectedAttributes = computed(() => {
+  return attributesList.value.filter(attr => attr.selected)
+})
+
+// 生成属性组合用于价格表格
+const selectedAttributeCombinations = computed(() => {
+  const selected = selectedAttributes.value
+  if (selected.length === 0) return []
+
+  // 获取所有已选中的属性选项
+  const selectedOptions = selected.map(attr => {
+    return attr.options.filter(opt => opt.selected)
+  })
+
+  // 如果有任何属性没有选中选项，返回空
+  if (selectedOptions.some(opts => opts.length === 0)) return []
+
+  // 生成笛卡尔积组合
+  const combinations = cartesianProduct(selectedOptions)
+
+  return combinations.map((combo, index) => {
+    const name = combo.map(opt => opt.name).join(' / ')
+    return {
+      id: index,
+      name: name,
+      purchasePrice: '',
+      wholesalePrice: '',
+      retailPrice: '',
+      barcode: '',
+      enabled: true
+    }
+  })
+})
+
+// 笛卡尔积辅助函数
+const cartesianProduct = (arrays) => {
+  if (arrays.length === 0) return []
+  if (arrays.length === 1) return arrays[0].map(item => [item])
+
+  const result = []
+  const restProduct = cartesianProduct(arrays.slice(1))
+
+  for (const item of arrays[0]) {
+    for (const rest of restProduct) {
+      result.push([item, ...rest])
+    }
+  }
+
+  return result
+}
+
+// 监听门店选择变化，清空仓库选择
+watch(() => formData.storeIds, (newStoreIds, oldStoreIds) => {
+  if (JSON.stringify(newStoreIds) !== JSON.stringify(oldStoreIds)) {
+    // 门店变化时，如果当前选择的仓库不在新的筛选结果中，则清空
+    const filteredIds = filteredWarehouses.value.map(w => w.id)
+    if (formData.warehouse && !filteredIds.find(w => w.id === formData.warehouse)) {
+      formData.warehouse = ''
+      formData.category = ''
+    }
+  }
+})
+
+// 监听仓库选择变化，清空分类选择
+watch(() => formData.warehouse, (newWarehouse, oldWarehouse) => {
+  if (newWarehouse !== oldWarehouse) {
+    formData.category = ''
+  }
+})
 
 // 加载门店数据
 const loadStores = async () => {
@@ -307,8 +632,184 @@ const loadStores = async () => {
   }
 }
 
+// 加载仓库数据
+const loadWarehouses = async () => {
+  try {
+    const response = await request({
+      url: '/warehouses',
+      method: 'GET'
+    })
+    if (response && Array.isArray(response)) {
+      allWarehouses.value = response
+    }
+  } catch (error) {
+    console.error('加载仓库失败:', error)
+  }
+}
+
+// 加载单位数据
+const loadUnits = async () => {
+  try {
+    const response = await request({
+      url: '/products/units',
+      method: 'GET'
+    })
+    if (response && Array.isArray(response)) {
+      units.value = response
+    }
+  } catch (error) {
+    console.error('加载单位失败:', error)
+  }
+}
+
+// 加载属性数据
+const loadAttributes = async () => {
+  try {
+    const response = await request({
+      url: '/products/attributes',
+      method: 'GET'
+    })
+    if (response && Array.isArray(response)) {
+      // 添加 selected 状态
+      attributesList.value = response.map(attr => ({
+        ...attr,
+        selected: false,
+        options: attr.options.map(opt => ({
+          ...opt,
+          selected: false
+        }))
+      }))
+    }
+  } catch (error) {
+    console.error('加载属性失败:', error)
+  }
+}
+
+// 新增单位
+const handleAddUnit = async () => {
+  const unitName = prompt('请输入新单位名称：')
+  if (!unitName || !unitName.trim()) return
+
+  try {
+    const response = await request({
+      url: '/products/units',
+      method: 'POST',
+      data: { name: unitName.trim() }
+    })
+    if (response.success) {
+      alert('单位添加成功')
+      await loadUnits()
+    }
+  } catch (error) {
+    alert('添加单位失败：' + (error.response?.data?.message || error.message))
+  }
+}
+
+// 获取单位名称
+const getUnitName = (unitId) => {
+  const unit = units.value.find(u => u.id === unitId)
+  return unit ? unit.name : ''
+}
+
+// 添加单位换算
+const addUnitConversion = () => {
+  if (!formData.unitId) {
+    alert('请先选择基础单位')
+    return
+  }
+  formData.unitConversions.push({
+    fromUnitId: null,
+    value: '',
+    splits: [] // 分裂项: [{ quantity: 10, unitId: 5 }]
+  })
+}
+
+// 删除单位换算
+const removeUnitConversion = (index) => {
+  formData.unitConversions.splice(index, 1)
+}
+
+// 添加分裂项
+const addSplit = (conversionIndex) => {
+  const conversion = formData.unitConversions[conversionIndex]
+  if (!conversion.splits) {
+    conversion.splits = []
+  }
+  conversion.splits.push({
+    quantity: '',
+    unitId: null
+  })
+}
+
+// 删除分裂项
+const removeSplit = (conversionIndex, splitIndex) => {
+  formData.unitConversions[conversionIndex].splits.splice(splitIndex, 1)
+}
+
+// 切换属性展开状态
+const toggleAttributes = () => {
+  attributesExpanded.value = !attributesExpanded.value
+}
+
+// 清空所有属性选择
+const clearAllAttributes = () => {
+  attributesList.value.forEach(attr => {
+    attr.selected = false
+    attr.options.forEach(opt => {
+      opt.selected = false
+    })
+  })
+}
+
+// 清空选中的属性选项
+const clearSelectedOptions = () => {
+  attributesList.value.forEach(attr => {
+    attr.options.forEach(opt => {
+      opt.selected = false
+    })
+  })
+}
+
+// 删除属性
+const deleteAttribute = () => {
+  const selectedAttr = attributesList.value.find(attr => attr.selected)
+  if (!selectedAttr) {
+    alert('请先选择要删除的属性')
+    return
+  }
+  if (confirm(`确定要删除属性"${selectedAttr.name}"吗？`)) {
+    const index = attributesList.value.findIndex(attr => attr.id === selectedAttr.id)
+    if (index > -1) {
+      attributesList.value.splice(index, 1)
+    }
+  }
+}
+
+// 新增属性
+const addNewAttribute = async () => {
+  const attrName = prompt('请输入新属性名称：')
+  if (!attrName || !attrName.trim()) return
+
+  try {
+    const response = await request({
+      url: '/products/attributes',
+      method: 'POST',
+      data: { name: attrName.trim() }
+    })
+    if (response.success) {
+      alert('属性添加成功')
+      await loadAttributes()
+    }
+  } catch (error) {
+    alert('添加属性失败：' + (error.response?.data?.message || error.message))
+  }
+}
+
 onMounted(() => {
   loadStores()
+  loadWarehouses()
+  loadUnits()
+  loadAttributes()
 })
 
 // 打开弹窗
@@ -1030,5 +1531,487 @@ defineExpose({
 
 .btn-save-continue:hover {
   background: #2563eb;
+}
+
+/* 单位标签样式 */
+.unit-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #374151;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s;
+  user-select: none;
+}
+
+.unit-tag:hover {
+  border-color: #10b981;
+  color: #10b981;
+  background: #f0fdf4;
+}
+
+.unit-tag.active {
+  border-color: #10b981;
+  background: #10b981;
+  color: white;
+  font-weight: 600;
+}
+
+.btn-add-unit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border: 1px dashed #9ca3af;
+  border-radius: 6px;
+  background: white;
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-add-unit:hover {
+  border-color: #10b981;
+  color: #10b981;
+  background: #f0fdf4;
+}
+
+/* 多单位换算样式 */
+.btn-add-conversion {
+  padding: 8px 16px;
+  border: 1px dashed #9ca3af;
+  border-radius: 6px;
+  background: white;
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  align-self: flex-start;
+}
+
+.btn-add-conversion:hover:not(:disabled) {
+  border-color: #10b981;
+  color: #10b981;
+  background: #f0fdf4;
+}
+
+.btn-add-conversion:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-delete-conversion {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #ef4444;
+  border-radius: 4px;
+  background: white;
+  color: #ef4444;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+
+.btn-delete-conversion:hover {
+  background: #ef4444;
+  color: white;
+}
+
+/* 分裂按钮样式 */
+.btn-split {
+  padding: 6px 14px;
+  border: 1px solid #3b82f6;
+  border-radius: 4px;
+  background: white;
+  color: #3b82f6;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-split:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+/* 分裂弹窗样式 */
+.split-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.split-modal {
+  background: white;
+  border-radius: 8px;
+  width: 480px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+.split-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.split-modal-header h4 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.btn-close-split {
+  font-size: 24px;
+  color: #9ca3af;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.btn-close-split:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.split-modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.split-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  border-top: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.btn-add-split {
+  padding: 8px 16px;
+  border: 1px dashed #9ca3af;
+  border-radius: 6px;
+  background: white;
+  color: #6b7280;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  margin-top: 10px;
+}
+
+.btn-add-split:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #eff6ff;
+}
+
+.btn-delete-split {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #ef4444;
+  border-radius: 4px;
+  background: white;
+  color: #ef4444;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+}
+
+.btn-delete-split:hover {
+  background: #ef4444;
+  color: white;
+}
+
+/* 属性区域样式 */
+.attributes-section {
+  width: 100%;
+}
+
+.attributes-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+  user-select: none;
+}
+
+.attributes-toggle:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.attributes-content {
+  margin-top: 16px;
+  padding: 20px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.checkbox-green {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #10b981;
+}
+
+.attribute-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 14px;
+  color: #374151;
+}
+
+.attribute-checkbox-item:hover {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.attribute-checkbox-item.checked {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.option-checkbox-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 14px;
+  background: white;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 13px;
+  color: #374151;
+  user-select: none;
+}
+
+.option-checkbox-tag:hover {
+  border-color: #10b981;
+  background: #f0fdf4;
+}
+
+.option-checkbox-tag.checked {
+  border-color: #10b981;
+  background: #10b981;
+  color: white;
+  font-weight: 500;
+}
+
+.btn-text-link-refresh {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #3b82f6;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-text-link-refresh:hover {
+  color: #2563eb;
+}
+
+.btn-text-link-add {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #3b82f6;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-text-link-add:hover {
+  color: #2563eb;
+}
+
+.btn-text-link-cancel {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #3b82f6;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-text-link-cancel:hover {
+  color: #2563eb;
+}
+
+/* 价格表格样式 */
+.attribute-price-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.attribute-price-table thead {
+  background: #f9fafb;
+}
+
+.attribute-price-table th {
+  padding: 12px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.attribute-price-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 13px;
+  color: #374151;
+}
+
+.attribute-price-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.table-input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  font-size: 13px;
+  transition: all 0.3s;
+}
+
+.table-input:focus {
+  outline: none;
+  border-color: #10b981;
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
+}
+
+.btn-batch-link {
+  padding: 2px 8px;
+  margin-left: 6px;
+  border: none;
+  background: none;
+  color: #3b82f6;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-batch-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+.btn-text-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-text-link:hover {
+  color: #374151;
+}
+
+.btn-text-link-primary {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #3b82f6;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-text-link-primary:hover {
+  color: #2563eb;
+}
+
+.btn-refresh {
+  padding: 4px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: white;
+  color: #6b7280;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-refresh:hover {
+  border-color: #10b981;
+  color: #10b981;
+  background: #f0fdf4;
+}
+
+.btn-link-sm {
+  padding: 4px 10px;
+  border: none;
+  background: none;
+  color: #3b82f6;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+  text-decoration: none;
+}
+
+.btn-link-sm:hover {
+  color: #2563eb;
+  text-decoration: underline;
 }
 </style>
