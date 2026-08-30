@@ -2,6 +2,34 @@
   <div class="product-list-page">
     <!-- 搜索栏 -->
     <div class="search-bar">
+      <div class="search-group store-slider">
+        <label>门店</label>
+        <div class="store-tabs">
+          <div
+            :class="['store-tab', { active: selectedStoreId === null }]"
+            @click="selectedStoreId = null"
+          >
+            全部
+          </div>
+          <div
+            v-for="store in allStores"
+            :key="store.id"
+            :class="['store-tab', { active: selectedStoreId === store.id }]"
+            @click="selectedStoreId = store.id"
+          >
+            {{ store.name }}
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-search" @click="handleSearch">
+        <span class="icon">🔍</span> 搜索
+      </button>
+
+      <button class="btn-filter" @click="toggleFilter">
+        <span class="icon">▼</span> 筛选
+      </button>
+
       <div class="search-group">
         <label>商品名称</label>
         <input
@@ -32,30 +60,15 @@
         />
       </div>
 
-      <button class="btn-search" @click="handleSearch">
-        <span class="icon">🔍</span> 搜索
-      </button>
-
-      <button class="btn-filter" @click="toggleFilter">
-        <span class="icon">▼</span> 筛选
-      </button>
-
       <div class="search-group checkbox-group">
         <input type="checkbox" id="showOnlyUsed" v-model="filters.showOnlyUsed" />
         <label for="showOnlyUsed">显示停用</label>
       </div>
 
       <div class="action-buttons">
-        <button class="btn-batch" @click="handleBatch">批量 ▼</button>
         <button class="btn-new" @click="handleNew">新增</button>
-        <button class="btn-import" @click="handleImport">导入</button>
-        <button class="btn-export" @click="handleExport">导出</button>
+        <button class="btn-batch-delete" @click="handleBatchDelete">批量删除</button>
       </div>
-    </div>
-
-    <!-- 设置按钮 -->
-    <div class="settings-row">
-      <button class="btn-settings" @click="handleSettings">⚙️</button>
     </div>
 
     <!-- 数据表格 -->
@@ -100,17 +113,16 @@
             <td class="col-name">
               <a href="#" class="product-link" @click.prevent="handleView(product)">{{ product.name }}</a>
             </td>
-            <td class="col-code">{{ product.code || '-' }}</td>
+            <td class="col-code">{{ product.specification || '-' }}</td>
             <td class="col-stock">{{ product.stock || '-' }}</td>
             <td class="col-unit">{{ product.unit || '-' }}</td>
             <td class="col-price">{{ product.price ? product.price.toFixed(2) : '0.00' }}</td>
             <td class="col-category">{{ product.category || '-' }}</td>
-            <td class="col-team">{{ product.warehouse || '无' }}</td>
+            <td class="col-team">{{ product.warehouse || '-' }}</td>
             <td class="col-notes">{{ product.notes || '-' }}</td>
             <td class="col-actions">
-              <button class="btn-action btn-copy" @click="handleCopy(product)">修改</button>
+              <button class="btn-action btn-edit" @click="handleCopy(product)">修改</button>
               <button class="btn-action btn-copy" @click="handleCopyProduct(product)">复制</button>
-              <button class="btn-action btn-delete" @click="handleDelete(product)">删除</button>
             </td>
           </tr>
 
@@ -163,6 +175,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import ProductFormModal from '@/components/admin/ProductFormModal.vue'
+import request from '@/api/request'
 
 // 筛选条件
 const filters = ref({
@@ -172,38 +185,177 @@ const filters = ref({
   showOnlyUsed: false
 })
 
+const selectedStoreId = ref(null) // 选中的门店ID，null表示全部
+
 // 数据
 const products = ref([])
+const allStores = ref([])
+const allWarehouses = ref([])
+const allUnits = ref([])
 const selectAll = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(30)
 const jumpPage = ref(1)
 const productFormModal = ref(null)
 
-// 模拟数据
-const mockProducts = [
-  { id: 1, name: '阴极', code: 'DE101', stock: -20000, unit: '公斤', price: 0.00, category: '成品分类', warehouse: '无', notes: '-', selected: false },
-  { id: 2, name: '洗涤硫酸', code: '', stock: -4400, unit: '无', price: 0.00, category: '无', warehouse: '无', notes: '-', selected: false },
-  { id: 3, name: '阴极 B110', code: '', stock: -500, unit: '公斤', price: 0.00, category: '无', warehouse: '无', notes: '-', selected: false },
-  { id: 4, name: '固化剂', code: '2103-18', stock: -72, unit: '公斤', price: 0.00, category: '成品分类', warehouse: '无', notes: '-', selected: false },
-  { id: 5, name: '阴极', code: '2103-1A', stock: -80, unit: '公斤', price: 0.00, category: '成品分类', warehouse: '无', notes: '-', selected: false },
-  { id: 6, name: '固化剂', code: '1106B', stock: -4000, unit: '无', price: 0.00, category: '成品分类', warehouse: '无', notes: '-', selected: false },
-  { id: 7, name: '阴极', code: '1106A', stock: -4000, unit: '公斤', price: 0.00, category: '成品分类', warehouse: '无', notes: '-', selected: false },
-  { id: 8, name: '阴素B026', code: '', stock: -6000, unit: '公斤', price: 0.00, category: '成品分类', warehouse: '无', notes: '-', selected: false },
-]
+// 加载门店数据
+const loadStores = async () => {
+  try {
+    const response = await request({
+      url: '/stores',
+      method: 'GET'
+    })
+    if (response && Array.isArray(response)) {
+      allStores.value = response
+    }
+  } catch (error) {
+    console.error('加载门店失败:', error)
+  }
+}
+
+// 加载仓库数据
+const loadWarehouses = async () => {
+  try {
+    const response = await request({
+      url: '/warehouses',
+      method: 'GET'
+    })
+    if (response && Array.isArray(response)) {
+      allWarehouses.value = response
+    }
+  } catch (error) {
+    console.error('加载仓库失败:', error)
+  }
+}
+
+// 加载单位数据
+const loadUnits = async () => {
+  try {
+    const response = await request({
+      url: '/products/units',
+      method: 'GET'
+    })
+    if (response && Array.isArray(response)) {
+      allUnits.value = response
+    }
+  } catch (error) {
+    console.error('加载单位失败:', error)
+  }
+}
+
+// 加载商品列表
+const loadProducts = async () => {
+  try {
+    const response = await request({
+      url: '/products',
+      method: 'GET'
+    })
+    if (response && Array.isArray(response)) {
+      // 处理商品数据，添加显示所需的字段
+      products.value = response.map(product => {
+        // 查找仓库名称
+        const warehouse = allWarehouses.value.find(w => w.id === product.warehouseId)
+        const warehouseName = warehouse ? warehouse.name : '无'
+
+        // 查找分类名称
+        let categoryName = '无'
+        const categoryId = product.categoryId || product.category
+        if (warehouse && categoryId) {
+          const category = warehouse.categories?.find(c => c.id === categoryId)
+          categoryName = category ? category.name : '无'
+        }
+
+        // 查找单位名称
+        const unit = allUnits.value.find(u => u.id === product.unitId)
+        const unitName = unit ? unit.name : '无'
+
+        // 查找门店名称
+        const storeNames = product.storeIds?.map(storeId => {
+          const store = allStores.value.find(s => s.id === storeId)
+          return store ? store.name : ''
+        }).filter(name => name).join(', ') || '无'
+
+        return {
+          ...product,
+          selected: false,
+          warehouse: warehouseName,
+          category: categoryName,
+          unit: unitName,
+          stores: storeNames,
+          stock: 0, // 库存需要从库存表获取
+          price: product.attributeCombinations?.[0]?.retailPrice || 0
+        }
+      })
+    }
+  } catch (error) {
+    console.error('加载商品列表失败:', error)
+  }
+}
 
 // 计算属性
-const totalProducts = computed(() => products.value.length)
+const totalProducts = computed(() => filteredProducts.value.length)
 const totalPages = computed(() => Math.ceil(totalProducts.value / pageSize.value))
+
+// 过滤后的商品列表
+const filteredProducts = computed(() => {
+  let result = products.value
+
+  // 按商品名称筛选
+  if (filters.value.productName) {
+    result = result.filter(p =>
+      p.name.toLowerCase().includes(filters.value.productName.toLowerCase())
+    )
+  }
+
+  // 按商品编号筛选
+  if (filters.value.productCode) {
+    result = result.filter(p =>
+      p.code && p.code.toLowerCase().includes(filters.value.productCode.toLowerCase())
+    )
+  }
+
+  // 按规格型号筛选
+  if (filters.value.specification) {
+    result = result.filter(p =>
+      p.specification && p.specification.toLowerCase().includes(filters.value.specification.toLowerCase())
+    )
+  }
+
+  // 按门店筛选（单选）
+  if (selectedStoreId.value !== null) {
+    result = result.filter(p =>
+      p.storeIds && p.storeIds.includes(selectedStoreId.value)
+    )
+  }
+
+  // 按状态筛选
+  if (!filters.value.showOnlyUsed) {
+    result = result.filter(p => p.enabled !== false)
+  }
+
+  return result
+})
+
+// 分页后的商品列表
 const paginatedProducts = computed(() => {
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
-  return products.value.slice(start, end)
+  return filteredProducts.value.slice(start, end)
 })
+
+// 切换门店选择
+const toggleStoreSelection = (storeId) => {
+  const index = selectedStoreIds.value.indexOf(storeId)
+  if (index > -1) {
+    selectedStoreIds.value.splice(index, 1)
+  } else {
+    selectedStoreIds.value.push(storeId)
+  }
+}
 
 // 方法
 const handleSearch = () => {
-  console.log('搜索', filters.value)
+  currentPage.value = 1 // 重置到第一页
 }
 
 const toggleFilter = () => {
@@ -214,43 +366,49 @@ const handleBatch = () => {
   console.log('批量操作')
 }
 
+const handleBatchDelete = async () => {
+  const selectedProducts = products.value.filter(p => p.selected)
+  if (selectedProducts.length === 0) {
+    alert('请先选择要删除的商品')
+    return
+  }
+
+  if (!confirm(`确定要删除选中的 ${selectedProducts.length} 个商品吗？`)) {
+    return
+  }
+
+  try {
+    // 批量删除
+    const deletePromises = selectedProducts.map(product =>
+      request({
+        url: `/products/${product.id}`,
+        method: 'DELETE'
+      })
+    )
+
+    await Promise.all(deletePromises)
+    alert('删除成功')
+    await loadProducts()
+  } catch (error) {
+    alert('删除失败：' + (error.response?.data?.message || error.message))
+  }
+}
+
+const handleSelectAll = () => {
+  paginatedProducts.value.forEach(p => {
+    p.selected = selectAll.value
+  })
+}
+
 const handleNew = () => {
   if (productFormModal.value) {
     productFormModal.value.open()
   }
 }
 
-const handleImport = () => {
-  console.log('导入')
-}
-
-const handleExport = () => {
-  console.log('导出')
-}
-
-const handleSaveProduct = (productData) => {
-  // 保存商品数据
-  const newProduct = {
-    id: products.value.length + 1,
-    name: productData.name,
-    code: productData.specification,
-    stock: 0,
-    unit: productData.unit,
-    price: 0,
-    category: productData.category,
-    warehouse: productData.warehouse || '无',
-    notes: productData.notes || '-',
-    selected: false,
-    disabled: productData.status === 'disabled'
-  }
-
-  products.value.unshift(newProduct)
-  console.log('商品已保存', newProduct)
-}
-
-const loadProducts = () => {
-  // 重新加载商品列表
-  console.log('重新加载商品列表')
+const handleSaveProduct = async (productData) => {
+  // 商品已通过表单API保存，这里只需要刷新列表
+  await loadProducts()
 }
 
 const handleSettings = () => {
@@ -259,10 +417,6 @@ const handleSettings = () => {
 
 const handleSort = (field) => {
   console.log('排序', field)
-}
-
-const handleSelectAll = () => {
-  products.value.forEach(p => p.selected = selectAll.value)
 }
 
 const handleView = (product) => {
@@ -303,8 +457,13 @@ const handlePageSizeChange = () => {
   currentPage.value = 1
 }
 
-onMounted(() => {
-  products.value = [...mockProducts]
+onMounted(async () => {
+  // 加载基础数据
+  await loadStores()
+  await loadWarehouses()
+  await loadUnits()
+  // 加载商品列表
+  await loadProducts()
 })
 </script>
 
@@ -386,6 +545,76 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.btn-new {
+  background: #10b981;
+  color: white;
+  border-color: #10b981;
+}
+
+.btn-new:hover {
+  background: #059669;
+}
+
+.btn-batch-delete {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background: #fca5a5;
+  color: white;
+}
+
+.btn-batch-delete:hover {
+  background: #f87171;
+}
+
+/* 门店滑块样式 */
+.store-slider {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.store-slider > label {
+  font-size: 14px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.store-tabs {
+  display: flex;
+  gap: 8px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.store-tab {
+  padding: 8px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.3s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.store-tab:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.store-tab.active {
+  background: #34d399;
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(52, 211, 153, 0.3);
 }
 
 .btn-search {
@@ -521,7 +750,8 @@ onMounted(() => {
 }
 
 .col-name {
-  min-width: 150px;
+  min-width: 100px;
+  max-width: 150px;
 }
 
 .col-code {

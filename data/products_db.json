@@ -48,47 +48,104 @@
     ],
     "attributes": [
         {
-            "id": 1,
+            "id": 2,
             "name": "颜色",
             "options": [
                 {
-                    "id": 101,
+                    "id": 201,
                     "name": "黑色"
                 },
                 {
-                    "id": 102,
-                    "name": "白色"
-                },
-                {
-                    "id": 103,
-                    "name": "红色"
-                },
-                {
-                    "id": 104,
-                    "name": "蓝色"
-                },
-                {
-                    "id": 105,
-                    "name": "绿色"
+                    "id": 202,
+                    "name": "灰色"
                 }
             ],
-            "createdAt": "2026-08-30 12:00:00"
+            "createdAt": "2026-08-30 12:00:00",
+            "updatedAt": "2026-08-30 08:31:22"
+        }
+    ],
+    "products": [
+        {
+            "id": 1,
+            "code": "01",
+            "name": "粘钢胶",
+            "specification": "40kg/组",
+            "category": 202,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": 2,
+            "storeIds": [
+                1
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [
+                {
+                    "fromUnitId": 5,
+                    "value": 20,
+                    "splits": []
+                }
+            ],
+            "enableAttributes": true,
+            "attributeCombinations": [
+                {
+                    "id": 0,
+                    "name": "黑色",
+                    "purchasePrice": "",
+                    "wholesalePrice": "",
+                    "retailPrice": 20,
+                    "barcode": "",
+                    "enabled": true
+                }
+            ],
+            "createdAt": "2026-08-30 08:32:03"
         },
         {
             "id": 2,
-            "name": "尺码",
-            "options": [
+            "code": "001",
+            "name": "树脂",
+            "specification": "1101A",
+            "category": "",
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": null,
+            "storeIds": [
+                1
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [],
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-30 08:39:10"
+        },
+        {
+            "id": 3,
+            "code": "001",
+            "name": "粘钢胶",
+            "specification": "40kg/组",
+            "category": "",
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": null,
+            "storeIds": [
+                2
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [
                 {
-                    "id": 202,
-                    "name": "M"
-                },
-                {
-                    "id": 204,
-                    "name": "XL"
+                    "fromUnitId": 5,
+                    "value": 20,
+                    "splits": []
                 }
             ],
-            "createdAt": "2026-08-30 12:00:00"
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-30 11:54:40"
         }
-    ],
-    "products": []
+    ]
 }

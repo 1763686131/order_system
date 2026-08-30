@@ -1103,8 +1103,8 @@ const handleSave = async () => {
     // 准备提交数据
     const submitData = {
       storeIds: formData.storeIds,
-      warehouse: formData.warehouse,
-      category: formData.category,
+      warehouseId: formData.warehouse,
+      categoryId: formData.category,  // 修改：保存仓库分类ID
       name: formData.name,
       code: formData.code,
       specification: formData.specification,
@@ -1172,8 +1172,8 @@ const handleSaveAndContinue = async () => {
     // 准备提交数据
     const submitData = {
       storeIds: formData.storeIds,
-      warehouse: formData.warehouse,
-      category: formData.category,
+      warehouseId: formData.warehouse,
+      categoryId: formData.category,  // 修改：保存仓库分类ID
       name: formData.name,
       code: formData.code,
       specification: formData.specification,
