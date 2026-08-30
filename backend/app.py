@@ -45,6 +45,34 @@ def health_check():
     return {"status": "ok", "message": "服务运行正常"}
 
 # ==========================================
+# 登录接口别名（兼容旧版前端）
+# ==========================================
+from flask import request, jsonify
+from utils.db_helper import read_users
+
+@app.route('/api/login', methods=['POST'])
+def login():
+    """用户登录"""
+    req_data = request.json
+    username = req_data.get('username')
+    password = req_data.get('password')
+
+    users = read_users()
+    for user in users:
+        if str(user['username']) == str(username) and user['password'] == password:
+            return jsonify({
+                "success": True,
+                "user": {
+                    "username": user['username'],
+                    "name": user.get('name', user['username']),
+                    "role": user.get('role', 'employee'),
+                    "permissions": user.get('permissions', [])
+                }
+            })
+
+    return jsonify({"success": False, "message": "账号或密码错误"}), 401
+
+# ==========================================
 # 静态文件上传路径
 # ==========================================
 @app.route('/uploads/<path:filename>')

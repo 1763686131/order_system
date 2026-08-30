@@ -17,7 +17,7 @@ if %errorlevel% neq 0 (
 echo ====================================
 echo Starting new container...
 echo ====================================
-docker run -d -p 7899:7899 --name my_order_app -v e:\order_system\data:/app/data -v e:\order_system\frontend:/app/frontend -v e:\order_system\uploads:/app/uploads -v e:\order_system\backend:/app order-backend
+docker run -d -p 7899:7899 --name my_order_app -e PYTHONDONTWRITEBYTECODE=1 -v e:\order_system\data:/app/data -v e:\order_system\frontend:/app/frontend -v e:\order_system\uploads:/app/uploads -v e:\order_system\backend:/app order-backend
 
 if %errorlevel% equ 0 (
     echo ====================================
