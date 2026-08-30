@@ -95,6 +95,12 @@ const routes = [
         name: 'admin-finance-express-courier',
         component: () => import('@/views/admin/finance/ExpressCourierReconciliation.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'inventory/warehouse',
+        name: 'admin-inventory-warehouse',
+        component: () => import('@/views/admin/inventory/WarehouseManage.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   }

@@ -13,6 +13,7 @@ orders_lock = Lock()
 users_lock = Lock()
 materials_lock = Lock()
 freight_records_lock = Lock()
+warehouses_lock = Lock()
 
 # ------------------------------------------------
 # 辅助函数：清理文件名中的非法字符（防崩溃核心）
@@ -30,6 +31,7 @@ ORDERS_FILE = '/app/data/orders_db.json'
 MATERIALS_FILE = '/app/data/material_db.json'
 FREIGHT_RECORDS_FILE = '/app/data/freight_records_db.json'
 STORES_FILE = '/app/data/stores_db.json'  # 新增：门店数据库
+WAREHOUSES_FILE = '/app/data/warehouses_db.json'  # 新增：仓库数据库
 BASE_UPLOAD_DIR = '/app/uploads' # 统一定义图片存储路径
 
 if os.path.exists('/app/frontend/index.html'):
@@ -96,6 +98,21 @@ def read_freight_records():
 def write_freight_records(data):
     with freight_records_lock:
         with open(FREIGHT_RECORDS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+def read_warehouses():
+    with warehouses_lock:
+        os.makedirs(os.path.dirname(WAREHOUSES_FILE), exist_ok=True)
+        if not os.path.exists(WAREHOUSES_FILE):
+            d = []
+            write_warehouses(d)
+            return d
+        with open(WAREHOUSES_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+def write_warehouses(data):
+    with warehouses_lock:
+        with open(WAREHOUSES_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=4)
 
 def read_stores():
@@ -876,6 +893,221 @@ def delete_store(store_id):
     write_stores(stores)
 
     return jsonify({'success': True, 'message': '删除成功'})
+
+# ==========================================
+# 🏭 仓库管理 API
+# ==========================================
+
+# 获取所有仓库列表
+@app.route('/api/warehouses', methods=['GET'])
+def get_warehouses():
+    try:
+        store_id = request.args.get('storeId')
+        warehouses = read_warehouses()
+
+        # 如果指定了门店ID，只返回该门店的仓库
+        if store_id:
+            warehouses = [w for w in warehouses if w.get('storeId') == int(store_id)]
+
+        return jsonify(warehouses)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 获取单个仓库详情
+@app.route('/api/warehouses/<int:warehouse_id>', methods=['GET'])
+def get_warehouse(warehouse_id):
+    try:
+        warehouses = read_warehouses()
+        warehouse = next((w for w in warehouses if w['id'] == warehouse_id), None)
+
+        if not warehouse:
+            return jsonify({'error': '仓库不存在'}), 404
+
+        return jsonify(warehouse)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 新增仓库
+@app.route('/api/warehouses', methods=['POST'])
+def create_warehouse():
+    try:
+        data = request.get_json()
+        code = data.get('code')
+        name = data.get('name')
+        store_id = data.get('storeId')
+        remark = data.get('remark', '')
+
+        if not code or not name or not store_id:
+            return jsonify({'error': '仓库ID、名称和门店ID为必填项'}), 400
+
+        warehouses = read_warehouses()
+
+        # 检查仓库编号是否已存在
+        if any(w['code'] == code for w in warehouses):
+            return jsonify({'error': '仓库ID已存在'}), 400
+
+        # 生成新的仓库ID
+        new_id = max([w['id'] for w in warehouses], default=0) + 1
+
+        new_warehouse = {
+            'id': new_id,
+            'code': code,
+            'name': name,
+            'storeId': int(store_id),
+            'remark': remark,
+            'status': 'active',
+            'created_at': datetime.now().strftime('%Y-%m-%d'),
+            'updated_at': datetime.now().strftime('%Y-%m-%d'),
+            'categories': []
+        }
+
+        warehouses.append(new_warehouse)
+        write_warehouses(warehouses)
+
+        return jsonify(new_warehouse), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 修改仓库
+@app.route('/api/warehouses/<int:warehouse_id>', methods=['PUT'])
+def update_warehouse(warehouse_id):
+    try:
+        data = request.get_json()
+        warehouses = read_warehouses()
+
+        warehouse = next((w for w in warehouses if w['id'] == warehouse_id), None)
+        if not warehouse:
+            return jsonify({'error': '仓库不存在'}), 404
+
+        # 检查仓库编号是否与其他仓库重复
+        code = data.get('code')
+        if code and any(w['code'] == code and w['id'] != warehouse_id for w in warehouses):
+            return jsonify({'error': '仓库ID已存在'}), 400
+
+        # 更新仓库信息
+        if code:
+            warehouse['code'] = code
+        if data.get('name'):
+            warehouse['name'] = data.get('name')
+        if data.get('storeId'):
+            warehouse['storeId'] = int(data.get('storeId'))
+        if 'remark' in data:
+            warehouse['remark'] = data.get('remark')
+        if data.get('status'):
+            warehouse['status'] = data.get('status')
+
+        warehouse['updated_at'] = datetime.now().strftime('%Y-%m-%d')
+
+        write_warehouses(warehouses)
+        return jsonify(warehouse)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 删除仓库
+@app.route('/api/warehouses/<int:warehouse_id>', methods=['DELETE'])
+def delete_warehouse(warehouse_id):
+    try:
+        warehouses = read_warehouses()
+        warehouse_index = next((i for i, w in enumerate(warehouses) if w['id'] == warehouse_id), None)
+
+        if warehouse_index is None:
+            return jsonify({'error': '仓库不存在'}), 404
+
+        warehouses.pop(warehouse_index)
+        write_warehouses(warehouses)
+
+        return jsonify({'message': '删除成功'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 新增仓库分类
+@app.route('/api/warehouses/<int:warehouse_id>/categories', methods=['POST'])
+def create_category(warehouse_id):
+    try:
+        data = request.get_json()
+        name = data.get('name')
+        code = data.get('code')
+
+        if not name:
+            return jsonify({'error': '分类名称为必填项'}), 400
+
+        warehouses = read_warehouses()
+        warehouse = next((w for w in warehouses if w['id'] == warehouse_id), None)
+
+        if not warehouse:
+            return jsonify({'error': '仓库不存在'}), 404
+
+        # 生成新的分类ID
+        categories = warehouse.get('categories', [])
+        new_id = max([c['id'] for c in categories], default=warehouse_id * 100) + 1
+
+        new_category = {
+            'id': new_id,
+            'name': name,
+            'code': code if code else f'CAT{new_id}',
+            'created_at': datetime.now().strftime('%Y-%m-%d')
+        }
+
+        categories.append(new_category)
+        warehouse['categories'] = categories
+        warehouse['updated_at'] = datetime.now().strftime('%Y-%m-%d')
+
+        write_warehouses(warehouses)
+        return jsonify(new_category), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 修改仓库分类
+@app.route('/api/warehouses/<int:warehouse_id>/categories/<int:category_id>', methods=['PUT'])
+def update_category(warehouse_id, category_id):
+    try:
+        data = request.get_json()
+        warehouses = read_warehouses()
+        warehouse = next((w for w in warehouses if w['id'] == warehouse_id), None)
+
+        if not warehouse:
+            return jsonify({'error': '仓库不存在'}), 404
+
+        category = next((c for c in warehouse.get('categories', []) if c['id'] == category_id), None)
+        if not category:
+            return jsonify({'error': '分类不存在'}), 404
+
+        if data.get('name'):
+            category['name'] = data.get('name')
+        if data.get('code'):
+            category['code'] = data.get('code')
+
+        warehouse['updated_at'] = datetime.now().strftime('%Y-%m-%d')
+
+        write_warehouses(warehouses)
+        return jsonify(category)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# 删除仓库分类
+@app.route('/api/warehouses/<int:warehouse_id>/categories/<int:category_id>', methods=['DELETE'])
+def delete_category(warehouse_id, category_id):
+    try:
+        warehouses = read_warehouses()
+        warehouse = next((w for w in warehouses if w['id'] == warehouse_id), None)
+
+        if not warehouse:
+            return jsonify({'error': '仓库不存在'}), 404
+
+        categories = warehouse.get('categories', [])
+        category_index = next((i for i, c in enumerate(categories) if c['id'] == category_id), None)
+
+        if category_index is None:
+            return jsonify({'error': '分类不存在'}), 404
+
+        categories.pop(category_index)
+        warehouse['categories'] = categories
+        warehouse['updated_at'] = datetime.now().strftime('%Y-%m-%d')
+
+        write_warehouses(warehouses)
+        return jsonify({'message': '删除成功'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # ==========================================
 # 🎯 文件万能通配拦截器 (必须垫在所有特定路由的最后面)

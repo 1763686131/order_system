@@ -217,7 +217,8 @@ const menuItems = ref([
     children: [
       { label: '库存管理', path: '/admin/stock' },
       { label: '入库记录', path: '/admin/stock/in' },
-      { label: '出库记录', path: '/admin/stock/out' }
+      { label: '出库记录', path: '/admin/stock/out' },
+      { label: '仓库管理', path: '/admin/inventory/warehouse' }
     ]
   },
   {

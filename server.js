@@ -29,6 +29,7 @@ app.use((req, res, next) => {
 const ordersDbPath = path.join(__dirname, 'data/orders_db.json')
 const materialsDbPath = path.join(__dirname, 'data/materials_db.json')
 const storesDbPath = path.join(__dirname, 'data/stores_db.json')
+const warehousesDbPath = path.join(__dirname, 'data/warehouses_db.json')
 const freightDbPath = path.join(__dirname, 'data/freight_records_db.json')
 
 // ==================== 辅助函数 ====================
@@ -481,6 +482,239 @@ app.put('/api/freight-records/reserve-fund/:id', async (req, res) => {
 
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: '服务运行正常' })
+})
+
+// ==================== 仓库管理API ====================
+
+// 获取所有仓库列表
+app.get('/api/warehouses', async (req, res) => {
+  try {
+    const { storeId } = req.query
+    const data = await fs.readFile(warehousesDbPath, 'utf8')
+    let warehouses = JSON.parse(data)
+
+    // 如果指定了门店ID，只返回该门店的仓库
+    if (storeId) {
+      warehouses = warehouses.filter(w => w.storeId === parseInt(storeId))
+    }
+
+    res.json(warehouses)
+  } catch (error) {
+    console.error('获取仓库列表失败:', error)
+    res.status(500).json({ error: '获取仓库列表失败' })
+  }
+})
+
+// 获取单个仓库详情
+app.get('/api/warehouses/:id', async (req, res) => {
+  try {
+    const data = await fs.readFile(warehousesDbPath, 'utf8')
+    const warehouses = JSON.parse(data)
+    const warehouse = warehouses.find(w => w.id === parseInt(req.params.id))
+
+    if (!warehouse) {
+      return res.status(404).json({ error: '仓库不存在' })
+    }
+
+    res.json(warehouse)
+  } catch (error) {
+    console.error('获取仓库详情失败:', error)
+    res.status(500).json({ error: '获取仓库详情失败' })
+  }
+})
+
+// 新增仓库
+app.post('/api/warehouses', async (req, res) => {
+  try {
+    const { code, name, storeId, remark } = req.body
+
+    if (!code || !name || !storeId) {
+      return res.status(400).json({ error: '仓库ID、名称和门店ID为必填项' })
+    }
+
+    const data = await fs.readFile(warehousesDbPath, 'utf8')
+    const warehouses = JSON.parse(data)
+
+    // 检查仓库编号是否已存在
+    if (warehouses.some(w => w.code === code)) {
+      return res.status(400).json({ error: '仓库ID已存在' })
+    }
+
+    // 生成新的仓库ID
+    const newId = warehouses.length > 0 ? Math.max(...warehouses.map(w => w.id)) + 1 : 1
+
+    const newWarehouse = {
+      id: newId,
+      code,
+      name,
+      storeId: parseInt(storeId),
+      remark: remark || '',
+      status: 'active',
+      created_at: new Date().toISOString().split('T')[0],
+      updated_at: new Date().toISOString().split('T')[0],
+      categories: []
+    }
+
+    warehouses.push(newWarehouse)
+    await fs.writeFile(warehousesDbPath, JSON.stringify(warehouses, null, 2))
+
+    res.status(201).json(newWarehouse)
+  } catch (error) {
+    console.error('新增仓库失败:', error)
+    res.status(500).json({ error: '新增仓库失败' })
+  }
+})
+
+// 修改仓库
+app.put('/api/warehouses/:id', async (req, res) => {
+  try {
+    const { code, name, storeId, remark, status } = req.body
+    const data = await fs.readFile(warehousesDbPath, 'utf8')
+    const warehouses = JSON.parse(data)
+    const index = warehouses.findIndex(w => w.id === parseInt(req.params.id))
+
+    if (index === -1) {
+      return res.status(404).json({ error: '仓库不存在' })
+    }
+
+    // 检查仓库编号是否与其他仓库重复
+    if (code && warehouses.some((w, i) => w.code === code && i !== index)) {
+      return res.status(400).json({ error: '仓库ID已存在' })
+    }
+
+    // 更新仓库信息
+    if (code) warehouses[index].code = code
+    if (name) warehouses[index].name = name
+    if (storeId) warehouses[index].storeId = parseInt(storeId)
+    if (remark !== undefined) warehouses[index].remark = remark
+    if (status) warehouses[index].status = status
+    warehouses[index].updated_at = new Date().toISOString().split('T')[0]
+
+    await fs.writeFile(warehousesDbPath, JSON.stringify(warehouses, null, 2))
+    res.json(warehouses[index])
+  } catch (error) {
+    console.error('修改仓库失败:', error)
+    res.status(500).json({ error: '修改仓库失败' })
+  }
+})
+
+// 删除仓库
+app.delete('/api/warehouses/:id', async (req, res) => {
+  try {
+    const data = await fs.readFile(warehousesDbPath, 'utf8')
+    const warehouses = JSON.parse(data)
+    const index = warehouses.findIndex(w => w.id === parseInt(req.params.id))
+
+    if (index === -1) {
+      return res.status(404).json({ error: '仓库不存在' })
+    }
+
+    warehouses.splice(index, 1)
+    await fs.writeFile(warehousesDbPath, JSON.stringify(warehouses, null, 2))
+
+    res.json({ message: '删除成功' })
+  } catch (error) {
+    console.error('删除仓库失败:', error)
+    res.status(500).json({ error: '删除仓库失败' })
+  }
+})
+
+// 新增仓库分类
+app.post('/api/warehouses/:id/categories', async (req, res) => {
+  try {
+    const { name, code } = req.body
+
+    if (!name) {
+      return res.status(400).json({ error: '分类名称为必填项' })
+    }
+
+    const data = await fs.readFile(warehousesDbPath, 'utf8')
+    const warehouses = JSON.parse(data)
+    const warehouse = warehouses.find(w => w.id === parseInt(req.params.id))
+
+    if (!warehouse) {
+      return res.status(404).json({ error: '仓库不存在' })
+    }
+
+    // 生成新的分类ID
+    const newId = warehouse.categories.length > 0
+      ? Math.max(...warehouse.categories.map(c => c.id)) + 1
+      : warehouse.id * 100 + 1
+
+    const newCategory = {
+      id: newId,
+      name,
+      code: code || `CAT${newId}`,
+      created_at: new Date().toISOString().split('T')[0]
+    }
+
+    warehouse.categories.push(newCategory)
+    warehouse.updated_at = new Date().toISOString().split('T')[0]
+
+    await fs.writeFile(warehousesDbPath, JSON.stringify(warehouses, null, 2))
+    res.status(201).json(newCategory)
+  } catch (error) {
+    console.error('新增分类失败:', error)
+    res.status(500).json({ error: '新增分类失败' })
+  }
+})
+
+// 修改仓库分类
+app.put('/api/warehouses/:id/categories/:categoryId', async (req, res) => {
+  try {
+    const { name, code } = req.body
+    const data = await fs.readFile(warehousesDbPath, 'utf8')
+    const warehouses = JSON.parse(data)
+    const warehouse = warehouses.find(w => w.id === parseInt(req.params.id))
+
+    if (!warehouse) {
+      return res.status(404).json({ error: '仓库不存在' })
+    }
+
+    const category = warehouse.categories.find(c => c.id === parseInt(req.params.categoryId))
+
+    if (!category) {
+      return res.status(404).json({ error: '分类不存在' })
+    }
+
+    if (name) category.name = name
+    if (code) category.code = code
+    warehouse.updated_at = new Date().toISOString().split('T')[0]
+
+    await fs.writeFile(warehousesDbPath, JSON.stringify(warehouses, null, 2))
+    res.json(category)
+  } catch (error) {
+    console.error('修改分类失败:', error)
+    res.status(500).json({ error: '修改分类失败' })
+  }
+})
+
+// 删除仓库分类
+app.delete('/api/warehouses/:id/categories/:categoryId', async (req, res) => {
+  try {
+    const data = await fs.readFile(warehousesDbPath, 'utf8')
+    const warehouses = JSON.parse(data)
+    const warehouse = warehouses.find(w => w.id === parseInt(req.params.id))
+
+    if (!warehouse) {
+      return res.status(404).json({ error: '仓库不存在' })
+    }
+
+    const index = warehouse.categories.findIndex(c => c.id === parseInt(req.params.categoryId))
+
+    if (index === -1) {
+      return res.status(404).json({ error: '分类不存在' })
+    }
+
+    warehouse.categories.splice(index, 1)
+    warehouse.updated_at = new Date().toISOString().split('T')[0]
+
+    await fs.writeFile(warehousesDbPath, JSON.stringify(warehouses, null, 2))
+    res.json({ message: '删除成功' })
+  } catch (error) {
+    console.error('删除分类失败:', error)
+    res.status(500).json({ error: '删除分类失败' })
+  }
 })
 
 // ==================== 启动服务器 ====================
