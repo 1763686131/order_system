@@ -2,6 +2,26 @@
   <div class="customer-list-page">
     <!-- 搜索栏 -->
     <div class="search-bar">
+      <div class="search-group store-slider">
+        <label>门店分类</label>
+        <div class="store-tabs">
+          <div
+            :class="['store-tab', { active: filters.storeId === null }]"
+            @click="filters.storeId = null"
+          >
+            全部
+          </div>
+          <div
+            v-for="store in allStores"
+            :key="store.id"
+            :class="['store-tab', { active: filters.storeId === store.id }]"
+            @click="filters.storeId = store.id"
+          >
+            {{ store.name }}
+          </div>
+        </div>
+      </div>
+
       <div class="search-group">
         <label>客户名称</label>
         <input
@@ -20,16 +40,6 @@
           placeholder="请输入联系电话"
           class="search-input"
         />
-      </div>
-
-      <div class="search-group">
-        <label>客户类型</label>
-        <select v-model="filters.customerType" class="search-select">
-          <option value="">全部</option>
-          <option value="retail">零售客户</option>
-          <option value="wholesale">批发客户</option>
-          <option value="vip">VIP客户</option>
-        </select>
       </div>
 
       <div class="search-group">
@@ -61,11 +71,11 @@
           <tr>
             <th>客户编号</th>
             <th>客户名称</th>
+            <th>所属门店</th>
             <th>联系人</th>
             <th>联系电话</th>
-            <th>客户类型</th>
-            <th>累计消费</th>
-            <th>欠款金额</th>
+            <th>储值余额</th>
+            <th>应收欠款</th>
             <th>状态</th>
             <th>创建时间</th>
             <th>操作</th>
@@ -84,17 +94,13 @@
           <tr v-else v-for="customer in customers" :key="customer.id">
             <td>{{ customer.customerCode }}</td>
             <td>{{ customer.customerName }}</td>
+            <td>{{ customer.storeName }}</td>
             <td>{{ customer.contactPerson }}</td>
             <td>{{ customer.phone }}</td>
-            <td>
-              <span :class="['type-badge', `type-${customer.customerType}`]">
-                {{ getCustomerTypeLabel(customer.customerType) }}
-              </span>
-            </td>
-            <td class="amount">¥{{ formatAmount(customer.totalSpent) }}</td>
+            <td class="amount balance">¥{{ formatAmount(customer.balance) }}</td>
             <td class="amount">
-              <span :class="{ 'debt-amount': customer.debtAmount > 0 }">
-                ¥{{ formatAmount(customer.debtAmount) }}
+              <span :class="{ 'debt-amount': customer.receivable > 0 }">
+                ¥{{ formatAmount(customer.receivable) }}
               </span>
             </td>
             <td>
@@ -163,8 +169,8 @@
                 <span>{{ selectedCustomer?.customerName }}</span>
               </div>
               <div class="detail-item">
-                <label>客户类型</label>
-                <span>{{ getCustomerTypeLabel(selectedCustomer?.customerType) }}</span>
+                <label>所属门店</label>
+                <span>{{ selectedCustomer?.storeName }}</span>
               </div>
               <div class="detail-item">
                 <label>联系人</label>
@@ -184,13 +190,13 @@
             <h4>财务信息</h4>
             <div class="detail-grid">
               <div class="detail-item">
-                <label>累计消费</label>
-                <span class="amount">¥{{ formatAmount(selectedCustomer?.totalSpent) }}</span>
+                <label>储值余额</label>
+                <span class="amount balance">¥{{ formatAmount(selectedCustomer?.balance) }}</span>
               </div>
               <div class="detail-item">
-                <label>欠款金额</label>
-                <span class="amount" :class="{ 'debt-amount': selectedCustomer?.debtAmount > 0 }">
-                  ¥{{ formatAmount(selectedCustomer?.debtAmount) }}
+                <label>应收欠款</label>
+                <span class="amount" :class="{ 'debt-amount': selectedCustomer?.receivable > 0 }">
+                  ¥{{ formatAmount(selectedCustomer?.receivable) }}
                 </span>
               </div>
             </div>
@@ -201,57 +207,144 @@
 
     <!-- 编辑/新增弹窗 -->
     <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
-      <div class="modal-content" @click.stop>
+      <div class="modal-content modal-large" @click.stop>
         <div class="modal-header">
           <h3>{{ isEditMode ? '编辑客户' : '新增客户' }}</h3>
           <button class="btn-close" @click="closeEditModal">✕</button>
         </div>
         <div class="modal-body">
           <form @submit.prevent="handleSubmit">
-            <div class="form-group">
-              <label>客户名称 <span class="required">*</span></label>
-              <input
-                v-model="formData.customerName"
-                type="text"
-                placeholder="请输入客户名称"
-                required
-              />
+            <!-- 第一排：客户名称 + 编号 -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>客户名称 <span class="required">*</span></label>
+                <input
+                  v-model="formData.customerName"
+                  type="text"
+                  placeholder="请输入客户名称"
+                  required
+                />
+              </div>
+              <div class="form-group">
+                <label>客户编号 <span class="required">*</span></label>
+                <input
+                  v-model="formData.customerCode"
+                  type="text"
+                  placeholder="请输入客户编号"
+                  required
+                />
+              </div>
             </div>
-            <div class="form-group">
-              <label>联系人 <span class="required">*</span></label>
-              <input
-                v-model="formData.contactPerson"
-                type="text"
-                placeholder="请输入联系人"
-                required
-              />
+
+            <!-- 第二排：联系人 + 联系电话 -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>联系人</label>
+                <input
+                  v-model="formData.contactPerson"
+                  type="text"
+                  placeholder="请输入联系人"
+                />
+              </div>
+              <div class="form-group">
+                <label>联系电话</label>
+                <input
+                  v-model="formData.phone"
+                  type="tel"
+                  placeholder="请输入联系电话"
+                />
+              </div>
             </div>
-            <div class="form-group">
-              <label>联系电话 <span class="required">*</span></label>
-              <input
-                v-model="formData.phone"
-                type="tel"
-                placeholder="请输入联系电话"
-                required
-              />
+
+            <!-- 第三排：联系地址（独占一排） -->
+            <div class="form-row">
+              <div class="form-group form-group-full">
+                <label>联系地址</label>
+                <textarea
+                  v-model="formData.address"
+                  placeholder="请输入联系地址"
+                  rows="2"
+                ></textarea>
+              </div>
             </div>
-            <div class="form-group">
-              <label>客户类型 <span class="required">*</span></label>
-              <select v-model="formData.customerType" required>
-                <option value="">请选择</option>
-                <option value="retail">零售客户</option>
-                <option value="wholesale">批发客户</option>
-                <option value="vip">VIP客户</option>
-              </select>
+
+            <!-- 第四排：储值余额 + 期初欠款 -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>储值余额</label>
+                <input
+                  v-model.number="formData.balance"
+                  type="number"
+                  step="0.01"
+                  placeholder="请输入储值余额"
+                />
+              </div>
+              <div class="form-group">
+                <label>期初欠款</label>
+                <input
+                  v-model.number="formData.initialDebt"
+                  type="number"
+                  step="0.01"
+                  placeholder="请输入期初欠款"
+                />
+              </div>
             </div>
-            <div class="form-group">
-              <label>联系地址</label>
-              <textarea
-                v-model="formData.address"
-                placeholder="请输入联系地址"
-                rows="3"
-              ></textarea>
+
+            <!-- 财务信息标题 -->
+            <div class="form-section-title">财务信息</div>
+
+            <!-- 第五排：开户行 + 银行账号 -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>开户行</label>
+                <input
+                  v-model="formData.bankName"
+                  type="text"
+                  placeholder="请输入开户行"
+                />
+              </div>
+              <div class="form-group">
+                <label>银行账号</label>
+                <input
+                  v-model="formData.bankAccount"
+                  type="text"
+                  placeholder="请输入银行账号"
+                />
+              </div>
             </div>
+
+            <!-- 第六排：行号 + 税号 -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>行号</label>
+                <input
+                  v-model="formData.bankCode"
+                  type="text"
+                  placeholder="请输入行号"
+                />
+              </div>
+              <div class="form-group">
+                <label>税号</label>
+                <input
+                  v-model="formData.taxNumber"
+                  type="text"
+                  placeholder="请输入税号"
+                />
+              </div>
+            </div>
+
+            <!-- 最后一排：备注（独占一排） -->
+            <div class="form-row">
+              <div class="form-group form-group-full">
+                <label>备注</label>
+                <textarea
+                  v-model="formData.remark"
+                  placeholder="请输入备注信息"
+                  rows="3"
+                ></textarea>
+              </div>
+            </div>
+
             <div class="form-actions">
               <button type="button" class="btn-cancel" @click="closeEditModal">取消</button>
               <button type="submit" class="btn-submit">{{ isEditMode ? '保存' : '创建' }}</button>
@@ -275,9 +368,15 @@ const pageSize = ref(20)
 const filters = ref({
   customerName: '',
   phone: '',
-  customerType: '',
+  storeId: null,
   status: ''
 })
+
+const allStores = ref([
+  { id: 1, name: '总店' },
+  { id: 2, name: '分店A' },
+  { id: 3, name: '分店B' }
+])
 
 const showDetailModal = ref(false)
 const showEditModal = ref(false)
@@ -286,10 +385,18 @@ const selectedCustomer = ref(null)
 
 const formData = ref({
   customerName: '',
+  customerCode: '',
+  storeId: '',
   contactPerson: '',
   phone: '',
-  customerType: '',
-  address: ''
+  address: '',
+  balance: 0,
+  initialDebt: 0,
+  bankName: '',
+  bankAccount: '',
+  bankCode: '',
+  taxNumber: '',
+  remark: ''
 })
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
@@ -305,11 +412,12 @@ const loadCustomers = async () => {
           id: 1,
           customerCode: 'C20260001',
           customerName: '张三超市',
+          storeId: 1,
+          storeName: '总店',
           contactPerson: '张三',
           phone: '13800138000',
-          customerType: 'retail',
-          totalSpent: 50000,
-          debtAmount: 5000,
+          balance: 5000,
+          receivable: 5000,
           status: 'active',
           address: '广东省广州市天河区XX路XX号',
           createdAt: '2026-01-15T10:30:00'
@@ -318,11 +426,12 @@ const loadCustomers = async () => {
           id: 2,
           customerCode: 'C20260002',
           customerName: '李四批发部',
+          storeId: 2,
+          storeName: '分店A',
           contactPerson: '李四',
           phone: '13900139000',
-          customerType: 'wholesale',
-          totalSpent: 150000,
-          debtAmount: 0,
+          balance: 15000,
+          receivable: 0,
           status: 'active',
           address: '广东省深圳市南山区XX街XX号',
           createdAt: '2026-02-20T14:20:00'
@@ -331,11 +440,12 @@ const loadCustomers = async () => {
           id: 3,
           customerCode: 'C20260003',
           customerName: '王五商贸',
+          storeId: 1,
+          storeName: '总店',
           contactPerson: '王五',
           phone: '13700137000',
-          customerType: 'vip',
-          totalSpent: 300000,
-          debtAmount: 20000,
+          balance: 30000,
+          receivable: 20000,
           status: 'active',
           address: '广东省广州市白云区XX路XX号',
           createdAt: '2026-03-10T09:15:00'
@@ -361,7 +471,7 @@ const handleReset = () => {
   filters.value = {
     customerName: '',
     phone: '',
-    customerType: '',
+    storeId: null,
     status: ''
   }
   currentPage.value = 1
@@ -373,10 +483,18 @@ const handleAdd = () => {
   isEditMode.value = false
   formData.value = {
     customerName: '',
+    customerCode: '',
+    storeId: '',
     contactPerson: '',
     phone: '',
-    customerType: '',
-    address: ''
+    address: '',
+    balance: 0,
+    initialDebt: 0,
+    bankName: '',
+    bankAccount: '',
+    bankCode: '',
+    taxNumber: '',
+    remark: ''
   }
   showEditModal.value = true
 }
@@ -393,10 +511,18 @@ const handleEdit = (customer) => {
   selectedCustomer.value = customer
   formData.value = {
     customerName: customer.customerName,
+    customerCode: customer.customerCode,
+    storeId: customer.storeId,
     contactPerson: customer.contactPerson,
     phone: customer.phone,
-    customerType: customer.customerType,
-    address: customer.address
+    address: customer.address,
+    balance: customer.balance,
+    initialDebt: customer.receivable,
+    bankName: customer.bankName || '',
+    bankAccount: customer.bankAccount || '',
+    bankCode: customer.bankCode || '',
+    taxNumber: customer.taxNumber || '',
+    remark: customer.remark || ''
   }
   showEditModal.value = true
 }
@@ -502,6 +628,52 @@ onMounted(() => {
   font-size: 13px;
   color: #666;
   font-weight: 500;
+}
+
+.store-slider {
+  flex: 1;
+  min-width: 0;
+  max-width: 600px;
+}
+
+.store-tabs {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0;
+}
+
+.store-tabs::-webkit-scrollbar {
+  height: 4px;
+}
+
+.store-tabs::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 2px;
+}
+
+.store-tab {
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.store-tab:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.store-tab.active {
+  background: #34d399;
+  color: #fff;
+  border-color: #34d399;
 }
 
 .search-input,
@@ -629,6 +801,10 @@ onMounted(() => {
 .amount {
   font-weight: 600;
   color: #059669;
+}
+
+.amount.balance {
+  color: #0891b2;
 }
 
 .debt-amount {
@@ -788,6 +964,10 @@ onMounted(() => {
   overflow-y: auto;
 }
 
+.modal-large {
+  max-width: 800px;
+}
+
 .modal-header {
   display: flex;
   justify-content: space-between;
@@ -863,8 +1043,30 @@ onMounted(() => {
 }
 
 /* 表单 */
-.form-group {
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
   margin-bottom: 20px;
+}
+
+.form-section-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #374151;
+  margin: 24px 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e5e7eb;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group-full {
+  grid-column: 1 / -1;
 }
 
 .form-group label {
@@ -939,6 +1141,18 @@ onMounted(() => {
 
 .btn-submit:hover {
   background: #10b981;
+}
+
+/* 响应式布局 */
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .modal-large {
+    max-width: 95%;
+  }
 }
 </style>
 
