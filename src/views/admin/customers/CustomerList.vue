@@ -961,7 +961,10 @@ onMounted(() => {
   max-width: 600px;
   width: 90%;
   max-height: 90vh;
-  overflow-y: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  position: relative;
 }
 
 .modal-large {
@@ -1001,6 +1004,9 @@ onMounted(() => {
 
 .modal-body {
   padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  padding-bottom: 100px;
 }
 
 /* 详情页 */
@@ -1110,9 +1116,16 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
+  padding: 16px 20px;
   border-top: 1px solid #e5e7eb;
+  background: #fff;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  margin: 0;
+  z-index: 10;
+  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .btn-cancel,
