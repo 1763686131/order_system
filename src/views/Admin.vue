@@ -230,10 +230,10 @@ const menuItems = ref([
     ]
   },
   {
-    label: '客户列表',
+    label: '客户',
     icon: icons.users,
     children: [
-      { label: '客户管理', path: '/admin/customers' },
+      { label: '客户列表', path: '/admin/customers' },
       { label: '客户分组', path: '/admin/customers/groups' }
     ]
   },

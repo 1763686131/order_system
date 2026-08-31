@@ -101,6 +101,12 @@ const routes = [
         name: 'admin-inventory-warehouse',
         component: () => import('@/views/admin/inventory/WarehouseManage.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'customers',
+        name: 'admin-customers',
+        component: () => import('@/views/admin/customers/CustomerList.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   }
