@@ -853,8 +853,37 @@ const hasLogistics = (order) => {
 const handleCopyOrderInfo = async (order) => {
   try {
     const textToCopy = formatOrderForCopy(order)
-    await navigator.clipboard.writeText(textToCopy)
-    showCopyMessage('复制成功')
+
+    // 优先使用 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(textToCopy)
+      showCopyMessage('复制成功')
+    } else {
+      // 降级方案：使用传统的 execCommand 方法
+      const textarea = document.createElement('textarea')
+      textarea.value = textToCopy
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      textarea.style.top = '0'
+      textarea.style.left = '0'
+      document.body.appendChild(textarea)
+      textarea.focus()
+      textarea.select()
+
+      try {
+        const successful = document.execCommand('copy')
+        if (successful) {
+          showCopyMessage('复制成功')
+        } else {
+          throw new Error('execCommand failed')
+        }
+      } catch (err) {
+        console.error('复制失败:', err)
+        alert('复制失败，请手动复制')
+      } finally {
+        document.body.removeChild(textarea)
+      }
+    }
   } catch (error) {
     console.error('复制失败:', error)
     alert('复制失败，请手动复制')

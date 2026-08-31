@@ -4358,7 +4358,7 @@
             "remark": "",
             "audit_state": 1,
             "store_id": 2,
-            "receipt_img_url": "/uploads/2026-08/李超订单_刘东_2026-08-30_3BF1.jpg",
+            "receipt_img_url": "/uploads/2026-08/李超订单_刘东_2026-08-31_FE09.jpg",
             "freight_costs": [
                 {
                     "type": "freight",
@@ -4718,7 +4718,8 @@
                     "note": "运费",
                     "amount": 500
                 }
-            ]
+            ],
+            "receipt_img_url": "/uploads/2026-08/奥运订单_朱峰峰_2026-08-31_00B3.jpg"
         }
     ]
 }

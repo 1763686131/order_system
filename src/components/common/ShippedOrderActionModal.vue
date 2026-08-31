@@ -945,7 +945,7 @@ const submitReceiptImage = async () => {
   formData.append('receipt_image', fileToUpload)
 
   try {
-    const response = await fetch(`http://localhost:3000/api/orders/${id}/upload_receipt`, {
+    const response = await fetch(`/api/orders/${id}/upload_receipt`, {
       method: 'POST',
       headers: {
         'Username': String(userStore.user?.username || ''),
