@@ -123,7 +123,7 @@
                   >
                     <span class="col-code">{{ product.code || '-' }}</span>
                     <span class="col-name">{{ product.name }}</span>
-                    <span class="col-spec">{{ product.specifications || '-' }}</span>
+                    <span class="col-spec">{{ product.specification || '-' }}</span>
                     <span class="col-unit">{{ getUnitName(product.unitId) || '-' }}</span>
                     <span class="col-stock">{{ product.stock || 0 }}</span>
                   </div>
@@ -134,8 +134,8 @@
             <td><input type="text" v-model="item.unit" readonly class="readonly-input" /></td>
             <td><input type="text" v-model="item.warehouseName" readonly class="readonly-input" /></td>
             <td class="right"><input type="text" :value="item.currentStock || ''" readonly class="readonly-input" /></td>
-            <td><input type="number" v-model.number="item.packages" min="0" /></td>
-            <td><input type="number" v-model.number="item.quantity" @input="calculateRowAmount(index)" min="0" step="0.01" /></td>
+            <td><input type="number" v-model.number="item.packages" @input="onPackagesChange(index)" min="0" /></td>
+            <td><input type="number" v-model.number="item.quantity" @input="onQuantityChange(index)" min="0" step="0.01" /></td>
             <td><input type="number" v-model.number="item.price" @input="calculateRowAmount(index)" min="0" step="0.01" /></td>
             <td><input type="number" v-model.number="item.taxIncludedPrice" min="0" step="0.01" /></td>
             <td class="right"><input type="text" :value="item.amount ? item.amount.toFixed(2) : ''" readonly class="readonly-input" /></td>
@@ -491,6 +491,10 @@ const selectProduct = (index, product) => {
 
   item.price = product.price || 0
   item.taxIncludedPrice = product.price || 0
+
+  // 保存单位换算信息
+  item.unitConversions = product.unitConversions || []
+  item.baseUnitId = product.unitId
 
   // 自动设置仓库（使用顶部选择的仓库或商品默认仓库）
   if (formData.value.warehouseId) {
