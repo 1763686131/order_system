@@ -358,6 +358,7 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import request from '@/api/request'
 
 const loading = ref(false)
 const customers = ref([])
@@ -372,11 +373,7 @@ const filters = ref({
   status: ''
 })
 
-const allStores = ref([
-  { id: 1, name: '总店' },
-  { id: 2, name: '分店A' },
-  { id: 3, name: '分店B' }
-])
+const allStores = ref([])
 
 const showDetailModal = ref(false)
 const showEditModal = ref(false)
@@ -401,61 +398,52 @@ const formData = ref({
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
 
+// 加载门店数据
+const loadStores = async () => {
+  try {
+    const response = await request({
+      url: '/stores',
+      method: 'GET'
+    })
+    if (response && Array.isArray(response)) {
+      allStores.value = response
+    }
+  } catch (error) {
+    console.error('加载门店失败:', error)
+  }
+}
+
 // 加载客户列表
 const loadCustomers = async () => {
   loading.value = true
   try {
-    // 模拟数据 - 实际应该调用API
-    setTimeout(() => {
-      customers.value = [
-        {
-          id: 1,
-          customerCode: 'C20260001',
-          customerName: '张三超市',
-          storeId: 1,
-          storeName: '总店',
-          contactPerson: '张三',
-          phone: '13800138000',
-          balance: 5000,
-          receivable: 5000,
-          status: 'active',
-          address: '广东省广州市天河区XX路XX号',
-          createdAt: '2026-01-15T10:30:00'
-        },
-        {
-          id: 2,
-          customerCode: 'C20260002',
-          customerName: '李四批发部',
-          storeId: 2,
-          storeName: '分店A',
-          contactPerson: '李四',
-          phone: '13900139000',
-          balance: 15000,
-          receivable: 0,
-          status: 'active',
-          address: '广东省深圳市南山区XX街XX号',
-          createdAt: '2026-02-20T14:20:00'
-        },
-        {
-          id: 3,
-          customerCode: 'C20260003',
-          customerName: '王五商贸',
-          storeId: 1,
-          storeName: '总店',
-          contactPerson: '王五',
-          phone: '13700137000',
-          balance: 30000,
-          receivable: 20000,
-          status: 'active',
-          address: '广东省广州市白云区XX路XX号',
-          createdAt: '2026-03-10T09:15:00'
+    const params = {
+      customerName: filters.value.customerName,
+      phone: filters.value.phone,
+      storeId: filters.value.storeId,
+      status: filters.value.status
+    }
+
+    const response = await request({
+      url: '/customers',
+      method: 'GET',
+      params
+    })
+
+    if (response && Array.isArray(response)) {
+      // 关联门店名称
+      customers.value = response.map(customer => {
+        const store = allStores.value.find(s => s.id === customer.storeId)
+        return {
+          ...customer,
+          storeName: store ? store.name : '未知门店'
         }
-      ]
+      })
       total.value = customers.value.length
-      loading.value = false
-    }, 500)
+    }
   } catch (error) {
     console.error('加载客户列表失败:', error)
+  } finally {
     loading.value = false
   }
 }
@@ -531,7 +519,10 @@ const handleEdit = (customer) => {
 const handleDelete = async (customer) => {
   if (confirm(`确定要删除客户"${customer.customerName}"吗？`)) {
     try {
-      // 实际应该调用API删除
+      await request({
+        url: `/customers/${customer.id}`,
+        method: 'DELETE'
+      })
       alert('删除成功')
       loadCustomers()
     } catch (error) {
@@ -544,13 +535,28 @@ const handleDelete = async (customer) => {
 // 提交表单
 const handleSubmit = async () => {
   try {
-    // 实际应该调用API保存
-    alert(isEditMode.value ? '保存成功' : '创建成功')
+    if (isEditMode.value) {
+      // 更新客户
+      await request({
+        url: `/customers/${selectedCustomer.value.id}`,
+        method: 'PUT',
+        data: formData.value
+      })
+      alert('保存成功')
+    } else {
+      // 创建客户
+      await request({
+        url: '/customers',
+        method: 'POST',
+        data: formData.value
+      })
+      alert('创建成功')
+    }
     closeEditModal()
     loadCustomers()
   } catch (error) {
     console.error('保存失败:', error)
-    alert('保存失败')
+    alert(error.response?.data?.error || '保存失败')
   }
 }
 
@@ -596,8 +602,9 @@ const getCustomerTypeLabel = (type) => {
   return labels[type] || type
 }
 
-onMounted(() => {
-  loadCustomers()
+onMounted(async () => {
+  await loadStores()
+  await loadCustomers()
 })
 </script>
 

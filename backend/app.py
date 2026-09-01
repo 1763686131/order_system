@@ -30,6 +30,7 @@ from routes.warehouses import warehouses_bp
 from routes.materials import materials_bp
 from routes.freight import freight_bp
 from routes.products import products_bp
+from routes.customers import customers_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(orders_bp)
@@ -38,6 +39,7 @@ app.register_blueprint(warehouses_bp)
 app.register_blueprint(materials_bp)
 app.register_blueprint(freight_bp)
 app.register_blueprint(products_bp)
+app.register_blueprint(customers_bp, url_prefix='/api/customers')
 
 # ==========================================
 # 健康检查接口

@@ -15,8 +15,9 @@
 3. [仓库管理](#3-仓库管理)
 4. [商品管理](#4-商品管理)
 5. [订单管理](#5-订单管理)
-6. [材料库存管理](#6-材料库存管理)
-7. [运费记录管理](#7-运费记录管理)
+6. [客户管理](#6-客户管理)
+7. [材料库存管理](#7-材料库存管理)
+8. [运费记录管理](#8-运费记录管理)
 
 ---
 
@@ -1078,9 +1079,184 @@
 
 ---
 
-## 6. 材料库存管理
+## 6. 客户管理
 
-### 6.1 获取材料库存信息
+### 6.1 获取客户列表
+- **URL**: `/api/customers`
+- **Method**: `GET`
+
+**查询参数**:
+- `customerName`: 客户名称（模糊搜索）
+- `phone`: 联系电话（模糊搜索）
+- `storeId`: 门店ID
+- `status`: 客户状态（active/inactive）
+
+**响应示例**:
+```json
+[
+  {
+    "id": 1,
+    "customerCode": "C20260001",
+    "customerName": "张三超市",
+    "storeId": 1,
+    "contactPerson": "张三",
+    "phone": "13800138000",
+    "address": "广东省广州市天河区XX路XX号",
+    "balance": 5000,
+    "receivable": 5000,
+    "bankName": "工商银行",
+    "bankAccount": "6222021234567890",
+    "bankCode": "102100099996",
+    "taxNumber": "91440101MA5CQ1234",
+    "remark": "重点客户",
+    "status": "active",
+    "createdAt": "2026-01-15T10:30:00",
+    "updatedAt": "2026-01-15T10:30:00"
+  }
+]
+```
+
+### 6.2 获取单个客户详情
+- **URL**: `/api/customers/<int:customer_id>`
+- **Method**: `GET`
+
+**响应示例**:
+```json
+{
+  "id": 1,
+  "customerCode": "C20260001",
+  "customerName": "张三超市",
+  "storeId": 1,
+  "contactPerson": "张三",
+  "phone": "13800138000",
+  "address": "广东省广州市天河区XX路XX号",
+  "balance": 5000,
+  "receivable": 5000,
+  "bankName": "工商银行",
+  "bankAccount": "6222021234567890",
+  "bankCode": "102100099996",
+  "taxNumber": "91440101MA5CQ1234",
+  "remark": "重点客户",
+  "status": "active",
+  "createdAt": "2026-01-15T10:30:00",
+  "updatedAt": "2026-01-15T10:30:00"
+}
+```
+
+### 6.3 创建客户
+- **URL**: `/api/customers`
+- **Method**: `POST`
+
+**请求参数**:
+```json
+{
+  "customerName": "张三超市",
+  "customerCode": "C20260001",
+  "storeId": 1,
+  "contactPerson": "张三",
+  "phone": "13800138000",
+  "address": "广东省广州市天河区XX路XX号",
+  "balance": 5000,
+  "initialDebt": 0,
+  "bankName": "工商银行",
+  "bankAccount": "6222021234567890",
+  "bankCode": "102100099996",
+  "taxNumber": "91440101MA5CQ1234",
+  "remark": "重点客户"
+}
+```
+
+**响应示例**:
+```json
+{
+  "id": 1,
+  "customerCode": "C20260001",
+  "customerName": "张三超市",
+  "storeId": 1,
+  "contactPerson": "张三",
+  "phone": "13800138000",
+  "address": "广东省广州市天河区XX路XX号",
+  "balance": 5000,
+  "receivable": 0,
+  "bankName": "工商银行",
+  "bankAccount": "6222021234567890",
+  "bankCode": "102100099996",
+  "taxNumber": "91440101MA5CQ1234",
+  "remark": "重点客户",
+  "status": "active",
+  "createdAt": "2026-09-01T10:30:00",
+  "updatedAt": "2026-09-01T10:30:00"
+}
+```
+
+### 6.4 更新客户信息
+- **URL**: `/api/customers/<int:customer_id>`
+- **Method**: `PUT`
+
+**请求参数**:
+```json
+{
+  "customerName": "张三超市",
+  "customerCode": "C20260001",
+  "storeId": 1,
+  "contactPerson": "张三",
+  "phone": "13800138000",
+  "address": "广东省广州市天河区XX路XX号",
+  "balance": 5000,
+  "initialDebt": 5000,
+  "bankName": "工商银行",
+  "bankAccount": "6222021234567890",
+  "bankCode": "102100099996",
+  "taxNumber": "91440101MA5CQ1234",
+  "remark": "重点客户"
+}
+```
+
+**响应示例**:
+```json
+{
+  "id": 1,
+  "customerCode": "C20260001",
+  "customerName": "张三超市",
+  "storeId": 1,
+  "contactPerson": "张三",
+  "phone": "13800138000",
+  "address": "广东省广州市天河区XX路XX号",
+  "balance": 5000,
+  "receivable": 5000,
+  "bankName": "工商银行",
+  "bankAccount": "6222021234567890",
+  "bankCode": "102100099996",
+  "taxNumber": "91440101MA5CQ1234",
+  "remark": "重点客户",
+  "status": "active",
+  "createdAt": "2026-09-01T10:30:00",
+  "updatedAt": "2026-09-01T11:30:00"
+}
+```
+
+### 6.5 删除客户
+- **URL**: `/api/customers/<int:customer_id>`
+- **Method**: `DELETE`
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "删除成功",
+  "customer": {
+    "id": 1,
+    "customerCode": "C20260001",
+    "customerName": "张三超市"
+  }
+}
+```
+
+---
+
+## 7. 材料库存管理
+
+### 7.1 获取材料库存信息
 - **URL**: `/api/materials`
 - **Method**: `GET`
 
@@ -1101,7 +1277,7 @@
 }
 ```
 
-### 6.2 添加材料记录
+### 7.2 添加材料记录
 - **URL**: `/api/materials`
 - **Method**: `POST`
 
@@ -1122,7 +1298,7 @@
 }
 ```
 
-### 6.3 更新库存
+### 7.3 更新库存
 - **URL**: `/api/materials/stock`
 - **Method**: `PUT`
 
@@ -1140,7 +1316,7 @@
 }
 ```
 
-### 6.4 更新材料记录
+### 7.4 更新材料记录
 - **URL**: `/api/materials/<int:record_id>`
 - **Method**: `PUT`
 
@@ -1160,7 +1336,7 @@
 }
 ```
 
-### 6.5 删除材料记录
+### 7.5 删除材料记录
 - **URL**: `/api/materials/<int:record_id>`
 - **Method**: `DELETE`
 
@@ -1173,9 +1349,9 @@
 
 ---
 
-## 7. 运费记录管理
+## 8. 运费记录管理
 
-### 7.1 获取所有运费记录
+### 8.1 获取所有运费记录
 - **URL**: `/api/freight-records`
 - **Method**: `GET`
 
@@ -1197,7 +1373,7 @@
 ]
 ```
 
-### 7.2 创建运费记录
+### 8.2 创建运费记录
 - **URL**: `/api/freight-records`
 - **Method**: `POST`
 - **Header**: `Username: admin`
@@ -1234,7 +1410,7 @@
 }
 ```
 
-### 7.3 获取所有备用金记录
+### 8.3 获取所有备用金记录
 - **URL**: `/api/freight-records/reserve-fund`
 - **Method**: `GET`
 
@@ -1253,7 +1429,7 @@
 ]
 ```
 
-### 7.4 创建备用金记录
+### 8.4 创建备用金记录
 - **URL**: `/api/freight-records/reserve-fund`
 - **Method**: `POST`
 - **Header**: `Username: admin`
@@ -1284,7 +1460,7 @@
 }
 ```
 
-### 7.5 获取最新备用金余额
+### 8.5 获取最新备用金余额
 - **URL**: `/api/freight-records/reserve-fund/latest`
 - **Method**: `GET`
 
@@ -1304,7 +1480,7 @@
 }
 ```
 
-### 7.6 更新备用金金额
+### 8.6 更新备用金金额
 - **URL**: `/api/freight-records/reserve-fund/<fund_id>`
 - **Method**: `PUT`
 - **Header**: `Username: admin`
