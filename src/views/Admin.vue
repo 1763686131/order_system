@@ -84,6 +84,9 @@
 
         <div class="header-right">
           <div class="header-actions">
+            <button class="btn-create-order" @click="goToCreateOrder">
+              ➕ 录入订单
+            </button>
             <component v-if="headerActions" :is="headerActions"></component>
           </div>
 
@@ -296,6 +299,10 @@ const currentMenuLabel = computed(() => {
 
 const navigateTo = (path) => {
   router.push(path)
+}
+
+const goToCreateOrder = () => {
+  router.push('/admin/orders/create')
 }
 
 const logout = () => {
@@ -557,6 +564,27 @@ const logout = () => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.btn-create-order {
+  padding: 8px 16px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-create-order:hover {
+  background: #059669;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
 }
 
 .header-tab {

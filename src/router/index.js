@@ -113,6 +113,12 @@ const routes = [
         name: 'admin-customers',
         component: () => import('@/views/admin/customers/CustomerList.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'orders/create',
+        name: 'admin-orders-create',
+        component: () => import('@/views/admin/orders/OrderForm.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   }
