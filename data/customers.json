@@ -7,7 +7,7 @@
       "storeId": 1,
       "contactPerson": "张三",
       "phone": "17554354236",
-      "address": "",
+      "address": "北京天安门",
       "balance": 0,
       "receivable": 5000,
       "bankName": "",
@@ -17,7 +17,7 @@
       "remark": "",
       "status": "active",
       "createdAt": "2026-09-01T12:58:31",
-      "updatedAt": "2026-09-01T13:07:42"
+      "updatedAt": "2026-09-01T14:46:38"
     },
     {
       "id": 2,
@@ -37,7 +37,26 @@
       "status": "active",
       "createdAt": "2026-09-01T13:08:25",
       "updatedAt": "2026-09-01T13:08:25"
+    },
+    {
+      "id": 3,
+      "customerCode": "003",
+      "customerName": "陶芸",
+      "storeId": 2,
+      "contactPerson": "王帅",
+      "phone": "17554354236",
+      "address": "四川成都成华路华容大道",
+      "balance": 0,
+      "receivable": 0,
+      "bankName": "",
+      "bankAccount": "",
+      "bankCode": "",
+      "taxNumber": "",
+      "remark": "",
+      "status": "active",
+      "createdAt": "2026-09-01T14:48:31",
+      "updatedAt": "2026-09-01T14:48:31"
     }
   ],
-  "nextId": 3
+  "nextId": 4
 }

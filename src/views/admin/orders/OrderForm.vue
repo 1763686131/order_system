@@ -253,6 +253,7 @@ const stores = ref([])
 const customers = ref([])
 const warehouses = ref([])
 const products = ref([])
+const units = ref([]) // 新增单位数据
 
 // 表单数据
 const formData = ref({
@@ -374,6 +375,18 @@ const loadProducts = async () => {
   }
 }
 
+// 加载单位
+const loadUnits = async () => {
+  try {
+    const response = await request({ url: '/products/units', method: 'GET' })
+    if (response && Array.isArray(response)) {
+      units.value = response
+    }
+  } catch (error) {
+    console.error('加载单位失败:', error)
+  }
+}
+
 // 门店改变
 const onStoreChange = () => {
   // 重置客户和仓库选择
@@ -426,7 +439,15 @@ const selectProduct = (index, product) => {
   item.productId = product.id
   item.productName = product.name
   item.spec = product.specification || ''
-  item.unit = product.unit || ''
+
+  // 根据 unitId 查找单位名称
+  if (product.unitId) {
+    const unit = units.value.find(u => u.id === product.unitId)
+    item.unit = unit ? unit.name : ''
+  } else {
+    item.unit = ''
+  }
+
   item.price = product.price || 0
   item.taxIncludedPrice = product.price || 0
 
@@ -566,6 +587,7 @@ onMounted(() => {
   loadCustomers()
   loadWarehouses()
   loadProducts()
+  loadUnits() // 加载单位数据
   initEmptyRows()
   // 生成默认订单编号（临时）
   formData.value.orderNumber = generateOrderNumber('NEW')
