@@ -275,7 +275,7 @@
                   复制
                 </button>
                 <button
-                  v-if="mode === 'logistics' && hasLogistics(order)"
+                  v-if="mode === 'logistics' && order.audit_state === 1"
                   class="btn-action btn-edit"
                   @click="handleEdit(order)"
                   title="修改信息"

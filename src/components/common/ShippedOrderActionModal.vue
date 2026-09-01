@@ -20,7 +20,7 @@
       >
         <div
           class="modal-header"
-          style="margin-bottom: 20px; cursor: grab;"
+          style="margin-bottom: 20px; cursor: grab; padding: 0;"
         >
           <div id="actionModalTitle" style="font-size: 18px; font-weight: bold; color: #333;">
             {{ modalTitle }}
@@ -34,6 +34,18 @@
 
         <!-- 审核填写物流单号窗口 -->
         <div id="auditContent" style="display: block;">
+          <!-- 显示客户和发货方式 -->
+          <div v-if="currentOrderInfo.customer || currentOrderInfo.shippingMethod" style="margin-bottom: 16px; padding: 10px 14px; background: #f5f5f5; border-radius: 6px; font-size: 13px; display: flex; gap: 24px;">
+            <div v-if="currentOrderInfo.customer" style="flex: 1;">
+              <span style="color: #666; font-weight: 500;">客户名称：</span>
+              <span style="color: #333; font-weight: bold;">{{ currentOrderInfo.customer }}</span>
+            </div>
+            <div v-if="currentOrderInfo.shippingMethod" style="flex: 1;">
+              <span style="color: #666; font-weight: 500;">发货方式：</span>
+              <span style="color: #333; font-weight: bold;">{{ currentOrderInfo.shippingMethod }}</span>
+            </div>
+          </div>
+
           <!-- 快捷点击标签 -->
           <div id="auditCarrierTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; min-height: 24px; align-items: center;">
             <span
@@ -251,6 +263,12 @@ const targetOrderId = ref(null)
 const modalTitle = ref('已出库订单管理')
 const modalSubtitle = ref('请选择对当前出库订单的操作指令')
 
+// 当前订单信息（客户名称和发货方式）
+const currentOrderInfo = ref({
+  customer: '',
+  shippingMethod: ''
+})
+
 // 消息提示状态
 const messageVisible = ref(false)
 const messageText = ref('')
@@ -420,6 +438,26 @@ const open = (orderId, mode) => {
 
   // 同步本地订单数据
   allOrdersLocal = orderStore.allOrders
+
+  // 获取订单信息，填充客户名称和发货方式
+  const order = allOrdersLocal.find(o => o.id === orderId)
+  if (order) {
+    currentOrderInfo.value.customer = order.order_client || ''
+
+    // 获取发货方式文本
+    const methodMap = { 0: '物流', 1: '零担快运', 2: '快递', 3: '专车', 4: '其它' }
+    if (order.shipping_method !== undefined && order.shipping_method !== '') {
+      let method = methodMap[order.shipping_method] || '其它'
+      if (order.shipping_method === 4 && order.shipping_custom) {
+        method = order.shipping_custom
+      }
+      currentOrderInfo.value.shippingMethod = method
+    } else if (order.logistics_type) {
+      currentOrderInfo.value.shippingMethod = order.logistics_type
+    } else {
+      currentOrderInfo.value.shippingMethod = '其它'
+    }
+  }
 
   const title = document.getElementById('actionModalTitle')
   const subtitle = document.getElementById('actionModalSubtitle')
