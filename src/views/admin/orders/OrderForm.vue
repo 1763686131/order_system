@@ -24,7 +24,7 @@
 
       <div class="info-group">
         <label>📦 仓库</label>
-        <select v-model="formData.warehouseId">
+        <select v-model="formData.warehouseId" @change="onWarehouseChange">
           <option value="">请选择仓库</option>
           <option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="warehouse.id">
             {{ warehouse.name }}
@@ -90,8 +90,8 @@
           <tr v-for="(item, index) in formData.items" :key="index" :class="{ 'row-focused': focusedRow === index }">
             <td class="center">{{ index + 1 }}</td>
             <td class="center">
-              <button class="btn-icon btn-add" @click="addRow(index)" title="在下方插入一行">➕</button>
-              <button class="btn-icon btn-remove" @click="removeRow(index)" title="删除此行">❌</button>
+              <button class="btn-icon btn-add" @click="addRow(index)" title="在下方插入一行">+</button>
+              <button class="btn-icon btn-remove" @click="removeRow(index)" title="删除此行">×</button>
             </td>
             <td class="product-col">
               <div class="product-select-wrapper">
@@ -101,7 +101,6 @@
                   @focus="showProductDropdown(index)"
                   @blur="hideProductDropdown(index)"
                   @input="filterProducts(index)"
-                  placeholder="请选择商品"
                   class="product-input"
                 />
                 <div
@@ -123,25 +122,25 @@
             <td><input type="text" v-model="item.spec" readonly class="readonly-input" /></td>
             <td><input type="text" v-model="item.unit" readonly class="readonly-input" /></td>
             <td><input type="text" v-model="item.warehouseName" readonly class="readonly-input" /></td>
-            <td class="right"><input type="text" :value="item.currentStock" readonly class="readonly-input" /></td>
+            <td class="right"><input type="text" :value="item.currentStock || ''" readonly class="readonly-input" /></td>
             <td><input type="number" v-model.number="item.packages" min="0" /></td>
             <td><input type="number" v-model.number="item.quantity" @input="calculateRowAmount(index)" min="0" step="0.01" /></td>
             <td><input type="number" v-model.number="item.price" @input="calculateRowAmount(index)" min="0" step="0.01" /></td>
             <td><input type="number" v-model.number="item.taxIncludedPrice" min="0" step="0.01" /></td>
-            <td class="right"><input type="text" :value="item.amount.toFixed(2)" readonly class="readonly-input" /></td>
-            <td class="right"><input type="text" :value="item.totalAmount.toFixed(2)" readonly class="readonly-input" /></td>
-            <td><input type="text" v-model="item.remark" placeholder="备注" /></td>
+            <td class="right"><input type="text" :value="item.amount ? item.amount.toFixed(2) : ''" readonly class="readonly-input" /></td>
+            <td class="right"><input type="text" :value="item.totalAmount ? item.totalAmount.toFixed(2) : ''" readonly class="readonly-input" /></td>
+            <td><input type="text" v-model="item.remark" /></td>
           </tr>
 
           <!-- 合计行 -->
           <tr class="total-row">
             <td colspan="2" class="center"><button class="btn-text-link">合计</button></td>
             <td colspan="5"></td>
-            <td class="right">{{ totalPackages }}</td>
-            <td class="right">{{ totalQuantity.toFixed(2) }}</td>
+            <td class="right">{{ totalPackages || '' }}</td>
+            <td class="right">{{ totalQuantity ? totalQuantity.toFixed(2) : '' }}</td>
             <td colspan="2"></td>
-            <td class="right">{{ totalAmount.toFixed(2) }}</td>
-            <td class="right">{{ totalTaxAmount.toFixed(2) }}</td>
+            <td class="right">{{ totalAmount ? totalAmount.toFixed(2) : '' }}</td>
+            <td class="right">{{ totalTaxAmount ? totalTaxAmount.toFixed(2) : '' }}</td>
             <td></td>
           </tr>
         </tbody>
@@ -178,49 +177,39 @@
             <input type="number" v-model.number="formData.discountRate" @input="calculateDiscount" min="0" max="100" />
           </div>
           <div class="finance-item">
-            <label>折后金额</label>
-            <input type="text" :value="discountedAmount.toFixed(2)" readonly />
-          </div>
-          <div class="finance-item">
-            <label>折后金额</label>
-            <input type="text" value="折后金额" readonly />
-          </div>
-          <div class="finance-item">
             <label>其他费用</label>
             <input type="number" v-model.number="formData.otherFees" @input="calculateFinal" min="0" />
           </div>
           <div class="finance-item">
             <label>结算账户</label>
-            <select v-model="formData.settlementAccount">
-              <option value="">现金账户</option>
-            </select>
+            <input type="text" :value="selectedStoreName" readonly class="readonly-input" />
           </div>
         </div>
 
         <div class="finance-row">
           <div class="finance-item">
             <span class="finance-label">积分:</span>
-            <span class="finance-value">{{ formData.points || 0 }}</span>
+            <span class="finance-value">{{ formData.points || '' }}</span>
           </div>
           <div class="finance-item">
             <span class="finance-label">客户欠款:</span>
-            <span class="finance-value">{{ customerDebt.toFixed(2) }}</span>
+            <span class="finance-value">{{ customerDebt ? customerDebt.toFixed(2) : '' }}</span>
           </div>
           <div class="finance-item">
             <span class="finance-label">本单应收:</span>
-            <span class="finance-value">{{ shouldReceive.toFixed(2) }}</span>
+            <span class="finance-value">{{ shouldReceive ? shouldReceive.toFixed(2) : '' }}</span>
           </div>
           <div class="finance-item">
             <span class="finance-label highlight">本次收款:</span>
-            <span class="finance-value highlight">{{ finalAmount.toFixed(2) }}</span>
+            <span class="finance-value highlight">{{ finalAmount ? finalAmount.toFixed(2) : '' }}</span>
           </div>
           <div class="finance-item">
             <span class="finance-label red">本单欠款:</span>
-            <span class="finance-value red">{{ currentDebt.toFixed(2) }}</span>
+            <span class="finance-value red">{{ currentDebt ? currentDebt.toFixed(2) : '' }}</span>
           </div>
           <div class="finance-item">
             <span class="finance-label">未收金额:</span>
-            <span class="finance-value">{{ unpaidAmount || 0 }}</span>
+            <span class="finance-value">{{ unpaidAmount || '' }}</span>
           </div>
           <div class="finance-item">
             <span class="finance-label">未收:</span>
@@ -268,10 +257,10 @@ const formData = ref({
   salesPerson: '',
   creator: '',
   orderRemark: '',
-  discountRate: 100,
-  otherFees: 0,
+  discountRate: null,
+  otherFees: null,
   settlementAccount: '',
-  points: 0,
+  points: null,
   printAfterSave: false,
   items: []
 })
@@ -290,6 +279,31 @@ const filteredWarehouses = computed(() => {
     return warehouses.value
   }
   return warehouses.value.filter(w => w.storeId === formData.value.storeId)
+})
+
+// 选中的门店名称（用于结算账户显示）
+const selectedStoreName = computed(() => {
+  const store = stores.value.find(s => s.id === formData.value.storeId)
+  return store ? store.name : ''
+})
+
+// 过滤商品（根据当前选择的门店和仓库）
+const filteredProducts = computed(() => {
+  let result = products.value
+
+  // 根据门店筛选
+  if (formData.value.storeId) {
+    result = result.filter(p =>
+      p.storeIds && Array.isArray(p.storeIds) && p.storeIds.includes(formData.value.storeId)
+    )
+  }
+
+  // 根据仓库筛选
+  if (formData.value.warehouseId) {
+    result = result.filter(p => p.warehouseId === formData.value.warehouseId)
+  }
+
+  return result
 })
 
 // 焦点行
@@ -314,13 +328,13 @@ function initEmptyRows() {
     unit: '',
     warehouseId: '',
     warehouseName: '',
-    currentStock: 0,
-    packages: 0,
-    quantity: 0,
-    price: 0,
-    taxIncludedPrice: 0,
-    amount: 0,
-    totalAmount: 0,
+    currentStock: null,
+    packages: null,
+    quantity: null,
+    price: null,
+    taxIncludedPrice: null,
+    amount: null,
+    totalAmount: null,
     remark: '',
     showDropdown: false,
     filteredProducts: []
@@ -397,6 +411,11 @@ const onStoreChange = () => {
   formData.value.contactAddress = ''
 }
 
+// 仓库改变
+const onWarehouseChange = () => {
+  // 仓库改变后，商品列表会通过 filteredProducts 自动筛选
+}
+
 // 客户改变
 const onCustomerChange = () => {
   const customer = customers.value.find(c => c.id === formData.value.customerId)
@@ -409,9 +428,14 @@ const onCustomerChange = () => {
 
 // 显示商品下拉框
 const showProductDropdown = (index) => {
+  // 如果没有选择门店和仓库，直接返回，不显示下拉框
+  if (!formData.value.storeId || !formData.value.warehouseId) {
+    return
+  }
+
   focusedRow.value = index
   formData.value.items[index].showDropdown = true
-  formData.value.items[index].filteredProducts = products.value
+  formData.value.items[index].filteredProducts = filteredProducts.value
 }
 
 // 隐藏商品下拉框
@@ -425,11 +449,11 @@ const hideProductDropdown = (index) => {
 const filterProducts = (index) => {
   const searchText = formData.value.items[index].productName.toLowerCase()
   if (searchText) {
-    formData.value.items[index].filteredProducts = products.value.filter(p =>
+    formData.value.items[index].filteredProducts = filteredProducts.value.filter(p =>
       p.name.toLowerCase().includes(searchText)
     )
   } else {
-    formData.value.items[index].filteredProducts = products.value
+    formData.value.items[index].filteredProducts = filteredProducts.value
   }
 }
 
@@ -485,13 +509,13 @@ const addRow = (index) => {
     unit: '',
     warehouseId: '',
     warehouseName: '',
-    currentStock: 0,
-    packages: 0,
-    quantity: 0,
-    price: 0,
-    taxIncludedPrice: 0,
-    amount: 0,
-    totalAmount: 0,
+    currentStock: null,
+    packages: null,
+    quantity: null,
+    price: null,
+    taxIncludedPrice: null,
+    amount: null,
+    totalAmount: null,
     remark: '',
     showDropdown: false,
     filteredProducts: []
@@ -524,12 +548,17 @@ const totalTaxAmount = computed(() => {
 
 // 折扣后金额
 const discountedAmount = computed(() => {
-  return totalAmount.value * (formData.value.discountRate / 100)
+  const rate = formData.value.discountRate
+  if (rate === null || rate === undefined || rate === '') return null
+  return totalAmount.value * (rate / 100)
 })
 
 // 应收金额
 const shouldReceive = computed(() => {
-  return discountedAmount.value + (formData.value.otherFees || 0)
+  const discounted = discountedAmount.value
+  const fees = formData.value.otherFees
+  if (discounted === null && !fees) return null
+  return (discounted || 0) + (fees || 0)
 })
 
 // 本次收款
