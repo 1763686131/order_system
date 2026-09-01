@@ -41,6 +41,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'inventory',
+        name: 'admin-inventory',
+        component: () => import('@/views/admin/products/InventoryList.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'orders',
         name: 'admin-orders',
         component: () => import('@/views/admin/orders/UnifiedOrderList.vue'),

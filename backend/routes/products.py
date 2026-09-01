@@ -247,3 +247,90 @@ def delete_product(product_id):
     write_products(data)
 
     return jsonify({'success': True, 'message': '删除成功'})
+
+# ==================== 库存管理 ====================
+
+@products_bp.route('/inventory', methods=['GET'])
+def get_inventory():
+    """获取库存列表（带库存信息的商品数据）"""
+    data = read_products()
+    products = data.get('products', [])
+    inventory_list = data.get('inventory', )
+
+    result = []
+    for product in products:
+        product_id = str(product['id'])
+        # 获取该商品的库存信息，如果不存在则使用默认值
+        inventory_info = inventory_list.get(product_id, {
+            'stock': 0,
+            'minStock': 0,
+            'maxStock': 0,
+            'updatedAt': product.get('createdAt', datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        })
+
+        # 合并商品信息和库存信息
+        result.append({
+            **product,
+            'stock': inventory_info.get('stock', 0),
+            'minStock': inventory_info.get('minStock', 0),
+            'maxStock': inventory_info.get('maxStock', 0),
+            'inventoryUpdatedAt': inventory_info.get('updatedAt', product.get('createdAt', ''))
+        })
+
+    return jsonify(result)
+
+@products_bp.route('/inventory/<int:product_id>', methods=['PUT'])
+def update_inventory(product_id):
+    """更新商品库存信息"""
+    req_data = request.json
+    data = read_products()
+
+    # 获取或初始化 inventory 字典
+    if 'inventory' not in data:
+        data['inventory'] = {}
+
+    inventory_list = data['inventory']
+    product_id_str = str(product_id)
+
+    # 更新库存信息
+    inventory_list[product_id_str] = {
+        'stock': req_data.get('stock', 0),
+        'minStock': req_data.get('minStock', 0),
+        'maxStock': req_data.get('maxStock', 0),
+        'updatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    }
+
+    data['inventory'] = inventory_list
+    write_products(data)
+
+    return jsonify({'success': True, 'inventory': inventory_list[product_id_str]})
+
+@products_bp.route('/inventory/batch', methods=['PUT'])
+def batch_update_inventory():
+    """批量更新库存"""
+    req_data = request.json
+    updates = req_data.get('updates', [])
+
+    data = read_products()
+    if 'inventory' not in data:
+        data['inventory'] = {}
+
+    inventory_list = data['inventory']
+    updated_count = 0
+
+    for update_item in updates:
+        product_id = str(update_item.get('productId'))
+        if product_id:
+            inventory_list[product_id] = {
+                'stock': update_item.get('stock', 0),
+                'minStock': update_item.get('minStock', 0),
+                'maxStock': update_item.get('maxStock', 0),
+                'updatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            updated_count += 1
+
+    data['inventory'] = inventory_list
+    write_products(data)
+
+    return jsonify({'success': True, 'message': f'成功更新 {updated_count} 条库存记录'})
+

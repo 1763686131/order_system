@@ -710,6 +710,99 @@
 }
 ```
 
+### 4.4 库存管理
+
+#### 4.4.1 获取库存列表
+- **URL**: `/api/products/inventory`
+- **Method**: `GET`
+- **说明**: 获取带库存信息的商品列表
+
+**响应示例**:
+```json
+[
+  {
+    "id": 1,
+    "code": "01",
+    "name": "粘钢胶",
+    "specification": "40kg/组",
+    "category": 202,
+    "unitId": 1,
+    "enableMultiUnit": false,
+    "notes": "",
+    "enabled": true,
+    "warehouseId": 2,
+    "storeIds": [1],
+    "warehouseCategories": {},
+    "unitConversions": [],
+    "enableAttributes": false,
+    "attributeCombinations": [],
+    "createdAt": "2026-08-30 08:32:03",
+    "stock": 100,
+    "minStock": 50,
+    "maxStock": 1000,
+    "inventoryUpdatedAt": "2026-08-30 12:00:00"
+  }
+]
+```
+
+#### 4.4.2 更新商品库存
+- **URL**: `/api/products/inventory/<int:product_id>`
+- **Method**: `PUT`
+
+**请求参数**:
+```json
+{
+  "stock": 100,
+  "minStock": 50,
+  "maxStock": 1000
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "inventory": {
+    "stock": 100,
+    "minStock": 50,
+    "maxStock": 1000,
+    "updatedAt": "2026-08-30 12:00:00"
+  }
+}
+```
+
+#### 4.4.3 批量更新库存
+- **URL**: `/api/products/inventory/batch`
+- **Method**: `PUT`
+
+**请求参数**:
+```json
+{
+  "updates": [
+    {
+      "productId": 1,
+      "stock": 100,
+      "minStock": 50,
+      "maxStock": 1000
+    },
+    {
+      "productId": 2,
+      "stock": 200,
+      "minStock": 100,
+      "maxStock": 2000
+    }
+  ]
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "成功更新 2 条库存记录"
+}
+```
+
 ---
 
 ## 5. 订单管理
