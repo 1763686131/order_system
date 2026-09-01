@@ -803,6 +803,18 @@
 }
 ```
 
+#### 4.4.4 删除库存信息
+- **URL**: `/api/products/inventory/<int:product_id>`
+- **Method**: `DELETE`
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "库存信息已删除"
+}
+```
+
 ---
 
 ## 5. 订单管理

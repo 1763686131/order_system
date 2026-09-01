@@ -334,3 +334,22 @@ def batch_update_inventory():
 
     return jsonify({'success': True, 'message': f'成功更新 {updated_count} 条库存记录'})
 
+@products_bp.route('/inventory/<int:product_id>', methods=['DELETE'])
+def delete_inventory(product_id):
+    """删除商品库存信息"""
+    data = read_products()
+
+    if 'inventory' not in data:
+        data['inventory'] = {}
+
+    inventory_list = data['inventory']
+    product_id_str = str(product_id)
+
+    if product_id_str in inventory_list:
+        del inventory_list[product_id_str]
+        data['inventory'] = inventory_list
+        write_products(data)
+        return jsonify({'success': True, 'message': '库存信息已删除'})
+    else:
+        return jsonify({'success': False, 'message': '库存信息不存在'}), 404
+

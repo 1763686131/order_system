@@ -417,5 +417,13 @@
             ],
             "createdAt": "2026-08-30 14:45:44"
         }
-    ]
+    ],
+    "inventory": {
+        "1": {
+            "stock": 10,
+            "minStock": 0,
+            "maxStock": 0,
+            "updatedAt": "2026-09-01 12:41:53"
+        }
+    }
 }
