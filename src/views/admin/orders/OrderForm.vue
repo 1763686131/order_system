@@ -108,13 +108,24 @@
                   class="product-dropdown"
                   @mousedown.prevent
                 >
+                  <div class="product-dropdown-header">
+                    <span class="col-code">编号</span>
+                    <span class="col-name">名称</span>
+                    <span class="col-spec">规格</span>
+                    <span class="col-unit">单位</span>
+                    <span class="col-stock">库存</span>
+                  </div>
                   <div
                     v-for="product in item.filteredProducts"
                     :key="product.id"
                     class="product-option"
                     @click="selectProduct(index, product)"
                   >
-                    {{ product.name }}
+                    <span class="col-code">{{ product.code || '-' }}</span>
+                    <span class="col-name">{{ product.name }}</span>
+                    <span class="col-spec">{{ product.specifications || '-' }}</span>
+                    <span class="col-unit">{{ getUnitName(product.unitId) || '-' }}</span>
+                    <span class="col-stock">{{ product.stock || 0 }}</span>
                   </div>
                 </div>
               </div>
@@ -399,6 +410,12 @@ const loadUnits = async () => {
   } catch (error) {
     console.error('加载单位失败:', error)
   }
+}
+
+// 根据单位ID获取单位名称
+const getUnitName = (unitId) => {
+  const unit = units.value.find(u => u.id === unitId)
+  return unit ? unit.name : ''
 }
 
 // 门店改变
@@ -841,8 +858,8 @@ onMounted(() => {
   position: absolute;
   top: 100%;
   left: 0;
-  right: 0;
-  max-height: 200px;
+  min-width: 600px;
+  max-height: 300px;
   overflow-y: auto;
   background: white;
   border: 1px solid #d1d5db;
@@ -852,11 +869,89 @@ onMounted(() => {
   margin-top: 2px;
 }
 
+.product-dropdown-header {
+  display: flex;
+  padding: 8px 12px;
+  background: #f3f4f6;
+  font-size: 12px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.product-dropdown-header .col-code {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.product-dropdown-header .col-name {
+  width: 180px;
+  flex-shrink: 0;
+}
+
+.product-dropdown-header .col-spec {
+  width: 150px;
+  flex-shrink: 0;
+}
+
+.product-dropdown-header .col-unit {
+  width: 80px;
+  flex-shrink: 0;
+}
+
+.product-dropdown-header .col-stock {
+  width: 90px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
 .product-option {
+  display: flex;
   padding: 8px 12px;
   font-size: 13px;
   cursor: pointer;
   transition: background 0.15s;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.product-option:last-child {
+  border-bottom: none;
+}
+
+.product-option .col-code {
+  width: 100px;
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.product-option .col-name {
+  width: 180px;
+  flex-shrink: 0;
+  font-weight: 500;
+  color: #111827;
+}
+
+.product-option .col-spec {
+  width: 150px;
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.product-option .col-unit {
+  width: 80px;
+  flex-shrink: 0;
+  color: #6b7280;
+}
+
+.product-option .col-stock {
+  width: 90px;
+  flex-shrink: 0;
+  text-align: right;
+  color: #059669;
+  font-weight: 500;
 }
 
 .product-option:hover {
