@@ -1,4 +1,43 @@
 {
-  "customers": [],
-  "nextId": 1
+  "customers": [
+    {
+      "id": 1,
+      "customerCode": "001",
+      "customerName": "锦州森源",
+      "storeId": 1,
+      "contactPerson": "张三",
+      "phone": "17554354236",
+      "address": "",
+      "balance": 0,
+      "receivable": 5000,
+      "bankName": "",
+      "bankAccount": "",
+      "bankCode": "",
+      "taxNumber": "",
+      "remark": "",
+      "status": "active",
+      "createdAt": "2026-09-01T12:58:31",
+      "updatedAt": "2026-09-01T13:07:42"
+    },
+    {
+      "id": 2,
+      "customerCode": "002",
+      "customerName": "雷安电器",
+      "storeId": 1,
+      "contactPerson": "网上",
+      "phone": "17800000000",
+      "address": "",
+      "balance": 0,
+      "receivable": 0,
+      "bankName": "",
+      "bankAccount": "",
+      "bankCode": "",
+      "taxNumber": "",
+      "remark": "",
+      "status": "active",
+      "createdAt": "2026-09-01T13:08:25",
+      "updatedAt": "2026-09-01T13:08:25"
+    }
+  ],
+  "nextId": 3
 }

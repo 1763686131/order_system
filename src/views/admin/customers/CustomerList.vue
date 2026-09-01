@@ -7,7 +7,7 @@
         <div class="store-tabs">
           <div
             :class="['store-tab', { active: filters.storeId === null }]"
-            @click="filters.storeId = null"
+            @click="handleStoreChange(null)"
           >
             全部
           </div>
@@ -15,7 +15,7 @@
             v-for="store in allStores"
             :key="store.id"
             :class="['store-tab', { active: filters.storeId === store.id }]"
-            @click="filters.storeId = store.id"
+            @click="handleStoreChange(store.id)"
           >
             {{ store.name }}
           </div>
@@ -214,7 +214,30 @@
         </div>
         <div class="modal-body">
           <form @submit.prevent="handleSubmit">
-            <!-- 第一排：客户名称 + 编号 -->
+            <!-- 第一排：所属门店（独占一排，点击高亮单选） -->
+            <div class="form-row">
+              <div class="form-group form-group-full">
+                <label>所属门店 <span class="required">*</span></label>
+                <div v-if="allStores.length > 0" class="store-selector">
+                  <div
+                    v-for="store in allStores"
+                    :key="store.id"
+                    :class="['store-option', { active: formData.storeId === store.id }]"
+                    @click="formData.storeId = store.id"
+                  >
+                    {{ store.name }}
+                  </div>
+                </div>
+                <div v-else class="empty-store-hint">
+                  <span>暂无门店数据</span>
+                  <button type="button" class="btn-add-store" @click="goToStorePage">
+                    <span class="icon">➕</span> 新增门店
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 第二排：客户名称 + 编号 -->
             <div class="form-row">
               <div class="form-group">
                 <label>客户名称 <span class="required">*</span></label>
@@ -236,7 +259,7 @@
               </div>
             </div>
 
-            <!-- 第二排：联系人 + 联系电话 -->
+            <!-- 第三排：联系人 + 联系电话 -->
             <div class="form-row">
               <div class="form-group">
                 <label>联系人</label>
@@ -256,7 +279,7 @@
               </div>
             </div>
 
-            <!-- 第三排：联系地址（独占一排） -->
+            <!-- 第四排：联系地址（独占一排） -->
             <div class="form-row">
               <div class="form-group form-group-full">
                 <label>联系地址</label>
@@ -268,7 +291,7 @@
               </div>
             </div>
 
-            <!-- 第四排：储值余额 + 期初欠款 -->
+            <!-- 第五排：储值余额 + 期初欠款 -->
             <div class="form-row">
               <div class="form-group">
                 <label>储值余额</label>
@@ -293,7 +316,7 @@
             <!-- 财务信息标题 -->
             <div class="form-section-title">财务信息</div>
 
-            <!-- 第五排：开户行 + 银行账号 -->
+            <!-- 第六排：开户行 + 银行账号 -->
             <div class="form-row">
               <div class="form-group">
                 <label>开户行</label>
@@ -313,7 +336,7 @@
               </div>
             </div>
 
-            <!-- 第六排：行号 + 税号 -->
+            <!-- 第七排：行号 + 税号 -->
             <div class="form-row">
               <div class="form-group">
                 <label>行号</label>
@@ -454,6 +477,13 @@ const handleSearch = () => {
   loadCustomers()
 }
 
+// 门店筛选
+const handleStoreChange = (storeId) => {
+  filters.value.storeId = storeId
+  currentPage.value = 1
+  loadCustomers()
+}
+
 // 重置
 const handleReset = () => {
   filters.value = {
@@ -472,7 +502,7 @@ const handleAdd = () => {
   formData.value = {
     customerName: '',
     customerCode: '',
-    storeId: '',
+    storeId: allStores.value.length > 0 ? allStores.value[0].id : '',
     contactPerson: '',
     phone: '',
     address: '',
@@ -571,6 +601,11 @@ const closeEditModal = () => {
   showEditModal.value = false
   isEditMode.value = false
   selectedCustomer.value = null
+}
+
+// 跳转到门店页面
+const goToStorePage = () => {
+  window.location.href = '/#/admin/stores'
 }
 
 // 分页
@@ -1117,6 +1152,72 @@ onMounted(async () => {
 .form-group textarea {
   resize: vertical;
   font-family: inherit;
+}
+
+/* 门店选择器样式 */
+.store-selector {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+}
+
+.store-option {
+  padding: 8px 16px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.store-option:hover {
+  background: #e5e7eb;
+  border-color: #d1d5db;
+}
+
+.store-option.active {
+  background: #34d399;
+  color: #fff;
+  border-color: #34d399;
+}
+
+.empty-store-hint {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #fef3c7;
+  border: 1px solid #fbbf24;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #92400e;
+}
+
+.btn-add-store {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: #34d399;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+}
+
+.btn-add-store:hover {
+  background: #10b981;
+}
+
+.btn-add-store .icon {
+  font-size: 12px;
 }
 
 .form-actions {
