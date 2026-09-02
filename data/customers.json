@@ -28,7 +28,7 @@
       "phone": "17800000000",
       "address": "",
       "balance": 0,
-      "receivable": 0,
+      "receivable": 5000,
       "bankName": "",
       "bankAccount": "",
       "bankCode": "",
@@ -36,7 +36,7 @@
       "remark": "",
       "status": "active",
       "createdAt": "2026-09-01T13:08:25",
-      "updatedAt": "2026-09-01T13:08:25"
+      "updatedAt": "2026-09-02T05:38:24"
     },
     {
       "id": 3,
@@ -47,7 +47,7 @@
       "phone": "17554354236",
       "address": "四川成都成华路华容大道",
       "balance": 0,
-      "receivable": 0,
+      "receivable": 10000,
       "bankName": "",
       "bankAccount": "",
       "bankCode": "",
@@ -55,7 +55,7 @@
       "remark": "",
       "status": "active",
       "createdAt": "2026-09-01T14:48:31",
-      "updatedAt": "2026-09-01T14:48:31"
+      "updatedAt": "2026-09-02T05:38:15"
     }
   ],
   "nextId": 4

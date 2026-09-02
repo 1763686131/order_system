@@ -80,9 +80,10 @@
             <th style="width: 80px">件数</th>
             <th style="width: 100px">*数量</th>
             <th style="width: 100px">*单价 (元)</th>
+            <th style="width: 80px">税率(%)</th>
             <th style="width: 100px">合税单价</th>
             <th style="width: 120px">金额 (元)</th>
-            <th style="width: 120px">价税合计</th>
+            <th style="width: 120px">含税金额</th>
             <th style="width: 180px">备注信息</th>
           </tr>
         </thead>
@@ -136,8 +137,9 @@
             <td class="right"><input type="text" :value="item.currentStock || ''" readonly class="readonly-input" /></td>
             <td><input type="number" v-model.number="item.packages" @input="onPackagesChange(index)" min="0" /></td>
             <td><input type="number" v-model.number="item.quantity" @input="onQuantityChange(index)" min="0" step="0.01" /></td>
-            <td><input type="number" v-model.number="item.price" @input="calculateRowAmount(index)" min="0" step="0.01" /></td>
-            <td><input type="number" v-model.number="item.taxIncludedPrice" min="0" step="0.01" /></td>
+            <td><input type="number" v-model.number="item.price" @input="onPriceChange(index)" min="0" step="0.01" /></td>
+            <td><input type="number" v-model.number="item.taxRate" @input="onItemTaxRateChange(index)" min="0" max="100" step="0.01" /></td>
+            <td><input type="number" v-model.number="item.taxIncludedPrice" @input="onTaxIncludedPriceChange(index)" min="0" step="0.01" /></td>
             <td class="right"><input type="text" :value="item.amount ? item.amount.toFixed(2) : ''" readonly class="readonly-input" /></td>
             <td class="right"><input type="text" :value="item.totalAmount ? item.totalAmount.toFixed(2) : ''" readonly class="readonly-input" /></td>
             <td><input type="text" v-model="item.remark" /></td>
@@ -149,7 +151,7 @@
             <td colspan="5"></td>
             <td class="right">{{ totalPackages || '' }}</td>
             <td class="right">{{ totalQuantity ? totalQuantity.toFixed(2) : '' }}</td>
-            <td colspan="2"></td>
+            <td colspan="3"></td>
             <td class="right">{{ totalAmount ? totalAmount.toFixed(2) : '' }}</td>
             <td class="right">{{ totalTaxAmount ? totalTaxAmount.toFixed(2) : '' }}</td>
             <td></td>
@@ -160,7 +162,7 @@
 
     <!-- 底部信息区 -->
     <div class="bottom-info-bar">
-      <div class="left-section">
+      <div class="finance-row-full">
         <div class="info-group">
           <label>业务员</label>
           <select v-model="formData.salesPerson">
@@ -179,70 +181,62 @@
           <label>备注信息</label>
           <input type="text" v-model="formData.orderRemark" placeholder="请输入备注信息" />
         </div>
+
+        <div class="finance-item">
+          <label>折扣金额</label>
+          <input type="number" v-model.number="formData.discountAmount" @input="calculateFinal" min="0" step="0.01" />
+        </div>
+        <div class="finance-item">
+          <label>其他费用</label>
+          <input type="number" v-model.number="formData.otherFees" @input="calculateFinal" min="0" />
+        </div>
+        <div class="finance-item">
+          <label>结算账户</label>
+          <input type="text" :value="selectedStoreName" readonly class="readonly-input" />
+        </div>
       </div>
 
-      <div class="right-section">
-        <div class="finance-row">
-          <div class="finance-item">
-            <label>折扣率(%)</label>
-            <input type="number" v-model.number="formData.discountRate" @input="calculateDiscount" min="0" max="100" />
-          </div>
-          <div class="finance-item">
-            <label>其他费用</label>
-            <input type="number" v-model.number="formData.otherFees" @input="calculateFinal" min="0" />
-          </div>
-          <div class="finance-item">
-            <label>结算账户</label>
-            <input type="text" :value="selectedStoreName" readonly class="readonly-input" />
-          </div>
+      <div class="finance-row">
+        <div class="finance-item">
+          <span class="finance-label">客户欠款:</span>
+          <span class="finance-value">{{ customerDebt ? customerDebt.toFixed(2) : '' }}</span>
         </div>
+        <div class="finance-item">
+          <span class="finance-label">本单应收:</span>
+          <span class="finance-value">{{ shouldReceive ? shouldReceive.toFixed(2) : '' }}</span>
+        </div>
+        <div class="finance-item">
+          <span class="finance-label highlight">本次收款:</span>
+          <span class="finance-value highlight">{{ finalAmount ? finalAmount.toFixed(2) : '' }}</span>
+        </div>
+        <div class="finance-item">
+          <span class="finance-label red">本单欠款:</span>
+          <span class="finance-value red">{{ currentDebt ? currentDebt.toFixed(2) : '' }}</span>
+        </div>
+        <div class="finance-item">
+          <span class="finance-label">未收金额:</span>
+          <span class="finance-value">{{ unpaidAmount || '' }}</span>
+        </div>
+        <div class="finance-item">
+          <span class="finance-label">未收:</span>
+          <span class="finance-value">{{ unpaidAmount || 0 }}</span>
+        </div>
+      </div>
 
-        <div class="finance-row">
-          <div class="finance-item">
-            <span class="finance-label">积分:</span>
-            <span class="finance-value">{{ formData.points || '' }}</span>
-          </div>
-          <div class="finance-item">
-            <span class="finance-label">客户欠款:</span>
-            <span class="finance-value">{{ customerDebt ? customerDebt.toFixed(2) : '' }}</span>
-          </div>
-          <div class="finance-item">
-            <span class="finance-label">本单应收:</span>
-            <span class="finance-value">{{ shouldReceive ? shouldReceive.toFixed(2) : '' }}</span>
-          </div>
-          <div class="finance-item">
-            <span class="finance-label highlight">本次收款:</span>
-            <span class="finance-value highlight">{{ finalAmount ? finalAmount.toFixed(2) : '' }}</span>
-          </div>
-          <div class="finance-item">
-            <span class="finance-label red">本单欠款:</span>
-            <span class="finance-value red">{{ currentDebt ? currentDebt.toFixed(2) : '' }}</span>
-          </div>
-          <div class="finance-item">
-            <span class="finance-label">未收金额:</span>
-            <span class="finance-value">{{ unpaidAmount || '' }}</span>
-          </div>
-          <div class="finance-item">
-            <span class="finance-label">未收:</span>
-            <span class="finance-value">{{ unpaidAmount || 0 }}</span>
-          </div>
-        </div>
-
-        <div class="action-row">
-          <label class="checkbox-label">
-            <input type="checkbox" v-model="formData.printAfterSave" />
-            保存后打印
-          </label>
-          <button class="btn-save-and-print" @click="handleSaveAndPrint">💾 保存并打印</button>
-          <button class="btn-save-final" @click="handleSaveFinal">保存(ctrl+Q)</button>
-        </div>
+      <div class="action-row">
+        <label class="checkbox-label">
+          <input type="checkbox" v-model="formData.printAfterSave" />
+          保存后打印
+        </label>
+        <button class="btn-save-and-print" @click="handleSaveAndPrint">💾 保存并打印</button>
+        <button class="btn-save-final" @click="handleSaveFinal">保存(ctrl+Q)</button>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
 
@@ -268,7 +262,8 @@ const formData = ref({
   salesPerson: '',
   creator: '',
   orderRemark: '',
-  discountRate: null,
+  taxRate: 13,
+  discountAmount: null,
   otherFees: null,
   settlementAccount: '',
   points: null,
@@ -343,12 +338,15 @@ function initEmptyRows() {
     packages: null,
     quantity: null,
     price: null,
+    taxRate: null,
     taxIncludedPrice: null,
     amount: null,
     totalAmount: null,
     remark: '',
     showDropdown: false,
-    filteredProducts: []
+    filteredProducts: [],
+    unitConversions: [],
+    conversionRate: null
   }))
 }
 
@@ -490,11 +488,19 @@ const selectProduct = (index, product) => {
   }
 
   item.price = product.price || 0
-  item.taxIncludedPrice = product.price || 0
+  item.taxRate = 13
+  item.taxIncludedPrice = product.price ? parseFloat((product.price * 1.13).toFixed(2)) : 0
 
   // 保存单位换算信息
   item.unitConversions = product.unitConversions || []
   item.baseUnitId = product.unitId
+
+  // 提取换算比例（件 → 基础单位，如 1件 = 20公斤）
+  if (item.unitConversions && item.unitConversions.length > 0) {
+    item.conversionRate = item.unitConversions[0].value || null
+  } else {
+    item.conversionRate = null
+  }
 
   // 自动设置仓库（使用顶部选择的仓库或商品默认仓库）
   if (formData.value.warehouseId) {
@@ -511,6 +517,66 @@ const selectProduct = (index, product) => {
   item.currentStock = product.stock || 0
 
   item.showDropdown = false
+  calculateRowAmount(index)
+}
+
+// 单价改变时自动计算含税单价
+const onPriceChange = (index) => {
+  const item = formData.value.items[index]
+  const taxRate = item.taxRate !== null && item.taxRate !== undefined ? item.taxRate : 0
+
+  if (item.price !== null && item.price !== undefined && item.price !== '') {
+    // 含税单价 = 单价 × (1 + 税率/100)，保留两位小数
+    item.taxIncludedPrice = parseFloat((item.price * (1 + taxRate / 100)).toFixed(2))
+  }
+
+  calculateRowAmount(index)
+}
+
+// 含税单价改变时自动计算单价
+const onTaxIncludedPriceChange = (index) => {
+  const item = formData.value.items[index]
+  const taxRate = item.taxRate !== null && item.taxRate !== undefined ? item.taxRate : 0
+
+  if (item.taxIncludedPrice !== null && item.taxIncludedPrice !== undefined && item.taxIncludedPrice !== '') {
+    // 单价 = 含税单价 ÷ (1 + 税率/100)，保留两位小数
+    item.price = parseFloat((item.taxIncludedPrice / (1 + taxRate / 100)).toFixed(2))
+  }
+
+  calculateRowAmount(index)
+}
+
+// 行税率改变时重新计算含税单价
+const onItemTaxRateChange = (index) => {
+  const item = formData.value.items[index]
+
+  // 如果有单价，则重新计算含税单价
+  if (item.price !== null && item.price !== undefined && item.price !== '') {
+    onPriceChange(index)
+  }
+}
+
+// 件数改变时自动换算数量
+const onPackagesChange = (index) => {
+  const item = formData.value.items[index]
+
+  // 如果有换算比例，自动计算数量
+  if (item.conversionRate && item.packages) {
+    item.quantity = item.packages * item.conversionRate
+  }
+
+  calculateRowAmount(index)
+}
+
+// 数量改变时自动换算件数
+const onQuantityChange = (index) => {
+  const item = formData.value.items[index]
+
+  // 如果有换算比例，自动计算件数
+  if (item.conversionRate && item.quantity) {
+    item.packages = item.quantity / item.conversionRate
+  }
+
   calculateRowAmount(index)
 }
 
@@ -534,12 +600,15 @@ const addRow = (index) => {
     packages: null,
     quantity: null,
     price: null,
+    taxRate: null,
     taxIncludedPrice: null,
     amount: null,
     totalAmount: null,
     remark: '',
     showDropdown: false,
-    filteredProducts: []
+    filteredProducts: [],
+    unitConversions: [],
+    conversionRate: null
   })
 }
 
@@ -567,19 +636,18 @@ const totalTaxAmount = computed(() => {
   return formData.value.items.reduce((sum, item) => sum + (item.totalAmount || 0), 0)
 })
 
-// 折扣后金额
-const discountedAmount = computed(() => {
-  const rate = formData.value.discountRate
-  if (rate === null || rate === undefined || rate === '') return null
-  return totalAmount.value * (rate / 100)
-})
+// 监听含税金额变化，自动更新折扣金额
+watch(totalTaxAmount, (newTotal) => {
+  // 自动将折扣金额设为含税金额总计
+  formData.value.discountAmount = newTotal
+}, { immediate: true })
 
-// 应收金额
+// 应收金额 = 折扣金额 + 其他费用
 const shouldReceive = computed(() => {
-  const discounted = discountedAmount.value
+  const discount = formData.value.discountAmount
   const fees = formData.value.otherFees
-  if (discounted === null && !fees) return null
-  return (discounted || 0) + (fees || 0)
+  if (discount === null && !fees) return null
+  return (discount || 0) + (fees || 0)
 })
 
 // 本次收款
@@ -597,11 +665,6 @@ const currentDebt = computed(() => {
 
 // 未收金额
 const unpaidAmount = ref(0)
-
-// 计算折扣
-const calculateDiscount = () => {
-  // 触发计算
-}
 
 // 计算最终金额
 const calculateFinal = () => {
@@ -1013,29 +1076,30 @@ onMounted(() => {
 .bottom-info-bar {
   background: white;
   padding: 12px 16px;
-  display: flex;
-  justify-content: space-between;
   border-top: 1px solid #e5e7eb;
-  gap: 20px;
-}
-
-.left-section {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.right-section {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  min-width: 700px;
+}
+
+.finance-row-full {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
 }
 
 .finance-row {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-end;
 }
 
 .finance-item {
