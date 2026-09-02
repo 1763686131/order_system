@@ -1,6 +1,5 @@
 """
 订单管理 API 路由
-100%从旧代码移植
 """
 from flask import Blueprint, request, jsonify
 from utils.db_helper import read_orders, write_orders, read_users

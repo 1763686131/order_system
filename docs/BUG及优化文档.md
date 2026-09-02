@@ -6,3 +6,38 @@
 组件src\views\admin\orders\UnifiedOrderList.vue，右边的录入和修改按钮有隐藏显示的问题，之前的功能是如果没有值，就有录入按钮，隐藏修改按钮，当我录入完成审核完成后，就隐藏录入按钮显示修改，把值修改为空时，录入按钮和修改按钮都会隐藏，改下逻辑，之前的修改按钮是按照值的空来判断的，改成审核判断，只要点击审核都会有显示录入按钮隐藏录入按钮，不会因为值为空而隐藏。（已修复）
 
 2、，当用户从父组件src\views\admin\orders\UnifiedOrderList.vue点进src\components\common\ShippedOrderActionModal.vue子组件时，应当把客户数据和发货方式都传入子组件，然后当用户点击录入或者修改按钮的时候渲染出来数据。从原先的“已出库订单管理”下面增加客户名字：和发货方式，渲染数据就是刚才传进来的数据。 修改按钮同样。（已修复）
+
+
+
+src\views\admin\orders\OrderForm.vue这是一个销售入库单，他的功能就是把客户下的订单完整的录入数据库中，里面现在的元素有获取客户列表，获取商品列表，获取库存，获取仓库，获取应收欠款，等等、功能基本都完善差不多了，先就差保存提交了，当我点击保存提交的时候，会把表单上传到数据库里data\orders_db.json里面
+
+
+          {
+            "id": 11,
+            "title": 
+            "status": "shipped",
+            "type": 0,
+            "date": "2026-07-14 14:41",
+            "completed_date": "2026-07-20 17:56",
+            "order_client": "张杰订单",
+            "receiver_name": "段洪强",
+            "receiver_phone": "15527382584",
+            "receiver_address": "湖北省武汉市江夏区光谷芯中心二期E区9栋 武汉海威船舶与海洋工程科技有限公司",
+            "goods_name": "碳纤维胶5公斤。用白桶装了 贴个品名和配比标签就好了 送客户做实验",
+            "goods_weight": "5kg",
+            "goods_quantity": "1件",
+            "goods_packaging": "桶装",
+            "logistics_service": [
+                "送货上门+回单拍照回传"
+            ],
+            "remark": "",
+            "shipping_method": 0,
+            "shipping_custom": "",
+            "logistics_no": "无单号记录",
+            "shipped_date": "2026-07-20 17:56",
+            "audit_state": 1,
+            "store_id": 2
+        },
+
+    
+这是我之前的数据库存放的数据表格式，我之前在src\components\front\OrderFormModal.vue组件里写过录入订单的结构样式，可以参考一下，但是我对于之前的订单录入组件的结构样式和数据都不满意，因为客户列表是现输入的，而不是从数据库拿取的，商品也是现数，根本没有库存和单位的概念，所以我重构了这个组件，变成src\views\admin\orders\OrderForm.vue，现在头疼的是，以前其它页面的获取数据接口是现在这个老的数据表，我想重构它不是一时半会就能重构的，请给我方案和建议，不用改我代码，先给我方案建议，我先参考，是先在原先的数据里面增加新的数据类型，还是直接重构，在前端慢慢来改？
