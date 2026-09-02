@@ -51,17 +51,22 @@
     <div class="contact-info-bar">
       <div class="info-group">
         <label>联系人:</label>
-        <input type="text" v-model="formData.contactPerson" readonly />
+        <input type="text" v-model="formData.contactPerson" placeholder="请输入联系人" />
       </div>
 
       <div class="info-group">
         <label>联系方式:</label>
-        <input type="tel" v-model="formData.contactPhone" readonly />
+        <input type="tel" v-model="formData.contactPhone" placeholder="请输入联系方式" />
       </div>
 
       <div class="info-group wide">
         <label>联系地址:</label>
         <input type="text" v-model="formData.contactAddress" placeholder="请输入联系地址" />
+      </div>
+
+      <div class="info-group">
+        <label>工程项目:</label>
+        <input type="text" v-model="formData.projectName" placeholder="选填" />
       </div>
     </div>
 
@@ -199,27 +204,19 @@
       <div class="finance-row">
         <div class="finance-item">
           <span class="finance-label">客户欠款:</span>
-          <span class="finance-value">{{ customerDebt ? customerDebt.toFixed(2) : '' }}</span>
+          <span class="finance-value">{{ customerDebt ? customerDebt.toFixed(2) : '0.00' }}</span>
         </div>
         <div class="finance-item">
           <span class="finance-label">本单应收:</span>
-          <span class="finance-value">{{ shouldReceive ? shouldReceive.toFixed(2) : '' }}</span>
+          <span class="finance-value">{{ shouldReceive ? shouldReceive.toFixed(2) : '0.00' }}</span>
         </div>
         <div class="finance-item">
-          <span class="finance-label highlight">本次收款:</span>
-          <span class="finance-value highlight">{{ finalAmount ? finalAmount.toFixed(2) : '' }}</span>
+          <label>本次收款:</label>
+          <input type="number" v-model.number="formData.currentPayment" @input="calculateFinal" min="0" step="0.01" />
         </div>
         <div class="finance-item">
           <span class="finance-label red">本单欠款:</span>
-          <span class="finance-value red">{{ currentDebt ? currentDebt.toFixed(2) : '' }}</span>
-        </div>
-        <div class="finance-item">
-          <span class="finance-label">未收金额:</span>
-          <span class="finance-value">{{ unpaidAmount || '' }}</span>
-        </div>
-        <div class="finance-item">
-          <span class="finance-label">未收:</span>
-          <span class="finance-value">{{ unpaidAmount || 0 }}</span>
+          <span class="finance-value red">{{ currentDebt ? currentDebt.toFixed(2) : '0.00' }}</span>
         </div>
       </div>
 
@@ -259,6 +256,7 @@ const formData = ref({
   contactPerson: '',
   contactPhone: '',
   contactAddress: '',
+  projectName: '',
   salesPerson: '',
   creator: '',
   orderRemark: '',
@@ -266,7 +264,7 @@ const formData = ref({
   discountAmount: null,
   otherFees: null,
   settlementAccount: '',
-  points: null,
+  currentPayment: 0,
   printAfterSave: false,
   items: []
 })
@@ -650,26 +648,50 @@ const shouldReceive = computed(() => {
   return (discount || 0) + (fees || 0)
 })
 
-// 本次收款
-const finalAmount = computed(() => {
-  return shouldReceive.value
-})
-
 // 客户欠款
 const customerDebt = ref(0)
 
-// 本单欠款
+// 本单欠款 = 折扣金额 + 其他费用 - 本次收款
 const currentDebt = computed(() => {
-  return 0
+  const discount = formData.value.discountAmount || 0
+  const fees = formData.value.otherFees || 0
+  const payment = formData.value.currentPayment || 0
+  return discount + fees - payment
 })
-
-// 未收金额
-const unpaidAmount = ref(0)
 
 // 计算最终金额
 const calculateFinal = () => {
   // 触发计算
 }
+
+// 加载客户欠款
+const loadCustomerDebt = async (customerId) => {
+  if (!customerId) {
+    customerDebt.value = 0
+    return
+  }
+  try {
+    const response = await request({
+      url: `/customers/${customerId}`,
+      method: 'GET'
+    })
+    if (response && response.receivable !== undefined) {
+      customerDebt.value = response.receivable
+    }
+  } catch (error) {
+    console.error('加载客户欠款失败:', error)
+    customerDebt.value = 0
+  }
+}
+
+// 监听客户选择变化
+watch(() => formData.value.customerId, (newCustomerId) => {
+  if (newCustomerId) {
+    loadCustomerDebt(newCustomerId)
+  } else {
+    customerDebt.value = 0
+  }
+})
 
 // 保存
 const handleSave = () => {
@@ -1109,41 +1131,44 @@ onMounted(() => {
 }
 
 .finance-item label {
-  font-size: 13px;
-  color: #6b7280;
+  font-size: 15px;
+  font-weight: 500;
+  color: #374151;
   white-space: nowrap;
 }
 
 .finance-item input,
 .finance-item select {
-  height: 28px;
-  padding: 0 8px;
+  height: 32px;
+  padding: 0 10px;
   border: 1px solid #d1d5db;
   border-radius: 4px;
-  font-size: 13px;
+  font-size: 15px;
   outline: none;
-  width: 100px;
+  width: 120px;
 }
 
 .finance-label {
-  font-size: 13px;
-  color: #6b7280;
+  font-size: 15px;
+  font-weight: 500;
+  color: #374151;
 }
 
 .finance-value {
-  font-size: 13px;
+  font-size: 16px;
   font-weight: 600;
-  color: #374151;
+  color: #111827;
+  min-width: 80px;
 }
 
 .finance-value.highlight {
   color: #10b981;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .finance-value.red {
   color: #ef4444;
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .action-row {
@@ -1187,5 +1212,16 @@ onMounted(() => {
 
 .btn-save-final:hover {
   background: #2563eb;
+}
+
+/* 隐藏数字输入框的上下箭头 */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
 }
 </style>
