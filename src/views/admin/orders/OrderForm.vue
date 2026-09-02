@@ -3,7 +3,7 @@
     <!-- 顶部信息区 -->
     <div class="top-info-bar">
       <div class="info-group">
-        <label>🏪 门店</label>
+        <label>门店</label>
         <select v-model="formData.storeId" @change="onStoreChange">
           <option value="">请选择门店</option>
           <option v-for="store in stores" :key="store.id" :value="store.id">
@@ -13,7 +13,7 @@
       </div>
 
       <div class="info-group">
-        <label>👤 客户</label>
+        <label>客户</label>
         <select v-model="formData.customerId" @change="onCustomerChange">
           <option value="">请选择客户</option>
           <option v-for="customer in filteredCustomers" :key="customer.id" :value="customer.id">
@@ -23,7 +23,7 @@
       </div>
 
       <div class="info-group">
-        <label>📦 仓库</label>
+        <label>仓库</label>
         <select v-model="formData.warehouseId" @change="onWarehouseChange">
           <option value="">请选择仓库</option>
           <option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="warehouse.id">
@@ -33,12 +33,12 @@
       </div>
 
       <div class="info-group">
-        <label>📅 单据日期</label>
+        <label>单据日期</label>
         <input type="date" v-model="formData.orderDate" />
       </div>
 
       <div class="info-group">
-        <label>🔖 单据编号</label>
+        <label>单据编号</label>
         <input type="text" v-model="formData.orderNumber" placeholder="ZG+日期+ID" />
       </div>
 
