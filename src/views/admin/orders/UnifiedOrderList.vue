@@ -147,27 +147,35 @@
             </td>
             <td class="col-date">{{ formatDate(order) }}</td>
             <td class="col-customer">{{ order.order_client || '-' }}</td>
-            <td class="col-receiver">{{ order.receiver_name || '-' }}</td>
-            <td class="col-phone">{{ order.receiver_phone || '-' }}</td>
+            <td class="col-receiver">{{ getContactPerson(order) }}</td>
+            <td class="col-phone">{{ getContactPhone(order) }}</td>
             <td class="col-address">
               <div class="expandable-cell">
-                <span class="cell-text">{{ (order.receiver_address || '-').substring(0, 6) }}</span>
+                <span class="cell-text">{{ getContactAddress(order).substring(0, 6) }}</span>
                 <span
-                  v-if="order.receiver_address && order.receiver_address.length > 6"
+                  v-if="getContactAddress(order).length > 6"
                   class="expand-icon"
-                  @click="showExpandModal(order.receiver_address, '收货地址')"
+                  @click="showExpandModal(getContactAddress(order), '收货地址')"
                 >
                   ▼
                 </span>
               </div>
             </td>
-            <td class="col-goods">
+            <td class="col-goods" :title="getGoodsTooltip(order)">
               <div class="expandable-cell">
-                <span class="cell-text">{{ (order.goods_name || '-').substring(0, 10) }}</span>
+                <span class="cell-text">{{ getGoodsDisplay(order).substring(0, 10) }}</span>
                 <span
-                  v-if="order.goods_name && order.goods_name.length > 10"
+                  v-if="isNewOrder(order)"
+                  class="expand-icon detail-btn"
+                  @click="showOrderDetail(order)"
+                  title="查看明细"
+                >
+                  📋
+                </span>
+                <span
+                  v-else-if="getGoodsDisplay(order).length > 10"
                   class="expand-icon"
-                  @click="showExpandModal(order.goods_name, '货物信息')"
+                  @click="showExpandModal(getGoodsDisplay(order), '货物信息')"
                 >
                   ▼
                 </span>
@@ -176,17 +184,17 @@
 
             <!-- 财务模式列 -->
             <template v-if="mode === 'finance'">
-              <td class="col-amount amount-receivable">-</td>
-              <td class="col-amount amount-received">-</td>
+              <td class="col-amount amount-receivable">{{ getShouldReceive(order) }}</td>
+              <td class="col-amount amount-received">{{ getCurrentPayment(order) }}</td>
               <td class="col-amount amount-unpaid">
-                <span>-</span>
+                <span>{{ getCurrentDebt(order) }}</span>
               </td>
             </template>
 
             <!-- 物流模式列 -->
             <template v-if="mode === 'logistics'">
               <td class="col-weight">
-                <span class="weight-text">{{ order.goods_weight || '-' }}</span>
+                <span class="weight-text">{{ getTotalWeight(order) }}</span>
               </td>
               <td class="col-shipping">
                 <span
@@ -388,6 +396,108 @@
         </div>
       </div>
     </div>
+
+    <!-- 商品明细弹窗 -->
+    <div v-if="orderDetailVisible" class="expand-modal-overlay" @click="closeOrderDetail">
+      <div class="order-detail-modal" @click.stop>
+        <div class="order-detail-header">
+          <h3>订单明细</h3>
+          <button class="modal-close-btn" @click="closeOrderDetail">✕</button>
+        </div>
+        <div class="order-detail-body">
+          <!-- 基本信息 -->
+          <div class="detail-section">
+            <div class="detail-row">
+              <span class="detail-label">订单编号：</span>
+              <span class="detail-value">{{ currentDetailOrder?.order_number || '-' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">客户名称：</span>
+              <span class="detail-value">{{ currentDetailOrder?.order_client || '-' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">订单日期：</span>
+              <span class="detail-value">{{ currentDetailOrder?.order_date || currentDetailOrder?.date || '-' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">工程项目：</span>
+              <span class="detail-value">{{ currentDetailOrder?.project_name || '-' }}</span>
+            </div>
+          </div>
+
+          <!-- 商品明细表格 -->
+          <div class="detail-section">
+            <h4>商品明细</h4>
+            <table class="detail-table">
+              <thead>
+                <tr>
+                  <th>序号</th>
+                  <th>商品名称</th>
+                  <th>规格型号</th>
+                  <th>单位</th>
+                  <th>件数</th>
+                  <th>数量</th>
+                  <th>单价</th>
+                  <th>金额</th>
+                  <th>含税金额</th>
+                  <th>备注</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in currentDetailOrder?.order_goods" :key="index">
+                  <td>{{ index + 1 }}</td>
+                  <td>{{ getGoodsItemName(item) }}</td>
+                  <td>{{ item.spec || '-' }}</td>
+                  <td>{{ item.unit || '-' }}</td>
+                  <td>{{ item.packages || '-' }}</td>
+                  <td>{{ item.quantity || '-' }}</td>
+                  <td>{{ item.price ? `¥${item.price.toFixed(2)}` : '-' }}</td>
+                  <td>{{ item.amount ? `¥${item.amount.toFixed(2)}` : '-' }}</td>
+                  <td>{{ item.total_amount ? `¥${item.total_amount.toFixed(2)}` : '-' }}</td>
+                  <td>{{ item.remark || '-' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 财务汇总 -->
+          <div class="detail-section financial-summary">
+            <div class="summary-row">
+              <span class="summary-label">小计（不含税）：</span>
+              <span class="summary-value">{{ currentDetailOrder?.subtotal_amount ? `¥${currentDetailOrder.subtotal_amount.toFixed(2)}` : '-' }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">税额：</span>
+              <span class="summary-value">{{ currentDetailOrder?.tax_amount ? `¥${currentDetailOrder.tax_amount.toFixed(2)}` : '-' }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">价税合计：</span>
+              <span class="summary-value">{{ currentDetailOrder?.total_amount ? `¥${currentDetailOrder.total_amount.toFixed(2)}` : '-' }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">折扣金额：</span>
+              <span class="summary-value">{{ currentDetailOrder?.discount_amount ? `¥${currentDetailOrder.discount_amount.toFixed(2)}` : '¥0.00' }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">其他费用：</span>
+              <span class="summary-value">{{ currentDetailOrder?.other_fees ? `¥${currentDetailOrder.other_fees.toFixed(2)}` : '¥0.00' }}</span>
+            </div>
+            <div class="summary-row highlight">
+              <span class="summary-label">本单应收：</span>
+              <span class="summary-value">{{ currentDetailOrder?.should_receive ? `¥${currentDetailOrder.should_receive.toFixed(2)}` : '-' }}</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">本次收款：</span>
+              <span class="summary-value">{{ currentDetailOrder?.current_payment ? `¥${currentDetailOrder.current_payment.toFixed(2)}` : '¥0.00' }}</span>
+            </div>
+            <div class="summary-row highlight">
+              <span class="summary-label">本单欠款：</span>
+              <span class="summary-value">{{ currentDetailOrder?.current_debt ? `¥${currentDetailOrder.current_debt.toFixed(2)}` : '-' }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -481,6 +591,7 @@ watch(() => props.mode, () => {
 const orders = ref([])
 const loading = ref(false)
 const stores = ref([])
+const products = ref([]) // 商品列表，用于反查商品名称
 
 // 排序状态
 const sortOrder = ref('desc') // 'desc' = 最近到远, 'asc' = 最远到近
@@ -593,17 +704,26 @@ const columnCount = computed(() => {
 const fetchOrdersData = async () => {
   loading.value = true
   try {
-    // 并行加载订单和门店数据
-    const [ordersResponse, storesData] = await Promise.all([
+    // 并行加载订单、门店和商品数据
+    const [ordersResponse, storesData, productsData] = await Promise.all([
       request({
         url: '/orders',
         method: 'GET'
       }),
-      getStores()
+      getStores(),
+      request({
+        url: '/products/inventory',
+        method: 'GET'
+      })
     ])
 
     // 只显示状态为 active 的门店
     stores.value = storesData.filter(store => store.status === 'active')
+
+    // 保存商品列表
+    if (productsData && Array.isArray(productsData)) {
+      products.value = productsData
+    }
 
     if (ordersResponse && Array.isArray(ordersResponse)) {
       // 更新 orderStore 的所有订单数据
@@ -664,15 +784,48 @@ const hasReceipt = (order) => {
 const filteredOrders = computed(() => {
   let result = [...orders.value]
 
-  // 关键词搜索
+  // 关键词搜索（扩展支持新字段）
   if (filters.value.keyword) {
     const keyword = filters.value.keyword.toLowerCase()
-    result = result.filter(order =>
-      String(order.id).toLowerCase().includes(keyword) ||
-      (order.order_client || '').toLowerCase().includes(keyword) ||
-      (order.receiver_name || '').toLowerCase().includes(keyword) ||
-      (props.mode === 'logistics' && (order.logistics_no || '').toLowerCase().includes(keyword))
-    )
+    result = result.filter(order => {
+      // 订单ID
+      if (String(order.id).toLowerCase().includes(keyword)) return true
+
+      // 订单编号（新订单）
+      if (order.order_number && order.order_number.toLowerCase().includes(keyword)) return true
+
+      // 客户名称
+      if ((order.order_client || '').toLowerCase().includes(keyword)) return true
+
+      // 联系人（新旧字段）
+      if ((order.contact_person || '').toLowerCase().includes(keyword)) return true
+      if ((order.receiver_name || '').toLowerCase().includes(keyword)) return true
+
+      // 联系地址（新旧字段）
+      if ((order.contact_address || '').toLowerCase().includes(keyword)) return true
+      if ((order.receiver_address || '').toLowerCase().includes(keyword)) return true
+
+      // 工程项目（新订单）
+      if (order.project_name && order.project_name.toLowerCase().includes(keyword)) return true
+
+      // 商品名称（旧字段）
+      if ((order.goods_name || '').toLowerCase().includes(keyword)) return true
+
+      // 商品明细（新字段）
+      if (order.order_goods && order.order_goods.length > 0) {
+        const hasMatch = order.order_goods.some(item =>
+          (item.goods_name || '').toLowerCase().includes(keyword)
+        )
+        if (hasMatch) return true
+      }
+
+      // 物流单号（物流模式）
+      if (props.mode === 'logistics' && (order.logistics_no || '').toLowerCase().includes(keyword)) {
+        return true
+      }
+
+      return false
+    })
   }
 
   // 分类筛选
@@ -746,6 +899,152 @@ const currentPageFreightTotal = computed(() => {
 const isSelected = (orderId) => {
   return selectedOrders.value.includes(orderId)
 }
+
+// ========== 新旧字段兼容辅助函数 ==========
+
+// 获取联系人
+const getContactPerson = (order) => {
+  return order.contact_person || order.receiver_name || '-'
+}
+
+// 获取联系电话
+const getContactPhone = (order) => {
+  return order.contact_phone || order.receiver_phone || '-'
+}
+
+// 获取联系地址
+const getContactAddress = (order) => {
+  return order.contact_address || order.receiver_address || '-'
+}
+
+// 获取商品信息显示
+const getGoodsDisplay = (order) => {
+  // 1. 如果有 order_goods 数组（新订单）
+  if (order.order_goods && order.order_goods.length > 0) {
+    const first = order.order_goods[0]
+    const count = order.order_goods.length
+    if (count > 1) {
+      return `${first.goods_name} 等${count}件商品`
+    }
+    return `${first.goods_name} ${first.spec || ''}`
+  }
+  // 2. 回退到旧字段
+  return order.goods_name || '-'
+}
+
+// 获取商品信息悬停提示
+const getGoodsTooltip = (order) => {
+  if (!order.order_goods || order.order_goods.length === 0) {
+    return order.goods_name || '-'
+  }
+  return order.order_goods.map(item =>
+    `${item.goods_name} ${item.spec || ''} x${item.quantity}`
+  ).join('\n')
+}
+
+// 获取总重量
+const getTotalWeight = (order) => {
+  // 1. 如果有 order_goods 数组
+  if (order.order_goods && order.order_goods.length > 0) {
+    const total = order.order_goods.reduce((sum, item) => sum + (item.quantity || 0), 0)
+    const unit = order.order_goods[0]?.unit || 'kg'
+    return `${total}${unit}`
+  }
+  // 2. 回退到旧字段
+  return order.goods_weight || '-'
+}
+
+// 获取件数
+const getPackageCount = (order) => {
+  // 1. 如果有 order_goods 数组
+  if (order.order_goods && order.order_goods.length > 0) {
+    const total = order.order_goods.reduce((sum, item) => sum + (item.packages || 0), 0)
+    return `${total}件`
+  }
+  // 2. 回退到旧字段
+  return order.goods_quantity || '-'
+}
+
+// 获取应收金额
+const getShouldReceive = (order) => {
+  if (order.should_receive !== undefined && order.should_receive !== null) {
+    return `¥${order.should_receive.toFixed(2)}`
+  }
+  if (order.total_amount !== undefined && order.total_amount !== null) {
+    return `¥${order.total_amount.toFixed(2)}`
+  }
+  return '-'
+}
+
+// 获取已收金额
+const getCurrentPayment = (order) => {
+  if (order.current_payment !== undefined && order.current_payment !== null) {
+    return `¥${order.current_payment.toFixed(2)}`
+  }
+  return '-'
+}
+
+// 获取未收金额
+const getCurrentDebt = (order) => {
+  if (order.current_debt !== undefined && order.current_debt !== null) {
+    return `¥${order.current_debt.toFixed(2)}`
+  }
+  // 如果没有 current_debt，尝试计算
+  if (order.should_receive !== undefined && order.current_payment !== undefined) {
+    const debt = order.should_receive - order.current_payment
+    return `¥${debt.toFixed(2)}`
+  }
+  return '-'
+}
+
+// 判断是否为新订单（有商品明细）
+const isNewOrder = (order) => {
+  return order.order_goods && order.order_goods.length > 0
+}
+
+// 根据 product_id 查找商品名称
+const getProductNameById = (productId) => {
+  if (!productId) return '-'
+  const product = products.value.find(p => p.id === productId)
+  return product ? product.name : `商品#${productId}`
+}
+
+// 获取商品明细的商品名称（兼容空 goods_name）
+const getGoodsItemName = (item) => {
+  // 1. 优先使用 goods_name
+  if (item.goods_name && item.goods_name.trim()) {
+    return item.goods_name
+  }
+  // 2. 回退到通过 product_id 查找
+  if (item.product_id) {
+    return getProductNameById(item.product_id)
+  }
+  // 3. 都没有，返回默认值
+  return '-'
+}
+
+// 商品明细弹窗状态
+const orderDetailVisible = ref(false)
+const currentDetailOrder = ref(null)
+
+// 显示商品明细弹窗
+const showOrderDetail = (order) => {
+  console.log('打开订单明细弹窗', order)
+  console.log('订单编号:', order.order_number)
+  console.log('商品明细:', order.order_goods)
+  currentDetailOrder.value = order
+  orderDetailVisible.value = true
+  console.log('弹窗状态:', orderDetailVisible.value)
+}
+
+// 关闭商品明细弹窗
+const closeOrderDetail = () => {
+  console.log('关闭订单明细弹窗')
+  orderDetailVisible.value = false
+  currentDetailOrder.value = null
+}
+
+// ========== 原有方法 ==========
 
 const toggleSelect = (orderId) => {
   const index = selectedOrders.value.indexOf(orderId)
@@ -1935,7 +2234,7 @@ const changePageSize = (size) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
+  z-index: 99999 !important;
   animation: fadeIn 0.2s ease;
 }
 
@@ -2134,12 +2433,170 @@ const changePageSize = (size) => {
 
 .freight-total {
   display: flex;
+}
+
+/* 商品明细弹窗样式 */
+.order-detail-modal {
+  background: #fff;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 1200px;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  z-index: 100000 !important;
+  position: relative;
+}
+
+.order-detail-header {
+  display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 16px;
-  background: #e6f4ff;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.order-detail-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.order-detail-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.detail-section {
+  margin-bottom: 24px;
+}
+
+.detail-section h4 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #34d399;
+  padding-bottom: 8px;
+}
+
+.detail-row {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.detail-row:last-child {
+  border-bottom: none;
+}
+
+.detail-label {
+  min-width: 100px;
+  font-weight: 500;
+  color: #6b7280;
+  font-size: 14px;
+}
+
+.detail-value {
+  color: #111827;
+  font-size: 14px;
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 8px;
-  border: 2px solid #91caff;
+  overflow: hidden;
+}
+
+.detail-table thead {
+  background: #f9fafb;
+}
+
+.detail-table th {
+  padding: 12px 8px;
+  text-align: center;
+  font-weight: 600;
+  color: #374151;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 13px;
+}
+
+.detail-table td {
+  padding: 10px 8px;
+  text-align: center;
+  border-bottom: 1px solid #f3f4f6;
+  color: #4b5563;
+}
+
+.detail-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.detail-table tbody tr:hover {
+  background: #f9fafb;
+}
+
+.financial-summary {
+  background: #f9fafb;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  font-size: 14px;
+}
+
+.summary-label {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.summary-value {
+  color: #111827;
+  font-weight: 600;
+}
+
+.summary-row.highlight {
+  padding: 12px 0;
+  border-top: 2px solid #e5e7eb;
+  border-bottom: 2px solid #e5e7eb;
+  margin: 8px 0;
+}
+
+.summary-row.highlight .summary-label {
+  font-size: 15px;
+  color: #374151;
+  font-weight: 600;
+}
+
+.summary-row.highlight .summary-value {
+  font-size: 16px;
+  color: #34d399;
+}
+
+/* 商品列的查看明细按钮 */
+.detail-btn {
+  cursor: pointer;
+  font-size: 16px;
+  transition: transform 0.2s;
+}
+
+.detail-btn:hover {
+  transform: scale(1.2);
 }
 
 .total-label {

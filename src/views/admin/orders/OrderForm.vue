@@ -480,6 +480,7 @@ const selectProduct = (index, product) => {
   const item = formData.value.items[index]
   item.productId = product.id
   item.productName = product.name
+  item.goodsName = product.name  // 添加这行，保证保存时字段不为空
   item.spec = product.specification || ''
 
   // 根据 unitId 查找单位名称

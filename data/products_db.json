@@ -426,10 +426,22 @@
             "updatedAt": "2026-09-04 14:47:41"
         },
         "2": {
-            "stock": 50000,
+            "stock": 48800,
             "minStock": 0,
             "maxStock": 0,
-            "updatedAt": "2026-09-04 14:48:11"
+            "updatedAt": "2026-09-04 15:17:43"
+        },
+        "3": {
+            "stock": -20,
+            "minStock": 0,
+            "maxStock": 0,
+            "updatedAt": "2026-09-04 15:17:43"
+        },
+        "5": {
+            "stock": -2000,
+            "minStock": 0,
+            "maxStock": 0,
+            "updatedAt": "2026-09-04 15:18:42"
         }
     }
 }
