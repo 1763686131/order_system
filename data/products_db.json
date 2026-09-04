@@ -420,10 +420,16 @@
     ],
     "inventory": {
         "1": {
-            "stock": 2000,
+            "stock": 4000,
             "minStock": 0,
             "maxStock": 0,
-            "updatedAt": "2026-09-01 13:41:11"
+            "updatedAt": "2026-09-04 14:47:41"
+        },
+        "2": {
+            "stock": 50000,
+            "minStock": 0,
+            "maxStock": 0,
+            "updatedAt": "2026-09-04 14:48:11"
         }
     }
 }

@@ -225,8 +225,12 @@
           <input type="checkbox" v-model="formData.printAfterSave" />
           保存后打印
         </label>
-        <button class="btn-save-and-print" @click="handleSaveAndPrint">💾 保存并打印</button>
-        <button class="btn-save-final" @click="handleSaveFinal">保存(ctrl+Q)</button>
+        <button class="btn-save-and-print" @click="handleSaveAndPrint" :disabled="saving">
+          {{ saving ? '⏳ 保存中...' : '💾 保存并打印' }}
+        </button>
+        <button class="btn-save-final" @click="handleSaveFinal" :disabled="saving">
+          {{ saving ? '⏳ 保存中...' : '保存(ctrl+Q)' }}
+        </button>
       </div>
     </div>
   </div>
@@ -384,10 +388,11 @@ const loadWarehouses = async () => {
   }
 }
 
-// 加载商品
+// 加载商品（包含库存信息）
 const loadProducts = async () => {
   try {
-    const response = await request({ url: '/products', method: 'GET' })
+    // 使用 /products/inventory 接口，返回的数据包含库存信息
+    const response = await request({ url: '/products/inventory', method: 'GET' })
     if (response && Array.isArray(response)) {
       products.value = response
     }
@@ -693,20 +698,172 @@ watch(() => formData.value.customerId, (newCustomerId) => {
   }
 })
 
-// 保存
-const handleSave = () => {
-  console.log('保存订单:', formData.value)
+// 表单校验
+const validateForm = () => {
+  // 1. 检查门店
+  if (!formData.value.storeId) {
+    alert('请选择门店')
+    return false
+  }
+
+  // 2. 检查客户
+  if (!formData.value.customerId) {
+    alert('请选择客户')
+    return false
+  }
+
+  // 3. 检查仓库
+  if (!formData.value.warehouseId) {
+    alert('请选择仓库')
+    return false
+  }
+
+  // 4. 检查联系人信息
+  if (!formData.value.contactPerson) {
+    alert('请填写联系人')
+    return false
+  }
+
+  if (!formData.value.contactPhone) {
+    alert('请填写联系方式')
+    return false
+  }
+
+  // 5. 检查商品明细
+  const validItems = formData.value.items.filter(item =>
+    item.productId && item.quantity && item.price
+  )
+
+  if (validItems.length === 0) {
+    alert('请至少添加一条有效的商品明细（商品、数量、单价必填）')
+    return false
+  }
+
+  // 6. 检查每个商品的必填字段
+  for (let i = 0; i < validItems.length; i++) {
+    const item = validItems[i]
+
+    if (!item.packages || item.packages <= 0) {
+      alert(`第 ${i + 1} 行商品的件数必须大于0`)
+      return false
+    }
+
+    if (!item.quantity || item.quantity <= 0) {
+      alert(`第 ${i + 1} 行商品的数量必须大于0`)
+      return false
+    }
+
+    if (!item.price || item.price <= 0) {
+      alert(`第 ${i + 1} 行商品的单价必须大于0`)
+      return false
+    }
+  }
+
+  return true
+}
+
+// 保存订单
+const saving = ref(false)
+
+const handleSave = async (printAfterSave = false) => {
+  // 1. 校验表单
+  if (!validateForm()) return
+
+  // 2. 防止重复提交
+  if (saving.value) {
+    alert('正在保存中，请稍候...')
+    return
+  }
+
+  try {
+    saving.value = true
+
+    // 3. 过滤有效商品
+    const validItems = formData.value.items.filter(item =>
+      item.productId && item.quantity && item.price
+    )
+
+    // 4. 构建请求数据
+    const requestData = {
+      storeId: formData.value.storeId,
+      customerId: formData.value.customerId,
+      warehouseId: formData.value.warehouseId,
+      orderDate: formData.value.orderDate,
+      orderNumber: formData.value.orderNumber,
+      contactPerson: formData.value.contactPerson,
+      contactPhone: formData.value.contactPhone,
+      contactAddress: formData.value.contactAddress,
+      projectName: formData.value.projectName,
+      salesPerson: formData.value.salesPerson,
+      creator: formData.value.creator,
+      orderRemark: formData.value.orderRemark,
+      taxRate: formData.value.taxRate,
+      discountAmount: formData.value.discountAmount || 0,
+      otherFees: formData.value.otherFees || 0,
+      settlementAccount: formData.value.settlementAccount,
+      currentPayment: formData.value.currentPayment || 0,
+      items: validItems.map(item => ({
+        productId: item.productId,
+        goodsName: item.goodsName,
+        spec: item.spec,
+        unit: item.unit,
+        warehouseId: item.warehouseId,
+        packages: item.packages,
+        quantity: item.quantity,
+        price: item.price,
+        taxRate: item.taxRate,
+        taxIncludedPrice: item.taxIncludedPrice,
+        amount: item.amount,
+        totalAmount: item.totalAmount,
+        remark: item.remark
+      }))
+    }
+
+    // 5. 调用接口
+    const response = await request({
+      url: '/orders',
+      method: 'POST',
+      data: requestData
+    })
+
+    // 6. 处理结果
+    if (response && response.success) {
+      alert(`订单保存成功！\n订单编号：${response.orderNumber}`)
+
+      if (printAfterSave) {
+        // TODO: 打印逻辑
+        console.log('执行打印操作...')
+      }
+
+      // 关闭窗口
+      handleClose()
+    } else {
+      alert('订单保存失败：' + (response?.message || '未知错误'))
+    }
+  } catch (error) {
+    console.error('保存订单失败:', error)
+
+    // 错误处理
+    if (error.response && error.response.data && error.response.data.message) {
+      alert('保存失败：' + error.response.data.message)
+    } else if (error.message) {
+      alert('保存失败：' + error.message)
+    } else {
+      alert('保存失败：网络错误，请检查网络连接')
+    }
+  } finally {
+    saving.value = false
+  }
 }
 
 // 保存并打印
 const handleSaveAndPrint = () => {
-  console.log('保存并打印')
-  handleSave()
+  handleSave(true)
 }
 
 // 最终保存
 const handleSaveFinal = () => {
-  handleSave()
+  handleSave(false)
 }
 
 // 关闭
@@ -1206,12 +1363,23 @@ onMounted(() => {
   background: #059669;
 }
 
+.btn-save-and-print:disabled,
+.btn-save-final:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
 .btn-save-final {
   background: #3b82f6;
 }
 
 .btn-save-final:hover {
   background: #2563eb;
+}
+
+.btn-save-final:disabled {
+  background: #9ca3af;
 }
 
 /* 隐藏数字输入框的上下箭头 */

@@ -60,8 +60,20 @@ def get_orders():
 
 @orders_bp.route('', methods=['POST'])
 def add_order():
-    """创建新订单"""
-    req_data = request.json
+    """创建新订单 - 支持新旧两种格式"""
+    with orders_lock:
+        req_data = request.json
+
+        # 判断是新格式还是旧格式
+        is_new_format = 'items' in req_data and 'customerId' in req_data
+
+        if is_new_format:
+            return create_new_format_order(req_data)
+        else:
+            return create_old_format_order(req_data)
+
+def create_old_format_order(req_data):
+    """创建旧格式订单（兼容旧代码）"""
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
     ct = datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -71,8 +83,8 @@ def add_order():
         "id": new_id,
         "title": req_data.get('title', ''),
         "status": "pending",
-        "type": req_data.get('type', 1),
-        "store_id": req_data.get('type', 1),
+        "type": req_data.get('type', 0),
+        "store_id": req_data.get('store_id', 1),
         "date": ct,
         "completed_date": "",
         "shipped_date": "",
@@ -95,6 +107,222 @@ def add_order():
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True, "data": new_order})
+
+def create_new_format_order(req_data):
+    """创建新格式订单 - 新旧字段并存"""
+    from utils.db_helper import read_products, write_products
+
+    # 读取数据
+    orders_data = read_orders()
+    orders_list = orders_data.get('orders', [])
+    products_data = read_products()
+    products_list = products_data.get('products', [])
+
+    # 读取客户数据
+    customers_file = '/app/data/customers.json' if os.path.exists('/app/data/customers.json') else 'data/customers.json'
+    try:
+        with open(customers_file, 'r', encoding='utf-8') as f:
+            customers_data = json.load(f)
+            customers_list = customers_data.get('customers', [])
+    except:
+        customers_list = []
+
+    # 读取门店数据
+    from utils.db_helper import read_stores
+    stores_list = read_stores()
+
+    # 生成订单ID
+    new_id = max([x['id'] for x in orders_list], default=0) + 1
+
+    # 生成订单编号
+    order_number = req_data.get('orderNumber', '')
+    if not order_number:
+        now = datetime.now()
+        date_str = now.strftime('%Y%m%d')
+        order_number = f"ZG{date_str}{str(new_id).zfill(3)}"
+
+    # 获取客户信息
+    customer_id = req_data.get('customerId')
+    customer = next((c for c in customers_list if c['id'] == customer_id), None)
+    customer_name = customer['customerName'] if customer else ''
+    customer_receivable = customer['receivable'] if customer else 0
+
+    # 获取门店名称
+    store_id = req_data.get('storeId')
+    store = next((s for s in stores_list if s['id'] == store_id), None)
+    store_name = store['name'] if store else ''
+
+    # 处理商品明细
+    items = req_data.get('items', [])
+    order_goods = []
+    goods_name_parts = []
+    total_quantity = 0
+    total_packages = 0
+
+    # 库存检查和扣减
+    for item in items:
+        product_id = item.get('productId')
+        quantity = item.get('quantity', 0)
+        warehouse_id = item.get('warehouseId')
+
+        if not product_id or not quantity:
+            continue
+
+        # 查找商品
+        product = next((p for p in products_list if p['id'] == product_id), None)
+        if not product:
+            return jsonify({"success": False, "message": f"商品ID {product_id} 不存在"}), 400
+
+        # 不检查库存，允许负库存
+
+        # 构建商品明细
+        order_goods.append({
+            "product_id": product_id,
+            "goods_name": item.get('goodsName', ''),
+            "spec": item.get('spec', ''),
+            "unit": item.get('unit', ''),
+            "warehouse_id": warehouse_id,
+            "packages": item.get('packages', 0),
+            "quantity": quantity,
+            "price": item.get('price', 0),
+            "tax_rate": item.get('taxRate', 13),
+            "tax_included_price": item.get('taxIncludedPrice', 0),
+            "amount": item.get('amount', 0),
+            "total_amount": item.get('totalAmount', 0),
+            "remark": item.get('remark', '')
+        })
+
+        # 累加统计
+        goods_name_parts.append(f"{item.get('goodsName', '')} {item.get('spec', '')} x{quantity}")
+        total_quantity += quantity
+        total_packages += item.get('packages', 0)
+
+    # 如果没有有效商品，返回错误
+    if not order_goods:
+        return jsonify({"success": False, "message": "至少需要添加一条商品明细"}), 400
+
+    # 计算财务字段
+    subtotal_amount = sum(item['amount'] for item in order_goods)
+    tax_amount = sum(item['total_amount'] - item['amount'] for item in order_goods)
+    total_amount = sum(item['total_amount'] for item in order_goods)
+    discount_amount = req_data.get('discountAmount', total_amount)
+    other_fees = req_data.get('otherFees', 0)
+    should_receive = discount_amount + other_fees
+    current_payment = req_data.get('currentPayment', 0)
+    current_debt = should_receive - current_payment
+
+    # 拼接旧格式字段
+    goods_name = '、'.join(goods_name_parts)
+    goods_weight = f"{total_quantity}{order_goods[0]['unit']}" if order_goods else ""
+    goods_quantity = f"{total_packages}件"
+
+    # 获取第一个商品的单位作为默认单位
+    first_unit = order_goods[0]['unit'] if order_goods else 'kg'
+
+    # 构建完整订单数据（新旧字段并存）
+    ct = datetime.now().strftime('%Y-%m-%d %H:%M')
+    order_date = req_data.get('orderDate', ct.split(' ')[0])
+
+    new_order = {
+        # 基础字段
+        "id": new_id,
+        "title": "",
+        "status": "completed",
+        "type": 1,  # 新订单标识
+        "date": f"{order_date} {ct.split(' ')[1]}",
+        "completed_date": ct,
+        "shipped_date": "",
+        "shipping_method": 0,
+        "shipping_custom": "",
+        "logistics_no": "无单号记录",
+        "audit_state": 0,
+        "store_id": store_id,
+
+        # 旧字段（兼容性保留）
+        "order_client": customer_name,
+        "receiver_name": req_data.get('contactPerson', ''),
+        "receiver_phone": req_data.get('contactPhone', ''),
+        "receiver_address": req_data.get('contactAddress', ''),
+        "goods_name": goods_name,
+        "goods_weight": goods_weight,
+        "goods_quantity": goods_quantity,
+        "goods_packaging": "桶装",
+        "logistics_service": ["送货上门+回单拍照回传"],
+        "remark": req_data.get('orderRemark', ''),
+
+        # 新字段（规范化结构）
+        "customer_id": customer_id,
+        "warehouse_id": req_data.get('warehouseId'),
+        "order_number": order_number,
+        "contact_person": req_data.get('contactPerson', ''),
+        "contact_phone": req_data.get('contactPhone', ''),
+        "contact_address": req_data.get('contactAddress', ''),
+        "project_name": req_data.get('projectName', ''),
+        "sales_person": req_data.get('salesPerson', ''),
+        "creator": req_data.get('creator', ''),
+        "settlement_account": store_name,
+
+        # 商品明细
+        "order_goods": order_goods,
+
+        # 财务字段
+        "subtotal_amount": round(subtotal_amount, 2),
+        "tax_amount": round(tax_amount, 2),
+        "total_amount": round(total_amount, 2),
+        "discount_amount": round(discount_amount, 2),
+        "other_fees": round(other_fees, 2),
+        "should_receive": round(should_receive, 2),
+        "current_payment": round(current_payment, 2),
+        "current_debt": round(current_debt, 2),
+        "customer_receivable": customer_receivable
+    }
+
+    # 扣减库存（从 inventory 对象中扣减）
+    if 'inventory' not in products_data:
+        products_data['inventory'] = {}
+
+    inventory_list = products_data['inventory']
+
+    for item in items:
+        product_id = item.get('productId')
+        quantity = item.get('quantity', 0)
+
+        if not product_id or not quantity:
+            continue
+
+        product_id_str = str(product_id)
+
+        # 如果 inventory 中没有该商品记录，初始化为0
+        if product_id_str not in inventory_list:
+            inventory_list[product_id_str] = {
+                'stock': 0,
+                'minStock': 0,
+                'maxStock': 0,
+                'updatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+
+        # 扣减库存（允许负数）
+        current_stock = inventory_list[product_id_str].get('stock', 0)
+        inventory_list[product_id_str]['stock'] = current_stock - quantity
+        inventory_list[product_id_str]['updatedAt'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    products_data['inventory'] = inventory_list
+
+    # 保存订单
+    orders_list.append(new_order)
+    orders_data['orders'] = orders_list
+    write_orders(orders_data)
+
+    # 保存库存（只保存 inventory，不需要保存整个 products 数组）
+    write_products(products_data)
+
+    return jsonify({
+        "success": True,
+        "message": "订单保存成功",
+        "orderId": new_id,
+        "orderNumber": order_number,
+        "data": new_order
+    })
 
 @orders_bp.route('/<int:order_id>', methods=['PUT'])
 def update_order_status(order_id):
