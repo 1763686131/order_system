@@ -84,8 +84,8 @@
 
         <div class="header-right">
           <div class="header-actions">
-            <button class="btn-create-order" @click="goToCreateOrder">
-              ➕ 录入订单
+            <button class="btn-add-order" @click="goToCreateOrder">
+              ➕ 新增订单
             </button>
             <component v-if="headerActions" :is="headerActions"></component>
           </div>
@@ -285,6 +285,14 @@ const isChildActive = (children) => {
 const currentPath = computed(() => route.path)
 
 const currentMenuLabel = computed(() => {
+  // 特殊路由处理
+  if (currentPath.value === '/admin/orders/create') {
+    return '订单/新增订单'
+  }
+  if (currentPath.value.startsWith('/admin/orders/edit/')) {
+    return '订单/修改订单'
+  }
+
   // 先尝试从子菜单中查找
   for (const item of menuItems.value) {
     if (item.children) {
@@ -566,25 +574,26 @@ const logout = () => {
   gap: 12px;
 }
 
-.btn-create-order {
-  padding: 8px 16px;
-  background: #10b981;
+.btn-add-order {
+  padding: 10px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 6px;
+  border-radius: 8px;
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-.btn-create-order:hover {
-  background: #059669;
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
+.btn-add-order:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .header-tab {

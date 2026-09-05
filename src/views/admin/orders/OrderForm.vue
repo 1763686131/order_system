@@ -171,14 +171,14 @@
         <div class="info-group">
           <label>业务员</label>
           <select v-model="formData.salesPerson">
-            <option value="">威小全💰</option>
+            <option value="柯晓">柯晓</option>
           </select>
         </div>
 
         <div class="info-group">
           <label>制单人</label>
           <select v-model="formData.creator">
-            <option value="">总经理🔒</option>
+            <option value="下单员">下单员</option>
           </select>
         </div>
 
@@ -233,6 +233,24 @@
         </button>
       </div>
     </div>
+
+    <!-- 自定义确认弹窗 -->
+    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
+      <div class="custom-modal">
+        <div class="modal-header">
+          <div class="modal-icon" :class="modalType">
+            {{ modalType === 'success' ? '✓' : '✕' }}
+          </div>
+          <h3>{{ modalTitle }}</h3>
+        </div>
+        <div class="modal-body">
+          <p>{{ modalMessage }}</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-modal-confirm" @click="closeModal">确定</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -254,6 +272,34 @@ const props = defineProps({
 // 判断是否为编辑模式
 const isEditMode = computed(() => props.orderId !== null)
 
+// 自定义弹窗
+const showModal = ref(false)
+const modalType = ref('success') // success 或 error
+const modalTitle = ref('')
+const modalMessage = ref('')
+
+const showSuccessModal = (message) => {
+  modalType.value = 'success'
+  modalTitle.value = '操作成功'
+  modalMessage.value = message
+  showModal.value = true
+}
+
+const showErrorModal = (message) => {
+  modalType.value = 'error'
+  modalTitle.value = '操作失败'
+  modalMessage.value = message
+  showModal.value = true
+}
+
+const closeModal = () => {
+  showModal.value = false
+  // 如果是成功提示，关闭弹窗后返回列表
+  if (modalType.value === 'success') {
+    router.back()
+  }
+}
+
 // 基础数据
 const stores = ref([])
 const customers = ref([])
@@ -272,8 +318,8 @@ const formData = ref({
   contactPhone: '',
   contactAddress: '',
   projectName: '',
-  salesPerson: '',
-  creator: '',
+  salesPerson: '柯晓',
+  creator: '下单员',
   orderRemark: '',
   taxRate: 13,
   discountAmount: null,
@@ -334,8 +380,15 @@ function generateOrderNumber(orderId) {
   const year = now.getFullYear()
   const month = String(now.getMonth() + 1).padStart(2, '0')
   const day = String(now.getDate()).padStart(2, '0')
-  const id = orderId || 'NEW'
-  return `ZG${year}${month}${day}${id}`
+
+  if (orderId && orderId !== 'TEMP') {
+    // 有订单ID：使用三位数ID（不足三位补0）
+    const id = String(orderId).padStart(3, '0')
+    return `ZG${year}${month}${day}${id}`
+  } else {
+    // 新增模式：使用临时标识
+    return `ZG${year}${month}${day}TEMP`
+  }
 }
 
 // 初始化空白行
@@ -492,6 +545,31 @@ const loadOrderData = async (orderId) => {
 
         console.log('商品明细填充完成，items:', formData.value.items)
 
+        // 编辑模式：在已有数据基础上增加3行空行
+        for (let i = 0; i < 3; i++) {
+          formData.value.items.push({
+            productId: '',
+            productName: '',
+            spec: '',
+            unit: '',
+            warehouseId: '',
+            warehouseName: '',
+            currentStock: null,
+            packages: null,
+            quantity: null,
+            price: null,
+            taxRate: 13,
+            taxIncludedPrice: null,
+            amount: null,
+            totalAmount: null,
+            remark: '',
+            showDropdown: false,
+            filteredProducts: [],
+            unitConversions: [],
+            conversionRate: null
+          })
+        }
+
         // 重新查询每个商品的当前库存
         for (let item of formData.value.items) {
           if (item.productId && item.warehouseId) {
@@ -509,7 +587,7 @@ const loadOrderData = async (orderId) => {
     }
   } catch (error) {
     console.error('加载订单数据失败:', error)
-    alert('加载订单数据失败，请稍后重试')
+    showErrorModal('加载订单数据失败，请稍后重试')
   }
 }
 
@@ -831,59 +909,49 @@ watch(() => formData.value.customerId, (newCustomerId) => {
 const validateForm = () => {
   // 1. 检查门店
   if (!formData.value.storeId) {
-    alert('请选择门店')
+    showErrorModal('请选择门店')
     return false
   }
 
   // 2. 检查客户
   if (!formData.value.customerId) {
-    alert('请选择客户')
+    showErrorModal('请选择客户')
     return false
   }
 
   // 3. 检查仓库
   if (!formData.value.warehouseId) {
-    alert('请选择仓库')
+    showErrorModal('请选择仓库')
     return false
   }
 
   // 4. 检查联系人信息
   if (!formData.value.contactPerson) {
-    alert('请填写联系人')
+    showErrorModal('请填写联系人')
     return false
   }
 
   if (!formData.value.contactPhone) {
-    alert('请填写联系方式')
+    showErrorModal('请填写联系方式')
     return false
   }
 
-  // 5. 检查商品明细
+  // 5. 检查商品明细（只要求商品ID和数量必填）
   const validItems = formData.value.items.filter(item =>
-    item.productId && item.quantity && item.price
+    item.productId && item.quantity
   )
 
   if (validItems.length === 0) {
-    alert('请至少添加一条有效的商品明细（商品、数量、单价必填）')
+    showErrorModal('请至少添加一条有效的商品明细（商品、数量必填）')
     return false
   }
 
-  // 6. 检查每个商品的必填字段
+  // 6. 检查每个商品的必填字段（只检查数量）
   for (let i = 0; i < validItems.length; i++) {
     const item = validItems[i]
 
-    if (!item.packages || item.packages <= 0) {
-      alert(`第 ${i + 1} 行商品的件数必须大于0`)
-      return false
-    }
-
     if (!item.quantity || item.quantity <= 0) {
-      alert(`第 ${i + 1} 行商品的数量必须大于0`)
-      return false
-    }
-
-    if (!item.price || item.price <= 0) {
-      alert(`第 ${i + 1} 行商品的单价必须大于0`)
+      showErrorModal(`第 ${i + 1} 行商品的数量必须大于0`)
       return false
     }
   }
@@ -900,7 +968,7 @@ const handleSave = async (printAfterSave = false) => {
 
   // 2. 防止重复提交
   if (saving.value) {
-    alert('正在保存中，请稍候...')
+    showErrorModal('正在保存中，请稍候...')
     return
   }
 
@@ -968,31 +1036,36 @@ const handleSave = async (printAfterSave = false) => {
 
     // 6. 处理结果
     if (response && response.success) {
-      alert(isEditMode.value
-        ? `订单修改成功！\n订单编号：${response.orderNumber || formData.value.orderNumber}`
-        : `订单保存成功！\n订单编号：${response.orderNumber}`
-      )
+      // 新增模式：用返回的真实ID更新订单编号
+      if (!isEditMode.value && response.orderId) {
+        const realOrderNumber = generateOrderNumber(response.orderId)
+        formData.value.orderNumber = realOrderNumber
+
+        showSuccessModal(`订单保存成功！\n订单编号：${realOrderNumber}`)
+      } else {
+        showSuccessModal(isEditMode.value
+          ? `订单修改成功！\n订单编号：${response.orderNumber || formData.value.orderNumber}`
+          : `订单保存成功！\n订单编号：${response.orderNumber}`
+        )
+      }
 
       if (printAfterSave) {
         // TODO: 打印逻辑
         console.log('执行打印操作...')
       }
-
-      // 关闭窗口
-      handleClose()
     } else {
-      alert('订单保存失败：' + (response?.message || '未知错误'))
+      showErrorModal('订单保存失败：' + (response?.message || '未知错误'))
     }
   } catch (error) {
     console.error('保存订单失败:', error)
 
     // 错误处理
     if (error.response && error.response.data && error.response.data.message) {
-      alert('保存失败：' + error.response.data.message)
+      showErrorModal('保存失败：' + error.response.data.message)
     } else if (error.message) {
-      alert('保存失败：' + error.message)
+      showErrorModal('保存失败：' + error.message)
     } else {
-      alert('保存失败：网络错误，请检查网络连接')
+      showErrorModal('保存失败：网络错误，请检查网络连接')
     }
   } finally {
     saving.value = false
@@ -1035,8 +1108,8 @@ onMounted(() => {
     // 新增模式：初始化空行
     console.log('进入新增模式')
     initEmptyRows()
-    // 生成默认订单编号（临时）
-    formData.value.orderNumber = generateOrderNumber('NEW')
+    // 生成默认订单编号（临时，保存后会用真实ID替换）
+    formData.value.orderNumber = generateOrderNumber('TEMP')
   }
 })
 </script>
@@ -1546,5 +1619,125 @@ input[type="number"]::-webkit-inner-spin-button {
 
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* 自定义弹窗样式 */
+.custom-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.custom-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+  width: 400px;
+  max-width: 90%;
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-header {
+  padding: 24px 24px 16px;
+  text-align: center;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: bold;
+  margin: 0 auto 12px;
+}
+
+.modal-icon.success {
+  background: #10b981;
+  color: white;
+}
+
+.modal-icon.error {
+  background: #ef4444;
+  color: white;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.modal-body {
+  padding: 24px;
+  text-align: center;
+}
+
+.modal-body p {
+  margin: 0;
+  font-size: 14px;
+  color: #6b7280;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.modal-footer {
+  padding: 16px 24px 24px;
+  text-align: center;
+}
+
+.btn-modal-confirm {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 32px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 120px;
+}
+
+.btn-modal-confirm:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-modal-confirm:active {
+  transform: translateY(0);
 }
 </style>

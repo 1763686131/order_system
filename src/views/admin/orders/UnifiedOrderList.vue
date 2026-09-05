@@ -258,9 +258,9 @@
             </td>
             <td class="col-actions">
               <div class="action-buttons">
-                <!-- 财务模式：新订单显示编辑按钮（所有状态都显示） -->
+                <!-- 财务模式：新订单显示编辑按钮（仅未出库状态显示） -->
                 <button
-                  v-if="mode === 'finance' && isNewOrder(order)"
+                  v-if="mode === 'finance' && isNewOrder(order) && order.status === 'completed'"
                   class="btn-action btn-edit"
                   @click="handleEditOrder(order)"
                   title="编辑订单"
@@ -545,26 +545,16 @@ const setHeaderActions = inject('setHeaderActions', null)
 // 在组件挂载时设置顶部栏按钮
 onMounted(() => {
   if (setHeaderActions) {
-    // 订单列表显示两个按钮，物流列表只显示导出按钮
+    // 订单列表只显示导出按钮（新增订单按钮已移到顶部）
     if (props.mode === 'finance') {
       setHeaderActions(() =>
-        h('div', { style: 'display: flex; gap: 12px;' }, [
-          h('button', {
-            class: 'btn-primary',
-            onClick: handleAdd,
-            style: 'padding: 10px 20px; background: #34d399; color: #fff; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;'
-          }, [
-            h('span', '➕'),
-            '新增订单'
-          ]),
-          h('button', {
-            class: 'btn-export',
-            onClick: handleExport,
-            style: 'padding: 10px 20px; background: #fff; color: #6b7280; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;'
-          }, [
-            h('span', '📥'),
-            '导出数据'
-          ])
+        h('button', {
+          class: 'btn-export',
+          onClick: handleExport,
+          style: 'padding: 10px 20px; background: #fff; color: #6b7280; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;'
+        }, [
+          h('span', '📥'),
+          '导出数据'
         ])
       )
     } else {
@@ -1113,7 +1103,7 @@ const handleReset = () => {
 }
 
 const handleAdd = () => {
-  console.log(props.mode === 'logistics' ? '新增物流单' : '新增订单')
+  // 已删除，使用顶部的"新增订单"按钮
 }
 
 const handleEdit = (order) => {

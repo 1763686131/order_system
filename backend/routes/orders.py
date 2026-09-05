@@ -241,7 +241,7 @@ def create_new_format_order(req_data):
         # 基础字段
         "id": new_id,
         "title": "",
-        "status": "completed",
+        "status": None,  # 默认未完成状态
         "type": 1,  # 新订单标识
         "date": f"{order_date} {ct.split(' ')[1]}",
         "completed_date": ct,
