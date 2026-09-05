@@ -13,12 +13,19 @@
 
           <div class="product-list" :class="order.compactClass">
             <div
-              v-for="(line, idx) in order.chunkLines"
+              v-for="(item, idx) in order.chunkGoodsRows"
               :key="idx"
-              class="product-item"
-              :style="getLineStyle(line, order.isMobile)"
-              v-html="formatLine(line, order.isMobile)"
-            ></div>
+              class="product-item product-row"
+            >
+              <div class="product-info-box">
+                <span v-if="item.goodsName" class="goods-name">{{ item.goodsName }}</span>
+                <span v-if="item.spec" class="goods-spec">{{ item.spec }}</span>
+              </div>
+              <div class="product-quantity-box">
+                <span v-if="item.quantity !== ''" class="goods-quantity">{{ item.quantity }}</span>
+                <span v-if="item.unit" class="goods-unit">{{ item.unit }}</span>
+              </div>
+            </div>
             <div v-if="order.indicatorHtml" class="card-part-indicator" v-html="order.partLetter"></div>
           </div>
 
@@ -69,10 +76,8 @@
               v-for="(line, idx) in order.allGoodsLines"
               :key="idx"
               class="info-row text-red text-bold"
-              :style="getBackLineStyle(line)"
-            >
-              {{ line }}
-            </div>
+              v-html="line"
+            ></div>
             <div style="display: flex; gap: 24px; margin-top: 16px;">
               <div class="info-row"><span class="info-label">包装：</span>{{ order.goods_packaging || '无' }}</div>
               <div class="info-row"><span class="info-label">数量：</span><span class="text-red text-bold">{{ order.goods_weight || '无' }}</span></div>
@@ -143,9 +148,8 @@
           v-for="(line, idx) in order.chunkLines"
           :key="idx"
           class="info-row text-red text-bold"
-          :style="getCompletedLineStyle(line)"
+          v-html="line"
         >
-          {{ line }}
         </div>
 
         <div v-if="order.indicatorHtml && !order.isMobile" class="card-part-indicator" style="font-size:70px;">{{ order.partLetter }}</div>
@@ -274,13 +278,39 @@ const processedOrders = computed(() => {
       return
     }
 
-    // 从 order_goods 数组中提取商品信息
-    const goodsLines = order.order_goods.map(item => {
+    // 保留结构化数据，供未完成订单正面使用两列对齐布局
+    const goodsRows = order.order_goods.map(item => ({
+      goodsName: item.goods_name || '',
+      spec: item.spec || '',
+      quantity: item.quantity ?? '',
+      unit: item.unit || ''
+    })).filter(item => item.goodsName || item.spec || item.quantity !== '' || item.unit)
+
+    // 生成背面和已完成订单继续使用的商品 HTML
+    const goodsLines = goodsRows.map(item => {
       const parts = []
-      if (item.goods_name) parts.push(item.goods_name)
-      if (item.spec) parts.push(item.spec)
-      if (item.quantity) parts.push(item.quantity)
-      if (item.unit) parts.push(item.unit)
+
+      // 商品名称 - 普通黑色
+      if (item.goodsName) {
+        parts.push(`<span class="goods-name">${item.goodsName}</span>`)
+      }
+
+      // 规格型号 - 数字和字母加粗红色
+      if (item.spec) {
+        const specWithStyle = item.spec.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-bold">$1</span>')
+        parts.push(`<span class="goods-spec">${specWithStyle}</span>`)
+      }
+
+      // 数量 - 全部加粗红色
+      if (item.quantity !== '') {
+        parts.push(`<span class="text-red-bold">${item.quantity}</span>`)
+      }
+
+      // 单位 - 普通黑色
+      if (item.unit) {
+        parts.push(`<span class="goods-unit">${item.unit}</span>`)
+      }
+
       return parts.join(' ')
     }).filter(l => l.trim() !== '')
 
@@ -291,24 +321,43 @@ const processedOrders = computed(() => {
 
     let chunks = []
     if (isMobile) {
-      chunks = [goodsLines]
+      chunks = [goodsRows]
     } else {
       // 每9行一组
-      for (let i = 0; i < goodsLines.length; i += 9) {
-        chunks.push(goodsLines.slice(i, i + 9))
+      for (let i = 0; i < goodsRows.length; i += 9) {
+        chunks.push(goodsRows.slice(i, i + 9))
       }
     }
 
-    chunks.forEach((chunkLines, chunkIndex) => {
+    chunks.forEach((chunkGoodsRows, chunkIndex) => {
       const isFirstCard = chunkIndex === 0
       const isSplit = chunks.length > 1
       const partLetter = String.fromCharCode(65 + chunkIndex)
-      const compactClass = (!isMobile && chunkLines.length >= 8) ? 'compact' : ''
+      const compactClass = (!isMobile && chunkGoodsRows.length >= 8) ? 'compact' : ''
       const typeClass = getStoreClass(order)
       const storeColor = getStoreColor(order)
       const storeTextColor = getStoreTextColor(order)
       const typeName = getStoreName(order) + '订单'
       const shortDate = order.completed_date ? order.completed_date.split(' ')[0] : '未知日期'
+      const chunkLines = chunkGoodsRows.map(item => {
+        const parts = []
+
+        if (item.goodsName) {
+          parts.push(`<span class="goods-name">${item.goodsName}</span>`)
+        }
+        if (item.spec) {
+          const specWithStyle = item.spec.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-bold">$1</span>')
+          parts.push(`<span class="goods-spec">${specWithStyle}</span>`)
+        }
+        if (item.quantity !== '') {
+          parts.push(`<span class="text-red-bold">${item.quantity}</span>`)
+        }
+        if (item.unit) {
+          parts.push(`<span class="goods-unit">${item.unit}</span>`)
+        }
+
+        return parts.join(' ')
+      })
 
       // 使用新字段
       const receiverName = order.contact_person || '未填'
@@ -345,6 +394,7 @@ const processedOrders = computed(() => {
         ...order,
         cardIndex: chunkIndex,
         chunkLines,
+        chunkGoodsRows,
         allGoodsLines: goodsLines,
         isFirstCard,
         isSplit,
@@ -375,64 +425,6 @@ const processedOrders = computed(() => {
   return result
 })
 
-// 计算文本缩放比例
-const calculateTextScale = (text, maxChars = 12, isHighlightMode = false) => {
-  if (!text) return 1
-  let len = 0
-
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i]
-
-    if (char.match(/[一-龥]/)) {
-      len += 1
-    } else if (isHighlightMode && char.match(/[a-zA-Z0-9.]/)) {
-      if (char.match(/[A-Z]/)) len += 1.8
-      else if (char.match(/[0-9]/)) len += 1.4
-      else len += 1.1
-    } else {
-      if (char.match(/[A-Z]/)) len += 0.9
-      else if (char.match(/[0-9]/)) len += 0.7
-      else len += 0.55
-    }
-  }
-
-  if (len <= maxChars) return 1
-  const scale = maxChars / len
-  return Math.max(scale, 0.35)
-}
-
-// 格式化行内容（高亮数字和字母）
-const formatLine = (line, isMobile) => {
-  if (isMobile) {
-    return line
-  }
-  return line.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-large">$1</span>')
-}
-
-// 获取行样式
-const getLineStyle = (line, isMobile) => {
-  if (isMobile) {
-    return 'white-space: pre-wrap; word-break: break-all; line-height: 1.5; padding-bottom: 6px; color: #333;'
-  }
-  const lineScale = calculateTextScale(line, 14.5, true)
-  const renderScale = Math.min(lineScale, 1.15)
-  return `zoom: ${renderScale}; white-space: nowrap; height: calc(var(--red-size, 42px) * 1.1); display: flex; align-items: center;`
-}
-
-// 获取背面行样式
-const getBackLineStyle = (line) => {
-  const lineScale = calculateTextScale(line, 15)
-  const renderScale = Math.min(lineScale, 1.15)
-  return `font-size: calc(15px * ${renderScale}); white-space: nowrap; height: 24px; display: flex; align-items: center;`
-}
-
-// 获取已完成订单行样式
-const getCompletedLineStyle = (line) => {
-  const lineScale = calculateTextScale(line, 14.5)
-  const renderScale = Math.min(lineScale, 1.15)
-  return `font-size: calc(var(--base-size, 24px) * ${renderScale}); white-space: nowrap; flex-shrink: 0; height: calc(var(--base-size, 24px) * 1.4); display: flex; align-items: center;`
-}
-
 // 切换卡片翻转
 const toggleCard = (event) => {
   const card = event.target.closest('.flip-container') || event.target.closest('.completed-card')
@@ -446,5 +438,78 @@ const toggleCard = (event) => {
 </script>
 
 <style scoped>
-/* 样式已在全局 CSS 中定义 */
+/* 未完成订单正面：商品信息与数量分成两个固定结构的盒子 */
+.product-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.product-info-box,
+.product-quantity-box {
+  min-height: 36px;
+  padding: 4px 8px;
+  border: 1px solid rgba(24, 144, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.42);
+}
+
+.product-info-box {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0 8px;
+  overflow-wrap: anywhere;
+}
+
+.product-quantity-box {
+  flex: 0 0 112px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px;
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.goods-name {
+  color: #333;
+}
+
+.goods-spec {
+  color: #1677ff;
+}
+
+.goods-quantity {
+  color: #ff4d4f;
+  font-weight: bold;
+  text-align: right;
+}
+
+.goods-unit {
+  color: #333;
+}
+
+/* 商品列表样式 */
+.goods-name {
+  color: #333;
+}
+
+.goods-spec {
+  color: #1677ff;
+}
+
+.text-red-bold {
+  color: #ff4d4f;
+  font-weight: bold;
+}
+
+.goods-unit {
+  color: #333;
+}
+
+/* 原有样式已在全局 CSS 中定义 */
 </style>
