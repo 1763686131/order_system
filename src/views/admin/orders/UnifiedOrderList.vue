@@ -258,6 +258,16 @@
             </td>
             <td class="col-actions">
               <div class="action-buttons">
+                <!-- 财务模式：新订单显示编辑按钮（所有状态都显示） -->
+                <button
+                  v-if="mode === 'finance' && isNewOrder(order)"
+                  class="btn-action btn-edit"
+                  @click="handleEditOrder(order)"
+                  title="编辑订单"
+                >
+                  编辑
+                </button>
+                <!-- 财务模式：出库按钮 -->
                 <button
                   v-if="mode === 'finance' && order.status === 'completed'"
                   class="btn-action btn-ship"
@@ -266,6 +276,7 @@
                 >
                   出库
                 </button>
+                <!-- 物流模式：录入物流信息 -->
                 <button
                   v-if="mode === 'logistics' && order.audit_state !== 1"
                   class="btn-action btn-logistics"
@@ -274,6 +285,7 @@
                 >
                   录入
                 </button>
+                <!-- 物流模式：复制物流信息 -->
                 <button
                   v-if="mode === 'logistics'"
                   class="btn-action btn-copy"
@@ -282,6 +294,7 @@
                 >
                   复制
                 </button>
+                <!-- 物流模式：修改物流信息 -->
                 <button
                   v-if="mode === 'logistics' && order.audit_state === 1"
                   class="btn-action btn-edit"
@@ -503,10 +516,13 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, inject, h, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
 import { formatOrderForCopy } from '@/utils/tools'
 import { getStores } from '@/utils/storeHelper'
+
+const router = useRouter()
 
 const props = defineProps({
   mode: {
@@ -1101,10 +1117,15 @@ const handleAdd = () => {
 }
 
 const handleEdit = (order) => {
-  // 触发打开已出库订单管理弹窗，模式为编辑
+  // 物流模式：触发打开已出库订单管理弹窗，模式为编辑
   window.dispatchEvent(new CustomEvent('open-shipped-action-modal', {
     detail: { orderId: order.id, mode: 'edit' }
   }))
+}
+
+// 编辑订单（跳转到编辑页面）
+const handleEditOrder = (order) => {
+  router.push({ name: 'admin-orders-edit', params: { id: order.id } })
 }
 
 // 计算运费总额

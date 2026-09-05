@@ -119,6 +119,13 @@ const routes = [
         name: 'admin-orders-create',
         component: () => import('@/views/admin/orders/OrderForm.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'orders/edit/:id',
+        name: 'admin-orders-edit',
+        component: () => import('@/views/admin/orders/OrderForm.vue'),
+        props: route => ({ orderId: Number(route.params.id) }),
+        meta: { requiresAuth: true }
       }
     ]
   }

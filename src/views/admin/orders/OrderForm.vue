@@ -243,6 +243,17 @@ import request from '@/api/request'
 
 const router = useRouter()
 
+// Props 定义
+const props = defineProps({
+  orderId: {
+    type: Number,
+    default: null
+  }
+})
+
+// 判断是否为编辑模式
+const isEditMode = computed(() => props.orderId !== null)
+
 // 基础数据
 const stores = ref([])
 const customers = ref([])
@@ -413,6 +424,77 @@ const loadUnits = async () => {
   }
 }
 
+// 加载订单数据（编辑模式）
+const loadOrderData = async (orderId) => {
+  try {
+    const response = await request({
+      url: `/orders/${orderId}`,
+      method: 'GET'
+    })
+
+    if (response) {
+      // 填充基础信息
+      formData.value.storeId = response.store_id || ''
+      formData.value.customerId = response.customer_id || ''
+      formData.value.warehouseId = response.warehouse_id || ''
+      formData.value.orderDate = response.order_date || response.date || ''
+      formData.value.orderNumber = response.order_number || ''
+      formData.value.contactPerson = response.contact_person || response.receiver_name || ''
+      formData.value.contactPhone = response.contact_phone || response.receiver_phone || ''
+      formData.value.contactAddress = response.contact_address || response.receiver_address || ''
+      formData.value.projectName = response.project_name || ''
+      formData.value.salesPerson = response.sales_person || ''
+      formData.value.creator = response.creator || ''
+      formData.value.orderRemark = response.remark || ''
+      formData.value.taxRate = response.tax_rate || 13
+      formData.value.discountAmount = response.discount_amount || null
+      formData.value.otherFees = response.other_fees || null
+      formData.value.settlementAccount = response.settlement_account || ''
+      formData.value.currentPayment = response.current_payment || 0
+
+      // 填充商品明细
+      if (response.order_goods && response.order_goods.length > 0) {
+        formData.value.items = response.order_goods.map(item => ({
+          productId: item.product_id || '',
+          productName: item.goods_name || '',
+          spec: item.spec || '',
+          unit: item.unit || '',
+          warehouseId: item.warehouse_id || '',
+          warehouseName: item.warehouse_name || '',
+          currentStock: null, // 需要重新查询
+          packages: item.packages || null,
+          quantity: item.quantity || null,
+          price: item.price || null,
+          taxRate: item.tax_rate || 13,
+          taxIncludedPrice: item.tax_included_price || null,
+          amount: item.amount || null,
+          totalAmount: item.total_amount || null,
+          remark: item.remark || '',
+          showDropdown: false,
+          filteredProducts: [],
+          unitConversions: [],
+          conversionRate: null
+        }))
+
+        // 重新查询每个商品的当前库存
+        for (let item of formData.value.items) {
+          if (item.productId && item.warehouseId) {
+            await updateStockInfo(item)
+          }
+        }
+      }
+
+      // 加载客户欠款
+      if (response.customer_id) {
+        await loadCustomerDebt(response.customer_id)
+      }
+    }
+  } catch (error) {
+    console.error('加载订单数据失败:', error)
+    alert('加载订单数据失败，请稍后重试')
+  }
+}
+
 // 根据单位ID获取单位名称
 const getUnitName = (unitId) => {
   const unit = units.value.find(u => u.id === unitId)
@@ -434,6 +516,29 @@ const onWarehouseChange = () => {
   // 仓库改变后，商品列表会通过 filteredProducts 自动筛选
 }
 
+// 加载客户欠款
+const customerReceivable = ref(0)
+const loadCustomerDebt = async (customerId) => {
+  if (!customerId) {
+    customerReceivable.value = 0
+    return
+  }
+
+  try {
+    const response = await request({
+      url: `/customers/${customerId}`,
+      method: 'GET'
+    })
+
+    if (response && response.receivable !== undefined) {
+      customerReceivable.value = response.receivable || 0
+    }
+  } catch (error) {
+    console.error('加载客户欠款失败:', error)
+    customerReceivable.value = 0
+  }
+}
+
 // 客户改变
 const onCustomerChange = () => {
   const customer = customers.value.find(c => c.id === formData.value.customerId)
@@ -442,6 +547,9 @@ const onCustomerChange = () => {
     formData.value.contactPhone = customer.phone || ''
     formData.value.contactAddress = customer.address || ''
   }
+
+  // 加载客户欠款
+  loadCustomerDebt(formData.value.customerId)
 }
 
 // 显示商品下拉框
@@ -522,6 +630,32 @@ const selectProduct = (index, product) => {
 
   item.showDropdown = false
   calculateRowAmount(index)
+}
+
+// 更新商品库存信息（编辑模式使用）
+const updateStockInfo = async (item) => {
+  try {
+    // 从商品列表中查找该商品
+    const product = products.value.find(p => p.id === item.productId)
+    if (product) {
+      // 更新库存
+      item.currentStock = product.stock || 0
+
+      // 更新仓库名称
+      if (item.warehouseId) {
+        const warehouse = warehouses.value.find(w => w.id === item.warehouseId)
+        item.warehouseName = warehouse ? warehouse.name : ''
+      }
+
+      // 更新单位换算信息
+      item.unitConversions = product.unitConversions || []
+      if (item.unitConversions && item.unitConversions.length > 0) {
+        item.conversionRate = item.unitConversions[0].value || null
+      }
+    }
+  } catch (error) {
+    console.error('更新库存信息失败:', error)
+  }
 }
 
 // 单价改变时自动计算含税单价
@@ -654,9 +788,6 @@ const shouldReceive = computed(() => {
   return (discount || 0) + (fees || 0)
 })
 
-// 客户欠款
-const customerDebt = ref(0)
-
 // 本单欠款 = 折扣金额 + 其他费用 - 本次收款
 const currentDebt = computed(() => {
   const discount = formData.value.discountAmount || 0
@@ -669,33 +800,12 @@ const currentDebt = computed(() => {
 const calculateFinal = () => {
   // 触发计算
 }
-
-// 加载客户欠款
-const loadCustomerDebt = async (customerId) => {
-  if (!customerId) {
-    customerDebt.value = 0
-    return
-  }
-  try {
-    const response = await request({
-      url: `/customers/${customerId}`,
-      method: 'GET'
-    })
-    if (response && response.receivable !== undefined) {
-      customerDebt.value = response.receivable
-    }
-  } catch (error) {
-    console.error('加载客户欠款失败:', error)
-    customerDebt.value = 0
-  }
-}
-
 // 监听客户选择变化
 watch(() => formData.value.customerId, (newCustomerId) => {
   if (newCustomerId) {
     loadCustomerDebt(newCustomerId)
   } else {
-    customerDebt.value = 0
+    customerReceivable.value = 0
   }
 })
 
@@ -821,15 +931,29 @@ const handleSave = async (printAfterSave = false) => {
     }
 
     // 5. 调用接口
-    const response = await request({
-      url: '/orders',
-      method: 'POST',
-      data: requestData
-    })
+    let response
+    if (isEditMode.value) {
+      // 编辑模式：PUT 请求
+      response = await request({
+        url: `/orders/${props.orderId}`,
+        method: 'PUT',
+        data: requestData
+      })
+    } else {
+      // 新增模式：POST 请求
+      response = await request({
+        url: '/orders',
+        method: 'POST',
+        data: requestData
+      })
+    }
 
     // 6. 处理结果
     if (response && response.success) {
-      alert(`订单保存成功！\n订单编号：${response.orderNumber}`)
+      alert(isEditMode.value
+        ? `订单修改成功！\n订单编号：${response.orderNumber || formData.value.orderNumber}`
+        : `订单保存成功！\n订单编号：${response.orderNumber}`
+      )
 
       if (printAfterSave) {
         // TODO: 打印逻辑
@@ -881,9 +1005,16 @@ onMounted(() => {
   loadWarehouses()
   loadProducts()
   loadUnits() // 加载单位数据
-  initEmptyRows()
-  // 生成默认订单编号（临时）
-  formData.value.orderNumber = generateOrderNumber('NEW')
+
+  if (isEditMode.value) {
+    // 编辑模式：加载订单数据
+    loadOrderData(props.orderId)
+  } else {
+    // 新增模式：初始化空行
+    initEmptyRows()
+    // 生成默认订单编号（临时）
+    formData.value.orderNumber = generateOrderNumber('NEW')
+  }
 })
 </script>
 
