@@ -749,7 +749,7 @@ const submitRevokeShipOrder = async () => {
     await request({
       url: `/orders/${id}`,
       method: 'PUT',
-      data: { status: 'completed' }
+      data: { status: 'pending' }
     })
     showMessage('已撤销出库', 'success')
     closeShippedActionModal()

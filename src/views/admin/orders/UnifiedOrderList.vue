@@ -258,9 +258,9 @@
             </td>
             <td class="col-actions">
               <div class="action-buttons">
-                <!-- 财务模式：新订单显示编辑按钮（仅未出库状态显示） -->
+                <!-- 财务模式：新订单显示编辑按钮（未出库状态都可以编辑） -->
                 <button
-                  v-if="mode === 'finance' && isNewOrder(order) && order.status === 'completed'"
+                  v-if="mode === 'finance' && isNewOrder(order) && order.status !== 'shipped'"
                   class="btn-action btn-edit"
                   @click="handleEditOrder(order)"
                   title="编辑订单"
