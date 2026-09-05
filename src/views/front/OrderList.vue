@@ -279,7 +279,8 @@ const processedOrders = computed(() => {
       const parts = []
       if (item.goods_name) parts.push(item.goods_name)
       if (item.spec) parts.push(item.spec)
-      if (item.quantity) parts.push(`x${item.quantity}`)
+      if (item.quantity) parts.push(item.quantity)
+      if (item.unit) parts.push(item.unit)
       return parts.join(' ')
     }).filter(l => l.trim() !== '')
 
