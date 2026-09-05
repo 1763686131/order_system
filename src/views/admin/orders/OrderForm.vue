@@ -396,6 +396,7 @@ function initEmptyRows() {
   formData.value.items = Array.from({ length: 8 }, () => ({
     productId: '',
     productName: '',
+    goodsName: '',
     spec: '',
     unit: '',
     warehouseId: '',
@@ -550,6 +551,7 @@ const loadOrderData = async (orderId) => {
           formData.value.items.push({
             productId: '',
             productName: '',
+            goodsName: '',
             spec: '',
             unit: '',
             warehouseId: '',
@@ -826,6 +828,7 @@ const addRow = (index) => {
   formData.value.items.splice(index + 1, 0, {
     productId: '',
     productName: '',
+    goodsName: '',
     spec: '',
     unit: '',
     warehouseId: '',
