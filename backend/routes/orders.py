@@ -58,6 +58,20 @@ def get_orders():
     orders_data = read_orders()
     return jsonify(orders_data.get('orders', []))
 
+@orders_bp.route('/<int:order_id>', methods=['GET'])
+def get_order(order_id):
+    """获取单个订单详情"""
+    orders_data = read_orders()
+    orders = orders_data.get('orders', [])
+
+    # 查找订单
+    order = next((o for o in orders if o.get('id') == order_id), None)
+
+    if not order:
+        return jsonify({'success': False, 'message': '订单不存在'}), 404
+
+    return jsonify(order)
+
 @orders_bp.route('', methods=['POST'])
 def add_order():
     """创建新订单 - 支持新旧两种格式"""
@@ -326,8 +340,21 @@ def create_new_format_order(req_data):
 
 @orders_bp.route('/<int:order_id>', methods=['PUT'])
 def update_order_status(order_id):
-    """更新订单状态"""
+    """更新订单 - 支持状态更新和完整编辑"""
     req_data = request.json
+
+    # 判断是完整编辑（新格式）还是状态更新
+    is_full_edit = 'items' in req_data and 'customerId' in req_data
+
+    if is_full_edit:
+        # 完整订单编辑
+        return update_full_order(order_id, req_data)
+    else:
+        # 状态更新（原有逻辑）
+        return update_order_status_only(order_id, req_data)
+
+def update_order_status_only(order_id, req_data):
+    """仅更新订单状态"""
     ns = req_data.get('status')
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
@@ -383,6 +410,174 @@ def update_order_status(order_id):
     orders_data['orders'] = orders_list
     write_orders(orders_data)
     return jsonify({"success": True})
+
+def update_full_order(order_id, req_data):
+    """完整更新订单（编辑模式）"""
+    from utils.db_helper import read_products, write_products
+
+    with orders_lock:
+        # 读取数据
+        orders_data = read_orders()
+        orders_list = orders_data.get('orders', [])
+
+        # 查找要更新的订单
+        order_index = None
+        for i, order in enumerate(orders_list):
+            if order.get('id') == order_id:
+                order_index = i
+                break
+
+        if order_index is None:
+            return jsonify({"success": False, "message": "订单不存在"}), 404
+
+        old_order = orders_list[order_index]
+
+        # 读取客户数据
+        customers_file = '/app/data/customers.json' if os.path.exists('/app/data/customers.json') else 'data/customers.json'
+        try:
+            with open(customers_file, 'r', encoding='utf-8') as f:
+                customers_data = json.load(f)
+                customers_list = customers_data.get('customers', [])
+        except:
+            customers_list = []
+
+        # 读取门店数据
+        from utils.db_helper import read_stores
+        stores_list = read_stores()
+
+        # 获取客户信息
+        customer_id = req_data.get('customerId')
+        customer = next((c for c in customers_list if c['id'] == customer_id), None)
+        customer_name = customer['customerName'] if customer else ''
+        customer_receivable = customer['receivable'] if customer else 0
+
+        # 获取门店名称
+        store_id = req_data.get('storeId')
+        store = next((s for s in stores_list if s['id'] == store_id), None)
+        store_name = store['name'] if store else ''
+
+        # 处理商品明细
+        items = req_data.get('items', [])
+        order_goods = []
+        goods_name_parts = []
+        total_quantity = 0
+        total_packages = 0
+
+        for item in items:
+            if not item.get('productId') or not item.get('quantity'):
+                continue
+
+            order_goods.append({
+                "product_id": item.get('productId'),
+                "goods_name": item.get('productName', ''),
+                "spec": item.get('spec', ''),
+                "unit": item.get('unit', ''),
+                "warehouse_id": item.get('warehouseId'),
+                "packages": item.get('packages', 0),
+                "quantity": item.get('quantity', 0),
+                "price": item.get('price', 0),
+                "tax_rate": item.get('taxRate', 13),
+                "tax_included_price": item.get('taxIncludedPrice', 0),
+                "amount": item.get('amount', 0),
+                "total_amount": item.get('totalAmount', 0),
+                "remark": item.get('remark', '')
+            })
+
+            goods_name_parts.append(f"{item.get('productName', '')} {item.get('spec', '')} x{item.get('quantity', 0)}")
+            total_quantity += item.get('quantity', 0)
+            total_packages += item.get('packages', 0)
+
+        if not order_goods:
+            return jsonify({"success": False, "message": "至少需要添加一条商品明细"}), 400
+
+        # 计算财务字段
+        subtotal_amount = sum(item['amount'] for item in order_goods)
+        tax_amount = sum(item['total_amount'] - item['amount'] for item in order_goods)
+        total_amount = sum(item['total_amount'] for item in order_goods)
+        discount_amount = req_data.get('discountAmount', total_amount)
+        other_fees = req_data.get('otherFees', 0)
+        should_receive = discount_amount + other_fees
+        current_payment = req_data.get('currentPayment', 0)
+        current_debt = should_receive - current_payment
+
+        # 拼接旧格式字段
+        goods_name = '、'.join(goods_name_parts)
+        goods_weight = f"{total_quantity}{order_goods[0]['unit']}" if order_goods else ""
+        goods_quantity = f"{total_packages}件"
+
+        # 更新订单数据（保留原有的 id, status, date 等）
+        order_date = req_data.get('orderDate', old_order.get('date', '').split(' ')[0])
+        order_time = old_order.get('date', '').split(' ')[1] if ' ' in old_order.get('date', '') else datetime.now().strftime('%H:%M')
+
+        updated_order = {
+            # 保留原有字段
+            "id": order_id,
+            "title": old_order.get('title', ''),
+            "status": old_order.get('status', 'completed'),
+            "type": 1,
+            "date": f"{order_date} {order_time}",
+            "completed_date": old_order.get('completed_date', ''),
+            "shipped_date": old_order.get('shipped_date', ''),
+            "shipping_method": old_order.get('shipping_method', 0),
+            "shipping_custom": old_order.get('shipping_custom', ''),
+            "logistics_no": old_order.get('logistics_no', '无单号记录'),
+            "audit_state": old_order.get('audit_state', 0),
+            "store_id": store_id,
+
+            # 更新旧字段
+            "order_client": customer_name,
+            "receiver_name": req_data.get('contactPerson', ''),
+            "receiver_phone": req_data.get('contactPhone', ''),
+            "receiver_address": req_data.get('contactAddress', ''),
+            "goods_name": goods_name,
+            "goods_weight": goods_weight,
+            "goods_quantity": goods_quantity,
+            "goods_packaging": "桶装",
+            "logistics_service": old_order.get('logistics_service', ["送货上门+回单拍照回传"]),
+            "remark": req_data.get('orderRemark', ''),
+
+            # 更新新字段
+            "customer_id": customer_id,
+            "warehouse_id": req_data.get('warehouseId'),
+            "order_number": req_data.get('orderNumber', old_order.get('order_number', '')),
+            "contact_person": req_data.get('contactPerson', ''),
+            "contact_phone": req_data.get('contactPhone', ''),
+            "contact_address": req_data.get('contactAddress', ''),
+            "project_name": req_data.get('projectName', ''),
+            "sales_person": req_data.get('salesPerson', ''),
+            "creator": old_order.get('creator', ''),
+            "settlement_account": store_name,
+
+            # 更新商品明细
+            "order_goods": order_goods,
+
+            # 更新财务字段
+            "subtotal_amount": round(subtotal_amount, 2),
+            "tax_amount": round(tax_amount, 2),
+            "total_amount": round(total_amount, 2),
+            "discount_amount": round(discount_amount, 2),
+            "other_fees": round(other_fees, 2),
+            "should_receive": round(should_receive, 2),
+            "current_payment": round(current_payment, 2),
+            "current_debt": round(current_debt, 2),
+            "customer_receivable": customer_receivable,
+
+            # 保留回单图片
+            "receipt_img_url": old_order.get('receipt_img_url', ''),
+            "freight_costs": old_order.get('freight_costs', [])
+        }
+
+        # 替换订单
+        orders_list[order_index] = updated_order
+        orders_data['orders'] = orders_list
+        write_orders(orders_data)
+
+        return jsonify({
+            "success": True,
+            "message": "订单更新成功",
+            "data": updated_order
+        })
+
 
 @orders_bp.route('/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):

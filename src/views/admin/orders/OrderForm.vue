@@ -426,18 +426,29 @@ const loadUnits = async () => {
 
 // 加载订单数据（编辑模式）
 const loadOrderData = async (orderId) => {
+  console.log('loadOrderData 被调用，订单ID:', orderId)
   try {
     const response = await request({
       url: `/orders/${orderId}`,
       method: 'GET'
     })
 
+    console.log('订单数据加载成功:', response)
+
     if (response) {
       // 填充基础信息
       formData.value.storeId = response.store_id || ''
       formData.value.customerId = response.customer_id || ''
       formData.value.warehouseId = response.warehouse_id || ''
-      formData.value.orderDate = response.order_date || response.date || ''
+
+      // 处理日期格式：从 "2026-09-05 02:23" 提取 "2026-09-05"
+      const rawDate = response.order_date || response.date || ''
+      if (rawDate) {
+        formData.value.orderDate = rawDate.split(' ')[0] // 只取日期部分
+      } else {
+        formData.value.orderDate = ''
+      }
+
       formData.value.orderNumber = response.order_number || ''
       formData.value.contactPerson = response.contact_person || response.receiver_name || ''
       formData.value.contactPhone = response.contact_phone || response.receiver_phone || ''
@@ -452,8 +463,11 @@ const loadOrderData = async (orderId) => {
       formData.value.settlementAccount = response.settlement_account || ''
       formData.value.currentPayment = response.current_payment || 0
 
+      console.log('基础信息填充完成，formData:', formData.value)
+
       // 填充商品明细
       if (response.order_goods && response.order_goods.length > 0) {
+        console.log('开始填充商品明细，order_goods:', response.order_goods)
         formData.value.items = response.order_goods.map(item => ({
           productId: item.product_id || '',
           productName: item.goods_name || '',
@@ -476,6 +490,8 @@ const loadOrderData = async (orderId) => {
           conversionRate: null
         }))
 
+        console.log('商品明细填充完成，items:', formData.value.items)
+
         // 重新查询每个商品的当前库存
         for (let item of formData.value.items) {
           if (item.productId && item.warehouseId) {
@@ -488,6 +504,8 @@ const loadOrderData = async (orderId) => {
       if (response.customer_id) {
         await loadCustomerDebt(response.customer_id)
       }
+
+      console.log('订单数据加载完毕')
     }
   } catch (error) {
     console.error('加载订单数据失败:', error)
@@ -1000,6 +1018,9 @@ const handleClose = () => {
 
 // 初始化
 onMounted(() => {
+  console.log('OrderForm mounted, props.orderId:', props.orderId)
+  console.log('isEditMode:', isEditMode.value)
+
   loadStores()
   loadCustomers()
   loadWarehouses()
@@ -1008,9 +1029,11 @@ onMounted(() => {
 
   if (isEditMode.value) {
     // 编辑模式：加载订单数据
+    console.log('进入编辑模式，加载订单ID:', props.orderId)
     loadOrderData(props.orderId)
   } else {
     // 新增模式：初始化空行
+    console.log('进入新增模式')
     initEmptyRows()
     // 生成默认订单编号（临时）
     formData.value.orderNumber = generateOrderNumber('NEW')
