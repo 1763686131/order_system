@@ -935,13 +935,23 @@ const validateForm = () => {
     return false
   }
 
-  // 5. 检查商品明细（只要求商品ID必填，数量、件数、单价都可以为空或0）
+  // 5. 检查商品明细（商品ID和数量必填，件数、单价可以为空）
   const validItems = formData.value.items.filter(item =>
-    item.productId
+    item.productId && item.quantity && item.quantity > 0
   )
 
   if (validItems.length === 0) {
-    showErrorModal('请至少添加一条有效的商品明细（至少填写商品）')
+    showErrorModal('请至少添加一条商品明细，并填写数量')
+    return false
+  }
+
+  // 检查是否有填了商品但没填数量的行
+  const hasInvalidItems = formData.value.items.some(item =>
+    item.productId && (!item.quantity || item.quantity <= 0)
+  )
+
+  if (hasInvalidItems) {
+    showErrorModal('已选择商品的行必须填写数量')
     return false
   }
 
