@@ -5375,7 +5375,7 @@
             "receiver_name": "张三",
             "receiver_phone": "17554354236",
             "receiver_address": "北京天安门",
-            "goods_name": " 1101A x500、 1101B x500",
+            "goods_name": "固化剂 1101A x500、固化剂 1101A x500",
             "goods_weight": "1000公斤",
             "goods_quantity": "0件",
             "goods_packaging": "桶装",
@@ -5396,7 +5396,7 @@
             "order_goods": [
                 {
                     "product_id": 5,
-                    "goods_name": "",
+                    "goods_name": "固化剂",
                     "spec": "1101A",
                     "unit": "公斤",
                     "warehouse_id": 2,
@@ -5410,9 +5410,9 @@
                     "remark": ""
                 },
                 {
-                    "product_id": 7,
-                    "goods_name": "",
-                    "spec": "1101B",
+                    "product_id": 5,
+                    "goods_name": "固化剂",
+                    "spec": "1101A",
                     "unit": "公斤",
                     "warehouse_id": 2,
                     "packages": 0,
@@ -5561,7 +5561,7 @@
             "receiver_name": "王帅",
             "receiver_phone": "17554354236",
             "receiver_address": "四川成都成华路华容大道",
-            "goods_name": " 1101A x20、 1101A x0",
+            "goods_name": "树脂 1101A x20、树脂 1101A x0",
             "goods_weight": "20公斤",
             "goods_quantity": "1件",
             "goods_packaging": "桶装",
@@ -5582,7 +5582,7 @@
             "order_goods": [
                 {
                     "product_id": 2,
-                    "goods_name": "",
+                    "goods_name": "树脂",
                     "spec": "1101A",
                     "unit": "公斤",
                     "warehouse_id": 1,
@@ -5597,7 +5597,7 @@
                 },
                 {
                     "product_id": 2,
-                    "goods_name": "",
+                    "goods_name": "树脂",
                     "spec": "1101A",
                     "unit": "公斤",
                     "warehouse_id": 1,
@@ -5640,7 +5640,7 @@
             "receiver_name": "王帅",
             "receiver_phone": "17554354236",
             "receiver_address": "四川成都成华路华容大道",
-            "goods_name": " 1101A x500、 1101A x500",
+            "goods_name": "树脂 1101A x500、树脂 1101A x500",
             "goods_weight": "1000公斤",
             "goods_quantity": "50件",
             "goods_packaging": "桶装",
@@ -5661,7 +5661,7 @@
             "order_goods": [
                 {
                     "product_id": 2,
-                    "goods_name": "",
+                    "goods_name": "树脂",
                     "spec": "1101A",
                     "unit": "公斤",
                     "warehouse_id": 1,
@@ -5676,7 +5676,7 @@
                 },
                 {
                     "product_id": 2,
-                    "goods_name": "",
+                    "goods_name": "树脂",
                     "spec": "1101A",
                     "unit": "公斤",
                     "warehouse_id": 1,

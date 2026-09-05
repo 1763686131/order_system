@@ -103,7 +103,7 @@
               <div class="product-select-wrapper">
                 <input
                   type="text"
-                  v-model="item.productName"
+                  v-model="item.goodsName"
                   @focus="showProductDropdown(index)"
                   @blur="hideProductDropdown(index)"
                   @input="filterProducts(index)"
@@ -395,7 +395,6 @@ function generateOrderNumber(orderId) {
 function initEmptyRows() {
   formData.value.items = Array.from({ length: 8 }, () => ({
     productId: '',
-    productName: '',
     goodsName: '',
     spec: '',
     unit: '',
@@ -524,8 +523,7 @@ const loadOrderData = async (orderId) => {
         console.log('开始填充商品明细，order_goods:', response.order_goods)
         formData.value.items = response.order_goods.map(item => ({
           productId: item.product_id || '',
-          productName: item.goods_name || '',
-          goodsName: item.goods_name || '',  // 同时设置 goodsName，确保保存时不丢失
+          goodsName: item.goods_name || '',
           spec: item.spec || '',
           unit: item.unit || '',
           warehouseId: item.warehouse_id || '',
@@ -551,7 +549,6 @@ const loadOrderData = async (orderId) => {
         for (let i = 0; i < 3; i++) {
           formData.value.items.push({
             productId: '',
-            productName: '',
             goodsName: '',
             spec: '',
             unit: '',
@@ -672,7 +669,7 @@ const hideProductDropdown = (index) => {
 
 // 过滤商品
 const filterProducts = (index) => {
-  const searchText = formData.value.items[index].productName.toLowerCase()
+  const searchText = formData.value.items[index].goodsName.toLowerCase()
   if (searchText) {
     formData.value.items[index].filteredProducts = filteredProducts.value.filter(p =>
       p.name.toLowerCase().includes(searchText)
@@ -686,8 +683,7 @@ const filterProducts = (index) => {
 const selectProduct = (index, product) => {
   const item = formData.value.items[index]
   item.productId = product.id
-  item.productName = product.name
-  item.goodsName = product.name  // 添加这行，保证保存时字段不为空
+  item.goodsName = product.name
   item.spec = product.specification || ''
 
   // 根据 unitId 查找单位名称
@@ -828,7 +824,6 @@ const calculateRowAmount = (index) => {
 const addRow = (index) => {
   formData.value.items.splice(index + 1, 0, {
     productId: '',
-    productName: '',
     goodsName: '',
     spec: '',
     unit: '',
@@ -995,7 +990,7 @@ const handleSave = async (printAfterSave = false) => {
       currentPayment: formData.value.currentPayment || 0,
       items: validItems.map(item => ({
         productId: item.productId,
-        goodsName: item.goodsName || item.productName || '',
+        goodsName: item.goodsName || '',
         spec: item.spec || '',
         unit: item.unit || '',
         warehouseId: item.warehouseId || null,
