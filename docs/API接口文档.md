@@ -15,9 +15,10 @@
 3. [仓库管理](#3-仓库管理)
 4. [商品管理](#4-商品管理)
 5. [订单管理](#5-订单管理)
-6. [客户管理](#6-客户管理)
-7. [材料库存管理](#7-材料库存管理)
-8. [运费记录管理](#8-运费记录管理)
+6. [运营商标签管理](#6-运营商标签管理)
+7. [客户管理](#7-客户管理)
+8. [材料库存管理](#8-材料库存管理)
+9. [运费记录管理](#9-运费记录管理)
 
 ---
 
@@ -823,54 +824,183 @@
 ### 5.1 获取所有订单
 - **URL**: `/api/orders`
 - **Method**: `GET`
+- **说明**: 获取所有订单列表，新旧订单格式共存
 
-**响应示例**:
+**响应示例（旧订单）**:
 ```json
 [
   {
-    "id": 1,
+    "id": 11,
     "title": "",
-    "status": "pending",
-    "type": 1,
-    "store_id": 1,
-    "date": "2026-08-30 12:00",
-    "completed_date": "",
-    "shipped_date": "",
-    "shipping_method": "",
+    "status": "shipped",
+    "type": 0,
+    "store_id": 2,
+    "date": "2026-07-14 14:41",
+    "completed_date": "2026-07-20 17:56",
+    "shipped_date": "2026-07-20 17:56",
+    "order_client": "张杰订单",
+    "receiver_name": "段洪强",
+    "receiver_phone": "15527382584",
+    "receiver_address": "湖北省武汉市江夏区光谷芯中心二期E区9栋",
+    "goods_name": "碳纤维胶5公斤",
+    "goods_weight": "5kg",
+    "goods_quantity": "1件",
+    "goods_packaging": "桶装",
+    "logistics_service": ["送货上门+回单拍照回传"],
+    "logistics_no": "无单号记录",
+    "shipping_method": 0,
     "shipping_custom": "",
-    "logistics_no": "",
-    "order_client": "客户名称",
-    "receiver_name": "收货人",
-    "receiver_phone": "13800138000",
-    "receiver_address": "收货地址",
-    "goods_name": "货物名称",
-    "goods_weight": "100kg",
-    "goods_quantity": "10",
-    "goods_packaging": "箱",
-    "logistics_service": "顺丰",
-    "remark": "备注"
+    "audit_state": 1,
+    "remark": ""
   }
 ]
 ```
 
-### 5.2 创建订单
+**响应示例（新订单 - 销售单）**:
+```json
+[
+  {
+    "id": 123,
+    "type": 1,
+    "status": "completed",
+    "store_id": 1,
+    "customer_id": 5,
+    "warehouse_id": 2,
+    "order_number": "ZG20260902001",
+    "order_date": "2026-09-02",
+    "date": "2026-09-02 10:30:00",
+    
+    "order_client": "武汉海威船舶",
+    "contact_person": "段洪强",
+    "contact_phone": "15527382584",
+    "contact_address": "湖北省武汉市江夏区光谷芯中心二期E区9栋",
+    "project_name": "海洋工程项目",
+    "sales_person": "李四",
+    "creator": "张三",
+    
+    "order_goods": [
+      {
+        "product_id": 10,
+        "goods_name": "碳纤维胶",
+        "spec": "5kg/桶",
+        "unit": "桶",
+        "warehouse_id": 2,
+        "warehouse_name": "小仓库",
+        "packages": 2,
+        "quantity": 10,
+        "price": 100.00,
+        "tax_rate": 13,
+        "tax_included_price": 113.00,
+        "amount": 1000.00,
+        "total_amount": 1130.00,
+        "remark": "送客户做实验"
+      },
+      {
+        "product_id": 15,
+        "goods_name": "环氧树脂",
+        "spec": "25kg/桶",
+        "unit": "桶",
+        "warehouse_id": 2,
+        "warehouse_name": "小仓库",
+        "packages": 1,
+        "quantity": 25,
+        "price": 50.00,
+        "tax_rate": 13,
+        "tax_included_price": 56.50,
+        "amount": 1250.00,
+        "total_amount": 1412.50,
+        "remark": ""
+      }
+    ],
+    
+    "subtotal_amount": 2250.00,
+    "tax_amount": 292.50,
+    "total_amount": 2542.50,
+    "discount_amount": 2542.50,
+    "other_fees": 0,
+    "should_receive": 2542.50,
+    "current_payment": 2542.50,
+    "current_debt": 0,
+    "settlement_account": "武汉门店",
+    
+    "goods_name": "碳纤维胶 5kg/桶 x10、环氧树脂 25kg/桶 x25",
+    "goods_weight": "35kg",
+    "goods_quantity": "3件",
+    "receiver_name": "段洪强",
+    "receiver_phone": "15527382584",
+    "receiver_address": "湖北省武汉市江夏区光谷芯中心二期E区9栋",
+    
+    "remark": "订单备注"
+  }
+]
+```
+
+### 5.2 获取单个订单详情
+- **URL**: `/api/orders/<int:order_id>`
+- **Method**: `GET`
+- **说明**: 获取订单详细信息，用于订单编辑
+
+**响应示例**: 同 5.1，返回单个订单对象
+
+### 5.3 创建订单（新销售单）
 - **URL**: `/api/orders`
 - **Method**: `POST`
+- **说明**: 创建新订单（type=1），包含完整商品明细和财务信息
 
 **请求参数**:
 ```json
 {
   "type": 1,
-  "order_client": "客户名称",
-  "receiver_name": "收货人",
-  "receiver_phone": "13800138000",
-  "receiver_address": "收货地址",
-  "goods_name": "货物名称",
-  "goods_weight": "100kg",
-  "goods_quantity": "10",
-  "goods_packaging": "箱",
-  "logistics_service": "顺丰",
-  "remark": "备注"
+  "storeId": 1,
+  "customerId": 5,
+  "warehouseId": 2,
+  "orderNumber": "ZG20260902001",
+  "orderDate": "2026-09-02",
+  "contactPerson": "段洪强",
+  "contactPhone": "15527382584",
+  "contactAddress": "湖北省武汉市江夏区光谷芯中心二期E区9栋",
+  "projectName": "海洋工程项目",
+  "salesPerson": "李四",
+  "creator": "张三",
+  "orderRemark": "订单备注",
+  "taxRate": 13,
+  "discountAmount": 2542.50,
+  "otherFees": 0,
+  "settlementAccount": "武汉门店",
+  "currentPayment": 2542.50,
+  
+  "items": [
+    {
+      "productId": 10,
+      "productName": "碳纤维胶",
+      "spec": "5kg/桶",
+      "unit": "桶",
+      "warehouseId": 2,
+      "packages": 2,
+      "quantity": 10,
+      "price": 100.00,
+      "taxRate": 13,
+      "taxIncludedPrice": 113.00,
+      "amount": 1000.00,
+      "totalAmount": 1130.00,
+      "remark": "送客户做实验"
+    },
+    {
+      "productId": 15,
+      "productName": "环氧树脂",
+      "spec": "25kg/桶",
+      "unit": "桶",
+      "warehouseId": 2,
+      "packages": 1,
+      "quantity": 25,
+      "price": 50.00,
+      "taxRate": 13,
+      "taxIncludedPrice": 56.50,
+      "amount": 1250.00,
+      "totalAmount": 1412.50,
+      "remark": ""
+    }
+  ]
 }
 ```
 
@@ -879,42 +1009,78 @@
 {
   "success": true,
   "data": {
-    "id": 2,
-    "title": "",
-    "status": "pending",
+    "id": 123,
+    "order_number": "ZG20260902001",
     "type": 1,
-    "store_id": 1,
-    "date": "2026-08-30 12:00",
-    "order_client": "客户名称",
-    "receiver_name": "收货人",
-    "receiver_phone": "13800138000",
-    "receiver_address": "收货地址",
-    "goods_name": "货物名称",
-    "goods_weight": "100kg",
-    "remark": "备注"
-  }
+    "status": "completed",
+    "date": "2026-09-02 10:30:00"
+  },
+  "message": "订单保存成功"
 }
 ```
 
-### 5.3 更新订单状态
+**注意事项**:
+- 保存时会同时填充新旧字段，确保兼容性
+- 自动计算 `subtotal_amount`、`tax_amount`、`total_amount`、`should_receive`、`current_debt`
+- 自动生成冗余字段 `goods_name`、`goods_weight`、`goods_quantity`
+- **库存不足时允许保存，不阻止录入**
+- 保存成功后自动扣减库存
+
+### 5.4 更新订单（编辑销售单）
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `PUT`
+- **说明**: 更新订单信息，支持编辑商品明细、财务信息等
 
-**请求参数**:
+**请求参数（完整订单更新）**:
+```json
+{
+  "storeId": 1,
+  "customerId": 5,
+  "warehouseId": 2,
+  "orderDate": "2026-09-02",
+  "contactPerson": "段洪强（修改）",
+  "contactPhone": "15527382584",
+  "contactAddress": "新地址",
+  "projectName": "海洋工程项目",
+  "salesPerson": "李四",
+  "creator": "张三",
+  "orderRemark": "修改后的备注",
+  "discountAmount": 2500.00,
+  "otherFees": 100,
+  "currentPayment": 2600.00,
+  
+  "items": [
+    {
+      "productId": 10,
+      "quantity": 15,
+      "price": 100.00
+    }
+  ]
+}
+```
+
+**或者仅更新订单状态**:
 ```json
 {
   "status": "completed"
 }
 ```
 
-**或者更新物流信息**:
+**或者仅更新物流信息**:
 ```json
 {
-  "logistics_no": "SF1234567890",
+  "logistics_no": "三志物流-SF123456",
+  "audit_state": 1,
   "freight_costs": [
     {
+      "type": "freight",
       "note": "运费",
-      "amount": 50
+      "amount": 150.00
+    },
+    {
+      "type": "other",
+      "note": "货拉拉",
+      "amount": 50.00
     }
   ]
 }
@@ -925,102 +1091,78 @@
 {
   "status": "shipped",
   "shipping_method": 0,
-  "logistics_no": "SF1234567890",
-  "shipped_date": "2026-08-30 12:00",
-  "freight_costs": [
-    {
-      "note": "运费",
-      "amount": 50
-    }
-  ]
+  "shipped_date": "2026-09-02 14:00:00"
 }
 ```
 
 **响应示例**:
 ```json
 {
-  "success": true
+  "success": true,
+  "message": "订单更新成功"
 }
 ```
 
-### 5.4 删除订单
+### 5.5 删除订单
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `DELETE`
-- **权限**: 需要对应的删除权限
-- **Header**: `Role: super_admin`, `Username: admin`
+- **说明**: 删除订单，新订单删除时会自动恢复库存
 
 **响应示例**:
 ```json
 {
-  "success": true
+  "success": true,
+  "message": "订单删除成功，库存已恢复"
 }
 ```
 
-### 5.5 编辑订单内容
-- **URL**: `/api/orders/<int:order_id>/edit`
-- **Method**: `PUT`
-- **权限**: 需要 `pending.edit` 权限
-- **Header**: `Role: super_admin`, `Username: admin`
+**注意事项**:
+- 删除新订单（type=1）时，会自动将已扣减的库存恢复
+- 删除旧订单不影响库存
+- 已发货订单建议先撤销出库再删除
 
-**请求参数**:
-```json
-{
-  "title": "",
-  "type": 1,
-  "date": "2026-08-30 12:00",
-  "order_client": "新客户名称",
-  "receiver_name": "新收货人",
-  "receiver_phone": "13900139000",
-  "receiver_address": "新收货地址",
-  "goods_name": "新货物名称",
-  "goods_weight": "200kg",
-  "goods_quantity": "20",
-  "goods_packaging": "袋",
-  "logistics_service": "中通",
-  "remark": "新备注"
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true
-}
-```
-
-### 5.6 上传订单回单
+### 5.6 上传回单图片
 - **URL**: `/api/orders/<int:order_id>/upload_receipt`
 - **Method**: `POST`
 - **Content-Type**: `multipart/form-data`
+- **说明**: 上传订单的发货回单图片
 
 **请求参数**:
-- `receipt_image`: 图片文件
+```
+receipt_image: File (图片文件)
+```
 
 **响应示例**:
 ```json
 {
   "success": true,
-  "message": "新图片上传并保存成功，旧图片已清理",
-  "image_url": "/uploads/2026-08/客户订单_收货人_2026-08-30_A1B2.jpg"
+  "receipt_img_url": "/uploads/receipts/123_1693901234.jpg",
+  "message": "回单上传成功"
 }
 ```
 
-### 5.7 删除订单回单
+### 5.7 删除回单图片
 - **URL**: `/api/orders/<int:order_id>/receipt`
 - **Method**: `DELETE`
+- **说明**: 删除订单的回单图片（从数据库和硬盘中彻底删除）
 
 **响应示例**:
 ```json
 {
   "success": true,
-  "message": "回单图片已彻底删除"
+  "message": "回单图片已删除"
 }
 ```
 
-### 5.8 更新订单已支付金额
+### 5.8 批量删除订单
+- **说明**: 前端通过并发调用 DELETE 接口实现批量删除
+- **逻辑**: 使用 `Promise.allSettled()` 确保所有请求完成，统计成功和失败数量
+
+### 5.9 更新订单已支付金额
 - **URL**: `/api/orders/<int:order_id>/paid-amount`
 - **Method**: `PUT`
 - **Header**: `Username: admin`
+- **说明**: 更新运费的已支付金额（用于物流对账）
 
 **请求参数**:
 ```json
@@ -1049,23 +1191,29 @@
 }
 ```
 
-### 5.9 获取运营商标签
-- **URL**: `/api/orders/carrier_tags`
+---
+
+## 6. 运营商标签管理
+
+### 6.1 获取运营商标签
+- **URL**: `/api/carrier_tags`
 - **Method**: `GET`
+- **说明**: 获取历史物流公司快捷标签（最多20个）
 
 **响应示例**:
 ```json
-["顺丰", "中通", "申通", "圆通"]
+["三志物流", "顺丰快递", "安能快运", "中通快递"]
 ```
 
-### 5.10 添加运营商标签
-- **URL**: `/api/orders/carrier_tags`
+### 6.2 添加运营商标签
+- **URL**: `/api/carrier_tags`
 - **Method**: `POST`
+- **说明**: 添加新的物流公司标签到历史记录
 
 **请求参数**:
 ```json
 {
-  "tag": "韵达"
+  "tag": "韵达快递"
 }
 ```
 
@@ -1073,15 +1221,20 @@
 ```json
 {
   "success": true,
-  "tags": ["韵达", "顺丰", "中通", "申通", "圆通"]
+  "tags": ["韵达快递", "三志物流", "顺丰快递", "安能快运"]
 }
 ```
 
+**注意事项**:
+- 新标签会插入到列表开头
+- 如果标签已存在，不会重复添加
+- 最多保留20个标签
+
 ---
 
-## 6. 客户管理
+## 7. 客户管理
 
-### 6.1 获取客户列表
+### 7.1 获取客户列表
 - **URL**: `/api/customers`
 - **Method**: `GET`
 
@@ -1254,9 +1407,9 @@
 
 ---
 
-## 7. 材料库存管理
+## 8. 材料库存管理
 
-### 7.1 获取材料库存信息
+### 8.1 获取材料库存信息
 - **URL**: `/api/materials`
 - **Method**: `GET`
 
@@ -1277,7 +1430,7 @@
 }
 ```
 
-### 7.2 添加材料记录
+### 8.2 添加材料记录
 - **URL**: `/api/materials`
 - **Method**: `POST`
 
@@ -1298,7 +1451,7 @@
 }
 ```
 
-### 7.3 更新库存
+### 8.3 更新库存
 - **URL**: `/api/materials/stock`
 - **Method**: `PUT`
 
@@ -1316,7 +1469,7 @@
 }
 ```
 
-### 7.4 更新材料记录
+### 8.4 更新材料记录
 - **URL**: `/api/materials/<int:record_id>`
 - **Method**: `PUT`
 
@@ -1336,7 +1489,7 @@
 }
 ```
 
-### 7.5 删除材料记录
+### 8.5 删除材料记录
 - **URL**: `/api/materials/<int:record_id>`
 - **Method**: `DELETE`
 
@@ -1349,9 +1502,9 @@
 
 ---
 
-## 8. 运费记录管理
+## 9. 运费记录管理
 
-### 8.1 获取所有运费记录
+### 9.1 获取所有运费记录
 - **URL**: `/api/freight-records`
 - **Method**: `GET`
 
@@ -1373,7 +1526,7 @@
 ]
 ```
 
-### 8.2 创建运费记录
+### 9.2 创建运费记录
 - **URL**: `/api/freight-records`
 - **Method**: `POST`
 - **Header**: `Username: admin`
@@ -1410,7 +1563,7 @@
 }
 ```
 
-### 8.3 获取所有备用金记录
+### 9.3 获取所有备用金记录
 - **URL**: `/api/freight-records/reserve-fund`
 - **Method**: `GET`
 
@@ -1429,7 +1582,7 @@
 ]
 ```
 
-### 8.4 创建备用金记录
+### 9.4 创建备用金记录
 - **URL**: `/api/freight-records/reserve-fund`
 - **Method**: `POST`
 - **Header**: `Username: admin`
@@ -1460,7 +1613,7 @@
 }
 ```
 
-### 8.5 获取最新备用金余额
+### 9.5 获取最新备用金余额
 - **URL**: `/api/freight-records/reserve-fund/latest`
 - **Method**: `GET`
 
@@ -1480,7 +1633,7 @@
 }
 ```
 
-### 8.6 更新备用金金额
+### 9.6 更新备用金金额
 - **URL**: `/api/freight-records/reserve-fund/<fund_id>`
 - **Method**: `PUT`
 - **Header**: `Username: admin`
