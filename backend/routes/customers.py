@@ -3,7 +3,7 @@ import os
 import json
 from datetime import datetime
 
-customers_bp = Blueprint('customers', __name__)
+customers_bp = Blueprint('customers', __name__, url_prefix='/api/customers')
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 CUSTOMERS_FILE = os.path.join(DATA_DIR, 'customers.json')
@@ -168,3 +168,39 @@ def delete_customer(customer_id):
     write_customers(data)
 
     return jsonify({'success': True, 'message': '删除成功', 'customer': deleted_customer})
+
+@customers_bp.route('/<int:customer_id>/receivable', methods=['GET'])
+def get_customer_receivable(customer_id):
+    """获取客户应收欠款"""
+    # 读取订单数据
+    orders_file = os.path.join(DATA_DIR, 'orders_db.json')
+    if not os.path.exists(orders_file):
+        return jsonify({'receivable': 0})
+
+    try:
+        with open(orders_file, 'r', encoding='utf-8') as f:
+            orders = json.load(f)
+    except Exception as e:
+        print(f"读取订单数据失败: {e}")
+        return jsonify({'receivable': 0})
+
+    # 计算该客户的应收欠款
+    total_receivable = 0
+    for order in orders:
+        if order.get('customer_id') == customer_id:
+            # 新订单格式
+            if order.get('order_goods'):
+                # 本单应收 = 价税合计 - 折扣金额 + 其他费用 - 本次收款
+                total_amount = order.get('total_amount', 0)  # 价税合计
+                discount = order.get('discount_amount', 0)
+                other_fees = order.get('other_fees', 0)
+                current_payment = order.get('current_payment', 0)
+                order_receivable = total_amount - discount + other_fees - current_payment
+                total_receivable += order_receivable
+            else:
+                # 旧订单格式 - 如果有欠款字段
+                debt = order.get('debt', 0)
+                total_receivable += debt
+
+    return jsonify({'receivable': total_receivable})
+

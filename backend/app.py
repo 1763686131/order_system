@@ -39,7 +39,7 @@ app.register_blueprint(warehouses_bp)
 app.register_blueprint(materials_bp)
 app.register_blueprint(freight_bp)
 app.register_blueprint(products_bp)
-app.register_blueprint(customers_bp, url_prefix='/api/customers')
+app.register_blueprint(customers_bp)
 
 # ==========================================
 # 健康检查接口
@@ -129,6 +129,10 @@ def uploaded_file(filename):
 @app.route('/<path:path>')
 def send_static_files(path):
     """前端路由拦截器"""
+    # 如果是 API 请求，跳过（让 Flask 返回 404）
+    if path.startswith('api/'):
+        return jsonify({'error': 'API endpoint not found'}), 404
+
     if '.' in path:
         return send_from_directory(FRONTEND_DIR, path)
     else:

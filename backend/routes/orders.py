@@ -179,7 +179,8 @@ def create_new_format_order(req_data):
         quantity = item.get('quantity', 0)
         warehouse_id = item.get('warehouseId')
 
-        if not product_id or not quantity:
+        # 只校验商品ID，数量和仓库允许为空
+        if not product_id:
             continue
 
         # 查找商品
@@ -301,7 +302,8 @@ def create_new_format_order(req_data):
         product_id = item.get('productId')
         quantity = item.get('quantity', 0)
 
-        if not product_id or not quantity:
+        # 只校验商品ID，数量为0时也要处理（不扣减库存）
+        if not product_id:
             continue
 
         product_id_str = str(product_id)
@@ -315,10 +317,11 @@ def create_new_format_order(req_data):
                 'updatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             }
 
-        # 扣减库存（允许负数）
-        current_stock = inventory_list[product_id_str].get('stock', 0)
-        inventory_list[product_id_str]['stock'] = current_stock - quantity
-        inventory_list[product_id_str]['updatedAt'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # 扣减库存（允许负数，quantity为0时不扣减）
+        if quantity > 0:
+            current_stock = inventory_list[product_id_str].get('stock', 0)
+            inventory_list[product_id_str]['stock'] = current_stock - quantity
+            inventory_list[product_id_str]['updatedAt'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     products_data['inventory'] = inventory_list
 
@@ -464,7 +467,8 @@ def update_full_order(order_id, req_data):
         total_packages = 0
 
         for item in items:
-            if not item.get('productId') or not item.get('quantity'):
+            # 只校验商品ID，数量和件数允许为空
+            if not item.get('productId'):
                 continue
 
             order_goods.append({

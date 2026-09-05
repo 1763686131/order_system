@@ -204,7 +204,7 @@
       <div class="finance-row">
         <div class="finance-item">
           <span class="finance-label">客户欠款:</span>
-          <span class="finance-value">{{ customerDebt ? customerDebt.toFixed(2) : '0.00' }}</span>
+          <span class="finance-value">{{ customerReceivable ? customerReceivable.toFixed(2) : '0.00' }}</span>
         </div>
         <div class="finance-item">
           <span class="finance-label">本单应收:</span>
@@ -975,9 +975,9 @@ const handleSave = async (printAfterSave = false) => {
   try {
     saving.value = true
 
-    // 3. 过滤有效商品
+    // 3. 过滤有效商品（件数和单价为选填项）
     const validItems = formData.value.items.filter(item =>
-      item.productId && item.quantity && item.price
+      item.productId && item.quantity
     )
 
     // 4. 构建请求数据
@@ -1005,9 +1005,9 @@ const handleSave = async (printAfterSave = false) => {
         spec: item.spec,
         unit: item.unit,
         warehouseId: item.warehouseId,
-        packages: item.packages,
+        packages: item.packages || 0,
         quantity: item.quantity,
-        price: item.price,
+        price: item.price || 0,
         taxRate: item.taxRate,
         taxIncludedPrice: item.taxIncludedPrice,
         amount: item.amount,
@@ -1036,18 +1036,15 @@ const handleSave = async (printAfterSave = false) => {
 
     // 6. 处理结果
     if (response && response.success) {
-      // 新增模式：用返回的真实ID更新订单编号
-      if (!isEditMode.value && response.orderId) {
-        const realOrderNumber = generateOrderNumber(response.orderId)
-        formData.value.orderNumber = realOrderNumber
-
-        showSuccessModal(`订单保存成功！\n订单编号：${realOrderNumber}`)
-      } else {
-        showSuccessModal(isEditMode.value
-          ? `订单修改成功！\n订单编号：${response.orderNumber || formData.value.orderNumber}`
-          : `订单保存成功！\n订单编号：${response.orderNumber}`
-        )
+      // 新增模式：用后端返回的真实订单编号更新
+      if (!isEditMode.value && response.orderNumber) {
+        formData.value.orderNumber = response.orderNumber
       }
+
+      showSuccessModal(isEditMode.value
+        ? `订单修改成功！\n订单编号：${formData.value.orderNumber}`
+        : `订单保存成功！\n订单编号：${formData.value.orderNumber}`
+      )
 
       if (printAfterSave) {
         // TODO: 打印逻辑
