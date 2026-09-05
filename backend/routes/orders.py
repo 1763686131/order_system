@@ -1,13 +1,14 @@
 """
 订单管理 API 路由
 """
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, Response, stream_with_context
 from utils.db_helper import read_orders, write_orders, read_users
 from datetime import datetime
 import os
 import uuid
 import json
 import threading
+from queue import Queue, Empty
 
 orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
@@ -25,6 +26,25 @@ else:
 
 # 线程锁
 orders_lock = threading.Lock()
+
+# 订单实时推送订阅者。每个前台页面对应一个队列，订单写入成功后立即广播。
+order_event_subscribers = set()
+order_event_subscribers_lock = threading.Lock()
+
+
+def broadcast_order_event(action, order=None, order_id=None):
+    """向所有已连接的前台页面推送订单变更事件。"""
+    payload = {
+        'action': action,
+        'order': order,
+        'orderId': order_id if order_id is not None else (order or {}).get('id')
+    }
+
+    with order_event_subscribers_lock:
+        subscribers = list(order_event_subscribers)
+
+    for subscriber in subscribers:
+        subscriber.put(payload)
 
 def sanitize_filename(name):
     """文件名清理函数"""
@@ -57,6 +77,42 @@ def get_orders():
     """获取所有订单"""
     orders_data = read_orders()
     return jsonify(orders_data.get('orders', []))
+
+
+@orders_bp.route('/events', methods=['GET'])
+def order_events():
+    """通过 SSE 推送订单变化，避免前台每隔几秒重复查询整张订单表。"""
+    subscriber = Queue()
+
+    with order_event_subscribers_lock:
+        order_event_subscribers.add(subscriber)
+
+    def event_stream():
+        # 发送连接确认，同时让浏览器知道断线后应在 3 秒后重连。
+        yield 'retry: 3000\nevent: connected\ndata: {}\n\n'
+
+        try:
+            while True:
+                try:
+                    payload = subscriber.get(timeout=20)
+                    data = json.dumps(payload, ensure_ascii=False)
+                    yield f'event: order-change\ndata: {data}\n\n'
+                except Empty:
+                    # SSE 注释行用于保活，避免代理或浏览器关闭空闲连接。
+                    yield ': keep-alive\n\n'
+        finally:
+            with order_event_subscribers_lock:
+                order_event_subscribers.discard(subscriber)
+
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'X-Accel-Buffering': 'no'
+        }
+    )
 
 @orders_bp.route('/<int:order_id>', methods=['GET'])
 def get_order(order_id):
@@ -120,6 +176,7 @@ def create_old_format_order(req_data):
     orders_list.append(new_order)
     orders_data['orders'] = orders_list
     write_orders(orders_data)
+    broadcast_order_event('created', order=new_order)
     return jsonify({"success": True, "data": new_order})
 
 def create_new_format_order(req_data):
@@ -329,6 +386,7 @@ def create_new_format_order(req_data):
     orders_list.append(new_order)
     orders_data['orders'] = orders_list
     write_orders(orders_data)
+    broadcast_order_event('created', order=new_order)
 
     # 保存库存（只保存 inventory，不需要保存整个 products 数组）
     write_products(products_data)
@@ -361,6 +419,7 @@ def update_order_status_only(order_id, req_data):
     ns = req_data.get('status')
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
+    changed_order = None
     for x in orders_list:
         if x['id'] == order_id:
             # 如果只是更新物流单号和运费，不改变状态
@@ -368,6 +427,7 @@ def update_order_status_only(order_id, req_data):
                 x['logistics_no'] = req_data.get('logistics_no')
                 if 'freight_costs' in req_data:
                     x['freight_costs'] = req_data.get('freight_costs', [])
+                changed_order = dict(x)
                 break
 
             # 正常的状态更新流程
@@ -408,10 +468,13 @@ def update_order_status_only(order_id, req_data):
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""
                 x['audit_state'] = 0
+            changed_order = dict(x)
             break
 
     orders_data['orders'] = orders_list
     write_orders(orders_data)
+    if changed_order is not None:
+        broadcast_order_event('updated', order=changed_order)
     return jsonify({"success": True})
 
 def update_full_order(order_id, req_data):
@@ -575,6 +638,7 @@ def update_full_order(order_id, req_data):
         orders_list[order_index] = updated_order
         orders_data['orders'] = orders_list
         write_orders(orders_data)
+        broadcast_order_event('updated', order=updated_order)
 
         return jsonify({
             "success": True,
@@ -610,6 +674,7 @@ def delete_order(order_id):
     orders_list = [x for x in orders_list if x['id'] != order_id]
     orders_data['orders'] = orders_list
     write_orders(orders_data)
+    broadcast_order_event('deleted', order_id=order_id)
     return jsonify({"success": True})
 
 @orders_bp.route('/<int:order_id>/edit', methods=['PUT'])
@@ -631,6 +696,7 @@ def edit_order_content(order_id):
     req_data = request.json
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
+    changed_order = None
     for x in orders_list:
         if x['id'] == order_id:
             x['title'] = req_data.get('title', '')
@@ -647,9 +713,12 @@ def edit_order_content(order_id):
             x['goods_packaging'] = req_data.get('goods_packaging', '')
             x['logistics_service'] = req_data.get('logistics_service', '')
             x['remark'] = req_data.get('remark', '')
+            changed_order = dict(x)
             break
     orders_data['orders'] = orders_list
     write_orders(orders_data)
+    if changed_order is not None:
+        broadcast_order_event('updated', order=changed_order)
     return jsonify({"success": True})
 
 @orders_bp.route('/<int:order_id>/upload_receipt', methods=['POST'])
@@ -706,6 +775,7 @@ def upload_receipt(order_id):
 
     order['receipt_img_url'] = db_image_url
     write_orders(orders_data)
+    broadcast_order_event('updated', order=order)
 
     return jsonify({
         "success": True,
@@ -738,6 +808,7 @@ def delete_order_receipt(order_id):
     # 清空数据库中的回单路径值
     order['receipt_img_url'] = ""
     write_orders(orders_data)
+    broadcast_order_event('updated', order=order)
 
     return jsonify({"success": True, "message": "回单图片已彻底删除"})
 
@@ -781,6 +852,7 @@ def update_order_paid_amount(order_id):
         orders[order_index] = order
         data['orders'] = orders
         write_orders(data)
+        broadcast_order_event('updated', order=order)
 
     return jsonify({'success': True, 'order': order})
 

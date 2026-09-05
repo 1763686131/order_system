@@ -302,6 +302,18 @@ const handleUserManage = () => {
 // 移动端导航栏隐藏逻辑
 let lastScrollY = 0
 let ticking = false
+let orderEventSource = null
+let fallbackPollingInterval = null
+let tab0 = null
+let tab1 = null
+let switchTabHandler = null
+
+const handleHorizontalScroll = (e) => {
+  if (e.deltaY !== 0) {
+    e.preventDefault()
+    e.currentTarget.scrollLeft += e.deltaY
+  }
+}
 
 const handleScroll = () => {
   if (!ticking) {
@@ -325,28 +337,51 @@ const handleScroll = () => {
   }
 }
 
-onMounted(() => {
-  // 加载订单数据
-  fetchOrders()
+// 监听后端订单变更事件，订单保存后由服务器主动推送到所有前台页面
+const connectOrderEvents = () => {
+  if (typeof EventSource === 'undefined') {
+    console.warn('当前浏览器不支持 SSE，启用轮询降级方案')
+    fallbackPollingInterval = setInterval(fetchOrders, 3000)
+    return
+  }
 
-  // 3秒自动轮询
-  const pollingInterval = setInterval(() => {
-    fetchOrders()
-  }, 3000)
+  const eventSource = new EventSource('/api/orders/events')
+  orderEventSource = eventSource
+  let hasConnected = false
+
+  eventSource.addEventListener('order-change', (event) => {
+    try {
+      orderStore.applyOrderEvent(JSON.parse(event.data))
+    } catch (error) {
+      console.error('解析订单实时事件失败:', error)
+    }
+  })
+
+  eventSource.onopen = () => {
+    // 首次连接前已经有初始化请求；重连后重新拉取一次，补回断线期间错过的事件。
+    if (hasConnected) {
+      fetchOrders()
+    }
+    hasConnected = true
+  }
+
+  eventSource.onerror = () => {
+    // EventSource 会按照服务端返回的 retry 值自动重连，这里不主动关闭连接。
+    console.warn('订单实时连接暂时断开，等待自动重连')
+  }
+}
+
+onMounted(() => {
+  // 先建立实时连接，再加载初始数据
+  connectOrderEvents()
+  fetchOrders()
 
   // 监听滚动事件
   window.addEventListener('scroll', handleScroll, { passive: true })
 
   // 🖱️ 鼠标滚轮横向滚动 (Tab 0 和 Tab 1)
-  const tab0 = document.getElementById('tab-0')
-  const tab1 = document.getElementById('tab-1')
-
-  const handleHorizontalScroll = (e) => {
-    if (e.deltaY !== 0) {
-      e.preventDefault()
-      e.currentTarget.scrollLeft += e.deltaY
-    }
-  }
+  tab0 = document.getElementById('tab-0')
+  tab1 = document.getElementById('tab-1')
 
   if (tab0) {
     tab0.addEventListener('wheel', handleHorizontalScroll, { passive: false })
@@ -359,11 +394,12 @@ onMounted(() => {
   window.addEventListener('refresh-orders', fetchOrders)
 
   // 监听切换 tab 事件
-  window.addEventListener('switch-tab', (e) => {
+  switchTabHandler = (e) => {
     if (e.detail && e.detail.index !== undefined) {
       switchTab(e.detail.index)
     }
-  })
+  }
+  window.addEventListener('switch-tab', switchTabHandler)
 
   // 挂载全局函数（供子组件和原始逻辑调用）
   window.triggerStatusConfirm = (order, status) => {
@@ -473,10 +509,26 @@ onMounted(() => {
   }
 
   // 清理函数
-  onUnmounted(() => {
-    clearInterval(pollingInterval)
-    window.removeEventListener('scroll', handleScroll)
-  })
+})
+
+onUnmounted(() => {
+  orderEventSource?.close()
+  if (fallbackPollingInterval) {
+    clearInterval(fallbackPollingInterval)
+  }
+
+  window.removeEventListener('scroll', handleScroll)
+  window.removeEventListener('refresh-orders', fetchOrders)
+  if (switchTabHandler) {
+    window.removeEventListener('switch-tab', switchTabHandler)
+  }
+
+  if (tab0) {
+    tab0.removeEventListener('wheel', handleHorizontalScroll)
+  }
+  if (tab1) {
+    tab1.removeEventListener('wheel', handleHorizontalScroll)
+  }
 })
 </script>
 

@@ -39,6 +39,29 @@ export const useOrderStore = defineStore('order', {
       this.allOrders = orders
     },
 
+    applyOrderEvent(event) {
+      const action = event?.action
+      const order = event?.order
+      const orderId = order?.id ?? event?.orderId
+
+      if (action === 'deleted') {
+        const deleteIndex = this.allOrders.findIndex(item => item.id === orderId)
+        if (deleteIndex !== -1) {
+          this.allOrders.splice(deleteIndex, 1)
+        }
+        return
+      }
+
+      if (!order || orderId == null) return
+
+      const orderIndex = this.allOrders.findIndex(item => item.id === orderId)
+      if (orderIndex === -1) {
+        this.allOrders.unshift(order)
+      } else {
+        this.allOrders[orderIndex] = order
+      }
+    },
+
     addOrder(order) {
       this.allOrders.unshift(order)
     },

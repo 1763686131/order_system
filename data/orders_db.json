@@ -6031,6 +6031,68 @@
             "customer_receivable": 10000,
             "receipt_img_url": "",
             "freight_costs": []
+        },
+        {
+            "id": 221,
+            "title": "",
+            "status": "pending",
+            "type": 1,
+            "date": "2026-09-05 16:45",
+            "completed_date": "",
+            "shipped_date": "",
+            "shipping_method": 0,
+            "shipping_custom": "",
+            "logistics_no": "无单号记录",
+            "audit_state": 0,
+            "store_id": 2,
+            "order_client": "李超",
+            "receiver_name": "哈哈哈",
+            "receiver_phone": "13012341234",
+            "receiver_address": "浙江嘉兴大乐透",
+            "goods_name": "碳纤维胶 30kg/组 x210",
+            "goods_weight": "210公斤",
+            "goods_quantity": "14件",
+            "goods_packaging": "桶装",
+            "logistics_service": [
+                "送货上门+回单拍照回传"
+            ],
+            "remark": "",
+            "customer_id": 4,
+            "warehouse_id": 1,
+            "order_number": "ZG20260906221",
+            "contact_person": "哈哈哈",
+            "contact_phone": "13012341234",
+            "contact_address": "浙江嘉兴大乐透",
+            "project_name": "",
+            "sales_person": "柯晓",
+            "creator": "下单员",
+            "settlement_account": "中固",
+            "order_goods": [
+                {
+                    "product_id": 15,
+                    "goods_name": "碳纤维胶",
+                    "spec": "30kg/组",
+                    "unit": "公斤",
+                    "warehouse_id": 1,
+                    "packages": 14,
+                    "quantity": 210,
+                    "price": 0,
+                    "tax_rate": 13,
+                    "tax_included_price": 0,
+                    "amount": 0,
+                    "total_amount": 0,
+                    "remark": ""
+                }
+            ],
+            "subtotal_amount": 0,
+            "tax_amount": 0,
+            "total_amount": 0,
+            "discount_amount": 0,
+            "other_fees": 0,
+            "should_receive": 0,
+            "current_payment": 0,
+            "current_debt": 0,
+            "customer_receivable": 0
         }
     ]
 }
