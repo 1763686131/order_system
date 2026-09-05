@@ -441,8 +441,10 @@ const toggleCard = (event) => {
 /* 未完成订单正面：商品信息与数量分成两个固定结构的盒子 */
 .product-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  column-gap: 12px;
+  row-gap: 8px;
   width: 100%;
 }
 
@@ -456,8 +458,8 @@ const toggleCard = (event) => {
 }
 
 .product-info-box {
-  flex: 1 1 auto;
-  min-width: 0;
+  flex: 1 1 160px;
+  min-width: 160px;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -466,9 +468,10 @@ const toggleCard = (event) => {
 }
 
 .product-quantity-box {
-  flex: 0 0 112px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+  display: inline-flex;
   align-items: baseline;
   gap: 6px;
   margin-left: auto;
