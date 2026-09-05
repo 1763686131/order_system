@@ -46,6 +46,12 @@
             </div>
           </div>
 
+          <!-- 商品信息展示区（新订单） -->
+          <div v-if="currentOrderInfo.goodsInfo" style="margin-bottom: 16px; padding: 12px; background: #fafafa; border-radius: 8px; border: 1px solid #e8e8e8;">
+            <div style="font-weight: bold; color: #333; margin-bottom: 8px; font-size: 13px;">订单商品信息</div>
+            <pre style="white-space: pre-wrap; font-size: 12px; color: #555; margin: 0; font-family: inherit; line-height: 1.6;">{{ currentOrderInfo.goodsInfo }}</pre>
+          </div>
+
           <!-- 快捷点击标签 -->
           <div id="auditCarrierTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; min-height: 24px; align-items: center;">
             <span
@@ -266,7 +272,8 @@ const modalSubtitle = ref('请选择对当前出库订单的操作指令')
 // 当前订单信息（客户名称和发货方式）
 const currentOrderInfo = ref({
   customer: '',
-  shippingMethod: ''
+  shippingMethod: '',
+  goodsInfo: '' // 新增：商品信息文本
 })
 
 // 消息提示状态
@@ -400,6 +407,25 @@ let currentReceiptRotation = 0
 // 全局变量，用于存储当前所有订单（照搬原生）
 let allOrdersLocal = []
 
+// 获取商品信息文本（新旧订单兼容）
+const getGoodsDisplayText = (order) => {
+  if (!order) return ''
+
+  // 新订单：显示商品明细列表
+  if (order.order_goods && order.order_goods.length > 0) {
+    const lines = order.order_goods.map((item, index) =>
+      `${index + 1}. ${item.goods_name} ${item.spec} x${item.quantity}${item.unit || ''} (${item.packages}件)`
+    )
+    const totalQty = order.order_goods.reduce((sum, item) => sum + (item.quantity || 0), 0)
+    const totalPkg = order.order_goods.reduce((sum, item) => sum + (item.packages || 0), 0)
+    const unit = order.order_goods[0]?.unit || ''
+    return lines.join('\n') + `\n总计：${totalQty}${unit}，${totalPkg}件`
+  }
+
+  // 旧订单：显示原始文本
+  return `商品：${order.goods_name || '-'}\n重量：${order.goods_weight || '-'}\n件数：${order.goods_quantity || '-'}`
+}
+
 // 加载物流公司标签
 const fetchCarrierTags = async () => {
   try {
@@ -457,6 +483,9 @@ const open = (orderId, mode) => {
     } else {
       currentOrderInfo.value.shippingMethod = '其它'
     }
+
+    // 🎯 新增：获取商品信息文本
+    currentOrderInfo.value.goodsInfo = getGoodsDisplayText(order)
   }
 
   const title = document.getElementById('actionModalTitle')
