@@ -473,7 +473,7 @@ def update_full_order(order_id, req_data):
 
             order_goods.append({
                 "product_id": item.get('productId'),
-                "goods_name": item.get('productName', ''),
+                "goods_name": item.get('goodsName', ''),
                 "spec": item.get('spec', ''),
                 "unit": item.get('unit', ''),
                 "warehouse_id": item.get('warehouseId'),
@@ -487,7 +487,7 @@ def update_full_order(order_id, req_data):
                 "remark": item.get('remark', '')
             })
 
-            goods_name_parts.append(f"{item.get('productName', '')} {item.get('spec', '')} x{item.get('quantity', 0)}")
+            goods_name_parts.append(f"{item.get('goodsName', '')} {item.get('spec', '')} x{item.get('quantity', 0)}")
             total_quantity += item.get('quantity', 0)
             total_packages += item.get('packages', 0)
 

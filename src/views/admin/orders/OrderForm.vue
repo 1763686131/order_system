@@ -525,6 +525,7 @@ const loadOrderData = async (orderId) => {
         formData.value.items = response.order_goods.map(item => ({
           productId: item.product_id || '',
           productName: item.goods_name || '',
+          goodsName: item.goods_name || '',  // 同时设置 goodsName，确保保存时不丢失
           spec: item.spec || '',
           unit: item.unit || '',
           warehouseId: item.warehouse_id || '',
@@ -939,24 +940,14 @@ const validateForm = () => {
     return false
   }
 
-  // 5. 检查商品明细（只要求商品ID和数量必填）
+  // 5. 检查商品明细（只要求商品ID必填，数量、件数、单价都可以为空或0）
   const validItems = formData.value.items.filter(item =>
-    item.productId && item.quantity
+    item.productId
   )
 
   if (validItems.length === 0) {
-    showErrorModal('请至少添加一条有效的商品明细（商品、数量必填）')
+    showErrorModal('请至少添加一条有效的商品明细（至少填写商品）')
     return false
-  }
-
-  // 6. 检查每个商品的必填字段（只检查数量）
-  for (let i = 0; i < validItems.length; i++) {
-    const item = validItems[i]
-
-    if (!item.quantity || item.quantity <= 0) {
-      showErrorModal(`第 ${i + 1} 行商品的数量必须大于0`)
-      return false
-    }
   }
 
   return true
@@ -978,9 +969,9 @@ const handleSave = async (printAfterSave = false) => {
   try {
     saving.value = true
 
-    // 3. 过滤有效商品（件数和单价为选填项）
+    // 3. 过滤有效商品（只要求填写商品ID，件数、数量、单价都可以为空）
     const validItems = formData.value.items.filter(item =>
-      item.productId && item.quantity
+      item.productId
     )
 
     // 4. 构建请求数据
@@ -1004,18 +995,18 @@ const handleSave = async (printAfterSave = false) => {
       currentPayment: formData.value.currentPayment || 0,
       items: validItems.map(item => ({
         productId: item.productId,
-        goodsName: item.goodsName,
-        spec: item.spec,
-        unit: item.unit,
-        warehouseId: item.warehouseId,
-        packages: item.packages || 0,
-        quantity: item.quantity,
-        price: item.price || 0,
-        taxRate: item.taxRate,
-        taxIncludedPrice: item.taxIncludedPrice,
-        amount: item.amount,
-        totalAmount: item.totalAmount,
-        remark: item.remark
+        goodsName: item.goodsName || item.productName || '',
+        spec: item.spec || '',
+        unit: item.unit || '',
+        warehouseId: item.warehouseId || null,
+        packages: Number(item.packages) || 0,
+        quantity: Number(item.quantity) || 0,
+        price: Number(item.price) || 0,
+        taxRate: Number(item.taxRate) || 13,
+        taxIncludedPrice: Number(item.taxIncludedPrice) || 0,
+        amount: Number(item.amount) || 0,
+        totalAmount: Number(item.totalAmount) || 0,
+        remark: item.remark || ''
       }))
     }
 
