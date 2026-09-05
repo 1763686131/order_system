@@ -268,7 +268,25 @@ const processedOrders = computed(() => {
   const isMobile = window.innerWidth <= 768
 
   props.orders.forEach(order => {
-    const goodsLines = (order.goods_name || '').split('\n').filter(l => l.trim() !== '')
+    // 使用新格式的 order_goods 数组
+    if (!order.order_goods || !Array.isArray(order.order_goods) || order.order_goods.length === 0) {
+      // 如果没有 order_goods，跳过这个订单
+      return
+    }
+
+    // 从 order_goods 数组中提取商品信息
+    const goodsLines = order.order_goods.map(item => {
+      const parts = []
+      if (item.goods_name) parts.push(item.goods_name)
+      if (item.spec) parts.push(item.spec)
+      if (item.quantity) parts.push(`x${item.quantity}`)
+      return parts.join(' ')
+    }).filter(l => l.trim() !== '')
+
+    // 如果没有有效的商品行，跳过
+    if (goodsLines.length === 0) {
+      return
+    }
 
     let chunks = []
     if (isMobile) {
@@ -278,7 +296,6 @@ const processedOrders = computed(() => {
       for (let i = 0; i < goodsLines.length; i += 9) {
         chunks.push(goodsLines.slice(i, i + 9))
       }
-      if (chunks.length === 0) chunks.push([])
     }
 
     chunks.forEach((chunkLines, chunkIndex) => {
@@ -291,6 +308,37 @@ const processedOrders = computed(() => {
       const storeTextColor = getStoreTextColor(order)
       const typeName = getStoreName(order) + '订单'
       const shortDate = order.completed_date ? order.completed_date.split(' ')[0] : '未知日期'
+
+      // 使用新字段
+      const receiverName = order.contact_person || '未填'
+      const receiverPhone = order.contact_phone || '未填'
+      const receiverAddress = order.contact_address || '未填'
+      const orderClient = order.order_client || '未命名归属'
+
+      // 从 order_goods 中汇总数据
+      let goodsPackaging = '桶装'
+      let goodsWeight = ''
+      let goodsQuantity = ''
+      let remark = order.remark || ''
+      let logisticsService = '送货上门+回单拍照回传'
+
+      if (order.order_goods && Array.isArray(order.order_goods) && order.order_goods.length > 0) {
+        // 重量：汇总所有商品的数量
+        const totalQuantity = order.order_goods.reduce((sum, item) => sum + (item.quantity || 0), 0)
+        const firstUnit = order.order_goods[0]?.unit || 'kg'
+        goodsWeight = totalQuantity > 0 ? `${totalQuantity}${firstUnit}` : ''
+
+        // 件数：汇总所有商品的件数
+        const totalPackages = order.order_goods.reduce((sum, item) => sum + (item.packages || 0), 0)
+        goodsQuantity = totalPackages > 0 ? `${totalPackages}件` : ''
+      }
+
+      // 处理物流服务字段
+      if (Array.isArray(order.logistics_service) && order.logistics_service.length > 0) {
+        logisticsService = order.logistics_service.join('、')
+      } else if (typeof order.logistics_service === 'string' && order.logistics_service) {
+        logisticsService = order.logistics_service
+      }
 
       result.push({
         ...order,
@@ -308,7 +356,17 @@ const processedOrders = computed(() => {
         shortDate,
         isMobile,
         indicatorHtml: (!isMobile && isSplit),
-        tagsHtml: isFirstCard && (order.goods_packaging || order.goods_weight || order.remark || order.goods_quantity)
+        tagsHtml: isFirstCard && (goodsPackaging || goodsWeight || remark || goodsQuantity),
+        // 覆盖字段
+        receiver_name: receiverName,
+        receiver_phone: receiverPhone,
+        receiver_address: receiverAddress,
+        order_client: orderClient,
+        goods_packaging: goodsPackaging,
+        goods_weight: goodsWeight,
+        goods_quantity: goodsQuantity,
+        logistics_service: logisticsService,
+        remark: remark
       })
     })
   })

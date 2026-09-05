@@ -56,7 +56,26 @@
       "status": "active",
       "createdAt": "2026-09-01T14:48:31",
       "updatedAt": "2026-09-02T05:38:15"
+    },
+    {
+      "id": 4,
+      "customerCode": "004",
+      "customerName": "李超",
+      "storeId": 2,
+      "contactPerson": "哈哈哈",
+      "phone": "13012341234",
+      "address": "浙江嘉兴大乐透",
+      "balance": 0,
+      "receivable": 0,
+      "bankName": "",
+      "bankAccount": "",
+      "bankCode": "",
+      "taxNumber": "",
+      "remark": "",
+      "status": "active",
+      "createdAt": "2026-09-05T14:12:09",
+      "updatedAt": "2026-09-05T14:12:09"
     }
   ],
-  "nextId": 4
+  "nextId": 5
 }

@@ -416,6 +416,32 @@
                 }
             ],
             "createdAt": "2026-08-30 14:45:44"
+        },
+        {
+            "id": 15,
+            "code": "002",
+            "name": "碳纤维胶",
+            "specification": "30kg/组",
+            "category": 101,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "",
+            "enabled": true,
+            "warehouseId": 1,
+            "storeIds": [
+                2
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [
+                {
+                    "fromUnitId": 5,
+                    "value": 15,
+                    "splits": []
+                }
+            ],
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-09-05 14:27:16"
         }
     ],
     "inventory": {
@@ -426,16 +452,16 @@
             "updatedAt": "2026-09-04 14:47:41"
         },
         "2": {
-            "stock": 48600,
+            "stock": 48550,
             "minStock": 0,
             "maxStock": 0,
-            "updatedAt": "2026-09-05 06:31:03"
+            "updatedAt": "2026-09-05 14:56:27"
         },
         "3": {
-            "stock": -1140,
+            "stock": -1160,
             "minStock": 0,
             "maxStock": 0,
-            "updatedAt": "2026-09-05 10:09:15"
+            "updatedAt": "2026-09-05 14:12:48"
         },
         "5": {
             "stock": -6620,
