@@ -426,22 +426,28 @@
             "updatedAt": "2026-09-04 14:47:41"
         },
         "2": {
-            "stock": 48800,
+            "stock": 48600,
             "minStock": 0,
             "maxStock": 0,
-            "updatedAt": "2026-09-04 15:17:43"
+            "updatedAt": "2026-09-05 06:31:03"
         },
         "3": {
-            "stock": -60,
+            "stock": -560,
             "minStock": 0,
             "maxStock": 0,
-            "updatedAt": "2026-09-05 06:09:11"
+            "updatedAt": "2026-09-05 06:31:03"
         },
         "5": {
             "stock": -6570,
             "minStock": 0,
             "maxStock": 0,
             "updatedAt": "2026-09-05 06:11:28"
+        },
+        "4": {
+            "stock": -1020,
+            "minStock": 0,
+            "maxStock": 0,
+            "updatedAt": "2026-09-05 06:35:37"
         }
     }
 }

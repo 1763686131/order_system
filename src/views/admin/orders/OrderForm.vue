@@ -1102,13 +1102,46 @@ onMounted(() => {
     console.log('进入编辑模式，加载订单ID:', props.orderId)
     loadOrderData(props.orderId)
   } else {
-    // 新增模式：初始化空行
+    // 新增模式：初始化空行并生成订单编号
     console.log('进入新增模式')
     initEmptyRows()
-    // 生成默认订单编号（临时，保存后会用真实ID替换）
-    formData.value.orderNumber = generateOrderNumber('TEMP')
+    // 从订单列表中获取最大ID+1，生成正式订单编号
+    generateNewOrderNumber()
   }
 })
+
+// 生成新订单编号（从现有订单中找最大ID+1）
+async function generateNewOrderNumber() {
+  try {
+    const response = await request({
+      url: '/orders',
+      method: 'GET'
+    })
+
+    if (response && Array.isArray(response)) {
+      // 从订单列表中找到最大的ID
+      let maxId = 0
+      response.forEach(order => {
+        if (order.id && order.id > maxId) {
+          maxId = order.id
+        }
+      })
+
+      // 下一个订单ID = 最大ID + 1
+      const nextId = maxId + 1
+      formData.value.orderNumber = generateOrderNumber(nextId)
+      console.log('生成订单编号:', formData.value.orderNumber, '(基于最大ID:', maxId, ')')
+    } else {
+      // 如果没有订单，从1开始
+      formData.value.orderNumber = generateOrderNumber(1)
+    }
+  } catch (error) {
+    console.error('获取订单列表失败:', error)
+    // 出错时使用临时编号
+    formData.value.orderNumber = generateOrderNumber('TEMP')
+  }
+}
+
 </script>
 
 <style scoped>
