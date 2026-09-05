@@ -4984,6 +4984,75 @@
             "current_payment": 0,
             "current_debt": 117520,
             "customer_receivable": 5000
+        },
+        {
+            "id": 206,
+            "title": "",
+            "status": "shipped",
+            "type": 1,
+            "date": "2026-09-05 02:23",
+            "completed_date": "2026-09-05 10:23",
+            "shipped_date": "2026-09-05 10:23",
+            "shipping_method": 0,
+            "shipping_custom": "",
+            "logistics_no": "啊松物流-987484572",
+            "audit_state": 1,
+            "store_id": 1,
+            "order_client": "锦州森源",
+            "receiver_name": "张三",
+            "receiver_phone": "17554354236",
+            "receiver_address": "北京天安门",
+            "goods_name": "固化剂 1101A x1000",
+            "goods_weight": "1000公斤",
+            "goods_quantity": "1件",
+            "goods_packaging": "桶装",
+            "logistics_service": [
+                "送货上门+回单拍照回传"
+            ],
+            "remark": "",
+            "customer_id": 1,
+            "warehouse_id": 2,
+            "order_number": "ZG20260905NEW",
+            "contact_person": "张三",
+            "contact_phone": "17554354236",
+            "contact_address": "北京天安门",
+            "project_name": "",
+            "sales_person": "",
+            "creator": "",
+            "settlement_account": "绝缘",
+            "order_goods": [
+                {
+                    "product_id": 5,
+                    "goods_name": "固化剂",
+                    "spec": "1101A",
+                    "unit": "公斤",
+                    "warehouse_id": 2,
+                    "packages": 1,
+                    "quantity": 1000,
+                    "price": 20,
+                    "tax_rate": 13,
+                    "tax_included_price": 22.6,
+                    "amount": 20000,
+                    "total_amount": 22600,
+                    "remark": ""
+                }
+            ],
+            "subtotal_amount": 20000,
+            "tax_amount": 2600,
+            "total_amount": 22600,
+            "discount_amount": 22600,
+            "other_fees": 0,
+            "should_receive": 22600,
+            "current_payment": 0,
+            "current_debt": 22600,
+            "customer_receivable": 5000,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 500
+                }
+            ]
         }
     ]
 }

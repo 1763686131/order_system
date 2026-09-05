@@ -1359,15 +1359,26 @@ const handleViewReceipt = (order) => {
 }
 
 const handleDelete = async (order) => {
-  if (confirm(`确定要删除订单 ${order.id} 吗？`)) {
+  // 判断是否为新订单
+  const isNew = order.order_goods && order.order_goods.length > 0
+
+  // 显示提示信息
+  let confirmMsg = `确定要删除订单 ${order.id} 吗？`
+  if (isNew) {
+    confirmMsg = `确定要删除订单 ${order.order_number || order.id} 吗？\n\n此订单包含 ${order.order_goods.length} 种商品，删除后将恢复库存。`
+  }
+
+  if (confirm(confirmMsg)) {
     try {
       await request({
         url: `/orders/${order.id}`,
         method: 'DELETE'
       })
+      alert('删除成功' + (isNew ? '，库存已恢复' : ''))
       await fetchOrdersData()
     } catch (error) {
-      alert('删除失败')
+      console.error('删除失败:', error)
+      alert('删除失败：' + (error.message || '未知错误'))
     }
   }
 }
@@ -1378,7 +1389,21 @@ const handleBatchDelete = async () => {
     return
   }
 
-  if (confirm(`确定要删除选中的 ${selectedOrders.value.length} 个订单吗？`)) {
+  // 统计新旧订单数量
+  const selectedOrdersData = orders.value.filter(o => selectedOrders.value.includes(o.id))
+  const newOrdersCount = selectedOrdersData.filter(o => o.order_goods && o.order_goods.length > 0).length
+  const oldOrdersCount = selectedOrders.value.length - newOrdersCount
+
+  // 构建提示信息
+  let confirmMsg = `确定要删除选中的 ${selectedOrders.value.length} 个订单吗？\n\n`
+  if (newOrdersCount > 0) {
+    confirmMsg += `其中包含 ${newOrdersCount} 个销售单（将恢复库存）\n`
+  }
+  if (oldOrdersCount > 0) {
+    confirmMsg += `其中包含 ${oldOrdersCount} 个普通订单`
+  }
+
+  if (confirm(confirmMsg)) {
     try {
       console.log('开始批量删除订单:', selectedOrders.value)
 
@@ -1394,7 +1419,7 @@ const handleBatchDelete = async () => {
         console.error('部分删除失败:', failed)
         alert(`删除完成，但有 ${failed.length} 个订单删除失败`)
       } else {
-        alert('删除成功')
+        alert('删除成功' + (newOrdersCount > 0 ? '，库存已恢复' : ''))
       }
 
       selectedOrders.value = []
