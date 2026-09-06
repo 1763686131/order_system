@@ -255,54 +255,226 @@ def read_products():
 
 
 def write_products(products_data):
-    """写入商品数据"""
+    """写入商品、单位、属性和库存数据。"""
     with products_lock:
         with get_db() as conn:
             cursor = conn.cursor()
 
-            # 更新商品（如果有变化）
+            # These endpoints pass the complete read_products() payload. Sync
+            # all collections so create/delete operations are persisted too.
+            if 'units' in products_data:
+                units = products_data.get('units') or []
+                unit_ids = []
+                for unit in units:
+                    unit_id = unit.get('id')
+                    if unit_id is None:
+                        continue
+                    unit_ids.append(int(unit_id))
+                    cursor.execute(
+                        '''
+                        INSERT INTO units (id, name, created_at)
+                        VALUES (?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+                        ON CONFLICT(id) DO UPDATE SET
+                            name = excluded.name
+                        ''',
+                        (
+                            int(unit_id),
+                            unit.get('name', ''),
+                            unit.get('createdAt') or unit.get('created_at'),
+                        )
+                    )
+
+                if unit_ids:
+                    placeholders = ','.join('?' for _ in unit_ids)
+                    cursor.execute(
+                        f'''
+                        DELETE FROM units
+                        WHERE id NOT IN ({placeholders})
+                          AND NOT EXISTS (
+                              SELECT 1 FROM products
+                              WHERE products.unit_id = units.id
+                          )
+                        ''',
+                        unit_ids,
+                    )
+                else:
+                    cursor.execute(
+                        '''
+                        DELETE FROM units
+                        WHERE NOT EXISTS (
+                            SELECT 1 FROM products
+                            WHERE products.unit_id = units.id
+                        )
+                        '''
+                    )
+
+            if 'attributes' in products_data:
+                attributes = products_data.get('attributes') or []
+                attribute_ids = []
+                for attribute in attributes:
+                    attribute_id = attribute.get('id')
+                    if attribute_id is None:
+                        continue
+                    attribute_ids.append(int(attribute_id))
+                    cursor.execute(
+                        '''
+                        INSERT INTO attributes (
+                            id, name, options, created_at, updated_at
+                        )
+                        VALUES (?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?)
+                        ON CONFLICT(id) DO UPDATE SET
+                            name = excluded.name,
+                            options = excluded.options,
+                            updated_at = excluded.updated_at
+                        ''',
+                        (
+                            int(attribute_id),
+                            attribute.get('name', ''),
+                            json.dumps(attribute.get('options', []), ensure_ascii=False),
+                            attribute.get('createdAt') or attribute.get('created_at'),
+                            attribute.get('updatedAt') or attribute.get('updated_at'),
+                        )
+                    )
+
+                if attribute_ids:
+                    placeholders = ','.join('?' for _ in attribute_ids)
+                    cursor.execute(
+                        f'DELETE FROM attributes WHERE id NOT IN ({placeholders})',
+                        attribute_ids,
+                    )
+                else:
+                    cursor.execute('DELETE FROM attributes')
+
             if 'products' in products_data:
-                for product in products_data['products']:
+                products = products_data.get('products') or []
+                product_ids = []
+                for product in products:
+                    product_id = product.get('id')
+                    if product_id is None:
+                        continue
+                    product_id = int(product_id)
+                    product_ids.append(product_id)
                     cursor.execute('''
-                    UPDATE products SET
-                        code = ?, name = ?, specification = ?, category = ?,
-                        unit_id = ?, enable_multi_unit = ?, notes = ?, enabled = ?,
-                        warehouse_id = ?, store_ids = ?, warehouse_categories = ?,
-                        unit_conversions = ?, enable_attributes = ?, attribute_combinations = ?,
+                    INSERT INTO products (
+                        id, code, name, specification, category, unit_id,
+                        enable_multi_unit, notes, enabled, warehouse_id, store_ids,
+                        warehouse_categories, unit_conversions, enable_attributes,
+                        attribute_combinations, created_at, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(id) DO UPDATE SET
+                        code = excluded.code,
+                        name = excluded.name,
+                        specification = excluded.specification,
+                        category = excluded.category,
+                        unit_id = excluded.unit_id,
+                        enable_multi_unit = excluded.enable_multi_unit,
+                        notes = excluded.notes,
+                        enabled = excluded.enabled,
+                        warehouse_id = excluded.warehouse_id,
+                        store_ids = excluded.store_ids,
+                        warehouse_categories = excluded.warehouse_categories,
+                        unit_conversions = excluded.unit_conversions,
+                        enable_attributes = excluded.enable_attributes,
+                        attribute_combinations = excluded.attribute_combinations,
                         updated_at = CURRENT_TIMESTAMP
-                    WHERE id = ?
                     ''', (
+                        product_id,
                         product.get('code'),
                         product.get('name'),
                         product.get('specification'),
-                        product.get('category'),
+                        product.get('category', product.get('categoryId')),
                         product.get('unitId'),
-                        product.get('enableMultiUnit', False),
+                        int(bool(product.get('enableMultiUnit', False))),
                         product.get('notes', ''),
-                        product.get('enabled', True),
+                        int(bool(product.get('enabled', True))),
                         product.get('warehouseId'),
-                        json.dumps(product.get('storeIds', [])),
-                        json.dumps(product.get('warehouseCategories', {})),
-                        json.dumps(product.get('unitConversions', [])),
-                        product.get('enableAttributes', False),
-                        json.dumps(product.get('attributeCombinations', [])),
-                        product.get('id')
+                        json.dumps(
+                            product.get('storeIds', product.get('store_ids', [])),
+                            ensure_ascii=False,
+                        ),
+                        json.dumps(
+                            product.get(
+                                'warehouseCategories',
+                                product.get('warehouse_categories', {}),
+                            ),
+                            ensure_ascii=False,
+                        ),
+                        json.dumps(
+                            product.get(
+                                'unitConversions',
+                                product.get('unit_conversions', []),
+                            ),
+                            ensure_ascii=False,
+                        ),
+                        int(bool(product.get('enableAttributes', False))),
+                        json.dumps(
+                            product.get(
+                                'attributeCombinations',
+                                product.get('attribute_combinations', []),
+                            ),
+                            ensure_ascii=False,
+                        ),
+                        product.get('createdAt') or product.get('created_at'),
                     ))
 
-            # 更新库存
+                if product_ids:
+                    placeholders = ','.join('?' for _ in product_ids)
+                    cursor.execute(
+                        f'DELETE FROM products WHERE id NOT IN ({placeholders})',
+                        product_ids,
+                    )
+                else:
+                    cursor.execute('DELETE FROM products')
+
             if 'inventory' in products_data:
-                inventory = products_data['inventory']
+                inventory = products_data.get('inventory') or {}
+                inventory_ids = []
                 for product_id, inv in inventory.items():
+                    try:
+                        product_id = int(product_id)
+                    except (TypeError, ValueError):
+                        continue
+                    inventory_ids.append(product_id)
                     cursor.execute('''
-                    INSERT OR REPLACE INTO inventory (product_id, stock, min_stock, max_stock, updated_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO inventory (
+                        product_id, stock, min_stock, max_stock, updated_at
+                    )
+                    VALUES (?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+                    ON CONFLICT(product_id) DO UPDATE SET
+                        stock = excluded.stock,
+                        min_stock = excluded.min_stock,
+                        max_stock = excluded.max_stock,
+                        updated_at = excluded.updated_at
                     ''', (
-                        int(product_id),
+                        product_id,
                         inv.get('stock', 0),
                         inv.get('minStock', 0),
                         inv.get('maxStock', 0),
-                        inv.get('updatedAt', 'CURRENT_TIMESTAMP')
+                        inv.get('updatedAt'),
                     ))
+
+                if inventory_ids:
+                    placeholders = ','.join('?' for _ in inventory_ids)
+                    cursor.execute(
+                        f'DELETE FROM inventory WHERE product_id NOT IN ({placeholders})',
+                        inventory_ids,
+                    )
+                else:
+                    cursor.execute('DELETE FROM inventory')
+
+                if 'products' in products_data:
+                    if product_ids:
+                        placeholders = ','.join('?' for _ in product_ids)
+                        cursor.execute(
+                            f'''
+                            DELETE FROM inventory
+                            WHERE product_id NOT IN ({placeholders})
+                            ''',
+                            product_ids,
+                        )
+                    else:
+                        cursor.execute('DELETE FROM inventory')
 
 
 # ==========================================
@@ -523,6 +695,25 @@ def write_orders(orders_data):
                         order.get('receipt_img_url', ''),
                         json.dumps(order.get('freight_costs', []))
                     ))
+
+            # The order list is a full snapshot. Remove rows omitted by a
+            # delete operation after all remaining rows have been upserted.
+            if 'orders' in orders_data:
+                order_ids = []
+                for order in orders:
+                    try:
+                        order_ids.append(int(order['id']))
+                    except (KeyError, TypeError, ValueError):
+                        continue
+
+                if order_ids:
+                    placeholders = ','.join('?' for _ in order_ids)
+                    cursor.execute(
+                        f'DELETE FROM orders WHERE id NOT IN ({placeholders})',
+                        order_ids,
+                    )
+                else:
+                    cursor.execute('DELETE FROM orders')
 
 
 # ==========================================

@@ -619,33 +619,80 @@ def update_full_order(order_id, req_data):
 
 @orders_bp.route('/<int:order_id>', methods=['DELETE'])
 def delete_order(order_id):
-    """删除订单"""
+    """删除订单，并恢复该订单占用的库存。"""
     req_role = request.headers.get('Role')
     req_username = request.headers.get('Username')
 
-    orders_data = read_orders()
-    orders_list = orders_data.get('orders', [])
+    with get_db() as conn:
+        target_row = conn.execute(
+            'SELECT id, status, order_goods FROM orders WHERE id = ?',
+            (order_id,)
+        ).fetchone()
 
-    target_order = next((o for o in orders_list if o['id'] == order_id), None)
-    if not target_order: return jsonify({"message": "找不到订单"}), 404
+    if not target_row:
+        return jsonify({"success": False, "message": "找不到订单"}), 404
 
-    needed_perm = 'completed.delete' if target_order['status'] == 'completed' else 'pending.delete'
+    needed_perm = (
+        'completed.delete'
+        if target_row['status'] == 'completed'
+        else 'pending.delete'
+    )
 
     has_p = False
-    if req_role == 'super_admin': has_p = True
+    if req_role == 'super_admin':
+        has_p = True
     else:
         for u in read_users():
             if str(u['username']) == str(req_username):
                 has_p = needed_perm in u.get('permissions', [])
                 break
 
-    if not has_p: return jsonify({"message": "底层权限不足，拦截删除操作"}), 403
+    if not has_p:
+        return jsonify({"success": False, "message": "底层权限不足，拦截删除操作"}), 403
 
-    orders_list = [x for x in orders_list if x['id'] != order_id]
-    orders_data['orders'] = orders_list
-    write_orders(orders_data)
+    try:
+        order_goods = json.loads(target_row['order_goods'] or '[]')
+    except (TypeError, ValueError):
+        order_goods = []
+    if not isinstance(order_goods, list):
+        order_goods = []
+
+    with orders_lock:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM orders WHERE id = ?', (order_id,))
+            if cursor.rowcount != 1:
+                return jsonify({"success": False, "message": "订单已不存在"}), 404
+
+            # New-format orders reserve stock by product_id and quantity.
+            # Restore it when the order is removed.
+            for item in order_goods:
+                if not isinstance(item, dict):
+                    continue
+                product_id = item.get('product_id', item.get('productId'))
+                try:
+                    quantity = float(item.get('quantity', 0) or 0)
+                    product_id = int(product_id)
+                except (TypeError, ValueError):
+                    continue
+                if quantity == 0:
+                    continue
+
+                cursor.execute(
+                    '''
+                    INSERT INTO inventory (
+                        product_id, stock, min_stock, max_stock, updated_at
+                    )
+                    VALUES (?, ?, 0, 0, CURRENT_TIMESTAMP)
+                    ON CONFLICT(product_id) DO UPDATE SET
+                        stock = COALESCE(inventory.stock, 0) + excluded.stock,
+                        updated_at = CURRENT_TIMESTAMP
+                    ''',
+                    (product_id, quantity),
+                )
+
     broadcast_order_event('deleted', order_id=order_id)
-    return jsonify({"success": True})
+    return jsonify({"success": True, "message": "删除成功"})
 
 @orders_bp.route('/<int:order_id>/edit', methods=['PUT'])
 def edit_order_content(order_id):

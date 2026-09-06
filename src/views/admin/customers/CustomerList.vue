@@ -554,10 +554,10 @@ const handleDelete = async (customer) => {
         method: 'DELETE'
       })
       alert('删除成功')
-      loadCustomers()
+      await loadCustomers()
     } catch (error) {
       console.error('删除失败:', error)
-      alert('删除失败')
+      alert('删除失败：' + (error.response?.data?.error || error.message))
     }
   }
 }
@@ -583,7 +583,7 @@ const handleSubmit = async () => {
       alert('创建成功')
     }
     closeEditModal()
-    loadCustomers()
+    await loadCustomers()
   } catch (error) {
     console.error('保存失败:', error)
     alert(error.response?.data?.error || '保存失败')
@@ -1276,4 +1276,3 @@ onMounted(async () => {
   }
 }
 </style>
-

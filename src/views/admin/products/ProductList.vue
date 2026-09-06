@@ -148,6 +148,7 @@
             <td class="col-actions">
               <button class="btn-action btn-edit" @click="handleCopy(product)">修改</button>
               <button class="btn-action btn-copy" @click="handleCopyProduct(product)">复制</button>
+              <button class="btn-action btn-delete" @click="handleDelete(product)">删除</button>
             </td>
           </tr>
 
@@ -494,8 +495,22 @@ const handleCopyProduct = (product) => {
   }
 }
 
-const handleDelete = (product) => {
-  console.log('删除', product)
+const handleDelete = async (product) => {
+  if (!confirm(`确定要删除商品"${product.name}"吗？`)) {
+    return
+  }
+
+  try {
+    await request({
+      url: `/products/${product.id}`,
+      method: 'DELETE'
+    })
+    alert('删除成功')
+    await loadProducts()
+  } catch (error) {
+    console.error('删除商品失败:', error)
+    alert('删除失败：' + (error.response?.data?.message || error.message))
+  }
 }
 
 const prevPage = () => {

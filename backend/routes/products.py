@@ -48,6 +48,9 @@ def delete_unit(unit_id):
     data = read_products()
     units = data.get('units', [])
 
+    if not any(unit.get('id') == unit_id for unit in units):
+        return jsonify({'success': False, 'message': '单位不存在'}), 404
+
     data['units'] = [u for u in units if u['id'] != unit_id]
     write_products(data)
 
@@ -95,15 +98,20 @@ def update_attribute(attr_id):
     req_data = request.json
     data = read_products()
     attributes = data.get('attributes', [])
+    found = False
 
     for attr in attributes:
         if attr['id'] == attr_id:
+            found = True
             if 'name' in req_data:
                 attr['name'] = req_data['name']
             if 'options' in req_data:
                 attr['options'] = req_data['options']
             attr['updatedAt'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             break
+
+    if not found:
+        return jsonify({'success': False, 'message': '属性不存在'}), 404
 
     data['attributes'] = attributes
     write_products(data)
@@ -115,6 +123,9 @@ def delete_attribute(attr_id):
     """删除属性"""
     data = read_products()
     attributes = data.get('attributes', [])
+
+    if not any(attr.get('id') == attr_id for attr in attributes):
+        return jsonify({'success': False, 'message': '属性不存在'}), 404
 
     data['attributes'] = [a for a in attributes if a['id'] != attr_id]
     write_products(data)
@@ -132,6 +143,7 @@ def add_attribute_option(attr_id):
     if not option_name:
         return jsonify({'success': False, 'message': '选项名称不能为空'}), 400
 
+    new_option = None
     for attr in attributes:
         if attr['id'] == attr_id:
             # 检查选项是否已存在
@@ -145,6 +157,9 @@ def add_attribute_option(attr_id):
             attr['options'].append(new_option)
             break
 
+    if new_option is None:
+        return jsonify({'success': False, 'message': '属性不存在'}), 404
+
     data['attributes'] = attributes
     write_products(data)
 
@@ -156,10 +171,19 @@ def delete_attribute_option(attr_id, option_id):
     data = read_products()
     attributes = data.get('attributes', [])
 
+    found_attribute = False
+    found_option = False
     for attr in attributes:
         if attr['id'] == attr_id:
+            found_attribute = True
+            found_option = any(opt.get('id') == option_id for opt in attr['options'])
             attr['options'] = [opt for opt in attr['options'] if opt['id'] != option_id]
             break
+
+    if not found_attribute:
+        return jsonify({'success': False, 'message': '属性不存在'}), 404
+    if not found_option:
+        return jsonify({'success': False, 'message': '属性选项不存在'}), 404
 
     data['attributes'] = attributes
     write_products(data)
@@ -212,9 +236,11 @@ def update_product(product_id):
     req_data = request.json
     data = read_products()
     products = data.get('products', [])
+    found = False
 
     for product in products:
         if product['id'] == product_id:
+            found = True
             product['code'] = req_data.get('code', '')
             product['name'] = req_data.get('name', '')
             product['specification'] = req_data.get('specification', '')
@@ -232,16 +258,23 @@ def update_product(product_id):
             product['updatedAt'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             break
 
+    if not found:
+        return jsonify({'success': False, 'message': '商品不存在'}), 404
+
     data['products'] = products
     write_products(data)
 
-    return jsonify({'success': True})
+    updated_product = next(product for product in products if product['id'] == product_id)
+    return jsonify({'success': True, 'product': updated_product})
 
 @products_bp.route('/<int:product_id>', methods=['DELETE'])
 def delete_product(product_id):
     """删除商品"""
     data = read_products()
     products = data.get('products', [])
+
+    if not any(product.get('id') == product_id for product in products):
+        return jsonify({'success': False, 'message': '商品不存在'}), 404
 
     data['products'] = [p for p in products if p['id'] != product_id]
     write_products(data)
@@ -352,4 +385,3 @@ def delete_inventory(product_id):
         return jsonify({'success': True, 'message': '库存信息已删除'})
     else:
         return jsonify({'success': False, 'message': '库存信息不存在'}), 404
-
