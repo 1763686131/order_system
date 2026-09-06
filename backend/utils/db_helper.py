@@ -94,29 +94,64 @@ def write_stores(stores_list):
 
 def read_warehouses():
     """读取所有仓库"""
+    import json
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM warehouses ORDER BY id')
         rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        warehouses = []
+        for row in rows:
+            warehouse = dict(row)
+            # 将 store_id 转换为 storeId (前端使用驼峰命名)
+            if 'store_id' in warehouse:
+                warehouse['storeId'] = warehouse.pop('store_id')
+            # 解析 categories JSON 字符串
+            if 'categories' in warehouse and warehouse['categories']:
+                try:
+                    warehouse['categories'] = json.loads(warehouse['categories'])
+                except:
+                    warehouse['categories'] = []
+            else:
+                warehouse['categories'] = []
+            warehouses.append(warehouse)
+        return warehouses
 
 
 def write_warehouses(warehouses_list):
     """批量写入仓库"""
+    import json
     with get_db() as conn:
         cursor = conn.cursor()
         cursor.execute('DELETE FROM warehouses')
 
         for warehouse in warehouses_list:
+            # 处理 storeId -> store_id 转换
+            store_id = warehouse.get('storeId') or warehouse.get('store_id')
+
+            # 处理 categories
+            categories = warehouse.get('categories', [])
+            if isinstance(categories, list):
+                categories = json.dumps(categories, ensure_ascii=False)
+
             cursor.execute('''
-            INSERT INTO warehouses (id, name, address, manager, phone)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO warehouses (
+                id, code, name, store_id, address, manager, phone,
+                status, remark, categories, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 warehouse.get('id'),
+                warehouse.get('code', ''),
                 warehouse.get('name'),
+                store_id,
                 warehouse.get('address', ''),
                 warehouse.get('manager', ''),
-                warehouse.get('phone', '')
+                warehouse.get('phone', ''),
+                warehouse.get('status', 'active'),
+                warehouse.get('remark', ''),
+                categories,
+                warehouse.get('created_at', ''),
+                warehouse.get('updated_at', '')
             ))
 
 

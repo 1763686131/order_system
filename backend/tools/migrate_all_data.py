@@ -172,26 +172,72 @@ def migrate_warehouses():
     with get_db() as conn:
         cursor = conn.cursor()
 
+        # 检查表结构
+        cursor.execute("PRAGMA table_info(warehouses)")
+        columns = [col[1] for col in cursor.fetchall()]
+
+        # 如果缺少字段，需要重建表
+        if 'code' not in columns:
+            print("⚠️ 检测到旧表结构，正在重建...")
+
+            # 备份旧数据
+            cursor.execute("SELECT * FROM warehouses")
+            old_data = cursor.fetchall()
+            print(f"   已备份 {len(old_data)} 条记录")
+
+            # 删除旧表
+            cursor.execute("DROP TABLE warehouses")
+
+            # 创建新表
+            cursor.execute('''
+            CREATE TABLE warehouses (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT,
+                name TEXT NOT NULL,
+                store_id INTEGER,
+                address TEXT,
+                manager TEXT,
+                phone TEXT,
+                status TEXT DEFAULT 'active',
+                remark TEXT,
+                categories TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP,
+                FOREIGN KEY (store_id) REFERENCES stores(id)
+            )
+            ''')
+            print("   ✅ 新表结构已创建")
+
+            conn.commit()
+
         # 清空旧数据
         cursor.execute("DELETE FROM warehouses")
 
         for wh in warehouses:
+            # 完整迁移所有字段
             cursor.execute("""
                 INSERT INTO warehouses (
-                    id, name, address, manager, phone, created_at
+                    id, code, name, store_id, address, manager, phone,
+                    status, remark, categories, created_at, updated_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 wh['id'],
+                wh.get('code', ''),
                 wh['name'],
-                wh.get('address', ''),
-                wh.get('manager', ''),
-                wh.get('phone', ''),
-                wh.get('createdAt', '')
+                wh.get('storeId'),
+                '',  # address
+                '',  # manager
+                '',  # phone
+                wh.get('status', 'active'),
+                wh.get('remark', ''),
+                json.dumps(wh.get('categories', []), ensure_ascii=False),
+                wh.get('created_at', ''),
+                wh.get('updated_at', '')
             ))
 
         conn.commit()
-        print(f"✅ 已迁移 {len(warehouses)} 个仓库")
+        print(f"✅ 已迁移 {len(warehouses)} 个仓库（包含 code, storeId, status, categories）")
 
 def migrate_users():
     """迁移用户数据"""
