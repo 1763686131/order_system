@@ -1,37 +1,9 @@
 from flask import Blueprint, request, jsonify
-import os
-import json
 from datetime import datetime
+from utils.db_helper import read_customers, write_customers
+from utils.db import get_db
 
 customers_bp = Blueprint('customers', __name__, url_prefix='/api/customers')
-
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
-CUSTOMERS_FILE = os.path.join(DATA_DIR, 'customers.json')
-
-def read_customers():
-    """读取客户数据"""
-    # 如果文件不存在，返回空结构
-    if not os.path.exists(CUSTOMERS_FILE):
-        return {'customers': [], 'nextId': 1}
-
-    try:
-        with open(CUSTOMERS_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"读取客户数据失败: {e}")
-        return {'customers': [], 'nextId': 1}
-
-def write_customers(data):
-    """写入客户数据"""
-    # 确保目录存在
-    os.makedirs(DATA_DIR, exist_ok=True)
-
-    try:
-        with open(CUSTOMERS_FILE, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-    except Exception as e:
-        print(f"写入客户数据失败: {e}")
-        raise
 
 @customers_bp.route('/', methods=['GET'])
 def get_customers():

@@ -595,3 +595,98 @@ def read_freight_records():
 def write_freight_records(data):
     """写入物流记录"""
     pass
+
+
+# ==========================================
+# 客户相关
+# ==========================================
+
+def read_customers():
+    """读取所有客户"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT * FROM customers ORDER BY id DESC')
+        rows = cursor.fetchall()
+        customers = []
+        for row in rows:
+            customer = dict(row)
+            # 转换字段名：customer_code -> customerCode
+            customer['customerCode'] = customer.pop('customer_code', '')
+            customer['customerName'] = customer.pop('customer_name', '')
+            customer['storeId'] = customer.pop('store_id', None)
+            customer['contactPerson'] = customer.pop('contact_person', '')
+            customer['bankName'] = customer.pop('bank_name', '')
+            customer['bankAccount'] = customer.pop('bank_account', '')
+            customer['bankCode'] = customer.pop('bank_code', '')
+            customer['taxNumber'] = customer.pop('tax_number', '')
+            customer['createdAt'] = customer.pop('created_at', '')
+            customer['updatedAt'] = customer.pop('updated_at', '')
+            customers.append(customer)
+        return {'customers': customers}
+
+
+def write_customers(customers_data):
+    """写入客户数据（批量更新）"""
+    customers_list = customers_data.get('customers', [])
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        # 清空表
+        cursor.execute('DELETE FROM customers')
+
+        for customer in customers_list:
+            cursor.execute('''
+            INSERT INTO customers (
+                id, customer_code, customer_name, store_id,
+                contact_person, phone, address,
+                balance, receivable,
+                bank_name, bank_account, bank_code, tax_number,
+                remark, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                customer.get('id'),
+                customer.get('customerCode', ''),
+                customer.get('customerName', ''),
+                customer.get('storeId'),
+                customer.get('contactPerson', ''),
+                customer.get('phone', ''),
+                customer.get('address', ''),
+                customer.get('balance', 0),
+                customer.get('receivable', 0),
+                customer.get('bankName', ''),
+                customer.get('bankAccount', ''),
+                customer.get('bankCode', ''),
+                customer.get('taxNumber', ''),
+                customer.get('remark', ''),
+                customer.get('status', 'active'),
+                customer.get('createdAt', ''),
+                customer.get('updatedAt', '')
+            ))
+        conn.commit()
+
+
+# ==========================================
+# 承运商标签相关
+# ==========================================
+
+def read_carrier_tags():
+    """读取承运商标签"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('SELECT tag FROM carrier_tags ORDER BY id DESC LIMIT 20')
+        rows = cursor.fetchall()
+        return [row['tag'] for row in rows]
+
+
+def write_carrier_tags(tags):
+    """写入承运商标签"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        # 清空表
+        cursor.execute('DELETE FROM carrier_tags')
+
+        # 插入标签
+        for tag in tags:
+            cursor.execute('INSERT INTO carrier_tags (tag) VALUES (?)', (tag,))
+
+        conn.commit()

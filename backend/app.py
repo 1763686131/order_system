@@ -51,26 +51,12 @@ def health_check():
 # ==========================================
 # 运营商标签接口（独立路由）
 # ==========================================
-import json
-
-CARRIER_TAGS_FILE = '/app/data/carrier_tags.json' if os.path.exists('/app/data/carrier_tags.json') else os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'carrier_tags.json')
-
-def load_carrier_tags():
-    if os.path.exists(CARRIER_TAGS_FILE):
-        try:
-            with open(CARRIER_TAGS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
-
-def save_carrier_tags(tags):
-    with open(CARRIER_TAGS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(tags, f, ensure_ascii=False, indent=2)
+# 注意：这个接口已经在 orders_bp 中实现，这里保留是为了向后兼容
+from utils.db_helper import read_carrier_tags, write_carrier_tags
 
 @app.route('/api/carrier_tags', methods=['GET'])
 def get_carrier_tags():
-    tags = load_carrier_tags()
+    tags = read_carrier_tags()
     return jsonify(tags)
 
 @app.route('/api/carrier_tags', methods=['POST'])
@@ -80,10 +66,10 @@ def add_carrier_tag():
     if not new_tag:
         return jsonify({'success': False, 'message': '标签不能为空'}), 400
 
-    tags = load_carrier_tags()
+    tags = read_carrier_tags()
     if new_tag not in tags:
         tags.insert(0, new_tag)
-        save_carrier_tags(tags[:20])
+        write_carrier_tags(tags[:20])
 
     return jsonify({'success': True, 'tags': tags})
 

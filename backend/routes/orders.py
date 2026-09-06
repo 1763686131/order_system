@@ -2,7 +2,8 @@
 订单管理 API 路由
 """
 from flask import Blueprint, request, jsonify, Response, stream_with_context
-from utils.db_helper import read_orders, write_orders, read_users
+from utils.db_helper import read_orders, write_orders, read_users, read_customers, read_carrier_tags, write_carrier_tags
+from utils.db import get_db
 from datetime import datetime
 import os
 import uuid
@@ -17,12 +18,6 @@ if os.path.exists('/app/uploads'):
     BASE_UPLOAD_DIR = '/app/uploads'
 else:
     BASE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'uploads')
-
-# 运营商标签文件路径
-if os.path.exists('/app/data/carrier_tags.json'):
-    CARRIER_TAGS_FILE = '/app/data/carrier_tags.json'
-else:
-    CARRIER_TAGS_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'data', 'carrier_tags.json')
 
 # 线程锁
 orders_lock = threading.Lock()
@@ -52,21 +47,6 @@ def sanitize_filename(name):
     for ch in forbidden:
         name = name.replace(ch, '_')
     return name[:50]
-
-def load_carrier_tags():
-    """加载运营商标签"""
-    if os.path.exists(CARRIER_TAGS_FILE):
-        try:
-            with open(CARRIER_TAGS_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception:
-            return []
-    return []
-
-def save_carrier_tags(tags):
-    """保存运营商标签"""
-    with open(CARRIER_TAGS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(tags, f, ensure_ascii=False, indent=2)
 
 # ==========================================
 # 订单接口
@@ -190,13 +170,8 @@ def create_new_format_order(req_data):
     products_list = products_data.get('products', [])
 
     # 读取客户数据
-    customers_file = '/app/data/customers.json' if os.path.exists('/app/data/customers.json') else 'data/customers.json'
-    try:
-        with open(customers_file, 'r', encoding='utf-8') as f:
-            customers_data = json.load(f)
-            customers_list = customers_data.get('customers', [])
-    except:
-        customers_list = []
+    customers_data = read_customers()
+    customers_list = customers_data.get('customers', [])
 
     # 读取门店数据
     from utils.db_helper import read_stores
@@ -499,13 +474,8 @@ def update_full_order(order_id, req_data):
         old_order = orders_list[order_index]
 
         # 读取客户数据
-        customers_file = '/app/data/customers.json' if os.path.exists('/app/data/customers.json') else 'data/customers.json'
-        try:
-            with open(customers_file, 'r', encoding='utf-8') as f:
-                customers_data = json.load(f)
-                customers_list = customers_data.get('customers', [])
-        except:
-            customers_list = []
+        customers_data = read_customers()
+        customers_list = customers_data.get('customers', [])
 
         # 读取门店数据
         from utils.db_helper import read_stores
@@ -863,7 +833,7 @@ def update_order_paid_amount(order_id):
 @orders_bp.route('/carrier_tags', methods=['GET'], endpoint='get_carrier_tags')
 def get_carrier_tags():
     """获取运营商标签"""
-    tags = load_carrier_tags()
+    tags = read_carrier_tags()
     return jsonify(tags)
 
 @orders_bp.route('/carrier_tags', methods=['POST'], endpoint='add_carrier_tag')
@@ -874,9 +844,9 @@ def add_carrier_tag():
     if not new_tag:
         return jsonify({'success': False, 'message': '标签不能为空'}), 400
 
-    tags = load_carrier_tags()
+    tags = read_carrier_tags()
     if new_tag not in tags:
         tags.insert(0, new_tag)  # 最新输入的排在前面
-        save_carrier_tags(tags[:20])  # 永远只保留最常用的前20个，防止词库爆炸
+        write_carrier_tags(tags[:20])  # 永远只保留最常用的前20个，防止词库爆炸
 
     return jsonify({'success': True, 'tags': tags})
