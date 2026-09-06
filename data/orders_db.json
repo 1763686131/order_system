@@ -615,7 +615,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "透明碳纤维胶",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/江西袁总订单_袁总_2026-07-23_A056.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -640,7 +640,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/李超订单_黄文政_2026-07-23_DD15.jpg",
+            "receipt_img_url": "/uploads/2026-08/李超订单_黄文政_2026-08-31_778E.jpg",
             "store_id": 2
         },
         {
@@ -653,7 +653,7 @@
             "shipped_date": "2026-07-23 10:01",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "浩丰 0004701",
+            "logistics_no": "浩丰物流-0004701",
             "order_client": "李超订单",
             "receiver_name": "史贤东",
             "receiver_phone": "18756510232",
@@ -666,7 +666,8 @@
             "remark": "",
             "audit_state": 1,
             "receipt_img_url": "/uploads/2026-07/李超订单订单_史贤东_2026-07-24_29F4.jpg",
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": []
         },
         {
             "id": 38,
@@ -812,7 +813,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/固特公司订单_周工_2026-07-24_1F04.jpg",
+            "receipt_img_url": "/uploads/2026-08/固特公司订单_周工_2026-08-31_4676.jpg",
             "store_id": 2
         },
         {
@@ -862,7 +863,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/高小宝订单_阙斌斌_2026-08-31_2EAF.jpg"
         },
         {
             "id": 46,
@@ -886,7 +888,7 @@
             "logistics_service": "送货上门+回单邮回",
             "remark": "安徽创联智众建设投资发展有限公司",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/李超订单_李森森_2026-07-31_6941.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -1008,7 +1010,7 @@
             "logistics_service": "送货上门+回单邮回",
             "remark": "安徽创联智众建设投资发展有限公司",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/李超订单_李森森_2026-07-29_A4BB.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -1057,7 +1059,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/固特公司订单_刘寄兴_2026-07-27_0627.jpg",
+            "receipt_img_url": "/uploads/2026-08/固特公司订单_刘寄兴_2026-08-31_A1AD.jpg",
             "store_id": 2
         },
         {
@@ -1082,7 +1084,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/泰州嘉宇订单_王宇舟_2026-07-27_06B5.jpg",
+            "receipt_img_url": "",
             "store_id": 1
         },
         {
@@ -1131,7 +1133,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李必年订单_李必年_2026-08-31_52E2.jpg"
         },
         {
             "id": 57,
@@ -1253,7 +1256,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/雷安电器订单_王雪萍_2026-07-29_3570.jpg",
+            "receipt_img_url": "/uploads/2026-08/雷安电器订单_王雪萍_2026-08-31_EAA1.jpg",
             "store_id": 1
         },
         {
@@ -1278,7 +1281,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/李超订单_李文阳_2026-07-29_B7FD.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -1327,7 +1330,7 @@
             "logistics_service": "送货上门",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-07/钟波庭订单_袁鹏_2026-07-30_021C.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -1401,7 +1404,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_何凯杰_2026-08-14_4632.jpg",
+            "receipt_img_url": "/uploads/2026-08/李超订单_何凯杰_2026-08-31_CC5F.jpg",
             "store_id": 2
         },
         {
@@ -1426,7 +1429,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-10_FA9D.jpg",
+            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-31_C592.jpg",
             "store_id": 1
         },
         {
@@ -1547,7 +1550,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/马姚丰订单_寇敏_2026-08-01_A5E8.jpg",
+            "receipt_img_url": "/uploads/2026-08/马姚丰订单_寇敏_2026-08-31_051E.jpg",
             "store_id": 2
         },
         {
@@ -1572,7 +1575,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_黄文政_2026-08-31_8825.jpg"
         },
         {
             "id": 75,
@@ -1644,7 +1648,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_汪王彬_2026-08-03_8825.jpg",
+            "receipt_img_url": "/uploads/2026-08/李超订单_汪王彬_2026-08-31_17DB.jpg",
             "store_id": 2
         },
         {
@@ -1669,7 +1673,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/高小宝订单_林工_2026-08-03_EBB7.jpg",
+            "receipt_img_url": "/uploads/2026-08/高小宝订单_林工_2026-08-31_9088.jpg",
             "store_id": 2
         },
         {
@@ -1718,7 +1722,14 @@
             "logistics_service": "送货上门",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 90
+                }
+            ]
         },
         {
             "id": 81,
@@ -1767,8 +1778,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/陶芸订单_牛华_2026-08-05_16C4.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/陶芸订单_牛华_2026-08-31_47DA.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 185
+                }
+            ]
         },
         {
             "id": 83,
@@ -1840,7 +1858,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/嘉诚电力订单_曹丽_2026-08-03_9831.jpg",
+            "receipt_img_url": "",
             "store_id": 1
         },
         {
@@ -1865,8 +1883,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-03_4045.jpg",
-            "store_id": 1
+            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-31_C126.jpg",
+            "store_id": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 138
+                }
+            ]
         },
         {
             "id": 87,
@@ -1914,8 +1939,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "湖南省建科院",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/柯钊松订单_蒋健_2026-08-06_DEA5.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/柯钊松订单_蒋健_2026-08-31_A6C0.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 90
+                }
+            ]
         },
         {
             "id": 89,
@@ -1939,7 +1971,14 @@
             "logistics_service": "送货上门",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 100
+                }
+            ]
         },
         {
             "id": 90,
@@ -1963,7 +2002,14 @@
             "logistics_service": "送货上门",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 60
+                }
+            ]
         },
         {
             "id": 91,
@@ -2012,7 +2058,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/马姚丰订单_余青明_2026-08-31_CBFF.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 250
+                }
+            ]
         },
         {
             "id": 93,
@@ -2073,7 +2127,7 @@
             "shipped_date": "2026-08-04 16:31",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197297",
+            "logistics_no": "安能物流-500258197297",
             "order_client": "钟波庭",
             "receiver_name": "收货信息周经理",
             "receiver_phone": "18810878472",
@@ -2085,7 +2139,14 @@
             "logistics_service": "送货上门",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 160
+                }
+            ]
         },
         {
             "id": 96,
@@ -2097,7 +2158,7 @@
             "shipped_date": "2026-08-04 16:32",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197299",
+            "logistics_no": "安能物流-500258197299",
             "order_client": "李超",
             "receiver_name": "汪王彬",
             "receiver_phone": "13858554409",
@@ -2109,8 +2170,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_汪王彬_2026-08-06_9E3D.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_汪王彬_2026-08-31_6AEB.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 110
+                }
+            ]
         },
         {
             "id": 97,
@@ -2146,7 +2214,7 @@
             "shipped_date": "2026-08-04 16:39",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197300",
+            "logistics_no": "安能物流-500258197300",
             "order_client": "国创电力",
             "receiver_name": "聂芳艳",
             "receiver_phone": "18573413907",
@@ -2158,8 +2226,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/国创电力订单_聂芳艳_2026-08-07_99A3.jpg",
-            "store_id": 1
+            "receipt_img_url": "/uploads/2026-08/国创电力订单_聂芳艳_2026-08-31_EAAD.jpg",
+            "store_id": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 140
+                }
+            ]
         },
         {
             "id": 99,
@@ -2183,7 +2258,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/毛志建订单_张金龙_2026-08-05_7360.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -2208,7 +2283,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-09/南宁周总订单_周总_2026-09-01_BA97.jpg"
         },
         {
             "id": 101,
@@ -2232,7 +2308,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-09/弘立德订单_王晓轩_2026-09-03_67DE.jpg"
         },
         {
             "id": 102,
@@ -2256,7 +2333,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-10_4F52.jpg",
+            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-31_861E.jpg",
             "store_id": 1
         },
         {
@@ -2269,7 +2346,7 @@
             "shipped_date": "2026-08-06 17:43",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197303",
+            "logistics_no": "安能物流-500258197303",
             "order_client": "裕方电气",
             "receiver_name": "王爱丹",
             "receiver_phone": "15726875757",
@@ -2281,8 +2358,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/裕方电气订单_王爱丹_2026-08-07_5D7A.jpg",
-            "store_id": 1
+            "receipt_img_url": "/uploads/2026-08/裕方电气订单_王爱丹_2026-08-31_EE22.jpg",
+            "store_id": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 442
+                }
+            ]
         },
         {
             "id": 104,
@@ -2294,7 +2378,7 @@
             "shipped_date": "2026-08-06 17:43",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197305",
+            "logistics_no": "安能物流-500258197305",
             "order_client": "高小宝",
             "receiver_name": "林如耀",
             "receiver_phone": "13799316076",
@@ -2306,8 +2390,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/高小宝订单_林如耀_2026-08-10_EE26.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/高小宝订单_林如耀_2026-08-31_24E0.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 318
+                }
+            ]
         },
         {
             "id": 105,
@@ -2319,7 +2410,7 @@
             "shipped_date": "2026-08-06 17:43",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197304",
+            "logistics_no": "安能物流-500258197304",
             "order_client": "李超",
             "receiver_name": "王士军",
             "receiver_phone": "18358171199",
@@ -2331,8 +2422,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_王士军_2026-08-07_4526.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_王士军_2026-08-31_6077.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 60
+                }
+            ]
         },
         {
             "id": 106,
@@ -2368,7 +2466,7 @@
             "shipped_date": "2026-08-07 16:42",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197311",
+            "logistics_no": "安能物流-500258197311",
             "order_client": "李超",
             "receiver_name": "钟杨",
             "receiver_phone": "18175985740",
@@ -2380,7 +2478,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 80
+                }
+            ]
         },
         {
             "id": 108,
@@ -2416,7 +2521,7 @@
             "shipped_date": "2026-08-07 16:42",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197310",
+            "logistics_no": "安能物流-500258197310",
             "order_client": "柯钊松订单",
             "receiver_name": "徐虎",
             "receiver_phone": "13974897892",
@@ -2428,8 +2533,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/柯钊松订单订单_徐虎_2026-08-10_6F59.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/柯钊松订单订单_徐虎_2026-08-31_583B.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 340
+                }
+            ]
         },
         {
             "id": 110,
@@ -2466,7 +2578,7 @@
             "shipped_date": "2026-08-08 16:49",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197313",
+            "logistics_no": "安能物流-500258197313",
             "order_client": "弘立德",
             "receiver_name": "李总",
             "receiver_phone": "18073199866",
@@ -2478,8 +2590,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/弘立德订单_李总_2026-08-10_660A.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/弘立德订单_李总_2026-08-31_3EFA.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 80
+                }
+            ]
         },
         {
             "id": 112,
@@ -2491,7 +2610,7 @@
             "shipped_date": "2026-08-10 16:58",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197317",
+            "logistics_no": "安能物流-500258197317",
             "order_client": "柯钊松",
             "receiver_name": "蒋健",
             "receiver_phone": "16686407999",
@@ -2503,7 +2622,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "带三份资料",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 210
+                }
+            ]
         },
         {
             "id": 113,
@@ -2552,7 +2678,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/嘉诚电力订单_采购部_2026-08-13_C284.jpg",
+            "receipt_img_url": "",
             "store_id": 1
         },
         {
@@ -2589,7 +2715,7 @@
             "shipped_date": "2026-08-10 17:24",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197319",
+            "logistics_no": "安能物流-500258197319",
             "order_client": "李超",
             "receiver_name": "杨总",
             "receiver_phone": "15867276730",
@@ -2601,7 +2727,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_杨总_2026-08-31_DA6B.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 140
+                }
+            ]
         },
         {
             "id": 117,
@@ -2613,7 +2747,7 @@
             "shipped_date": "2026-08-10 17:24",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197318",
+            "logistics_no": "安能物流-500258197318",
             "order_client": "陶芸",
             "receiver_name": "吴工",
             "receiver_phone": "13590877193",
@@ -2625,8 +2759,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/陶芸订单_吴工_2026-08-13_82D6.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/陶芸订单_吴工_2026-08-31_5843.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 230
+                }
+            ]
         },
         {
             "id": 118,
@@ -2638,7 +2779,7 @@
             "shipped_date": "2026-08-11 15:26",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197322",
+            "logistics_no": "安能物流-500258197322",
             "order_client": "张杰订单",
             "receiver_name": "沈志炳",
             "receiver_phone": "13067588513",
@@ -2650,7 +2791,14 @@
             "logistics_service": "送货上门",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 160
+                }
+            ]
         },
         {
             "id": 119,
@@ -2674,7 +2822,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/黄吉祥订单_黄吉祥_2026-08-14_EAA8.jpg",
+            "receipt_img_url": "/uploads/2026-08/黄吉祥订单_黄吉祥_2026-08-31_9DD2.jpg",
             "store_id": 2
         },
         {
@@ -2699,7 +2847,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-13_72F0.jpg",
+            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-31_A986.jpg",
             "store_id": 1
         },
         {
@@ -2749,7 +2897,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/杭州奥峰订单_宋雪华_2026-08-13_5CC3.jpg",
+            "receipt_img_url": "/uploads/2026-08/杭州奥峰订单_宋雪华_2026-08-31_7084.jpg",
             "store_id": 1
         },
         {
@@ -2762,7 +2910,7 @@
             "shipped_date": "2026-08-12 10:16",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197324",
+            "logistics_no": "安能物流-500258197324",
             "order_client": "现金用户",
             "receiver_name": "另灵敏",
             "receiver_phone": "18601139266",
@@ -2774,7 +2922,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 95
+                }
+            ]
         },
         {
             "id": 124,
@@ -2786,7 +2941,7 @@
             "shipped_date": "2026-08-12 10:15",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197325",
+            "logistics_no": "安能物流-500258197325",
             "order_client": "李超",
             "receiver_name": "王奎",
             "receiver_phone": "13706002722",
@@ -2798,8 +2953,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_王奎_2026-08-14_19F7.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_王奎_2026-08-31_3D3E.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 95
+                }
+            ]
         },
         {
             "id": 125,
@@ -2823,7 +2985,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "安徽创联智众建设投资发展有限公司",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单订单_李森森_2026-08-14_0980.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -2872,7 +3034,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_钱学浙_2026-08-14_0CF0.jpg",
+            "receipt_img_url": "/uploads/2026-08/李超订单_钱学浙_2026-08-31_F9C2.jpg",
             "store_id": 2
         },
         {
@@ -2885,7 +3047,7 @@
             "shipped_date": "2026-08-12 17:06",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197329",
+            "logistics_no": "安能物流-500258197329",
             "order_client": "李超",
             "receiver_name": "薛刚",
             "receiver_phone": "18160879277",
@@ -2897,7 +3059,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "安徽建科特技",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_薛刚_2026-08-31_2DBE.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 265
+                }
+            ]
         },
         {
             "id": 129,
@@ -2921,7 +3091,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/马姚丰订单_王建国_2026-08-13_FE22.jpg",
+            "receipt_img_url": "/uploads/2026-08/马姚丰订单_王建国_2026-08-31_762E.jpg",
             "store_id": 2
         },
         {
@@ -2946,7 +3116,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/俞陈飞订单_叶中先_2026-08-14_C929.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -2971,7 +3141,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/毛志健订单_张金龙_2026-08-14_D655.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -2996,7 +3166,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 1
+            "store_id": 1,
+            "receipt_img_url": "/uploads/2026-09/锦州森源订单_刘爽_2026-09-01_74CC.jpg"
         },
         {
             "id": 133,
@@ -3020,7 +3191,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_王纪省_2026-08-14_ACA8.jpg",
+            "receipt_img_url": "/uploads/2026-08/李超订单_王纪省_2026-08-31_605D.jpg",
             "store_id": 2
         },
         {
@@ -3045,7 +3216,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "浙江万烁建筑技术有限公司",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/浙江万烁建筑技术有限公司订单_吕工_2026-08-14_6C6F.jpg",
+            "receipt_img_url": "",
             "store_id": 2
         },
         {
@@ -3058,7 +3229,7 @@
             "shipped_date": "2026-08-14 16:27",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197335",
+            "logistics_no": "安能物流-500258197335",
             "order_client": "李超",
             "receiver_name": "王巨成",
             "receiver_phone": "18814818227",
@@ -3070,8 +3241,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_王巨成_2026-08-17_9399.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_王巨成_2026-08-31_211B.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 75
+                }
+            ]
         },
         {
             "id": 136,
@@ -3083,7 +3261,7 @@
             "shipped_date": "2026-08-14 17:06",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197337",
+            "logistics_no": "安能物流-500258197337",
             "order_client": "高小宝",
             "receiver_name": "高小宝",
             "receiver_phone": "18872365156",
@@ -3095,8 +3273,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/高小宝订单_高小宝_2026-08-19_CC79.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/高小宝订单_高小宝_2026-08-31_E822.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 340
+                }
+            ]
         },
         {
             "id": 137,
@@ -3120,7 +3305,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/杭州奥峰订单_宋雪华_2026-08-17_3BE2.jpg",
+            "receipt_img_url": "",
             "store_id": 1
         },
         {
@@ -3145,7 +3330,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-17_AE43.jpg",
+            "receipt_img_url": "",
             "store_id": 1
         },
         {
@@ -3158,7 +3343,7 @@
             "shipped_date": "2026-08-14 16:46",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197336",
+            "logistics_no": "安能物流-500258197336",
             "order_client": "宝光绝缘",
             "receiver_name": "袁少妮",
             "receiver_phone": "15249172394",
@@ -3170,8 +3355,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/宝光绝缘订单_袁少妮_2026-08-19_3B95.jpg",
-            "store_id": 1
+            "receipt_img_url": "/uploads/2026-08/宝光绝缘订单_袁少妮_2026-08-31_6099.jpg",
+            "store_id": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 450
+                }
+            ]
         },
         {
             "id": 140,
@@ -3183,7 +3375,7 @@
             "shipped_date": "2026-08-14 18:24",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197338",
+            "logistics_no": "安能物流-500258197338",
             "order_client": "李超",
             "receiver_name": "杨总",
             "receiver_phone": "15867276730",
@@ -3195,8 +3387,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_杨总_2026-08-17_C626.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_杨总_2026-08-31_2F62.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 85
+                }
+            ]
         },
         {
             "id": 141,
@@ -3244,7 +3443,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 1
+            "store_id": 1,
+            "receipt_img_url": "/uploads/2026-09/湖北正策订单_黄叶_2026-09-01_36C1.jpg"
         },
         {
             "id": 143,
@@ -3256,7 +3456,7 @@
             "shipped_date": "2026-08-15 15:52",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197345",
+            "logistics_no": "安能物流-500258197345",
             "order_client": "雷安电气",
             "receiver_name": "王雪萍",
             "receiver_phone": "13968497998",
@@ -3268,8 +3468,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-19_CB52.jpg",
-            "store_id": 1
+            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-31_204B.jpg",
+            "store_id": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 160
+                }
+            ]
         },
         {
             "id": 144,
@@ -3317,7 +3524,8 @@
             "logistics_service": "送货上门+回单邮回",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单订单_李森森_2026-08-31_C933.jpg"
         },
         {
             "id": 146,
@@ -3341,7 +3549,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-09/南宁周总订单_周总_2026-09-01_3A60.jpg"
         },
         {
             "id": 147,
@@ -3389,7 +3598,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李必年订单_李必年_2026-08-19_C1EF.jpg",
+            "receipt_img_url": "/uploads/2026-08/李必年订单_李必年_2026-08-31_24C3.jpg",
             "store_id": 2
         },
         {
@@ -3414,7 +3623,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 1
+            "store_id": 1,
+            "receipt_img_url": "/uploads/2026-09/锦州森源订单_刘爽_2026-09-01_A8EA.jpg"
         },
         {
             "id": 150,
@@ -3450,7 +3660,7 @@
             "shipped_date": "2026-08-17 15:48",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197352",
+            "logistics_no": "安能物流-500258197352",
             "order_client": "李超",
             "receiver_name": "杨总",
             "receiver_phone": "15867276730",
@@ -3462,8 +3672,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_杨总_2026-08-19_1CE3.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_杨总_2026-08-31_0C8A.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 80
+                }
+            ]
         },
         {
             "id": 152,
@@ -3523,7 +3740,7 @@
             "shipped_date": "2026-08-18 16:35",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197357",
+            "logistics_no": "安能物流-500258197357",
             "order_client": "李超",
             "receiver_name": "吴昌力",
             "receiver_phone": "13566631900",
@@ -3535,7 +3752,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_吴昌力_2026-08-31_EB47.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 85
+                }
+            ]
         },
         {
             "id": 155,
@@ -3559,7 +3784,8 @@
             "logistics_service": "送货上门+回单邮回",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_夏雨_2026-08-31_8A8A.jpg"
         },
         {
             "id": 156,
@@ -3631,7 +3857,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-09/弘立德订单_王晓轩_2026-09-03_B0B5.jpg"
         },
         {
             "id": 159,
@@ -3655,8 +3882,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/熊芳芳订单_熊芳芳_2026-08-24_A01C.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/熊芳芳订单_熊芳芳_2026-08-31_2153.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 362
+                }
+            ]
         },
         {
             "id": 160,
@@ -3680,7 +3914,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-09/陶芸订单_郭余金_2026-09-01_2E09.jpg"
         },
         {
             "id": 161,
@@ -3704,7 +3939,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_李森森_2026-08-31_90F7.jpg"
         },
         {
             "id": 162,
@@ -3728,7 +3964,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/马姚丰订单_王建国_2026-08-22_AEE1.jpg",
+            "receipt_img_url": "/uploads/2026-08/马姚丰订单_王建国_2026-08-31_9E20.jpg",
             "store_id": 2
         },
         {
@@ -3766,7 +4002,7 @@
             "shipped_date": "2026-08-21 17:28",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197367",
+            "logistics_no": "安能物流-500258197367",
             "order_client": "李超",
             "receiver_name": "王士军",
             "receiver_phone": "18358171199",
@@ -3778,8 +4014,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_王士军_2026-08-24_3C2D.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_王士军_2026-08-31_B7BA.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 180
+                }
+            ]
         },
         {
             "id": 165,
@@ -3791,7 +4034,7 @@
             "shipped_date": "2026-08-24 10:35",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197369",
+            "logistics_no": "安能物流-500258197369",
             "order_client": "李超",
             "receiver_name": "郭立锋",
             "receiver_phone": "18297435575",
@@ -3803,8 +4046,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_郭立锋_2026-08-24_A2B2.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_郭立锋_2026-08-31_DD2B.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 120
+                }
+            ]
         },
         {
             "id": 166,
@@ -3828,7 +4078,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 1
+            "store_id": 1,
+            "receipt_img_url": "/uploads/2026-09/锦州森源订单_刘爽_2026-09-01_6BD6.jpg"
         },
         {
             "id": 167,
@@ -3852,7 +4103,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-26_314E.jpg",
+            "receipt_img_url": "/uploads/2026-08/雷安电气订单_王雪萍_2026-08-31_D089.jpg",
             "store_id": 1
         },
         {
@@ -3865,7 +4116,7 @@
             "shipped_date": "2026-08-24 13:35",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197372",
+            "logistics_no": "安能物流-500258197372",
             "order_client": "陶芸",
             "receiver_name": "梁总",
             "receiver_phone": "15768290391",
@@ -3877,8 +4128,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/陶芸订单_梁总_2026-08-26_AE4B.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/陶芸订单_梁总_2026-08-31_0CDE.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 150
+                }
+            ]
         },
         {
             "id": 169,
@@ -3902,7 +4160,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_李森森_2026-08-25_CA31.jpg",
+            "receipt_img_url": "/uploads/2026-08/李超订单_李森森_2026-08-31_0A3D.jpg",
             "store_id": 2
         },
         {
@@ -3915,7 +4173,7 @@
             "shipped_date": "2026-08-24 17:10",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197379",
+            "logistics_no": "安能物流-500258197379",
             "order_client": "张杰",
             "receiver_name": "张建昌",
             "receiver_phone": "18257570688",
@@ -3928,7 +4186,14 @@
             "remark": "",
             "audit_state": 1,
             "receipt_img_url": "",
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 100
+                }
+            ]
         },
         {
             "id": 171,
@@ -3952,10 +4217,9 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/马姚丰订单_王建国_2026-08-26_1958.jpg",
+            "receipt_img_url": "/uploads/2026-08/马姚丰订单_王建国_2026-08-31_2AB7.jpg",
             "freight_costs": [],
-            "store_id": 2,
-            "receipt_url": ""
+            "store_id": 2
         },
         {
             "id": 172,
@@ -3967,7 +4231,7 @@
             "shipped_date": "2026-08-24 17:10",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197377",
+            "logistics_no": "安能物流-500258197377",
             "order_client": "李超",
             "receiver_name": "孟",
             "receiver_phone": "15150974658",
@@ -3979,7 +4243,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_孟_2026-08-31_15D9.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 80
+                }
+            ]
         },
         {
             "id": 173,
@@ -3991,7 +4263,7 @@
             "shipped_date": "2026-08-24 17:10",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197378",
+            "logistics_no": "安能物流-500258197378",
             "order_client": "薛波",
             "receiver_name": "郑",
             "receiver_phone": "18083759172",
@@ -4003,8 +4275,14 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/薛波订单_郑_2026-08-26_0171.jpg",
-            "freight_costs": [],
+            "receipt_img_url": "/uploads/2026-08/薛波订单_郑_2026-08-31_85A3.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 110
+                }
+            ],
             "store_id": 2
         },
         {
@@ -4029,7 +4307,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/嘉诚电力订单_曹丽_2026-08-26_0661.jpg",
+            "receipt_img_url": "/uploads/2026-08/嘉诚电力订单_曹丽_2026-08-31_BD3C.jpg",
             "store_id": 1
         },
         {
@@ -4054,7 +4332,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/丹高电器订单_姚丽敏_2026-08-26_1A7D.jpg",
+            "receipt_img_url": "/uploads/2026-08/丹高电器订单_姚丽敏_2026-08-31_681D.jpg",
             "store_id": 1
         },
         {
@@ -4067,7 +4345,7 @@
             "shipped_date": "2026-08-24 17:10",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197375",
+            "logistics_no": "安能物流-500258197375",
             "order_client": "李超",
             "receiver_name": "吴",
             "receiver_phone": "13566631900",
@@ -4079,8 +4357,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/李超订单_吴_2026-08-26_2E2B.jpg",
-            "store_id": 2
+            "receipt_img_url": "/uploads/2026-08/李超订单_吴_2026-08-31_9A2A.jpg",
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 110
+                }
+            ]
         },
         {
             "id": 177,
@@ -4092,7 +4377,7 @@
             "shipped_date": "2026-08-24 17:10",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197376",
+            "logistics_no": "安能物流-500258197376",
             "order_client": "弘立德",
             "receiver_name": "李志凡",
             "receiver_phone": "18390623727",
@@ -4104,7 +4389,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/弘立德订单_李志凡_2026-08-31_C33C.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 380
+                }
+            ]
         },
         {
             "id": 178,
@@ -4129,11 +4422,12 @@
             "remark": "",
             "audit_state": 1,
             "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_吴校锋_2026-08-31_543A.jpg",
             "freight_costs": [
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 2000
+                    "amount": 400
                 }
             ]
         },
@@ -4160,7 +4454,14 @@
             "remark": "",
             "audit_state": 1,
             "store_id": 2,
-            "receipt_url": "/uploads/receipts/179_未知_414f8676.jpg"
+            "receipt_img_url": "/uploads/2026-08/现金用户订单_赵亮亮_2026-08-31_7F34.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 190
+                }
+            ]
         },
         {
             "id": 180,
@@ -4184,7 +4485,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/黄吉祥订单_黄吉祥_2026-08-31_E337.jpg"
         },
         {
             "id": 181,
@@ -4208,7 +4510,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-09/李超订单_王剑_2026-09-01_7D45.jpg"
         },
         {
             "id": 182,
@@ -4233,7 +4536,7 @@
             "remark": "",
             "audit_state": 1,
             "store_id": 1,
-            "receipt_url": "/uploads/receipts/182_明斯特钟师傅13974125780浙江省嘉兴市平湖市独山港镇聚福西路211号两创中心1号楼树脂+20000kg_e5f254c7.jpg"
+            "receipt_img_url": "/uploads/2026-08/明斯特订单_钟师傅_2026-08-31_91EE.jpg"
         },
         {
             "id": 183,
@@ -4249,7 +4552,7 @@
             "order_client": "李超",
             "receiver_name": "梁恒",
             "receiver_phone": "17334558576",
-            "receiver_address": "号码:   安徽省宿州市泗县长沟镇长沟供电营业厅西一百米",
+            "receiver_address": "安徽省宿州市泗县长沟镇长沟供电营业厅西一百米",
             "goods_name": "赛文封缝胶\n40公斤装✖️75组 3000公斤。",
             "goods_weight": "3000kg",
             "goods_quantity": "150件",
@@ -4257,7 +4560,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 900
+                }
+            ],
+            "receipt_img_url": "/uploads/2026-09/李超订单_梁恒_2026-09-03_E7DC.jpg"
         },
         {
             "id": 184,
@@ -4281,7 +4592,7 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "",
+            "receipt_img_url": "/uploads/2026-08/嘉诚电力订单_采购部_2026-08-31_978F.jpg",
             "store_id": 1
         },
         {
@@ -4306,9 +4617,8 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "receipt_img_url": "/uploads/2026-08/浙江义友订单_朱峰峰_2026-08-30_DC68.jpg",
-            "store_id": 1,
-            "receipt_url": ""
+            "receipt_img_url": "/uploads/2026-08/浙江义友订单_朱峰峰_2026-08-31_4D7F.jpg",
+            "store_id": 1
         },
         {
             "id": 186,
@@ -4333,7 +4643,7 @@
             "remark": "",
             "audit_state": 1,
             "store_id": 1,
-            "receipt_img_url": "/uploads/2026-08/锦州森源订单_刘爽_2026-08-30_AEA5.jpg"
+            "receipt_img_url": "/uploads/2026-09/锦州森源订单_刘爽_2026-09-01_D9F8.jpg"
         },
         {
             "id": 187,
@@ -4345,7 +4655,7 @@
             "shipped_date": "2026-08-26 16:48",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197389",
+            "logistics_no": "安能物流-500258197389",
             "order_client": "李超",
             "receiver_name": "刘东",
             "receiver_phone": "15608212235",
@@ -4358,12 +4668,12 @@
             "remark": "",
             "audit_state": 1,
             "store_id": 2,
-            "receipt_img_url": "/uploads/2026-08/李超订单_刘东_2026-08-31_FE09.jpg",
+            "receipt_img_url": "/uploads/2026-08/李超订单_刘东_2026-08-31_731A.jpg",
             "freight_costs": [
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 500
+                    "amount": 120
                 }
             ]
         },
@@ -4377,7 +4687,7 @@
             "shipped_date": "2026-08-26 17:18",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-500258197390",
+            "logistics_no": "安能物流-500258197390",
             "order_client": "李超",
             "receiver_name": "另灵敏",
             "receiver_phone": "18601139266",
@@ -4389,7 +4699,15 @@
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2
+            "store_id": 2,
+            "receipt_img_url": "/uploads/2026-08/李超订单_另灵敏_2026-08-31_020E.jpg",
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 110
+                }
+            ]
         },
         {
             "id": 189,
@@ -4401,7 +4719,7 @@
             "shipped_date": "2026-08-28 14:05",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
+            "logistics_no": "浩丰物流-0011642",
             "order_client": "李超",
             "receiver_name": "史贤东",
             "receiver_phone": "18756510232",
@@ -4412,8 +4730,16 @@
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单邮回",
             "remark": "",
-            "audit_state": 0,
-            "store_id": 2
+            "audit_state": 1,
+            "store_id": 2,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 1050
+                }
+            ],
+            "receipt_img_url": "/uploads/2026-08/李超订单_史贤东_2026-08-31_C934.jpg"
         },
         {
             "id": 190,
@@ -4473,7 +4799,7 @@
             "shipped_date": "2026-08-28 14:05",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能-710098451721",
+            "logistics_no": "安能物流-710098451721",
             "order_client": "钟波庭",
             "receiver_name": "毛经理",
             "receiver_phone": "18810878472",
@@ -4486,7 +4812,13 @@
             "remark": "",
             "audit_state": 1,
             "store_id": 2,
-            "receipt_url": "/uploads/receipts/192_钟波庭毛经理18810878472，山东省济宁市汶上县花园路汶上县第一实验小学东南侧约130米中都市场粮局。天固浸渍胶，共60kg。植筋胶，共60kg。_cef7a846.jpg"
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 150
+                }
+            ]
         },
         {
             "id": 193,
@@ -4495,10 +4827,10 @@
             "type": 1,
             "date": "2026-08-28 14:12",
             "completed_date": "2026-08-29 09:17",
-            "shipped_date": "2026-08-30 05:15",
-            "shipping_method": "",
+            "shipped_date": "2026-08-29 09:17",
+            "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "申诉书-545",
+            "logistics_no": "三志物流-260828003394",
             "order_client": "锦州森源",
             "receiver_name": "刘爽",
             "receiver_phone": "18604161611",
@@ -4511,128 +4843,46 @@
             "remark": "",
             "audit_state": 1,
             "store_id": 1,
-            "freight_costs": []
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 2680
+                }
+            ],
+            "receipt_img_url": "/uploads/2026-09/锦州森源订单_刘爽_2026-09-01_D0C0.jpg"
         },
         {
-            "id": 194,
+            "id": 199,
             "title": "",
             "status": "shipped",
             "type": 2,
-            "date": "2026-08-29 09:17",
-            "completed_date": "2026-08-29 16:23",
-            "shipped_date": "2026-08-30 04:53",
-            "shipping_method": "",
+            "store_id": 2,
+            "date": "2026-08-31 10:00",
+            "completed_date": "2026-08-28 10:00",
+            "shipped_date": "2026-08-28 10:00",
+            "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "三志物流-500258197389",
+            "logistics_no": "浩丰物流-0011747",
             "order_client": "李超",
             "receiver_name": "王纪省",
             "receiver_phone": "18369388079",
             "receiver_address": "蚌埠市禹会区迎宾大道高速养护管理处南100米蚌埠养护中心",
-            "goods_name": "赛文聚脲中间层\n480kg",
+            "goods_name": "赛文聚脲中间层 480kg",
             "goods_weight": "480kg",
             "goods_quantity": "32件",
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单邮回",
             "remark": "",
             "audit_state": 1,
-            "store_id": 2,
             "freight_costs": [
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 5000
+                    "amount": 380
                 }
             ],
-            "receipt_img_url": "/uploads/2026-09/李超订单_王纪省_2026-09-01_B69E.jpg"
-        },
-        {
-            "id": 197,
-            "title": "",
-            "status": "shipped",
-            "type": 3,
-            "date": "2026-08-29 16:12",
-            "completed_date": "2026-08-30 00:22",
-            "shipped_date": "2026-08-30 00:22",
-            "shipping_method": 0,
-            "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
-            "order_client": "zxcadfc ",
-            "receiver_name": "朱峰峰",
-            "receiver_phone": "15395265192",
-            "receiver_address": "浙江省温州市乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
-            "goods_name": "树脂 1101A",
-            "goods_weight": "10000kg",
-            "goods_quantity": "10件",
-            "goods_packaging": "桶装",
-            "logistics_service": "送货上门+回单拍照回传",
-            "remark": "",
-            "store_id": 3,
-            "audit_state": 0
-        },
-        {
-            "id": 198,
-            "title": "",
-            "status": "shipped",
-            "type": 2,
-            "store_id": 2,
-            "date": "2026-08-30 05:06",
-            "completed_date": "2026-08-30 05:06",
-            "shipped_date": "2026-08-30 05:07",
-            "shipping_method": "",
-            "shipping_custom": "",
-            "logistics_no": "蜜风物流-1111",
-            "order_client": "陶云",
-            "receiver_name": "朱峰峰",
-            "receiver_phone": "15395265192",
-            "receiver_address": "浙江省温州市乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
-            "goods_name": "树脂 1101A",
-            "goods_weight": "10000kg",
-            "goods_quantity": "10件",
-            "goods_packaging": "桶装",
-            "logistics_service": "送货上门+回单拍照回传",
-            "remark": "",
-            "receipt_img_url": "",
-            "audit_state": 1,
-            "freight_costs": [
-                {
-                    "type": "freight",
-                    "note": "运费",
-                    "amount": 500
-                }
-            ]
-        },
-        {
-            "id": 199,
-            "title": "",
-            "status": "shipped",
-            "type": 1,
-            "store_id": 1,
-            "date": "2026-08-30 05:07",
-            "completed_date": "2026-08-30 05:12",
-            "shipped_date": "2026-08-30 05:12",
-            "shipping_method": "",
-            "shipping_custom": "",
-            "logistics_no": "安能-4545",
-            "order_client": "大苏打是的",
-            "receiver_name": "朱峰峰d是",
-            "receiver_phone": "15395265190",
-            "receiver_address": "浙江省温州市天赋和乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
-            "goods_name": "树脂 1101A4545",
-            "goods_weight": "1040kg",
-            "goods_quantity": "14件",
-            "goods_packaging": "桶装",
-            "logistics_service": "送货上门+回单拍照回传",
-            "remark": "",
-            "order_remark": "",
-            "receipt_img_url": "",
-            "audit_state": 1,
-            "freight_costs": [
-                {
-                    "type": "freight",
-                    "note": "运费",
-                    "amount": 411
-                }
-            ]
+            "receipt_img_url": "/uploads/2026-09/李超订单_王纪省_2026-09-03_B9F8.jpg"
         },
         {
             "id": 200,
@@ -4640,24 +4890,31 @@
             "status": "shipped",
             "type": 2,
             "store_id": 2,
-            "date": "2026-08-30 05:39",
-            "completed_date": "2026-08-30 13:42",
-            "shipped_date": "2026-08-30 13:42",
-            "shipping_method": 0,
+            "date": "2026-08-31 13:12",
+            "completed_date": "2026-08-31 14:09",
+            "shipped_date": "2026-08-31 14:09",
+            "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "蜜风物流-444",
-            "order_client": "大苏打啊",
-            "receiver_name": "朱峰峰",
-            "receiver_phone": "15395265192",
-            "receiver_address": "浙江省温州市乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
-            "goods_name": "树脂 1101A",
-            "goods_weight": "10000kg",
-            "goods_quantity": "10件",
+            "logistics_no": "安能物流-500258766055",
+            "order_client": "高小宝",
+            "receiver_name": "高小宝",
+            "receiver_phone": "18872365156",
+            "receiver_address": "福建省厦门市海沧区青礁村大路社128-5",
+            "goods_name": "中固灌注胶30公斤装✖️10组=300公斤。",
+            "goods_weight": "300kg",
+            "goods_quantity": "20件",
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
             "audit_state": 1,
-            "freight_costs": []
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 340
+                }
+            ],
+            "receipt_img_url": "/uploads/2026-09/高小宝订单_高小宝_2026-09-02_D6A0.jpg"
         },
         {
             "id": 201,
@@ -4665,18 +4922,110 @@
             "status": "shipped",
             "type": 2,
             "store_id": 2,
-            "date": "2026-08-30 05:42",
-            "completed_date": "2026-08-30 13:43",
-            "shipped_date": "2026-08-30 13:43",
+            "date": "2026-08-31 13:18",
+            "completed_date": "2026-09-01 14:12",
+            "shipped_date": "2026-09-01 14:12",
+            "shipping_method": 3,
+            "shipping_custom": "",
+            "logistics_no": "运满满-贵EB2004",
+            "order_client": "弘立德",
+            "receiver_name": "杨总",
+            "receiver_phone": "13787572902",
+            "receiver_address": "湖南省怀化市沅陵县五强溪镇五强溪沅水大桥",
+            "goods_name": "弘立德品牌HLD-M植筋胶\n(45公斤每组)\n共计30×45=1350公斤 30组\n弘立德品牌HLD-GF灌缝胶\n(30公斤每组)\n共计1×30=30公斤 1组\n弘立德品牌HLD-F封边胶\n共计30×45=1350公斤 30组\n弘立德品牌HLD-G灌钢胶\n(30公斤每组)\n共计166×30=4980公斤 166组\n弘立德品牌HLD-HNZ油性结构环氧涂装胶\n(45公斤每组)\n共计111×45=4995公斤 111组\n",
+            "goods_weight": "12705kg",
+            "goods_quantity": "676件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 1,
+            "freight_costs": []
+        },
+        {
+            "id": 202,
+            "title": "",
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-08-31 13:26",
+            "completed_date": "2026-08-31 14:09",
+            "shipped_date": "2026-08-31 14:09",
+            "shipping_method": 3,
+            "shipping_custom": "",
+            "logistics_no": "运满满-浙GAS2991",
+            "order_client": "李超",
+            "receiver_name": "岳恒",
+            "receiver_phone": "15735155726",
+            "receiver_address": "浙江省绍兴市新昌县七星街道G104万丰科技园1号3号楼7层703号",
+            "goods_name": "赛文碳纤维胶+450kg",
+            "goods_weight": "450kg",
+            "goods_quantity": "30件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 270
+                },
+                {
+                    "type": "other",
+                    "note": "货拉拉-浙GAL9361",
+                    "amount": 120
+                }
+            ]
+        },
+        {
+            "id": 203,
+            "title": "",
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-08-31 13:29",
+            "completed_date": "2026-08-31 16:22",
+            "shipped_date": "2026-08-31 16:22",
             "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "安能物流-4455",
-            "order_client": "奥运",
-            "receiver_name": "朱峰峰",
-            "receiver_phone": "15395265192",
-            "receiver_address": "浙江省温州市乐清市北白象镇金炉工业区交通东路 708 号义友电气有限公司",
-            "goods_name": "树脂 1101A",
-            "goods_weight": "10000kg",
+            "logistics_no": "安能物流-500258766057",
+            "order_client": "俞陈飞",
+            "receiver_name": "郑小丽",
+            "receiver_phone": "13420045999",
+            "receiver_address": "广东省中山市五桂山长命水大街5号（旭日曦苑）113卡（超宝加固）收件人郑小丽",
+            "goods_name": "磐鑫粘钢胶\n植筋胶\n碳纤维胶\n灌注胶 \n各5公斤",
+            "goods_weight": "20kg",
+            "goods_quantity": "8件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 1,
+            "freight_costs": [
+                {
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 80
+                }
+            ]
+        },
+        {
+            "id": 204,
+            "title": "",
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-08-31 13:32",
+            "completed_date": "2026-08-31 16:22",
+            "shipped_date": "2026-08-31 16:22",
+            "shipping_method": 1,
+            "shipping_custom": "",
+            "logistics_no": "安能物流-500258766056",
+            "order_client": "李超",
+            "receiver_name": "孙经理",
+            "receiver_phone": "19005213379",
+            "receiver_address": "江苏省徐州市丰县华山镇钢城2区28号",
+            "goods_name": "赛文150kg底涂。30公斤/组",
+            "goods_weight": "150kg",
             "goods_quantity": "10件",
             "goods_packaging": "桶装",
             "logistics_service": "送货上门+回单拍照回传",
@@ -4686,1520 +5035,586 @@
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 500
+                    "amount": 200
                 }
-            ],
-            "receipt_img_url": "/uploads/2026-08/奥运订单_朱峰峰_2026-08-31_00B3.jpg"
+            ]
         },
         {
-            "id": 202,
-            "title": "",
-            "status": "completed",
-            "type": 1,
-            "date": "2026-09-04 15:04",
-            "completed_date": "2026-09-05 14:59",
-            "shipped_date": "",
-            "shipping_method": "",
-            "shipping_custom": "",
-            "logistics_no": "",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "粘钢胶 40kg/组 x500",
-            "goods_weight": "500公斤",
-            "goods_quantity": "1件",
-            "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
-            "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260904NEW",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "",
-            "creator": "",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 1,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000,
-            "receipt_img_url": "",
-            "freight_costs": []
-        },
-        {
-            "id": 203,
+            "id": 205,
             "title": "",
             "status": "shipped",
-            "type": 1,
-            "date": "2026-09-04 15:17",
-            "completed_date": "2026-09-05 22:59",
-            "shipped_date": "2026-09-05 22:59",
-            "shipping_method": 0,
+            "type": 0,
+            "store_id": 0,
+            "date": "2026-08-31 17:23",
+            "completed_date": "2026-08-31 17:25",
+            "shipped_date": "2026-08-31 17:25",
+            "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "树脂 1101A x500",
-            "goods_weight": "500公斤",
-            "goods_quantity": "1件",
+            "logistics_no": "安能物流-500258766058",
+            "order_client": "现金用户",
+            "receiver_name": "姚虞侠",
+            "receiver_phone": "15656068222",
+            "receiver_address": "浙江省乐清市南塘交通中路49号",
+            "goods_name": "石头胶15公斤装✖️2组=30公斤",
+            "goods_weight": "30",
+            "goods_quantity": "4件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门",
             "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260904NEW",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "",
-            "creator": "",
-            "settlement_account": "中固",
-            "order_goods": [
+            "audit_state": 1,
+            "freight_costs": [
                 {
-                    "product_id": 2,
-                    "goods_name": "树脂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 1,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 60
                 }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000,
-            "receipt_img_url": "",
-            "freight_costs": []
-        },
-        {
-            "id": 204,
-            "title": "",
-            "status": "shipped",
-            "type": 1,
-            "date": "2026-09-04 15:17",
-            "completed_date": "2026-09-05 22:59",
-            "shipped_date": "2026-09-05 22:59",
-            "shipping_method": 0,
-            "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "粘钢胶 40kg/组 x200、粘钢胶 40kg/组 x20",
-            "goods_weight": "220公斤",
-            "goods_quantity": "2件",
-            "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
-            "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260904NEW",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "",
-            "creator": "",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 1,
-                    "quantity": 200,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 1,
-                    "quantity": 20,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000,
-            "receipt_img_url": "",
-            "freight_costs": []
+            ]
         },
         {
             "id": 206,
             "title": "",
             "status": "shipped",
-            "type": 1,
-            "date": "2026-09-05 02:23",
-            "completed_date": "2026-09-05 10:23",
-            "shipped_date": "2026-09-05 10:23",
-            "shipping_method": 0,
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-08-31 18:10",
+            "completed_date": "2026-08-31 18:11",
+            "shipped_date": "2026-08-31 18:11",
+            "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "啊松物流-987484572",
-            "audit_state": 1,
-            "store_id": 1,
-            "order_client": "锦州森源",
-            "receiver_name": "张三",
-            "receiver_phone": "17554354236",
-            "receiver_address": "北京天安门",
-            "goods_name": "固化剂 1101A x1000",
-            "goods_weight": "1000公斤",
-            "goods_quantity": "1件",
+            "logistics_no": "运满满-苏BV7567",
+            "order_client": "李超",
+            "receiver_name": "王士军",
+            "receiver_phone": "18358171199",
+            "receiver_address": "江苏省无锡市江阴市徐霞客镇璜塘村金凤南路璜塘桥上",
+            "goods_name": "赛文五组封口胶200公斤\n7组灌注胶210公斤。",
+            "goods_weight": "410kg",
+            "goods_quantity": "24件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 1,
-            "warehouse_id": 2,
-            "order_number": "ZG20260905NEW",
-            "contact_person": "张三",
-            "contact_phone": "17554354236",
-            "contact_address": "北京天安门",
-            "project_name": "",
-            "sales_person": "",
-            "creator": "",
-            "settlement_account": "绝缘",
-            "order_goods": [
-                {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 1,
-                    "quantity": 1000,
-                    "price": 20,
-                    "tax_rate": 13,
-                    "tax_included_price": 22.6,
-                    "amount": 20000,
-                    "total_amount": 22600,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 20000,
-            "tax_amount": 2600,
-            "total_amount": 22600,
-            "discount_amount": 22600,
-            "other_fees": 0,
-            "should_receive": 22600,
-            "current_payment": 0,
-            "current_debt": 22600,
-            "customer_receivable": 5000,
+            "audit_state": 1,
             "freight_costs": [
                 {
                     "type": "freight",
                     "note": "运费",
-                    "amount": 500
+                    "amount": 230
                 }
             ],
-            "receipt_img_url": "/uploads/2026-09/锦州森源订单_张三_2026-09-05_CC64.jpg"
+            "receipt_img_url": "/uploads/2026-08/李超订单_王士军_2026-08-31_22BD.jpg"
         },
         {
             "id": 207,
             "title": "",
             "status": "shipped",
-            "type": 1,
-            "date": "2026-09-05 04:49",
-            "completed_date": "2026-09-05 22:59",
-            "shipped_date": "2026-09-05 22:59",
-            "shipping_method": 1,
+            "type": 0,
+            "store_id": 0,
+            "date": "2026-09-01 12:22",
+            "completed_date": "2026-09-01 13:45",
+            "shipped_date": "2026-09-01 13:45",
+            "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
-            "audit_state": 0,
-            "store_id": 1,
-            "order_client": "锦州森源",
-            "receiver_name": "张三",
-            "receiver_phone": "17554354236",
-            "receiver_address": "北京天安门",
-            "goods_name": "固化剂 1101A x2000、固化剂 1101A x2000",
-            "goods_weight": "4000公斤",
-            "goods_quantity": "2件",
+            "logistics_no": "浩丰物流-0011800",
+            "order_client": "李超",
+            "receiver_name": "陈启帆",
+            "receiver_phone": "15233134112",
+            "receiver_address": "安徽省阜阳市颍州区袁集镇安徽交控道路养护有限公司阜阳项目部",
+            "goods_name": "赛文封缝胶\n40公斤装✖️50组+2000公斤",
+            "goods_weight": "2000kg",
+            "goods_quantity": "100件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单邮回",
             "remark": "",
-            "customer_id": 1,
-            "warehouse_id": 2,
-            "order_number": "ZG20260905NEW",
-            "contact_person": "张三",
-            "contact_phone": "17554354236",
-            "contact_address": "北京天安门",
-            "project_name": "",
-            "sales_person": "",
-            "creator": "",
-            "settlement_account": "绝缘",
-            "order_goods": [
-                {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 1,
-                    "quantity": 2000,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 1,
-                    "quantity": 2000,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 5000,
-            "receipt_img_url": "",
+            "audit_state": 1,
             "freight_costs": []
         },
         {
             "id": 208,
             "title": "",
             "status": "shipped",
-            "type": 1,
-            "date": "2026-09-05 05:17",
-            "completed_date": "2026-09-05 22:59",
-            "shipped_date": "2026-09-05 22:59",
-            "shipping_method": 0,
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-09-01 12:26",
+            "completed_date": "2026-09-01 16:26",
+            "shipped_date": "2026-09-01 16:26",
+            "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "暂未录入单号",
-            "audit_state": 0,
-            "store_id": 1,
-            "order_client": "锦州森源",
-            "receiver_name": "张三",
-            "receiver_phone": "17554354236",
-            "receiver_address": "北京天安门",
-            "goods_name": "固化剂 1101A x1000",
-            "goods_weight": "1000公斤",
-            "goods_quantity": "5件",
+            "logistics_no": "运满满-鲁QAS9112",
+            "order_client": "固特公司",
+            "receiver_name": "收货人",
+            "receiver_phone": "19537627151",
+            "receiver_address": "刘总   浙江省杭州市上城区景湘路8(景芳地铁站A口步行360米)",
+            "goods_name": "中固碳纤维胶水 + 810KG",
+            "goods_weight": "810kg",
+            "goods_quantity": "54件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 1,
-            "warehouse_id": 2,
-            "order_number": "ZG20260905005",
-            "contact_person": "张三",
-            "contact_phone": "17554354236",
-            "contact_address": "北京天安门",
-            "project_name": "",
-            "sales_person": "",
-            "creator": "",
-            "settlement_account": "绝缘",
-            "order_goods": [
+            "audit_state": 1,
+            "freight_costs": [
                 {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 5,
-                    "quantity": 1000,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 250
                 }
             ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 5000,
-            "receipt_img_url": "",
-            "freight_costs": []
+            "receipt_img_url": "/uploads/2026-09/固特公司订单_收货人_2026-09-02_0DAE.jpg"
         },
         {
             "id": 209,
             "title": "",
-            "status": null,
+            "status": "shipped",
             "type": 1,
-            "date": "2026-09-05 05:46",
-            "completed_date": "2026-09-05 05:46",
-            "shipped_date": "",
-            "shipping_method": 0,
-            "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
             "store_id": 1,
-            "order_client": "锦州森源",
-            "receiver_name": "张三",
-            "receiver_phone": "17554354236",
-            "receiver_address": "北京天安门",
-            "goods_name": "固化剂 1101A x500",
-            "goods_weight": "500公斤",
-            "goods_quantity": "2件",
-            "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "date": "2026-09-01 14:12",
+            "completed_date": "2026-09-01 15:19",
+            "shipped_date": "2026-09-01 15:19",
+            "shipping_method": 3,
+            "shipping_custom": "",
+            "logistics_no": "运满满-浙JDV2890",
+            "order_client": "金石智诚",
+            "receiver_name": "李小姐",
+            "receiver_phone": "19107999901",
+            "receiver_address": "浙江省嘉兴市平湖市钟埭街道新明路 999 号 16 号厂房 102 室浙江金石智诚智能装备制造有限公司",
+            "goods_name": "树脂 B110  500kg",
+            "goods_weight": "500kg",
+            "goods_quantity": "1件",
+            "goods_packaging": "托盘",
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 1,
-            "warehouse_id": 2,
-            "order_number": "ZG20260905TEMP",
-            "contact_person": "张三",
-            "contact_phone": "17554354236",
-            "contact_address": "北京天安门",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "绝缘",
-            "order_goods": [
+            "audit_state": 1,
+            "freight_costs": [
                 {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 2,
-                    "quantity": 500,
-                    "price": 20,
-                    "tax_rate": 13,
-                    "tax_included_price": 22.6,
-                    "amount": 10000,
-                    "total_amount": 11300,
-                    "remark": ""
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 280
                 }
             ],
-            "subtotal_amount": 10000,
-            "tax_amount": 1300,
-            "total_amount": 11300,
-            "discount_amount": 11300,
-            "other_fees": 0,
-            "should_receive": 11300,
-            "current_payment": 0,
-            "current_debt": 11300,
-            "customer_receivable": 5000
+            "receipt_img_url": "/uploads/2026-09/金石智诚订单_李小姐_2026-09-02_A374.jpg"
         },
         {
             "id": 210,
             "title": "",
-            "status": null,
-            "type": 1,
-            "date": "2026-09-05 05:47",
-            "completed_date": "2026-09-05 05:47",
-            "shipped_date": "",
-            "shipping_method": 0,
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-09-01 14:33",
+            "completed_date": "2026-09-01 16:26",
+            "shipped_date": "2026-09-01 16:26",
+            "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
-            "store_id": 1,
-            "order_client": "锦州森源",
-            "receiver_name": "张三",
-            "receiver_phone": "17554354236",
-            "receiver_address": "北京天安门",
-            "goods_name": "固化剂 1101A x20",
-            "goods_weight": "20公斤",
-            "goods_quantity": "1件",
+            "logistics_no": "运满满-苏BFM8980",
+            "order_client": "李超",
+            "receiver_name": "王士军",
+            "receiver_phone": "18358171199",
+            "receiver_address": "江苏省无锡市江阴市徐霞客镇璜塘村金凤南路璜塘桥上",
+            "goods_name": "赛文\n灌注胶10组+300公斤\n封口胶5组+200公斤\n碳纤维胶 +30公斤",
+            "goods_weight": "530kg",
+            "goods_quantity": "32件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 1,
-            "warehouse_id": 2,
-            "order_number": "ZG20260905TEMP",
-            "contact_person": "张三",
-            "contact_phone": "17554354236",
-            "contact_address": "北京天安门",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "绝缘",
-            "order_goods": [
+            "audit_state": 1,
+            "freight_costs": [
                 {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 1,
-                    "quantity": 20,
-                    "price": 20,
-                    "tax_rate": 13,
-                    "tax_included_price": 22.6,
-                    "amount": 400,
-                    "total_amount": 452,
-                    "remark": ""
+                    "type": "freight",
+                    "note": "运费",
+                    "amount": 300
                 }
             ],
-            "subtotal_amount": 400,
-            "tax_amount": 52,
-            "total_amount": 452,
-            "discount_amount": 452,
-            "other_fees": 0,
-            "should_receive": 452,
-            "current_payment": 0,
-            "current_debt": 452,
-            "customer_receivable": 5000
+            "receipt_img_url": "/uploads/2026-09/李超订单_王士军_2026-09-02_2FAA.jpg"
         },
         {
             "id": 211,
             "title": "",
-            "status": null,
+            "status": "shipped",
             "type": 1,
-            "date": "2026-09-05 06:08",
-            "completed_date": "2026-09-05 06:08",
-            "shipped_date": "",
-            "shipping_method": 0,
+            "store_id": 1,
+            "date": "2026-09-01 14:41",
+            "completed_date": "2026-09-01 15:19",
+            "shipped_date": "2026-09-01 15:19",
+            "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "粘钢胶 40kg/组 x20",
-            "goods_weight": "20公斤",
+            "logistics_no": "安能物流-500258766060",
+            "order_client": "华贵电气",
+            "receiver_name": "王总",
+            "receiver_phone": "13157771111",
+            "receiver_address": "浙江省乐清市柳市镇湖头工业区柳湖路788号华贵电气",
+            "goods_name": "阻燃剂 250kg",
+            "goods_weight": "250kg",
             "goods_quantity": "1件",
-            "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "goods_packaging": "袋装",
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260905TEMP",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 1,
-                    "quantity": 20,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000,
-            "receipt_img_url": "",
+            "audit_state": 1,
             "freight_costs": []
         },
         {
             "id": 212,
             "title": "",
-            "status": null,
+            "status": "shipped",
             "type": 1,
-            "date": "2026-09-05 06:09",
-            "completed_date": "2026-09-05 06:09",
-            "shipped_date": "",
-            "shipping_method": 0,
+            "store_id": 1,
+            "date": "2026-09-02 12:43",
+            "completed_date": "2026-09-02 14:44",
+            "shipped_date": "2026-09-02 14:44",
+            "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "粘钢胶 40kg/组 x20",
-            "goods_weight": "20公斤",
-            "goods_quantity": "1件",
+            "logistics_no": "运满满-豫CAB0376",
+            "order_client": "句容昊龙",
+            "receiver_name": "李总",
+            "receiver_phone": "13505293655",
+            "receiver_address": "江苏句容市边城镇东昌集镇东衣路107号句容昊龙电器有限公司",
+            "goods_name": "树脂：1101A 1000kg\n固化剂：1101B 1000kg",
+            "goods_weight": "2000kg",
+            "goods_quantity": "2件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260905TEMP",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 1,
-                    "quantity": 20,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000
+            "audit_state": 1,
+            "freight_costs": [],
+            "receipt_img_url": "/uploads/2026-09/句容昊龙订单_李总_2026-09-03_E681.jpg"
         },
         {
             "id": 213,
             "title": "",
-            "status": null,
-            "type": 1,
-            "date": "2026-09-05 06:11",
-            "completed_date": "2026-09-05 06:11",
-            "shipped_date": "",
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-09-02 12:48",
+            "completed_date": "2026-09-02 17:11",
+            "shipped_date": "2026-09-02 17:11",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
-            "store_id": 1,
-            "order_client": "锦州森源",
-            "receiver_name": "张三",
-            "receiver_phone": "17554354236",
-            "receiver_address": "北京天安门",
-            "goods_name": "固化剂 1101A x500、固化剂 1101A x500",
-            "goods_weight": "1000公斤",
-            "goods_quantity": "0件",
+            "logistics_no": "暂未录入单号",
+            "order_client": "夏华平",
+            "receiver_name": "夏华平",
+            "receiver_phone": "13638615575",
+            "receiver_address": "湖北省武汉市东西湖区团结村646仓库",
+            "goods_name": "灌注胶（彩桶红盖子）\n18公斤x55组\n碳纤维胶（白桶白盖）\n18公斤x5组\n碳纤维胶（彩色桶）\nA剂 12公斤x13件\n包检测的环氧植筋胶 （彩色桶）\nB剂 6 公斤x12件  盖子上粘标签\n包检测的粘钢胶 （彩色桶）\nA剂 12公斤x 12件 盖子上粘标签",
+            "goods_weight": "1452kg",
+            "goods_quantity": "157件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 1,
-            "warehouse_id": 2,
-            "order_number": "ZG20260905TEMP",
-            "contact_person": "张三",
-            "contact_phone": "17554354236",
-            "contact_address": "北京天安门",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "绝缘",
-            "order_goods": [
-                {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 0,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 0,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 5000,
-            "receipt_img_url": "",
-            "freight_costs": []
+            "audit_state": 0
         },
         {
             "id": 214,
             "title": "",
-            "status": null,
-            "type": 1,
-            "date": "2026-09-05 06:31",
-            "completed_date": "2026-09-05 06:31",
-            "shipped_date": "",
-            "shipping_method": 0,
-            "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
+            "status": "shipped",
+            "type": 2,
             "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "粘钢胶 40kg/组 x500、树脂 1101A x200、粘钢胶 40kg/组 x500、粘钢胶 40kg/组 x500",
-            "goods_weight": "1700公斤",
-            "goods_quantity": "75件",
+            "date": "2026-09-03 13:50",
+            "completed_date": "2026-09-03 16:50",
+            "shipped_date": "2026-09-03 16:50",
+            "shipping_method": 3,
+            "shipping_custom": "",
+            "logistics_no": "运满满-皖SN0H68",
+            "order_client": "李超",
+            "receiver_name": "梁恒",
+            "receiver_phone": "17334558576",
+            "receiver_address": "安徽省宿州市泗县长沟镇长沟供电营业厅西一百米",
+            "goods_name": "赛文环氧腻子 5吨",
+            "goods_weight": "5000kg",
+            "goods_quantity": "250件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单邮回",
             "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260905001",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 25,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 2,
-                    "goods_name": "树脂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 0,
-                    "quantity": 200,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 4,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 25,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 4,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 25,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000
+            "audit_state": 1,
+            "freight_costs": []
         },
         {
             "id": 215,
             "title": "",
-            "status": null,
+            "status": "shipped",
             "type": 1,
-            "date": "2026-09-05 06:35",
-            "completed_date": "2026-09-05 06:35",
-            "shipped_date": "",
-            "shipping_method": 0,
+            "store_id": 1,
+            "date": "2026-09-03 13:52",
+            "completed_date": "2026-09-03 16:50",
+            "shipped_date": "2026-09-03 16:50",
+            "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "树脂 1101A x20、树脂 1101A x0",
-            "goods_weight": "20公斤",
-            "goods_quantity": "1件",
+            "logistics_no": "运满满-苏CRY506",
+            "order_client": "雷安电气",
+            "receiver_name": "王雪萍",
+            "receiver_phone": "13968497998",
+            "receiver_address": "楚门镇南兴东路190号浙江雷安电气有限公司",
+            "goods_name": "树脂 1101A  5000kg\n固化剂 1101B 5000kg",
+            "goods_weight": "10000kg",
+            "goods_quantity": "10件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260905215",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 2,
-                    "goods_name": "树脂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 1,
-                    "quantity": 20,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 2,
-                    "goods_name": "树脂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 0,
-                    "quantity": 0,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000,
-            "receipt_img_url": "",
+            "audit_state": 1,
             "freight_costs": []
         },
         {
             "id": 216,
             "title": "",
-            "status": null,
-            "type": 1,
-            "date": "2026-09-05 06:44",
-            "completed_date": "2026-09-05 06:44",
-            "shipped_date": "",
-            "shipping_method": 0,
-            "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
+            "status": "shipped",
+            "type": 2,
             "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "树脂 1101A x500、树脂 1101A x500",
-            "goods_weight": "1000公斤",
-            "goods_quantity": "50件",
+            "date": "2026-09-03 13:52",
+            "completed_date": "2026-09-03 16:50",
+            "shipped_date": "2026-09-03 16:50",
+            "shipping_method": 1,
+            "shipping_custom": "",
+            "logistics_no": "顺丰物流-SF0213697572204",
+            "order_client": "李超",
+            "receiver_name": "谢起荣",
+            "receiver_phone": "13645952777",
+            "receiver_address": "福建省泉州市晋江市龙湖镇大埔开发区，聚源东路54号",
+            "goods_name": "赛文碳纤维胶8组 240公斤。",
+            "goods_weight": "240kg",
+            "goods_quantity": "16件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260905216",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 2,
-                    "goods_name": "树脂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 25,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 2,
-                    "goods_name": "树脂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 25,
-                    "quantity": 500,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000,
-            "receipt_img_url": "",
+            "audit_state": 1,
             "freight_costs": []
         },
         {
             "id": 217,
             "title": "",
-            "status": null,
-            "type": 1,
-            "date": "2026-09-05 10:06",
-            "completed_date": "2026-09-05 10:06",
-            "shipped_date": "",
+            "status": "shipped",
+            "type": 2,
+            "store_id": 2,
+            "date": "2026-09-04 13:42",
+            "completed_date": "2026-09-04 16:00",
+            "shipped_date": "2026-09-04 16:00",
             "shipping_method": 0,
             "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
-            "store_id": 1,
-            "order_client": "锦州森源",
-            "receiver_name": "张三",
-            "receiver_phone": "17554354236",
-            "receiver_address": "北京天安门",
-            "goods_name": "固化剂 1101A x50",
-            "goods_weight": "50公斤",
-            "goods_quantity": "0件",
+            "logistics_no": "暂未录入单号",
+            "order_client": "夏华平",
+            "receiver_name": "夏华平",
+            "receiver_phone": "13638615575",
+            "receiver_address": "湖北省武汉市东西湖区团结村646仓库",
+            "goods_name": "中誉固彩桶\n B级碳纤维胶18公斤装✖️40组\n B级碳纤维胶A胶12公斤装✖️10桶\n（桶盖上什么都不贴 桶身标签不打日期）\n\nB级碳纤维胶9公斤装的✖️10组\n（白桶白盖 桶盖上贴品目标签就好 不要包检测）\nA级包检测碳纤维胶9公斤装✖️5组\n（白桶白盖桶盖上 需要打上A级包检测的标签）\n\n白桶白盖\nB级碳纤维胶18公斤装✖️10组=180公斤",
+            "goods_weight": "1155kg",
+            "goods_quantity": "140件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 1,
-            "warehouse_id": 2,
-            "order_number": "ZG20260905217",
-            "contact_person": "张三",
-            "contact_phone": "17554354236",
-            "contact_address": "北京天安门",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "绝缘",
-            "order_goods": [
-                {
-                    "product_id": 5,
-                    "goods_name": "固化剂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 2,
-                    "packages": 0,
-                    "quantity": 50,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 5000
+            "audit_state": 0
         },
         {
             "id": 218,
             "title": "",
-            "status": null,
-            "type": 1,
-            "date": "2026-09-05 10:09",
-            "completed_date": "2026-09-05 10:09",
-            "shipped_date": "",
-            "shipping_method": 0,
+            "status": "shipped",
+            "type": 0,
+            "store_id": 0,
+            "date": "2026-09-04 13:45",
+            "completed_date": "2026-09-04 16:00",
+            "shipped_date": "2026-09-04 16:00",
+            "shipping_method": 1,
             "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "粘钢胶 40kg/组 x40、粘钢胶 40kg/组 x40",
-            "goods_weight": "80公斤",
-            "goods_quantity": "4件",
+            "logistics_no": "顺丰物流-SF0213547662069",
+            "order_client": "高小宝",
+            "receiver_name": "李总",
+            "receiver_phone": "18160075833",
+            "receiver_address": "四川省成都市双流区华阳街道天府新区四川1号",
+            "goods_name": "中固 植筋胶6.7-3.4公斤装 10箱（200公斤）\n检测报告，合格证，营业执照各2份。",
+            "goods_weight": "200kg",
+            "goods_quantity": "10件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260905218",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 2,
-                    "quantity": 40,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 2,
-                    "quantity": 40,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 10000
+            "audit_state": 1,
+            "freight_costs": []
         },
         {
             "id": 219,
             "title": "",
-            "status": null,
+            "status": "shipped",
             "type": 1,
-            "date": "2026-09-05 14:12",
-            "completed_date": "2026-09-05 14:12",
-            "shipped_date": "",
-            "shipping_method": 0,
+            "store_id": 1,
+            "date": "2026-09-04 14:50",
+            "completed_date": "2026-09-04 16:00",
+            "shipped_date": "2026-09-04 16:00",
+            "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "李超",
-            "receiver_name": "哈哈哈",
-            "receiver_phone": "13012341234",
-            "receiver_address": "浙江嘉兴大乐透",
-            "goods_name": "粘钢胶 40kg/组 x20",
-            "goods_weight": "20公斤",
-            "goods_quantity": "1件",
+            "logistics_no": "运满满-皖KK0G17",
+            "order_client": "龙都电力",
+            "receiver_name": "王杰",
+            "receiver_phone": "15239450601",
+            "receiver_address": "河南省淮阳县临蔡镇中心幼儿园周口龙都电力设备有限公司",
+            "goods_name": "树脂1101A 3000kg\n固化剂1101B 3000kg",
+            "goods_weight": "6000kg",
+            "goods_quantity": "6件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 4,
-            "warehouse_id": 1,
-            "order_number": "ZG20260905219",
-            "contact_person": "哈哈哈",
-            "contact_phone": "13012341234",
-            "contact_address": "浙江嘉兴大乐透",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 1,
-                    "quantity": 20,
-                    "price": 9.73,
-                    "tax_rate": 13,
-                    "tax_included_price": 11,
-                    "amount": 194.60000000000002,
-                    "total_amount": 220,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 194.6,
-            "tax_amount": 25.4,
-            "total_amount": 220,
-            "discount_amount": 220,
-            "other_fees": 0,
-            "should_receive": 220,
-            "current_payment": 0,
-            "current_debt": 220,
-            "customer_receivable": 0,
-            "receipt_img_url": "",
+            "audit_state": 1,
             "freight_costs": []
         },
         {
             "id": 220,
             "title": "",
-            "status": "pending",
+            "status": "shipped",
             "type": 1,
-            "date": "2026-09-05 14:56",
-            "completed_date": "",
-            "shipped_date": "",
-            "shipping_method": "",
+            "store_id": 1,
+            "date": "2026-09-04 15:59",
+            "completed_date": "2026-09-04 17:30",
+            "shipped_date": "2026-09-04 17:30",
+            "shipping_method": 3,
             "shipping_custom": "",
-            "logistics_no": "",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "陶芸",
-            "receiver_name": "王帅",
-            "receiver_phone": "17554354236",
-            "receiver_address": "四川成都成华路华容大道",
-            "goods_name": "树脂 1101A x50、粘钢胶 40kg/组 x50、树脂 1101A x1000、粘钢胶 40kg/组 x50、粘钢胶 40kg/组 x200",
-            "goods_weight": "1350公斤",
-            "goods_quantity": "15.0件",
-            "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_no": "运满满-豫P70K76",
+            "order_client": "金石智诚",
+            "receiver_name": "李小姐",
+            "receiver_phone": "19107999901",
+            "receiver_address": "浙江省嘉兴市平湖市钟埭街道新明路 999 号 16 号厂房 102 室浙江金石智诚智能装备制造有限公司",
+            "goods_name": "树脂 B110  2500kg",
+            "goods_weight": "2500kg",
+            "goods_quantity": "4件",
+            "goods_packaging": "托盘",
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 3,
-            "warehouse_id": 1,
-            "order_number": "ZG20260905220",
-            "contact_person": "王帅",
-            "contact_phone": "17554354236",
-            "contact_address": "四川成都成华路华容大道",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 2,
-                    "goods_name": "树脂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 0,
-                    "quantity": 50,
-                    "price": 10,
-                    "tax_rate": 13,
-                    "tax_included_price": 11.3,
-                    "amount": 500,
-                    "total_amount": 565,
-                    "remark": ""
-                },
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 2.5,
-                    "quantity": 50,
-                    "price": 5,
-                    "tax_rate": 13,
-                    "tax_included_price": 5.65,
-                    "amount": 250,
-                    "total_amount": 282.5,
-                    "remark": ""
-                },
-                {
-                    "product_id": 2,
-                    "goods_name": "树脂",
-                    "spec": "1101A",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 0,
-                    "quantity": 1000,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 2.5,
-                    "quantity": 50,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                },
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 10,
-                    "quantity": 200,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 750,
-            "tax_amount": 97.5,
-            "total_amount": 847.5,
-            "discount_amount": 847.5,
-            "other_fees": 0,
-            "should_receive": 847.5,
-            "current_payment": 0,
-            "current_debt": 847.5,
-            "customer_receivable": 10000,
-            "receipt_img_url": "",
+            "audit_state": 1,
             "freight_costs": []
         },
         {
             "id": 221,
             "title": "",
-            "status": "pending",
-            "type": 1,
-            "date": "2026-09-05 16:45",
-            "completed_date": "",
-            "shipped_date": "",
-            "shipping_method": 0,
-            "shipping_custom": "",
-            "logistics_no": "无单号记录",
-            "audit_state": 0,
+            "status": "shipped",
+            "type": 2,
             "store_id": 2,
+            "date": "2026-09-05 15:51",
+            "completed_date": "2026-09-05 17:12",
+            "shipped_date": "2026-09-05 17:12",
+            "shipping_method": 3,
+            "shipping_custom": "",
+            "logistics_no": "暂未录入单号",
             "order_client": "李超",
-            "receiver_name": "哈哈哈",
-            "receiver_phone": "13012341234",
-            "receiver_address": "浙江嘉兴大乐透",
-            "goods_name": "碳纤维胶 30kg/组 x210",
-            "goods_weight": "210公斤",
-            "goods_quantity": "14件",
+            "receiver_name": "梁恒",
+            "receiver_phone": "17334558576",
+            "receiver_address": "安徽省宿州市泗县长沟镇长沟供电营业厅西一百米",
+            "goods_name": "赛文环氧腻子 5吨",
+            "goods_weight": "5000kg",
+            "goods_quantity": "250件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单邮回",
             "remark": "",
-            "customer_id": 4,
-            "warehouse_id": 1,
-            "order_number": "ZG20260906221",
-            "contact_person": "哈哈哈",
-            "contact_phone": "13012341234",
-            "contact_address": "浙江嘉兴大乐透",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 15,
-                    "goods_name": "碳纤维胶",
-                    "spec": "30kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 14,
-                    "quantity": 210,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": ""
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 0
+            "audit_state": 0
         },
         {
             "id": 222,
             "title": "",
             "status": "shipped",
-            "type": 1,
-            "date": "2026-09-05 17:00",
-            "completed_date": "2026-09-06 01:01",
-            "shipped_date": "2026-09-06 01:01",
-            "shipping_method": 0,
+            "type": 0,
+            "store_id": 0,
+            "date": "2026-09-05 16:06",
+            "completed_date": "2026-09-05 17:13",
+            "shipped_date": "2026-09-05 17:13",
+            "shipping_method": 1,
             "shipping_custom": "",
             "logistics_no": "暂未录入单号",
-            "audit_state": 0,
-            "store_id": 2,
-            "order_client": "李超",
-            "receiver_name": "哈哈哈",
-            "receiver_phone": "13012341234",
-            "receiver_address": "浙江嘉兴大乐透",
-            "goods_name": "粘钢胶 40kg/组 x2100、碳纤维胶 30kg/组 x2100、粘钢胶 40kg/组 x2100、碳纤维胶 30kg/组 x2100",
-            "goods_weight": "8400公斤",
-            "goods_quantity": "490件",
+            "order_client": "陶芸",
+            "receiver_name": "吴工",
+            "receiver_phone": "13590877193",
+            "receiver_address": "广东省中山市横栏镇松祥西路28号首层笙四卡",
+            "goods_name": "中固灌注胶7组210公斤。",
+            "goods_weight": "210kg",
+            "goods_quantity": "14件",
             "goods_packaging": "桶装",
-            "logistics_service": [
-                "送货上门+回单拍照回传"
-            ],
+            "logistics_service": "送货上门+回单拍照回传",
             "remark": "",
-            "customer_id": 4,
-            "warehouse_id": 1,
-            "order_number": "ZG20260906222",
-            "contact_person": "哈哈哈",
-            "contact_phone": "13012341234",
-            "contact_address": "浙江嘉兴大乐透",
-            "project_name": "",
-            "sales_person": "柯晓",
-            "creator": "下单员",
-            "settlement_account": "中固",
-            "order_goods": [
-                {
-                    "product_id": 3,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 105,
-                    "quantity": 2100,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": "你好"
-                },
-                {
-                    "product_id": 15,
-                    "goods_name": "碳纤维胶",
-                    "spec": "30kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 140,
-                    "quantity": 2100,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": "我擦"
-                },
-                {
-                    "product_id": 4,
-                    "goods_name": "粘钢胶",
-                    "spec": "40kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 105,
-                    "quantity": 2100,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": "可以的"
-                },
-                {
-                    "product_id": 15,
-                    "goods_name": "碳纤维胶",
-                    "spec": "30kg/组",
-                    "unit": "公斤",
-                    "warehouse_id": 1,
-                    "packages": 140,
-                    "quantity": 2100,
-                    "price": 0,
-                    "tax_rate": 13,
-                    "tax_included_price": 0,
-                    "amount": 0,
-                    "total_amount": 0,
-                    "remark": "666"
-                }
-            ],
-            "subtotal_amount": 0,
-            "tax_amount": 0,
-            "total_amount": 0,
-            "discount_amount": 0,
-            "other_fees": 0,
-            "should_receive": 0,
-            "current_payment": 0,
-            "current_debt": 0,
-            "customer_receivable": 0
+            "audit_state": 0
+        },
+        {
+            "id": 223,
+            "title": "",
+            "status": "shipped",
+            "type": 0,
+            "store_id": 0,
+            "date": "2026-09-05 16:07",
+            "completed_date": "2026-09-05 17:13",
+            "shipped_date": "2026-09-05 17:13",
+            "shipping_method": 1,
+            "shipping_custom": "",
+            "logistics_no": "暂未录入单号",
+            "order_client": "张杰",
+            "receiver_name": "单洪江",
+            "receiver_phone": "13357555675",
+            "receiver_address": "浙江省绍兴市上虞区永和大道东海食品科技园区",
+            "goods_name": "航硕耐黄变封缝胶20公斤。",
+            "goods_weight": "20kg",
+            "goods_quantity": "2件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 0
+        },
+        {
+            "id": 224,
+            "title": "",
+            "status": "shipped",
+            "type": 0,
+            "store_id": 0,
+            "date": "2026-09-05 16:07",
+            "completed_date": "2026-09-05 17:13",
+            "shipped_date": "2026-09-05 17:13",
+            "shipping_method": 1,
+            "shipping_custom": "",
+            "logistics_no": "暂未录入单号",
+            "order_client": "李超",
+            "receiver_name": "郭立锋",
+            "receiver_phone": "18297435575",
+            "receiver_address": "安徽省六安市金安区三十铺镇松林南路光圣水泥制品厂院内",
+            "goods_name": "赛文封缝胶2组80kg。",
+            "goods_weight": "80kg",
+            "goods_quantity": "4件",
+            "goods_packaging": "桶装",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 0
+        },
+        {
+            "id": 225,
+            "title": "",
+            "status": "shipped",
+            "type": 0,
+            "store_id": 0,
+            "date": "2026-09-05 16:08",
+            "completed_date": "2026-09-05 17:13",
+            "shipped_date": "2026-09-05 17:13",
+            "shipping_method": 1,
+            "shipping_custom": "",
+            "logistics_no": "暂未录入单号",
+            "order_client": "陶芸",
+            "receiver_name": "广东省中山",
+            "receiver_phone": "18925305290",
+            "receiver_address": "市起湾牌坊初日街一巷20号 陈工",
+            "goods_name": "中固支装胶2箱60支。",
+            "goods_weight": "2件",
+            "goods_quantity": "44kg",
+            "goods_packaging": "纸箱",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 0
+        },
+        {
+            "id": 226,
+            "title": "",
+            "status": "shipped",
+            "type": 0,
+            "store_id": 0,
+            "date": "2026-09-05 18:17",
+            "completed_date": "2026-09-05 18:17",
+            "shipped_date": "2026-09-05 18:17",
+            "shipping_method": 1,
+            "shipping_custom": "",
+            "logistics_no": "暂未录入单号",
+            "order_client": "弘立德",
+            "receiver_name": "张威",
+            "receiver_phone": "15572669498",
+            "receiver_address": "湖北省仙桃市容百锂电材料有限公司一号门",
+            "goods_name": "HLD-M支装植筋胶90支\n胶枪2把。",
+            "goods_weight": "60kg",
+            "goods_quantity": "3件",
+            "goods_packaging": "纸箱",
+            "logistics_service": "送货上门+回单拍照回传",
+            "remark": "",
+            "audit_state": 0
         }
     ]
 }

@@ -44,6 +44,16 @@
             "id": 9,
             "name": "袋",
             "createdAt": "2026-08-30 06:58:59"
+        },
+        {
+            "id": 10,
+            "name": "条",
+            "createdAt": "2026-08-30 23:18:23"
+        },
+        {
+            "id": 11,
+            "name": "支",
+            "createdAt": "2026-08-31 17:38:34"
         }
     ],
     "attributes": [
@@ -54,10 +64,6 @@
                 {
                     "id": 201,
                     "name": "黑色"
-                },
-                {
-                    "id": 202,
-                    "name": "灰色"
                 }
             ],
             "createdAt": "2026-08-30 12:00:00",
@@ -67,17 +73,17 @@
     "products": [
         {
             "id": 1,
-            "code": "01",
+            "code": "DA-Z",
             "name": "粘钢胶",
             "specification": "40kg/组",
-            "category": 401,
+            "category": 101,
             "unitId": 1,
             "enableMultiUnit": false,
-            "notes": "",
+            "notes": "膏体",
             "enabled": true,
-            "warehouseId": 4,
+            "warehouseId": 1,
             "storeIds": [
-                1
+                2
             ],
             "warehouseCategories": {},
             "unitConversions": [
@@ -87,152 +93,13 @@
                     "value": 20
                 }
             ],
-            "enableAttributes": true,
-            "attributeCombinations": [
-                {
-                    "id": 0,
-                    "name": "黑色",
-                    "purchasePrice": "",
-                    "wholesalePrice": "",
-                    "retailPrice": 30,
-                    "barcode": "",
-                    "enabled": true
-                },
-                {
-                    "id": 1,
-                    "name": "灰色",
-                    "purchasePrice": "",
-                    "wholesalePrice": "",
-                    "retailPrice": 20,
-                    "barcode": "",
-                    "enabled": true
-                }
-            ],
-            "createdAt": "2026-08-30 08:32:03",
-            "updatedAt": "2026-08-30 14:45:36"
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-30 23:20:16",
+            "updatedAt": "2026-08-31 17:40:36"
         },
         {
             "id": 2,
-            "code": "001",
-            "name": "树脂",
-            "specification": "1101A",
-            "category": 101,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 1,
-            "storeIds": [
-                2
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 08:39:10",
-            "updatedAt": "2026-08-30 12:43:55"
-        },
-        {
-            "id": 3,
-            "code": "001",
-            "name": "粘钢胶",
-            "specification": "40kg/组",
-            "category": 101,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 1,
-            "storeIds": [
-                2
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [
-                {
-                    "fromUnitId": 5,
-                    "splits": [],
-                    "value": 20
-                }
-            ],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 11:54:40",
-            "updatedAt": "2026-08-30 12:38:35"
-        },
-        {
-            "id": 4,
-            "code": "001",
-            "name": "粘钢胶",
-            "specification": "40kg/组",
-            "category": 101,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 1,
-            "storeIds": [
-                2
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [
-                {
-                    "fromUnitId": 5,
-                    "splits": [],
-                    "value": 20
-                }
-            ],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 12:38:25"
-        },
-        {
-            "id": 5,
-            "code": "GHJ-001",
-            "name": "固化剂",
-            "specification": "1101A",
-            "category": 202,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 2,
-            "storeIds": [
-                1
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 12:47:24"
-        },
-        {
-            "id": 6,
-            "code": "01",
-            "name": "粘钢胶",
-            "specification": "40kg/组",
-            "category": 401,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 4,
-            "storeIds": [
-                1
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [
-                {
-                    "fromUnitId": 5,
-                    "splits": [],
-                    "value": 20
-                }
-            ],
-            "enableAttributes": true,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 12:58:01"
-        },
-        {
-            "id": 7,
             "code": "GHJ-001",
             "name": "固化剂",
             "specification": "1101B",
@@ -249,13 +116,13 @@
             "unitConversions": [],
             "enableAttributes": false,
             "attributeCombinations": [],
-            "createdAt": "2026-08-30 12:58:46"
+            "createdAt": "2026-08-30 23:21:08"
         },
         {
-            "id": 8,
-            "code": "GHJ-001",
-            "name": "固化剂",
-            "specification": "2101B",
+            "id": 3,
+            "code": "SZ-001",
+            "name": "树脂",
+            "specification": "1101A",
             "category": 202,
             "unitId": 1,
             "enableMultiUnit": false,
@@ -269,163 +136,17 @@
             "unitConversions": [],
             "enableAttributes": false,
             "attributeCombinations": [],
-            "createdAt": "2026-08-30 13:07:45"
+            "createdAt": "2026-08-30 23:25:15"
         },
         {
-            "id": 9,
-            "code": "GHJ-001",
-            "name": "固化剂",
-            "specification": "2101C",
-            "category": 202,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 2,
-            "storeIds": [
-                1
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 13:08:00"
-        },
-        {
-            "id": 10,
-            "code": "455",
-            "name": "固化剂",
-            "specification": "是的",
-            "category": 202,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 2,
-            "storeIds": [
-                1
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 13:12:03"
-        },
-        {
-            "id": 11,
-            "code": "455",
-            "name": "固化剂",
-            "specification": "是的",
-            "category": 202,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 2,
-            "storeIds": [
-                1
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 13:15:00"
-        },
-        {
-            "id": 12,
-            "code": "455",
-            "name": "固化剂",
-            "specification": "是的11",
-            "category": 202,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 2,
-            "storeIds": [
-                1
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 13:15:04",
-            "updatedAt": "2026-08-30 13:15:12"
-        },
-        {
-            "id": 13,
-            "code": "455",
-            "name": "固化剂",
-            "specification": "是的11",
-            "category": 202,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 2,
-            "storeIds": [
-                1
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [],
-            "enableAttributes": false,
-            "attributeCombinations": [],
-            "createdAt": "2026-08-30 14:10:04"
-        },
-        {
-            "id": 14,
-            "code": "01",
-            "name": "粘钢胶",
+            "id": 4,
+            "code": "DA-ZJ",
+            "name": "植筋胶",
             "specification": "40kg/组",
-            "category": 401,
-            "unitId": 1,
-            "enableMultiUnit": false,
-            "notes": "",
-            "enabled": true,
-            "warehouseId": 4,
-            "storeIds": [
-                1
-            ],
-            "warehouseCategories": {},
-            "unitConversions": [
-                {
-                    "fromUnitId": 5,
-                    "splits": [],
-                    "value": 20
-                }
-            ],
-            "enableAttributes": true,
-            "attributeCombinations": [
-                {
-                    "id": 0,
-                    "name": "黑色",
-                    "purchasePrice": "",
-                    "wholesalePrice": "",
-                    "retailPrice": 30,
-                    "barcode": "",
-                    "enabled": true
-                },
-                {
-                    "id": 1,
-                    "name": "灰色",
-                    "purchasePrice": "",
-                    "wholesalePrice": "",
-                    "retailPrice": 20,
-                    "barcode": "",
-                    "enabled": true
-                }
-            ],
-            "createdAt": "2026-08-30 14:45:44"
-        },
-        {
-            "id": 15,
-            "code": "002",
-            "name": "碳纤维胶",
-            "specification": "30kg/组",
             "category": 101,
             "unitId": 1,
             "enableMultiUnit": false,
-            "notes": "",
+            "notes": "膏体",
             "enabled": true,
             "warehouseId": 1,
             "storeIds": [
@@ -435,51 +156,68 @@
             "unitConversions": [
                 {
                     "fromUnitId": 5,
-                    "value": 15,
-                    "splits": []
+                    "splits": [],
+                    "value": 20
                 }
             ],
             "enableAttributes": false,
             "attributeCombinations": [],
-            "createdAt": "2026-09-05 14:27:16"
+            "createdAt": "2026-08-31 17:38:53",
+            "updatedAt": "2026-08-31 17:40:46"
+        },
+        {
+            "id": 5,
+            "code": "DA-G",
+            "name": "灌注胶",
+            "specification": "30kg/组",
+            "category": 101,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "液体",
+            "enabled": true,
+            "warehouseId": 1,
+            "storeIds": [
+                2
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [
+                {
+                    "fromUnitId": 5,
+                    "splits": [],
+                    "value": 15
+                }
+            ],
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-31 17:39:27",
+            "updatedAt": "2026-08-31 17:40:53"
+        },
+        {
+            "id": 6,
+            "code": "DA-T",
+            "name": "碳纤维胶",
+            "specification": "30kg/组",
+            "category": 101,
+            "unitId": 1,
+            "enableMultiUnit": false,
+            "notes": "液体",
+            "enabled": true,
+            "warehouseId": 1,
+            "storeIds": [
+                2
+            ],
+            "warehouseCategories": {},
+            "unitConversions": [
+                {
+                    "fromUnitId": 5,
+                    "splits": [],
+                    "value": 15
+                }
+            ],
+            "enableAttributes": false,
+            "attributeCombinations": [],
+            "createdAt": "2026-08-31 17:40:04",
+            "updatedAt": "2026-08-31 17:40:12"
         }
-    ],
-    "inventory": {
-        "1": {
-            "stock": 4000,
-            "minStock": 0,
-            "maxStock": 0,
-            "updatedAt": "2026-09-04 14:47:41"
-        },
-        "2": {
-            "stock": 48550,
-            "minStock": 0,
-            "maxStock": 0,
-            "updatedAt": "2026-09-05 14:56:27"
-        },
-        "3": {
-            "stock": -3260,
-            "minStock": 0,
-            "maxStock": 0,
-            "updatedAt": "2026-09-05 17:00:12"
-        },
-        "5": {
-            "stock": -6620,
-            "minStock": 0,
-            "maxStock": 0,
-            "updatedAt": "2026-09-05 10:06:45"
-        },
-        "4": {
-            "stock": -3120,
-            "minStock": 0,
-            "maxStock": 0,
-            "updatedAt": "2026-09-05 17:00:12"
-        },
-        "15": {
-            "stock": -4410,
-            "minStock": 0,
-            "maxStock": 0,
-            "updatedAt": "2026-09-05 17:00:12"
-        }
-    }
+    ]
 }

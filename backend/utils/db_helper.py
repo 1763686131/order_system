@@ -5,7 +5,7 @@ import sqlite3
 import json
 from contextlib import contextmanager
 from threading import Lock
-from models import get_db
+from utils.db import get_db
 
 # 线程锁
 orders_lock = Lock()

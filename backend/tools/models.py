@@ -1,5 +1,6 @@
 """
-数据库模型定义
+数据库模型定义（仅用于初始化和迁移工具）
+生产环境请使用 backend/db.py 中的 get_db() 函数
 """
 import sqlite3
 from datetime import datetime
@@ -8,15 +9,22 @@ import os
 import json
 
 # 数据库文件路径
+# tools/models.py -> backend/tools/ -> backend/ -> project_root/
 if os.path.exists('/app/data'):
     DB_PATH = '/app/data/order_system.db'
 else:
-    DB_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data', 'order_system.db')
+    # 从 backend/tools/ 向上两级到项目根目录，再进入 data/
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    DB_PATH = os.path.join(project_root, 'data', 'order_system.db')
 
 
 @contextmanager
 def get_db():
-    """数据库连接上下文管理器"""
+    """
+    数据库连接上下文管理器
+    注意：此函数仅供 tools/ 目录下的迁移和备份脚本使用
+    生产环境请使用 backend/db.py 中的 get_db()
+    """
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:

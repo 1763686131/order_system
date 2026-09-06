@@ -13,13 +13,15 @@ if sys.platform == 'win32':
 from models import init_db, get_db
 
 # 数据文件路径
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+# tools/migrate_to_sqlite.py -> backend/tools/ -> backend/ -> project_root/
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 ORDERS_FILE = os.path.join(DATA_DIR, 'orders_db.json')
 PRODUCTS_FILE = os.path.join(DATA_DIR, 'products_db.json')
 USERS_FILE = os.path.join(DATA_DIR, 'users_db.json')
 STORES_FILE = os.path.join(DATA_DIR, 'stores_db.json')
 WAREHOUSES_FILE = os.path.join(DATA_DIR, 'warehouses_db.json')
-CUSTOMERS_FILE = os.path.join(DATA_DIR, 'customers_db.json')
+CUSTOMERS_FILE = os.path.join(DATA_DIR, 'customers.json')  # 注意：文件名是 customers.json 不是 customers_db.json
 MATERIAL_FILE = os.path.join(DATA_DIR, 'material_db.json')
 
 
@@ -115,15 +117,17 @@ def migrate_customers():
         cursor = conn.cursor()
         for customer in customers:
             cursor.execute('''
-            INSERT INTO customers (id, name, contact, phone, address, email)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO customers (id, customer_name, contact_person, contact_phone, contact_address, receivable, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 customer.get('id'),
-                customer.get('name'),
-                customer.get('contact', ''),
+                customer.get('customerName'),
+                customer.get('contactPerson', ''),
                 customer.get('phone', ''),
                 customer.get('address', ''),
-                customer.get('email', '')
+                customer.get('receivable', 0),
+                customer.get('createdAt'),
+                customer.get('updatedAt')
             ))
         print(f"✅ 迁移 {len(customers)} 个客户")
 
@@ -218,6 +222,19 @@ def migrate_orders():
     with get_db() as conn:
         cursor = conn.cursor()
         for idx, order in enumerate(orders, 1):
+            # 将 goods_name 追加到 remark 中
+            goods_name = order.get('goods_name', '').strip()
+            original_remark = order.get('remark', '').strip()
+
+            # 如果 goods_name 有内容，则追加到 remark
+            if goods_name:
+                if original_remark:
+                    combined_remark = f"{original_remark}\n[商品名称]: {goods_name}"
+                else:
+                    combined_remark = f"[商品名称]: {goods_name}"
+            else:
+                combined_remark = original_remark
+
             cursor.execute('''
             INSERT INTO orders (
                 id, title, status, type, date, completed_date, shipped_date,
@@ -249,12 +266,12 @@ def migrate_orders():
                 order.get('receiver_name', ''),
                 order.get('receiver_phone', ''),
                 order.get('receiver_address', ''),
-                order.get('goods_name', ''),
+                goods_name,  # 保留原始 goods_name
                 order.get('goods_weight', ''),
                 order.get('goods_quantity', ''),
                 order.get('goods_packaging', ''),
                 json.dumps(order.get('logistics_service', [])),
-                order.get('remark', ''),
+                combined_remark,  # 使用合并后的备注
                 order.get('customer_id'),
                 order.get('warehouse_id'),
                 order.get('order_number', ''),
@@ -284,6 +301,7 @@ def migrate_orders():
 
         print(f"  📊 已迁移 {len(orders)}/{len(orders)} 条订单")
         print(f"✅ 订单迁移完成，共 {len(orders)} 条")
+        print(f"  ℹ️  goods_name 已追加到 remark 字段")
 
 
 def migrate_materials():
