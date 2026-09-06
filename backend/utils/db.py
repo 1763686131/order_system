@@ -6,12 +6,12 @@ import sqlite3
 from contextlib import contextmanager
 
 # 数据库路径配置
-# backend/db.py -> backend/ -> project_root/
+# utils/db.py -> backend/utils/ -> backend/ -> project_root/
 if os.path.exists('/app/data'):
     DB_PATH = '/app/data/order_system.db'
 else:
-    # 从 backend/ 向上一级到项目根目录，再进入 data/
-    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # 从 backend/utils/ 向上两级到项目根目录，再进入 data/
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     DB_PATH = os.path.join(project_root, 'data', 'order_system.db')
 
 

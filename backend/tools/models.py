@@ -59,10 +59,14 @@ def init_db():
         cursor.execute('''
         CREATE TABLE IF NOT EXISTS stores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE,
             name TEXT NOT NULL,
-            address TEXT,
-            phone TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            status TEXT DEFAULT 'active',
+            remark TEXT,
+            color TEXT,
+            text_color TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP
         )
         ''')
 
