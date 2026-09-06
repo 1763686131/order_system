@@ -11,6 +11,7 @@ from utils.db import get_db
 orders_lock = Lock()
 users_lock = Lock()
 products_lock = Lock()
+customers_lock = Lock()
 
 
 # ==========================================
@@ -67,25 +68,55 @@ def read_stores():
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM stores ORDER BY id')
         rows = cursor.fetchall()
-        return [dict(row) for row in rows]
+        stores = []
+        for row in rows:
+            store = dict(row)
+            store['textColor'] = store.pop('text_color', '#333333')
+            stores.append(store)
+        return stores
 
 
 def write_stores(stores_list):
-    """批量写入门店"""
+    """新增或更新门店，兼容旧的列表式调用。"""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM stores')
 
         for store in stores_list:
             cursor.execute('''
-            INSERT INTO stores (id, name, address, phone)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO stores (
+                id, code, name, status, remark, color,
+                text_color, created_at, updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                code = excluded.code,
+                name = excluded.name,
+                status = excluded.status,
+                remark = excluded.remark,
+                color = excluded.color,
+                text_color = excluded.text_color,
+                updated_at = excluded.updated_at
             ''', (
                 store.get('id'),
+                store.get('code', ''),
                 store.get('name'),
-                store.get('address', ''),
-                store.get('phone', '')
+                store.get('status', 'active'),
+                store.get('remark', ''),
+                store.get('color', '#ffffff'),
+                store.get('textColor', store.get('text_color', '#333333')),
+                store.get('created_at', ''),
+                store.get('updated_at', '')
             ))
+
+        store_ids = [store.get('id') for store in stores_list]
+        if store_ids:
+            placeholders = ', '.join('?' for _ in store_ids)
+            cursor.execute(
+                f'DELETE FROM stores WHERE id NOT IN ({placeholders})',
+                store_ids
+            )
+        else:
+            cursor.execute('DELETE FROM stores')
 
 
 # ==========================================
@@ -605,12 +636,35 @@ def read_customers():
     """读取所有客户"""
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM customers ORDER BY id DESC')
+        cursor.execute('''
+        SELECT
+            c.id,
+            c.customer_code,
+            c.customer_name,
+            c.store_id,
+            c.contact_person,
+            c.phone,
+            c.address,
+            c.balance,
+            c.receivable,
+            c.bank_name,
+            c.bank_account,
+            c.bank_code,
+            c.tax_number,
+            c.remark,
+            c.status,
+            c.created_at,
+            c.updated_at,
+            s.name AS store_name,
+            s.status AS store_status
+        FROM customers c
+        LEFT JOIN stores s ON s.id = c.store_id
+        ORDER BY c.id DESC
+        ''')
         rows = cursor.fetchall()
         customers = []
         for row in rows:
             customer = dict(row)
-            # 转换字段名：customer_code -> customerCode
             customer['customerCode'] = customer.pop('customer_code', '')
             customer['customerName'] = customer.pop('customer_name', '')
             customer['storeId'] = customer.pop('store_id', None)
@@ -621,48 +675,63 @@ def read_customers():
             customer['taxNumber'] = customer.pop('tax_number', '')
             customer['createdAt'] = customer.pop('created_at', '')
             customer['updatedAt'] = customer.pop('updated_at', '')
+            customer['storeName'] = customer.pop('store_name', None)
+            customer['storeStatus'] = customer.pop('store_status', None)
             customers.append(customer)
         return {'customers': customers}
 
 
 def write_customers(customers_data):
-    """写入客户数据（批量更新）"""
+    """新增或更新客户，兼容旧的列表式调用。"""
     customers_list = customers_data.get('customers', [])
 
-    with get_db() as conn:
-        cursor = conn.cursor()
-        # 清空表
-        cursor.execute('DELETE FROM customers')
-
-        for customer in customers_list:
-            cursor.execute('''
-            INSERT INTO customers (
-                id, customer_code, customer_name, store_id,
-                contact_person, phone, address,
-                balance, receivable,
-                bank_name, bank_account, bank_code, tax_number,
-                remark, status, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                customer.get('id'),
-                customer.get('customerCode', ''),
-                customer.get('customerName', ''),
-                customer.get('storeId'),
-                customer.get('contactPerson', ''),
-                customer.get('phone', ''),
-                customer.get('address', ''),
-                customer.get('balance', 0),
-                customer.get('receivable', 0),
-                customer.get('bankName', ''),
-                customer.get('bankAccount', ''),
-                customer.get('bankCode', ''),
-                customer.get('taxNumber', ''),
-                customer.get('remark', ''),
-                customer.get('status', 'active'),
-                customer.get('createdAt', ''),
-                customer.get('updatedAt', '')
-            ))
-        conn.commit()
+    with customers_lock:
+        with get_db() as conn:
+            cursor = conn.cursor()
+            for customer in customers_list:
+                cursor.execute('''
+                INSERT INTO customers (
+                    id, customer_code, customer_name, store_id,
+                    contact_person, phone, address,
+                    balance, receivable,
+                    bank_name, bank_account, bank_code, tax_number,
+                    remark, status, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    customer_code = excluded.customer_code,
+                    customer_name = excluded.customer_name,
+                    store_id = excluded.store_id,
+                    contact_person = excluded.contact_person,
+                    phone = excluded.phone,
+                    address = excluded.address,
+                    balance = excluded.balance,
+                    receivable = excluded.receivable,
+                    bank_name = excluded.bank_name,
+                    bank_account = excluded.bank_account,
+                    bank_code = excluded.bank_code,
+                    tax_number = excluded.tax_number,
+                    remark = excluded.remark,
+                    status = excluded.status,
+                    updated_at = excluded.updated_at
+                ''', (
+                    customer.get('id'),
+                    customer.get('customerCode', ''),
+                    customer.get('customerName', ''),
+                    customer.get('storeId'),
+                    customer.get('contactPerson', ''),
+                    customer.get('phone', ''),
+                    customer.get('address', ''),
+                    customer.get('balance', 0),
+                    customer.get('receivable', 0),
+                    customer.get('bankName', ''),
+                    customer.get('bankAccount', ''),
+                    customer.get('bankCode', ''),
+                    customer.get('taxNumber', ''),
+                    customer.get('remark', ''),
+                    customer.get('status', 'active'),
+                    customer.get('createdAt', ''),
+                    customer.get('updatedAt', '')
+                ))
 
 
 # ==========================================

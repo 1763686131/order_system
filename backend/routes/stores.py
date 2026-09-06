@@ -5,6 +5,7 @@
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from utils.db_helper import read_stores, write_stores
+from utils.db import get_db
 
 stores_bp = Blueprint('stores', __name__, url_prefix='/api/stores')
 
@@ -93,7 +94,24 @@ def delete_store(store_id):
     if store_index is None:
         return jsonify({'error': '门店不存在'}), 404
 
-    # TODO: 检查是否有关联的订单
+    with get_db() as conn:
+        cursor = conn.cursor()
+        order_count = cursor.execute(
+            'SELECT COUNT(*) AS count FROM orders WHERE store_id = ?',
+            (store_id,)
+        ).fetchone()['count']
+        customer_count = cursor.execute(
+            'SELECT COUNT(*) AS count FROM customers WHERE store_id = ?',
+            (store_id,)
+        ).fetchone()['count']
+
+    if order_count or customer_count:
+        return jsonify({
+            'error': (
+                f'门店已关联{order_count}条订单、{customer_count}个客户，'
+                '不能删除'
+            )
+        }), 409
 
     stores.pop(store_index)
     write_stores(stores)
