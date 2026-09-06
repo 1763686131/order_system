@@ -256,10 +256,11 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
 
 const router = useRouter()
+const route = useRoute()
 
 // Props 定义
 const props = defineProps({
@@ -271,6 +272,10 @@ const props = defineProps({
 
 // 判断是否为编辑模式
 const isEditMode = computed(() => props.orderId !== null)
+const copySourceId = computed(() => {
+  const orderId = Number(route.query.copyFrom)
+  return Number.isInteger(orderId) && orderId > 0 ? orderId : null
+})
 
 // 自定义弹窗
 const showModal = ref(false)
@@ -1086,26 +1091,34 @@ const handleClose = () => {
 }
 
 // 初始化
-onMounted(() => {
+onMounted(async () => {
   console.log('OrderForm mounted, props.orderId:', props.orderId)
   console.log('isEditMode:', isEditMode.value)
 
-  loadStores()
-  loadCustomers()
-  loadWarehouses()
-  loadProducts()
-  loadUnits() // 加载单位数据
+  await Promise.all([
+    loadStores(),
+    loadCustomers(),
+    loadWarehouses(),
+    loadProducts(),
+    loadUnits()
+  ])
 
   if (isEditMode.value) {
     // 编辑模式：加载订单数据
     console.log('进入编辑模式，加载订单ID:', props.orderId)
-    loadOrderData(props.orderId)
+    await loadOrderData(props.orderId)
   } else {
     // 新增模式：初始化空行并生成订单编号
     console.log('进入新增模式')
     initEmptyRows()
+
+    if (copySourceId.value) {
+      console.log('复制订单数据，源订单ID:', copySourceId.value)
+      await loadOrderData(copySourceId.value)
+    }
+
     // 从订单列表中获取最大ID+1，生成正式订单编号
-    generateNewOrderNumber()
+    await generateNewOrderNumber()
   }
 })
 

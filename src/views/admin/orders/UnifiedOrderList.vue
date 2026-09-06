@@ -84,6 +84,7 @@
               <input
                 type="checkbox"
                 :checked="isAllSelected"
+                :indeterminate="isPagePartiallySelected"
                 @change="toggleSelectAll"
               />
             </th>
@@ -267,6 +268,15 @@
                 >
                   编辑
                 </button>
+                <!-- 财务模式：仅新格式销售订单支持复制 -->
+                <button
+                  v-if="mode === 'finance' && isNewOrder(order)"
+                  class="btn-action btn-copy"
+                  @click="handleCopySalesOrder(order)"
+                  title="复制为新订单"
+                >
+                  复制
+                </button>
                 <!-- 财务模式：出库按钮 -->
                 <button
                   v-if="mode === 'finance' && order.status === 'completed'"
@@ -326,10 +336,10 @@
           <span>每页显示</span>
           <div class="page-size-tabs">
             <button
-              :class="['page-size-tab', { active: !showAll && pageSize === 20 }]"
-              @click="changePageSize(20)"
+              :class="['page-size-tab', { active: !showAll && pageSize === 30 }]"
+              @click="changePageSize(30)"
             >
-              20条
+              30条
             </button>
             <button
               :class="['page-size-tab', { active: !showAll && pageSize === 50 }]"
@@ -680,7 +690,7 @@ const expandModal = ref({
 
 // 分页
 const currentPage = ref(1)
-const pageSize = ref(20)
+const pageSize = ref(30)
 const showAll = ref(false) // 是否显示全部
 
 // 计算属性
@@ -894,6 +904,13 @@ const isAllSelected = computed(() => {
     paginatedOrders.value.every(order => selectedOrders.value.includes(order.id))
 })
 
+const isPagePartiallySelected = computed(() => {
+  const selectedCount = paginatedOrders.value.filter(order =>
+    selectedOrders.value.includes(order.id)
+  ).length
+  return selectedCount > 0 && selectedCount < paginatedOrders.value.length
+})
+
 // 计算当前页运费总额
 const currentPageFreightTotal = computed(() => {
   return paginatedOrders.value.reduce((sum, order) => {
@@ -1062,10 +1079,16 @@ const toggleSelect = (orderId) => {
 }
 
 const toggleSelectAll = () => {
+  const currentPageIds = paginatedOrders.value.map(order => order.id)
+
   if (isAllSelected.value) {
-    selectedOrders.value = []
+    selectedOrders.value = selectedOrders.value.filter(
+      orderId => !currentPageIds.includes(orderId)
+    )
   } else {
-    selectedOrders.value = filteredOrders.value.map(order => order.id)
+    selectedOrders.value = [
+      ...new Set([...selectedOrders.value, ...currentPageIds])
+    ]
   }
 }
 
@@ -1116,6 +1139,14 @@ const handleEdit = (order) => {
 // 编辑订单（跳转到编辑页面）
 const handleEditOrder = (order) => {
   router.push({ name: 'admin-orders-edit', params: { id: order.id } })
+}
+
+// 复制新格式销售订单：进入新增页并由表单重新生成订单编号
+const handleCopySalesOrder = (order) => {
+  router.push({
+    name: 'admin-orders-create',
+    query: { copyFrom: String(order.id) }
+  })
 }
 
 // 计算运费总额
@@ -1673,23 +1704,23 @@ const changePageSize = (size) => {
 }
 
 .order-table tbody tr {
-  transition: background 0.2s;
+  transition: background-color 0.2s;
 }
 
-.order-table tbody tr:hover {
-  background: #f9fafb;
+.order-table tbody tr > td {
+  transition: background-color 0.2s;
 }
 
-.order-table tbody tr.selected {
-  background: #ecfdf5;
+.order-table tbody tr:hover > td {
+  background-color: #dbeafe !important;
 }
 
-.order-table tbody tr.insulation-row {
-  background: #FFF4D9 !important;
+.order-table tbody tr.selected > td {
+  background-color: #bfdbfe !important;
 }
 
-.order-table tbody tr.insulation-row.selected {
-  background: #FFF0C2 !important;
+.order-table tbody tr.selected:hover > td {
+  background-color: #93c5fd !important;
 }
 
 /* 列宽 */
@@ -1796,18 +1827,6 @@ const changePageSize = (size) => {
   background: #fff;
   box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
   z-index: 5;
-}
-
-.order-table tbody tr:hover .col-actions {
-  background: #f9fafb;
-}
-
-.order-table tbody tr.selected .col-actions {
-  background: #ecfdf5;
-}
-
-.order-table tbody tr.insulation-row .col-actions {
-  background: #FFF4D9 !important;
 }
 
 .action-buttons {
