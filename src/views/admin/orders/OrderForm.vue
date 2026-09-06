@@ -43,7 +43,15 @@
       </div>
 
       <div class="info-group right-actions">
-        <button class="btn-close" @click="handleClose">关闭 ››</button>
+        <div class="tax-switch-group">
+          <label class="switch-label">含税</label>
+          <label class="switch">
+            <input type="checkbox" v-model="showTaxColumns" />
+            <span class="slider"></span>
+          </label>
+        </div>
+        <button class="btn-clear" @click="handleClearForm">清空</button>
+        <button class="btn-close" @click="showCloseConfirm">关闭 ››</button>
       </div>
     </div>
 
@@ -85,10 +93,10 @@
             <th style="width: 80px">件数</th>
             <th style="width: 100px">*数量</th>
             <th style="width: 100px">*单价 (元)</th>
-            <th style="width: 80px">税率(%)</th>
-            <th style="width: 100px">合税单价</th>
+            <th v-if="showTaxColumns" style="width: 80px">税率(%)</th>
+            <th v-if="showTaxColumns" style="width: 100px">含税单价</th>
             <th style="width: 120px">金额 (元)</th>
-            <th style="width: 120px">含税金额</th>
+            <th v-if="showTaxColumns" style="width: 120px">含税金额</th>
             <th style="width: 180px">备注信息</th>
           </tr>
         </thead>
@@ -143,10 +151,10 @@
             <td><input type="number" v-model.number="item.packages" @input="onPackagesChange(index)" min="0" /></td>
             <td><input type="number" v-model.number="item.quantity" @input="onQuantityChange(index)" min="0" step="0.01" /></td>
             <td><input type="number" v-model.number="item.price" @input="onPriceChange(index)" min="0" step="0.01" /></td>
-            <td><input type="number" v-model.number="item.taxRate" @input="onItemTaxRateChange(index)" min="0" max="100" step="0.01" /></td>
-            <td><input type="number" v-model.number="item.taxIncludedPrice" @input="onTaxIncludedPriceChange(index)" min="0" step="0.01" /></td>
+            <td v-if="showTaxColumns"><input type="number" v-model.number="item.taxRate" @input="onItemTaxRateChange(index)" min="0" max="100" step="0.01" /></td>
+            <td v-if="showTaxColumns"><input type="number" v-model.number="item.taxIncludedPrice" @input="onTaxIncludedPriceChange(index)" min="0" step="0.01" /></td>
             <td class="right"><input type="text" :value="item.amount ? item.amount.toFixed(2) : ''" readonly class="readonly-input" /></td>
-            <td class="right"><input type="text" :value="item.totalAmount ? item.totalAmount.toFixed(2) : ''" readonly class="readonly-input" /></td>
+            <td v-if="showTaxColumns" class="right"><input type="text" :value="item.totalAmount ? item.totalAmount.toFixed(2) : ''" readonly class="readonly-input" /></td>
             <td><input type="text" v-model="item.remark" /></td>
           </tr>
 
@@ -154,11 +162,20 @@
           <tr class="total-row">
             <td colspan="2" class="center"><button class="btn-text-link">合计</button></td>
             <td colspan="5"></td>
-            <td class="right">{{ totalPackages || '' }}</td>
+            <td class="right">
+              <input
+                type="number"
+                :value="manualTotalPackages !== null ? manualTotalPackages : totalPackagesCalculated"
+                @focus="onTotalPackagesFocus"
+                @input="onManualTotalPackagesInput"
+                class="editable-total"
+                min="0"
+              />
+            </td>
             <td class="right">{{ totalQuantity ? totalQuantity.toFixed(2) : '' }}</td>
-            <td colspan="3"></td>
+            <td :colspan="showTaxColumns ? 3 : 1"></td>
             <td class="right">{{ totalAmount ? totalAmount.toFixed(2) : '' }}</td>
-            <td class="right">{{ totalTaxAmount ? totalTaxAmount.toFixed(2) : '' }}</td>
+            <td v-if="showTaxColumns" class="right">{{ totalTaxAmount ? totalTaxAmount.toFixed(2) : '' }}</td>
             <td></td>
           </tr>
         </tbody>
@@ -234,6 +251,23 @@
       </div>
     </div>
 
+    <!-- 关闭确认弹窗 -->
+    <div v-if="showCloseConfirmModal" class="custom-modal-overlay" @click.self="cancelClose">
+      <div class="custom-modal">
+        <div class="modal-header">
+          <div class="modal-icon warning">!</div>
+          <h3>确认关闭</h3>
+        </div>
+        <div class="modal-body">
+          <p>确定要关闭吗？未保存的数据将丢失</p>
+        </div>
+        <div class="modal-footer">
+          <button class="btn-modal-cancel" @click="cancelClose">取消</button>
+          <button class="btn-modal-confirm" @click="confirmClose">确定</button>
+        </div>
+      </div>
+    </div>
+
     <!-- 自定义确认弹窗 -->
     <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
       <div class="custom-modal">
@@ -261,6 +295,15 @@ import request from '@/api/request'
 
 const router = useRouter()
 const route = useRoute()
+
+// 含税开关状态
+const showTaxColumns = ref(false)
+
+// 手动修改的合计件数
+const manualTotalPackages = ref(null)
+
+// 关闭确认弹窗
+const showCloseConfirmModal = ref(false)
 
 // Props 定义
 const props = defineProps({
@@ -610,11 +653,41 @@ const onStoreChange = () => {
   formData.value.contactPerson = ''
   formData.value.contactPhone = ''
   formData.value.contactAddress = ''
+
+  // 清空商品列表
+  clearProductItems()
 }
 
 // 仓库改变
 const onWarehouseChange = () => {
   // 仓库改变后，商品列表会通过 filteredProducts 自动筛选
+  // 清空商品列表
+  clearProductItems()
+}
+
+// 清空商品列表
+const clearProductItems = () => {
+  formData.value.items = Array.from({ length: 8 }, () => ({
+    productId: '',
+    goodsName: '',
+    spec: '',
+    unit: '',
+    warehouseId: '',
+    warehouseName: '',
+    currentStock: null,
+    packages: null,
+    quantity: null,
+    price: null,
+    taxRate: null,
+    taxIncludedPrice: null,
+    amount: null,
+    totalAmount: null,
+    remark: '',
+    showDropdown: false,
+    filteredProducts: [],
+    unitConversions: [],
+    conversionRate: null
+  }))
 }
 
 // 加载客户欠款
@@ -662,7 +735,17 @@ const showProductDropdown = (index) => {
 
   focusedRow.value = index
   formData.value.items[index].showDropdown = true
-  formData.value.items[index].filteredProducts = filteredProducts.value
+
+  // 获取相同名称的商品，按规格型号分组
+  const currentName = formData.value.items[index].goodsName
+  if (currentName) {
+    const sameNameProducts = filteredProducts.value.filter(p =>
+      p.name.toLowerCase().includes(currentName.toLowerCase())
+    )
+    formData.value.items[index].filteredProducts = sameNameProducts
+  } else {
+    formData.value.items[index].filteredProducts = filteredProducts.value
+  }
 }
 
 // 隐藏商品下拉框
@@ -858,8 +941,17 @@ const removeRow = (index) => {
 }
 
 // 计算合计
-const totalPackages = computed(() => {
+const totalPackagesCalculated = computed(() => {
   return formData.value.items.reduce((sum, item) => sum + (item.packages || 0), 0)
+})
+
+const totalPackages = computed(() => {
+  // 如果有手动修改的值，使用手动值
+  if (manualTotalPackages.value !== null) {
+    return manualTotalPackages.value
+  }
+  // 否则返回计算值
+  return totalPackagesCalculated.value
 })
 
 const totalQuantity = computed(() => {
@@ -874,11 +966,40 @@ const totalTaxAmount = computed(() => {
   return formData.value.items.reduce((sum, item) => sum + (item.totalAmount || 0), 0)
 })
 
+// 合计件数获得焦点
+const onTotalPackagesFocus = () => {
+  // 聚焦时如果没有手动值，设置当前计算值
+  if (manualTotalPackages.value === null) {
+    manualTotalPackages.value = totalPackagesCalculated.value
+  }
+}
+
+// 手动输入合计件数
+const onManualTotalPackagesInput = (event) => {
+  const value = event.target.value
+  manualTotalPackages.value = value === '' ? null : Number(value)
+}
+
+// 监听商品明细变化，如果没有手动修改过，自动更新
+watch(() => formData.value.items.map(item => item.packages), () => {
+  // 如果没有手动修改过（或手动值为null），则自动跟随计算
+  if (manualTotalPackages.value === null) {
+    // 不需要做任何事，计算属性会自动更新
+  } else {
+    // 如果有手动修改，当表格数据变化时重新计算
+    manualTotalPackages.value = totalPackagesCalculated.value
+  }
+}, { deep: true })
+
 // 监听含税金额变化，自动更新折扣金额
-watch(totalTaxAmount, (newTotal) => {
-  // 自动将折扣金额设为含税金额总计
-  formData.value.discountAmount = newTotal
-}, { immediate: true })
+watch(
+  () => (showTaxColumns.value ? totalTaxAmount.value : totalAmount.value),
+  (newTotal) => {
+    // 根据含税开关状态，选择不同的金额
+    formData.value.discountAmount = newTotal
+  },
+  { immediate: true }
+)
 
 // 应收金额 = 折扣金额 + 其他费用
 const shouldReceive = computed(() => {
@@ -1020,6 +1141,12 @@ const handleSave = async (printAfterSave = false) => {
       }))
     }
 
+    // 添加手动修改的合计件数
+    const finalTotalPackages = manualTotalPackages.value !== null
+      ? manualTotalPackages.value
+      : validItems.reduce((sum, item) => sum + (Number(item.packages) || 0), 0)
+    requestData.totalPackages = finalTotalPackages
+
     // 5. 调用接口
     let response
     if (isEditMode.value) {
@@ -1084,9 +1211,43 @@ const handleSaveFinal = () => {
 }
 
 // 关闭
-const handleClose = () => {
-  if (confirm('确定要关闭吗？未保存的数据将丢失')) {
-    router.back()
+const showCloseConfirm = () => {
+  showCloseConfirmModal.value = true
+}
+
+const cancelClose = () => {
+  showCloseConfirmModal.value = false
+}
+
+const confirmClose = () => {
+  showCloseConfirmModal.value = false
+  router.back()
+}
+
+// 清空表单
+const handleClearForm = () => {
+  if (confirm('确定要清空所有数据吗？此操作不可恢复')) {
+    // 重置基础信息
+    formData.value.storeId = ''
+    formData.value.customerId = ''
+    formData.value.warehouseId = ''
+    formData.value.orderDate = new Date().toISOString().split('T')[0]
+    formData.value.contactPerson = ''
+    formData.value.contactPhone = ''
+    formData.value.contactAddress = ''
+    formData.value.projectName = ''
+    formData.value.salesPerson = '柯晓'
+    formData.value.creator = '下单员'
+    formData.value.orderRemark = ''
+    formData.value.discountAmount = null
+    formData.value.otherFees = null
+    formData.value.currentPayment = 0
+
+    // 清空商品列表
+    initEmptyRows()
+
+    // 重置手动合计
+    manualTotalPackages.value = null
   }
 }
 
@@ -1211,6 +1372,80 @@ async function generateNewOrderNumber() {
 .info-group.right-actions {
   margin-left: auto;
   gap: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.tax-switch-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.switch-label {
+  font-size: 13px;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #d1d5db;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: #10b981;
+}
+
+input:checked + .slider:before {
+  transform: translateX(20px);
+}
+
+.btn-clear {
+  padding: 6px 14px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-clear:hover {
+  background: #dc2626;
 }
 
 .btn-need-delivery {
@@ -1512,6 +1747,23 @@ async function generateNewOrderNumber() {
   padding: 8px;
 }
 
+.editable-total {
+  width: 100%;
+  height: 28px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 600;
+  outline: none;
+  text-align: right;
+}
+
+.editable-total:focus {
+  border-color: #10b981;
+  background: white;
+}
+
 .btn-text-link {
   background: none;
   border: none;
@@ -1735,6 +1987,11 @@ input[type="number"] {
   color: white;
 }
 
+.modal-icon.warning {
+  background: #f59e0b;
+  color: white;
+}
+
 .modal-header h3 {
   margin: 0;
   font-size: 18px;
@@ -1758,6 +2015,27 @@ input[type="number"] {
 .modal-footer {
   padding: 16px 24px 24px;
   text-align: center;
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.btn-modal-cancel {
+  background: white;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  padding: 10px 32px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 120px;
+}
+
+.btn-modal-cancel:hover {
+  background: #f9fafb;
+  border-color: #9ca3af;
 }
 
 .btn-modal-confirm {
