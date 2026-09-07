@@ -480,6 +480,14 @@
                   <td>{{ item.remark || '-' }}</td>
                 </tr>
               </tbody>
+              <tfoot>
+                <tr class="detail-total-row">
+                  <td colspan="4" class="detail-total-label">合计</td>
+                  <td>{{ getDetailTotalPackages(currentDetailOrder) }}</td>
+                  <td>{{ getDetailTotalQuantity(currentDetailOrder) }}</td>
+                  <td colspan="4"></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 
@@ -1044,6 +1052,26 @@ const getGoodsItemName = (item) => {
   }
   // 3. 都没有，返回默认值
   return '-'
+}
+
+// 计算订单明细中的合计件数
+const getDetailTotalPackages = (order) => {
+  if (!order || !Array.isArray(order.order_goods)) return '-'
+
+  return order.order_goods.reduce((total, item) => {
+    return total + (Number(item.packages) || 0)
+  }, 0)
+}
+
+// 计算订单明细中的合计数量
+const getDetailTotalQuantity = (order) => {
+  if (!order || !Array.isArray(order.order_goods)) return '-'
+
+  const total = order.order_goods.reduce((sum, item) => {
+    return sum + (Number(item.quantity) || 0)
+  }, 0)
+
+  return Number.isInteger(total) ? total : total.toFixed(2)
 }
 
 // 商品明细弹窗状态
@@ -2598,6 +2626,21 @@ const changePageSize = (size) => {
 
 .detail-table tbody tr:hover {
   background: #f9fafb;
+}
+
+.detail-table tfoot {
+  background: #fef3c7;
+  font-weight: 600;
+}
+
+.detail-total-row td {
+  color: #111827;
+  border-top: 2px solid #f3d27a;
+  border-bottom: none;
+}
+
+.detail-total-label {
+  text-align: right !important;
 }
 
 .financial-summary {

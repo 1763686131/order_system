@@ -742,16 +742,16 @@ const closeShippedActionModal = () => {
   clearReceiptImage()
 }
 
-// 1. 撤销出库
+// 1. 撤销出库：已出库订单按流程退回已完成，不直接回到未完成
 const submitRevokeShipOrder = async () => {
   const id = targetOrderId.value
   try {
     await request({
       url: `/orders/${id}`,
       method: 'PUT',
-      data: { status: 'pending' }
+      data: { status: 'completed' }
     })
-    showMessage('已撤销出库', 'success')
+    showMessage('已撤销出库，订单已恢复为已完成状态', 'success')
     closeShippedActionModal()
     emit('refresh')
   } catch (e) {
