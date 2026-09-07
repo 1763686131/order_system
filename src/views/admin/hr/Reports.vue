@@ -107,31 +107,60 @@
         :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
         @click="hideContextMenu"
       >
-        <div class="context-menu-item" @click="handleDownload">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
-          下载
-        </div>
-        <div class="context-menu-item" @click="handleShare">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="18" cy="5" r="3"/>
-            <circle cx="6" cy="12" r="3"/>
-            <circle cx="18" cy="19" r="3"/>
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-          </svg>
-          分享
-        </div>
-        <div class="context-menu-item danger" @click="handleDelete">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="3 6 5 6 21 6"/>
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-          </svg>
-          删除
-        </div>
+        <!-- 文件菜单 -->
+        <template v-if="contextMenu.type === 'file'">
+          <div class="context-menu-item" @click="handleDownload">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            下载
+          </div>
+          <div class="context-menu-item" @click="handleMove">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+              <polyline points="13 2 13 9 20 9"/>
+            </svg>
+            移动
+          </div>
+          <div class="context-menu-item" @click="handleShare">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="18" cy="5" r="3"/>
+              <circle cx="6" cy="12" r="3"/>
+              <circle cx="18" cy="19" r="3"/>
+              <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+              <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+            </svg>
+            分享
+          </div>
+          <div class="context-menu-item danger" @click="handleDelete">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            删除
+          </div>
+        </template>
+
+        <!-- 文件夹菜单 -->
+        <template v-if="contextMenu.type === 'folder'">
+          <div class="context-menu-item" @click="handleRenameFolder">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            </svg>
+            重命名
+          </div>
+          <div class="context-menu-item danger" @click="handleDeleteFolder">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+            删除文件夹
+          </div>
+        </template>
+
         <div class="context-menu-divider"></div>
         <div class="context-menu-item" @click="hideContextMenu">取消</div>
       </div>
@@ -173,6 +202,60 @@
         </div>
       </div>
     </teleport>
+
+    <!-- 重命名文件夹弹窗 -->
+    <teleport to="body">
+      <div v-if="showRenameFolderModal" class="modal-overlay" @click.self="showRenameFolderModal = false">
+        <div class="modal-content">
+          <h3 class="modal-title">重命名文件夹</h3>
+          <input
+            v-model="renameFolderValue"
+            type="text"
+            class="folder-input"
+            placeholder="请输入新名称"
+            @keyup.enter="confirmRenameFolder"
+          />
+          <div class="modal-actions">
+            <button class="btn-cancel" @click="showRenameFolderModal = false">取消</button>
+            <button class="btn-confirm" @click="confirmRenameFolder">确定</button>
+          </div>
+        </div>
+      </div>
+    </teleport>
+
+    <!-- 移动文件弹窗 -->
+    <teleport to="body">
+      <div v-if="showMoveModal" class="modal-overlay" @click.self="showMoveModal = false">
+        <div class="modal-content">
+          <h3 class="modal-title">移动文件到</h3>
+          <div class="folder-list">
+            <div
+              class="folder-list-item"
+              @click="moveFileToFolder('')"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#3b82f6" stroke="#2563eb" stroke-width="1.5"/>
+              </svg>
+              根目录
+            </div>
+            <div
+              v-for="folder in allFolders"
+              :key="folder.path"
+              class="folder-list-item"
+              @click="moveFileToFolder(folder.path)"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="#FFA500" stroke="#FF8C00" stroke-width="1.5"/>
+              </svg>
+              {{ folder.path }}
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-cancel" @click="showMoveModal = false">取消</button>
+          </div>
+        </div>
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -187,11 +270,16 @@ const fileTree = ref({ folders: [], files: [] })
 const currentPath = ref([])
 const fileInput = ref(null)
 const showShareModal = ref(false)
+const showRenameFolderModal = ref(false)
+const showMoveModal = ref(false)
 const shareFile = ref(null)
 const shareLink = ref('')
 const shareExpireDays = ref(7)
 const copied = ref(false)
 const shareLinkInput = ref(null)
+const renameFolderValue = ref('')
+const renameFolderTarget = ref(null)
+const moveFileTarget = ref(null)
 
 // 右键菜单状态
 const contextMenu = ref({
@@ -242,6 +330,24 @@ const countFiles = (folder) => {
   }
   return count
 }
+
+// 递归获取所有文件夹路径（用于移动文件时选择目标）
+const allFolders = computed(() => {
+  const folders = []
+
+  const collectFolders = (node, prefix = '') => {
+    if (node.folders) {
+      node.folders.forEach(folder => {
+        const path = prefix ? `${prefix}/${folder.name}` : folder.name
+        folders.push({ name: folder.name, path })
+        collectFolders(folder, path)
+      })
+    }
+  }
+
+  collectFolders(fileTree.value)
+  return folders
+})
 
 // 同步文件
 const syncFiles = async () => {
@@ -356,7 +462,13 @@ const showFileContextMenu = (event, file) => {
 
 // 显示文件夹右键菜单
 const showFolderContextMenu = (event, folder) => {
-  // 暂时不支持文件夹右键菜单
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    type: 'folder',
+    target: folder
+  }
 }
 
 // 隐藏右键菜单
@@ -370,6 +482,33 @@ const handleDownload = () => {
     window.open(`${API_BASE}/download/${contextMenu.value.target.id}`, '_blank')
   }
   hideContextMenu()
+}
+
+// 处理移动
+const handleMove = () => {
+  moveFileTarget.value = contextMenu.value.target
+  showMoveModal.value = true
+  hideContextMenu()
+}
+
+// 移动文件到目标文件夹
+const moveFileToFolder = async (targetFolderPath) => {
+  try {
+    const response = await axios.post(`${API_BASE}/move`, {
+      file_id: moveFileTarget.value.id,
+      target_folder: targetFolderPath
+    })
+
+    if (response.data.success) {
+      alert('移动成功')
+      await loadFileList()
+      showMoveModal.value = false
+    } else {
+      alert('移动失败: ' + response.data.message)
+    }
+  } catch (error) {
+    alert('移动失败: ' + error.message)
+  }
 }
 
 // 处理分享
@@ -408,14 +547,68 @@ const copyShareLink = () => {
   }, 2000)
 }
 
-// 处理删除
+// 处理文件删除
 const handleDelete = async () => {
-  if (confirm(`确定要删除"${contextMenu.value.target.name}"吗？`)) {
+  if (confirm(`确定要删除"${contextMenu.value.target.name}"吗？此操作将永久删除文件！`)) {
     try {
       const response = await axios.delete(`${API_BASE}/delete/${contextMenu.value.target.id}`)
 
       if (response.data.success) {
         alert('删除成功')
+        await loadFileList()
+      } else {
+        alert('删除失败: ' + response.data.message)
+      }
+    } catch (error) {
+      alert('删除失败: ' + error.message)
+    }
+  }
+  hideContextMenu()
+}
+
+// 处理文件夹重命名
+const handleRenameFolder = () => {
+  renameFolderTarget.value = contextMenu.value.target
+  renameFolderValue.value = contextMenu.value.target.name
+  showRenameFolderModal.value = true
+  hideContextMenu()
+}
+
+// 确认重命名文件夹
+const confirmRenameFolder = async () => {
+  if (!renameFolderValue.value.trim()) {
+    alert('文件夹名称不能为空')
+    return
+  }
+
+  try {
+    const response = await axios.post(`${API_BASE}/folder/rename`, {
+      old_path: renameFolderTarget.value.path,
+      new_name: renameFolderValue.value
+    })
+
+    if (response.data.success) {
+      alert('重命名成功')
+      await loadFileList()
+      showRenameFolderModal.value = false
+    } else {
+      alert('重命名失败: ' + response.data.message)
+    }
+  } catch (error) {
+    alert('重命名失败: ' + error.message)
+  }
+}
+
+// 处理文件夹删除
+const handleDeleteFolder = async () => {
+  if (confirm(`确定要删除文件夹"${contextMenu.value.target.name}"吗？此操作将永久删除文件夹及其所有内容！`)) {
+    try {
+      const response = await axios.delete(`${API_BASE}/folder/delete`, {
+        data: { folder_path: contextMenu.value.target.path }
+      })
+
+      if (response.data.success) {
+        alert(response.data.message)
         await loadFileList()
       } else {
         alert('删除失败: ' + response.data.message)
@@ -767,6 +960,22 @@ const selectedFolder = ref(null)
   margin-bottom: 16px;
 }
 
+.folder-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  transition: all 0.2s;
+  box-sizing: border-box;
+}
+
+.folder-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
 .share-info {
   margin-bottom: 16px;
 }
@@ -831,6 +1040,32 @@ const selectedFolder = ref(null)
 
 .copy-btn:hover {
   background: #059669;
+}
+
+.folder-list {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 16px 0;
+}
+
+.folder-list-item {
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.folder-list-item:hover {
+  background: #f0f9ff;
+  border-color: #3b82f6;
+  color: #1f2937;
 }
 
 .modal-actions {

@@ -466,16 +466,24 @@ def download_shared_file(share_token):
 @hr_reports_bp.route('/delete/<file_id>', methods=['DELETE'])
 def delete_file(file_id):
     """
-    删除文件（仅删除数据库记录，不删除物理文件）
+    删除文件（删除数据库记录和物理文件）
     """
     try:
         with get_db() as conn:
             cursor = conn.cursor()
-            cursor.execute('DELETE FROM hr_reports WHERE id = ?', (file_id,))
+            cursor.execute('SELECT file_path FROM hr_reports WHERE id = ?', (file_id,))
+            row = cursor.fetchone()
 
-            if cursor.rowcount == 0:
+            if not row:
                 return jsonify({'success': False, 'message': '文件不存在'}), 404
 
+            # 删除物理文件
+            file_path = os.path.join(UPLOAD_BASE_PATH, row['file_path'])
+            if os.path.exists(file_path):
+                os.remove(file_path)
+
+            # 删除数据库记录
+            cursor.execute('DELETE FROM hr_reports WHERE id = ?', (file_id,))
             conn.commit()
 
         return jsonify({'success': True, 'message': '删除成功'})
@@ -484,4 +492,179 @@ def delete_file(file_id):
         return jsonify({
             'success': False,
             'message': f'删除失败: {str(e)}'
+        }), 500
+
+
+@hr_reports_bp.route('/folder/rename', methods=['POST'])
+def rename_folder():
+    """
+    重命名文件夹（同时更新数据库中所有相关文件的路径）
+    """
+    try:
+        req_data = request.json or {}
+        old_path = req_data.get('old_path', '')
+        new_name = req_data.get('new_name', '')
+
+        if not old_path or not new_name:
+            return jsonify({'success': False, 'message': '参数不完整'}), 400
+
+        # 构建新旧路径
+        old_full_path = os.path.join(UPLOAD_BASE_PATH, old_path)
+
+        # 获取父目录和新路径
+        parent_dir = os.path.dirname(old_full_path)
+        new_full_path = os.path.join(parent_dir, new_name)
+
+        if not os.path.exists(old_full_path):
+            return jsonify({'success': False, 'message': '文件夹不存在'}), 404
+
+        if os.path.exists(new_full_path):
+            return jsonify({'success': False, 'message': '目标文件夹已存在'}), 400
+
+        # 重命名物理文件夹
+        os.rename(old_full_path, new_full_path)
+
+        # 更新数据库中所有相关文件的路径
+        with get_db() as conn:
+            cursor = conn.cursor()
+
+            # 查询所有以旧路径开头的文件
+            cursor.execute('''
+                SELECT id, file_path FROM hr_reports
+                WHERE file_path LIKE ?
+            ''', (old_path + '%',))
+
+            files = cursor.fetchall()
+
+            # 构建新的相对路径前缀
+            parent_relative = os.path.dirname(old_path)
+            new_relative_prefix = os.path.join(parent_relative, new_name).replace('\\', '/') if parent_relative else new_name
+
+            # 更新每个文件的路径
+            for file in files:
+                old_file_path = file['file_path']
+                # 替换路径前缀
+                new_file_path = old_file_path.replace(old_path, new_relative_prefix, 1)
+
+                cursor.execute('''
+                    UPDATE hr_reports
+                    SET file_path = ?, updated_at = ?
+                    WHERE id = ?
+                ''', (new_file_path, datetime.now(), file['id']))
+
+            conn.commit()
+
+        return jsonify({'success': True, 'message': '重命名成功'})
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'重命名失败: {str(e)}'
+        }), 500
+
+
+@hr_reports_bp.route('/folder/delete', methods=['DELETE'])
+def delete_folder():
+    """
+    删除文件夹（删除物理文件夹及数据库中所有相关记录）
+    """
+    try:
+        req_data = request.json or {}
+        folder_path = req_data.get('folder_path', '')
+
+        if not folder_path:
+            return jsonify({'success': False, 'message': '参数不完整'}), 400
+
+        full_path = os.path.join(UPLOAD_BASE_PATH, folder_path)
+
+        if not os.path.exists(full_path):
+            return jsonify({'success': False, 'message': '文件夹不存在'}), 404
+
+        # 删除物理文件夹及其内容
+        import shutil
+        shutil.rmtree(full_path)
+
+        # 删除数据库中所有相关记录
+        with get_db() as conn:
+            cursor = conn.cursor()
+            cursor.execute('''
+                DELETE FROM hr_reports
+                WHERE file_path LIKE ?
+            ''', (folder_path + '%',))
+            deleted_count = cursor.rowcount
+            conn.commit()
+
+        return jsonify({
+            'success': True,
+            'message': f'删除成功，共删除 {deleted_count} 个文件'
+        })
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'删除失败: {str(e)}'
+        }), 500
+
+
+@hr_reports_bp.route('/move', methods=['POST'])
+def move_file():
+    """
+    移动文件到另一个文件夹
+    """
+    try:
+        req_data = request.json or {}
+        file_id = req_data.get('file_id', '')
+        target_folder = req_data.get('target_folder', '')  # 目标文件夹相对路径
+
+        if not file_id:
+            return jsonify({'success': False, 'message': '参数不完整'}), 400
+
+        with get_db() as conn:
+            cursor = conn.cursor()
+
+            # 获取原文件信息
+            cursor.execute('SELECT filename, file_path FROM hr_reports WHERE id = ?', (file_id,))
+            row = cursor.fetchone()
+
+            if not row:
+                return jsonify({'success': False, 'message': '文件不存在'}), 404
+
+            old_file_path = os.path.join(UPLOAD_BASE_PATH, row['file_path'])
+
+            # 构建新路径
+            if target_folder:
+                new_relative_path = os.path.join(target_folder, row['filename']).replace('\\', '/')
+                new_file_path = os.path.join(UPLOAD_BASE_PATH, target_folder, row['filename'])
+                target_dir = os.path.join(UPLOAD_BASE_PATH, target_folder)
+            else:
+                new_relative_path = row['filename']
+                new_file_path = os.path.join(UPLOAD_BASE_PATH, row['filename'])
+                target_dir = UPLOAD_BASE_PATH
+
+            # 确保目标目录存在
+            os.makedirs(target_dir, exist_ok=True)
+
+            # 检查目标文件是否已存在
+            if os.path.exists(new_file_path):
+                return jsonify({'success': False, 'message': '目标位置已存在同名文件'}), 400
+
+            # 移动物理文件
+            import shutil
+            shutil.move(old_file_path, new_file_path)
+
+            # 更新数据库
+            cursor.execute('''
+                UPDATE hr_reports
+                SET file_path = ?, updated_at = ?
+                WHERE id = ?
+            ''', (new_relative_path, datetime.now(), file_id))
+
+            conn.commit()
+
+        return jsonify({'success': True, 'message': '移动成功'})
+
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'message': f'移动失败: {str(e)}'
         }), 500
