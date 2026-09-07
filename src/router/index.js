@@ -126,6 +126,12 @@ const routes = [
         component: () => import('@/views/admin/orders/OrderForm.vue'),
         props: route => ({ orderId: Number(route.params.id) }),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'hr/reports',
+        name: 'admin-hr-reports',
+        component: () => import('@/views/admin/hr/Reports.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   }
