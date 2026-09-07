@@ -201,8 +201,7 @@ const menuItems = ref([
     icon: icons.package,
     children: [
       { label: '商品列表', path: '/admin/products' },
-      { label: '商品分类', path: '/admin/categories' },
-      { label: '商品库存', path: '/admin/inventory' }
+      { label: '原材料列表', path: '/admin/materials' }
     ]
   },
   {
@@ -218,7 +217,8 @@ const menuItems = ref([
     label: '库存',
     icon: icons.chart,
     children: [
-      { label: '库存管理', path: '/admin/stock' },
+      { label: '成品库存', path: '/admin/inventory' },
+      { label: '原材料库存', path: '/admin/inventory/materials' },
       { label: '入库记录', path: '/admin/stock/in' },
       { label: '出库记录', path: '/admin/stock/out' },
       { label: '仓库管理', path: '/admin/inventory/warehouse' }
