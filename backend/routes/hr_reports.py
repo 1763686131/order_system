@@ -392,19 +392,22 @@ def create_share_link(file_id):
             share_token = str(uuid.uuid4())
             expire_at = datetime.now() + timedelta(days=expire_days)
 
+            # 格式化为标准字符串（不带毫秒）
+            expire_at_str = expire_at.strftime('%Y-%m-%d %H:%M:%S')
+
             # 更新分享信息
             cursor.execute('''
                 UPDATE hr_reports
                 SET share_token = ?, share_expire = ?
                 WHERE id = ?
-            ''', (share_token, expire_at, file_id))
+            ''', (share_token, expire_at_str, file_id))
 
             conn.commit()
 
         return jsonify({
             'success': True,
             'share_token': share_token,
-            'expire_at': expire_at.strftime('%Y-%m-%d %H:%M:%S')
+            'expire_at': expire_at_str
         })
 
     except Exception as e:
@@ -433,9 +436,26 @@ def download_shared_file(share_token):
 
         # 检查是否过期
         if row['share_expire']:
-            expire_time = datetime.strptime(row['share_expire'], '%Y-%m-%d %H:%M:%S')
-            if datetime.now() > expire_time:
-                return jsonify({'success': False, 'message': '分享链接已过期'}), 403
+            try:
+                # 尝试多种日期格式
+                expire_str = str(row['share_expire']).strip()
+
+                # 尝试标准格式
+                try:
+                    expire_time = datetime.strptime(expire_str, '%Y-%m-%d %H:%M:%S')
+                except ValueError:
+                    # 尝试带毫秒格式
+                    try:
+                        expire_time = datetime.strptime(expire_str.split('.')[0], '%Y-%m-%d %H:%M:%S')
+                    except ValueError:
+                        # ISO格式
+                        expire_time = datetime.fromisoformat(expire_str.replace('T', ' ').split('.')[0])
+
+                if datetime.now() > expire_time:
+                    return jsonify({'success': False, 'message': '分享链接已过期'}), 403
+            except Exception as e:
+                # 如果日期解析失败，记录错误但不阻止访问
+                print(f"日期解析错误: {e}, 原始值: {row['share_expire']}")
 
         file_path = os.path.join(UPLOAD_BASE_PATH, row['file_path'])
 

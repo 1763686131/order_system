@@ -39,9 +39,9 @@ def _ensure_hr_reports_schema(conn):
                 file_type TEXT,
                 uploader TEXT,
                 share_token TEXT,
-                share_expire TIMESTAMP,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                share_expire TEXT,
+                created_at TEXT DEFAULT (datetime('now', 'localtime')),
+                updated_at TEXT DEFAULT (datetime('now', 'localtime'))
             )
         """)
 

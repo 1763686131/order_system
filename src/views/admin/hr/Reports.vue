@@ -37,7 +37,7 @@
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="#FFA500" stroke="#FF8C00" stroke-width="1.5"/>
             </svg>
           </div>
-          <div class="folder-name">{{ folder.name }}</div>
+          <div class="folder-name" :title="folder.name">{{ folder.name }}</div>
           <div class="folder-count">{{ folder.fileCount }} 个文件</div>
         </div>
 
@@ -73,7 +73,7 @@
             </template>
             <template v-else>FILE</template>
           </div>
-          <div class="file-name">{{ file.name }}</div>
+          <div class="file-name" :title="file.name">{{ file.name }}</div>
           <div class="file-size">{{ formatFileSize(file.size) }}</div>
         </div>
 
@@ -176,10 +176,9 @@
             <div class="expire-selector">
               <label>有效期:</label>
               <select v-model="shareExpireDays">
-                <option :value="1">1天</option>
-                <option :value="3">3天</option>
                 <option :value="7">7天</option>
                 <option :value="30">30天</option>
+                <option :value="365">365天</option>
               </select>
             </div>
           </div>
@@ -231,7 +230,8 @@
           <div class="folder-list">
             <div
               class="folder-list-item"
-              @click="moveFileToFolder('')"
+              :class="{ 'selected': selectedTargetFolder === '' }"
+              @click="selectTargetFolder('')"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                 <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#3b82f6" stroke="#2563eb" stroke-width="1.5"/>
@@ -242,7 +242,8 @@
               v-for="folder in allFolders"
               :key="folder.path"
               class="folder-list-item"
-              @click="moveFileToFolder(folder.path)"
+              :class="{ 'selected': selectedTargetFolder === folder.path }"
+              @click="selectTargetFolder(folder.path)"
             >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="#FFA500" stroke="#FF8C00" stroke-width="1.5"/>
@@ -252,6 +253,13 @@
           </div>
           <div class="modal-actions">
             <button class="btn-cancel" @click="showMoveModal = false">取消</button>
+            <button
+              class="btn-confirm"
+              :disabled="selectedTargetFolder === null"
+              @click="confirmMoveFile"
+            >
+              确定
+            </button>
           </div>
         </div>
       </div>
@@ -280,6 +288,7 @@ const shareLinkInput = ref(null)
 const renameFolderValue = ref('')
 const renameFolderTarget = ref(null)
 const moveFileTarget = ref(null)
+const selectedTargetFolder = ref(null)  // 选中的目标文件夹
 
 // 右键菜单状态
 const contextMenu = ref({
@@ -487,11 +496,42 @@ const handleDownload = () => {
 // 处理移动
 const handleMove = () => {
   moveFileTarget.value = contextMenu.value.target
+  selectedTargetFolder.value = null  // 重置选择
   showMoveModal.value = true
   hideContextMenu()
 }
 
-// 移动文件到目标文件夹
+// 选择目标文件夹
+const selectTargetFolder = (folderPath) => {
+  selectedTargetFolder.value = folderPath
+}
+
+// 确认移动文件
+const confirmMoveFile = async () => {
+  if (selectedTargetFolder.value === null) {
+    return
+  }
+
+  try {
+    const response = await axios.post(`${API_BASE}/move`, {
+      file_id: moveFileTarget.value.id,
+      target_folder: selectedTargetFolder.value
+    })
+
+    if (response.data.success) {
+      alert('移动成功')
+      await loadFileList()
+      showMoveModal.value = false
+      selectedTargetFolder.value = null
+    } else {
+      alert('移动失败: ' + response.data.message)
+    }
+  } catch (error) {
+    alert('移动失败: ' + error.message)
+  }
+}
+
+// 移动文件到目标文件夹（废弃，改用 confirmMoveFile）
 const moveFileToFolder = async (targetFolderPath) => {
   try {
     const response = await axios.post(`${API_BASE}/move`, {
@@ -808,9 +848,14 @@ const selectedFolder = ref(null)
   font-weight: 600;
   color: #1f2937;
   margin-bottom: 6px;
+  word-wrap: break-word;
+  word-break: break-all;
+  line-height: 1.4;
+  max-height: 3.6em;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 
 .folder-count,
@@ -1068,6 +1113,13 @@ const selectedFolder = ref(null)
   color: #1f2937;
 }
 
+.folder-list-item.selected {
+  background: #dbeafe;
+  border-color: #3b82f6;
+  color: #1e40af;
+  font-weight: 600;
+}
+
 .modal-actions {
   display: flex;
   gap: 12px;
@@ -1100,8 +1152,14 @@ const selectedFolder = ref(null)
   color: white;
 }
 
-.btn-confirm:hover {
+.btn-confirm:hover:not(:disabled) {
   background: #2563eb;
+}
+
+.btn-confirm:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 /* 右键菜单样式 */
