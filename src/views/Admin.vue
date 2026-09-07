@@ -187,6 +187,7 @@ const icons = {
   trending: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
   users: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   dollar: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  briefcase: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
   settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>'
 }
 
@@ -248,6 +249,15 @@ const menuItems = ref([
       { label: '收款历史', path: '/admin/finance/payment-history' },
       { label: '物流/专车对账', path: '/admin/finance/logistics-truck' },
       { label: '快运/快递对账', path: '/admin/finance/express-courier' }
+    ]
+  },
+  {
+    label: '人事行政',
+    icon: icons.briefcase,
+    children: [
+      { label: '员工管理', path: '/admin/hr/employees' },
+      { label: '公司资料', path: '/admin/hr/company' },
+      { label: '检测报告', path: '/admin/hr/reports' }
     ]
   },
   {
@@ -347,7 +357,7 @@ const logout = () => {
 /* 左侧边栏样式 */
 .sidebar {
   width: 240px;
-  background: #2c3e50;
+  background: #1e293b;
   color: #fff;
   display: flex;
   flex-direction: column;
@@ -356,9 +366,9 @@ const logout = () => {
 }
 
 .sidebar-header {
-  padding: 16px 20px;
-  background: #1a252f;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  background: #0f172a;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 
 .system-name {
@@ -369,7 +379,7 @@ const logout = () => {
 
 .sidebar-nav {
   flex: 1;
-  padding: 8px 0;
+  padding: 12px 8px;
   overflow-y: auto;
 }
 
@@ -380,20 +390,21 @@ const logout = () => {
 }
 
 .nav-item-group {
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 
 .nav-item {
-  padding: 12px 20px;
+  padding: 12px 16px;
   cursor: pointer;
-  transition: all 0.3s;
-  color: #bdc3c7;
+  transition: all 0.2s;
+  color: #94a3b8;
   font-size: 14px;
-  border-left: 3px solid transparent;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 12px;
   position: relative;
+  margin-bottom: 2px;
 }
 
 .nav-item.has-children {
@@ -429,26 +440,25 @@ const logout = () => {
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
 }
 
 .nav-item.active {
-  background: rgba(52, 211, 153, 0.1);
-  color: #34d399;
-  border-left-color: #34d399;
+  background: #3b82f6;
+  color: #fff;
 }
 
 .nav-item.expanded {
   background: rgba(255, 255, 255, 0.05);
+  color: #e2e8f0;
 }
 
 /* 子菜单 */
 .nav-submenu {
   list-style: none;
-  padding: 0;
+  padding: 4px 0;
   margin: 0;
-  background: rgba(0, 0, 0, 0.1);
   animation: slideDown 0.3s ease;
 }
 
@@ -464,15 +474,16 @@ const logout = () => {
 }
 
 .nav-subitem {
-  padding: 10px 20px 10px 52px;
+  padding: 10px 16px 10px 48px;
   cursor: pointer;
-  transition: all 0.3s;
-  color: #95a5a6;
-  font-size: 13px;
-  border-left: 3px solid transparent;
+  transition: all 0.2s;
+  color: #94a3b8;
+  font-size: 14px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-bottom: 2px;
 }
 
 .nav-subicon {
@@ -485,14 +496,13 @@ const logout = () => {
 }
 
 .nav-subitem:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  color: #e2e8f0;
 }
 
 .nav-subitem.active {
-  background: rgba(52, 211, 153, 0.15);
-  color: #34d399;
-  border-left-color: #34d399;
+  background: #3b82f6;
+  color: #fff;
 }
 
 /* 右侧主体区域 */
