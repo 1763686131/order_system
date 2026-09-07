@@ -10,6 +10,7 @@
 
 ## 版本历史
 
+- **v2.1** (2026-09-07) - 补充人事检测报告文件管理接口文档
 - **v2.0** (2026-09-06) - 迁移至 SQLite 数据库，优化性能和并发支持
 - **v1.0** (2026-08-30) - 初始版本，使用 JSON 文件存储
 
@@ -26,6 +27,7 @@
 7. [客户管理](#7-客户管理)
 8. [原材料管理](#8-原材料管理)
 9. [运费记录管理](#9-运费记录管理)
+10. [人事检测报告文件管理](#10-人事检测报告文件管理)
 
 ---
 
@@ -1704,14 +1706,332 @@ receipt_image: File (图片文件)
 
 ---
 
+## 10. 人事检测报告文件管理
+
+> 模块前缀：`/api/hr/reports`
+>
+> 用于管理人事检测报告及其他相关文件，支持多级文件夹、文件上传、同步扫描、下载/预览、分享、移动和删除。
+
+### 10.1 同步文件目录
+- **URL**: `/api/hr/reports/sync`
+- **Method**: `POST`
+- **Content-Type**: 无请求体
+- **说明**: 递归扫描服务端人事报告上传目录，将允许类型的文件同步到 `hr_reports` 数据表。
+
+**支持的文件扩展名**:
+
+| 扩展名 | 文件类型 |
+|--------|----------|
+| `pdf` | PDF 文档 |
+| `jpg`、`jpeg`、`png`、`gif` | 图片 |
+| `xls`、`xlsx` | Excel 文件 |
+| `doc`、`docx` | Word 文件 |
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "同步完成: 新增 2 个，更新 1 个，删除 0 个",
+  "stats": {
+    "new": 2,
+    "updated": 1,
+    "deleted": 0,
+    "total": 8
+  }
+}
+```
+
+**说明**:
+- 扫描包含多级子文件夹。
+- 只同步上述允许类型的文件。
+- 根据文件路径和 MD5 哈希判断新增、修改和删除。
+- 如果物理文件已经不存在，对应的数据库记录会被删除。
+
+### 10.2 获取文件列表
+- **URL**: `/api/hr/reports/list`
+- **Method**: `GET`
+- **说明**: 获取所有报告文件，以树形结构返回文件夹和文件。
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "data": {
+    "folders": [
+      {
+        "name": "2026",
+        "path": "2026",
+        "folders": [],
+        "files": [
+          {
+            "id": "2a0e6a7b-3a90-4b5f-9f4a-123456789abc",
+            "name": "检测报告.pdf",
+            "path": "2026/检测报告.pdf",
+            "size": 245760,
+            "type": "pdf",
+            "createdAt": "2026-09-07 10:00:00",
+            "updatedAt": "2026-09-07 10:00:00"
+          }
+        ]
+      }
+    ],
+    "files": []
+  }
+}
+```
+
+**文件对象字段**:
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | 文件唯一 ID |
+| `name` | string | 文件名 |
+| `path` | string | 相对于报告存储目录的文件路径，使用 `/` 分隔 |
+| `size` | integer | 文件大小，单位为字节 |
+| `type` | string | `pdf`、`image`、`excel`、`word` 或 `other` |
+| `createdAt` | string | 创建时间 |
+| `updatedAt` | string | 更新时间 |
+
+### 10.3 上传文件
+- **URL**: `/api/hr/reports/upload`
+- **Method**: `POST`
+- **Content-Type**: `multipart/form-data`
+- **Header**: `Username`（可选，未提供时记录为 `unknown`）
+
+**请求参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `file` | File | 是 | 待上传文件 |
+| `folder_path` | string | 否 | 目标文件夹相对路径，例如 `2026/09`，为空时上传到根目录 |
+
+**请求示例**:
+```bash
+curl -X POST "http://localhost:5000/api/hr/reports/upload" `
+  -H "Username: admin" `
+  -F "file=@D:\reports\检测报告.pdf" `
+  -F "folder_path=2026/09"
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "上传成功",
+  "file": {
+    "id": "2a0e6a7b-3a90-4b5f-9f4a-123456789abc",
+    "name": "检测报告.pdf",
+    "path": "2026/09/检测报告.pdf",
+    "size": 245760,
+    "type": "pdf"
+  }
+}
+```
+
+**常见错误**:
+- 未提供 `file`：HTTP `400`，返回 `没有文件`。
+- 文件名为空：HTTP `400`，返回 `文件名为空`。
+- 扩展名不在允许列表中：HTTP `400`，返回 `不支持的文件类型`。
+
+### 10.4 下载或预览文件
+- **URL**: `/api/hr/reports/download/<file_id>`
+- **Method**: `GET`
+- **说明**: 根据文件 ID 返回文件流。
+
+**返回规则**:
+- PDF 和图片使用浏览器内联预览（`Content-Disposition: inline`）。
+- Excel、Word 等其他允许类型以附件形式下载（`Content-Disposition: attachment`）。
+- 成功时返回文件流，不是 JSON。
+
+**错误响应示例**:
+```json
+{
+  "success": false,
+  "message": "文件不存在"
+}
+```
+
+### 10.5 创建文件分享链接
+- **URL**: `/api/hr/reports/share/<file_id>`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+- **说明**: 为指定文件生成一个分享 Token。同一个文件再次生成分享链接时，旧 Token 会被覆盖。
+
+**请求参数**:
+```json
+{
+  "expire_days": 7
+}
+```
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+|------|------|------|--------|------|
+| `expire_days` | number | 否 | `7` | 分享有效天数 |
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "share_token": "6d6f4c5e-1be1-4f91-b6e6-123456789abc",
+  "expire_at": "2026-09-14 10:30:00"
+}
+```
+
+### 10.6 通过分享链接下载或预览文件
+- **URL**: `/api/hr/reports/share/<share_token>`
+- **Method**: `GET`
+- **说明**: 通过分享 Token 访问文件。PDF 和图片会尝试在浏览器中预览，其他文件直接下载。
+
+**请求示例**:
+```text
+GET /api/hr/reports/share/6d6f4c5e-1be1-4f91-b6e6-123456789abc
+```
+
+**错误响应**:
+```json
+{
+  "success": false,
+  "message": "分享链接已过期"
+}
+```
+
+**可能的 HTTP 状态码**:
+- `403`：分享链接已过期。
+- `404`：分享链接无效或文件已丢失。
+- `500`：下载处理失败。
+
+### 10.7 删除文件
+- **URL**: `/api/hr/reports/delete/<file_id>`
+- **Method**: `DELETE`
+- **说明**: 同时删除物理文件和数据库记录。
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "删除成功"
+}
+```
+
+### 10.8 重命名文件夹
+- **URL**: `/api/hr/reports/folder/rename`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+- **说明**: 重命名物理文件夹，并同步更新该文件夹下所有文件的数据库路径。
+
+**请求参数**:
+```json
+{
+  "old_path": "2026/09",
+  "new_name": "2026年09月"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `old_path` | string | 是 | 原文件夹相对路径 |
+| `new_name` | string | 是 | 新文件夹名称，不是完整路径 |
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "重命名成功"
+}
+```
+
+**常见错误**:
+- 参数缺失：HTTP `400`，返回 `参数不完整`。
+- 原文件夹不存在：HTTP `404`，返回 `文件夹不存在`。
+- 目标文件夹已存在：HTTP `400`，返回 `目标文件夹已存在`。
+
+### 10.9 删除文件夹
+- **URL**: `/api/hr/reports/folder/delete`
+- **Method**: `DELETE`
+- **Content-Type**: `application/json`
+- **说明**: 递归删除物理文件夹及其内容，并删除数据库中该路径下的所有文件记录。
+
+**请求参数**:
+```json
+{
+  "folder_path": "2026/09"
+}
+```
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "删除成功，共删除 3 个文件"
+}
+```
+
+**常见错误**:
+- 参数缺失：HTTP `400`，返回 `参数不完整`。
+- 文件夹不存在：HTTP `404`，返回 `文件夹不存在`。
+
+### 10.10 移动文件
+- **URL**: `/api/hr/reports/move`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+- **说明**: 将文件移动到指定文件夹，并同步更新数据库中的相对路径。
+
+**请求参数**:
+```json
+{
+  "file_id": "2a0e6a7b-3a90-4b5f-9f4a-123456789abc",
+  "target_folder": "2026/10"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `file_id` | string | 是 | 文件唯一 ID |
+| `target_folder` | string | 否 | 目标文件夹相对路径，为空时移动到根目录 |
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "移动成功"
+}
+```
+
+**常见错误**:
+- `file_id` 缺失：HTTP `400`，返回 `参数不完整`。
+- 文件不存在：HTTP `404`，返回 `文件不存在`。
+- 目标位置存在同名文件：HTTP `400`，返回 `目标位置已存在同名文件`。
+
+### 10.11 人事报告文件字段和存储说明
+
+`hr_reports` 表的主要字段如下：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | TEXT | 文件唯一 ID |
+| `filename` | TEXT | 原始安全文件名 |
+| `file_path` | TEXT | 文件相对路径，唯一 |
+| `file_hash` | TEXT | 文件 MD5 哈希 |
+| `file_size` | INTEGER | 文件大小，单位为字节 |
+| `file_type` | TEXT | 文件类型：`pdf`、`image`、`excel`、`word` |
+| `uploader` | TEXT | 上传人，由 `Username` 请求头写入 |
+| `share_token` | TEXT | 分享 Token |
+| `share_expire` | TEXT | 分享过期时间 |
+| `created_at` | TEXT | 创建时间 |
+| `updated_at` | TEXT | 更新时间 |
+
+文件物理存储在后端 `uploads/hr_reports` 目录下；Linux 容器环境中如果存在 `/app/uploads`，则使用 `/app/uploads/hr_reports`。
+
+---
+
 ## 错误响应格式
 
-所有接口在发生错误时返回以下格式：
+多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
 
 ```json
 {
-  "error": "错误描述",
-  "message": "详细错误信息"
+  "success": false,
+  "message": "错误描述"
 }
 ```
 
@@ -1747,6 +2067,7 @@ receipt_image: File (图片文件)
 - `warehouse_categories` - 仓库分类表
 - `carrier_tags` - 物流公司标签表
 - `remark_tags` - 原材料备注标签表
+- `hr_reports` - 人事检测报告文件表
 
 ### 数据库索引优化
 
@@ -1887,6 +2208,11 @@ SQLite 支持**多读一写**模式：
 ---
 
 ## 更新日志
+
+### v2.1.0 (2026-09-07)
+- ✅ 补充人事检测报告文件管理接口
+- ✅ 补充文件上传、预览、分享、移动和文件夹管理说明
+- ✅ 同步 `hr_reports` 数据表字段文档
 
 ### v2.0.0 (2026-09-06)
 - ✅ 迁移至 SQLite 数据库
