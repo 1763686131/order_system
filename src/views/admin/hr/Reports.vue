@@ -9,6 +9,7 @@
           :key="folder.id"
           class="folder-card"
           @click="openFolder(folder)"
+          @contextmenu.prevent="showFolderContextMenu($event, folder)"
         >
           <div class="folder-icon">
             <svg width="80" height="80" viewBox="0 0 24 24" fill="none">
@@ -51,6 +52,7 @@
           :key="file.id"
           class="file-book"
           @click="openPDF(file)"
+          @contextmenu.prevent="showFileContextMenu($event, file)"
         >
           <div class="book-cover">
             <div class="book-icon">PDF</div>
@@ -82,6 +84,40 @@
       />
     </div>
 
+    <!-- 右键菜单 -->
+    <teleport to="body">
+      <div
+        v-if="contextMenu.visible"
+        class="context-menu"
+        :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
+        @click="hideContextMenu"
+      >
+        <div class="context-menu-item" @click="handleRename">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+          </svg>
+          重命名
+        </div>
+        <div v-if="contextMenu.type === 'file'" class="context-menu-item" @click="handleMove">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+            <polyline points="13 2 13 9 20 9"/>
+          </svg>
+          移动
+        </div>
+        <div class="context-menu-item danger" @click="handleDelete">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          删除
+        </div>
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" @click="hideContextMenu">取消</div>
+      </div>
+    </teleport>
+
     <!-- 新增文件夹弹窗 -->
     <teleport to="body">
       <div v-if="showAddFolderModal" class="modal-overlay" @click.self="showAddFolderModal = false">
@@ -101,16 +137,73 @@
         </div>
       </div>
     </teleport>
+
+    <!-- 重命名弹窗 -->
+    <teleport to="body">
+      <div v-if="showRenameModal" class="modal-overlay" @click.self="showRenameModal = false">
+        <div class="modal-content">
+          <h3 class="modal-title">重命名</h3>
+          <input
+            v-model="renameValue"
+            type="text"
+            class="folder-input"
+            placeholder="请输入新名称"
+            @keyup.enter="confirmRename"
+          />
+          <div class="modal-actions">
+            <button class="btn-cancel" @click="showRenameModal = false">取消</button>
+            <button class="btn-confirm" @click="confirmRename">确定</button>
+          </div>
+        </div>
+      </div>
+    </teleport>
+
+    <!-- 移动文件弹窗 -->
+    <teleport to="body">
+      <div v-if="showMoveModal" class="modal-overlay" @click.self="showMoveModal = false">
+        <div class="modal-content">
+          <h3 class="modal-title">移动到</h3>
+          <div class="folder-list">
+            <div
+              v-for="folder in folders.filter(f => f.id !== selectedFolder.id)"
+              :key="folder.id"
+              class="folder-list-item"
+              @click="moveFileToFolder(folder)"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="#FFA500" stroke="#FF8C00" stroke-width="1.5"/>
+              </svg>
+              {{ folder.name }}
+            </div>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-cancel" @click="showMoveModal = false">取消</button>
+          </div>
+        </div>
+      </div>
+    </teleport>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 
 const selectedFolder = ref(null)
 const showAddFolderModal = ref(false)
+const showRenameModal = ref(false)
+const showMoveModal = ref(false)
 const newFolderName = ref('')
+const renameValue = ref('')
 const fileInput = ref(null)
+
+// 右键菜单状态
+const contextMenu = ref({
+  visible: false,
+  x: 0,
+  y: 0,
+  type: '', // 'folder' or 'file'
+  target: null
+})
 
 // 模拟文件夹数据
 const folders = ref([
@@ -175,6 +268,113 @@ const openPDF = (file) => {
     alert('PDF文件尚未上传')
   }
 }
+
+// 显示文件夹右键菜单
+const showFolderContextMenu = (event, folder) => {
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    type: 'folder',
+    target: folder
+  }
+}
+
+// 显示文件右键菜单
+const showFileContextMenu = (event, file) => {
+  contextMenu.value = {
+    visible: true,
+    x: event.clientX,
+    y: event.clientY,
+    type: 'file',
+    target: file
+  }
+}
+
+// 隐藏右键菜单
+const hideContextMenu = () => {
+  contextMenu.value.visible = false
+}
+
+// 处理重命名
+const handleRename = () => {
+  renameValue.value = contextMenu.value.target.name.replace('.pdf', '')
+  showRenameModal.value = true
+  hideContextMenu()
+}
+
+// 确认重命名
+const confirmRename = () => {
+  if (renameValue.value.trim()) {
+    if (contextMenu.value.type === 'folder') {
+      contextMenu.value.target.name = renameValue.value
+    } else {
+      contextMenu.value.target.name = renameValue.value + (renameValue.value.endsWith('.pdf') ? '' : '.pdf')
+    }
+    showRenameModal.value = false
+    renameValue.value = ''
+  }
+}
+
+// 处理删除
+const handleDelete = () => {
+  if (confirm(`确定要删除"${contextMenu.value.target.name}"吗？`)) {
+    if (contextMenu.value.type === 'folder') {
+      const index = folders.value.findIndex(f => f.id === contextMenu.value.target.id)
+      if (index > -1) {
+        folders.value.splice(index, 1)
+      }
+    } else {
+      const index = selectedFolder.value.files.findIndex(f => f.id === contextMenu.value.target.id)
+      if (index > -1) {
+        selectedFolder.value.files.splice(index, 1)
+        selectedFolder.value.fileCount--
+      }
+    }
+  }
+  hideContextMenu()
+}
+
+// 处理移动
+const handleMove = () => {
+  showMoveModal.value = true
+  hideContextMenu()
+}
+
+// 移动文件到目标文件夹
+const moveFileToFolder = (targetFolder) => {
+  const fileToMove = contextMenu.value.target
+  const sourceFolder = selectedFolder.value
+
+  // 从原文件夹移除
+  const index = sourceFolder.files.findIndex(f => f.id === fileToMove.id)
+  if (index > -1) {
+    sourceFolder.files.splice(index, 1)
+    sourceFolder.fileCount--
+  }
+
+  // 添加到目标文件夹
+  targetFolder.files.push(fileToMove)
+  targetFolder.fileCount++
+
+  showMoveModal.value = false
+  alert(`已将"${fileToMove.name}"移动到"${targetFolder.name}"`)
+}
+
+// 点击其他地方隐藏右键菜单
+const handleClickOutside = (event) => {
+  if (contextMenu.value.visible) {
+    hideContextMenu()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
 </script>
 
 <style scoped>
@@ -427,5 +627,91 @@ const openPDF = (file) => {
 
 .btn-confirm:hover {
   background: #2563eb;
+}
+
+/* 右键菜单样式 */
+.context-menu {
+  position: fixed;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  padding: 4px;
+  min-width: 160px;
+  z-index: 9999;
+  animation: fadeIn 0.15s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.context-menu-item {
+  padding: 10px 16px;
+  font-size: 14px;
+  color: #374151;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.context-menu-item:hover {
+  background: #f3f4f6;
+  color: #1f2937;
+}
+
+.context-menu-item.danger {
+  color: #ef4444;
+}
+
+.context-menu-item.danger:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.context-menu-item svg {
+  flex-shrink: 0;
+}
+
+.context-menu-divider {
+  height: 1px;
+  background: #e5e7eb;
+  margin: 4px 0;
+}
+
+/* 文件夹列表样式 */
+.folder-list {
+  max-height: 300px;
+  overflow-y: auto;
+  margin: 16px 0;
+}
+
+.folder-list-item {
+  padding: 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: #374151;
+}
+
+.folder-list-item:hover {
+  background: #f0f9ff;
+  border-color: #3b82f6;
+  color: #1f2937;
 }
 </style>
