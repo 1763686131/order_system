@@ -19,6 +19,40 @@ _schema_lock = Lock()
 _schema_ready = False
 
 
+def _ensure_hr_reports_schema(conn):
+    """创建人事检测报告表"""
+    cursor = conn.cursor()
+
+    # 检查表是否存在
+    table_exists = cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'hr_reports'"
+    ).fetchone()
+
+    if not table_exists:
+        cursor.execute("""
+            CREATE TABLE hr_reports (
+                id TEXT PRIMARY KEY,
+                filename TEXT NOT NULL,
+                file_path TEXT NOT NULL UNIQUE,
+                file_hash TEXT,
+                file_size INTEGER,
+                file_type TEXT,
+                uploader TEXT,
+                share_token TEXT,
+                share_expire TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # 创建索引
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hr_reports_path ON hr_reports(file_path)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hr_reports_token ON hr_reports(share_token)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_hr_reports_type ON hr_reports(file_type)")
+
+        conn.commit()
+
+
 def _ensure_customer_schema(conn):
     """Migrate the legacy customers table to the fields used by the API."""
     global _schema_ready
@@ -159,6 +193,7 @@ def get_db():
     conn.row_factory = sqlite3.Row
     try:
         _ensure_customer_schema(conn)
+        _ensure_hr_reports_schema(conn)
         yield conn
         conn.commit()
     except Exception:

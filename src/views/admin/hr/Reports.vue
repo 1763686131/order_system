@@ -1,12 +1,33 @@
 <template>
   <div class="reports-container">
+    <!-- 顶部工具栏 -->
+    <div class="toolbar">
+      <h2 class="page-title">检测报告</h2>
+      <button class="sync-btn" @click="syncFiles" :disabled="syncing">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ spinning: syncing }">
+          <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2"/>
+        </svg>
+        {{ syncing ? '同步中...' : '同步文件' }}
+      </button>
+    </div>
+
+    <!-- 面包屑导航 -->
+    <div v-if="currentPath.length > 0" class="breadcrumb">
+      <span class="breadcrumb-item" @click="navigateToRoot">根目录</span>
+      <span v-for="(folder, index) in currentPath" :key="index" class="breadcrumb-item">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M9 18l6-6-6-6"/>
+        </svg>
+        <span @click="navigateToFolder(index)">{{ folder.name }}</span>
+      </span>
+    </div>
+
     <!-- 文件夹视图 -->
     <div v-if="!selectedFolder" class="folders-view">
-      <h2 class="page-title">检测报告</h2>
       <div class="folders-grid">
         <div
-          v-for="folder in folders"
-          :key="folder.id"
+          v-for="folder in currentFolders"
+          :key="folder.path"
           class="folder-card"
           @click="openFolder(folder)"
           @contextmenu.prevent="showFolderContextMenu($event, folder)"
@@ -20,64 +41,58 @@
           <div class="folder-count">{{ folder.fileCount }} 个文件</div>
         </div>
 
-        <!-- 新增文件夹按钮 -->
-        <div class="folder-card add-folder" @click="showAddFolderModal = true">
-          <div class="folder-icon">
-            <svg width="80" height="80" viewBox="0 0 24 24" fill="none">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="#e5e7eb" stroke="#9ca3af" stroke-width="1.5" stroke-dasharray="4 4"/>
-              <circle cx="12" cy="13" r="4" fill="#3b82f6"/>
-              <path d="M12 11v4M10 13h4" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <div class="folder-name">新建文件夹</div>
-        </div>
-      </div>
-    </div>
-
-    <!-- PDF 文件书架视图 -->
-    <div v-else class="files-view">
-      <div class="files-header">
-        <button class="back-btn" @click="closeFolder">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 12H5M12 19l-7-7 7-7"/>
-          </svg>
-          返回
-        </button>
-        <h2 class="folder-title">{{ selectedFolder.name }}</h2>
-      </div>
-
-      <div class="files-shelf">
+        <!-- 当前文件 -->
         <div
-          v-for="file in selectedFolder.files"
+          v-for="file in currentFiles"
           :key="file.id"
-          class="file-book"
-          @click="openPDF(file)"
+          class="file-card"
+          @click="openFile(file)"
           @contextmenu.prevent="showFileContextMenu($event, file)"
         >
-          <div class="book-cover">
-            <div class="book-icon">PDF</div>
-            <div class="book-title">{{ file.name }}</div>
+          <div class="file-icon" :class="`file-type-${file.type}`">
+            <template v-if="file.type === 'pdf'">PDF</template>
+            <template v-else-if="file.type === 'image'">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            </template>
+            <template v-else-if="file.type === 'excel'">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
+            </template>
+            <template v-else-if="file.type === 'word'">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+            </template>
+            <template v-else>FILE</template>
           </div>
-          <div class="book-spine"></div>
+          <div class="file-name">{{ file.name }}</div>
+          <div class="file-size">{{ formatFileSize(file.size) }}</div>
         </div>
 
         <!-- 上传文件按钮 -->
-        <div class="file-book add-file" @click="triggerFileUpload">
-          <div class="book-cover add-cover">
+        <div class="file-card add-file" @click="triggerFileUpload">
+          <div class="file-icon add-icon">
             <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="10"/>
               <path d="M12 8v8M8 12h8"/>
             </svg>
-            <div class="add-text">上传PDF</div>
           </div>
-          <div class="book-spine"></div>
+          <div class="file-name">上传文件</div>
         </div>
       </div>
 
       <input
         ref="fileInput"
         type="file"
-        accept="application/pdf"
+        accept=".pdf,.jpg,.jpeg,.png,.gif,.xlsx,.xls,.doc,.docx"
         multiple
         style="display: none"
         @change="handleFileUpload"
@@ -92,19 +107,23 @@
         :style="{ top: contextMenu.y + 'px', left: contextMenu.x + 'px' }"
         @click="hideContextMenu"
       >
-        <div class="context-menu-item" @click="handleRename">
+        <div class="context-menu-item" @click="handleDownload">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
-          重命名
+          下载
         </div>
-        <div v-if="contextMenu.type === 'file'" class="context-menu-item" @click="handleMove">
+        <div class="context-menu-item" @click="handleShare">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-            <polyline points="13 2 13 9 20 9"/>
+            <circle cx="18" cy="5" r="3"/>
+            <circle cx="6" cy="12" r="3"/>
+            <circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
           </svg>
-          移动
+          分享
         </div>
         <div class="context-menu-item danger" @click="handleDelete">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -118,66 +137,38 @@
       </div>
     </teleport>
 
-    <!-- 新增文件夹弹窗 -->
+    <!-- 分享弹窗 -->
     <teleport to="body">
-      <div v-if="showAddFolderModal" class="modal-overlay" @click.self="showAddFolderModal = false">
+      <div v-if="showShareModal" class="modal-overlay" @click.self="showShareModal = false">
         <div class="modal-content">
-          <h3 class="modal-title">新建文件夹</h3>
-          <input
-            v-model="newFolderName"
-            type="text"
-            class="folder-input"
-            placeholder="请输入文件夹名称"
-            @keyup.enter="createFolder"
-          />
-          <div class="modal-actions">
-            <button class="btn-cancel" @click="showAddFolderModal = false">取消</button>
-            <button class="btn-confirm" @click="createFolder">确定</button>
-          </div>
-        </div>
-      </div>
-    </teleport>
-
-    <!-- 重命名弹窗 -->
-    <teleport to="body">
-      <div v-if="showRenameModal" class="modal-overlay" @click.self="showRenameModal = false">
-        <div class="modal-content">
-          <h3 class="modal-title">重命名</h3>
-          <input
-            v-model="renameValue"
-            type="text"
-            class="folder-input"
-            placeholder="请输入新名称"
-            @keyup.enter="confirmRename"
-          />
-          <div class="modal-actions">
-            <button class="btn-cancel" @click="showRenameModal = false">取消</button>
-            <button class="btn-confirm" @click="confirmRename">确定</button>
-          </div>
-        </div>
-      </div>
-    </teleport>
-
-    <!-- 移动文件弹窗 -->
-    <teleport to="body">
-      <div v-if="showMoveModal" class="modal-overlay" @click.self="showMoveModal = false">
-        <div class="modal-content">
-          <h3 class="modal-title">移动到</h3>
-          <div class="folder-list">
-            <div
-              v-for="folder in folders.filter(f => f.id !== selectedFolder.id)"
-              :key="folder.id"
-              class="folder-list-item"
-              @click="moveFileToFolder(folder)"
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" fill="#FFA500" stroke="#FF8C00" stroke-width="1.5"/>
-              </svg>
-              {{ folder.name }}
+          <h3 class="modal-title">分享文件</h3>
+          <div class="share-info">
+            <p>文件名: <strong>{{ shareFile?.name }}</strong></p>
+            <div class="expire-selector">
+              <label>有效期:</label>
+              <select v-model="shareExpireDays">
+                <option :value="1">1天</option>
+                <option :value="3">3天</option>
+                <option :value="7">7天</option>
+                <option :value="30">30天</option>
+              </select>
             </div>
           </div>
+          <div v-if="shareLink" class="share-link-box">
+            <input
+              ref="shareLinkInput"
+              type="text"
+              :value="shareLink"
+              readonly
+              class="share-link-input"
+            />
+            <button class="copy-btn" @click="copyShareLink">
+              {{ copied ? '已复制' : '复制链接' }}
+            </button>
+          </div>
           <div class="modal-actions">
-            <button class="btn-cancel" @click="showMoveModal = false">取消</button>
+            <button class="btn-cancel" @click="showShareModal = false">取消</button>
+            <button v-if="!shareLink" class="btn-confirm" @click="generateShareLink">生成链接</button>
           </div>
         </div>
       </div>
@@ -186,15 +177,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import axios from 'axios'
 
-const selectedFolder = ref(null)
-const showAddFolderModal = ref(false)
-const showRenameModal = ref(false)
-const showMoveModal = ref(false)
-const newFolderName = ref('')
-const renameValue = ref('')
+const API_BASE = 'http://localhost:7899/api/hr/reports'
+
+const syncing = ref(false)
+const fileTree = ref({ folders: [], files: [] })
+const currentPath = ref([])
 const fileInput = ref(null)
+const showShareModal = ref(false)
+const shareFile = ref(null)
+const shareLink = ref('')
+const shareExpireDays = ref(7)
+const copied = ref(false)
+const shareLinkInput = ref(null)
 
 // 右键菜单状态
 const contextMenu = ref({
@@ -205,79 +202,145 @@ const contextMenu = ref({
   target: null
 })
 
-// 模拟文件夹数据
-const folders = ref([
-  { id: 1, name: '产品检测报告', fileCount: 5, files: [
-    { id: 1, name: '2024年度产品质检报告.pdf', url: '' },
-    { id: 2, name: '原材料检测报告-Q1.pdf', url: '' },
-    { id: 3, name: '成品质量检验报告.pdf', url: '' }
-  ]},
-  { id: 2, name: '环境检测报告', fileCount: 3, files: [
-    { id: 4, name: '车间环境检测-2024.pdf', url: '' },
-    { id: 5, name: '空气质量检测报告.pdf', url: '' }
-  ]},
-  { id: 3, name: '安全检测报告', fileCount: 2, files: [
-    { id: 6, name: '消防安全检测报告.pdf', url: '' }
-  ]}
-])
+// 当前显示的文件夹和文件
+const currentFolders = computed(() => {
+  let current = fileTree.value
+  for (const folder of currentPath.value) {
+    const found = current.folders.find(f => f.name === folder.name)
+    if (found) {
+      current = found
+    } else {
+      return []
+    }
+  }
+  return current.folders.map(f => ({
+    ...f,
+    fileCount: countFiles(f)
+  }))
+})
 
-const openFolder = (folder) => {
-  selectedFolder.value = folder
-}
+const currentFiles = computed(() => {
+  let current = fileTree.value
+  for (const folder of currentPath.value) {
+    const found = current.folders.find(f => f.name === folder.name)
+    if (found) {
+      current = found
+    } else {
+      return []
+    }
+  }
+  return current.files || []
+})
 
-const closeFolder = () => {
-  selectedFolder.value = null
-}
-
-const createFolder = () => {
-  if (newFolderName.value.trim()) {
-    folders.value.push({
-      id: Date.now(),
-      name: newFolderName.value,
-      fileCount: 0,
-      files: []
+// 递归计算文件夹内文件数量
+const countFiles = (folder) => {
+  let count = folder.files ? folder.files.length : 0
+  if (folder.folders) {
+    folder.folders.forEach(f => {
+      count += countFiles(f)
     })
-    newFolderName.value = ''
-    showAddFolderModal.value = false
+  }
+  return count
+}
+
+// 同步文件
+const syncFiles = async () => {
+  syncing.value = true
+  try {
+    const response = await axios.post(`${API_BASE}/sync`)
+    if (response.data.success) {
+      alert(response.data.message)
+      await loadFileList()
+    } else {
+      alert('同步失败: ' + response.data.message)
+    }
+  } catch (error) {
+    alert('同步失败: ' + error.message)
+  } finally {
+    syncing.value = false
   }
 }
 
+// 加载文件列表
+const loadFileList = async () => {
+  try {
+    const response = await axios.get(`${API_BASE}/list`)
+    if (response.data.success) {
+      fileTree.value = response.data.data
+    }
+  } catch (error) {
+    console.error('加载文件列表失败:', error)
+  }
+}
+
+// 导航到根目录
+const navigateToRoot = () => {
+  currentPath.value = []
+}
+
+// 导航到指定层级
+const navigateToFolder = (index) => {
+  currentPath.value = currentPath.value.slice(0, index + 1)
+}
+
+// 打开文件夹
+const openFolder = (folder) => {
+  currentPath.value.push({ name: folder.name })
+}
+
+// 打开文件
+const openFile = (file) => {
+  // PDF 和图片直接在新标签页预览，其他文件会触发下载
+  window.open(`${API_BASE}/download/${file.id}`, '_blank')
+}
+
+// 触发文件上传
 const triggerFileUpload = () => {
   fileInput.value?.click()
 }
 
-const handleFileUpload = (event) => {
+// 处理文件上传
+const handleFileUpload = async (event) => {
   const files = Array.from(event.target.files)
-  files.forEach(file => {
-    if (file.type === 'application/pdf') {
-      selectedFolder.value.files.push({
-        id: Date.now() + Math.random(),
-        name: file.name,
-        url: URL.createObjectURL(file)
-      })
-      selectedFolder.value.fileCount++
+
+  for (const file of files) {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    // 构建当前路径
+    const folderPath = currentPath.value.map(p => p.name).join('/')
+    if (folderPath) {
+      formData.append('folder_path', folderPath)
     }
-  })
+
+    try {
+      const response = await axios.post(`${API_BASE}/upload`, formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'Username': localStorage.getItem('username') || 'unknown'
+        }
+      })
+
+      if (response.data.success) {
+        console.log('上传成功:', file.name)
+      }
+    } catch (error) {
+      alert(`上传失败 ${file.name}: ${error.message}`)
+    }
+  }
+
+  // 重新加载列表
+  await loadFileList()
   event.target.value = ''
 }
 
-const openPDF = (file) => {
-  if (file.url) {
-    window.open(file.url, '_blank')
-  } else {
-    alert('PDF文件尚未上传')
-  }
-}
-
-// 显示文件夹右键菜单
-const showFolderContextMenu = (event, folder) => {
-  contextMenu.value = {
-    visible: true,
-    x: event.clientX,
-    y: event.clientY,
-    type: 'folder',
-    target: folder
-  }
+// 格式化文件大小
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
 }
 
 // 显示文件右键菜单
@@ -291,74 +354,77 @@ const showFileContextMenu = (event, file) => {
   }
 }
 
+// 显示文件夹右键菜单
+const showFolderContextMenu = (event, folder) => {
+  // 暂时不支持文件夹右键菜单
+}
+
 // 隐藏右键菜单
 const hideContextMenu = () => {
   contextMenu.value.visible = false
 }
 
-// 处理重命名
-const handleRename = () => {
-  renameValue.value = contextMenu.value.target.name.replace('.pdf', '')
-  showRenameModal.value = true
+// 处理下载
+const handleDownload = () => {
+  if (contextMenu.value.type === 'file') {
+    window.open(`${API_BASE}/download/${contextMenu.value.target.id}`, '_blank')
+  }
   hideContextMenu()
 }
 
-// 确认重命名
-const confirmRename = () => {
-  if (renameValue.value.trim()) {
-    if (contextMenu.value.type === 'folder') {
-      contextMenu.value.target.name = renameValue.value
+// 处理分享
+const handleShare = () => {
+  shareFile.value = contextMenu.value.target
+  showShareModal.value = true
+  shareLink.value = ''
+  copied.value = false
+  hideContextMenu()
+}
+
+// 生成分享链接
+const generateShareLink = async () => {
+  try {
+    const response = await axios.post(`${API_BASE}/share/${shareFile.value.id}`, {
+      expire_days: shareExpireDays.value
+    })
+
+    if (response.data.success) {
+      shareLink.value = `${window.location.origin}/api/hr/reports/share/${response.data.share_token}`
     } else {
-      contextMenu.value.target.name = renameValue.value + (renameValue.value.endsWith('.pdf') ? '' : '.pdf')
+      alert('生成分享链接失败: ' + response.data.message)
     }
-    showRenameModal.value = false
-    renameValue.value = ''
+  } catch (error) {
+    alert('生成分享链接失败: ' + error.message)
   }
+}
+
+// 复制分享链接
+const copyShareLink = () => {
+  shareLinkInput.value?.select()
+  document.execCommand('copy')
+  copied.value = true
+  setTimeout(() => {
+    copied.value = false
+  }, 2000)
 }
 
 // 处理删除
-const handleDelete = () => {
+const handleDelete = async () => {
   if (confirm(`确定要删除"${contextMenu.value.target.name}"吗？`)) {
-    if (contextMenu.value.type === 'folder') {
-      const index = folders.value.findIndex(f => f.id === contextMenu.value.target.id)
-      if (index > -1) {
-        folders.value.splice(index, 1)
+    try {
+      const response = await axios.delete(`${API_BASE}/delete/${contextMenu.value.target.id}`)
+
+      if (response.data.success) {
+        alert('删除成功')
+        await loadFileList()
+      } else {
+        alert('删除失败: ' + response.data.message)
       }
-    } else {
-      const index = selectedFolder.value.files.findIndex(f => f.id === contextMenu.value.target.id)
-      if (index > -1) {
-        selectedFolder.value.files.splice(index, 1)
-        selectedFolder.value.fileCount--
-      }
+    } catch (error) {
+      alert('删除失败: ' + error.message)
     }
   }
   hideContextMenu()
-}
-
-// 处理移动
-const handleMove = () => {
-  showMoveModal.value = true
-  hideContextMenu()
-}
-
-// 移动文件到目标文件夹
-const moveFileToFolder = (targetFolder) => {
-  const fileToMove = contextMenu.value.target
-  const sourceFolder = selectedFolder.value
-
-  // 从原文件夹移除
-  const index = sourceFolder.files.findIndex(f => f.id === fileToMove.id)
-  if (index > -1) {
-    sourceFolder.files.splice(index, 1)
-    sourceFolder.fileCount--
-  }
-
-  // 添加到目标文件夹
-  targetFolder.files.push(fileToMove)
-  targetFolder.fileCount++
-
-  showMoveModal.value = false
-  alert(`已将"${fileToMove.name}"移动到"${targetFolder.name}"`)
 }
 
 // 点击其他地方隐藏右键菜单
@@ -369,12 +435,16 @@ const handleClickOutside = (event) => {
 }
 
 onMounted(() => {
+  loadFileList()
   document.addEventListener('click', handleClickOutside)
 })
 
 onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
 })
+
+// 兼容旧代码（如果需要）
+const selectedFolder = ref(null)
 </script>
 
 <style scoped>
@@ -383,37 +453,113 @@ onUnmounted(() => {
   min-height: calc(100vh - 100px);
 }
 
+/* 顶部工具栏 */
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
 .page-title {
   font-size: 24px;
   font-weight: 600;
   color: #1f2937;
-  margin-bottom: 24px;
+  margin: 0;
 }
 
-/* 文件夹网格视图 */
+.sync-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.sync-btn:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.sync-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.sync-btn svg.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 面包屑导航 */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.breadcrumb-item:hover {
+  color: #3b82f6;
+}
+
+.breadcrumb-item span {
+  cursor: pointer;
+}
+
+/* 文件夹和文件网格视图 */
 .folders-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 20px;
 }
 
-.folder-card {
+.folder-card,
+.file-card {
   background: white;
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
   text-align: center;
   cursor: pointer;
   transition: all 0.3s ease;
   border: 2px solid #f3f4f6;
 }
 
-.folder-card:hover {
+.folder-card:hover,
+.file-card:hover {
   transform: translateY(-8px);
   box-shadow: 0 12px 24px rgba(0, 0, 0, 0.1);
   border-color: #3b82f6;
 }
 
-.folder-card.add-folder:hover {
+.file-card.add-file {
+  border: 2px dashed #9ca3af;
+  background: #f9fafb;
+}
+
+.file-card.add-file:hover {
   border-color: #3b82f6;
   background: #f0f9ff;
 }
@@ -425,15 +571,58 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.folder-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-  margin-bottom: 8px;
+.file-icon {
+  width: 80px;
+  height: 80px;
+  margin: 0 auto 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 18px;
+  font-weight: bold;
+  border-radius: 8px;
+  color: white;
 }
 
-.folder-count {
+.file-icon.file-type-pdf {
+  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+}
+
+.file-icon.file-type-image {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+}
+
+.file-icon.file-type-excel {
+  background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+}
+
+.file-icon.file-type-word {
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+}
+
+.file-icon.file-type-other {
+  background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%);
+}
+
+.file-icon.add-icon {
+  background: none;
+  color: #9ca3af;
+}
+
+.folder-name,
+.file-name {
   font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.folder-count,
+.file-size {
+  font-size: 12px;
   color: #6b7280;
 }
 
@@ -566,7 +755,8 @@ onUnmounted(() => {
   background: white;
   border-radius: 12px;
   padding: 24px;
-  width: 400px;
+  width: 90%;
+  max-width: 500px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
 }
 
@@ -577,20 +767,70 @@ onUnmounted(() => {
   margin-bottom: 16px;
 }
 
-.folder-input {
-  width: 100%;
-  padding: 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.2s;
-  box-sizing: border-box;
+.share-info {
+  margin-bottom: 16px;
 }
 
-.folder-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+.share-info p {
+  margin-bottom: 12px;
+  color: #374151;
+  font-size: 14px;
+}
+
+.expire-selector {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.expire-selector label {
+  font-size: 14px;
+  color: #374151;
+  font-weight: 500;
+}
+
+.expire-selector select {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 14px;
+  outline: none;
+  cursor: pointer;
+}
+
+.share-link-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.share-link-input {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  font-size: 13px;
+  background: #f9fafb;
+  font-family: monospace;
+}
+
+.copy-btn {
+  padding: 10px 16px;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.copy-btn:hover {
+  background: #059669;
 }
 
 .modal-actions {
@@ -686,32 +926,5 @@ onUnmounted(() => {
   height: 1px;
   background: #e5e7eb;
   margin: 4px 0;
-}
-
-/* 文件夹列表样式 */
-.folder-list {
-  max-height: 300px;
-  overflow-y: auto;
-  margin: 16px 0;
-}
-
-.folder-list-item {
-  padding: 12px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  margin-bottom: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 14px;
-  color: #374151;
-}
-
-.folder-list-item:hover {
-  background: #f0f9ff;
-  border-color: #3b82f6;
-  color: #1f2937;
 }
 </style>
