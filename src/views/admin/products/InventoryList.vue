@@ -73,9 +73,9 @@
           <span class="button-icon" aria-hidden="true">↓</span>
           导出
         </button>
-        <button class="btn btn-primary" type="button" @click="handleAddInventory">
+        <button class="btn btn-primary" type="button" @click="openStockInModal()">
           <span class="button-icon" aria-hidden="true">+</span>
-          库存调整
+          入库
         </button>
       </div>
     </div>
@@ -179,7 +179,7 @@
             </td>
             <td class="col-update-time">{{ formatDateTime(item.updateTime) }}</td>
             <td class="col-actions">
-              <button class="btn-action btn-edit" @click="handleEdit(item)">编辑</button>
+              <button class="btn-action btn-edit" @click="openStockInModal(item)">入库</button>
             </td>
           </tr>
 
@@ -224,69 +224,7 @@
       </div>
     </div>
 
-    <!-- 库存编辑弹窗 -->
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-container">
-        <div class="modal-header">
-          <h3>{{ isEditMode ? '编辑库存' : '录入库存' }}</h3>
-          <button class="modal-close" @click="closeModal">×</button>
-        </div>
-
-        <div class="modal-body">
-          <div class="form-row">
-            <div class="form-group">
-              <label>商品名称 <span class="required">*</span></label>
-              <select v-model="formData.productId" class="form-input" :disabled="isEditMode">
-                <option :value="null">请选择商品</option>
-                <option v-for="product in allProducts" :key="product.id" :value="product.id">
-                  {{ product.name }} {{ product.code ? `(${product.code})` : '' }}
-                </option>
-              </select>
-            </div>
-
-            <div class="form-group">
-              <label>当前库存 <span class="required">*</span></label>
-              <input
-                v-model.number="formData.stock"
-                type="number"
-                min="0"
-                class="form-input"
-                placeholder="请输入当前库存"
-              />
-            </div>
-          </div>
-
-          <div class="form-row">
-            <div class="form-group">
-              <label>最低库存</label>
-              <input
-                v-model.number="formData.minStock"
-                type="number"
-                min="0"
-                class="form-input"
-                placeholder="请输入最低库存"
-              />
-            </div>
-
-            <div class="form-group">
-              <label>最高库存</label>
-              <input
-                v-model.number="formData.maxStock"
-                type="number"
-                min="0"
-                class="form-input"
-                placeholder="请输入最高库存"
-              />
-            </div>
-          </div>
-        </div>
-
-        <div class="modal-footer">
-          <button class="btn-cancel" @click="closeModal">取消</button>
-          <button class="btn-save" @click="handleSave">保存</button>
-        </div>
-      </div>
-    </div>
+    <StockInOrderModal ref="stockInModalRef" @saved="handleStockInSaved" />
   </div>
 </template>
 
@@ -294,6 +232,7 @@
 import { ref, computed, onMounted } from 'vue'
 import request from '@/api/request'
 import { getMeasurementUnits } from '@/utils/unitHelper'
+import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
 
 // 筛选条件
 const filters = ref({
@@ -329,15 +268,8 @@ const jumpPage = ref(1)
 const sortKey = ref('')
 const sortDirection = ref('asc') // 'asc' 或 'desc'
 
-// 弹窗相关
-const showModal = ref(false)
-const isEditMode = ref(false)
-const formData = ref({
-  productId: null,
-  stock: 0,
-  minStock: 0,
-  maxStock: 0
-})
+// 入库单弹窗
+const stockInModalRef = ref(null)
 
 // 加载门店数据
 const loadStores = async () => {
@@ -651,81 +583,24 @@ const handleView = (item) => {
   console.log('查看详情', item)
 }
 
-// 打开新增弹窗
-const handleAddInventory = () => {
-  isEditMode.value = false
-  formData.value = {
-    productId: null,
-    stock: 0,
-    minStock: 0,
-    maxStock: 0
-  }
-  showModal.value = true
+// 打开入库单弹窗。成品库存页固定使用成品入库模式；传入行数据时由弹窗预填明细。
+const openStockInModal = (item = null) => {
+  const initialItem = item
+    ? { ...item, productId: item.productId ?? item.id }
+    : null
+  const initialData = selectedStoreId.value === null
+    ? undefined
+    : { storeId: selectedStoreId.value }
+
+  stockInModalRef.value?.open({
+    type: 'finished-product',
+    item: initialItem,
+    data: initialData
+  })
 }
 
-// 打开编辑弹窗
-const handleEdit = (item) => {
-  isEditMode.value = true
-  formData.value = {
-    productId: item.productId,
-    stock: item.stock,
-    minStock: item.minStock,
-    maxStock: item.maxStock
-  }
-  showModal.value = true
-}
-
-// 关闭弹窗
-const closeModal = () => {
-  showModal.value = false
-  formData.value = {
-    productId: null,
-    stock: 0,
-    minStock: 0,
-    maxStock: 0
-  }
-}
-
-// 保存库存
-const handleSave = async () => {
-  // 验证
-  if (!formData.value.productId) {
-    alert('请选择商品')
-    return
-  }
-
-  try {
-    if (isEditMode.value) {
-      // 更新库存
-      await request({
-        url: `/products/inventory/${formData.value.productId}`,
-        method: 'PUT',
-        data: {
-          stock: formData.value.stock || 0,
-          minStock: formData.value.minStock || 0,
-          maxStock: formData.value.maxStock || 0
-        }
-      })
-      alert('更新成功')
-    } else {
-      // 新增库存（实际上也是更新）
-      await request({
-        url: `/products/inventory/${formData.value.productId}`,
-        method: 'PUT',
-        data: {
-          stock: formData.value.stock || 0,
-          minStock: formData.value.minStock || 0,
-          maxStock: formData.value.maxStock || 0
-        }
-      })
-      alert('录入成功')
-    }
-
-    closeModal()
-    await loadInventory()
-  } catch (error) {
-    alert('保存失败：' + (error.response?.data?.message || error.message))
-  }
+const handleStockInSaved = async () => {
+  await loadInventory()
 }
 
 const prevPage = () => {
@@ -1295,157 +1170,6 @@ onMounted(async () => {
 
 .page-size-select:focus {
   border-color: #3b82f6;
-}
-
-/* 弹窗样式 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-container {
-  background: white;
-  border-radius: 8px;
-  width: 600px;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
-}
-
-.modal-header {
-  padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.modal-close {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: transparent;
-  font-size: 24px;
-  color: #6b7280;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.modal-close:hover {
-  background: #f3f4f6;
-  color: #111827;
-}
-
-.modal-body {
-  padding: 24px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.form-row:last-child {
-  margin-bottom: 0;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-group label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #374151;
-}
-
-.required {
-  color: #ef4444;
-}
-
-.form-input {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.3s;
-}
-
-.form-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.form-input:disabled {
-  background: #f3f4f6;
-  cursor: not-allowed;
-}
-
-.modal-footer {
-  padding: 16px 24px;
-  border-top: 1px solid #e5e7eb;
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.btn-cancel,
-.btn-save {
-  padding: 8px 20px;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.3s;
-  border: none;
-}
-
-.btn-cancel {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.btn-cancel:hover {
-  background: #e5e7eb;
-}
-
-.btn-save {
-  background: #10b981;
-  color: white;
-}
-
-.btn-save:hover {
-  background: #059669;
 }
 
 .col-actions {

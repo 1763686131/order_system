@@ -21,6 +21,8 @@ _units_schema_lock = Lock()
 _units_schema_ready = False
 _raw_material_schema_lock = Lock()
 _raw_material_schema_ready = False
+_stock_inbound_schema_lock = Lock()
+_stock_inbound_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 
@@ -163,6 +165,159 @@ def _ensure_raw_material_products_schema(conn):
         )
         conn.commit()
         _raw_material_schema_ready = True
+
+
+def _ensure_stock_inbound_schema(conn):
+    """Create the independent stock-in document, supplier and balance tables."""
+    global _stock_inbound_schema_ready
+    if _stock_inbound_schema_ready:
+        return
+
+    with _stock_inbound_schema_lock:
+        if _stock_inbound_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS suppliers (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                supplier_code TEXT,
+                supplier_name TEXT NOT NULL,
+                store_id INTEGER,
+                contact_person TEXT,
+                phone TEXT,
+                address TEXT,
+                tax_number TEXT,
+                bank_name TEXT,
+                bank_account TEXT,
+                remark TEXT,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_suppliers_code "
+            "ON suppliers(supplier_code) "
+            "WHERE supplier_code IS NOT NULL AND trim(supplier_code) <> ''"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_suppliers_store_status "
+            "ON suppliers(store_id, status)"
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stock_inbounds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_no TEXT NOT NULL UNIQUE,
+                document_date TEXT,
+                receipt_type TEXT NOT NULL,
+                store_id INTEGER,
+                warehouse_id INTEGER,
+                supplier_id INTEGER,
+                workshop TEXT,
+                inspector TEXT,
+                quality_no TEXT,
+                remark TEXT,
+                attachments TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                total_quantity REAL NOT NULL DEFAULT 0,
+                total_tax REAL NOT NULL DEFAULT 0,
+                total_amount REAL NOT NULL DEFAULT 0,
+                posted_at TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stock_inbounds_filter "
+            "ON stock_inbounds(receipt_type, status, document_date DESC)"
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stock_inbound_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                inbound_id INTEGER NOT NULL,
+                line_no INTEGER NOT NULL,
+                product_type TEXT NOT NULL,
+                product_id INTEGER,
+                product_code TEXT,
+                product_name TEXT,
+                specification TEXT,
+                unit TEXT,
+                expected_qty REAL,
+                received_qty REAL,
+                bin_code TEXT,
+                batch_no TEXT,
+                unit_price REAL,
+                tax_rate REAL NOT NULL DEFAULT 0,
+                tax_amount REAL NOT NULL DEFAULT 0,
+                total_amount REAL NOT NULL DEFAULT 0,
+                remark TEXT,
+                FOREIGN KEY(inbound_id) REFERENCES stock_inbounds(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stock_inbound_items_inbound "
+            "ON stock_inbound_items(inbound_id, line_no)"
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stock_balances (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_type TEXT NOT NULL,
+                product_id INTEGER NOT NULL,
+                warehouse_id INTEGER NOT NULL DEFAULT 0,
+                store_id INTEGER NOT NULL DEFAULT 0,
+                bin_code TEXT NOT NULL DEFAULT '',
+                batch_no TEXT NOT NULL DEFAULT '',
+                quantity REAL NOT NULL DEFAULT 0,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(product_type, product_id, warehouse_id, store_id, bin_code, batch_no)
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stock_balances_lookup "
+            "ON stock_balances(product_type, product_id, warehouse_id)"
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS stock_movements (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                movement_type TEXT NOT NULL,
+                receipt_type TEXT NOT NULL,
+                source_document_id INTEGER NOT NULL,
+                source_document_no TEXT NOT NULL,
+                source_item_id INTEGER,
+                product_type TEXT NOT NULL,
+                product_id INTEGER NOT NULL,
+                warehouse_id INTEGER NOT NULL DEFAULT 0,
+                store_id INTEGER NOT NULL DEFAULT 0,
+                bin_code TEXT NOT NULL DEFAULT '',
+                batch_no TEXT NOT NULL DEFAULT '',
+                quantity REAL NOT NULL,
+                unit_price REAL,
+                tax_rate REAL,
+                total_amount REAL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stock_movements_product "
+            "ON stock_movements(product_type, product_id, warehouse_id, created_at DESC)"
+        )
+        conn.commit()
+        _stock_inbound_schema_ready = True
 
 
 def _ensure_customer_schema(conn):
@@ -308,6 +463,7 @@ def get_db():
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)
         _ensure_raw_material_products_schema(conn)
+        _ensure_stock_inbound_schema(conn)
         yield conn
         conn.commit()
     except Exception:

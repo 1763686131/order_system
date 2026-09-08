@@ -75,9 +75,9 @@
             <span class="button-icon" aria-hidden="true">↓</span>
             导出
           </button>
-          <button class="btn btn-primary" type="button" @click="openAdjustmentModal()">
+          <button class="btn btn-primary" type="button" @click="openStockInModal()">
             <span class="button-icon" aria-hidden="true">+</span>
-            库存调整
+            入库
           </button>
         </div>
       </div>
@@ -194,8 +194,8 @@
               </td>
               <td class="muted-cell">{{ material.updatedAt }}</td>
               <td class="actions-column">
-                <button class="table-action" type="button" @click="openAdjustmentModal(material)">
-                  调整库存
+                <button class="table-action" type="button" @click="openStockInModal(material)">
+                  入库
                 </button>
               </td>
             </tr>
@@ -226,69 +226,7 @@
       </footer>
     </section>
 
-    <div v-if="adjustmentModal.visible" class="modal-backdrop" @click.self="closeAdjustmentModal">
-      <section class="adjustment-modal" role="dialog" aria-modal="true" aria-labelledby="adjustment-title">
-        <header class="modal-header">
-          <div>
-            <span class="modal-eyebrow">本地演示</span>
-            <h2 id="adjustment-title">库存调整</h2>
-          </div>
-          <button class="modal-close" type="button" title="关闭" @click="closeAdjustmentModal">×</button>
-        </header>
-
-        <div class="modal-body">
-          <label class="modal-field">
-            <span>原材料</span>
-            <select v-model="adjustmentForm.materialId">
-              <option v-for="material in materials" :key="material.id" :value="material.id">
-                {{ material.name }} · {{ material.code }}
-              </option>
-            </select>
-          </label>
-
-          <div class="modal-field">
-            <span>调整类型</span>
-            <div class="adjustment-types">
-              <button
-                type="button"
-                :class="{ active: adjustmentForm.type === 'in' }"
-                @click="adjustmentForm.type = 'in'"
-              >
-                入库增加
-              </button>
-              <button
-                type="button"
-                :class="{ active: adjustmentForm.type === 'out' }"
-                @click="adjustmentForm.type = 'out'"
-              >
-                出库减少
-              </button>
-            </div>
-          </div>
-
-          <div class="modal-grid">
-            <label class="modal-field">
-              <span>调整数量</span>
-              <input v-model.number="adjustmentForm.quantity" type="number" min="0" step="0.01" />
-            </label>
-            <div class="modal-field current-stock-field">
-              <span>调整后库存</span>
-              <strong>{{ formatNumber(adjustedStockPreview) }} {{ selectedMaterial?.unit || '' }}</strong>
-            </div>
-          </div>
-
-          <label class="modal-field">
-            <span>备注</span>
-            <textarea v-model.trim="adjustmentForm.remark" rows="3" placeholder="请输入本次调整原因"></textarea>
-          </label>
-        </div>
-
-        <footer class="modal-footer">
-          <button class="btn btn-secondary" type="button" @click="closeAdjustmentModal">取消</button>
-          <button class="btn btn-primary" type="button" @click="saveAdjustment">保存调整</button>
-        </footer>
-      </section>
-    </div>
+    <StockInOrderModal ref="stockInModalRef" @saved="handleStockInSaved" />
   </div>
 </template>
 
@@ -296,6 +234,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import request from '@/api/request'
 import { getMeasurementUnits } from '@/utils/unitHelper'
+import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
 
 const stores = ref([
   { id: 1, name: '绝缘门店' },
@@ -699,59 +638,30 @@ const exportInventory = () => {
   URL.revokeObjectURL(url)
 }
 
-const adjustmentModal = ref({ visible: false })
-const adjustmentForm = ref({
-  materialId: materials.value[0].id,
-  type: 'in',
-  quantity: 0,
-  remark: ''
-})
+const stockInModalRef = ref(null)
 
-const selectedMaterial = computed(() => {
-  return materials.value.find(item => item.id === Number(adjustmentForm.value.materialId)) || null
-})
+// 原材料库存页固定使用采购入库模式；行操作会预填所选原材料。
+const openStockInModal = (material = null) => {
+  const initialItem = material
+    ? { ...material, productId: material.productId ?? material.id }
+    : null
+  const initialData = filters.value.storeId === null
+    ? undefined
+    : { storeId: filters.value.storeId }
 
-const adjustedStockPreview = computed(() => {
-  if (!selectedMaterial.value) return 0
-  const quantity = Number(adjustmentForm.value.quantity) || 0
-  return adjustmentForm.value.type === 'in'
-    ? selectedMaterial.value.stock + quantity
-    : Math.max(0, selectedMaterial.value.stock - quantity)
-})
-
-const openAdjustmentModal = (material = null) => {
-  adjustmentForm.value = {
-    materialId: material?.id || materials.value[0]?.id,
-    type: 'in',
-    quantity: 0,
-    remark: ''
-  }
-  adjustmentModal.value.visible = true
+  stockInModalRef.value?.open({
+    type: 'raw-material',
+    item: initialItem,
+    data: initialData
+  })
 }
 
-const closeAdjustmentModal = () => {
-  adjustmentModal.value.visible = false
-}
-
-const saveAdjustment = () => {
-  const material = selectedMaterial.value
-  const quantity = Number(adjustmentForm.value.quantity)
-
-  if (!material || !quantity || quantity <= 0) {
-    window.alert('请选择原材料并填写大于 0 的调整数量')
-    return
-  }
-
-  material.stock = adjustedStockPreview.value
-  material.updatedAt = new Date().toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
+const handleStockInSaved = async () => {
+  await loadMaterialProducts()
+  lastRefreshed.value = new Date().toLocaleTimeString('zh-CN', {
     hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).replaceAll('/', '-')
-  closeAdjustmentModal()
+    minute: '2-digit'
+  })
 }
 
 onMounted(loadMaterialProducts)
@@ -1279,120 +1189,6 @@ onMounted(loadMaterialProducts)
   cursor: not-allowed;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgba(15, 23, 42, 0.42);
-}
-
-.adjustment-modal {
-  width: min(520px, 100%);
-  overflow: hidden;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2);
-}
-
-.modal-header,
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 17px 20px;
-}
-
-.modal-header {
-  border-bottom: 1px solid #e7ebf1;
-}
-
-.modal-header h2 {
-  margin: 4px 0 0;
-  color: #1f2937;
-  font-size: 18px;
-}
-
-.modal-close {
-  width: 30px;
-  height: 30px;
-  color: #64748b;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 22px;
-  line-height: 1;
-}
-
-.modal-close:hover {
-  background: #f1f5f9;
-}
-
-.modal-body {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 20px;
-}
-
-.modal-field {
-  display: flex;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.modal-field > span {
-  color: #64748b;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.modal-field select,
-.modal-field input,
-.modal-field textarea {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 9px 10px;
-  border: 1px solid #d8dee8;
-  border-radius: 5px;
-  background: #fff;
-}
-
-.modal-field textarea {
-  resize: vertical;
-}
-
-.modal-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.adjustment-types button {
-  flex: 1;
-  padding: 9px 12px;
-  border-color: #d8dee8;
-}
-
-.current-stock-field strong {
-  min-height: 36px;
-  display: flex;
-  align-items: center;
-  color: #1f2937;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.modal-footer {
-  justify-content: flex-end;
-  gap: 10px;
-  border-top: 1px solid #e7ebf1;
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1459,8 +1255,5 @@ onMounted(loadMaterialProducts)
     flex-direction: column;
   }
 
-  .modal-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

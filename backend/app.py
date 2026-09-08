@@ -33,6 +33,7 @@ from routes.products import products_bp
 from routes.raw_material_products import raw_material_products_bp
 from routes.customers import customers_bp
 from routes.hr_reports import hr_reports_bp
+from routes.stock_inbounds import stock_inbounds_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(orders_bp)
@@ -44,6 +45,7 @@ app.register_blueprint(products_bp)
 app.register_blueprint(raw_material_products_bp)
 app.register_blueprint(customers_bp)
 app.register_blueprint(hr_reports_bp)
+app.register_blueprint(stock_inbounds_bp)
 
 # ==========================================
 # 健康检查接口
