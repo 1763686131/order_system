@@ -3,7 +3,7 @@
     <div class="modal-container" @click.stop>
       <!-- 弹窗头部 -->
       <div class="modal-header">
-        <h3 class="modal-title">{{ isEdit ? '编辑商品' : '新增商品' }}</h3>
+        <h3 class="modal-title">{{ isEdit ? `编辑${entityLabel}` : `新增${entityLabel}` }}</h3>
         <button class="btn-close" @click="handleClose">×</button>
       </div>
 
@@ -83,11 +83,11 @@
           <!-- 第三行：商品名称 + 编号 -->
           <div class="form-row">
             <div class="form-group half">
-              <label class="required">商品名称:</label>
+              <label class="required">{{ entityLabel }}名称:</label>
               <input
                 v-model="formData.name"
                 type="text"
-                placeholder="请输入商品名称"
+                :placeholder="`请输入${entityLabel}名称`"
                 class="form-input"
               />
             </div>
@@ -237,7 +237,10 @@
                         <input type="checkbox" v-model="formData.enableAttributes" class="checkbox-green" id="enableAttr" />
                         <span style="font-size: 14px; color: #10b981;">启用属性</span>
                       </label>
-                      <span style="color: #9ca3af; font-size: 14px; cursor: help;" title="启用属性后可以设置商品的不同规格">?</span>
+                      <span
+                        style="color: #9ca3af; font-size: 14px; cursor: help;"
+                        :title="`启用属性后可以设置${entityLabel}的不同规格`"
+                      >?</span>
                     </div>
                     <div style="display: flex; gap: 16px;">
                       <button type="button" class="btn-text-link-add" @click="addNewAttribute">
@@ -501,10 +504,19 @@
 
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import request from '@/api/request'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { getMeasurementUnits } from '@/utils/unitHelper'
 
+const props = defineProps({
+  mode: {
+    type: String,
+    default: ''
+  }
+})
+
+const route = useRoute()
 const visible = ref(false)
 const isEdit = ref(false)
 const currentTab = ref(0)
@@ -513,6 +525,15 @@ const allWarehouses = ref([]) // 所有仓库数据
 const units = ref([]) // 单位列表
 const attributesExpanded = ref(false) // 属性区域是否展开
 const attributesList = ref([]) // 属性列表（从数据库加载）
+
+const isRawMaterial = computed(() => (
+  props.mode === 'raw-material'
+  || route.name === 'admin-materials'
+  || route.meta?.productType === 'raw-material'
+))
+
+const entityLabel = computed(() => isRawMaterial.value ? '原材料' : '商品')
+const apiPrefix = computed(() => isRawMaterial.value ? '/raw-material-products' : '/products')
 
 const tabs = ['基本信息', '仓库', '价格&条码', '库存设置']
 
@@ -530,7 +551,8 @@ const formData = reactive({
   warehouseCategories: {}, // 格式: { 仓库ID: [分类ID数组] }
   unitConversions: [], // 单位换算关系: [{ fromUnitId: 1, value: 10 }] 表示 1个fromUnit = 10个baseUnit
   enableAttributes: false, // 是否启用属性
-  attributes: [] // 选中的属性和选项
+  attributes: [], // 选中的属性和选项
+  attributeCombinations: []
 })
 
 const emit = defineEmits(['save', 'refresh'])
@@ -965,15 +987,14 @@ onMounted(() => {
 const open = (product = null) => {
   visible.value = true
   currentTab.value = 0
+  resetForm()
 
   if (product) {
     // 判断是编辑还是复制：有ID则为编辑，无ID则为复制（新增）
     isEdit.value = !!product.id
 
     // 填充表单数据
-    if (product.id) {
-      formData.id = product.id
-    }
+    formData.id = product.id || null
     formData.code = product.code || ''
     formData.name = product.name || ''
     formData.specification = product.specification || ''
@@ -1056,6 +1077,7 @@ const handleOverlayClick = () => {
 // 重置表单
 const resetForm = () => {
   Object.assign(formData, {
+    id: null,
     code: '',
     name: '',
     specification: '',
@@ -1204,7 +1226,7 @@ const handleSave = async () => {
   }
 
   if (!formData.name) {
-    alert('请输入商品名称')
+    alert(`请输入${entityLabel.value}名称`)
     return
   }
 
@@ -1224,6 +1246,8 @@ const handleSave = async () => {
       specification: formData.specification,
       notes: formData.notes,
       unitId: formData.unitId,
+      enableMultiUnit: formData.enableMultiUnit,
+      warehouseCategories: formData.warehouseCategories,
       unitConversions: formData.unitConversions,
       enableAttributes: formData.enableAttributes,
       enabled: formData.enabled
@@ -1235,7 +1259,9 @@ const handleSave = async () => {
     }
 
     // 调用API保存
-    const url = isEdit.value ? `/products/${formData.id}` : '/products'
+    const url = isEdit.value
+      ? `${apiPrefix.value}/${formData.id}`
+      : apiPrefix.value
     const method = isEdit.value ? 'PUT' : 'POST'
 
     const response = await request({
@@ -1246,7 +1272,7 @@ const handleSave = async () => {
 
     if (response.success) {
       alert(isEdit.value ? '更新成功' : '添加成功')
-      emit('save', response.product)
+      emit('save', response.product || response.rawMaterialProduct)
       handleClose()
     }
   } catch (error) {
@@ -1273,7 +1299,7 @@ const handleSaveAndContinue = async () => {
   }
 
   if (!formData.name) {
-    alert('请输入商品名称')
+    alert(`请输入${entityLabel.value}名称`)
     return
   }
 
@@ -1293,6 +1319,8 @@ const handleSaveAndContinue = async () => {
       specification: formData.specification,
       notes: formData.notes,
       unitId: formData.unitId,
+      enableMultiUnit: formData.enableMultiUnit,
+      warehouseCategories: formData.warehouseCategories,
       unitConversions: formData.unitConversions,
       enableAttributes: formData.enableAttributes,
       enabled: formData.enabled
@@ -1305,14 +1333,14 @@ const handleSaveAndContinue = async () => {
 
     // 调用API保存
     const response = await request({
-      url: '/products',
+      url: apiPrefix.value,
       method: 'POST',
       data: submitData
     })
 
     if (response.success) {
       alert('添加成功')
-      emit('save', response.product)
+      emit('save', response.product || response.rawMaterialProduct)
       resetForm()
     }
   } catch (error) {

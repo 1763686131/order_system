@@ -194,7 +194,12 @@
     </div>
 
     <!-- 商品表单弹窗 -->
-    <ProductFormModal ref="productFormModal" @save="handleSaveProduct" @refresh="loadProducts" />
+    <ProductFormModal
+      ref="productFormModal"
+      mode="finished-product"
+      @save="handleSaveProduct"
+      @refresh="loadProducts"
+    />
   </div>
 </template>
 
@@ -262,9 +267,7 @@ const loadUnits = async () => {
       url: '/products/units',
       method: 'GET'
     })
-    if (response && Array.isArray(response)) {
-      allUnits.value = response
-    }
+    allUnits.value = getMeasurementUnits(response)
   } catch (error) {
     console.error('加载单位失败:', error)
   }

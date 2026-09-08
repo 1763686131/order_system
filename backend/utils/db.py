@@ -8,7 +8,7 @@ from threading import Lock
 
 # 数据库路径配置
 # utils/db.py -> backend/utils/ -> backend/ -> project_root/
-if os.path.exists('/app/data'):
+if os.path.exists('/app/frontend/index.html') and os.path.isdir('/app/data'):
     DB_PATH = '/app/data/order_system.db'
 else:
     # 从 backend/utils/ 向上两级到项目根目录，再进入 data/
@@ -19,6 +19,8 @@ _schema_lock = Lock()
 _schema_ready = False
 _units_schema_lock = Lock()
 _units_schema_ready = False
+_raw_material_schema_lock = Lock()
+_raw_material_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 
@@ -115,6 +117,52 @@ def _ensure_hr_reports_schema(conn):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hr_reports_type ON hr_reports(file_type)")
 
         conn.commit()
+
+
+def _ensure_raw_material_products_schema(conn):
+    """创建与成品结构一致、但独立存储的原材料商品表。"""
+    global _raw_material_schema_ready
+    if _raw_material_schema_ready:
+        return
+
+    with _raw_material_schema_lock:
+        if _raw_material_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS raw_material_products (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT,
+                name TEXT NOT NULL,
+                specification TEXT,
+                category INTEGER,
+                unit_id INTEGER,
+                enable_multi_unit INTEGER DEFAULT 0,
+                notes TEXT,
+                enabled INTEGER DEFAULT 1,
+                warehouse_id INTEGER,
+                store_ids TEXT,
+                warehouse_categories TEXT,
+                unit_conversions TEXT,
+                enable_attributes INTEGER DEFAULT 0,
+                attribute_combinations TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_raw_material_products_code "
+            "ON raw_material_products(code)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_raw_material_products_name "
+            "ON raw_material_products(name)"
+        )
+        conn.commit()
+        _raw_material_schema_ready = True
 
 
 def _ensure_customer_schema(conn):
@@ -259,6 +307,7 @@ def get_db():
         _ensure_units_schema(conn)
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)
+        _ensure_raw_material_products_schema(conn)
         yield conn
         conn.commit()
     except Exception:

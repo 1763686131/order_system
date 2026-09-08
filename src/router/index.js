@@ -38,12 +38,24 @@ const routes = [
         path: 'products',
         name: 'admin-products',
         component: () => import('@/views/admin/products/ProductList.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, productType: 'finished-product' }
+      },
+      {
+        path: 'materials',
+        name: 'admin-materials',
+        component: () => import('@/views/admin/products/MaterialProductList.vue'),
+        meta: { requiresAuth: true, productType: 'raw-material' }
       },
       {
         path: 'inventory',
         name: 'admin-inventory',
         component: () => import('@/views/admin/products/InventoryList.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'inventory/materials',
+        name: 'admin-inventory-materials',
+        component: () => import('@/views/admin/products/MaterialInventory.vue'),
         meta: { requiresAuth: true }
       },
       {

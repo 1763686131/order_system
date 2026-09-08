@@ -14,7 +14,7 @@ from queue import Queue, Empty
 orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
 # 文件上传目录
-if os.path.exists('/app/uploads'):
+if os.path.exists('/app/frontend/index.html') and os.path.isdir('/app/uploads'):
     BASE_UPLOAD_DIR = '/app/uploads'
 else:
     BASE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'uploads')

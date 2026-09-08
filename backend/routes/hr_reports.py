@@ -14,7 +14,7 @@ import mimetypes
 hr_reports_bp = Blueprint('hr_reports', __name__, url_prefix='/api/hr/reports')
 
 # 文件存储路径配置
-if os.path.exists('/app/uploads'):
+if os.path.exists('/app/frontend/index.html') and os.path.isdir('/app/uploads'):
     UPLOAD_BASE_PATH = '/app/uploads/hr_reports'
 else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
