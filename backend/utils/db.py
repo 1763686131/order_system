@@ -17,6 +17,70 @@ else:
 
 _schema_lock = Lock()
 _schema_ready = False
+_units_schema_lock = Lock()
+_units_schema_ready = False
+
+DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
+
+
+def _ensure_units_schema(conn):
+    """为单位表增加分组字段，并初始化默认包装。"""
+    global _units_schema_ready
+    if _units_schema_ready:
+        return
+
+    with _units_schema_lock:
+        if _units_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        table_exists = cursor.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'units'"
+        ).fetchone()
+
+        if not table_exists:
+            cursor.execute(
+                """
+                CREATE TABLE units (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    unit_type TEXT NOT NULL DEFAULT 'measurement',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+        else:
+            existing_columns = {
+                row["name"] for row in cursor.execute("PRAGMA table_info(units)")
+            }
+            if "unit_type" not in existing_columns:
+                cursor.execute(
+                    "ALTER TABLE units ADD COLUMN unit_type TEXT DEFAULT 'measurement'"
+                )
+
+        cursor.execute(
+            """
+            UPDATE units
+            SET unit_type = 'measurement'
+            WHERE unit_type IS NULL OR trim(unit_type) = ''
+            """
+        )
+
+        for packaging_name in DEFAULT_PACKAGING_NAMES:
+            cursor.execute(
+                """
+                INSERT INTO units (name, unit_type)
+                SELECT ?, 'packaging'
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM units
+                    WHERE name = ? AND unit_type = 'packaging'
+                )
+                """,
+                (packaging_name, packaging_name),
+            )
+
+        conn.commit()
+        _units_schema_ready = True
 
 
 def _ensure_hr_reports_schema(conn):
@@ -192,6 +256,7 @@ def get_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     try:
+        _ensure_units_schema(conn)
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)
         yield conn

@@ -11,47 +11,96 @@ products_bp = Blueprint('products', __name__, url_prefix='/api/products')
 
 @products_bp.route('/units', methods=['GET'])
 def get_units():
-    """获取所有单位"""
+    """获取计量单位和包装，两个列表保持分离。"""
     data = read_products()
     return jsonify(data.get('units', []))
 
+
+def _get_unit_groups():
+    data = read_products()
+    groups = data.get('units') or {}
+    if isinstance(groups, list):
+        return {
+            'measurements': groups,
+            'packagings': []
+        }
+    return groups
+
+
+@products_bp.route('/units/measurements', methods=['GET'])
+def get_measurement_units():
+    """只获取商品计量单位。"""
+    return jsonify(_get_unit_groups().get('measurements', []))
+
+
+@products_bp.route('/units/packagings', methods=['GET'])
+def get_packaging_units():
+    """只获取订单包装。"""
+    return jsonify(_get_unit_groups().get('packagings', []))
+
+
 @products_bp.route('/units', methods=['POST'])
 def add_unit():
-    """添加单位"""
-    req_data = request.json
+    """添加计量单位或包装。"""
+    req_data = request.json or {}
     data = read_products()
-    units = data.get('units', [])
+    unit_groups = data.get('units') or {}
+    if isinstance(unit_groups, list):
+        unit_groups = {'measurements': unit_groups, 'packagings': []}
+
+    measurements = unit_groups.get('measurements', [])
+    packagings = unit_groups.get('packagings', [])
+    unit_type = req_data.get('type') or req_data.get('unitType') or 'measurement'
+    target_units = packagings if unit_type == 'packaging' else measurements
 
     unit_name = req_data.get('name', '').strip()
     if not unit_name:
-        return jsonify({'success': False, 'message': '单位名称不能为空'}), 400
+        return jsonify({'success': False, 'message': '名称不能为空'}), 400
 
     # 检查是否已存在
-    if any(u['name'] == unit_name for u in units):
-        return jsonify({'success': False, 'message': '该单位已存在'}), 400
+    if any(u['name'] == unit_name for u in target_units):
+        return jsonify({'success': False, 'message': '该名称已存在'}), 400
 
+    all_units = measurements + packagings
     new_unit = {
-        'id': max([u['id'] for u in units], default=0) + 1,
+        'id': max([u['id'] for u in all_units], default=0) + 1,
         'name': unit_name,
+        'unit_type': 'packaging' if unit_type == 'packaging' else 'measurement',
         'createdAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     }
 
-    units.append(new_unit)
-    data['units'] = units
+    target_units.append(new_unit)
+    data['units'] = {
+        'measurements': measurements,
+        'packagings': packagings
+    }
     write_products(data)
 
     return jsonify({'success': True, 'unit': new_unit})
 
 @products_bp.route('/units/<int:unit_id>', methods=['DELETE'])
 def delete_unit(unit_id):
-    """删除单位"""
+    """删除计量单位或包装。"""
     data = read_products()
-    units = data.get('units', [])
+    unit_groups = data.get('units') or {}
+    if isinstance(unit_groups, list):
+        unit_groups = {'measurements': unit_groups, 'packagings': []}
 
-    if not any(unit.get('id') == unit_id for unit in units):
-        return jsonify({'success': False, 'message': '单位不存在'}), 404
+    measurements = unit_groups.get('measurements', [])
+    packagings = unit_groups.get('packagings', [])
+    all_units = measurements + packagings
 
-    data['units'] = [u for u in units if u['id'] != unit_id]
+    if not any(unit.get('id') == unit_id for unit in all_units):
+        return jsonify({'success': False, 'message': '记录不存在'}), 404
+
+    data['units'] = {
+        'measurements': [
+            unit for unit in measurements if unit['id'] != unit_id
+        ],
+        'packagings': [
+            unit for unit in packagings if unit['id'] != unit_id
+        ]
+    }
     write_products(data)
 
     return jsonify({'success': True, 'message': '删除成功'})

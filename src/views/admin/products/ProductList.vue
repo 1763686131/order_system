@@ -202,6 +202,7 @@
 import { ref, computed, onMounted } from 'vue'
 import ProductFormModal from '@/components/admin/ProductFormModal.vue'
 import request from '@/api/request'
+import { getMeasurementUnits } from '@/utils/unitHelper'
 
 // 筛选条件
 const filters = ref({

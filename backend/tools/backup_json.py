@@ -50,7 +50,16 @@ def export_to_json():
         products = [dict(row) for row in cursor.fetchall()]
 
         cursor.execute('SELECT * FROM units ORDER BY id')
-        units = [dict(row) for row in cursor.fetchall()]
+        measurements = []
+        packagings = []
+        for row in cursor.fetchall():
+            unit = dict(row)
+            unit['createdAt'] = unit.pop('created_at', None)
+            unit_type = unit.pop('unit_type', 'measurement') or 'measurement'
+            if unit_type == 'packaging':
+                packagings.append(unit)
+            else:
+                measurements.append(unit)
 
         cursor.execute('SELECT * FROM inventory')
         inventory = {}
@@ -66,7 +75,10 @@ def export_to_json():
         products_file = os.path.join(BACKUP_DIR, f'products_backup_{timestamp}.json')
         with open(products_file, 'w', encoding='utf-8') as f:
             json.dump({
-                'units': units,
+                'units': {
+                    'measurements': measurements,
+                    'packagings': packagings
+                },
                 'products': products,
                 'inventory': inventory
             }, f, ensure_ascii=False, indent=2)

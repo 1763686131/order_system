@@ -195,9 +195,18 @@ def read_products():
     with get_db() as conn:
         cursor = conn.cursor()
 
-        # 读取单位
+        # 读取单位，并按类型拆成计量单位和包装。
         cursor.execute('SELECT * FROM units ORDER BY id')
-        units = [dict(row) for row in cursor.fetchall()]
+        measurement_units = []
+        packaging_units = []
+        for row in cursor.fetchall():
+            unit = dict(row)
+            unit['createdAt'] = unit.pop('created_at', None)
+            unit_type = unit.pop('unit_type', 'measurement') or 'measurement'
+            if unit_type == 'packaging':
+                packaging_units.append(unit)
+            else:
+                measurement_units.append(unit)
 
         # 读取属性
         cursor.execute('SELECT * FROM attributes ORDER BY id')
@@ -247,7 +256,10 @@ def read_products():
             }
 
         return {
-            'units': units,
+            'units': {
+                'measurements': measurement_units,
+                'packagings': packaging_units
+            },
             'attributes': attributes,
             'products': products,
             'inventory': inventory
@@ -263,23 +275,47 @@ def write_products(products_data):
             # These endpoints pass the complete read_products() payload. Sync
             # all collections so create/delete operations are persisted too.
             if 'units' in products_data:
-                units = products_data.get('units') or []
+                units_payload = products_data.get('units') or {}
+                if isinstance(units_payload, list):
+                    measurement_units = units_payload
+                    packaging_units = []
+                else:
+                    measurement_units = (
+                        units_payload.get('measurements')
+                        or units_payload.get('units')
+                        or []
+                    )
+                    packaging_units = (
+                        units_payload.get('packagings')
+                        or units_payload.get('packaging')
+                        or []
+                    )
+
+                units = [
+                    (unit, 'measurement')
+                    for unit in measurement_units
+                ] + [
+                    (unit, 'packaging')
+                    for unit in packaging_units
+                ]
                 unit_ids = []
-                for unit in units:
+                for unit, unit_type in units:
                     unit_id = unit.get('id')
                     if unit_id is None:
                         continue
                     unit_ids.append(int(unit_id))
                     cursor.execute(
                         '''
-                        INSERT INTO units (id, name, created_at)
-                        VALUES (?, ?, COALESCE(?, CURRENT_TIMESTAMP))
+                        INSERT INTO units (id, name, unit_type, created_at)
+                        VALUES (?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))
                         ON CONFLICT(id) DO UPDATE SET
-                            name = excluded.name
+                            name = excluded.name,
+                            unit_type = excluded.unit_type
                         ''',
                         (
                             int(unit_id),
                             unit.get('name', ''),
+                            unit_type,
                             unit.get('createdAt') or unit.get('created_at'),
                         )
                     )

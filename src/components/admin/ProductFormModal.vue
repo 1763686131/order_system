@@ -503,6 +503,7 @@
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import request from '@/api/request'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
+import { getMeasurementUnits } from '@/utils/unitHelper'
 
 const visible = ref(false)
 const isEdit = ref(false)
@@ -696,7 +697,7 @@ const loadWarehouses = async () => {
 const loadUnits = async () => {
   try {
     const response = await request({
-      url: '/products/units',
+      url: '/products/units/measurements',
       method: 'GET'
     })
     if (response && Array.isArray(response)) {
@@ -739,7 +740,7 @@ const handleAddUnit = async () => {
     const response = await request({
       url: '/products/units',
       method: 'POST',
-      data: { name: unitName.trim() }
+      data: { name: unitName.trim(), type: 'measurement' }
     })
     if (response.success) {
       alert('单位添加成功')
