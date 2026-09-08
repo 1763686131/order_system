@@ -86,13 +86,18 @@
           <div class="header-actions">
             <button
               v-if="showOrderDraftShortcut"
-              class="order-draft-shortcut"
+              :class="['order-draft-shortcut', `is-${orderDraftStore.draftMode}`]"
               type="button"
               :title="`返回${orderDraftStore.draftTitle}`"
               :aria-label="`返回${orderDraftStore.draftTitle}`"
               @click="restoreOrderDraft"
             >
-              <span class="order-draft-shortcut-icon" aria-hidden="true"></span>
+              <span class="order-draft-shortcut-mark" aria-hidden="true">
+                {{ orderDraftStore.draftMark }}
+              </span>
+              <span class="order-draft-shortcut-label">
+                {{ orderDraftStore.draftShortLabel }}
+              </span>
             </button>
             <component v-if="headerActions" :is="headerActions"></component>
           </div>
@@ -333,8 +338,8 @@ const navigateTo = (path) => {
 }
 
 const restoreOrderDraft = () => {
-  if (orderDraftStore.draftLocation) {
-    router.push(orderDraftStore.draftLocation)
+  if (orderDraftStore.draftPath) {
+    router.push(orderDraftStore.draftPath)
   }
 }
 
@@ -600,62 +605,66 @@ const logout = () => {
 }
 
 .order-draft-shortcut {
-  width: 36px;
-  height: 36px;
-  position: relative;
-  display: flex;
+  height: 38px;
+  min-width: 86px;
+  padding: 3px 10px 3px 4px;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  background: #fff;
-  color: #4f46e5;
-  border: 1px solid #c7d2fe;
+  gap: 7px;
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #6ee7b7;
   border-radius: 6px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(4, 120, 87, 0.14);
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
 
 .order-draft-shortcut:hover {
-  background: #eef2ff;
-  border-color: #818cf8;
+  background: #d1fae5;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(4, 120, 87, 0.2);
 }
 
-.order-draft-shortcut::after {
-  content: '';
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  top: 5px;
-  right: 5px;
-  background: #ef4444;
-  border: 2px solid #fff;
-  border-radius: 50%;
+.order-draft-shortcut.is-edit {
+  background: #fff7ed;
+  color: #b45309;
+  border-color: #fdba74;
+  box-shadow: 0 2px 6px rgba(180, 83, 9, 0.14);
 }
 
-.order-draft-shortcut-icon {
-  width: 14px;
-  height: 17px;
-  position: relative;
-  display: block;
-  border: 2px solid currentColor;
-  border-radius: 2px;
+.order-draft-shortcut.is-edit:hover {
+  background: #ffedd5;
+  box-shadow: 0 4px 10px rgba(180, 83, 9, 0.2);
 }
 
-.order-draft-shortcut-icon::before,
-.order-draft-shortcut-icon::after {
-  content: '';
-  position: absolute;
-  left: 3px;
-  right: 3px;
-  height: 1px;
-  background: currentColor;
+.order-draft-shortcut-mark {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: #fff;
+  background: #059669;
+  border-radius: 4px;
+  font-family: KaiTi, STKaiti, cursive;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1;
+  transform: rotate(-3deg);
 }
 
-.order-draft-shortcut-icon::before {
-  top: 5px;
+.order-draft-shortcut.is-edit .order-draft-shortcut-mark {
+  background: #d97706;
+  transform: rotate(3deg);
 }
 
-.order-draft-shortcut-icon::after {
-  top: 9px;
+.order-draft-shortcut-label {
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .header-tab {

@@ -39,20 +39,38 @@ export const useOrderDraftStore = defineStore('orderDraft', {
 
   getters: {
     hasDraft: (state) => Boolean(state.draft),
-    draftLocation: (state) => {
-      if (!state.draft?.route) {
-        return null
+    draftPath: (state) => {
+      if (!state.draft) {
+        return ''
       }
 
-      return {
-        name: state.draft.route.name,
-        params: { ...(state.draft.route.params || {}) },
-        query: { ...(state.draft.route.query || {}) }
+      if (state.draft.path) {
+        return state.draft.path
       }
+
+      if (state.draft.mode === 'edit' && state.draft.orderId) {
+        return `/admin/orders/edit/${state.draft.orderId}`
+      }
+
+      const copyFrom = state.draft.route?.query?.copyFrom
+      return copyFrom
+        ? `/admin/orders/create?copyFrom=${encodeURIComponent(copyFrom)}`
+        : '/admin/orders/create'
     },
     draftTitle: (state) => {
       if (!state.draft) return ''
       return state.draft.mode === 'edit' ? '修改订单' : '新增订单'
+    },
+    draftMark: (state) => {
+      if (!state.draft) return ''
+      return state.draft.mode === 'edit' ? '改' : '新'
+    },
+    draftShortLabel: (state) => {
+      if (!state.draft) return ''
+      return state.draft.mode === 'edit' ? '修改单' : '新增单'
+    },
+    draftMode: (state) => {
+      return state.draft?.mode || 'create'
     }
   },
 

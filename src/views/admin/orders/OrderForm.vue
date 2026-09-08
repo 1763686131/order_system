@@ -355,6 +355,13 @@ const draftKey = computed(() => {
   }
   return copySourceId.value ? `create:${copySourceId.value}` : 'create:new'
 })
+const orderFormRoute = {
+  key: draftKey.value,
+  path: route.fullPath,
+  name: route.name,
+  params: { ...route.params },
+  query: { ...route.query }
+}
 
 // 自定义弹窗
 const showModal = ref(false)
@@ -473,16 +480,17 @@ const persistDraft = () => {
   }
 
   orderDraftStore.saveDraft({
-    key: draftKey.value,
+    key: orderFormRoute.key,
     mode: isEditMode.value ? 'edit' : 'create',
     orderId: props.orderId,
     formData: getDraftFormData(),
     showTaxColumns: showTaxColumns.value,
     manualTotalPackages: manualTotalPackages.value,
+    path: orderFormRoute.path,
     route: {
-      name: route.name,
-      params: { ...route.params },
-      query: { ...route.query }
+      name: orderFormRoute.name,
+      params: orderFormRoute.params,
+      query: orderFormRoute.query
     }
   })
 }
@@ -1465,13 +1473,13 @@ onMounted(async () => {
     loadUnits()
   ])
 
-  const savedDraft = orderDraftStore.draft
-  if (savedDraft && savedDraft.key !== draftKey.value && orderDraftStore.draftLocation) {
-    await router.replace(orderDraftStore.draftLocation)
-    return
+  let savedDraft = orderDraftStore.draft
+  if (savedDraft && savedDraft.key !== orderFormRoute.key) {
+    orderDraftStore.clearDraft()
+    savedDraft = null
   }
 
-  if (savedDraft && savedDraft.key === draftKey.value) {
+  if (savedDraft && savedDraft.key === orderFormRoute.key) {
     await restoreDraft(savedDraft)
 
     for (const item of formData.value.items) {

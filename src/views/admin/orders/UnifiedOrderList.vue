@@ -1168,10 +1168,7 @@ const handleReset = () => {
 }
 
 const handleAdd = () => {
-  openOrderTask(
-    { name: 'admin-orders-create' },
-    'create:new'
-  )
+  openOrderTask({ name: 'admin-orders-create' })
 }
 
 const handleEdit = (order) => {
@@ -1183,10 +1180,7 @@ const handleEdit = (order) => {
 
 // 编辑订单（跳转到编辑页面）
 const handleEditOrder = (order) => {
-  openOrderTask(
-    { name: 'admin-orders-edit', params: { id: order.id } },
-    `edit:${order.id}`
-  )
+  openOrderTask({ name: 'admin-orders-edit', params: { id: order.id } })
 }
 
 // 复制新格式销售订单：进入新增页并由表单重新生成订单编号
@@ -1195,20 +1189,13 @@ const handleCopySalesOrder = (order) => {
     {
       name: 'admin-orders-create',
       query: { copyFrom: String(order.id) }
-    },
-    `create:${order.id}`
+    }
   )
 }
 
-const openOrderTask = (location, draftKey) => {
-  if (orderDraftStore.hasDraft && orderDraftStore.draft.key !== draftKey) {
-    if (orderDraftStore.draftLocation) {
-      router.push(orderDraftStore.draftLocation)
-    }
-    showCopyMessage('已有未关闭的订单页面，请先完成或关闭当前订单', 'error')
-    return
-  }
-
+const openOrderTask = (location) => {
+  // 新增和修改只保留一个任务，后打开的页面替换原草稿。
+  orderDraftStore.clearDraft()
   router.push(location)
 }
 
