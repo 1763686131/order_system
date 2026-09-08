@@ -492,12 +492,16 @@ def read_orders():
         for row in rows:
             order = dict(row)
 
-            # 解析 JSON 字段
+            # 解析 JSON 字段。物流服务兼容旧数组、新字符串两种存储格式。
             for field in ['logistics_service', 'order_goods', 'freight_costs']:
-                if order.get(field):
-                    order[field] = json.loads(order[field])
-                else:
+                raw_value = order.get(field)
+                if not raw_value:
                     order[field] = []
+                    continue
+                try:
+                    order[field] = json.loads(raw_value)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    order[field] = raw_value
 
             # 字段名转换（数据库用下划线，前端用驼峰）
             order_converted = {
@@ -603,7 +607,11 @@ def write_orders(orders_data):
                         order.get('goods_weight', ''),
                         order.get('goods_quantity', ''),
                         order.get('goods_packaging', ''),
-                        json.dumps(order.get('logistics_service', [])),
+                        (
+                            order.get('logistics_service', '')
+                            if isinstance(order.get('logistics_service', ''), str)
+                            else json.dumps(order.get('logistics_service', []), ensure_ascii=False)
+                        ),
                         order.get('remark', ''),
                         order.get('customer_id'),
                         order.get('warehouse_id'),
@@ -670,7 +678,11 @@ def write_orders(orders_data):
                         order.get('goods_weight', ''),
                         order.get('goods_quantity', ''),
                         order.get('goods_packaging', ''),
-                        json.dumps(order.get('logistics_service', [])),
+                        (
+                            order.get('logistics_service', '')
+                            if isinstance(order.get('logistics_service', ''), str)
+                            else json.dumps(order.get('logistics_service', []), ensure_ascii=False)
+                        ),
                         order.get('remark', ''),
                         order.get('customer_id'),
                         order.get('warehouse_id'),

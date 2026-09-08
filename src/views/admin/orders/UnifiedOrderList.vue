@@ -1221,7 +1221,9 @@ const hasLogistics = (order) => {
 // 复制物流极简信息
 const handleCopyOrderInfo = async (order) => {
   try {
-    const textToCopy = formatOrderForCopy(order)
+    const textToCopy = formatOrderForCopy(order, false, {
+      storeName: getStoreName(order)
+    })
 
     // 优先使用 Clipboard API
     if (navigator.clipboard && navigator.clipboard.writeText) {

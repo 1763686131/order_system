@@ -29,10 +29,15 @@ def export_to_json():
         orders = []
         for row in cursor.fetchall():
             order = dict(row)
-            # 解析 JSON 字段
+            # 解析 JSON 字段，物流服务兼容旧数组和新字符串。
             for field in ['logistics_service', 'order_goods', 'freight_costs']:
-                if order.get(field):
-                    order[field] = json.loads(order[field])
+                raw_value = order.get(field)
+                if not raw_value:
+                    continue
+                try:
+                    order[field] = json.loads(raw_value)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    order[field] = raw_value
             orders.append(order)
 
         orders_file = os.path.join(BACKUP_DIR, f'orders_backup_{timestamp}.json')

@@ -76,6 +76,19 @@
         <label>工程项目:</label>
         <input type="text" v-model="formData.projectName" placeholder="选填" />
       </div>
+
+      <div class="info-group">
+        <label>物流服务:</label>
+        <select v-model="formData.logisticsService">
+          <option
+            v-for="service in logisticsServiceOptions"
+            :key="service"
+            :value="service"
+          >
+            {{ service }}
+          </option>
+        </select>
+      </div>
     </div>
 
     <!-- 商品表格区 -->
@@ -202,6 +215,20 @@
         <div class="info-group wide">
           <label>备注信息</label>
           <input type="text" v-model="formData.orderRemark" placeholder="请输入备注信息" />
+        </div>
+
+        <div class="info-group">
+          <label>包装</label>
+          <select v-model="formData.packaging" @change="handlePackagingChange">
+            <option
+              v-for="packaging in packagingOptions"
+              :key="packaging"
+              :value="packaging"
+            >
+              {{ packaging }}
+            </option>
+            <option :value="ADD_PACKAGING_VALUE">新增包装...</option>
+          </select>
         </div>
 
         <div class="finance-item">
@@ -355,6 +382,16 @@ const warehouses = ref([])
 const products = ref([])
 const units = ref([]) // 新增单位数据
 
+const DEFAULT_PACKAGING_OPTIONS = ['无', '桶装', '纸箱', '托盘', '袋装']
+const ADD_PACKAGING_VALUE = '__add_packaging__'
+const logisticsServiceOptions = [
+  '送货上门+回单拍照回传',
+  '送货上门+回单邮回',
+  '送货上门',
+  '用户自提',
+  '无'
+]
+
 // 表单数据
 const formData = ref({
   storeId: '',
@@ -366,6 +403,8 @@ const formData = ref({
   contactPhone: '',
   contactAddress: '',
   projectName: '',
+  packaging: '无',
+  logisticsService: '送货上门+回单拍照回传',
   salesPerson: '柯晓',
   creator: '下单员',
   orderRemark: '',
@@ -377,6 +416,30 @@ const formData = ref({
   printAfterSave: false,
   items: []
 })
+
+const packagingOptions = computed(() => {
+  const customPackaging = units.value
+    .map(unit => unit.name)
+    .filter(Boolean)
+
+  const currentPackaging = formData.value.packaging &&
+    formData.value.packaging !== ADD_PACKAGING_VALUE
+    ? [formData.value.packaging]
+    : []
+
+  return [...new Set([
+    ...DEFAULT_PACKAGING_OPTIONS,
+    ...customPackaging,
+    ...currentPackaging
+  ])]
+})
+
+const normalizeLogisticsService = (value) => {
+  if (Array.isArray(value)) {
+    return value[0] || logisticsServiceOptions[0]
+  }
+  return String(value || logisticsServiceOptions[0])
+}
 
 // 过滤后的客户（根据门店）
 const filteredCustomers = computed(() => {
@@ -555,6 +618,8 @@ const loadOrderData = async (orderId) => {
       formData.value.contactPhone = response.contact_phone || response.receiver_phone || ''
       formData.value.contactAddress = response.contact_address || response.receiver_address || ''
       formData.value.projectName = response.project_name || ''
+      formData.value.packaging = response.goods_packaging || '无'
+      formData.value.logisticsService = normalizeLogisticsService(response.logistics_service)
       formData.value.salesPerson = response.sales_person || ''
       formData.value.creator = response.creator || ''
       formData.value.orderRemark = response.remark || ''
@@ -643,6 +708,43 @@ const loadOrderData = async (orderId) => {
 const getUnitName = (unitId) => {
   const unit = units.value.find(u => u.id === unitId)
   return unit ? unit.name : ''
+}
+
+const handlePackagingChange = async () => {
+  if (formData.value.packaging !== ADD_PACKAGING_VALUE) {
+    return
+  }
+
+  const packagingName = window.prompt('请输入新的包装名称')
+  formData.value.packaging = '无'
+
+  if (!packagingName || !packagingName.trim()) {
+    return
+  }
+
+  const trimmedName = packagingName.trim()
+  if (packagingOptions.value.includes(trimmedName)) {
+    formData.value.packaging = trimmedName
+    return
+  }
+
+  try {
+    const response = await request({
+      url: '/products/units',
+      method: 'POST',
+      data: { name: trimmedName }
+    })
+
+    if (!response?.success) {
+      throw new Error(response?.message || '新增包装失败')
+    }
+
+    await loadUnits()
+    formData.value.packaging = trimmedName
+  } catch (error) {
+    console.error('新增包装失败:', error)
+    showErrorModal(`新增包装失败：${error.response?.data?.message || error.message}`)
+  }
 }
 
 // 门店改变
@@ -1116,6 +1218,8 @@ const handleSave = async (printAfterSave = false) => {
       contactPhone: formData.value.contactPhone,
       contactAddress: formData.value.contactAddress,
       projectName: formData.value.projectName,
+      goodsPackaging: formData.value.packaging,
+      logisticsService: formData.value.logisticsService,
       salesPerson: formData.value.salesPerson,
       creator: formData.value.creator,
       orderRemark: formData.value.orderRemark,
@@ -1236,6 +1340,8 @@ const handleClearForm = () => {
     formData.value.contactPhone = ''
     formData.value.contactAddress = ''
     formData.value.projectName = ''
+    formData.value.packaging = '无'
+    formData.value.logisticsService = logisticsServiceOptions[0]
     formData.value.salesPerson = '柯晓'
     formData.value.creator = '下单员'
     formData.value.orderRemark = ''

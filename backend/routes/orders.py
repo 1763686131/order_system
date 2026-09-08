@@ -21,10 +21,19 @@ else:
 
 # 线程锁
 orders_lock = threading.Lock()
+DEFAULT_GOODS_PACKAGING = '无'
+DEFAULT_LOGISTICS_SERVICE = '送货上门+回单拍照回传'
 
 # 订单实时推送订阅者。每个前台页面对应一个队列，订单写入成功后立即广播。
 order_event_subscribers = set()
 order_event_subscribers_lock = threading.Lock()
+
+
+def normalize_logistics_service(value):
+    """将旧订单的服务数组和新订单的服务字符串统一为字符串。"""
+    if isinstance(value, list):
+        return value[0] if value else DEFAULT_LOGISTICS_SERVICE
+    return str(value or DEFAULT_LOGISTICS_SERVICE)
 
 
 def broadcast_order_event(action, order=None, order_id=None):
@@ -293,8 +302,13 @@ def create_new_format_order(req_data):
         "goods_name": goods_name,
         "goods_weight": goods_weight,
         "goods_quantity": goods_quantity,
-        "goods_packaging": "桶装",
-        "logistics_service": ["送货上门+回单拍照回传"],
+        "goods_packaging": req_data.get('goodsPackaging')
+            or req_data.get('goods_packaging')
+            or DEFAULT_GOODS_PACKAGING,
+        "logistics_service": normalize_logistics_service(
+            req_data.get('logisticsService')
+            or req_data.get('logistics_service')
+        ),
         "remark": req_data.get('orderRemark', ''),
 
         # 新字段（规范化结构）
@@ -569,8 +583,14 @@ def update_full_order(order_id, req_data):
             "goods_name": goods_name,
             "goods_weight": goods_weight,
             "goods_quantity": goods_quantity,
-            "goods_packaging": "桶装",
-            "logistics_service": old_order.get('logistics_service', ["送货上门+回单拍照回传"]),
+            "goods_packaging": req_data.get('goodsPackaging')
+                or req_data.get('goods_packaging')
+                or DEFAULT_GOODS_PACKAGING,
+            "logistics_service": normalize_logistics_service(
+                req_data.get('logisticsService')
+                or req_data.get('logistics_service')
+                or old_order.get('logistics_service')
+            ),
             "remark": req_data.get('orderRemark', ''),
 
             # 更新新字段
