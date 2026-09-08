@@ -2,69 +2,81 @@
   <div class="inventory-list-page">
     <!-- 搜索栏 -->
     <div class="search-bar">
-      <div class="search-group store-slider">
-        <label>门店</label>
-        <div class="store-tabs">
-          <div
-            :class="['store-tab', { active: selectedStoreId === null }]"
-            @click="selectedStoreId = null"
-          >
-            全部
-          </div>
-          <div
-            v-for="store in allStores"
-            :key="store.id"
-            :class="['store-tab', { active: selectedStoreId === store.id }]"
-            @click="selectedStoreId = store.id"
-          >
-            {{ store.name }}
-          </div>
+      <label class="search-field">
+        <span class="sr-only">搜索商品</span>
+        <span class="search-icon" aria-hidden="true"></span>
+        <input
+          v-model.trim="filters.productName"
+          type="search"
+          placeholder="搜索名称、编号或规格"
+        />
+      </label>
+
+      <span class="filter-label">门店</span>
+      <div class="store-tabs">
+        <div
+          :class="['store-tab', { active: selectedStoreId === null }]"
+          @click="selectedStoreId = null"
+        >
+          全部门店
+        </div>
+        <div
+          v-for="store in allStores"
+          :key="store.id"
+          :class="['store-tab', { active: selectedStoreId === store.id }]"
+          @click="selectedStoreId = store.id"
+        >
+          {{ store.name }}
         </div>
       </div>
 
-      <button class="btn-search" @click="handleSearch">
-        <span class="icon">🔍</span> 搜索
-      </button>
+      <label class="filter-field">
+        <span>分类</span>
+        <select v-model="filters.categoryId">
+          <option :value="null">全部分类</option>
+          <option v-for="category in allCategories" :key="category.id" :value="category.id">
+            {{ category.name }}
+          </option>
+        </select>
+      </label>
 
-      <div class="search-group">
-        <label>商品名称</label>
-        <input
-          v-model="filters.productName"
-          type="text"
-          placeholder="请输入商品名称"
-          class="search-input"
-        />
-      </div>
-
-      <div class="search-group">
-        <label>商品编号</label>
-        <input
-          v-model="filters.productCode"
-          type="text"
-          placeholder="请输入商品编号"
-          class="search-input"
-        />
-      </div>
-
-      <div class="search-group">
-        <label>仓库</label>
-        <select v-model="filters.warehouseId" class="search-select">
+      <label class="filter-field">
+        <span>仓库</span>
+        <select v-model="filters.warehouseId">
           <option :value="null">全部仓库</option>
           <option v-for="warehouse in allWarehouses" :key="warehouse.id" :value="warehouse.id">
             {{ warehouse.name }}
           </option>
         </select>
-      </div>
+      </label>
 
-      <div class="search-group checkbox-group">
-        <input type="checkbox" id="lowStock" v-model="filters.lowStockOnly" />
-        <label for="lowStock">仅显示低库存</label>
+      <div class="status-filter" aria-label="库存状态">
+        <span class="filter-label">库存状态</span>
+        <div class="status-tabs">
+          <button
+            v-for="status in statusOptions"
+            :key="status.value"
+            type="button"
+            :class="{ active: filters.status === status.value }"
+            @click="filters.status = status.value"
+          >
+            {{ status.label }}
+          </button>
+        </div>
       </div>
 
       <div class="action-buttons">
-        <button class="btn-new" @click="handleAddInventory">录入库存</button>
-        <button class="btn-export" @click="handleExport">导出</button>
-        <button class="btn-refresh" @click="handleRefresh">刷新</button>
+        <button class="btn btn-secondary" type="button" @click="handleRefresh">
+          重置筛选
+        </button>
+        <button class="btn btn-secondary" type="button" @click="handleExport">
+          <span class="button-icon" aria-hidden="true">↓</span>
+          导出
+        </button>
+        <button class="btn btn-primary" type="button" @click="handleAddInventory">
+          <span class="button-icon" aria-hidden="true">+</span>
+          库存调整
+        </button>
       </div>
     </div>
 
@@ -116,18 +128,18 @@
             <th class="col-id">ID</th>
             <th class="col-code sortable" @click="handleSort('code')">
               商品编号
-              <span class="sort-icon">⇅</span>
+              <span class="sort-icon">{{ getSortIcon('code') }}</span>
             </th>
             <th class="col-name sortable" @click="handleSort('name')">
               商品名称
-              <span class="sort-icon">⇅</span>
+              <span class="sort-icon">{{ getSortIcon('name') }}</span>
             </th>
             <th class="col-spec">规格型号</th>
             <th class="col-warehouse">仓库</th>
             <th class="col-category">分类</th>
             <th class="col-stock sortable" @click="handleSort('stock')">
               当前库存
-              <span class="sort-icon">⇅</span>
+              <span class="sort-icon">{{ getSortIcon('stock') }}</span>
             </th>
             <th class="col-unit">单位</th>
             <th class="col-min-stock">最低库存</th>
@@ -135,7 +147,7 @@
             <th class="col-status">库存状态</th>
             <th class="col-update-time sortable" @click="handleSort('updateTime')">
               更新时间
-              <span class="sort-icon">⇅</span>
+              <span class="sort-icon">{{ getSortIcon('updateTime') }}</span>
             </th>
             <th class="col-actions">操作</th>
           </tr>
@@ -288,10 +300,20 @@ const filters = ref({
   productName: '',
   productCode: '',
   warehouseId: null,
+  categoryId: null,
+  status: 'all',
   lowStockOnly: false
 })
 
 const selectedStoreId = ref(null)
+
+// 状态选项
+const statusOptions = [
+  { value: 'all', label: '全部' },
+  { value: 'normal', label: '正常' },
+  { value: 'low', label: '预警' },
+  { value: 'out', label: '缺货' }
+]
 
 // 数据
 const inventory = ref([])
@@ -302,6 +324,10 @@ const allUnits = ref([])
 const currentPage = ref(1)
 const pageSize = ref(30)
 const jumpPage = ref(1)
+
+// 排序相关
+const sortKey = ref('')
+const sortDirection = ref('asc') // 'asc' 或 'desc'
 
 // 弹窗相关
 const showModal = ref(false)
@@ -427,6 +453,25 @@ const loadInventory = async () => {
 const totalInventory = computed(() => filteredInventory.value.length)
 const totalPages = computed(() => Math.ceil(totalInventory.value / pageSize.value))
 
+// 获取所有分类
+const allCategories = computed(() => {
+  const categories = []
+  const categoryMap = new Map()
+
+  allWarehouses.value.forEach(warehouse => {
+    if (warehouse.categories && Array.isArray(warehouse.categories)) {
+      warehouse.categories.forEach(category => {
+        if (!categoryMap.has(category.id)) {
+          categoryMap.set(category.id, category)
+          categories.push(category)
+        }
+      })
+    }
+  })
+
+  return categories
+})
+
 // 库存统计
 const totalProducts = computed(() => inventory.value.length)
 const normalStockCount = computed(() =>
@@ -446,7 +491,8 @@ const filteredInventory = computed(() => {
   // 按商品名称筛选
   if (filters.value.productName) {
     result = result.filter(item =>
-      item.productName.toLowerCase().includes(filters.value.productName.toLowerCase())
+      item.productName.toLowerCase().includes(filters.value.productName.toLowerCase()) ||
+      (item.productCode && item.productCode.toLowerCase().includes(filters.value.productName.toLowerCase()))
     )
   }
 
@@ -462,6 +508,14 @@ const filteredInventory = computed(() => {
     result = result.filter(item => item.warehouseId === filters.value.warehouseId)
   }
 
+  // 按分类筛选
+  if (filters.value.categoryId) {
+    result = result.filter(item => {
+      const product = allProducts.value.find(p => p.id === item.productId)
+      return product && (product.categoryId === filters.value.categoryId || product.category === filters.value.categoryId)
+    })
+  }
+
   // 按门店筛选
   if (selectedStoreId.value !== null) {
     result = result.filter(item =>
@@ -469,13 +523,55 @@ const filteredInventory = computed(() => {
     )
   }
 
+  // 按状态筛选
+  if (filters.value.status !== 'all') {
+    result = result.filter(item => {
+      const stockStatus = getStockStatus(item)
+      return stockStatus === filters.value.status
+    })
+  }
+
   // 仅显示低库存
   if (filters.value.lowStockOnly) {
     result = result.filter(item => item.stock < item.minStock)
   }
 
+  // 排序
+  if (sortKey.value) {
+    result = [...result].sort((a, b) => {
+      let aValue = a[sortKey.value]
+      let bValue = b[sortKey.value]
+
+      // 特殊处理不同字段
+      if (sortKey.value === 'name') {
+        aValue = a.productName
+        bValue = b.productName
+      } else if (sortKey.value === 'updateTime') {
+        aValue = new Date(a.updateTime).getTime()
+        bValue = new Date(b.updateTime).getTime()
+      }
+
+      // 比较
+      let comparison = 0
+      if (typeof aValue === 'number' && typeof bValue === 'number') {
+        comparison = aValue - bValue
+      } else {
+        comparison = String(aValue || '').localeCompare(String(bValue || ''), 'zh-CN')
+      }
+
+      return sortDirection.value === 'asc' ? comparison : -comparison
+    })
+  }
+
   return result
 })
+
+// 获取库存状态
+const getStockStatus = (item) => {
+  if (item.stock === 0) return 'out'
+  if (item.stock < item.minStock) return 'low'
+  return 'normal'
+}
 
 // 分页后的库存列表
 const paginatedInventory = computed(() => {
@@ -533,7 +629,22 @@ const handleRefresh = async () => {
 }
 
 const handleSort = (field) => {
-  console.log('排序', field)
+  if (sortKey.value === field) {
+    // 如果点击同一列，切换排序方向
+    sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  } else {
+    // 如果点击不同列，设置新的排序键并默认升序
+    sortKey.value = field
+    sortDirection.value = 'asc'
+  }
+}
+
+// 获取排序图标
+const getSortIcon = (field) => {
+  if (sortKey.value !== field) {
+    return '⇅' // 未排序
+  }
+  return sortDirection.value === 'asc' ? '↑' : '↓'
 }
 
 const handleView = (item) => {
@@ -659,72 +770,75 @@ onMounted(async () => {
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding: 16px 20px;
   background: white;
   border-bottom: 1px solid #e5e7eb;
   flex-wrap: wrap;
 }
 
-.search-group {
+.search-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  min-height: 38px;
+  max-width: 200px;
+  flex: 0 0 200px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  position: relative;
+  padding-left: 34px;
 }
 
-.search-group label {
+.search-field input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1f2937;
   font-size: 14px;
-  color: #374151;
+}
+
+.search-icon {
+  position: absolute;
+  left: 13px;
+  width: 13px;
+  height: 13px;
+  border: 1.8px solid #94a3b8;
+  border-radius: 50%;
+}
+
+.search-icon::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  width: 6px;
+  height: 1.8px;
+  background: #94a3b8;
+  transform: rotate(45deg);
+}
+
+.filter-label {
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-.search-input,
-.search-select {
-  width: 160px;
-  padding: 6px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.3s;
-}
-
-.search-input:focus,
-.search-select:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
-
-.checkbox-group {
-  gap: 6px;
-}
-
-.checkbox-group input[type="checkbox"] {
-  cursor: pointer;
-}
-
-.checkbox-group label {
-  cursor: pointer;
-}
-
-/* 门店滑块 */
-.store-slider {
-  flex: 0 0 auto;
+.store-tabs,
+.status-tabs {
   display: flex;
   align-items: center;
-  gap: 12px;
-}
-
-.store-tabs {
-  display: flex;
   gap: 8px;
   background: #f3f4f6;
   padding: 4px;
   border-radius: 8px;
 }
 
-.store-tab {
-  padding: 8px 20px;
+.store-tab,
+.status-tabs button {
+  padding: 8px 16px;
   font-size: 14px;
   font-weight: 500;
   color: #6b7280;
@@ -733,69 +847,114 @@ onMounted(async () => {
   transition: all 0.3s;
   white-space: nowrap;
   user-select: none;
+  background: transparent;
+  border: 1px solid transparent;
 }
 
-.store-tab:hover {
+.store-tab:hover,
+.status-tabs button:hover {
   background: #e5e7eb;
   color: #374151;
 }
 
-.store-tab.active {
+.store-tab.active,
+.status-tabs button.active {
   background: #34d399;
   color: #fff;
   box-shadow: 0 2px 4px rgba(52, 211, 153, 0.3);
 }
 
-.btn-search,
-.btn-new,
-.btn-export,
-.btn-refresh {
-  padding: 6px 16px;
+.filter-field {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  gap: 8px;
   border: 1px solid #d1d5db;
   border-radius: 4px;
+  background: #fff;
+}
+
+.filter-field span {
+  color: #6b7280;
   font-size: 14px;
+  white-space: nowrap;
+}
+
+.filter-field select {
+  border: 0;
+  outline: 0;
+  color: #1f2937;
+  background: transparent;
+  font-size: 14px;
+  min-width: 100px;
+  height: 36px;
+}
+
+.status-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.btn {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
-  background: white;
-  color: #374151;
+  transition: 0.2s ease;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.btn-search {
-  background: #3b82f6;
-  color: white;
+.btn-secondary {
+  color: #374151;
+  background: #fff;
+  border: 1px solid #d1d5db;
+}
+
+.btn-secondary:hover {
   border-color: #3b82f6;
-}
-
-.btn-search:hover {
-  background: #2563eb;
-}
-
-.btn-new {
-  background: #10b981;
-  color: white;
-  border-color: #10b981;
-}
-
-.btn-new:hover {
-  background: #059669;
-}
-
-.btn-export:hover,
-.btn-refresh:hover {
+  color: #3b82f6;
   background: #f3f4f6;
 }
 
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
+.btn-primary {
+  color: #fff;
+  background: #10b981;
+  border: 1px solid #10b981;
 }
 
-.icon {
-  font-size: 12px;
+.btn-primary:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+.button-icon {
+  font-size: 16px;
+  line-height: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* 统计卡片 */
@@ -912,7 +1071,8 @@ onMounted(async () => {
 }
 
 .col-name {
-  min-width: 150px;
+  min-width: 120px;
+  max-width: 180px;
 }
 
 .col-spec {
@@ -944,7 +1104,7 @@ onMounted(async () => {
 }
 
 .col-status {
-  width: 100px;
+  width: 120px;
 }
 
 .col-update-time {
