@@ -20,6 +20,15 @@
             {{ store.name }}订单
           </div>
         </div>
+        <button
+          v-if="mode === 'finance'"
+          class="btn-add-order-inline"
+          type="button"
+          @click="handleAdd"
+        >
+          <span aria-hidden="true">+</span>
+          {{ addButtonText }}
+        </button>
 
         <input
           v-model="filters.keyword"
@@ -537,6 +546,7 @@ import { ref, computed, onMounted, onUnmounted, inject, h, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
+import { useOrderDraftStore } from '@/stores/orderDraft'
 import { formatOrderForCopy } from '@/utils/tools'
 import { getStores } from '@/utils/storeHelper'
 
@@ -553,6 +563,7 @@ const props = defineProps({
 const emit = defineEmits(['ship', 'refresh'])
 
 const orderStore = useOrderStore()
+const orderDraftStore = useOrderDraftStore()
 
 // 从父组件注入 handleShip 方法
 const handleShipFromParent = inject('handleShip', null)
@@ -604,6 +615,9 @@ onMounted(() => {
 onUnmounted(() => {
   // 清理事件监听
   document.removeEventListener('click', handleClickOutside)
+  if (setHeaderActions) {
+    setHeaderActions(null)
+  }
 })
 
 // 监听 mode 变化，重新获取数据
@@ -1154,7 +1168,10 @@ const handleReset = () => {
 }
 
 const handleAdd = () => {
-  // 已删除，使用顶部的"新增订单"按钮
+  openOrderTask(
+    { name: 'admin-orders-create' },
+    'create:new'
+  )
 }
 
 const handleEdit = (order) => {
@@ -1166,15 +1183,33 @@ const handleEdit = (order) => {
 
 // 编辑订单（跳转到编辑页面）
 const handleEditOrder = (order) => {
-  router.push({ name: 'admin-orders-edit', params: { id: order.id } })
+  openOrderTask(
+    { name: 'admin-orders-edit', params: { id: order.id } },
+    `edit:${order.id}`
+  )
 }
 
 // 复制新格式销售订单：进入新增页并由表单重新生成订单编号
 const handleCopySalesOrder = (order) => {
-  router.push({
-    name: 'admin-orders-create',
-    query: { copyFrom: String(order.id) }
-  })
+  openOrderTask(
+    {
+      name: 'admin-orders-create',
+      query: { copyFrom: String(order.id) }
+    },
+    `create:${order.id}`
+  )
+}
+
+const openOrderTask = (location, draftKey) => {
+  if (orderDraftStore.hasDraft && orderDraftStore.draft.key !== draftKey) {
+    if (orderDraftStore.draftLocation) {
+      router.push(orderDraftStore.draftLocation)
+    }
+    showCopyMessage('已有未关闭的订单页面，请先完成或关闭当前订单', 'error')
+    return
+  }
+
+  router.push(location)
 }
 
 // 计算运费总额
@@ -1599,6 +1634,33 @@ const changePageSize = (size) => {
   background: #34d399;
   color: #fff;
   box-shadow: 0 2px 4px rgba(52, 211, 153, 0.3);
+}
+
+.btn-add-order-inline {
+  height: 36px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  background: #4f46e5;
+  color: #fff;
+  border: 1px solid #4f46e5;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-add-order-inline:hover {
+  background: #4338ca;
+  border-color: #4338ca;
+}
+
+.btn-add-order-inline span {
+  font-size: 18px;
+  line-height: 1;
 }
 
 .search-input {

@@ -84,8 +84,15 @@
 
         <div class="header-right">
           <div class="header-actions">
-            <button class="btn-add-order" @click="goToCreateOrder">
-              ➕ 新增订单
+            <button
+              v-if="showOrderDraftShortcut"
+              class="order-draft-shortcut"
+              type="button"
+              :title="`返回${orderDraftStore.draftTitle}`"
+              :aria-label="`返回${orderDraftStore.draftTitle}`"
+              @click="restoreOrderDraft"
+            >
+              <span class="order-draft-shortcut-icon" aria-hidden="true"></span>
             </button>
             <component v-if="headerActions" :is="headerActions"></component>
           </div>
@@ -121,12 +128,14 @@
 import { ref, computed, provide, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useOrderDraftStore } from '@/stores/orderDraft'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import ShipOrderModal from '@/components/front/ShipOrderModal.vue'
 
 const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
+const orderDraftStore = useOrderDraftStore()
 
 const notificationCount = ref(3)
 const shippedActionModal = ref(null)
@@ -293,6 +302,10 @@ const isChildActive = (children) => {
 }
 
 const currentPath = computed(() => route.path)
+const showOrderDraftShortcut = computed(() => {
+  const isOrderFormRoute = route.name === 'admin-orders-create' || route.name === 'admin-orders-edit'
+  return orderDraftStore.hasDraft && !isOrderFormRoute
+})
 
 const currentMenuLabel = computed(() => {
   // 特殊路由处理
@@ -319,8 +332,10 @@ const navigateTo = (path) => {
   router.push(path)
 }
 
-const goToCreateOrder = () => {
-  router.push('/admin/orders/create')
+const restoreOrderDraft = () => {
+  if (orderDraftStore.draftLocation) {
+    router.push(orderDraftStore.draftLocation)
+  }
 }
 
 const logout = () => {
@@ -584,26 +599,63 @@ const logout = () => {
   gap: 12px;
 }
 
-.btn-add-order {
-  padding: 10px 20px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+.order-draft-shortcut {
+  width: 36px;
+  height: 36px;
+  position: relative;
   display: flex;
   align-items: center;
-  gap: 8px;
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+  justify-content: center;
+  background: #fff;
+  color: #4f46e5;
+  border: 1px solid #c7d2fe;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.btn-add-order:hover {
-  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+.order-draft-shortcut:hover {
+  background: #eef2ff;
+  border-color: #818cf8;
+}
+
+.order-draft-shortcut::after {
+  content: '';
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  top: 5px;
+  right: 5px;
+  background: #ef4444;
+  border: 2px solid #fff;
+  border-radius: 50%;
+}
+
+.order-draft-shortcut-icon {
+  width: 14px;
+  height: 17px;
+  position: relative;
+  display: block;
+  border: 2px solid currentColor;
+  border-radius: 2px;
+}
+
+.order-draft-shortcut-icon::before,
+.order-draft-shortcut-icon::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  height: 1px;
+  background: currentColor;
+}
+
+.order-draft-shortcut-icon::before {
+  top: 5px;
+}
+
+.order-draft-shortcut-icon::after {
+  top: 9px;
 }
 
 .header-tab {

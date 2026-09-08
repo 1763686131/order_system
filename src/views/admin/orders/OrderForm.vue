@@ -316,12 +316,15 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, inject, nextTick, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
+import { useOrderDraftStore } from '@/stores/orderDraft'
 
 const router = useRouter()
 const route = useRoute()
+const orderDraftStore = useOrderDraftStore()
+const setHeaderActions = inject('setHeaderActions', null)
 
 // 含税开关状态
 const showTaxColumns = ref(false)
@@ -345,6 +348,12 @@ const isEditMode = computed(() => props.orderId !== null)
 const copySourceId = computed(() => {
   const orderId = Number(route.query.copyFrom)
   return Number.isInteger(orderId) && orderId > 0 ? orderId : null
+})
+const draftKey = computed(() => {
+  if (isEditMode.value) {
+    return `edit:${props.orderId}`
+  }
+  return copySourceId.value ? `create:${copySourceId.value}` : 'create:new'
 })
 
 // 自定义弹窗
@@ -371,6 +380,7 @@ const closeModal = () => {
   showModal.value = false
   // 如果是成功提示，关闭弹窗后返回列表
   if (modalType.value === 'success') {
+    discardDraft()
     router.back()
   }
 }
@@ -380,7 +390,8 @@ const stores = ref([])
 const customers = ref([])
 const warehouses = ref([])
 const products = ref([])
-const units = ref([]) // 新增单位数据
+const units = ref([])
+const packagingUnits = ref([])
 
 const DEFAULT_PACKAGING_OPTIONS = ['无', '桶装', '纸箱', '托盘', '袋装']
 const ADD_PACKAGING_VALUE = '__add_packaging__'
@@ -418,7 +429,7 @@ const formData = ref({
 })
 
 const packagingOptions = computed(() => {
-  const customPackaging = units.value
+  const customPackaging = packagingUnits.value
     .map(unit => unit.name)
     .filter(Boolean)
 
@@ -439,6 +450,75 @@ const normalizeLogisticsService = (value) => {
     return value[0] || logisticsServiceOptions[0]
   }
   return String(value || logisticsServiceOptions[0])
+}
+
+const draftReady = ref(false)
+let draftSaveTimer = null
+
+const cloneDraftValue = (value) => JSON.parse(JSON.stringify(value))
+
+const getDraftFormData = () => {
+  const snapshot = cloneDraftValue(formData.value)
+  snapshot.items = (snapshot.items || []).map(item => ({
+    ...item,
+    showDropdown: false,
+    filteredProducts: []
+  }))
+  return snapshot
+}
+
+const persistDraft = () => {
+  if (!draftReady.value) {
+    return
+  }
+
+  orderDraftStore.saveDraft({
+    key: draftKey.value,
+    mode: isEditMode.value ? 'edit' : 'create',
+    orderId: props.orderId,
+    formData: getDraftFormData(),
+    showTaxColumns: showTaxColumns.value,
+    manualTotalPackages: manualTotalPackages.value,
+    route: {
+      name: route.name,
+      params: { ...route.params },
+      query: { ...route.query }
+    }
+  })
+}
+
+const scheduleDraftSave = () => {
+  if (!draftReady.value) {
+    return
+  }
+
+  clearTimeout(draftSaveTimer)
+  draftSaveTimer = setTimeout(persistDraft, 120)
+}
+
+const restoreDraft = async (draft) => {
+  const restoredFormData = cloneDraftValue(draft.formData)
+  formData.value = {
+    ...formData.value,
+    ...restoredFormData
+  }
+  formData.value.items = (formData.value.items || []).map(item => ({
+    ...item,
+    showDropdown: false,
+    filteredProducts: []
+  }))
+  showTaxColumns.value = Boolean(draft.showTaxColumns)
+  manualTotalPackages.value = draft.manualTotalPackages ?? null
+
+  // 金额联动的 watcher 会在恢复商品行后执行，下一帧再还原用户手工输入值。
+  await nextTick()
+  formData.value.discountAmount = restoredFormData.discountAmount ?? null
+}
+
+const discardDraft = () => {
+  draftReady.value = false
+  clearTimeout(draftSaveTimer)
+  orderDraftStore.clearDraft()
 }
 
 // 过滤后的客户（根据门店）
@@ -579,10 +659,12 @@ const loadProducts = async () => {
 // 加载单位
 const loadUnits = async () => {
   try {
-    const response = await request({ url: '/products/units', method: 'GET' })
-    if (response && Array.isArray(response)) {
-      units.value = response
-    }
+    const [measurementResponse, packagingResponse] = await Promise.all([
+      request({ url: '/products/units/measurements', method: 'GET' }),
+      request({ url: '/products/units/packagings', method: 'GET' })
+    ])
+    units.value = Array.isArray(measurementResponse) ? measurementResponse : []
+    packagingUnits.value = Array.isArray(packagingResponse) ? packagingResponse : []
   } catch (error) {
     console.error('加载单位失败:', error)
   }
@@ -732,7 +814,7 @@ const handlePackagingChange = async () => {
     const response = await request({
       url: '/products/units',
       method: 'POST',
-      data: { name: trimmedName }
+      data: { name: trimmedName, type: 'packaging' }
     })
 
     if (!response?.success) {
@@ -1325,6 +1407,7 @@ const cancelClose = () => {
 
 const confirmClose = () => {
   showCloseConfirmModal.value = false
+  discardDraft()
   router.back()
 }
 
@@ -1357,10 +1440,22 @@ const handleClearForm = () => {
   }
 }
 
+watch(
+  [formData, showTaxColumns, manualTotalPackages],
+  () => {
+    scheduleDraftSave()
+  },
+  { deep: true }
+)
+
 // 初始化
 onMounted(async () => {
   console.log('OrderForm mounted, props.orderId:', props.orderId)
   console.log('isEditMode:', isEditMode.value)
+
+  if (setHeaderActions) {
+    setHeaderActions(null)
+  }
 
   await Promise.all([
     loadStores(),
@@ -1370,23 +1465,51 @@ onMounted(async () => {
     loadUnits()
   ])
 
-  if (isEditMode.value) {
-    // 编辑模式：加载订单数据
-    console.log('进入编辑模式，加载订单ID:', props.orderId)
-    await loadOrderData(props.orderId)
-  } else {
-    // 新增模式：初始化空行并生成订单编号
-    console.log('进入新增模式')
-    initEmptyRows()
+  const savedDraft = orderDraftStore.draft
+  if (savedDraft && savedDraft.key !== draftKey.value && orderDraftStore.draftLocation) {
+    await router.replace(orderDraftStore.draftLocation)
+    return
+  }
 
-    if (copySourceId.value) {
-      console.log('复制订单数据，源订单ID:', copySourceId.value)
-      await loadOrderData(copySourceId.value)
+  if (savedDraft && savedDraft.key === draftKey.value) {
+    await restoreDraft(savedDraft)
+
+    for (const item of formData.value.items) {
+      if (item.productId && item.warehouseId) {
+        await updateStockInfo(item)
+      }
     }
 
-    // 从订单列表中获取最大ID+1，生成正式订单编号
-    await generateNewOrderNumber()
+    if (formData.value.customerId) {
+      await loadCustomerDebt(formData.value.customerId)
+    }
+  } else {
+    if (isEditMode.value) {
+      // 编辑模式：加载订单数据
+      console.log('进入编辑模式，加载订单ID:', props.orderId)
+      await loadOrderData(props.orderId)
+    } else {
+      // 新增模式：初始化空行并生成订单编号
+      console.log('进入新增模式')
+      initEmptyRows()
+
+      if (copySourceId.value) {
+        console.log('复制订单数据，源订单ID:', copySourceId.value)
+        await loadOrderData(copySourceId.value)
+      }
+
+      // 从订单列表中获取最大ID+1，生成正式订单编号
+      await generateNewOrderNumber()
+    }
   }
+
+  draftReady.value = true
+  persistDraft()
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(draftSaveTimer)
+  persistDraft()
 })
 
 // 生成新订单编号（从现有订单中找最大ID+1）
