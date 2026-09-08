@@ -10,6 +10,7 @@
 
 ## 版本历史
 
+- **v2.3** (2026-09-08) - 新增供应商、入库单、库存余额与事务过账接口
 - **v2.2** (2026-09-08) - 新增原材料商品档案接口，补充单位分组接口
 - **v2.1** (2026-09-07) - 补充人事检测报告文件管理接口文档
 - **v2.0** (2026-09-06) - 迁移至 SQLite 数据库，优化性能和并发支持
@@ -29,6 +30,7 @@
 8. [原材料使用与生产流水](#8-原材料使用与生产流水)
 9. [运费记录管理](#9-运费记录管理)
 10. [人事检测报告文件管理](#10-人事检测报告文件管理)
+11. [供应商与入库管理](#11-供应商与入库管理)
 
 ---
 
@@ -52,6 +54,10 @@
 - `products.name` - 按商品名称查询优化
 - `raw_material_products.code` - 按原材料编号查询优化
 - `raw_material_products.name` - 按原材料名称查询优化
+- `suppliers.supplier_code` - 供应商编号唯一索引
+- `stock_inbounds.receipt_type/status/document_date` - 入库单列表筛选优化
+- `stock_balances.product_type/product_id/warehouse_id` - 库存余额查询优化
+- `stock_movements.product_type/product_id/warehouse_id/created_at` - 库存流水查询优化
 
 ---
 
@@ -2281,6 +2287,452 @@ GET /api/hr/reports/share/6d6f4c5e-1be1-4f91-b6e6-123456789abc
 
 ---
 
+## 11. 供应商与入库管理
+
+本模块由 `backend/routes/stock_inbounds.py` 提供，支持原材料采购入库和成品生产完工入库。
+
+入库单有以下两种类型：
+
+- `raw-material`：原材料采购入库，提交过账时必须关联有效供应商
+- `finished-product`：成品生产完工入库，生产车间/班组为选填字段
+
+入库单有以下三种状态：
+
+- `draft`：草稿，只保存单据头与明细，不改变库存
+- `posted`：已过账，写入库存余额与库存流水
+- `cancelled`：已作废，未过账单据执行删除操作后进入此状态
+
+### 11.1 获取供应商列表
+
+- **URL**: `/api/suppliers`
+- **Method**: `GET`
+- **说明**: 获取供应商基础资料，默认返回所有状态的记录
+
+**Query 参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `storeId` | integer | 否 | 返回该门店及未指定门店的供应商 |
+| `status` | string | 否 | 按状态筛选：`active` 或 `inactive` |
+
+**响应示例**:
+
+```json
+[
+  {
+    "id": 1,
+    "supplierCode": "SUP-001",
+    "supplierName": "华中原料供应有限公司",
+    "storeId": 1,
+    "contactPerson": "王经理",
+    "phone": "13800000000",
+    "address": "湖北省武汉市",
+    "taxNumber": "91420100XXXXXXXX",
+    "bankName": "中国银行武汉分行",
+    "bankAccount": "1234567890",
+    "remark": "月结供应商",
+    "status": "active",
+    "createdAt": "2026-09-08 10:00:00",
+    "updatedAt": "2026-09-08 10:00:00"
+  }
+]
+```
+
+### 11.2 新增供应商
+
+- **URL**: `/api/suppliers`
+- **Method**: `POST`
+
+**请求参数**:
+
+```json
+{
+  "supplierCode": "SUP-001",
+  "supplierName": "华中原料供应有限公司",
+  "storeId": 1,
+  "contactPerson": "王经理",
+  "phone": "13800000000",
+  "address": "湖北省武汉市",
+  "taxNumber": "91420100XXXXXXXX",
+  "bankName": "中国银行武汉分行",
+  "bankAccount": "1234567890",
+  "remark": "月结供应商",
+  "status": "active"
+}
+```
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `supplierName` | string | 是 | 供应商名称；兼容别名 `name` |
+| `supplierCode` | string | 否 | 供应商编号；兼容别名 `code`，非空时全局唯一 |
+| `storeId` | integer | 否 | 所属门店 ID |
+| `contactPerson` | string | 否 | 联系人 |
+| `phone` | string | 否 | 联系电话 |
+| `address` | string | 否 | 联系地址 |
+| `taxNumber` | string | 否 | 税号 |
+| `bankName` | string | 否 | 开户银行 |
+| `bankAccount` | string | 否 | 银行账号 |
+| `remark` | string | 否 | 备注 |
+| `status` | string | 否 | 默认 `active` |
+
+**成功响应**: HTTP `201`
+
+```json
+{
+  "success": true,
+  "supplier": {
+    "id": 1,
+    "supplierCode": "SUP-001",
+    "supplierName": "华中原料供应有限公司",
+    "status": "active"
+  }
+}
+```
+
+供应商编号重复时返回 HTTP `409`；名称为空或字段格式错误时返回 HTTP `400`。
+
+### 11.3 更新供应商
+
+- **URL**: `/api/suppliers/<int:supplier_id>`
+- **Method**: `PUT`
+- **说明**: 支持只传需要修改的字段，字段定义与新增供应商相同
+
+**请求示例**:
+
+```json
+{
+  "contactPerson": "李经理",
+  "phone": "13900000000",
+  "remark": "联系人已更新"
+}
+```
+
+**成功响应**:
+
+```json
+{
+  "success": true,
+  "supplier": {
+    "id": 1,
+    "supplierCode": "SUP-001",
+    "supplierName": "华中原料供应有限公司",
+    "contactPerson": "李经理",
+    "phone": "13900000000",
+    "status": "active"
+  }
+}
+```
+
+供应商不存在时返回 HTTP `404`，编号冲突时返回 HTTP `409`。
+
+### 11.4 删除或停用供应商
+
+- **URL**: `/api/suppliers/<int:supplier_id>`
+- **Method**: `DELETE`
+- **说明**: 未被入库单引用时物理删除；已被引用时保留历史资料并把状态改为 `inactive`
+
+**成功响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "供应商已停用"
+}
+```
+
+供应商不存在时返回 HTTP `404`。
+
+### 11.5 获取入库单列表
+
+- **URL**: `/api/stock-inbounds`
+- **Method**: `GET`
+- **说明**: 按 ID 倒序返回入库单；每张单据包含 `items` 明细数组
+
+**Query 参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | string | 否 | `raw-material` 或 `finished-product` |
+| `status` | string | 否 | `draft`、`posted` 或 `cancelled` |
+
+**响应示例**:
+
+```json
+[
+  {
+    "id": 12,
+    "documentNo": "RK20260908012",
+    "documentDate": "2026-09-08",
+    "type": "raw-material",
+    "storeId": 1,
+    "warehouseId": 2,
+    "supplierId": 1,
+    "workshop": "",
+    "status": "posted",
+    "totalQuantity": 98.5,
+    "totalTax": 158.09,
+    "totalAmount": 1374.13,
+    "postedAt": "2026-09-08 14:30:00",
+    "createdAt": "2026-09-08 14:25:00",
+    "updatedAt": "2026-09-08 14:30:00",
+    "items": [
+      {
+        "id": 28,
+        "inbound_id": 12,
+        "line_no": 1,
+        "product_type": "raw-material",
+        "productId": 3,
+        "productCode": "RM-003",
+        "productName": "轻质碳酸钙",
+        "receivedQty": 98.5,
+        "batchNo": "20260908-A",
+        "unitPrice": 12.3456,
+        "taxRate": 13,
+        "taxAmount": 158.09,
+        "totalAmount": 1374.13
+      }
+    ]
+  }
+]
+```
+
+### 11.6 获取入库单详情
+
+- **URL**: `/api/stock-inbounds/<int:inbound_id>`
+- **Method**: `GET`
+- **说明**: 返回指定入库单的表头、汇总和全部明细
+
+入库单不存在时返回 HTTP `404`：
+
+```json
+{
+  "success": false,
+  "message": "入库单不存在"
+}
+```
+
+### 11.7 新建入库单
+
+- **URL**: `/api/stock-inbounds`
+- **Method**: `POST`
+- **说明**: 使用 `status: "draft"` 保存草稿，或使用 `status: "posted"` 直接提交过账
+
+**请求参数**:
+
+```json
+{
+  "documentNo": "RK20260908012",
+  "documentDate": "2026-09-08",
+  "type": "raw-material",
+  "storeId": 1,
+  "warehouseId": 2,
+  "supplierId": 1,
+  "workshop": null,
+  "inspector": "张质检",
+  "qualityNo": "QJ-20260908-001",
+  "remark": "采购到货",
+  "attachments": [
+    {
+      "name": "送货单.pdf",
+      "size": 128000,
+      "type": "application/pdf"
+    }
+  ],
+  "status": "posted",
+  "items": [
+    {
+      "productId": 3,
+      "productCode": "RM-003",
+      "productName": "轻质碳酸钙",
+      "specification": "1250目 / 40kg",
+      "unit": "公斤",
+      "expectedQty": 100,
+      "receivedQty": 98.5,
+      "binCode": "A-01-03",
+      "batchNo": "20260908-A",
+      "unitPrice": 12.3456,
+      "taxRate": 13,
+      "remark": "抽检合格"
+    }
+  ]
+}
+```
+
+**表头字段**:
+
+| 参数 | 类型 | 草稿 | 过账 | 说明 |
+|------|------|------|------|------|
+| `documentNo` | string | 否 | 否 | 为空时由后端生成 `RK + YYYYMMDD + 至少三位ID` |
+| `documentDate` | string | 是 | 是 | 单据日期，建议使用 `YYYY-MM-DD` |
+| `type` | string | 是 | 是 | `raw-material` 或 `finished-product` |
+| `storeId` | integer | 否 | 否 | 门店 ID |
+| `warehouseId` | integer | 是 | 是 | 目标仓库 ID，必须存在 |
+| `supplierId` | integer | 否 | 原材料必填 | 供应商 ID，原材料过账时必须有效且为 `active` |
+| `workshop` | string | 否 | 否 | 成品生产车间/班组，当前为选填 |
+| `inspector` | string | 否 | 否 | 检验员 |
+| `qualityNo` | string | 否 | 否 | 质检单号 |
+| `remark` | string | 否 | 否 | 备注，最多保存 200 字符 |
+| `attachments` | array | 否 | 否 | 附件元数据数组，见下方说明 |
+| `status` | string | 否 | 是 | 默认 `draft`；提交过账传 `posted` |
+| `items` | array | 否 | 是 | 草稿允许空数组；过账至少一条有效明细 |
+
+**明细字段**:
+
+| 参数 | 类型 | 过账必填 | 说明 |
+|------|------|----------|------|
+| `productId` | integer | 业务必填 | 物料 ID；按入库类型关联 `products` 或 `raw_material_products` |
+| `productCode` | string | 否 | 物料编码；请求也兼容 `code` |
+| `productName` | string | 否 | 物料名称快照；请求也兼容 `name`，前端选择物料后自动填充 |
+| `specification` | string | 否 | 规格型号 |
+| `unit` | string | 否 | 基本计量单位文本 |
+| `expectedQty` | number | 否 | 应收数量 |
+| `receivedQty` | number | 是 | 实收数量，必须大于 `0` |
+| `binCode` | string | 否 | 货位编码 |
+| `batchNo` | string | 是 | 批次号 |
+| `unitPrice` | number | 否 | 单价；前端限制 4 位小数 |
+| `taxRate` | number | 否 | 百分数，例如 `13` 代表 13%，不是 `0.13` |
+| `remark` | string | 否 | 行备注 |
+
+> 调用方过账时必须提供 `productId`。当前接口兼容只带 `productName` 的历史明细，但没有 `productId` 的明细不会更新库存余额，也不会生成库存流水。
+
+金额字段由服务端重新计算，不信任客户端传入值：
+
+```text
+taxAmount = receivedQty × unitPrice × taxRate ÷ 100
+totalAmount = receivedQty × unitPrice + taxAmount
+```
+
+行税额、行价税合计和单据汇总均使用十进制定点计算，金额保留 2 位小数。
+
+**成功响应**: HTTP `201`
+
+```json
+{
+  "success": true,
+  "message": "入库单保存成功",
+  "id": 12,
+  "stockIn": {
+    "id": 12,
+    "documentNo": "RK20260908012",
+    "documentDate": "2026-09-08",
+    "type": "raw-material",
+    "status": "posted",
+    "totalQuantity": 98.5,
+    "totalTax": 158.09,
+    "totalAmount": 1374.13,
+    "postedAt": "2026-09-08 14:30:00",
+    "items": [
+      {
+        "id": 28,
+        "inbound_id": 12,
+        "line_no": 1,
+        "product_type": "raw-material",
+        "productId": 3,
+        "productCode": "RM-003",
+        "productName": "轻质碳酸钙",
+        "receivedQty": 98.5,
+        "batchNo": "20260908-A",
+        "unitPrice": 12.3456,
+        "taxRate": 13,
+        "taxAmount": 158.09,
+        "totalAmount": 1374.13
+      }
+    ]
+  }
+}
+```
+
+> `attachments` 当前只把文件名、大小、MIME 类型等 JSON 元数据写入入库单，尚未提供附件二进制上传接口。
+
+### 11.8 修改草稿或提交过账
+
+- **URL**: `/api/stock-inbounds/<int:inbound_id>`
+- **Method**: `PUT`
+- **说明**: 修改现有未过账单据；传入 `status: "posted"` 时提交过账
+
+请求字段与“新建入库单”相同。保存时会替换该单据的全部明细，不是局部合并明细。
+
+**成功响应**:
+
+```json
+{
+  "success": true,
+  "message": "入库单更新成功",
+  "stockIn": {
+    "id": 12,
+    "documentNo": "RK20260908012",
+    "status": "posted"
+  }
+}
+```
+
+已过账单据不可再次修改或重复过账，返回 HTTP `409`：
+
+```json
+{
+  "success": false,
+  "message": "已过账单据不可修改"
+}
+```
+
+### 11.9 作废入库单
+
+- **URL**: `/api/stock-inbounds/<int:inbound_id>`
+- **Method**: `DELETE`
+- **说明**: 逻辑作废未过账单据，把状态更新为 `cancelled`，不物理删除记录
+
+**成功响应**:
+
+```json
+{
+  "success": true,
+  "message": "入库单已作废"
+}
+```
+
+已过账单据不能直接作废，返回 HTTP `409`；入库单不存在时返回 HTTP `404`。
+
+### 11.10 获取库存余额
+
+- **URL**: `/api/stock-balances`
+- **Method**: `GET`
+- **说明**: 汇总已过账入库数量，结果按物料类型、物料、仓库和门店分组
+
+**Query 参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `type` | string | 否 | `raw-material` 或 `finished-product` |
+
+**响应示例**:
+
+```json
+[
+  {
+    "productType": "raw-material",
+    "productId": 3,
+    "warehouseId": 2,
+    "storeId": 1,
+    "quantity": 98.5,
+    "updatedAt": "2026-09-08 14:30:00"
+  }
+]
+```
+
+### 11.11 过账规则与数据写入
+
+提交 `status: "posted"` 后，后端在同一个 SQLite 事务中执行：
+
+1. 写入或更新 `stock_inbounds` 单据头。
+2. 写入 `stock_inbound_items` 入库明细。
+3. 按物料、仓库、门店、货位和批次增量更新 `stock_balances`。
+4. 为每条有效明细写入一条 `stock_movements` 库存流水。
+5. 成品入库额外增量同步旧版 `inventory` 表，保证现有成品库存页面兼容。
+
+原材料库存使用独立 `stock_balances` 余额，不写入旧的成品 `inventory` 表。草稿不会执行第 3 至第 5 步。
+
+---
+
 ## 错误响应格式
 
 多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
@@ -2299,6 +2751,7 @@ GET /api/hr/reports/share/6d6f4c5e-1be1-4f91-b6e6-123456789abc
 - `401` - 未授权
 - `403` - 权限不足
 - `404` - 资源不存在
+- `409` - 资源状态冲突或唯一编号重复
 - `500` - 服务器内部错误
 
 ---
@@ -2317,6 +2770,11 @@ GET /api/hr/reports/share/6d6f4c5e-1be1-4f91-b6e6-123456789abc
 - `stores` - 门店表（3条记录）
 - `warehouses` - 仓库表（4条记录）
 - `users` - 用户表（9条记录）
+- `suppliers` - 供应商基础资料表
+- `stock_inbounds` - 入库单头与状态、汇总信息表
+- `stock_inbound_items` - 入库单明细表
+- `stock_balances` - 按物料、仓库、门店、货位和批次保存的库存余额表
+- `stock_movements` - 入库过账库存流水表
 
 **辅助表**:
 - `units` - 计量单位和包装表，通过 `unit_type` 分组
@@ -2346,6 +2804,21 @@ CREATE INDEX idx_raw_material_products_code
 ON raw_material_products(code);
 CREATE INDEX idx_raw_material_products_name
 ON raw_material_products(name);
+
+-- 供应商与入库单查询优化
+CREATE UNIQUE INDEX idx_suppliers_code
+ON suppliers(supplier_code)
+WHERE supplier_code IS NOT NULL AND trim(supplier_code) <> '';
+CREATE INDEX idx_suppliers_store_status
+ON suppliers(store_id, status);
+CREATE INDEX idx_stock_inbounds_filter
+ON stock_inbounds(receipt_type, status, document_date DESC);
+CREATE INDEX idx_stock_inbound_items_inbound
+ON stock_inbound_items(inbound_id, line_no);
+CREATE INDEX idx_stock_balances_lookup
+ON stock_balances(product_type, product_id, warehouse_id);
+CREATE INDEX idx_stock_movements_product
+ON stock_movements(product_type, product_id, warehouse_id, created_at DESC);
 ```
 
 ### 性能优化建议
@@ -2371,6 +2844,9 @@ ON raw_material_products(name);
 
 原材料商品档案 `raw_material_products` 是新增的独立表，没有对应的历史 JSON 迁移来源；新建或编辑后直接通过
 `/api/raw-material-products` 持久化到 SQLite。
+
+供应商、入库单、明细、库存余额和库存流水表由 `backend/utils/db.py` 在首次数据库连接时自动创建，
+没有对应的历史 JSON 迁移来源。
 
 ---
 
@@ -2403,6 +2879,19 @@ ON raw_material_products(name);
 ### 门店状态说明
 - `active` - 启用
 - `inactive` - 停用
+
+### 入库类型说明
+- `raw-material` - 原材料采购入库
+- `finished-product` - 成品生产完工入库
+
+### 入库单状态说明
+- `draft` - 草稿，未改变库存
+- `posted` - 已过账，已经写入库存余额和流水
+- `cancelled` - 已作废
+
+### 供应商状态说明
+- `active` - 启用，可用于原材料入库过账
+- `inactive` - 停用，仅保留历史关联
 
 ### 备用金类型
 - `deposit` - 充值
@@ -2473,6 +2962,14 @@ SQLite 支持**多读一写**模式：
 ---
 
 ## 更新日志
+
+### v2.3.0 (2026-09-08)
+- ✅ 新增供应商 CRUD 与 `suppliers` 数据表
+- ✅ 新增原材料采购入库和成品生产完工入库接口
+- ✅ 新增入库单头、入库明细、库存余额和库存流水数据表
+- ✅ 支持草稿保存、事务过账、防止重复过账和未过账单据作废
+- ✅ 成品过账同步旧版 `inventory` 表，原材料使用独立库存余额
+- ✅ 两个库存页面接入公共 `StockInOrderModal.vue` 入库单弹窗
 
 ### v2.2.0 (2026-09-08)
 - ✅ 新增原材料商品档案 CRUD 接口和 `raw_material_products` 独立数据表

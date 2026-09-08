@@ -9,7 +9,7 @@
 - 💰 **运费对账系统** - 物流/快递运费对账、备用金管理、Excel导出
 - 📦 **商品档案管理** - 成品商品与原材料商品分开管理，共用商品录入弹窗
 - 📊 **原材料业务数据** - 使用/生产时间线、日期筛选、快捷词库、行内编辑
-- 📋 **库存管理** - 成品库存与原材料库存独立展示，支持筛选、分页和调整
+- 📋 **库存与入库管理** - 成品/原材料库存独立展示，支持采购入库、生产完工入库、草稿和过账
 - 🔍 **全局搜索** - 支持运单号、收货人、电话、地址多维度搜索
 - 🤖 **智能解析** - 粘贴文本自动识别填充订单信息
 - 🧮 **智能计算器** - 内置重量计算器，支持复杂算术表达式
@@ -79,8 +79,11 @@ order_system/
 │   │   ├── products.py               # 成品、单位、属性和成品库存接口
 │   │   ├── raw_material_products.py  # 原材料商品档案接口
 │   │   ├── materials.py              # 原材料使用/生产流水接口
+│   │   ├── stock_inbounds.py         # 供应商、入库单、库存余额和过账接口
 │   │   └── orders.py                 # 订单接口
-│   ├── utils/                        # SQLite 连接和数据读写
+│   ├── utils/                        # SQLite 连接、表结构初始化和数据读写
+│   │   ├── db.py                     # 数据库连接与自动建表
+│   │   └── db_helper.py              # 兼容层数据读写
 │   ├── start.bat                     # Docker 启动脚本（自动检测路径）
 │   ├── Dockerfile                    # Docker 镜像配置
 │   └── requirements.txt              # Python 依赖
@@ -127,6 +130,7 @@ order_system/
 │   │   │   ├── ConfirmModal.vue              # 确认对话框
 │   │   │   ├── SearchOrderModal.vue          # 全局搜索
 │   │   │   ├── ShippedOrderActionModal.vue   # 已出库订单操作
+│   │   │   ├── StockInOrderModal.vue          # 原材料/成品共用入库单弹窗
 │   │   │   ├── SmartCalculator.vue           # 智能计算器
 │   │   │   └── NomiFloatingAI.vue            # NomiAI 浮动助手
 │   │   │
@@ -152,8 +156,11 @@ order_system/
 │           └── main.css              # 全局样式
 │
 ├── data/                             # SQLite 数据库与历史备份
-│   ├── order_system.db               # 当前业务数据库
+│   ├── order_system.db               # 当前业务数据库（含供应商、入库单、库存余额与流水）
 │   └── backup_before_cleanup/        # 历史 JSON 备份
+│
+├── docs/                             # 业务与接口文档
+│   └── API接口文档.md                 # 后端 API 参数、响应和业务规则
 │
 ├── uploads/                          # 上传文件
 │   └── receipts/                     # 回单图片存储
@@ -181,6 +188,7 @@ order_system/
 - **Flask** - Python 轻量级 Web 框架
 - **Python 3.8+** - 后端语言
 - **SQLite** - 当前业务数据库，按表存储订单、商品、原材料档案和库存
+- **入库过账** - 入库单头、明细、库存余额和库存流水在同一事务中持久化
 
 ### 部署
 
@@ -230,7 +238,10 @@ order_system/
 - ✅ **公共商品弹窗** - `ProductFormModal.vue` 根据路由或 `mode` 属性切换成品/原材料模式
 - ✅ **独立数据表** - 成品保存到 `products`，原材料保存到 `raw_material_products`
 - ✅ **成品库存** - 读取 `products` 与 `inventory` 数据
-- ✅ **原材料库存** - 展示原材料库存状态，并兼容原材料商品档案
+- ✅ **原材料库存** - 展示原材料档案，并可从工具栏或物料行发起采购入库
+- ✅ **统一入库弹窗** - 支持原材料采购入库和成品生产完工入库，明细实时计算数量、税额和价税合计
+- ✅ **草稿与过账** - 草稿只保存单据；提交过账后生成库存流水并增量更新库存余额
+- ✅ **供应商基础资料** - 原材料采购入库可关联独立的 `suppliers` 数据表
 - ✅ **单位分组** - `units` 表通过 `unit_type` 区分计量单位和包装
 
 订单中的包装和物流服务使用字符串保存：
@@ -293,8 +304,9 @@ order_system/
 | `src/views/admin/orders/UnifiedOrderList.vue` | 页面 | 统一展示订单和物流状态；复制物流订单文本 | `/api/orders`、门店接口 |
 | `src/views/admin/products/ProductList.vue` | 页面 | 成品商品档案新增、编辑、复制、删除 | `/api/products` |
 | `src/views/admin/products/MaterialProductList.vue` | 页面 | 原材料商品档案新增、编辑、复制、删除 | `/api/raw-material-products` |
-| `src/views/admin/products/InventoryList.vue` | 页面 | 成品库存查询和调整 | `/api/products/inventory` |
-| `src/views/admin/products/MaterialInventory.vue` | 页面 | 原材料库存展示和筛选；当前库存调整为前端演示 | `/api/raw-material-products` |
+| `src/views/admin/products/InventoryList.vue` | 页面 | 成品库存查询，并从工具栏或商品行发起成品入库 | `/api/products/inventory`、`/api/stock-inbounds` |
+| `src/views/admin/products/MaterialInventory.vue` | 页面 | 原材料库存展示和筛选，并从工具栏或物料行发起采购入库 | `/api/raw-material-products`、`/api/stock-inbounds` |
+| `src/components/common/StockInOrderModal.vue` | 公共弹窗 | 新建/编辑采购或生产完工入库单，完成校验、汇总、草稿保存与提交过账 | 门店、仓库、商品、供应商和入库单接口 |
 | `src/components/admin/ProductFormModal.vue` | 公共弹窗 | 根据 `mode` 或路由元信息切换成品/原材料录入模式 | `/api/products` 或 `/api/raw-material-products` |
 | `src/views/front/MaterialDisplay.vue` | 页面 | 原材料使用/生产流水时间线和快捷备注 | `/api/materials` |
 
@@ -308,6 +320,16 @@ order_system/
 - 两种模式共用门店、仓库、分类、单位、单位换算、属性和状态字段
 - 只有数据存储目标不同，原材料不会写入成品 `products` 表
 
+### 入库单弹窗模式
+
+`src/components/common/StockInOrderModal.vue` 由两个库存页面共用：
+
+- 成品库存传入 `type: 'finished-product'`，固定为“成品生产完工入库”，车间可选“大车间”或“小车间”
+- 原材料库存传入 `type: 'raw-material'`，固定为“原材料采购入库”，提交过账时供应商必填
+- 工具栏“入库”创建空白单据；列表行“入库”会预填当前商品或原材料
+- 保存草稿写入单据头和明细但不改变库存；提交过账会写入库存余额及库存流水
+- 弹窗附件控件当前保存文件名、大小和 MIME 类型等元数据，尚未上传文件二进制内容
+
 ### 后台路由
 
 | 路由 | 页面 | 数据用途 |
@@ -315,7 +337,7 @@ order_system/
 | `/admin/products` | 成品商品列表 | 成品档案，使用 `products` 表 |
 | `/admin/materials` | 原材料列表 | 原材料商品档案，使用 `raw_material_products` 表 |
 | `/admin/inventory` | 成品库存 | 成品库存数据 |
-| `/admin/inventory/materials` | 原材料库存 | 原材料库存展示和前端调整演示 |
+| `/admin/inventory/materials` | 原材料库存 | 原材料库存展示和采购入库 |
 
 ## 🔐 权限说明
 
