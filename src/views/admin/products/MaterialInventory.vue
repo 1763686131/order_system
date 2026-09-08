@@ -1,27 +1,5 @@
 <template>
   <div class="material-inventory-page">
-    <header class="page-header">
-      <div>
-        <div class="breadcrumb">库存管理 / 原材料库存</div>
-        <h1>原材料库存</h1>
-        <p>集中查看树脂、助剂、填料等原材料的库存状态。</p>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-secondary" type="button" @click="resetFilters">
-          重置筛选
-        </button>
-        <button class="btn btn-secondary" type="button" @click="exportInventory">
-          <span class="button-icon" aria-hidden="true">↓</span>
-          导出
-        </button>
-        <button class="btn btn-primary" type="button" @click="openAdjustmentModal()">
-          <span class="button-icon" aria-hidden="true">+</span>
-          库存调整
-        </button>
-      </div>
-    </header>
-
     <section class="filter-panel">
       <div class="filter-row">
         <label class="search-field">
@@ -33,6 +11,26 @@
             placeholder="搜索名称、编号或规格"
           />
         </label>
+
+        <span class="filter-label">门店</span>
+        <div class="store-tabs">
+          <button
+            type="button"
+            :class="{ active: filters.storeId === null }"
+            @click="filters.storeId = null"
+          >
+            全部门店
+          </button>
+          <button
+            v-for="store in stores"
+            :key="store.id"
+            type="button"
+            :class="{ active: filters.storeId === store.id }"
+            @click="filters.storeId = store.id"
+          >
+            {{ store.name }}
+          </button>
+        </div>
 
         <label class="filter-field">
           <span>分类</span>
@@ -68,29 +66,20 @@
             </button>
           </div>
         </div>
-      </div>
 
-      <div class="store-filter">
-        <span class="filter-label">所属门店</span>
-        <div class="store-tabs">
-          <button
-            type="button"
-            :class="{ active: filters.storeId === null }"
-            @click="filters.storeId = null"
-          >
-            全部门店
+        <div class="header-actions">
+          <button class="btn btn-secondary" type="button" @click="resetFilters">
+            重置筛选
           </button>
-          <button
-            v-for="store in stores"
-            :key="store.id"
-            type="button"
-            :class="{ active: filters.storeId === store.id }"
-            @click="filters.storeId = store.id"
-          >
-            {{ store.name }}
+          <button class="btn btn-secondary" type="button" @click="exportInventory">
+            <span class="button-icon" aria-hidden="true">↓</span>
+            导出
+          </button>
+          <button class="btn btn-primary" type="button" @click="openAdjustmentModal()">
+            <span class="button-icon" aria-hidden="true">+</span>
+            库存调整
           </button>
         </div>
-        <span class="filter-result">共 {{ filteredMaterials.length }} 条结果</span>
       </div>
     </section>
 
@@ -135,7 +124,7 @@
           <h2>原材料明细</h2>
           <span>最后刷新：{{ lastRefreshed }}</span>
         </div>
-        <button class="refresh-button" type="button" title="刷新模拟数据" @click="refreshData">
+        <button class="refresh-button" type="button" title="刷新" @click="refreshData">
           <span aria-hidden="true">↻</span>
           刷新
         </button>
@@ -770,121 +759,37 @@ onMounted(loadMaterialProducts)
 
 <style scoped>
 .material-inventory-page {
-  min-height: 100%;
-  padding: 28px 30px 36px;
-  color: #172033;
-  background: #f6f8fb;
-}
-
-.page-header,
-.filter-row,
-.store-filter,
-.table-toolbar,
-.table-footer,
-.header-actions {
-  display: flex;
-  align-items: center;
-}
-
-.page-header {
-  justify-content: space-between;
-  gap: 24px;
-  margin-bottom: 24px;
-}
-
-.breadcrumb,
-.modal-eyebrow {
-  color: #718096;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-}
-
-.page-header h1 {
-  margin: 7px 0 6px;
-  color: #111827;
-  font-size: 26px;
-  letter-spacing: 0;
-}
-
-.page-header p {
-  margin: 0;
-  color: #718096;
-  font-size: 13px;
-}
-
-.header-actions {
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.btn {
-  min-height: 36px;
-  padding: 0 14px;
-  border-radius: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.btn-secondary {
-  color: #4b5563;
-  background: #fff;
-  border: 1px solid #d8dee8;
-}
-
-.btn-secondary:hover {
-  border-color: #aeb8c8;
-  background: #f9fafb;
-}
-
-.btn-primary {
-  color: #fff;
-  background: #2563eb;
-  border: 1px solid #2563eb;
-}
-
-.btn-primary:hover {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-}
-
-.button-icon {
-  margin-right: 5px;
-  font-size: 16px;
-  line-height: 0;
+  padding: 0;
+  background: #f5f5f5;
+  min-height: 100vh;
 }
 
 .filter-panel,
 .table-panel {
   background: #fff;
-  border: 1px solid #e7ebf1;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(30, 41, 59, 0.04);
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .filter-panel {
-  padding: 16px 18px 12px;
-  margin-bottom: 18px;
+  padding: 16px 20px;
 }
 
 .filter-row {
+  display: flex;
+  align-items: center;
   gap: 12px;
   flex-wrap: wrap;
 }
 
-.search-field,
-.filter-field {
+.search-field {
   display: flex;
   align-items: center;
-  min-height: 36px;
-  border: 1px solid #d8dee8;
-  border-radius: 6px;
+  min-height: 38px;
+  max-width: 200px;
+  flex: 0 0 200px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
   background: #fff;
-}
-
-.search-field {
-  flex: 1 1 260px;
   position: relative;
   padding-left: 34px;
 }
@@ -895,7 +800,7 @@ onMounted(loadMaterialProducts)
   outline: 0;
   background: transparent;
   color: #1f2937;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .search-icon {
@@ -918,144 +823,174 @@ onMounted(loadMaterialProducts)
   transform: rotate(45deg);
 }
 
-.filter-field {
-  padding: 0 10px;
-  gap: 8px;
-}
-
-.filter-field span,
 .filter-label {
-  color: #64748b;
-  font-size: 12px;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-.filter-field select,
-.modal-field select,
-.modal-field input,
-.modal-field textarea {
+.store-tabs,
+.status-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.store-tabs button,
+.status-tabs button {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.3s;
+  white-space: nowrap;
+  user-select: none;
+  background: transparent;
+  border: 1px solid transparent;
+}
+
+.store-tabs button:hover,
+.status-tabs button:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.store-tabs button.active,
+.status-tabs button.active {
+  background: #34d399;
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(52, 211, 153, 0.3);
+}
+
+.filter-field {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  gap: 8px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.filter-field span {
+  color: #6b7280;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.filter-field select {
   border: 0;
   outline: 0;
   color: #1f2937;
   background: transparent;
-  font-size: 13px;
-}
-
-.filter-field select {
-  min-width: 110px;
-  height: 34px;
-}
-
-.status-filter,
-.store-filter {
-  gap: 10px;
+  font-size: 14px;
+  min-width: 100px;
+  height: 36px;
 }
 
 .status-filter {
   display: flex;
   align-items: center;
+  gap: 10px;
 }
 
-.status-tabs,
-.store-tabs,
-.adjustment-types {
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.btn {
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: 0.2s ease;
   display: flex;
   align-items: center;
   gap: 4px;
 }
 
-.status-tabs button,
-.store-tabs button,
-.adjustment-types button {
-  border: 1px solid transparent;
-  border-radius: 5px;
-  color: #64748b;
-  background: transparent;
-  cursor: pointer;
-  font-size: 12px;
-  transition: 0.2s ease;
+.btn-secondary {
+  color: #374151;
+  background: #fff;
+  border: 1px solid #d1d5db;
 }
 
-.status-tabs button,
-.store-tabs button {
-  padding: 7px 10px;
+.btn-secondary:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+  background: #f3f4f6;
 }
 
-.status-tabs button:hover,
-.store-tabs button:hover,
-.adjustment-types button:hover {
-  color: #1d4ed8;
-  background: #eff6ff;
+.btn-primary {
+  color: #fff;
+  background: #10b981;
+  border: 1px solid #10b981;
 }
 
-.status-tabs button.active,
-.store-tabs button.active,
-.adjustment-types button.active {
-  color: #1d4ed8;
-  background: #eff6ff;
-  border-color: #bfdbfe;
-  font-weight: 600;
+.btn-primary:hover {
+  background: #059669;
+  border-color: #059669;
 }
 
-.store-filter {
-  display: flex;
-  flex-wrap: wrap;
-  padding-top: 14px;
-  margin-top: 14px;
-  border-top: 1px solid #eef1f5;
-}
-
-.filter-result {
-  margin-left: auto;
-  color: #94a3b8;
-  font-size: 12px;
+.button-icon {
+  font-size: 16px;
+  line-height: 0;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 14px;
-  margin-bottom: 18px;
+  gap: 0;
 }
 
 .stat-card {
-  min-height: 110px;
-  padding: 16px 18px;
+  padding: 18px 22px;
   background: #fff;
-  border: 1px solid #e7ebf1;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(30, 41, 59, 0.04);
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .stat-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  color: #64748b;
-  font-size: 13px;
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .stat-card strong {
   display: block;
-  margin: 10px 0 4px;
+  margin: 12px 0 5px;
   color: #111827;
-  font-size: 25px;
+  font-size: 28px;
   font-weight: 700;
 }
 
 .stat-card small {
-  color: #94a3b8;
-  font-size: 11px;
+  color: #9ca3af;
+  font-size: 13px;
 }
 
 .stat-mark {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
 }
 
@@ -1081,41 +1016,50 @@ onMounted(loadMaterialProducts)
 
 .table-panel {
   overflow: hidden;
+  background: white;
+}
+
+.table-toolbar,
+.table-footer {
+  display: flex;
+  align-items: center;
 }
 
 .table-toolbar {
   justify-content: space-between;
   gap: 16px;
-  padding: 17px 18px;
-  border-bottom: 1px solid #e7ebf1;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .table-toolbar h2 {
-  margin: 0 0 4px;
+  margin: 0 0 5px;
   color: #1f2937;
   font-size: 16px;
+  font-weight: 600;
 }
 
 .table-toolbar span {
-  color: #94a3b8;
-  font-size: 12px;
+  color: #9ca3af;
+  font-size: 13px;
 }
 
 .refresh-button {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 7px 10px;
-  color: #64748b;
-  border: 1px solid #d8dee8;
-  border-radius: 5px;
+  gap: 6px;
+  padding: 8px 12px;
+  color: #6b7280;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
   background: #fff;
   cursor: pointer;
+  font-size: 14px;
 }
 
 .refresh-button:hover {
-  color: #2563eb;
-  border-color: #93c5fd;
+  color: #3b82f6;
+  border-color: #3b82f6;
 }
 
 .refresh-button span {
@@ -1131,37 +1075,38 @@ onMounted(loadMaterialProducts)
   width: 100%;
   min-width: 1080px;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .inventory-table th {
-  padding: 12px 14px;
-  color: #64748b;
-  background: #f8fafc;
-  border-bottom: 1px solid #e7ebf1;
-  font-size: 12px;
+  padding: 14px 16px;
+  color: #6b7280;
+  background: #f9fafb;
+  border-bottom: 2px solid #e5e7eb;
+  font-size: 14px;
   font-weight: 600;
   text-align: left;
   white-space: nowrap;
 }
 
 .inventory-table td {
-  padding: 13px 14px;
-  color: #334155;
-  border-bottom: 1px solid #eef1f5;
+  padding: 14px 16px;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
   white-space: nowrap;
 }
 
 .inventory-table tbody tr:hover {
-  background: #fafcff;
+  background: #f9fafb;
 }
 
 .sortable {
   cursor: pointer;
+  user-select: none;
 }
 
 .sortable:hover {
-  color: #2563eb;
+  background: #f3f4f6;
 }
 
 .sort-indicator {
@@ -1170,7 +1115,7 @@ onMounted(loadMaterialProducts)
 }
 
 .sort-indicator.active {
-  color: #2563eb;
+  color: #3b82f6;
 }
 
 .number-column {
@@ -1179,37 +1124,39 @@ onMounted(loadMaterialProducts)
 
 .code-cell,
 .muted-cell {
-  color: #64748b !important;
+  color: #6b7280 !important;
 }
 
 .material-name {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
 }
 
 .material-name strong {
   color: #1f2937;
   font-weight: 600;
+  font-size: 14px;
 }
 
 .material-name small,
 .max-stock {
-  color: #94a3b8;
-  font-size: 11px;
+  color: #9ca3af;
+  font-size: 13px;
 }
 
 .category-tag {
   display: inline-block;
-  padding: 4px 7px;
+  padding: 5px 9px;
   color: #475569;
   background: #f1f5f9;
   border-radius: 4px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 .stock-number {
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .status-normal {
@@ -1228,10 +1175,11 @@ onMounted(loadMaterialProducts)
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 5px 8px;
+  padding: 6px 10px;
   border-radius: 5px;
   background: #f8fafc;
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .status-normal.status-badge {
@@ -1258,42 +1206,45 @@ onMounted(loadMaterialProducts)
 }
 
 .table-action {
-  padding: 5px 9px;
-  color: #2563eb;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
-  border-radius: 4px;
+  padding: 6px 12px;
+  color: #3b82f6;
+  background: white;
+  border: 1px solid #3b82f6;
+  border-radius: 3px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .table-action:hover {
   color: #fff;
-  background: #2563eb;
+  background: #3b82f6;
 }
 
 .empty-state {
-  padding: 58px 20px !important;
-  color: #94a3b8 !important;
+  padding: 60px 20px !important;
+  color: #9ca3af !important;
   text-align: center !important;
 }
 
 .empty-title {
-  color: #64748b;
+  color: #6b7280;
   font-weight: 600;
+  font-size: 14px;
 }
 
 .empty-state p {
-  margin: 7px 0 0;
-  font-size: 12px;
+  margin: 8px 0 0;
+  font-size: 13px;
 }
 
 .table-footer {
   justify-content: space-between;
   gap: 16px;
-  padding: 13px 18px;
-  color: #94a3b8;
-  font-size: 12px;
+  padding: 16px 20px;
+  color: #9ca3af;
+  font-size: 13px;
+  border-top: 1px solid #e5e7eb;
+  background: white;
 }
 
 .pagination {
@@ -1304,17 +1255,22 @@ onMounted(loadMaterialProducts)
 
 .pagination select,
 .pagination button {
-  min-height: 30px;
-  padding: 0 9px;
-  color: #64748b;
+  min-height: 34px;
+  padding: 0 12px;
+  color: #6b7280;
   background: #fff;
-  border: 1px solid #d8dee8;
+  border: 1px solid #d1d5db;
   border-radius: 4px;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .pagination button {
   cursor: pointer;
+}
+
+.pagination button:hover:not(:disabled) {
+  border-color: #3b82f6;
+  color: #3b82f6;
 }
 
 .pagination button:disabled {

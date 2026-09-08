@@ -1,17 +1,5 @@
 <template>
   <div class="material-product-page">
-    <section class="page-heading">
-      <div>
-        <div class="breadcrumb">商品管理 / 原材料列表</div>
-        <h1>原材料列表</h1>
-        <p>维护树脂、助剂、填料等原材料的商品档案。</p>
-      </div>
-      <button class="btn-primary" type="button" @click="handleNew">
-        <span aria-hidden="true">＋</span>
-        新增原材料
-      </button>
-    </section>
-
     <section class="filter-panel">
       <div class="store-filter">
         <span class="filter-label">门店</span>
@@ -32,6 +20,10 @@
           @click="selectedStoreId = store.id"
         >
           {{ store.name }}
+        </button>
+        <button class="btn-primary" type="button" @click="handleNew">
+          <span aria-hidden="true">＋</span>
+          新增原材料
         </button>
       </div>
 
@@ -316,82 +308,19 @@ onMounted(async () => {
 
 <style scoped>
 .material-product-page {
-  min-height: 100%;
-  color: #172033;
+  padding: 0;
+  background: #f5f5f5;
+  min-height: 100vh;
 }
 
-.page-heading,
 .filter-panel,
 .table-section {
   background: #fff;
-  border: 1px solid #e5eaf0;
-  border-radius: 8px;
-}
-
-.page-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 22px 24px;
-  margin-bottom: 14px;
-}
-
-.breadcrumb {
-  color: #7b8798;
-  font-size: 12px;
-  margin-bottom: 8px;
-}
-
-h1,
-h2,
-p {
-  margin: 0;
-}
-
-h1 {
-  font-size: 24px;
-  letter-spacing: 0;
-}
-
-.page-heading p {
-  margin-top: 8px;
-  color: #7b8798;
-  font-size: 13px;
-}
-
-.btn-primary,
-.btn-secondary,
-.btn-refresh,
-.pagination button,
-.pagination select {
-  height: 34px;
-  border-radius: 5px;
-  border: 1px solid #d8e0e9;
-  padding: 0 13px;
-  background: #fff;
-  color: #526174;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: #1677ff;
-  border-color: #1677ff;
-  color: #fff;
-  font-weight: 600;
-}
-
-.btn-primary:hover {
-  background: #0958d9;
+  border-bottom: 1px solid #e5e7eb;
 }
 
 .filter-panel {
   padding: 16px 20px;
-  margin-bottom: 14px;
 }
 
 .store-filter {
@@ -406,7 +335,8 @@ h1 {
 .filter-label,
 .field span {
   color: #69778a;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .filter-label {
@@ -416,17 +346,52 @@ h1 {
 .store-chip {
   border: 1px solid #dbe3ec;
   border-radius: 4px;
-  padding: 6px 13px;
+  padding: 8px 16px;
   color: #69778a;
   background: #fff;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 14px;
 }
 
 .store-chip.active {
   border-color: #1677ff;
   color: #1677ff;
   background: #eaf3ff;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 38px;
+  border-radius: 5px;
+  border: 1px solid #1677ff;
+  padding: 0 16px;
+  background: #1677ff;
+  color: #fff;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+  margin-left: auto;
+}
+
+.btn-primary:hover {
+  background: #0958d9;
+  border-color: #0958d9;
+}
+
+.btn-secondary,
+.btn-refresh,
+.pagination button,
+.pagination select {
+  height: 38px;
+  border-radius: 5px;
+  border: 1px solid #d8e0e9;
+  padding: 0 16px;
+  background: #fff;
+  color: #526174;
+  cursor: pointer;
+  font-size: 14px;
 }
 
 .filter-grid {
@@ -446,14 +411,14 @@ h1 {
 .field input,
 .field select {
   width: 100%;
-  height: 34px;
-  padding: 0 10px;
+  height: 38px;
+  padding: 0 12px;
   border: 1px solid #d8e0e9;
   border-radius: 5px;
   outline: none;
   color: #263548;
   background: #fff;
-  font-size: 13px;
+  font-size: 14px;
   box-sizing: border-box;
 }
 
@@ -481,32 +446,37 @@ h1 {
   display: grid;
   grid-template-columns: 1fr auto;
   align-items: center;
-  padding: 16px 20px;
+  padding: 18px 22px;
   background: #fff;
-  border: 1px solid #e5eaf0;
-  border-radius: 8px;
+  border-bottom: 1px solid #e5eaf0;
 }
 
 .summary-label {
   color: #69778a;
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .summary-item strong {
   color: #172033;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 700;
 }
 
 .summary-note {
   grid-column: 1 / -1;
   color: #9aa6b5;
-  font-size: 11px;
-  margin-top: 5px;
+  font-size: 13px;
+  margin-top: 6px;
 }
 
 .table-section {
   overflow: hidden;
+  background: white;
+}
+
+h2 {
+  margin: 0;
 }
 
 .section-toolbar,
@@ -524,12 +494,13 @@ h1 {
 
 .section-toolbar h2 {
   font-size: 16px;
+  font-weight: 600;
 }
 
 .section-toolbar span,
 .pagination {
   color: #8a96a6;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .section-toolbar span {
@@ -555,17 +526,17 @@ table {
 
 th,
 td {
-  padding: 13px 16px;
+  padding: 14px 16px;
   text-align: left;
   border-bottom: 1px solid #edf0f4;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 th {
   color: #69778a;
   background: #fafbfd;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -584,12 +555,13 @@ tbody tr:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border-radius: 5px;
   background: #e6f4ff;
   color: #1677ff;
   font-weight: 700;
+  font-size: 14px;
 }
 
 .product-cell strong,
@@ -600,12 +572,13 @@ tbody tr:hover {
 .product-cell strong {
   color: #253348;
   font-weight: 600;
+  font-size: 14px;
 }
 
 .product-cell small {
   margin-top: 3px;
   color: #9aa6b5;
-  font-size: 11px;
+  font-size: 13px;
   max-width: 150px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -618,9 +591,10 @@ tbody tr:hover {
 
 .status-pill {
   display: inline-flex;
-  padding: 4px 9px;
+  padding: 5px 11px;
   border-radius: 12px;
-  font-size: 11px;
+  font-size: 13px;
+  font-weight: 500;
 }
 
 .status-pill.enabled {
@@ -641,9 +615,9 @@ tbody tr:hover {
 .table-action {
   border: 0;
   background: transparent;
-  padding: 4px 5px;
+  padding: 5px 6px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .table-action.edit {
@@ -671,20 +645,22 @@ tbody tr:hover {
 
 .empty-state strong {
   color: #526174;
+  font-size: 14px;
 }
 
 .empty-icon {
-  width: 38px;
-  height: 38px;
-  line-height: 38px;
+  width: 42px;
+  height: 42px;
+  line-height: 42px;
   border-radius: 50%;
   color: #1677ff;
   background: #eaf3ff;
-  font-size: 22px;
+  font-size: 24px;
 }
 
 .pagination {
   border-top: 1px solid #edf0f4;
+  background: white;
 }
 
 .pagination-actions {
@@ -709,11 +685,6 @@ tbody tr:hover {
 }
 
 @media (max-width: 600px) {
-  .page-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
   .filter-grid {
     grid-template-columns: 1fr;
   }
@@ -721,6 +692,16 @@ tbody tr:hover {
   .pagination {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .store-filter {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .btn-primary {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>
