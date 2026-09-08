@@ -1,13 +1,15 @@
 # 订单管理系统
 
-基于 Vue 3 + Vite 的现代化物流订单管理系统，支持订单全生命周期管理、回单管理、运费对账和智能订单解析。
+基于 Vue 3 + Vite + Flask + SQLite 的物流订单管理系统，支持订单全生命周期管理、商品与原材料档案、库存管理、回单管理、运费对账和智能订单解析。
 
 ## ✨ 主要特性
 
 - 🎯 **完整订单流转** - 未完成 → 已完成 → 已出库全流程管理
 - 📸 **回单智能管理** - 图片上传、在线预览、旋转编辑、大图查看
 - 💰 **运费对账系统** - 物流/快递运费对账、备用金管理、Excel导出
-- 📊 **原材料数据** - 时间线展示、日期筛选、快捷词库、行内编辑
+- 📦 **商品档案管理** - 成品商品与原材料商品分开管理，共用商品录入弹窗
+- 📊 **原材料业务数据** - 使用/生产时间线、日期筛选、快捷词库、行内编辑
+- 📋 **库存管理** - 成品库存与原材料库存独立展示，支持筛选、分页和调整
 - 🔍 **全局搜索** - 支持运单号、收货人、电话、地址多维度搜索
 - 🤖 **智能解析** - 粘贴文本自动识别填充订单信息
 - 🧮 **智能计算器** - 内置重量计算器，支持复杂算术表达式
@@ -18,7 +20,7 @@
 
 ### 环境要求
 
-- Node.js >= 16.0
+- Node.js >= 20.19.0
 - Python >= 3.8 (后端)
 - Docker (可选，用于容器化部署)
 
@@ -72,7 +74,13 @@ npm run preview
 ```
 order_system/
 ├── backend/                          # 后端服务
-│   ├── app.py                        # Flask 主应用
+│   ├── app.py                        # Flask 主应用和蓝图注册
+│   ├── routes/                       # API 路由
+│   │   ├── products.py               # 成品、单位、属性和成品库存接口
+│   │   ├── raw_material_products.py  # 原材料商品档案接口
+│   │   ├── materials.py              # 原材料使用/生产流水接口
+│   │   └── orders.py                 # 订单接口
+│   ├── utils/                        # SQLite 连接和数据读写
 │   ├── start.bat                     # Docker 启动脚本（自动检测路径）
 │   ├── Dockerfile                    # Docker 镜像配置
 │   └── requirements.txt              # Python 依赖
@@ -94,18 +102,25 @@ order_system/
 │   │   ├── LoginView.vue             # 登录页
 │   │   ├── MainView.vue              # 主界面（Tab导航容器）
 │   │   │
+│   │   ├── Admin.vue                 # 管理后台容器、侧边菜单和顶部导航
 │   │   ├── front/                    # 前台业务页面
 │   │   │   ├── OrderList.vue         # 订单列表（未完成+已完成）
 │   │   │   ├── ShippedOrderList.vue  # 已出库订单
-│   │   │   └── MaterialDisplay.vue   # 原材料数据展示
+│   │   │   └── MaterialDisplay.vue   # 原材料使用/生产数据展示
 │   │   │
 │   │   └── admin/                    # 后台管理页面
-│   │       ├── Admin.vue             # 管理后台容器
-│   │       ├── UserManage.vue        # 用户权限管理
-│   │       ├── LogisticsTruckReconciliation.vue  # 物流对账
-│   │       ├── ExpressCourierReconciliation.vue  # 快递对账
-│   │       └── orders/               # 订单管理模块
-│   │           └── UnifiedOrderList.vue  # 统一订单列表
+│   │       ├── Dashboard.vue         # 管理后台首页
+│   │       ├── products/             # 商品与库存管理
+│   │       │   ├── ProductList.vue          # 成品商品列表
+│   │       │   ├── MaterialProductList.vue  # 原材料商品档案列表
+│   │       │   ├── InventoryList.vue        # 成品库存
+│   │       │   └── MaterialInventory.vue    # 原材料库存
+│   │       ├── orders/               # 订单管理模块
+│   │       │   ├── OrderForm.vue            # 新增/修改订单
+│   │       │   └── UnifiedOrderList.vue     # 统一订单列表
+│   │       ├── system/               # 用户、角色、门店管理
+│   │       ├── finance/              # 财务与运费对账
+│   │       └── hr/                   # 人事报告
 │   │
 │   ├── components/                   # 组件库
 │   │   ├── common/                   # 公共组件
@@ -114,6 +129,10 @@ order_system/
 │   │   │   ├── ShippedOrderActionModal.vue   # 已出库订单操作
 │   │   │   ├── SmartCalculator.vue           # 智能计算器
 │   │   │   └── NomiFloatingAI.vue            # NomiAI 浮动助手
+│   │   │
+│   │   ├── admin/                    # 后台公共组件
+│   │   │   ├── ProductFormModal.vue  # 成品/原材料共用商品录入弹窗
+│   │   │   └── StoreFormModal.vue    # 门店录入弹窗
 │   │   │
 │   │   └── front/                    # 前台专用组件
 │   │       ├── OrderFormModal.vue    # 订单表单（新增/编辑）
@@ -132,11 +151,9 @@ order_system/
 │       └── styles/
 │           └── main.css              # 全局样式
 │
-├── data/                             # 数据存储（JSON 数据库）
-│   ├── orders_db.json                # 订单数据
-│   ├── users_db.json                 # 用户数据
-│   ├── material_db.json              # 原材料数据
-│   └── carrier_tags.json             # 物流快捷词库
+├── data/                             # SQLite 数据库与历史备份
+│   ├── order_system.db               # 当前业务数据库
+│   └── backup_before_cleanup/        # 历史 JSON 备份
 │
 ├── uploads/                          # 上传文件
 │   └── receipts/                     # 回单图片存储
@@ -163,7 +180,7 @@ order_system/
 
 - **Flask** - Python 轻量级 Web 框架
 - **Python 3.8+** - 后端语言
-- **JSON** - 文件数据库（生产环境建议迁移至 MySQL/PostgreSQL）
+- **SQLite** - 当前业务数据库，按表存储订单、商品、原材料档案和库存
 
 ### 部署
 
@@ -178,6 +195,8 @@ order_system/
   - 模式1: 系统标准化复制格式（【中固订单】/【绝缘订单】开头）
   - 模式2: 模糊提取引擎（智能识别姓名、电话、地址）
 - ✅ **订单编辑** - 修改订单信息（使用专用 `/edit` 端点，不影响状态）
+- ✅ **包装与物流服务** - 订单录入和编辑支持包装、物流服务下拉选择，并写入订单数据
+- ✅ **订单草稿保留** - 离开新增/修改页面后通过顶部悬浮入口返回，表单数据不会丢失
 - ✅ **订单搜索** - 全局搜索（运单号、收货人、电话、地址）
 - ✅ **订单复制** - 一键复制订单信息，支持"制单归属"字段
 - ✅ **订单删除** - 权限控制下的物理删除
@@ -205,7 +224,22 @@ order_system/
 - ✅ **绝缘订单标记** - 绝缘订单以红色字体显示
 - ✅ **多笔运费** - 支持单个订单多笔运费记录
 
-### 原材料管理
+### 商品与库存管理
+- ✅ **成品商品列表** - 商品档案新增、修改、复制、删除和门店筛选
+- ✅ **原材料商品列表** - 独立维护原材料名称、编号、规格、单位、分类、仓库和门店
+- ✅ **公共商品弹窗** - `ProductFormModal.vue` 根据路由或 `mode` 属性切换成品/原材料模式
+- ✅ **独立数据表** - 成品保存到 `products`，原材料保存到 `raw_material_products`
+- ✅ **成品库存** - 读取 `products` 与 `inventory` 数据
+- ✅ **原材料库存** - 展示原材料库存状态，并兼容原材料商品档案
+- ✅ **单位分组** - `units` 表通过 `unit_type` 区分计量单位和包装
+
+订单中的包装和物流服务使用字符串保存：
+
+- 包装字段：`goods_packaging`，默认值为“无”
+- 物流服务字段：`logistics_service`，默认值为“送货上门+回单拍照回传”
+- 历史订单可能把 `logistics_service` 返回为数组，新订单返回字符串，前端会兼容两种格式
+
+### 原材料业务数据
 - ✅ **数据录入** - 使用量/生产量/备注快速录入
 - ✅ **时间线展示** - 按日期分组的朋友圈式时间线
 - ✅ **日期筛选** - 默认30天，支持自定义日期范围
@@ -248,7 +282,40 @@ order_system/
 ### 组件组织
 - `views/` - 页面级组件，按前台/后台分类
 - `components/common/` - 公共弹窗和工具组件
+- `components/admin/` - 后台管理公共弹窗，包含成品/原材料共用的 `ProductFormModal.vue`
 - `components/front/` - 前台专用弹窗组件
+
+### 前端组件说明表
+
+| 页面/组件 | 类型 | 主要职责 | 主要数据来源 |
+|-----------|------|----------|--------------|
+| `src/views/admin/orders/OrderForm.vue` | 页面 | 新增、修改订单；包装、物流服务选择；保存订单草稿状态 | `/api/orders`、单位接口 |
+| `src/views/admin/orders/UnifiedOrderList.vue` | 页面 | 统一展示订单和物流状态；复制物流订单文本 | `/api/orders`、门店接口 |
+| `src/views/admin/products/ProductList.vue` | 页面 | 成品商品档案新增、编辑、复制、删除 | `/api/products` |
+| `src/views/admin/products/MaterialProductList.vue` | 页面 | 原材料商品档案新增、编辑、复制、删除 | `/api/raw-material-products` |
+| `src/views/admin/products/InventoryList.vue` | 页面 | 成品库存查询和调整 | `/api/products/inventory` |
+| `src/views/admin/products/MaterialInventory.vue` | 页面 | 原材料库存展示和筛选；当前库存调整为前端演示 | `/api/raw-material-products` |
+| `src/components/admin/ProductFormModal.vue` | 公共弹窗 | 根据 `mode` 或路由元信息切换成品/原材料录入模式 | `/api/products` 或 `/api/raw-material-products` |
+| `src/views/front/MaterialDisplay.vue` | 页面 | 原材料使用/生产流水时间线和快捷备注 | `/api/materials` |
+
+### 商品弹窗模式
+
+`src/components/admin/ProductFormModal.vue` 是成品和原材料共用的录入组件：
+
+- 在 `ProductList.vue` 中使用 `mode="finished-product"`，调用 `/api/products`
+- 在 `MaterialProductList.vue` 中使用 `mode="raw-material"`，调用 `/api/raw-material-products`
+- 组件也会读取当前路由的 `meta.productType`，兼容直接从路由进入的场景
+- 两种模式共用门店、仓库、分类、单位、单位换算、属性和状态字段
+- 只有数据存储目标不同，原材料不会写入成品 `products` 表
+
+### 后台路由
+
+| 路由 | 页面 | 数据用途 |
+|------|------|----------|
+| `/admin/products` | 成品商品列表 | 成品档案，使用 `products` 表 |
+| `/admin/materials` | 原材料列表 | 原材料商品档案，使用 `raw_material_products` 表 |
+| `/admin/inventory` | 成品库存 | 成品库存数据 |
+| `/admin/inventory/materials` | 原材料库存 | 原材料库存展示和前端调整演示 |
 
 ## 🔐 权限说明
 
@@ -410,7 +477,7 @@ server {
 
 - `src/` - 新版本代码（当前使用）
 - `backend/` - 后端代码（Flask API）
-- `data/` - 数据存储（JSON 文件数据库）
+- `data/` - SQLite 数据库和历史备份
 - `uploads/` - 上传文件存储
 - `frontend old/` - 旧版本代码（已废弃，可删除）
 
@@ -427,23 +494,32 @@ server {
 
 ### 版本信息
 
-- **当前版本**: v2.8.0
-- **最后更新**: 2026-08-30
+- **当前版本**: v3.0.0
+- **最后更新**: 2026-09-08
 - **Vue 版本**: 3.4+
-- **Vite 版本**: 5.0+
-- **Node 版本**: 16.0+
+- **Vite 版本**: 8.2.2
+- **Node 版本**: 20.19.0+（或 22.12.0+）
 
 ### 数据存储
 
-系统使用 JSON 文件作为数据库：
+系统当前使用 SQLite 数据库 `data/order_system.db`：
 
-- `data/orders_db.json` - 订单数据
-- `data/users_db.json` - 用户数据
-- `data/material_db.json` - 原材料数据
-- `data/carrier_tags.json` - 物流公司快捷词库
-- `uploads/` - 回单图片存储目录
+- `orders` - 订单数据
+- `products` - 成品商品档案
+- `raw_material_products` - 原材料商品档案
+- `inventory` - 成品库存数据
+- `material_records` - 原材料使用/生产流水
+- `units` - 计量单位和包装，使用 `unit_type` 分组
+- `attributes` - 商品属性及选项
+- `stores`、`warehouses`、`customers` - 基础业务数据
+- `uploads/` - 回单图片和人事报告文件
 
-⚠️ **生产环境建议**: 迁移到 MySQL/PostgreSQL 等关系型数据库以提升性能和数据安全性。
+原材料商品档案与原材料使用/生产流水是两类数据：
+
+- 原材料商品档案：用于后台原材料列表，并作为原材料库存等后续业务的数据来源，存储在 `raw_material_products`
+- 原材料使用/生产流水：用于前台原材料数据时间线，存储在 `material_records`
+
+历史 JSON 文件仅作为迁移或备份参考，当前业务接口以 SQLite 为准。
 
 ### 常见问题
 

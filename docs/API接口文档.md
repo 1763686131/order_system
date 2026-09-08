@@ -10,6 +10,7 @@
 
 ## 版本历史
 
+- **v2.2** (2026-09-08) - 新增原材料商品档案接口，补充单位分组接口
 - **v2.1** (2026-09-07) - 补充人事检测报告文件管理接口文档
 - **v2.0** (2026-09-06) - 迁移至 SQLite 数据库，优化性能和并发支持
 - **v1.0** (2026-08-30) - 初始版本，使用 JSON 文件存储
@@ -25,7 +26,7 @@
 5. [订单管理](#5-订单管理)
 6. [运营商标签管理](#6-运营商标签管理)
 7. [客户管理](#7-客户管理)
-8. [原材料管理](#8-原材料管理)
+8. [原材料使用与生产流水](#8-原材料使用与生产流水)
 9. [运费记录管理](#9-运费记录管理)
 10. [人事检测报告文件管理](#10-人事检测报告文件管理)
 
@@ -49,6 +50,8 @@
 - `orders.date` - 按日期查询优化
 - `products.code` - 按商品编码查询优化
 - `products.name` - 按商品名称查询优化
+- `raw_material_products.code` - 按原材料编号查询优化
+- `raw_material_products.name` - 按原材料名称查询优化
 
 ---
 
@@ -455,9 +458,40 @@
 
 ### 4.1 单位管理
 
-#### 4.1.1 获取所有单位
+单位统一存储在 `units` 表中，通过 `unit_type` 字段分为两组：
+
+- `measurement`：计量单位，例如公斤、吨、件
+- `packaging`：包装，例如无、桶装、纸箱、托盘、袋装
+
+#### 4.1.1 获取全部单位分组
 - **URL**: `/api/products/units`
 - **Method**: `GET`
+- **说明**: 同时返回计量单位和包装，两个数组相互独立
+
+**响应示例**:
+```json
+{
+  "measurements": [
+    {
+      "id": 1,
+      "name": "公斤",
+      "createdAt": "2026-08-30 12:00:00"
+    }
+  ],
+  "packagings": [
+    {
+      "id": 20,
+      "name": "桶装",
+      "createdAt": "2026-09-08 09:00:00"
+    }
+  ]
+}
+```
+
+#### 4.1.2 获取计量单位
+- **URL**: `/api/products/units/measurements`
+- **Method**: `GET`
+- **说明**: 只返回 `unit_type=measurement` 的单位数组，商品与原材料录入弹窗使用此接口
 
 **响应示例**:
 ```json
@@ -470,16 +504,40 @@
 ]
 ```
 
-#### 4.1.2 新增单位
+#### 4.1.3 获取包装列表
+- **URL**: `/api/products/units/packagings`
+- **Method**: `GET`
+- **说明**: 只返回 `unit_type=packaging` 的包装数组
+
+**响应示例**:
+```json
+[
+  {
+    "id": 20,
+    "name": "无",
+    "createdAt": "2026-09-08 09:00:00"
+  },
+  {
+    "id": 21,
+    "name": "桶装",
+    "createdAt": "2026-09-08 09:00:00"
+  }
+]
+```
+
+#### 4.1.4 新增单位或包装
 - **URL**: `/api/products/units`
 - **Method**: `POST`
 
 **请求参数**:
 ```json
 {
-  "name": "箱"
+  "name": "吨",
+  "type": "measurement"
 }
 ```
+
+`type` 支持 `measurement` 和 `packaging`，未传时默认使用 `measurement`。
 
 **响应示例**:
 ```json
@@ -487,13 +545,14 @@
   "success": true,
   "unit": {
     "id": 10,
-    "name": "箱",
+    "name": "吨",
+    "unit_type": "measurement",
     "createdAt": "2026-08-30 12:00:00"
   }
 }
 ```
 
-#### 4.1.3 删除单位
+#### 4.1.5 删除单位或包装
 - **URL**: `/api/products/units/<int:unit_id>`
 - **Method**: `DELETE`
 
@@ -847,6 +906,171 @@
 }
 ```
 
+### 4.5 原材料商品档案
+
+原材料商品档案与成品商品使用基本相同的字段结构，但存储在独立的
+`raw_material_products` 表中。
+
+> `/api/raw-material-products` 管理原材料的名称、编号、规格、单位等档案。
+> `/api/materials` 管理原材料使用量和生产量流水，两者不是同一类数据。
+
+#### 4.5.1 获取原材料商品列表
+- **URL**: `/api/raw-material-products`
+- **Method**: `GET`
+- **说明**: 按 ID 倒序返回全部原材料商品档案
+
+**响应示例**:
+```json
+[
+  {
+    "id": 1,
+    "code": "RM-001",
+    "name": "环氧树脂",
+    "specification": "E-44 / 20kg",
+    "category": 101,
+    "unitId": 1,
+    "enableMultiUnit": false,
+    "notes": "液体原料",
+    "enabled": true,
+    "warehouseId": 1,
+    "storeIds": [1, 2],
+    "warehouseCategories": {},
+    "unitConversions": [],
+    "enableAttributes": false,
+    "attributeCombinations": [],
+    "createdAt": "2026-09-08 09:00:00",
+    "updatedAt": null
+  }
+]
+```
+
+#### 4.5.2 新增原材料商品
+- **URL**: `/api/raw-material-products`
+- **Method**: `POST`
+- **说明**: 新建原材料商品档案，`name` 不能为空
+
+**请求参数**:
+```json
+{
+  "storeIds": [1, 2],
+  "warehouseId": 1,
+  "categoryId": 101,
+  "name": "环氧树脂",
+  "code": "RM-001",
+  "specification": "E-44 / 20kg",
+  "notes": "液体原料",
+  "unitId": 1,
+  "enableMultiUnit": false,
+  "enabled": true,
+  "warehouseCategories": {},
+  "unitConversions": [
+    {
+      "fromUnitId": 2,
+      "value": 20,
+      "splits": []
+    }
+  ],
+  "enableAttributes": false,
+  "attributeCombinations": []
+}
+```
+
+**响应示例（字段已精简）**:
+```json
+{
+  "success": true,
+  "product": {
+    "id": 1,
+    "code": "RM-001",
+    "name": "环氧树脂",
+    "specification": "E-44 / 20kg",
+    "category": 101,
+    "unitId": 1,
+    "enableMultiUnit": false,
+    "notes": "液体原料",
+    "enabled": true,
+    "warehouseId": 1,
+    "storeIds": [1, 2],
+    "warehouseCategories": {},
+    "unitConversions": [],
+    "enableAttributes": false,
+    "attributeCombinations": [],
+    "createdAt": "2026-09-08 09:00:00",
+    "updatedAt": null
+  },
+  "rawMaterialProduct": {
+    "id": 1,
+    "name": "环氧树脂"
+  }
+}
+```
+
+`product` 和 `rawMaterialProduct` 指向同一条新建记录，实际两个字段都会返回完整对象；
+上例仅为避免重复展示而精简 `rawMaterialProduct`。保留两个字段是为了兼容公共商品弹窗和原材料页面。
+
+#### 4.5.3 更新原材料商品
+- **URL**: `/api/raw-material-products/<int:product_id>`
+- **Method**: `PUT`
+- **说明**: 更新指定原材料商品，提交结构与新增接口相同
+
+**响应示例（字段已精简）**:
+```json
+{
+  "success": true,
+  "product": {
+    "id": 1,
+    "name": "环氧树脂 E-44",
+    "updatedAt": "2026-09-08 10:30:00"
+  },
+  "rawMaterialProduct": {
+    "id": 1,
+    "name": "环氧树脂 E-44"
+  }
+}
+```
+
+`product` 和 `rawMaterialProduct` 在更新接口中同样是同一条记录的完整对象。
+
+#### 4.5.4 删除原材料商品
+- **URL**: `/api/raw-material-products/<int:product_id>`
+- **Method**: `DELETE`
+
+**响应示例**:
+```json
+{
+  "success": true,
+  "message": "删除成功"
+}
+```
+
+#### 4.5.5 字段说明
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `name` | string | 是 | 原材料名称 |
+| `code` | string | 否 | 原材料编号 |
+| `specification` | string | 否 | 规格型号 |
+| `categoryId` / `category` | integer | 否 | 仓库分类 ID |
+| `unitId` | integer | 否 | 计量单位 ID，关联 `units` 表 |
+| `warehouseId` | integer | 否 | 默认仓库 ID |
+| `storeIds` | array | 否 | 所属门店 ID 数组 |
+| `enabled` | boolean | 否 | 是否启用，默认 `true` |
+| `enableMultiUnit` | boolean | 否 | 是否启用多单位 |
+| `unitConversions` | array | 否 | 多单位换算关系 |
+| `warehouseCategories` | object | 否 | 仓库与分类的关联配置 |
+| `enableAttributes` | boolean | 否 | 是否启用属性 |
+| `attributeCombinations` | array | 否 | 属性、价格和条码组合 |
+| `notes` | string | 否 | 备注 |
+
+**前端调用关系**:
+
+| 页面或组件 | 路由/模式 | 接口 |
+|------------|-----------|------|
+| `ProductList.vue` | `/admin/products`、`finished-product` | `/api/products` |
+| `MaterialProductList.vue` | `/admin/materials`、`raw-material` | `/api/raw-material-products` |
+| `ProductFormModal.vue` | 根据路由或 `mode` 自动切换 | 上述对应接口 |
+| `MaterialInventory.vue` | `/admin/inventory/materials` | 读取 `/api/raw-material-products` |
+
 ---
 
 ## 5. 订单管理
@@ -854,7 +1078,7 @@
 ### 5.1 获取所有订单
 - **URL**: `/api/orders`
 - **Method**: `GET`
-- **说明**: 获取所有订单列表，新旧订单格式共存
+- **说明**: 获取所有订单列表，新旧订单格式共存；返回结果包含订单包装和物流服务字段
 
 **响应示例（旧订单）**:
 ```json
@@ -956,14 +1180,36 @@
     "goods_name": "碳纤维胶 5kg/桶 x10、环氧树脂 25kg/桶 x25",
     "goods_weight": "35kg",
     "goods_quantity": "3件",
+    "goods_packaging": "桶装",
+    "logistics_service": "送货上门+回单拍照回传",
     "receiver_name": "段洪强",
     "receiver_phone": "15527382584",
     "receiver_address": "湖北省武汉市江夏区光谷芯中心二期E区9栋",
     
     "remark": "订单备注"
-  }
+}
 ]
 ```
+
+**包装和物流服务字段**:
+
+- `goods_packaging`: 订单包装字符串，默认值为 `"无"`，可使用单位接口中的 `unit_type=packaging` 数据
+- `logistics_service`: 物流服务字符串，默认值为 `"送货上门+回单拍照回传"`
+- 为兼容历史数据，旧订单的 `logistics_service` 可能是数组，新订单保存为字符串
+
+包装默认选项为：`无`、`桶装`、`纸箱`、`托盘`、`袋装`，也可以通过
+`POST /api/products/units` 以 `type=packaging` 新增包装。
+
+物流服务选项为：
+
+1. `送货上门+回单拍照回传`
+2. `送货上门+回单邮回`
+3. `送货上门`
+4. `用户自提`
+5. `无`
+
+订单表中对应的 SQLite 字段为 `goods_packaging TEXT` 和
+`logistics_service TEXT`，两者保存的是字符值。
 
 ### 5.2 获取单个订单详情
 - **URL**: `/api/orders/<int:order_id>`
@@ -990,6 +1236,8 @@
   "contactPhone": "15527382584",
   "contactAddress": "湖北省武汉市江夏区光谷芯中心二期E区9栋",
   "projectName": "海洋工程项目",
+  "goodsPackaging": "桶装",
+  "logisticsService": "送货上门+回单拍照回传",
   "salesPerson": "李四",
   "creator": "张三",
   "orderRemark": "订单备注",
@@ -1072,6 +1320,8 @@
   "contactPhone": "15527382584",
   "contactAddress": "新地址",
   "projectName": "海洋工程项目",
+  "goodsPackaging": "纸箱",
+  "logisticsService": "送货上门",
   "salesPerson": "李四",
   "creator": "张三",
   "orderRemark": "修改后的备注",
@@ -1088,6 +1338,18 @@
   ]
 }
 ```
+
+编辑订单时也可以单独更新包装和物流服务：
+
+```json
+{
+  "goodsPackaging": "纸箱",
+  "logisticsService": "送货上门"
+}
+```
+
+新订单表单使用驼峰字段 `goodsPackaging`、`logisticsService`；后端同时兼容
+下划线字段 `goods_packaging`、`logistics_service`。
 
 **或者仅更新订单状态**:
 ```json
@@ -1426,12 +1688,15 @@ receipt_image: File (图片文件)
 
 ---
 
-## 8. 原材料管理
+## 8. 原材料使用与生产流水
 
-### 8.1 获取原材料库存信息
+> 本章节管理原材料的使用量、生产量和备注标签。
+> 原材料商品档案请参阅 [4.5 原材料商品档案](#45-原材料商品档案)。
+
+### 8.1 获取原材料流水与汇总
 - **URL**: `/api/materials`
 - **Method**: `GET`
-- **说明**: 获取原材料库存记录和标签
+- **说明**: 获取原材料使用/生产流水、备注标签和计算后的库存汇总
 
 **响应示例**:
 ```json
@@ -1480,22 +1745,17 @@ receipt_image: File (图片文件)
 {
   "used": 50.0,
   "produced": 100.0,
-  "remark": "粘钢胶",
-  "date": "2026-09-06 10:00"
+  "remark": "粘钢胶"
 }
 ```
+
+服务端会使用当前时间生成 `date` 字段，数量单位统一为公斤。
 
 **响应示例**:
 ```json
 {
   "success": true,
-  "record": {
-    "id": 60,
-    "used": 50.0,
-    "produced": 100.0,
-    "remark": "粘钢胶",
-    "date": "2026-09-06 10:00"
-  }
+  "id": 60
 }
 ```
 
@@ -1509,16 +1769,14 @@ receipt_image: File (图片文件)
 {
   "used": 60.0,
   "produced": 120.0,
-  "remark": "粘钢胶（更新）",
-  "date": "2026-09-06 11:00"
+  "remark": "粘钢胶（更新）"
 }
 ```
 
 **响应示例**:
 ```json
 {
-  "success": true,
-  "message": "原材料记录更新成功"
+  "success": true
 }
 ```
 
@@ -1530,8 +1788,7 @@ receipt_image: File (图片文件)
 **响应示例**:
 ```json
 {
-  "success": true,
-  "message": "原材料记录删除成功"
+  "success": true
 }
 ```
 
@@ -2053,15 +2310,16 @@ GET /api/hr/reports/share/6d6f4c5e-1be1-4f91-b6e6-123456789abc
 **核心表**:
 - `orders` - 订单表（209条记录）
 - `products` - 商品表（15条记录）
+- `raw_material_products` - 原材料商品档案表
 - `inventory` - 库存表（6条记录）
 - `customers` - 客户表（4条记录）
-- `materials` - 原材料记录表（55条记录）
+- `material_records` - 原材料使用/生产流水表（55条记录）
 - `stores` - 门店表（3条记录）
 - `warehouses` - 仓库表（4条记录）
 - `users` - 用户表（9条记录）
 
 **辅助表**:
-- `units` - 计量单位表
+- `units` - 计量单位和包装表，通过 `unit_type` 分组
 - `attributes` - 商品属性表
 - `attribute_options` - 属性选项表
 - `warehouse_categories` - 仓库分类表
@@ -2083,15 +2341,18 @@ CREATE INDEX idx_products_code ON products(code);
 CREATE INDEX idx_products_name ON products(name);
 CREATE INDEX idx_products_warehouse ON products(warehouse_id);
 
--- 原材料查询优化
-CREATE INDEX idx_materials_date ON materials(date);
+-- 原材料商品档案查询优化
+CREATE INDEX idx_raw_material_products_code
+ON raw_material_products(code);
+CREATE INDEX idx_raw_material_products_name
+ON raw_material_products(name);
 ```
 
 ### 性能优化建议
 
 1. **查询优化**: 使用索引字段作为查询条件
 2. **批量操作**: 使用事务批量插入/更新数据
-3. **连接池**: 后端使用 SQLite 连接池（默认开启）
+3. **连接管理**: 后端按请求创建 SQLite 连接，统一在请求结束后关闭
 4. **备份策略**: 定期备份 `order_system.db` 文件
 
 ### 数据迁移
@@ -2103,10 +2364,13 @@ CREATE INDEX idx_materials_date ON materials(date);
 | orders_db.json | orders | 209 |
 | products_db.json | products, inventory | 15 + 6 |
 | customers_db.json | customers | 4 |
-| materials_db.json | materials | 55 |
+| materials_db.json | material_records | 55 |
 | stores_db.json | stores | 3 |
 | warehouses_db.json | warehouses, warehouse_categories | 4 + N |
 | users_db.json | users | 9 |
+
+原材料商品档案 `raw_material_products` 是新增的独立表，没有对应的历史 JSON 迁移来源；新建或编辑后直接通过
+`/api/raw-material-products` 持久化到 SQLite。
 
 ---
 
@@ -2156,7 +2420,7 @@ CREATE INDEX idx_materials_date ON materials(date);
 ## 常见问题 (FAQ)
 
 ### 1. 数据库文件在哪里？
-数据库文件位于 `e:\order_system\data\order_system.db`，大小约 248KB。
+数据库文件位于项目根目录下的 `data/order_system.db`。Docker 部署时默认使用容器内的 `/app/data/order_system.db`。
 
 ### 2. 如何备份数据？
 ```bash
@@ -2165,17 +2429,12 @@ copy data\order_system.db data\order_system_backup.db
 
 # 方法2: 导出为 JSON（使用备份脚本）
 cd backend
-py backup_json.py
+py tools\backup_json.py
 ```
 
-### 3. 如何恢复到 JSON 模式？
-```bash
-cd backend
-# 保存当前 SQLite 版本
-mv utils/db_helper.py utils/db_helper_sqlite.py
-# 恢复 JSON 版本
-mv utils/db_helper_old.py utils/db_helper.py
-```
+### 3. 如何使用历史 JSON 备份？
+当前运行版本以 SQLite 为准，不再提供切换回 JSON 读写模式的操作。历史 JSON 文件仅用于迁移或人工核对，
+可以使用 `backend/tools/backup_json.py` 从当前 SQLite 导出一份新的 JSON 备份。
 
 ### 4. 并发支持如何？
 SQLite 支持**多读一写**模式：
@@ -2202,12 +2461,25 @@ SQLite 支持**多读一写**模式：
    sqlite3 data/order_system.db "REINDEX;"
    ```
 
-### 7. 前端需要修改吗？
-**完全不需要！** API 接口和返回格式保持 100% 兼容。
+### 7. 成品和原材料为什么使用不同接口？
+两类商品使用相同的录入字段结构，但数据存储目标不同：
+
+- 成品商品使用 `/api/products`，保存到 `products`
+- 原材料商品使用 `/api/raw-material-products`，保存到 `raw_material_products`
+- 公共组件 `ProductFormModal.vue` 会根据路由或 `mode` 自动选择对应接口
+
+这样可以避免原材料档案和成品档案混在同一张表中，同时保留相同的前端录入体验。
 
 ---
 
 ## 更新日志
+
+### v2.2.0 (2026-09-08)
+- ✅ 新增原材料商品档案 CRUD 接口和 `raw_material_products` 独立数据表
+- ✅ `ProductFormModal.vue` 支持成品和原材料两种录入模式
+- ✅ `units` 增加 `unit_type` 分组，计量单位与包装数据分离
+- ✅ 新增计量单位、包装分组查询接口
+- ✅ 订单接口补充 `goods_packaging` 和 `logistics_service` 字段说明
 
 ### v2.1.0 (2026-09-07)
 - ✅ 补充人事检测报告文件管理接口
