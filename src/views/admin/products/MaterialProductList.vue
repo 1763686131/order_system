@@ -1,25 +1,15 @@
 <template>
   <div class="material-product-page">
     <section class="filter-panel">
-      <label class="search-field">
-        <span class="sr-only">搜索原材料</span>
-        <span class="search-icon" aria-hidden="true"></span>
-        <input
-          v-model.trim="filters.name"
-          type="search"
-          placeholder="搜索名称、编号或规格"
-        />
-      </label>
-
-      <span class="filter-label">门店</span>
-      <div class="store-tabs">
+      <div class="store-filter">
+        <span class="filter-label">门店</span>
         <button
           class="store-chip"
           :class="{ active: selectedStoreId === null }"
           type="button"
           @click="selectedStoreId = null"
         >
-          全部门店
+          全部
         </button>
         <button
           v-for="store in stores"
@@ -31,50 +21,34 @@
         >
           {{ store.name }}
         </button>
-      </div>
-
-      <label class="filter-field">
-        <span>分类</span>
-        <select v-model="filters.category">
-          <option value="">全部分类</option>
-          <option v-for="category in categories" :key="category" :value="category">
-            {{ category }}
-          </option>
-        </select>
-      </label>
-
-      <label class="filter-field">
-        <span>仓库</span>
-        <select v-model="filters.warehouse">
-          <option value="">全部仓库</option>
-          <option v-for="warehouse in warehouses" :key="warehouse" :value="warehouse">
-            {{ warehouse }}
-          </option>
-        </select>
-      </label>
-
-      <label class="filter-field">
-        <span>状态</span>
-        <select v-model="filters.status">
-          <option value="all">全部状态</option>
-          <option value="enabled">启用</option>
-          <option value="disabled">停用</option>
-        </select>
-      </label>
-
-      <div class="action-buttons">
         <button class="btn-primary" type="button" @click="handleNew">
           <span aria-hidden="true">＋</span>
           新增原材料
         </button>
-        <button
-          class="btn-batch-delete"
-          :disabled="selectedCount === 0"
-          type="button"
-          @click="handleBatchDelete"
-        >
-          批量删除
-        </button>
+      </div>
+
+      <div class="filter-grid">
+        <label class="field">
+          <span>原材料名称</span>
+          <input v-model.trim="filters.name" type="search" placeholder="搜索名称" />
+        </label>
+        <label class="field">
+          <span>编号</span>
+          <input v-model.trim="filters.code" type="search" placeholder="搜索编号" />
+        </label>
+        <label class="field">
+          <span>规格型号</span>
+          <input v-model.trim="filters.specification" type="search" placeholder="搜索规格" />
+        </label>
+        <label class="field">
+          <span>状态</span>
+          <select v-model="filters.status">
+            <option value="all">全部状态</option>
+            <option value="enabled">启用</option>
+            <option value="disabled">停用</option>
+          </select>
+        </label>
+        <button class="btn-secondary" type="button" @click="resetFilters">重置</button>
       </div>
     </section>
 
@@ -112,9 +86,6 @@
         <table>
           <thead>
             <tr>
-              <th class="col-checkbox">
-                <input type="checkbox" v-model="selectAll" @change="handleSelectAll" />
-              </th>
               <th>原材料</th>
               <th>编号</th>
               <th>规格型号</th>
@@ -128,9 +99,6 @@
           </thead>
           <tbody>
             <tr v-for="product in paginatedProducts" :key="product.id">
-              <td class="col-checkbox">
-                <input type="checkbox" v-model="product.selected" />
-              </td>
               <td>
                 <div class="product-cell">
                   <span class="product-mark" aria-hidden="true">{{ getInitial(product.name) }}</span>
@@ -140,29 +108,30 @@
                   </div>
                 </div>
               </td>
-              <td class=”muted”>{{ product.code || '-' }}</td>
+              <td class="muted">{{ product.code || '-' }}</td>
               <td>{{ product.specification || '-' }}</td>
               <td>{{ product.unitName || '-' }}</td>
               <td>{{ product.categoryName || '-' }}</td>
               <td>{{ product.warehouseName || '-' }}</td>
               <td>
-                <span class=”store-text”>{{ product.storeNames || '全部门店' }}</span>
+                <span class="store-text">{{ product.storeNames || '全部门店' }}</span>
               </td>
               <td>
-                <span class=”status-pill” :class="product.enabled === false ? 'disabled' : 'enabled'">
+                <span class="status-pill" :class="product.enabled === false ? 'disabled' : 'enabled'">
                   {{ product.enabled === false ? '停用' : '启用' }}
                 </span>
               </td>
-              <td class=”actions-column”>
-                <button class=”table-action edit” type=”button” @click="handleEdit(product)">修改</button>
-                <button class=”table-action copy” type=”button” @click="handleCopy(product)">复制</button>
+              <td class="actions-column">
+                <button class="table-action edit" type="button" @click="handleEdit(product)">修改</button>
+                <button class="table-action copy" type="button" @click="handleCopy(product)">复制</button>
+                <button class="table-action delete" type="button" @click="handleDelete(product)">删除</button>
               </td>
             </tr>
             <tr v-if="paginatedProducts.length === 0">
-              <td colspan="10" class="empty-state">
+              <td colspan="9" class="empty-state">
                 <span class="empty-icon" aria-hidden="true">□</span>
                 <strong>暂无原材料商品</strong>
-                <span>点击右上角"新增原材料"开始建立档案</span>
+                <span>点击右上角“新增原材料”开始建立档案</span>
               </td>
             </tr>
           </tbody>
@@ -200,46 +169,20 @@ import { getMeasurementUnits } from '@/utils/unitHelper'
 const productFormModal = ref(null)
 const products = ref([])
 const stores = ref([])
-const allWarehouses = ref([])
+const warehouses = ref([])
 const units = ref([])
 const selectedStoreId = ref(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
-const selectAll = ref(false)
 const filters = reactive({
   name: '',
   code: '',
   specification: '',
-  category: '',
-  warehouse: '',
   status: 'all'
 })
 
-const warehouseMap = computed(() => new Map(allWarehouses.value.map(item => [item.id, item])))
+const warehouseMap = computed(() => new Map(warehouses.value.map(item => [item.id, item])))
 const unitMap = computed(() => new Map(units.value.map(item => [item.id, item.name])))
-
-// 选中数量
-const selectedCount = computed(() => {
-  return products.value.filter(p => p.selected).length
-})
-
-// 获取所有分类
-const categories = computed(() => {
-  const cats = new Set()
-  decoratedProducts.value.forEach(p => {
-    if (p.categoryName) cats.add(p.categoryName)
-  })
-  return Array.from(cats)
-})
-
-// 获取所有仓库名称
-const warehouses = computed(() => {
-  const whs = new Set()
-  decoratedProducts.value.forEach(p => {
-    if (p.warehouseName) whs.add(p.warehouseName)
-  })
-  return Array.from(whs)
-})
 
 const decoratedProducts = computed(() => products.value.map(product => {
   const warehouse = warehouseMap.value.get(product.warehouseId)
@@ -262,19 +205,17 @@ const decoratedProducts = computed(() => products.value.map(product => {
 const filteredProducts = computed(() => decoratedProducts.value.filter(product => {
   const nameMatched = !filters.name
     || product.name?.toLowerCase().includes(filters.name.toLowerCase())
-    || product.code?.toLowerCase().includes(filters.name.toLowerCase())
-    || product.specification?.toLowerCase().includes(filters.name.toLowerCase())
-  const categoryMatched = !filters.category
-    || product.categoryName === filters.category
-  const warehouseMatched = !filters.warehouse
-    || product.warehouseName === filters.warehouse
+  const codeMatched = !filters.code
+    || product.code?.toLowerCase().includes(filters.code.toLowerCase())
+  const specificationMatched = !filters.specification
+    || product.specification?.toLowerCase().includes(filters.specification.toLowerCase())
   const storeMatched = selectedStoreId.value === null
     || product.storeIds?.includes(selectedStoreId.value)
   const statusMatched = filters.status === 'all'
     || (filters.status === 'enabled' && product.enabled !== false)
     || (filters.status === 'disabled' && product.enabled === false)
 
-  return nameMatched && categoryMatched && warehouseMatched && storeMatched && statusMatched
+  return nameMatched && codeMatched && specificationMatched && storeMatched && statusMatched
 }))
 
 const totalPages = computed(() => Math.max(1, Math.ceil(filteredProducts.value.length / pageSize.value)))
@@ -303,7 +244,7 @@ const loadStores = async () => {
 
 const loadWarehouses = async () => {
   const response = await request({ url: '/warehouses', method: 'GET' })
-  allWarehouses.value = Array.isArray(response) ? response : []
+  warehouses.value = Array.isArray(response) ? response : []
 }
 
 const loadUnits = async () => {
@@ -314,7 +255,7 @@ const loadUnits = async () => {
 const loadProducts = async () => {
   try {
     const response = await request({ url: '/raw-material-products', method: 'GET' })
-    products.value = Array.isArray(response) ? response.map(p => ({ ...p, selected: false })) : []
+    products.value = Array.isArray(response) ? response : []
   } catch (error) {
     console.error('加载原材料商品失败:', error)
     products.value = []
@@ -323,48 +264,16 @@ const loadProducts = async () => {
 
 const resetFilters = () => {
   filters.name = ''
-  filters.category = ''
-  filters.warehouse = ''
+  filters.code = ''
+  filters.specification = ''
   filters.status = 'all'
   selectedStoreId.value = null
 }
 
 const getInitial = name => (name || '原').slice(0, 1)
 
-const handleSelectAll = () => {
-  products.value.forEach(p => {
-    p.selected = selectAll.value
-  })
-}
-
 const handleNew = () => productFormModal.value?.open()
 const handleEdit = product => productFormModal.value?.open(product)
-
-const handleBatchDelete = async () => {
-  const selectedProducts = products.value.filter(p => p.selected)
-  if (selectedProducts.length === 0) {
-    return
-  }
-
-  if (!window.confirm(`确定要删除选中的 ${selectedProducts.length} 个原材料吗？`)) {
-    return
-  }
-
-  try {
-    const deletePromises = selectedProducts.map(product =>
-      request({
-        url: `/raw-material-products/${product.id}`,
-        method: 'DELETE'
-      })
-    )
-
-    await Promise.all(deletePromises)
-    await loadProducts()
-    window.alert('删除成功')
-  } catch (error) {
-    window.alert(`删除失败：${error.response?.data?.message || error.message}`)
-  }
-}
 const handleCopy = product => {
   const { id, ...copy } = product
   productFormModal.value?.open(copy)
@@ -412,184 +321,41 @@ onMounted(async () => {
 
 .filter-panel {
   padding: 16px 20px;
+}
+
+.store-filter {
   display: flex;
   align-items: center;
-  gap: 12px;
   flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf0f4;
 }
 
-.search-field {
-  display: flex;
-  align-items: center;
-  min-height: 38px;
-  max-width: 200px;
-  flex: 0 0 200px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: #fff;
-  position: relative;
-  padding-left: 34px;
-}
-
-.search-field input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: #1f2937;
+.filter-label,
+.field span {
+  color: #69778a;
   font-size: 14px;
-}
-
-.search-icon {
-  position: absolute;
-  left: 13px;
-  width: 13px;
-  height: 13px;
-  border: 1.8px solid #94a3b8;
-  border-radius: 50%;
-}
-
-.search-icon::after {
-  content: '';
-  position: absolute;
-  right: -5px;
-  bottom: -3px;
-  width: 6px;
-  height: 1.8px;
-  background: #94a3b8;
-  transform: rotate(45deg);
+  font-weight: 500;
 }
 
 .filter-label {
-  color: #6b7280;
-  font-size: 14px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.store-tabs {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #f3f4f6;
-  padding: 4px;
-  border-radius: 8px;
+  margin-right: 4px;
 }
 
 .store-chip {
+  border: 1px solid #dbe3ec;
+  border-radius: 4px;
   padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #6b7280;
+  color: #69778a;
+  background: #fff;
   cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.3s;
-  white-space: nowrap;
-  user-select: none;
-  background: transparent;
-  border: 1px solid transparent;
-}
-
-.store-chip:hover {
-  background: #e5e7eb;
-  color: #374151;
+  font-size: 14px;
 }
 
 .store-chip.active {
-  background: #34d399;
-  color: #fff;
-  box-shadow: 0 2px 4px rgba(52, 211, 153, 0.3);
-}
-
-.filter-field {
-  display: flex;
-  align-items: center;
-  min-height: 38px;
-  padding: 0 12px;
-  gap: 8px;
-  border: 1px solid #d1d5db;
-  border-radius: 4px;
-  background: #fff;
-}
-
-.filter-field span {
-  color: #6b7280;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.filter-field select {
-  border: 0;
-  outline: 0;
-  color: #1f2937;
-  background: transparent;
-  font-size: 14px;
-  min-width: 100px;
-  height: 36px;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.btn-primary {
-  height: 38px;
-  padding: 0 16px;
-  background: #10b981;
-  color: white;
-  border: 1px solid #10b981;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.btn-primary:hover {
-  background: #059669;
-  border-color: #059669;
-}
-
-.btn-batch-delete {
-  height: 38px;
-  padding: 0 16px;
-  background: #ef4444;
-  color: white;
-  border: 1px solid #ef4444;
-  border-radius: 4px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-batch-delete:hover:not(:disabled) {
-  background: #dc2626;
-  border-color: #dc2626;
-}
-
-.btn-batch-delete:disabled {
-  background: #d1d5db;
-  border-color: #d1d5db;
-  color: #9ca3af;
-  cursor: not-allowed;
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
+  border-color: #1677ff;
+  color: #1677ff;
   background: #eaf3ff;
 }
 
