@@ -2,72 +2,68 @@
   <div class="product-list-page">
     <!-- 搜索栏 -->
     <div class="search-bar">
-      <div class="search-group store-slider">
-        <label>门店</label>
-        <div class="store-tabs">
-          <div
-            :class="['store-tab', { active: selectedStoreId === null }]"
-            @click="selectedStoreId = null"
-          >
-            全部
-          </div>
-          <div
-            v-for="store in allStores"
-            :key="store.id"
-            :class="['store-tab', { active: selectedStoreId === store.id }]"
-            @click="selectedStoreId = store.id"
-          >
-            {{ store.name }}
-          </div>
+      <label class="search-field">
+        <span class="sr-only">搜索商品</span>
+        <span class="search-icon" aria-hidden="true"></span>
+        <input
+          v-model.trim="filters.productName"
+          type="search"
+          placeholder="搜索名称、编号或规格"
+        />
+      </label>
+
+      <span class="filter-label">门店</span>
+      <div class="store-tabs">
+        <div
+          :class="['store-tab', { active: selectedStoreId === null }]"
+          @click="selectedStoreId = null"
+        >
+          全部门店
+        </div>
+        <div
+          v-for="store in allStores"
+          :key="store.id"
+          :class="['store-tab', { active: selectedStoreId === store.id }]"
+          @click="selectedStoreId = store.id"
+        >
+          {{ store.name }}
         </div>
       </div>
 
-      <button class="btn-search" @click="handleSearch">
-        <span class="icon">🔍</span> 搜索
-      </button>
+      <label class="filter-field">
+        <span>分类</span>
+        <select v-model="filters.categoryId">
+          <option :value="null">全部分类</option>
+          <option v-for="category in allCategories" :key="category.id" :value="category.id">
+            {{ category.name }}
+          </option>
+        </select>
+      </label>
 
-      <button class="btn-filter" @click="toggleFilter">
-        <span class="icon">▼</span> 筛选
-      </button>
+      <label class="filter-field">
+        <span>仓库</span>
+        <select v-model="filters.warehouseId">
+          <option :value="null">全部仓库</option>
+          <option v-for="warehouse in allWarehouses" :key="warehouse.id" :value="warehouse.id">
+            {{ warehouse.name }}
+          </option>
+        </select>
+      </label>
 
-      <div class="search-group">
-        <label>商品名称</label>
-        <input
-          v-model="filters.productName"
-          type="text"
-          placeholder="请输入商品名称"
-          class="search-input"
-        />
-      </div>
-
-      <div class="search-group">
-        <label>商品编号</label>
-        <input
-          v-model="filters.productCode"
-          type="text"
-          placeholder="请输入商品编号"
-          class="search-input"
-        />
-      </div>
-
-      <div class="search-group">
-        <label>规格型号</label>
-        <input
-          v-model="filters.specification"
-          type="text"
-          placeholder="请输入规格型号"
-          class="search-input"
-        />
-      </div>
-
-      <div class="search-group checkbox-group">
+      <div class="checkbox-group">
         <input type="checkbox" id="showOnlyUsed" v-model="filters.showOnlyUsed" />
         <label for="showOnlyUsed">显示停用</label>
       </div>
 
       <div class="action-buttons">
         <button class="btn-new" @click="handleNew">新增</button>
-        <button class="btn-batch-delete" @click="handleBatchDelete">批量删除</button>
+        <button
+          class="btn-batch-delete"
+          :disabled="selectedCount === 0"
+          @click="handleBatchDelete"
+        >
+          批量删除
+        </button>
       </div>
     </div>
 
@@ -148,7 +144,6 @@
             <td class="col-actions">
               <button class="btn-action btn-edit" @click="handleCopy(product)">修改</button>
               <button class="btn-action btn-copy" @click="handleCopyProduct(product)">复制</button>
-              <button class="btn-action btn-delete" @click="handleDelete(product)">删除</button>
             </td>
           </tr>
 
@@ -214,6 +209,8 @@ const filters = ref({
   productName: '',
   productCode: '',
   specification: '',
+  categoryId: null,
+  warehouseId: null,
   showOnlyUsed: false
 })
 
@@ -326,14 +323,40 @@ const loadProducts = async () => {
 const totalProducts = computed(() => filteredProducts.value.length)
 const totalPages = computed(() => Math.ceil(totalProducts.value / pageSize.value))
 
+// 选中商品数量
+const selectedCount = computed(() => {
+  return products.value.filter(p => p.selected).length
+})
+
+// 获取所有分类
+const allCategories = computed(() => {
+  const categories = []
+  const categoryMap = new Map()
+
+  allWarehouses.value.forEach(warehouse => {
+    if (warehouse.categories && Array.isArray(warehouse.categories)) {
+      warehouse.categories.forEach(category => {
+        if (!categoryMap.has(category.id)) {
+          categoryMap.set(category.id, category)
+          categories.push(category)
+        }
+      })
+    }
+  })
+
+  return categories
+})
+
 // 过滤后的商品列表
 const filteredProducts = computed(() => {
   let result = products.value
 
-  // 按商品名称筛选
+  // 按商品名称筛选（同时搜索名称、编号、规格）
   if (filters.value.productName) {
     result = result.filter(p =>
-      p.name.toLowerCase().includes(filters.value.productName.toLowerCase())
+      p.name.toLowerCase().includes(filters.value.productName.toLowerCase()) ||
+      (p.code && p.code.toLowerCase().includes(filters.value.productName.toLowerCase())) ||
+      (p.specification && p.specification.toLowerCase().includes(filters.value.productName.toLowerCase()))
     )
   }
 
@@ -348,6 +371,20 @@ const filteredProducts = computed(() => {
   if (filters.value.specification) {
     result = result.filter(p =>
       p.specification && p.specification.toLowerCase().includes(filters.value.specification.toLowerCase())
+    )
+  }
+
+  // 按分类筛选
+  if (filters.value.categoryId) {
+    result = result.filter(p =>
+      p.categoryId === filters.value.categoryId || p.category === filters.value.categoryId
+    )
+  }
+
+  // 按仓库筛选
+  if (filters.value.warehouseId) {
+    result = result.filter(p =>
+      p.warehouseId === filters.value.warehouseId
     )
   }
 
@@ -560,45 +597,124 @@ onMounted(async () => {
 .search-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   padding: 16px 20px;
   background: white;
   border-bottom: 1px solid #e5e7eb;
   flex-wrap: wrap;
 }
 
-.search-group {
+.search-field {
   display: flex;
   align-items: center;
-  gap: 8px;
+  min-height: 38px;
+  max-width: 200px;
+  flex: 0 0 200px;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+  background: #fff;
+  position: relative;
+  padding-left: 34px;
 }
 
-.search-group label {
+.search-field input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1f2937;
   font-size: 14px;
-  color: #374151;
+}
+
+.search-icon {
+  position: absolute;
+  left: 13px;
+  width: 13px;
+  height: 13px;
+  border: 1.8px solid #94a3b8;
+  border-radius: 50%;
+}
+
+.search-icon::after {
+  content: '';
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+  width: 6px;
+  height: 1.8px;
+  background: #94a3b8;
+  transform: rotate(45deg);
+}
+
+.filter-label {
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-.search-input {
-  width: 160px;
-  padding: 6px 12px;
+.store-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 8px;
+}
+
+.store-tab {
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6b7280;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.3s;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.store-tab:hover {
+  background: #e5e7eb;
+  color: #374151;
+}
+
+.store-tab.active {
+  background: #34d399;
+  color: #fff;
+  box-shadow: 0 2px 4px rgba(52, 211, 153, 0.3);
+}
+
+.filter-field {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 0 12px;
+  gap: 8px;
   border: 1px solid #d1d5db;
   border-radius: 4px;
+  background: #fff;
+}
+
+.filter-field span {
+  color: #6b7280;
   font-size: 14px;
-  outline: none;
-  transition: all 0.3s;
+  white-space: nowrap;
 }
 
-.search-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
-}
-
-.search-input::placeholder {
-  color: #9ca3af;
+.filter-field select {
+  border: 0;
+  outline: 0;
+  color: #1f2937;
+  background: transparent;
+  font-size: 14px;
+  min-width: 100px;
+  height: 36px;
 }
 
 .checkbox-group {
+  display: flex;
+  align-items: center;
   gap: 6px;
 }
 
@@ -608,6 +724,70 @@ onMounted(async () => {
 
 .checkbox-group label {
   cursor: pointer;
+  font-size: 14px;
+  color: #6b7280;
+  white-space: nowrap;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.btn-new {
+  height: 38px;
+  padding: 0 16px;
+  background: #10b981;
+  color: white;
+  border: 1px solid #10b981;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-new:hover {
+  background: #059669;
+  border-color: #059669;
+}
+
+.btn-batch-delete {
+  height: 38px;
+  padding: 0 16px;
+  background: #ef4444;
+  color: white;
+  border: 1px solid #ef4444;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-batch-delete:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+}
+
+.btn-batch-delete:disabled {
+  background: #d1d5db;
+  border-color: #d1d5db;
+  color: #9ca3af;
+  cursor: not-allowed;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .btn-search,

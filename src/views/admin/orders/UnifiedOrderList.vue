@@ -3,6 +3,16 @@
     <!-- 筛选工具栏 -->
     <div class="filter-bar">
       <div class="filter-group">
+        <button
+          v-if="mode === 'finance'"
+          class="btn-add-order-inline"
+          type="button"
+          @click="handleAdd"
+        >
+          <span aria-hidden="true">+</span>
+          {{ addButtonText }}
+        </button>
+
         <!-- 分类滑块 -->
         <div class="category-tabs">
           <div
@@ -20,15 +30,6 @@
             {{ store.name }}订单
           </div>
         </div>
-        <button
-          v-if="mode === 'finance'"
-          class="btn-add-order-inline"
-          type="button"
-          @click="handleAdd"
-        >
-          <span aria-hidden="true">+</span>
-          {{ addButtonText }}
-        </button>
 
         <input
           v-model="filters.keyword"
@@ -1630,9 +1631,9 @@ const changePageSize = (size) => {
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  background: #4f46e5;
+  background: #3b82f6;
   color: #fff;
-  border: 1px solid #4f46e5;
+  border: 1px solid #3b82f6;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
@@ -1641,8 +1642,8 @@ const changePageSize = (size) => {
 }
 
 .btn-add-order-inline:hover {
-  background: #4338ca;
-  border-color: #4338ca;
+  background: #2563eb;
+  border-color: #2563eb;
 }
 
 .btn-add-order-inline span {

@@ -605,66 +605,49 @@ const logout = () => {
 }
 
 .order-draft-shortcut {
-  height: 38px;
-  min-width: 86px;
-  padding: 3px 10px 3px 4px;
+  height: 36px;
+  padding: 0 14px;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  background: #ecfdf5;
-  color: #047857;
-  border: 1px solid #6ee7b7;
+  justify-content: center;
+  gap: 6px;
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
   border-radius: 6px;
   cursor: pointer;
-  box-shadow: 0 2px 6px rgba(4, 120, 87, 0.14);
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
 }
 
 .order-draft-shortcut:hover {
-  background: #d1fae5;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 10px rgba(4, 120, 87, 0.2);
+  background: #fee2e2;
+  border-color: #fca5a5;
+  color: #b91c1c;
 }
 
 .order-draft-shortcut.is-edit {
   background: #fff7ed;
-  color: #b45309;
-  border-color: #fdba74;
-  box-shadow: 0 2px 6px rgba(180, 83, 9, 0.14);
+  color: #d97706;
+  border: 1px solid #fdba74;
 }
 
 .order-draft-shortcut.is-edit:hover {
   background: #ffedd5;
-  box-shadow: 0 4px 10px rgba(180, 83, 9, 0.2);
+  border-color: #fbbf24;
+  color: #b45309;
 }
 
 .order-draft-shortcut-mark {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  color: #fff;
-  background: #059669;
-  border-radius: 4px;
-  font-family: KaiTi, STKaiti, cursive;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1;
-  transform: rotate(-3deg);
-}
-
-.order-draft-shortcut.is-edit .order-draft-shortcut-mark {
-  background: #d97706;
-  transform: rotate(3deg);
+  display: none;
 }
 
 .order-draft-shortcut-label {
   white-space: nowrap;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
 }
 
 .header-tab {
