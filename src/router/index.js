@@ -47,6 +47,12 @@ const routes = [
         meta: { requiresAuth: true, productType: 'raw-material' }
       },
       {
+        path: 'suppliers',
+        name: 'admin-suppliers',
+        component: () => import('@/views/admin/products/SupplierList.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'inventory',
         name: 'admin-inventory',
         component: () => import('@/views/admin/products/InventoryList.vue'),
@@ -56,6 +62,20 @@ const routes = [
         path: 'inventory/materials',
         name: 'admin-inventory-materials',
         component: () => import('@/views/admin/products/MaterialInventory.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'stock/in',
+        name: 'admin-stock-in',
+        component: () => import('@/views/admin/products/StockRecordList.vue'),
+        props: { mode: 'INBOUND' },
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'stock/out',
+        name: 'admin-stock-out',
+        component: () => import('@/views/admin/products/StockRecordList.vue'),
+        props: { mode: 'OUTBOUND' },
         meta: { requiresAuth: true }
       },
       {

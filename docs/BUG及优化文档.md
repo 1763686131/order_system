@@ -115,3 +115,47 @@ src\views\admin\orders\OrderForm.vue这是一个销售入库单，他的功能�
    - 弹窗关闭前若表单有脏数据（已修改），需弹出确认提示。
 
 
+
+
+# Project Background & Constraints
+- 技术栈：Vue 3 (`<script setup>`)，单文件组件（SFC）。
+- 部署环境：纯内网/本地部署，无互联网访问权限。
+- 依赖限制：严禁引入在线 CDN、Google Fonts 或在线矢量图标库。图标请使用内联 SVG、Unicode 字符或本地已有组件。
+- 视觉风格：现代企业级简约风。利用 Scoped CSS 自定义变量，搭配浅色卡片、微弱投影、软胶囊状态标签（Tag）及等宽数字排版（`tabular-nums`）。
+
+# Goal
+编写一个进销存流水记录与明细预览的通用单文件组件：`StockRecordList.vue`放进src\views\admin\products里面，并在src\views\Admin.vue注册它。
+通过 Props `mode: 'INBOUND' | 'OUTBOUND'` 动态复用于“入库记录”与“出库记录”。
+
+# Component Specifications
+
+### 1. Props & Emits 定义
+- Props:
+  * `mode`: String, 可选值 `'INBOUND'`（入库，主色偏青翠绿）或 `'OUTBOUND'`（出库，主色偏科技蓝/活力橙），必填。
+  * `dataList`: Array, 单据列表数据（可提供内置 Mock 供本地预览）。
+- Emits:
+  * `create`: 触发新建单据
+  * `view-detail`: 查看单据详情
+  * `red-flush`: 红冲/作废单据
+  * `print`: 打印单据
+
+### 2. 界面模块划分
+1. **顶部搜索栏**：
+   - 栅格布局，包含：单据编号、单据日期范围、仓库、往来对象（入库显示“供应商”，出库显示“客户”）、单据状态。
+   - 右侧包含“查询”、“重置”操作按钮。
+2. **操作工具栏**：
+   - 左侧：状态快捷筛选 Tab（全部、已过账、待审核、已红冲）；
+   - 右侧：“+ 新增入库/出库单”（根据 mode 变化文案）、“导出 Excel”按钮。
+3. **数据表格（主表）**：
+   - 列：单据编号（点击可展开详情）、业务类型、单据日期、仓库、往来对象（供应商/客户）、总品种数、总数量、价税合计（加粗等宽显示，格式化为千分位保留 2 位小数）、制单人、状态标签、操作列。
+   - 状态标签（Tag）：已过账（浅绿背景/深绿字）、待审核（浅橙背景/深橙字）、已红冲（浅灰背景/红字）。
+4. **内置右侧滑动抽屉（Drawer / 展开详情）**：
+   - 点击主表某一行时，右侧平滑滑出抽屉面板，展示该单据关联的物料明细（商品编码、名称规格、单位、数量、单价、金额、批次号）。
+   - 支持点击遮罩或关闭图标退出。
+
+# Implementation Requirements
+1. 使用 `<script setup>` 语法，逻辑清晰，抽离金额千分位格式化函数 `formatMoney` 和日期处理。
+2. 根据 `props.mode` 动态计算表头文案（如 `isOutbound ? '客户名称' : '供应商'`）及主题色彩类名。
+3. 样式写在 `<style scoped>` 内，不污染全局。
+
+

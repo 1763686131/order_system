@@ -118,7 +118,14 @@
       <!-- 主内容区 -->
       <main class="main-content">
         <router-view v-slot="{ Component }">
-          <component :is="Component" />
+          <component
+            :is="Component"
+            ref="activeContentRef"
+            @create="handleStockRecordCreate"
+            @view-detail="handleStockRecordViewDetail"
+            @red-flush="handleStockRecordRedFlush"
+            @print="handleStockRecordPrint"
+          />
         </router-view>
       </main>
     </div>
@@ -126,6 +133,7 @@
     <!-- 弹窗组件 -->
     <ShippedOrderActionModal ref="shippedActionModal" @refresh="handleRefresh" />
     <ShipOrderModal ref="shipOrderModal" @refresh="handleRefresh" />
+    <StockInOrderModal ref="stockRecordModal" @saved="handleStockRecordSaved" />
   </div>
 </template>
 
@@ -134,8 +142,10 @@ import { ref, computed, provide, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
+import request from '@/api/request'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import ShipOrderModal from '@/components/front/ShipOrderModal.vue'
+import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -145,6 +155,8 @@ const orderDraftStore = useOrderDraftStore()
 const notificationCount = ref(3)
 const shippedActionModal = ref(null)
 const shipOrderModal = ref(null)
+const stockRecordModal = ref(null)
+const activeContentRef = ref(null)
 
 // 侧边栏折叠状态
 const isSidebarCollapsed = ref(false)
@@ -183,6 +195,50 @@ const handleRefresh = () => {
   if (window.refreshUnifiedOrderList) {
     window.refreshUnifiedOrderList()
   }
+}
+
+const handleStockRecordCreate = ({ mode } = {}) => {
+  if (mode === 'OUTBOUND') {
+    router.push('/admin/orders/create')
+    return
+  }
+  stockRecordModal.value?.open({ type: 'raw-material' })
+}
+
+const handleStockRecordViewDetail = () => {
+  // The reusable list owns its drawer; the event is available for page-level analytics.
+}
+
+const handleStockRecordSaved = () => {
+  activeContentRef.value?.reload?.()
+}
+
+const handleStockRecordRedFlush = async record => {
+  if (!record || record.status !== 'pending') return
+
+  if (record.source?.status && record.source.status !== 'draft') {
+    window.alert('当前单据不可直接作废，请从原业务单据处理。')
+    return
+  }
+
+  if (record.source?.type && !['raw-material', 'finished-product'].includes(record.source.type)) {
+    window.alert('出库单暂未提供红冲接口，请从销售订单处理。')
+    return
+  }
+
+  if (!window.confirm(`确定将单据“${record.documentNo}”作废吗？`)) return
+
+  try {
+    await request({ url: `/stock-inbounds/${record.id}`, method: 'DELETE' })
+    activeContentRef.value?.closeDrawer?.()
+    await activeContentRef.value?.reload?.()
+  } catch (error) {
+    window.alert(error?.response?.data?.message || error?.message || '单据作废失败，请稍后重试。')
+  }
+}
+
+const handleStockRecordPrint = () => {
+  // StockRecordList triggers the browser print dialog after emitting this event.
 }
 
 // 提供给子组件的 ship 方法
@@ -236,6 +292,7 @@ const menuItems = ref([
       { label: '原材料库存', path: '/admin/inventory/materials' },
       { label: '入库记录', path: '/admin/stock/in' },
       { label: '出库记录', path: '/admin/stock/out' },
+      { label: '供应商管理', path: '/admin/suppliers' },
       { label: '仓库管理', path: '/admin/inventory/warehouse' }
     ]
   },
