@@ -350,14 +350,24 @@ def download_file(file_id):
         if not os.path.exists(file_path):
             return jsonify({'success': False, 'message': '文件已丢失'}), 404
 
+        # 确定 MIME 类型
+        mimetype = mimetypes.guess_type(row['filename'])[0]
+
         # PDF 和图片在浏览器中预览，其他文件下载
         if row['file_type'] in ['pdf', 'image']:
-            return send_file(
+            # 对于 PDF，确保使用正确的 MIME 类型
+            if row['file_type'] == 'pdf' and not mimetype:
+                mimetype = 'application/pdf'
+
+            response = send_file(
                 file_path,
-                mimetype=mimetypes.guess_type(row['filename'])[0],
+                mimetype=mimetype,
                 as_attachment=False,
                 download_name=row['filename']
             )
+            # 添加响应头，确保浏览器以内联方式显示
+            response.headers['Content-Disposition'] = f'inline; filename="{row["filename"]}"'
+            return response
         else:
             return send_file(
                 file_path,

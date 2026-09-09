@@ -269,9 +269,9 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import axios from 'axios'
+import request from '@/api/request'
 
-const API_BASE = 'http://localhost:7899/api/hr/reports'
+const API_BASE = '/hr/reports'
 
 const syncing = ref(false)
 const fileTree = ref({ folders: [], files: [] })
@@ -362,12 +362,12 @@ const allFolders = computed(() => {
 const syncFiles = async () => {
   syncing.value = true
   try {
-    const response = await axios.post(`${API_BASE}/sync`)
-    if (response.data.success) {
-      alert(response.data.message)
+    const response = await request.post(`${API_BASE}/sync`)
+    if (response.success) {
+      alert(response.message)
       await loadFileList()
     } else {
-      alert('同步失败: ' + response.data.message)
+      alert('同步失败: ' + response.message)
     }
   } catch (error) {
     alert('同步失败: ' + error.message)
@@ -379,9 +379,9 @@ const syncFiles = async () => {
 // 加载文件列表
 const loadFileList = async () => {
   try {
-    const response = await axios.get(`${API_BASE}/list`)
-    if (response.data.success) {
-      fileTree.value = response.data.data
+    const response = await request.get(`${API_BASE}/list`)
+    if (response.success) {
+      fileTree.value = response.data
     }
   } catch (error) {
     console.error('加载文件列表失败:', error)
@@ -406,7 +406,8 @@ const openFolder = (folder) => {
 // 打开文件
 const openFile = (file) => {
   // PDF 和图片直接在新标签页预览，其他文件会触发下载
-  window.open(`${API_BASE}/download/${file.id}`, '_blank')
+  // 使用完整的 API 路径
+  window.open(`/api/hr/reports/download/${file.id}`, '_blank')
 }
 
 // 触发文件上传
@@ -429,14 +430,14 @@ const handleFileUpload = async (event) => {
     }
 
     try {
-      const response = await axios.post(`${API_BASE}/upload`, formData, {
+      const response = await request.post(`${API_BASE}/upload`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
           'Username': localStorage.getItem('username') || 'unknown'
         }
       })
 
-      if (response.data.success) {
+      if (response.success) {
         console.log('上传成功:', file.name)
       }
     } catch (error) {
@@ -513,18 +514,18 @@ const confirmMoveFile = async () => {
   }
 
   try {
-    const response = await axios.post(`${API_BASE}/move`, {
+    const response = await request.post(`${API_BASE}/move`, {
       file_id: moveFileTarget.value.id,
       target_folder: selectedTargetFolder.value
     })
 
-    if (response.data.success) {
+    if (response.success) {
       alert('移动成功')
       await loadFileList()
       showMoveModal.value = false
       selectedTargetFolder.value = null
     } else {
-      alert('移动失败: ' + response.data.message)
+      alert('移动失败: ' + response.message)
     }
   } catch (error) {
     alert('移动失败: ' + error.message)
@@ -563,14 +564,14 @@ const handleShare = () => {
 // 生成分享链接
 const generateShareLink = async () => {
   try {
-    const response = await axios.post(`${API_BASE}/share/${shareFile.value.id}`, {
+    const response = await request.post(`${API_BASE}/share/${shareFile.value.id}`, {
       expire_days: shareExpireDays.value
     })
 
-    if (response.data.success) {
-      shareLink.value = `${window.location.origin}/api/hr/reports/share/${response.data.share_token}`
+    if (response.success) {
+      shareLink.value = `${window.location.origin}/api/hr/reports/share/${response.share_token}`
     } else {
-      alert('生成分享链接失败: ' + response.data.message)
+      alert('生成分享链接失败: ' + response.message)
     }
   } catch (error) {
     alert('生成分享链接失败: ' + error.message)
@@ -591,13 +592,13 @@ const copyShareLink = () => {
 const handleDelete = async () => {
   if (confirm(`确定要删除"${contextMenu.value.target.name}"吗？此操作将永久删除文件！`)) {
     try {
-      const response = await axios.delete(`${API_BASE}/delete/${contextMenu.value.target.id}`)
+      const response = await request.delete(`${API_BASE}/delete/${contextMenu.value.target.id}`)
 
-      if (response.data.success) {
+      if (response.success) {
         alert('删除成功')
         await loadFileList()
       } else {
-        alert('删除失败: ' + response.data.message)
+        alert('删除失败: ' + response.message)
       }
     } catch (error) {
       alert('删除失败: ' + error.message)
@@ -622,17 +623,17 @@ const confirmRenameFolder = async () => {
   }
 
   try {
-    const response = await axios.post(`${API_BASE}/folder/rename`, {
+    const response = await request.post(`${API_BASE}/folder/rename`, {
       old_path: renameFolderTarget.value.path,
       new_name: renameFolderValue.value
     })
 
-    if (response.data.success) {
+    if (response.success) {
       alert('重命名成功')
       await loadFileList()
       showRenameFolderModal.value = false
     } else {
-      alert('重命名失败: ' + response.data.message)
+      alert('重命名失败: ' + response.message)
     }
   } catch (error) {
     alert('重命名失败: ' + error.message)
@@ -643,15 +644,15 @@ const confirmRenameFolder = async () => {
 const handleDeleteFolder = async () => {
   if (confirm(`确定要删除文件夹"${contextMenu.value.target.name}"吗？此操作将永久删除文件夹及其所有内容！`)) {
     try {
-      const response = await axios.delete(`${API_BASE}/folder/delete`, {
+      const response = await request.delete(`${API_BASE}/folder/delete`, {
         data: { folder_path: contextMenu.value.target.path }
       })
 
-      if (response.data.success) {
-        alert(response.data.message)
+      if (response.success) {
+        alert(response.message)
         await loadFileList()
       } else {
-        alert('删除失败: ' + response.data.message)
+        alert('删除失败: ' + response.message)
       }
     } catch (error) {
       alert('删除失败: ' + error.message)
