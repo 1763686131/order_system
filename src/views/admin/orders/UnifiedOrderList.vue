@@ -92,6 +92,45 @@
               {{ store.name }}订单
             </button>
           </div>
+
+          <!-- 状态筛选滑块 -->
+          <div class="status-filter-slider" role="tablist" aria-label="订单状态筛选">
+            <button
+              :class="['slider-tab', { active: filters.status === '' }]"
+              type="button"
+              @click="filters.status = ''"
+            >
+              全部
+              <span class="count-badge">{{ getStatusCount('') }}</span>
+            </button>
+            <button
+              v-if="mode === 'finance'"
+              :class="['slider-tab', { active: filters.status === 'pending' }]"
+              type="button"
+              @click="filters.status = 'pending'"
+            >
+              未完成
+              <span class="count-badge">{{ getStatusCount('pending') }}</span>
+            </button>
+            <button
+              v-if="mode === 'finance'"
+              :class="['slider-tab', { active: filters.status === 'completed' }]"
+              type="button"
+              @click="filters.status = 'completed'"
+            >
+              已完成
+              <span class="count-badge">{{ getStatusCount('completed') }}</span>
+            </button>
+            <button
+              :class="['slider-tab', { active: filters.status === 'shipped' }]"
+              type="button"
+              @click="filters.status = 'shipped'"
+            >
+              已出库
+              <span class="count-badge">{{ getStatusCount('shipped') }}</span>
+            </button>
+          </div>
+
           <!-- 选中提示 -->
           <div v-if="selectedOrders.length > 0" class="selection-count">
             已选中 <strong>{{ selectedOrders.length }}</strong> 项
@@ -924,6 +963,7 @@ const isInsulationStore = (order) => {
 const filters = ref({
   keyword: '',
   category: '',
+  status: '', // 新增状态筛选
   shippingMethods: [], // 改为数组以支持多选
   startDate: '',
   endDate: ''
@@ -1130,6 +1170,13 @@ const filteredOrders = computed(() => {
     result = result.filter(order => {
       const orderCategory = getCategoryText(order)
       return orderCategory === filters.value.category
+    })
+  }
+
+  // 状态筛选
+  if (filters.value.status) {
+    result = result.filter(order => {
+      return order.status === filters.value.status
     })
   }
 
@@ -1468,10 +1515,71 @@ const handleReset = () => {
   filters.value = {
     keyword: '',
     category: '',
+    status: '', // 重置状态筛选
     shippingMethods: [], // 改为数组
     startDate: '',
     endDate: ''
   }
+}
+
+// 获取各状态的订单数量
+const getStatusCount = (status) => {
+  if (!status) {
+    // 全部订单数（应用其他筛选条件，但不包括状态筛选）
+    let result = [...orders.value]
+
+    // 应用关键词筛选
+    if (filters.value.keyword) {
+      const keyword = filters.value.keyword.toLowerCase()
+      result = result.filter(order => {
+        if (String(order.id).toLowerCase().includes(keyword)) return true
+        if (order.order_number && order.order_number.toLowerCase().includes(keyword)) return true
+        if ((order.order_client || '').toLowerCase().includes(keyword)) return true
+        if ((order.contact_person || '').toLowerCase().includes(keyword)) return true
+        if ((order.receiver_name || '').toLowerCase().includes(keyword)) return true
+        return false
+      })
+    }
+
+    // 应用分类筛选
+    if (filters.value.category) {
+      result = result.filter(order => {
+        const orderCategory = getCategoryText(order)
+        return orderCategory === filters.value.category
+      })
+    }
+
+    return result.length
+  }
+
+  // 特定状态的订单数（应用所有其他筛选条件）
+  let result = [...orders.value]
+
+  // 应用关键词筛选
+  if (filters.value.keyword) {
+    const keyword = filters.value.keyword.toLowerCase()
+    result = result.filter(order => {
+      if (String(order.id).toLowerCase().includes(keyword)) return true
+      if (order.order_number && order.order_number.toLowerCase().includes(keyword)) return true
+      if ((order.order_client || '').toLowerCase().includes(keyword)) return true
+      if ((order.contact_person || '').toLowerCase().includes(keyword)) return true
+      if ((order.receiver_name || '').toLowerCase().includes(keyword)) return true
+      return false
+    })
+  }
+
+  // 应用分类筛选
+  if (filters.value.category) {
+    result = result.filter(order => {
+      const orderCategory = getCategoryText(order)
+      return orderCategory === filters.value.category
+    })
+  }
+
+  // 应用状态筛选
+  result = result.filter(order => order.status === status)
+
+  return result.length
 }
 
 const handleAdd = () => {
@@ -2118,6 +2226,17 @@ svg {
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
+.status-filter-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+  margin-left: 16px;
+}
+
 .slider-tab {
   display: inline-flex;
   height: 36px;
@@ -2132,6 +2251,7 @@ svg {
   font-size: 13px;
   font-weight: 600;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .slider-tab:hover {
@@ -2145,6 +2265,24 @@ svg {
   box-shadow: 0 2px 6px rgba(var(--accent-rgb), 0.3);
 }
 
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.slider-tab.active .count-badge {
+  background: rgba(255, 255, 255, 0.25);
+}
+
 .selection-count {
   display: flex;
   align-items: center;
@@ -2153,6 +2291,7 @@ svg {
   color: var(--text-secondary);
   font-size: 13px;
   font-weight: 500;
+  margin-left: auto;
 }
 
 .selection-count strong {
@@ -2222,6 +2361,7 @@ svg {
   font-weight: 650;
   text-align: left;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .records-table td {
@@ -2232,6 +2372,7 @@ svg {
   border-bottom: 1px solid #edf1f5;
   text-overflow: ellipsis;
   white-space: nowrap;
+  vertical-align: middle;
 }
 
 .records-table tbody tr:last-child td {
@@ -2251,23 +2392,57 @@ svg {
   background: rgba(var(--accent-rgb), 0.08);
 }
 
-/* 增大复选框尺寸 */
+/* 增大复选框尺寸并对齐 */
+.col-checkbox {
+  width: 50px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 0 16px !important;
+  line-height: 1 !important;
+}
+
+.records-table th.col-checkbox {
+  padding: 0 16px !important;
+  vertical-align: middle !important;
+  line-height: 45px !important;
+}
+
+.records-table td.col-checkbox {
+  padding: 0 16px !important;
+  vertical-align: middle !important;
+  line-height: 57px !important;
+}
+
 .records-table input[type="checkbox"] {
   width: 18px;
   height: 18px;
   cursor: pointer;
   accent-color: var(--accent);
+  margin: 0;
+  padding: 0;
+  vertical-align: middle;
+  position: relative;
+  top: 0;
 }
 
-.records-table thead input[type="checkbox"] {
+.records-table thead th.col-checkbox input[type="checkbox"] {
   width: 18px;
   height: 18px;
+  margin: 0;
+  padding: 0;
+  vertical-align: middle;
+  position: relative;
+  top: 0;
 }
 
-.col-checkbox {
-  width: 50px;
-  text-align: center;
+.records-table tbody td.col-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
   vertical-align: middle;
+  position: relative;
+  top: 0;
 }
 .document-column { width: 140px; }
 .records-table th:nth-child(3) { width: 110px; }
