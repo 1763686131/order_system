@@ -250,6 +250,7 @@
               :key="order.id"
               class="record-row"
               :class="{ selected: isSelected(order.id) }"
+              :style="{ '--store-bg-color': getStoreColor(order) }"
               tabindex="0"
               @click="openOrderDetail(order)"
               @keydown.enter.prevent="openOrderDetail(order)"
@@ -408,9 +409,9 @@
         </span>
         <div class="pagination" aria-label="分页">
           <select v-model.number="pageSize" aria-label="每页条数">
-            <option :value="10">10 条 / 页</option>
-            <option :value="20">20 条 / 页</option>
+            <option :value="30">30 条 / 页</option>
             <option :value="50">50 条 / 页</option>
+            <option :value="99999">全部</option>
           </select>
           <button
             type="button"
@@ -1522,64 +1523,15 @@ const handleReset = () => {
   }
 }
 
-// 获取各状态的订单数量
+// 获取各状态的订单数量（基于当前所有筛选后的订单）
 const getStatusCount = (status) => {
   if (!status) {
-    // 全部订单数（应用其他筛选条件，但不包括状态筛选）
-    let result = [...orders.value]
-
-    // 应用关键词筛选
-    if (filters.value.keyword) {
-      const keyword = filters.value.keyword.toLowerCase()
-      result = result.filter(order => {
-        if (String(order.id).toLowerCase().includes(keyword)) return true
-        if (order.order_number && order.order_number.toLowerCase().includes(keyword)) return true
-        if ((order.order_client || '').toLowerCase().includes(keyword)) return true
-        if ((order.contact_person || '').toLowerCase().includes(keyword)) return true
-        if ((order.receiver_name || '').toLowerCase().includes(keyword)) return true
-        return false
-      })
-    }
-
-    // 应用分类筛选
-    if (filters.value.category) {
-      result = result.filter(order => {
-        const orderCategory = getCategoryText(order)
-        return orderCategory === filters.value.category
-      })
-    }
-
-    return result.length
+    // 全部：返回应用了除状态外所有筛选条件的订单数
+    return filteredOrders.value.length
   }
 
-  // 特定状态的订单数（应用所有其他筛选条件）
-  let result = [...orders.value]
-
-  // 应用关键词筛选
-  if (filters.value.keyword) {
-    const keyword = filters.value.keyword.toLowerCase()
-    result = result.filter(order => {
-      if (String(order.id).toLowerCase().includes(keyword)) return true
-      if (order.order_number && order.order_number.toLowerCase().includes(keyword)) return true
-      if ((order.order_client || '').toLowerCase().includes(keyword)) return true
-      if ((order.contact_person || '').toLowerCase().includes(keyword)) return true
-      if ((order.receiver_name || '').toLowerCase().includes(keyword)) return true
-      return false
-    })
-  }
-
-  // 应用分类筛选
-  if (filters.value.category) {
-    result = result.filter(order => {
-      const orderCategory = getCategoryText(order)
-      return orderCategory === filters.value.category
-    })
-  }
-
-  // 应用状态筛选
-  result = result.filter(order => order.status === status)
-
-  return result.length
+  // 特定状态：在当前筛选结果基础上再按状态过滤
+  return filteredOrders.value.filter(order => order.status === status).length
 }
 
 const handleAdd = () => {
@@ -2382,14 +2334,15 @@ svg {
 .record-row {
   cursor: pointer;
   transition: background 0.15s ease;
+  background: var(--store-bg-color, #fff);
 }
 
 .record-row:hover {
-  background: rgba(var(--accent-rgb), 0.12);
+  background: rgba(var(--accent-rgb), 0.18) !important;
 }
 
 .record-row.selected {
-  background: rgba(var(--accent-rgb), 0.08);
+  background: rgba(var(--accent-rgb), 0.12) !important;
 }
 
 /* 增大复选框尺寸并对齐 */
