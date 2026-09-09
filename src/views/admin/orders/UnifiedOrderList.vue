@@ -167,6 +167,19 @@
             </svg>
           </button>
           <button
+            class="button button-export"
+            type="button"
+            title="导出Excel"
+            @click="handleExport"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            导出 Excel
+          </button>
+          <button
             v-if="mode === 'finance'"
             class="button button-primary create-button"
             type="button"
@@ -2205,6 +2218,19 @@ svg {
 }
 
 .button-secondary:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+/* 导出按钮 */
+.button-export {
+  color: #374151;
+  background: #fff;
+  border-color: #d1d5db;
+}
+
+.button-export:hover:not(:disabled) {
   color: var(--accent-dark);
   background: var(--accent-soft);
   border-color: var(--accent-border);
