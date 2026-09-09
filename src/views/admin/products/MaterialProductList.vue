@@ -93,6 +93,7 @@
               <th>分类</th>
               <th>默认仓库</th>
               <th>门店</th>
+              <th class="stock-column">当前库存</th>
               <th>状态</th>
               <th class="actions-column">操作</th>
             </tr>
@@ -116,6 +117,17 @@
               <td>
                 <span class="store-text">{{ product.storeNames || '全部门店' }}</span>
               </td>
+              <td class="stock-column">
+                <strong
+                  class="stock-value"
+                  :title="selectedStoreId === null ? '全部门店库存合计' : '当前门店库存合计'"
+                >
+                  {{ formatStock(product.currentStock) }}
+                </strong>
+                <small v-if="product.inventoryUpdatedAt" class="stock-updated">
+                  {{ formatStockUpdatedAt(product.inventoryUpdatedAt) }}
+                </small>
+              </td>
               <td>
                 <span class="status-pill" :class="product.enabled === false ? 'disabled' : 'enabled'">
                   {{ product.enabled === false ? '停用' : '启用' }}
@@ -128,7 +140,7 @@
               </td>
             </tr>
             <tr v-if="paginatedProducts.length === 0">
-              <td colspan="9" class="empty-state">
+              <td colspan="10" class="empty-state">
                 <span class="empty-icon" aria-hidden="true">□</span>
                 <strong>暂无原材料商品</strong>
                 <span>点击右上角“新增原材料”开始建立档案</span>
@@ -171,6 +183,7 @@ const products = ref([])
 const stores = ref([])
 const warehouses = ref([])
 const units = ref([])
+const stockBalances = ref([])
 const selectedStoreId = ref(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -183,11 +196,36 @@ const filters = reactive({
 
 const warehouseMap = computed(() => new Map(warehouses.value.map(item => [item.id, item])))
 const unitMap = computed(() => new Map(units.value.map(item => [item.id, item.name])))
+const stockBalanceMap = computed(() => {
+  const balancesByProduct = new Map()
+
+  stockBalances.value.forEach(balance => {
+    if (balance.productType && balance.productType !== 'raw-material') return
+
+    const productKey = String(balance.productId)
+    if (!balancesByProduct.has(productKey)) balancesByProduct.set(productKey, [])
+    balancesByProduct.get(productKey).push(balance)
+  })
+
+  return balancesByProduct
+})
 
 const decoratedProducts = computed(() => products.value.map(product => {
   const warehouse = warehouseMap.value.get(product.warehouseId)
   const categoryId = product.categoryId || product.category
   const category = warehouse?.categories?.find(item => item.id === categoryId)
+  const productBalances = stockBalanceMap.value.get(String(product.id)) || []
+  const visibleBalances = selectedStoreId.value === null
+    ? productBalances
+    : productBalances.filter(balance => String(balance.storeId) === String(selectedStoreId.value))
+  const currentStock = visibleBalances.reduce((sum, balance) => {
+    const quantity = Number(balance.quantity)
+    return sum + (Number.isFinite(quantity) ? quantity : 0)
+  }, 0)
+  const inventoryUpdatedAt = visibleBalances.reduce((latest, balance) => {
+    const updatedAt = balance.updatedAt || ''
+    return updatedAt > latest ? updatedAt : latest
+  }, '')
   const storeNames = (product.storeIds || [])
     .map(storeId => stores.value.find(store => store.id === storeId)?.name)
     .filter(Boolean)
@@ -198,7 +236,9 @@ const decoratedProducts = computed(() => products.value.map(product => {
     unitName: unitMap.value.get(product.unitId),
     warehouseName: warehouse?.name,
     categoryName: category?.name,
-    storeNames
+    storeNames,
+    currentStock,
+    inventoryUpdatedAt
   }
 }))
 
@@ -254,11 +294,16 @@ const loadUnits = async () => {
 
 const loadProducts = async () => {
   try {
-    const response = await request({ url: '/raw-material-products', method: 'GET' })
-    products.value = Array.isArray(response) ? response : []
+    const [productResponse, balanceResponse] = await Promise.all([
+      request({ url: '/raw-material-products', method: 'GET' }),
+      request({ url: '/stock-balances', method: 'GET', params: { type: 'raw-material' } })
+    ])
+    products.value = Array.isArray(productResponse) ? productResponse : []
+    stockBalances.value = Array.isArray(balanceResponse) ? balanceResponse : []
   } catch (error) {
-    console.error('加载原材料商品失败:', error)
+    console.error('加载原材料商品或库存失败:', error)
     products.value = []
+    stockBalances.value = []
   }
 }
 
@@ -271,6 +316,16 @@ const resetFilters = () => {
 }
 
 const getInitial = name => (name || '原').slice(0, 1)
+
+const formatStock = value => Number(value || 0).toLocaleString('zh-CN', {
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 3
+})
+
+const formatStockUpdatedAt = value => {
+  if (!value) return ''
+  return String(value).slice(0, 16)
+}
 
 const handleNew = () => productFormModal.value?.open()
 const handleEdit = product => productFormModal.value?.open(product)
@@ -521,7 +576,7 @@ h2 {
 table {
   width: 100%;
   border-collapse: collapse;
-  min-width: 1060px;
+  min-width: 1160px;
 }
 
 th,
@@ -587,6 +642,30 @@ tbody tr:hover {
 .muted,
 .store-text {
   color: #748196;
+}
+
+.stock-column {
+  min-width: 118px;
+  text-align: right;
+}
+
+.stock-value,
+.stock-updated {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+
+.stock-value {
+  color: #172033;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.stock-updated {
+  margin-top: 3px;
+  color: #9aa6b5;
+  font-size: 11px;
+  font-weight: 400;
 }
 
 .status-pill {

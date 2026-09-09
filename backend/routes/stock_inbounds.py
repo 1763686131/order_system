@@ -68,9 +68,14 @@ def _type(value):
 
 def _status(value):
     text = str(value or 'draft').strip().lower()
-    if text not in ('draft', 'posted', 'cancelled'):
+    if text not in ('draft', 'reviewed', 'posted', 'cancelled'):
         raise ValueError('单据状态无效')
     return text
+
+
+def _is_audited(status):
+    """已审核单据才允许生成库存流水。posted 保留用于兼容旧数据。"""
+    return str(status or '').lower() in ('reviewed', 'posted')
 
 
 def _clean_text(value, max_length=None):
@@ -251,6 +256,8 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False):
             continue
         if product_id is None and not name:
             raise ValueError('每条明细必须选择物料')
+        if require_valid and product_id is None:
+            raise ValueError('审核明细必须关联有效物料')
         if product_id is not None and not _product_exists(conn, receipt_type, product_id):
             raise ValueError(f'物料 ID {product_id} 不存在')
         if require_valid and received <= 0:
@@ -276,7 +283,7 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False):
             'remark': _clean_text(raw.get('remark', ''), 500),
         })
     if require_valid and not normalized:
-        raise ValueError('提交过账至少需要 1 条有效物料明细')
+        raise ValueError('审核至少需要 1 条有效物料明细')
     return normalized
 
 
@@ -285,7 +292,8 @@ def _document_values(conn, data, existing=None, for_post=False):
     receipt_type = _type(data.get('type', data.get('receiptType', existing.get('receipt_type'))))
     status = _status(data.get('status', existing.get('status', 'draft')))
     if for_post:
-        status = 'posted'
+        status = 'reviewed'
+    require_valid = for_post or _is_audited(status)
     document_date = _clean_text(data.get('documentDate', data.get('document_date', existing.get('document_date', ''))), 20)
     if not document_date:
         raise ValueError('请选择单据日期')
@@ -293,16 +301,16 @@ def _document_values(conn, data, existing=None, for_post=False):
     store_id = _optional_int(data.get('storeId', data.get('store_id', existing.get('store_id'))), '门店ID')
     supplier_id = _optional_int(data.get('supplierId', data.get('supplier_id', existing.get('supplier_id'))), '供应商ID')
     workshop = _clean_text(data.get('workshop', data.get('productionWorkshop', existing.get('workshop', ''))), 80)
-    if receipt_type == 'raw-material' and for_post:
+    if receipt_type == 'raw-material' and require_valid:
         if supplier_id is None:
             raise ValueError('请选择供应商')
         if not conn.execute("SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)).fetchone():
             raise ValueError('供应商不存在或已停用')
     if not conn.execute('SELECT 1 FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone():
         raise ValueError('目标仓库不存在')
-    items = _normalize_items(conn, receipt_type, data.get('items', existing.get('_items', [])), for_post)
-    if for_post and not any(item['received_qty'] > 0 for item in items):
-        raise ValueError('提交过账至少需要 1 条有效物料明细')
+    items = _normalize_items(conn, receipt_type, data.get('items', existing.get('_items', [])), require_valid)
+    if require_valid and not any(item['received_qty'] > 0 for item in items):
+        raise ValueError('审核至少需要 1 条有效物料明细')
     total_quantity = sum(Decimal(str(item['received_qty'])) for item in items)
     total_tax = sum(Decimal(str(item['tax_amount'])) for item in items).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
     total_amount = sum(Decimal(str(item['total_amount'])) for item in items).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
@@ -371,7 +379,7 @@ def _serialize_document(conn, row, include_items=True):
 
 
 def _post_items(conn, document_row, item_rows):
-    """Apply a posted document in the caller's transaction."""
+    """Apply an audited document in the caller's transaction."""
     receipt_type = document_row['receipt_type']
     now = _now()
     for item in item_rows:
@@ -423,6 +431,60 @@ def _post_items(conn, document_row, item_rows):
             )
 
 
+def _reverse_posted_items(conn, document_row):
+    """Reverse inventory movements written by one inbound document."""
+    movements = conn.execute(
+        '''
+        SELECT * FROM stock_movements
+        WHERE movement_type = 'in' AND source_document_id = ?
+        ORDER BY id
+        ''',
+        (document_row['id'],),
+    ).fetchall()
+    for movement in movements:
+        quantity = float(movement['quantity'] or 0)
+        balance = conn.execute(
+            '''
+            SELECT quantity FROM stock_balances
+            WHERE product_type = ? AND product_id = ? AND warehouse_id = ?
+              AND store_id = ? AND bin_code = ? AND batch_no = ?
+            ''',
+            (
+                movement['product_type'], movement['product_id'], movement['warehouse_id'],
+                movement['store_id'], movement['bin_code'], movement['batch_no'],
+            ),
+        ).fetchone()
+        if not balance or float(balance['quantity'] or 0) + 0.0000001 < quantity:
+            raise ValueError('当前库存不足，无法反审核该入库单')
+        conn.execute(
+            '''
+            UPDATE stock_balances
+            SET quantity = quantity - ?, updated_at = ?
+            WHERE product_type = ? AND product_id = ? AND warehouse_id = ?
+              AND store_id = ? AND bin_code = ? AND batch_no = ?
+            ''',
+            (
+                quantity, _now(), movement['product_type'], movement['product_id'],
+                movement['warehouse_id'], movement['store_id'], movement['bin_code'],
+                movement['batch_no'],
+            ),
+        )
+        if movement['product_type'] == 'finished-product':
+            conn.execute(
+                '''
+                UPDATE inventory
+                SET stock = COALESCE(stock, 0) - ?, updated_at = ?
+                WHERE product_id = ?
+                ''',
+                (quantity, _now(), movement['product_id']),
+            )
+    conn.execute(
+        "DELETE FROM stock_movements WHERE movement_type = 'in' AND source_document_id = ?",
+        (document_row['id'],),
+    )
+    conn.execute('DELETE FROM stock_balances WHERE ABS(quantity) < 0.0000001')
+
+
 def _insert_items(conn, inbound_id, receipt_type, items):
     for line_no, item in enumerate(items, start=1):
         cursor = conn.execute(
@@ -460,7 +522,7 @@ def _document_insert(conn, values):
             values['supplier_id'], values['workshop'], values['inspector'], values['quality_no'],
             values['remark'], json.dumps(values['attachments'], ensure_ascii=False), values['status'],
             values['total_quantity'], values['total_tax'], values['total_amount'],
-            now if values['status'] == 'posted' else None, now, now,
+            now if _is_audited(values['status']) else None, now, now,
         ),
     )
     inbound_id = cursor.lastrowid
@@ -469,7 +531,7 @@ def _document_insert(conn, values):
         conn.execute('UPDATE stock_inbounds SET document_no = ? WHERE id = ?', (generated, inbound_id))
     row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
     _insert_items(conn, inbound_id, values['receipt_type'], values['items'])
-    if values['status'] == 'posted':
+    if _is_audited(values['status']):
         _post_items(conn, row, [dict(item, id=item.get('id')) for item in values['items']])
     return conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
 
@@ -516,9 +578,11 @@ def create_stock_inbound():
     data = request.get_json(silent=True) or {}
     requested_status = str(data.get('status') or 'draft').lower()
     try:
+        if _is_audited(requested_status):
+            return jsonify({'success': False, 'message': '请先保存待审核单据，再调用审核接口'}), 400
         with _write_lock:
             with get_db() as conn:
-                values = _document_values(conn, data, for_post=requested_status == 'posted')
+                values = _document_values(conn, data)
                 row = _document_insert(conn, values)
                 return jsonify({'success': True, 'message': '入库单保存成功', 'stockIn': _serialize_document(conn, row), 'id': row['id']}), 201
     except ValueError as exc:
@@ -535,14 +599,16 @@ def update_stock_inbound(inbound_id):
     data = request.get_json(silent=True) or {}
     requested_status = str(data.get('status') or '').lower()
     try:
+        if _is_audited(requested_status):
+            return jsonify({'success': False, 'message': '请通过审核接口变更审核状态'}), 400
         with _write_lock:
             with get_db() as conn:
                 old_row, old_values = _existing_values(conn, inbound_id)
                 if not old_row:
                     return jsonify({'success': False, 'message': '入库单不存在'}), 404
-                if old_row['status'] == 'posted':
-                    return jsonify({'success': False, 'message': '已过账单据不可修改'}), 409
-                values = _document_values(conn, data, existing=old_values, for_post=requested_status == 'posted')
+                if _is_audited(old_row['status']):
+                    return jsonify({'success': False, 'message': '已审核单据不可修改'}), 409
+                values = _document_values(conn, data, existing=old_values)
                 now = _now()
                 document_no = values['document_no'] or old_row['document_no']
                 conn.execute(
@@ -558,12 +624,12 @@ def update_stock_inbound(inbound_id):
                         values['warehouse_id'], values['supplier_id'], values['workshop'], values['inspector'],
                         values['quality_no'], values['remark'], json.dumps(values['attachments'], ensure_ascii=False),
                         values['status'], values['total_quantity'], values['total_tax'], values['total_amount'],
-                        now if values['status'] == 'posted' else None, now, inbound_id,
+                        now if _is_audited(values['status']) else None, now, inbound_id,
                     ),
                 )
                 conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (inbound_id,))
                 _insert_items(conn, inbound_id, values['receipt_type'], values['items'])
-                if values['status'] == 'posted':
+                if _is_audited(values['status']):
                     new_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                     _post_items(conn, new_row, [dict(item, id=item.get('id')) for item in values['items']])
                 row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
@@ -582,10 +648,109 @@ def cancel_stock_inbound(inbound_id):
         row = conn.execute('SELECT status FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
         if not row:
             return jsonify({'success': False, 'message': '入库单不存在'}), 404
-        if row['status'] == 'posted':
-            return jsonify({'success': False, 'message': '已过账单据不能直接删除'}), 409
+        if _is_audited(row['status']):
+            return jsonify({'success': False, 'message': '已审核单据不能直接删除，请先反审核'}), 409
+        if row['status'] == 'cancelled':
+            conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (inbound_id,))
+            conn.execute('DELETE FROM stock_inbounds WHERE id = ?', (inbound_id,))
+            return jsonify({'success': True, 'message': '已红冲入库单已删除', 'deleted': True})
         conn.execute("UPDATE stock_inbounds SET status = 'cancelled', updated_at = ? WHERE id = ?", (_now(), inbound_id))
         return jsonify({'success': True, 'message': '入库单已作废'})
+
+
+@stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>/restart', methods=['POST'])
+def restart_stock_inbound(inbound_id):
+    """将已红冲且未写库存的单据重新置为待审核。"""
+    with _write_lock:
+        with get_db() as conn:
+            row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+            if not row:
+                return jsonify({'success': False, 'message': '入库单不存在'}), 404
+            if row['status'] != 'cancelled':
+                return jsonify({'success': False, 'message': '只有已红冲单据可以重新启用'}), 409
+            conn.execute(
+                "UPDATE stock_inbounds SET status = 'draft', updated_at = ? WHERE id = ?",
+                (_now(), inbound_id),
+            )
+            updated = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+            return jsonify({
+                'success': True,
+                'message': '入库单已重新启用',
+                'stockIn': _serialize_document(conn, updated),
+            })
+
+
+@stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>/audit', methods=['POST'])
+def audit_stock_inbound(inbound_id):
+    """审核待审核入库单，并在同一事务内写入库存余额和流水。"""
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                row, values = _existing_values(conn, inbound_id)
+                if not row:
+                    return jsonify({'success': False, 'message': '入库单不存在'}), 404
+                if _is_audited(row['status']):
+                    return jsonify({'success': False, 'message': '入库单已经审核'}), 409
+                if row['status'] != 'draft':
+                    return jsonify({'success': False, 'message': '只有待审核单据可以审核'}), 409
+                movement_exists = conn.execute(
+                    "SELECT 1 FROM stock_movements WHERE movement_type = 'in' AND source_document_id = ? LIMIT 1",
+                    (inbound_id,),
+                ).fetchone()
+                if movement_exists:
+                    return jsonify({'success': False, 'message': '该单据已有库存流水，请先检查数据状态'}), 409
+
+                # 重新按审核规则校验供应商、物料、数量和批次。
+                _document_values(conn, values, existing=values, for_post=True)
+                item_rows = conn.execute(
+                    'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id',
+                    (inbound_id,),
+                ).fetchall()
+                now = _now()
+                conn.execute(
+                    "UPDATE stock_inbounds SET status = 'reviewed', posted_at = ?, updated_at = ? WHERE id = ?",
+                    (now, now, inbound_id),
+                )
+                audited_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+                _post_items(conn, audited_row, [dict(item) for item in item_rows])
+                return jsonify({
+                    'success': True,
+                    'message': '入库单审核成功，库存已更新',
+                    'stockIn': _serialize_document(conn, audited_row),
+                })
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'message': '入库单审核失败', 'detail': str(exc)}), 500
+
+
+@stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>/audit', methods=['DELETE'])
+def reverse_audit_stock_inbound(inbound_id):
+    """反审核入库单，并回退该单据此前写入的库存流水。"""
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+                if not row:
+                    return jsonify({'success': False, 'message': '入库单不存在'}), 404
+                if not _is_audited(row['status']):
+                    return jsonify({'success': False, 'message': '当前单据未审核'}), 409
+                _reverse_posted_items(conn, row)
+                now = _now()
+                conn.execute(
+                    "UPDATE stock_inbounds SET status = 'draft', posted_at = NULL, updated_at = ? WHERE id = ?",
+                    (now, inbound_id),
+                )
+                updated = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+                return jsonify({
+                    'success': True,
+                    'message': '入库单已反审核，库存已回退',
+                    'stockIn': _serialize_document(conn, updated),
+                })
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 409
+    except Exception as exc:
+        return jsonify({'success': False, 'message': '入库单反审核失败', 'detail': str(exc)}), 500
 
 
 @stock_inbounds_bp.route('/stock-balances', methods=['GET'])

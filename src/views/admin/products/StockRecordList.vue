@@ -165,7 +165,12 @@
             </svg>
             导出 Excel
           </button>
-          <button class="button button-primary create-button" type="button" @click="handleCreate">
+          <button
+            v-if="!isOutbound"
+            class="button button-primary create-button"
+            type="button"
+            @click="handleCreate"
+          >
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M12 5v14"></path>
               <path d="M5 12h14"></path>
@@ -258,6 +263,7 @@
                     </svg>
                   </button>
                   <button
+                    v-if="!isOutbound"
                     class="danger-action"
                     type="button"
                     title="红冲或作废"
@@ -425,28 +431,33 @@
               </section>
             </div>
 
-            <footer class="drawer-footer">
-              <div class="drawer-state-actions">
+            <footer :class="['drawer-footer', { 'drawer-footer-readonly': isOutbound }]">
+              <div v-if="!isOutbound" class="drawer-state-actions">
                 <button
                   v-if="selectedRecord.status === 'pending'"
                   class="button button-primary"
                   type="button"
+                  :disabled="documentAction.pending"
                   @click="handleReview(selectedRecord)"
                 >
-                  审核
+                  <span v-if="isDocumentAction(selectedRecord, 'audit')" class="button-spinner" aria-hidden="true"></span>
+                  {{ isDocumentAction(selectedRecord, 'audit') ? '正在审核中...' : '审核' }}
                 </button>
                 <button
                   v-else-if="selectedRecord.status === 'reviewed' || selectedRecord.status === 'posted'"
                   class="button button-secondary"
                   type="button"
+                  :disabled="documentAction.pending"
                   @click="handleReverseAudit(selectedRecord)"
                 >
-                  反审核
+                  <span v-if="isDocumentAction(selectedRecord, 'reverse-audit')" class="button-spinner" aria-hidden="true"></span>
+                  {{ isDocumentAction(selectedRecord, 'reverse-audit') ? '正在反审核...' : '反审核' }}
                 </button>
                 <button
                   v-if="selectedRecord.status === 'cancelled'"
                   class="button button-secondary"
                   type="button"
+                  :disabled="documentAction.pending"
                   @click="handleRestart(selectedRecord)"
                 >
                   重新启用
@@ -455,15 +466,17 @@
                   v-if="selectedRecord.status === 'cancelled'"
                   class="button button-danger-light"
                   type="button"
+                  :disabled="documentAction.pending"
                   @click="handleDelete(selectedRecord)"
                 >
                   删除
                 </button>
               </div>
               <button
+                v-if="!isOutbound"
                 class="button button-danger-light"
                 type="button"
-                :disabled="selectedRecord.status !== 'pending'"
+                :disabled="selectedRecord.status !== 'pending' || documentAction.pending"
                 @click="handleRedFlush(selectedRecord)"
               >
                 红冲 / 作废
@@ -625,6 +638,7 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const localStatusOverrides = ref(new Map())
 const hiddenRecordIds = ref(new Set())
+const documentAction = reactive({ pending: false, id: '', type: '' })
 let loadToken = 0
 let detailToken = 0
 
@@ -1060,7 +1074,10 @@ const loadRecords = async () => {
   }
 }
 
-const handleCreate = () => emit('create', { mode: props.mode })
+const handleCreate = () => {
+  if (isOutbound.value) return
+  emit('create', { mode: props.mode })
+}
 
 const openDetail = async record => {
   const token = ++detailToken
@@ -1087,40 +1104,116 @@ const closeDrawer = () => {
   selectedRecord.value = null
 }
 
-const handleRedFlush = record => {
-  if (record?.status === 'pending') emit('red-flush', record)
+const isDocumentAction = (record, type) => (
+  documentAction.pending
+  && documentAction.type === type
+  && String(documentAction.id) === String(record?.id)
+)
+
+const beginDocumentAction = (record, type) => {
+  if (documentAction.pending || record?.id === undefined || record?.id === null || record?.id === '') return false
+  Object.assign(documentAction, { pending: true, id: record.id, type })
+  return true
 }
 
-const updateLocalStatus = (record, status, eventName) => {
-  if (record?.id === undefined || record?.id === null || record?.id === '') return
+const finishDocumentAction = () => {
+  Object.assign(documentAction, { pending: false, id: '', type: '' })
+}
+
+const responseRecord = (response, fallback, status) => (
+  response?.stockIn
+  || response?.stockInbound
+  || response?.receipt
+  || { ...(fallback?.source || fallback), status }
+)
+
+const applyServerRecord = (record, source, fallbackStatus) => {
+  const id = String(record.id)
+  const status = normalizeStatus(source || { status: fallbackStatus })
   const overrides = new Map(localStatusOverrides.value)
-  overrides.set(String(record.id), status)
+  overrides.set(id, status)
   localStatusOverrides.value = overrides
-  selectedRecord.value = normalizeRecord(record.source || record)
-  emit(eventName, selectedRecord.value)
+
+  if (!Array.isArray(props.dataList)) {
+    const index = internalRecords.value.findIndex(item => String(firstValue(item.id, item.documentId, item.document_id)) === id)
+    if (index >= 0) internalRecords.value.splice(index, 1, source)
+  }
+  selectedRecord.value = normalizeRecord(source)
+  return selectedRecord.value
 }
 
-const handleReview = record => {
-  if (record?.status === 'pending') updateLocalStatus(record, 'reviewed', 'review')
+const handleRedFlush = record => {
+  if (!isOutbound.value && record?.status === 'pending') emit('red-flush', record)
 }
 
-const handleReverseAudit = record => {
-  if (record?.status === 'reviewed' || record?.status === 'posted') {
-    updateLocalStatus(record, 'pending', 'reverse-audit')
+const handleReview = async record => {
+  if (isOutbound.value || record?.status !== 'pending' || !beginDocumentAction(record, 'audit')) return
+  try {
+    const response = await request({ url: `/stock-inbounds/${record.id}/audit`, method: 'POST' })
+    const updated = applyServerRecord(record, responseRecord(response, record, 'reviewed'), 'reviewed')
+    emit('review', updated)
+  } catch (error) {
+    window.alert(error?.response?.data?.message || error?.message || '审核失败，请稍后重试')
+  } finally {
+    finishDocumentAction()
   }
 }
 
-const handleRestart = record => {
-  if (record?.status === 'cancelled') updateLocalStatus(record, 'pending', 'restart')
+const handleReverseAudit = async record => {
+  if (
+    isOutbound.value
+    || !['reviewed', 'posted'].includes(record?.status)
+    || !beginDocumentAction(record, 'reverse-audit')
+  ) return
+  try {
+    const response = await request({ url: `/stock-inbounds/${record.id}/audit`, method: 'DELETE' })
+    const updated = applyServerRecord(record, responseRecord(response, record, 'draft'), 'draft')
+    emit('reverse-audit', updated)
+  } catch (error) {
+    window.alert(error?.response?.data?.message || error?.message || '反审核失败，请稍后重试')
+  } finally {
+    finishDocumentAction()
+  }
 }
 
-const handleDelete = record => {
-  if (record?.status !== 'cancelled' || record?.id === undefined || record?.id === null || record?.id === '') return
-  const hidden = new Set(hiddenRecordIds.value)
-  hidden.add(String(record.id))
-  hiddenRecordIds.value = hidden
-  closeDrawer()
-  emit('delete', record)
+const handleRestart = async record => {
+  if (isOutbound.value || record?.status !== 'cancelled' || !beginDocumentAction(record, 'restart')) return
+  try {
+    const response = await request({ url: `/stock-inbounds/${record.id}/restart`, method: 'POST' })
+    const updated = applyServerRecord(record, responseRecord(response, record, 'draft'), 'draft')
+    emit('restart', updated)
+  } catch (error) {
+    window.alert(error?.response?.data?.message || error?.message || '重新启用失败，请稍后重试')
+  } finally {
+    finishDocumentAction()
+  }
+}
+
+const handleDelete = async record => {
+  if (
+    isOutbound.value
+    || record?.status !== 'cancelled'
+    || record?.id === undefined
+    || record?.id === null
+    || record?.id === ''
+    || !beginDocumentAction(record, 'delete')
+  ) return
+  if (!window.confirm(`确定永久删除已红冲单据“${record.documentNo}”吗？`)) {
+    finishDocumentAction()
+    return
+  }
+  try {
+    await request({ url: `/stock-inbounds/${record.id}`, method: 'DELETE' })
+    const hidden = new Set(hiddenRecordIds.value)
+    hidden.add(String(record.id))
+    hiddenRecordIds.value = hidden
+    closeDrawer()
+    emit('delete', record)
+  } catch (error) {
+    window.alert(error?.response?.data?.message || error?.message || '删除失败，请稍后重试')
+  } finally {
+    finishDocumentAction()
+  }
 }
 
 const handlePrint = async record => {
@@ -1374,6 +1467,16 @@ svg {
 .button svg {
   width: 16px;
   height: 16px;
+}
+
+.button-spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
 .button:disabled,
@@ -2220,6 +2323,10 @@ svg {
   padding: 13px 18px;
   background: #fff;
   border-top: 1px solid #dfe5ec;
+}
+
+.drawer-footer-readonly {
+  justify-content: flex-end;
 }
 
 .drawer-state-actions {
