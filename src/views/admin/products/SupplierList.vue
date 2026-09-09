@@ -1,5 +1,5 @@
 <template>
-  <div class="supplier-page">
+  <div class="supplier-page" @click="closeFilterMenu">
     <header class="page-header">
       <div>
         <p class="eyebrow">采购协同</p>
@@ -59,23 +59,104 @@
             @keyup.enter="handleSearch"
           />
         </label>
-        <label class="field">
+        <div class="field">
           <span>所属门店</span>
-          <select v-model="filters.storeId" @change="handleSearch">
-            <option value="">全部门店</option>
-            <option v-for="store in stores" :key="store.id" :value="String(store.id)">
-              {{ store.name || store.storeName }}
-            </option>
-          </select>
-        </label>
-        <label class="field">
+          <div class="filter-combobox" @click.stop>
+            <input
+              v-model="storeQuery"
+              type="search"
+              role="combobox"
+              aria-label="所属门店"
+              :aria-expanded="activeFilterMenu === 'store'"
+              aria-autocomplete="list"
+              placeholder="全部门店"
+              @focus="openFilterMenu('store')"
+              @keydown="handleFilterKeydown($event, 'store')"
+            />
+            <button
+              class="combobox-toggle"
+              type="button"
+              title="选择所属门店"
+              aria-label="选择所属门店"
+              @mousedown.prevent
+              @click="toggleFilterMenu('store')"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            <div v-if="activeFilterMenu === 'store'" class="combobox-options" role="listbox">
+              <button
+                v-for="(option, index) in filteredStoreOptions"
+                :key="option.value || 'all-stores'"
+                class="combobox-option"
+                :class="{ selected: filters.storeId === option.value, highlighted: highlightedFilterIndex === index }"
+                type="button"
+                role="option"
+                :aria-selected="filters.storeId === option.value"
+                @mouseenter="highlightedFilterIndex = index"
+                @click="selectFilterOption('store', option)"
+              >
+                <span>{{ option.label }}</span>
+                <small v-if="option.meta">{{ option.meta }}</small>
+                <svg v-if="filters.storeId === option.value" aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+                  <path d="m5 12 4 4L19 6" />
+                </svg>
+              </button>
+              <span v-if="filteredStoreOptions.length === 0" class="combobox-empty">未找到匹配门店</span>
+            </div>
+          </div>
+        </div>
+        <div class="field">
           <span>供应商状态</span>
-          <select v-model="filters.status" @change="handleSearch">
-            <option value="">全部状态</option>
-            <option value="active">启用</option>
-            <option value="inactive">停用</option>
-          </select>
-        </label>
+          <div class="filter-combobox" @click.stop>
+            <input
+              v-model="statusQuery"
+              type="search"
+              role="combobox"
+              aria-label="供应商状态"
+              :aria-expanded="activeFilterMenu === 'status'"
+              aria-autocomplete="list"
+              placeholder="全部状态"
+              @focus="openFilterMenu('status')"
+              @keydown="handleFilterKeydown($event, 'status')"
+            />
+            <button
+              class="combobox-toggle"
+              type="button"
+              title="选择供应商状态"
+              aria-label="选择供应商状态"
+              @mousedown.prevent
+              @click="toggleFilterMenu('status')"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            <div v-if="activeFilterMenu === 'status'" class="combobox-options" role="listbox">
+              <button
+                v-for="(option, index) in filteredStatusOptions"
+                :key="option.value || 'all-statuses'"
+                class="combobox-option"
+                :class="{ selected: filters.status === option.value, highlighted: highlightedFilterIndex === index }"
+                type="button"
+                role="option"
+                :aria-selected="filters.status === option.value"
+                @mouseenter="highlightedFilterIndex = index"
+                @click="selectFilterOption('status', option)"
+              >
+                <span class="status-option-label">
+                  <i class="status-option-dot" :class="option.value || 'all'"></i>
+                  {{ option.label }}
+                </span>
+                <svg v-if="filters.status === option.value" aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+                  <path d="m5 12 4 4L19 6" />
+                </svg>
+              </button>
+              <span v-if="filteredStatusOptions.length === 0" class="combobox-empty">未找到匹配状态</span>
+            </div>
+          </div>
+        </div>
         <div class="filter-actions">
           <button class="btn btn-primary btn-search" type="button" @click="handleSearch">
             <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
@@ -394,6 +475,17 @@ const filters = reactive({
   status: ''
 })
 
+const storeQuery = ref('')
+const statusQuery = ref('')
+const activeFilterMenu = ref('')
+const highlightedFilterIndex = ref(0)
+
+const statusOptions = [
+  { value: '', label: '全部状态' },
+  { value: 'active', label: '启用', meta: '可用于采购入库' },
+  { value: 'inactive', label: '停用', meta: '仅保留历史资料' }
+]
+
 const emptyForm = () => ({
   supplierCode: '',
   supplierName: '',
@@ -412,6 +504,34 @@ const form = reactive(emptyForm())
 const errors = reactive({ supplierName: '', supplierCode: '', phone: '' })
 
 const storeMap = computed(() => new Map(stores.value.map(store => [String(store.id), store.name || store.storeName || '未知门店'])))
+
+const storeOptions = computed(() => [
+  { value: '', label: '全部门店', meta: '包含通用供应商' },
+  ...stores.value.map(store => ({
+    value: String(store.id),
+    label: store.name || store.storeName || ('门店 ' + store.id),
+    meta: store.code || ''
+  }))
+])
+
+const filteredStoreOptions = computed(() => {
+  const query = storeQuery.value.trim().toLowerCase()
+  if (!query) return storeOptions.value
+  return storeOptions.value.filter(option =>
+    option.label.toLowerCase().includes(query)
+    || option.meta.toLowerCase().includes(query)
+  )
+})
+
+const filteredStatusOptions = computed(() => {
+  const query = statusQuery.value.trim().toLowerCase()
+  if (!query) return statusOptions
+  return statusOptions.filter(option =>
+    option.label.toLowerCase().includes(query)
+    || option.value.toLowerCase().includes(query)
+    || String(option.meta || '').toLowerCase().includes(query)
+  )
+})
 
 const filteredSuppliers = computed(() => {
   const name = filters.supplierName.toLowerCase()
@@ -446,6 +566,21 @@ watch(
 watch(totalPages, value => {
   if (currentPage.value > value) currentPage.value = value
 })
+
+watch(
+  () => filters.storeId,
+  value => {
+    const option = storeOptions.value.find(item => item.value === String(value ?? ''))
+    storeQuery.value = option?.value ? option.label : ''
+  }
+)
+watch(
+  () => filters.status,
+  value => {
+    const option = statusOptions.find(item => item.value === String(value ?? ''))
+    statusQuery.value = option?.value ? option.label : ''
+  }
+)
 
 const normalizeSupplier = source => {
   const item = source || {}
@@ -524,6 +659,61 @@ const handleSearch = () => {
   loadSuppliers()
 }
 
+const openFilterMenu = type => {
+  activeFilterMenu.value = type
+  highlightedFilterIndex.value = 0
+}
+
+const toggleFilterMenu = type => {
+  if (activeFilterMenu.value === type) {
+    closeFilterMenu()
+    return
+  }
+  openFilterMenu(type)
+}
+
+const closeFilterMenu = () => {
+  activeFilterMenu.value = ''
+}
+
+const selectFilterOption = (type, option) => {
+  if (type === 'store') {
+    filters.storeId = option.value
+    storeQuery.value = option.value ? option.label : ''
+  } else {
+    filters.status = option.value
+    statusQuery.value = option.value ? option.label : ''
+  }
+  closeFilterMenu()
+  handleSearch()
+}
+
+const handleFilterKeydown = (event, type) => {
+  const options = type === 'store' ? filteredStoreOptions.value : filteredStatusOptions.value
+  if (event.key === 'ArrowDown') {
+    event.preventDefault()
+    if (!options.length) return
+    highlightedFilterIndex.value = (highlightedFilterIndex.value + 1) % options.length
+    return
+  }
+  if (event.key === 'ArrowUp') {
+    event.preventDefault()
+    if (!options.length) return
+    highlightedFilterIndex.value = (highlightedFilterIndex.value - 1 + options.length) % options.length
+    return
+  }
+  if (event.key === 'Enter') {
+    event.preventDefault()
+    const option = options[highlightedFilterIndex.value]
+    if (option) selectFilterOption(type, option)
+    return
+  }
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeFilterMenu()
+  }
+}
+
 const resetFilters = () => {
   Object.assign(filters, {
     supplierName: '',
@@ -533,6 +723,9 @@ const resetFilters = () => {
     storeId: '',
     status: ''
   })
+  storeQuery.value = ''
+  statusQuery.value = ''
+  closeFilterMenu()
   currentPage.value = 1
 }
 
@@ -830,6 +1023,122 @@ textarea:focus {
 input::placeholder,
 textarea::placeholder {
   color: #a5afb7;
+}
+
+.filter-combobox {
+  position: relative;
+}
+
+.filter-combobox > input {
+  padding-right: 34px;
+}
+
+.combobox-toggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: inline-flex;
+  width: 34px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0 4px 4px 0;
+  cursor: pointer;
+  color: #78858f;
+  background: transparent;
+}
+
+.combobox-toggle:hover {
+  color: var(--accent-dark);
+  background: #f2f8f6;
+}
+
+.combobox-options {
+  position: absolute;
+  z-index: 12;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: 230px;
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid #d8e1df;
+  border-radius: 5px;
+  background: #fff;
+  box-shadow: 0 8px 20px rgba(22, 39, 46, .14);
+}
+
+.combobox-option {
+  display: flex;
+  width: 100%;
+  min-height: 37px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #3e4c57;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+}
+
+.combobox-option small {
+  overflow: hidden;
+  margin-left: auto;
+  color: #a1abb2;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.combobox-option svg {
+  flex: 0 0 auto;
+  color: var(--accent-dark);
+}
+
+.combobox-option:hover,
+.combobox-option.highlighted {
+  background: #f1f8f5;
+}
+
+.combobox-option.selected {
+  color: var(--accent-dark);
+  font-weight: 650;
+}
+
+.combobox-empty {
+  display: block;
+  padding: 13px 9px;
+  color: #9aa5ad;
+  font-size: 12px;
+  text-align: center;
+}
+
+.status-option-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.status-option-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #b0b9bf;
+}
+
+.status-option-dot.active {
+  background: #1aa27f;
+}
+
+.status-option-dot.inactive {
+  background: #a17880;
 }
 
 .filter-actions {

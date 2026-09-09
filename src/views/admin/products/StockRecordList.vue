@@ -38,32 +38,46 @@
 
         <label class="field-group">
           <span>仓库</span>
-          <select v-model="searchDraft.warehouse">
-            <option value="">全部仓库</option>
-            <option v-for="warehouse in warehouseOptions" :key="warehouse" :value="warehouse">
-              {{ warehouse }}
-            </option>
-          </select>
+          <input
+            v-model.trim="searchDraft.warehouse"
+            type="search"
+            list="stock-warehouse-options"
+            placeholder="输入或选择仓库"
+          />
+          <datalist id="stock-warehouse-options">
+            <option v-for="warehouse in warehouseOptions" :key="warehouse" :value="warehouse" />
+          </datalist>
         </label>
 
         <label class="field-group">
           <span>{{ counterpartyLabel }}</span>
-          <select v-model="searchDraft.counterparty">
-            <option value="">全部{{ counterpartyLabel }}</option>
-            <option v-for="party in counterpartyOptions" :key="party" :value="party">
-              {{ party }}
-            </option>
-          </select>
+          <input
+            v-model.trim="searchDraft.counterparty"
+            type="search"
+            list="stock-counterparty-options"
+            :placeholder="`输入或选择${counterpartyLabel}`"
+          />
+          <datalist id="stock-counterparty-options">
+            <option v-for="party in counterpartyOptions" :key="party" :value="party" />
+          </datalist>
         </label>
 
         <label class="field-group">
           <span>单据状态</span>
-          <select v-model="searchDraft.status">
-            <option value="">全部状态</option>
-            <option value="posted">已过账</option>
-            <option value="pending">待审核</option>
-            <option value="cancelled">已红冲</option>
-          </select>
+          <input
+            v-model.trim="searchDraft.statusText"
+            type="search"
+            list="stock-status-options"
+            placeholder="输入或选择状态"
+            @input="searchDraft.status = ''"
+          />
+          <datalist id="stock-status-options">
+            <option value="全部状态" />
+            <option value="已过账" />
+            <option value="已审核" />
+            <option value="待审核" />
+            <option value="已红冲" />
+          </datalist>
         </label>
 
         <div class="search-actions">
@@ -97,19 +111,34 @@
 
     <section class="records-panel">
       <header class="records-toolbar">
-        <div class="status-tabs" role="tablist" aria-label="状态快捷筛选">
-          <button
-            v-for="tab in statusTabs"
-            :key="tab.value"
-            :class="['status-tab', { active: activeStatus === tab.value }]"
-            type="button"
-            role="tab"
-            :aria-selected="activeStatus === tab.value"
-            @click="setStatusTab(tab.value)"
-          >
-            {{ tab.label }}
-            <span>{{ tab.count }}</span>
-          </button>
+        <div class="toolbar-filters">
+          <div class="material-type-tabs" role="tablist" aria-label="物料类型筛选">
+            <button
+              v-for="tab in materialTypeTabs"
+              :key="tab.value"
+              :class="['status-tab', { active: materialTypeFilter === tab.value }]"
+              type="button"
+              role="tab"
+              :aria-selected="materialTypeFilter === tab.value"
+              @click="setMaterialType(tab.value)"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
+          <div class="status-tabs" role="tablist" aria-label="状态快捷筛选">
+            <button
+              v-for="tab in statusTabs"
+              :key="tab.value"
+              :class="['status-tab', { active: activeStatus === tab.value }]"
+              type="button"
+              role="tab"
+              :aria-selected="activeStatus === tab.value"
+              @click="setStatusTab(tab.value)"
+            >
+              {{ tab.label }}
+              <span>{{ tab.count }}</span>
+            </button>
+          </div>
         </div>
 
         <div class="toolbar-actions">
@@ -155,6 +184,7 @@
               <th>单据日期</th>
               <th>仓库</th>
               <th>{{ counterpartyLabel }}</th>
+              <th class="material-column">物料名称</th>
               <th class="number-column">总品种数</th>
               <th class="number-column">总数量</th>
               <th class="money-column">价税合计</th>
@@ -166,11 +196,11 @@
           <tbody>
             <template v-if="loading">
               <tr v-for="index in 5" :key="`loading-${index}`" class="skeleton-row">
-                <td v-for="cell in 11" :key="cell"><span></span></td>
+                <td v-for="cell in 12" :key="cell"><span></span></td>
               </tr>
             </template>
             <tr v-else-if="pagedRecords.length === 0">
-              <td colspan="11" class="empty-cell">
+              <td colspan="12" class="empty-cell">
                 <div class="empty-mark" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M4 6h16v14H4z"></path>
@@ -204,6 +234,10 @@
               <td>{{ record.warehouseName }}</td>
               <td class="party-cell" :title="record.counterpartyName">
                 {{ record.counterpartyName }}
+              </td>
+              <td class="material-cell" :title="record.primaryMaterialName">
+                <strong>{{ record.primaryMaterialName }}</strong>
+                <span v-if="record.varietyCount > 1">等{{ record.varietyCount }}件物品</span>
               </td>
               <td class="number-column">{{ record.varietyCount }}</td>
               <td class="number-column numeric">{{ formatQuantity(record.totalQuantity) }}</td>
@@ -392,6 +426,40 @@
             </div>
 
             <footer class="drawer-footer">
+              <div class="drawer-state-actions">
+                <button
+                  v-if="selectedRecord.status === 'pending'"
+                  class="button button-primary"
+                  type="button"
+                  @click="handleReview(selectedRecord)"
+                >
+                  审核
+                </button>
+                <button
+                  v-else-if="selectedRecord.status === 'reviewed' || selectedRecord.status === 'posted'"
+                  class="button button-secondary"
+                  type="button"
+                  @click="handleReverseAudit(selectedRecord)"
+                >
+                  反审核
+                </button>
+                <button
+                  v-if="selectedRecord.status === 'cancelled'"
+                  class="button button-secondary"
+                  type="button"
+                  @click="handleRestart(selectedRecord)"
+                >
+                  重新启用
+                </button>
+                <button
+                  v-if="selectedRecord.status === 'cancelled'"
+                  class="button button-danger-light"
+                  type="button"
+                  @click="handleDelete(selectedRecord)"
+                >
+                  删除
+                </button>
+              </div>
               <button
                 class="button button-danger-light"
                 type="button"
@@ -436,7 +504,16 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['create', 'view-detail', 'red-flush', 'print'])
+const emit = defineEmits([
+  'create',
+  'view-detail',
+  'red-flush',
+  'print',
+  'review',
+  'reverse-audit',
+  'restart',
+  'delete'
+])
 
 const mockInboundRecords = [
   {
@@ -543,8 +620,11 @@ const supplierMap = ref(new Map())
 const selectedRecord = ref(null)
 const drawerOpen = ref(false)
 const activeStatus = ref('all')
+const materialTypeFilter = ref('all')
 const currentPage = ref(1)
 const pageSize = ref(10)
+const localStatusOverrides = ref(new Map())
+const hiddenRecordIds = ref(new Set())
 let loadToken = 0
 let detailToken = 0
 
@@ -554,7 +634,8 @@ const emptySearch = () => ({
   endDate: '',
   warehouse: '',
   counterparty: '',
-  status: ''
+  status: '',
+  statusText: ''
 })
 
 const searchDraft = reactive(emptySearch())
@@ -570,12 +651,44 @@ const firstValue = (...values) => values.find(value => value !== undefined && va
 const normalizeStatus = record => {
   const rawStatus = String(firstValue(record.status, record.documentStatus, record.auditStatus, '')).toLowerCase()
   if (['cancelled', 'canceled', 'void', 'voided', 'reversed', 'red-flushed', 'red_flush'].includes(rawStatus)) return 'cancelled'
-  if (['posted', 'approved', 'audited', 'completed'].includes(rawStatus)) return 'posted'
+  if (['reviewed', 'review', 'approved', 'audited', 'audit-passed', 'audit_passed'].includes(rawStatus)) return 'reviewed'
+  if (['posted', 'completed'].includes(rawStatus)) return 'posted'
   if (['draft', 'pending', 'reviewing', 'unapproved'].includes(rawStatus)) return 'pending'
   if (isOutbound.value && rawStatus === 'shipped') {
     return toNumber(firstValue(record.audit_state, record.auditState, 0)) === 1 ? 'posted' : 'pending'
   }
   return 'pending'
+}
+
+const normalizeMaterialType = (record, items = []) => {
+  const itemType = items.find(item => firstValue(
+    item.materialType,
+    item.material_type,
+    item.productType,
+    item.product_type,
+    item.type
+  ))
+  const rawType = String(firstValue(
+    record.materialType,
+    record.material_type,
+    record.productType,
+    record.product_type,
+    record.type,
+    record.businessType,
+    itemType?.materialType,
+    itemType?.material_type,
+    itemType?.productType,
+    itemType?.product_type,
+    itemType?.type,
+    ''
+  )).toLowerCase()
+  if (['raw', 'raw-material', 'raw_material', 'material', 'materials', '原材料', '原料'].includes(rawType)) {
+    return 'raw-material'
+  }
+  if (['finished', 'finished-product', 'finished_product', 'product', '成品'].includes(rawType)) {
+    return 'finished-product'
+  }
+  return isOutbound.value ? 'finished-product' : 'raw-material'
 }
 
 const normalizeItem = (item = {}, index) => {
@@ -668,9 +781,12 @@ const normalizeRecord = record => {
     items.reduce((sum, item) => sum + item.amount, 0)
   ))
 
+  const id = firstValue(record.id, record.documentId, record.document_id, record.documentNo, record.order_number)
+  const baseStatus = normalizeStatus(record)
+  const status = localStatusOverrides.value.get(String(id)) || baseStatus
   return {
     source: record,
-    id: firstValue(record.id, record.documentId, record.document_id, record.documentNo, record.order_number),
+    id,
     documentNo: String(firstValue(record.documentNo, record.document_no, record.orderNumber, record.order_number, record.code, '-')),
     documentDate: firstValue(
       record.documentDate,
@@ -685,19 +801,37 @@ const normalizeRecord = record => {
       ''
     ),
     businessType: businessTypeLabel(record),
+    materialType: normalizeMaterialType(record, items),
+    productType: normalizeMaterialType(record, items),
     warehouseName: String(warehouseName),
     counterpartyName: String(counterpartyName),
-    varietyCount: toNumber(firstValue(record.varietyCount, record.totalVarieties, record.total_varieties, distinctItems.size)),
+    primaryMaterialName: String(firstValue(
+      record.primaryMaterialName,
+      record.primary_material_name,
+      items[0]?.name,
+      record.productName,
+      record.product_name,
+      record.goodsName,
+      record.goods_name,
+      '未命名物料'
+    )),
+    varietyCount: Math.max(
+      toNumber(firstValue(record.varietyCount, record.totalVarieties, record.total_varieties, 0)),
+      distinctItems.size
+    ),
     totalQuantity,
     totalAmount,
     creator: String(firstValue(record.creatorName, record.creator, record.createdBy, record.created_by, '-')),
-    status: normalizeStatus(record),
+    status,
     items
   }
 }
 
 const sourceRecords = computed(() => Array.isArray(props.dataList) ? props.dataList : internalRecords.value)
-const records = computed(() => sourceRecords.value.filter(Boolean).map(normalizeRecord))
+const records = computed(() => sourceRecords.value
+  .filter(Boolean)
+  .map(normalizeRecord)
+  .filter(record => !hiddenRecordIds.value.has(String(record.id))))
 
 const warehouseOptions = computed(() => (
   [...new Set(records.value.map(record => record.warehouseName).filter(Boolean))]
@@ -711,13 +845,20 @@ const counterpartyOptions = computed(() => (
 
 const statusLabel = status => ({
   posted: '已过账',
+  reviewed: '已审核',
   pending: '待审核',
   cancelled: '已红冲'
 }[status] || '待审核')
 
+const materialTypeTabs = [
+  { value: 'all', label: '全部' },
+  { value: 'raw-material', label: '原材料' },
+  { value: 'finished-product', label: '成品' }
+]
+
 const statusTabs = computed(() => [
   { value: 'all', label: '全部', count: records.value.length },
-  { value: 'posted', label: '已过账', count: records.value.filter(item => item.status === 'posted').length },
+  { value: 'posted', label: '已过账', count: records.value.filter(item => ['posted', 'reviewed'].includes(item.status)).length },
   { value: 'pending', label: '待审核', count: records.value.filter(item => item.status === 'pending').length },
   { value: 'cancelled', label: '已红冲', count: records.value.filter(item => item.status === 'cancelled').length }
 ])
@@ -738,10 +879,14 @@ const filteredRecords = computed(() => {
     const matchesDocument = !keyword || record.documentNo.toLowerCase().includes(keyword)
     const matchesStart = !appliedSearch.startDate || (date && date >= appliedSearch.startDate)
     const matchesEnd = !appliedSearch.endDate || (date && date <= appliedSearch.endDate)
-    const matchesWarehouse = !appliedSearch.warehouse || record.warehouseName === appliedSearch.warehouse
-    const matchesParty = !appliedSearch.counterparty || record.counterpartyName === appliedSearch.counterparty
-    const matchesStatus = activeStatus.value === 'all' || record.status === activeStatus.value
-    return matchesDocument && matchesStart && matchesEnd && matchesWarehouse && matchesParty && matchesStatus
+    const warehouseKeyword = appliedSearch.warehouse.toLowerCase()
+    const partyKeyword = appliedSearch.counterparty.toLowerCase()
+    const matchesWarehouse = !warehouseKeyword || record.warehouseName.toLowerCase().includes(warehouseKeyword)
+    const matchesParty = !partyKeyword || record.counterpartyName.toLowerCase().includes(partyKeyword)
+    const statusFilter = activeStatus.value === 'all' ? appliedSearch.status : activeStatus.value
+    const matchesStatus = statusesMatch(record.status, statusFilter)
+    const matchesMaterialType = materialTypeFilter.value === 'all' || record.materialType === materialTypeFilter.value
+    return matchesDocument && matchesStart && matchesEnd && matchesWarehouse && matchesParty && matchesStatus && matchesMaterialType
   })
 })
 
@@ -763,7 +908,36 @@ const formatQuantity = value => Number(toNumber(value)).toLocaleString('zh-CN', 
   maximumFractionDigits: 2
 })
 
+const statusTextMap = {
+  '': '全部状态',
+  all: '全部状态',
+  posted: '已过账',
+  reviewed: '已审核',
+  pending: '待审核',
+  cancelled: '已红冲'
+}
+
+const statusValueFromText = value => {
+  const query = String(value || '').trim().toLowerCase()
+  if (!query || ['全部', '全部状态', 'all'].includes(query)) return ''
+  if (['已过账', 'posted'].some(item => item.includes(query) || query.includes(item))) return 'posted'
+  if (['已审核', 'reviewed', 'approved', 'audited'].some(item => item.includes(query) || query.includes(item))) return 'reviewed'
+  if (['待审核', 'draft', 'pending', 'unapproved'].some(item => item.includes(query) || query.includes(item))) return 'pending'
+  if (['已红冲', '已作废', 'cancelled', 'canceled'].some(item => item.includes(query) || query.includes(item))) return 'cancelled'
+  return ''
+}
+
+const statusesMatch = (recordStatus, filterStatus) => {
+  if (!filterStatus || filterStatus === 'all') return true
+  if (filterStatus === 'posted') return ['posted', 'reviewed'].includes(recordStatus)
+  return recordStatus === filterStatus
+}
+
 const applySearch = () => {
+  searchDraft.status = searchDraft.statusText
+    ? statusValueFromText(searchDraft.statusText)
+    : (searchDraft.status || '')
+  searchDraft.statusText = statusTextMap[searchDraft.status] || searchDraft.statusText || ''
   Object.assign(appliedSearch, searchDraft)
   activeStatus.value = searchDraft.status || 'all'
   currentPage.value = 1
@@ -773,13 +947,21 @@ const resetSearch = () => {
   Object.assign(searchDraft, emptySearch())
   Object.assign(appliedSearch, emptySearch())
   activeStatus.value = 'all'
+  materialTypeFilter.value = 'all'
   currentPage.value = 1
 }
 
 const setStatusTab = status => {
   activeStatus.value = status
   searchDraft.status = status === 'all' ? '' : status
+  searchDraft.statusText = statusTextMap[status] || ''
   appliedSearch.status = searchDraft.status
+  appliedSearch.statusText = searchDraft.statusText
+  currentPage.value = 1
+}
+
+const setMaterialType = type => {
+  materialTypeFilter.value = type
   currentPage.value = 1
 }
 
@@ -851,10 +1033,9 @@ const loadRecords = async () => {
 
     warehouseMap.value = new Map(warehouses.map(item => [String(item.id), item.name || item.warehouseName]))
     if (isOutbound.value) {
-      internalRecords.value = recordsResult.value.filter(record => {
-        const status = String(firstValue(record.status, '')).toLowerCase()
-        return ['shipped', 'outbound', 'out'].includes(status)
-      })
+      // The outbound ledger must include pending orders as well as shipped ones:
+      // pending rows are the records that can be reviewed from the drawer.
+      internalRecords.value = recordsResult.value
     } else {
       const suppliersResult = results[2]
       const suppliers = suppliersResult.status === 'fulfilled' && Array.isArray(suppliersResult.value)
@@ -883,6 +1064,7 @@ const handleCreate = () => emit('create', { mode: props.mode })
 
 const openDetail = async record => {
   const token = ++detailToken
+  const currentMode = props.mode
   selectedRecord.value = record
   drawerOpen.value = true
   emit('view-detail', record)
@@ -890,7 +1072,7 @@ const openDetail = async record => {
   if (!isOutbound.value && record.items.length === 0 && record.id && !Array.isArray(props.dataList)) {
     try {
       const detail = await request({ url: `/stock-inbounds/${record.id}`, method: 'GET' })
-      if (token === detailToken && selectedRecord.value?.id === record.id) {
+      if (token === detailToken && currentMode === props.mode && selectedRecord.value?.id === record.id) {
         selectedRecord.value = normalizeRecord(detail)
       }
     } catch (error) {
@@ -900,11 +1082,45 @@ const openDetail = async record => {
 }
 
 const closeDrawer = () => {
+  detailToken += 1
   drawerOpen.value = false
+  selectedRecord.value = null
 }
 
 const handleRedFlush = record => {
   if (record?.status === 'pending') emit('red-flush', record)
+}
+
+const updateLocalStatus = (record, status, eventName) => {
+  if (record?.id === undefined || record?.id === null || record?.id === '') return
+  const overrides = new Map(localStatusOverrides.value)
+  overrides.set(String(record.id), status)
+  localStatusOverrides.value = overrides
+  selectedRecord.value = normalizeRecord(record.source || record)
+  emit(eventName, selectedRecord.value)
+}
+
+const handleReview = record => {
+  if (record?.status === 'pending') updateLocalStatus(record, 'reviewed', 'review')
+}
+
+const handleReverseAudit = record => {
+  if (record?.status === 'reviewed' || record?.status === 'posted') {
+    updateLocalStatus(record, 'pending', 'reverse-audit')
+  }
+}
+
+const handleRestart = record => {
+  if (record?.status === 'cancelled') updateLocalStatus(record, 'pending', 'restart')
+}
+
+const handleDelete = record => {
+  if (record?.status !== 'cancelled' || record?.id === undefined || record?.id === null || record?.id === '') return
+  const hidden = new Set(hiddenRecordIds.value)
+  hidden.add(String(record.id))
+  hiddenRecordIds.value = hidden
+  closeDrawer()
+  emit('delete', record)
 }
 
 const handlePrint = async record => {
@@ -922,6 +1138,7 @@ const exportExcel = () => {
     单据日期: formatDate(record.documentDate),
     仓库: record.warehouseName,
     [counterpartyLabel.value]: record.counterpartyName,
+    物料名称: record.primaryMaterialName,
     总品种数: record.varietyCount,
     总数量: record.totalQuantity,
     价税合计: record.totalAmount,
@@ -929,11 +1146,11 @@ const exportExcel = () => {
     状态: statusLabel(record.status)
   }))
   const worksheet = XLSX.utils.json_to_sheet(rows, {
-    header: ['单据编号', '业务类型', '单据日期', '仓库', counterpartyLabel.value, '总品种数', '总数量', '价税合计', '制单人', '状态']
+    header: ['单据编号', '业务类型', '单据日期', '仓库', counterpartyLabel.value, '物料名称', '总品种数', '总数量', '价税合计', '制单人', '状态']
   })
   worksheet['!cols'] = [
     { wch: 20 }, { wch: 18 }, { wch: 13 }, { wch: 16 }, { wch: 26 },
-    { wch: 10 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
+    { wch: 20 }, { wch: 10 }, { wch: 12 }, { wch: 15 }, { wch: 12 }, { wch: 10 }
   ]
   const workbook = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(workbook, worksheet, `${documentLabel.value}记录`)
@@ -950,6 +1167,8 @@ watch([filteredRecords, pageSize], () => {
 
 watch(() => props.mode, () => {
   resetSearch()
+  localStatusOverrides.value = new Map()
+  hiddenRecordIds.value = new Set()
   closeDrawer()
   loadRecords()
 })
@@ -1248,6 +1467,21 @@ svg {
   border-bottom: 1px solid var(--border);
 }
 
+.toolbar-filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.material-type-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding-right: 10px;
+  border-right: 1px solid var(--border);
+}
+
 .status-tabs {
   display: flex;
   align-items: center;
@@ -1383,11 +1617,12 @@ svg {
 .records-table th:nth-child(3) { width: 112px; }
 .records-table th:nth-child(4) { width: 130px; }
 .records-table th:nth-child(5) { width: 190px; }
-.records-table th:nth-child(6) { width: 90px; }
-.records-table th:nth-child(7) { width: 105px; }
-.records-table th:nth-child(8) { width: 135px; }
-.records-table th:nth-child(9) { width: 95px; }
-.records-table th:nth-child(10) { width: 104px; }
+.records-table th:nth-child(6) { width: 155px; }
+.records-table th:nth-child(7) { width: 90px; }
+.records-table th:nth-child(8) { width: 105px; }
+.records-table th:nth-child(9) { width: 135px; }
+.records-table th:nth-child(10) { width: 95px; }
+.records-table th:nth-child(11) { width: 104px; }
 .records-table .operation-column { width: 126px; text-align: center; }
 
 .number-column,
@@ -1440,6 +1675,30 @@ svg {
   color: var(--text-secondary);
 }
 
+.material-cell {
+  max-width: 170px;
+}
+
+.material-cell strong,
+.material-cell span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-cell strong {
+  color: #283548;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.material-cell span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
 .money-value {
   color: #182230 !important;
   font-weight: 750;
@@ -1467,6 +1726,11 @@ svg {
 .status-posted {
   color: #13734f;
   background: #eaf8f1;
+}
+
+.status-reviewed {
+  color: #16647a;
+  background: #e7f5f8;
 }
 
 .status-pending {
@@ -1956,6 +2220,13 @@ svg {
   padding: 13px 18px;
   background: #fff;
   border-top: 1px solid #dfe5ec;
+}
+
+.drawer-state-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .drawer-enter-active,

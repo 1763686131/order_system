@@ -73,7 +73,7 @@
                 <span>供应商 <em>*</em></span>
                 <select v-model="form.supplierId">
                   <option value="">请选择供应商</option>
-                  <option v-for="supplier in suppliers" :key="supplier.id" :value="supplier.id">
+                  <option v-for="supplier in filteredSuppliers" :key="supplier.id" :value="supplier.id">
                     {{ supplier.name || supplier.supplierName }}
                   </option>
                 </select>
@@ -222,10 +222,10 @@
           </div>
           <div class="footer-actions">
             <button type="button" class="btn btn-ghost" :disabled="saving" @click="requestClose">取消 / 关闭</button>
-            <button type="button" class="btn btn-secondary" :disabled="saving" @click="save('draft')">保存草稿</button>
-            <button type="button" class="btn btn-primary" :disabled="saving" @click="save('posted')">
+            <button type="button" class="btn btn-secondary" :disabled="saving" @click="saveDraftLocal">保存草稿</button>
+            <button type="button" class="btn btn-primary" :disabled="saving" @click="submitReview">
               <span v-if="saving" class="spinner"></span>
-              {{ saving ? '处理中…' : '提交过账' }}
+              {{ saving ? '处理中…' : '提交审核' }}
             </button>
           </div>
         </footer>
@@ -254,6 +254,7 @@
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import request from '@/api/request'
+import { useStockDraftStore } from '@/stores/stockDraft'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -263,6 +264,8 @@ const props = defineProps({
   initialItem: { type: Object, default: null },
   initialData: { type: Object, default: null }
 })
+
+const stockDraftStore = useStockDraftStore()
 
 const emit = defineEmits([
   'update:modelValue',
@@ -291,6 +294,7 @@ const rawProducts = ref([])
 const suppliers = ref([])
 const units = ref([])
 const notice = reactive({ visible: false, type: 'success', message: '' })
+const reviewSubmitted = ref(false)
 const errors = reactive({ documentDate: '', warehouseId: '', supplierId: '', items: '' })
 const rowErrors = ref([])
 const workshops = ['大车间', '小车间']
@@ -306,7 +310,7 @@ const blankRow = () => ({
   expectedQty: null,
   receivedQty: null,
   binCode: '',
-  batchNo: '',
+  batchNo: today(),
   unitPrice: null,
   taxRate: 13,
   currentStock: 0,
@@ -347,13 +351,36 @@ const isRawMaterial = computed(() => normalizedType(activeType.value) === 'raw-m
 const typeLabel = computed(() => isRawMaterial.value ? '原材料采购入库' : '成品生产完工入库')
 const isEdit = computed(() => activeMode.value === 'edit' || Boolean(activeInitialData.value?.id))
 const visibleState = computed(() => props.visible !== undefined ? props.visible : (props.modelValue || internalVisible.value))
-const availableProducts = computed(() => isRawMaterial.value ? rawProducts.value : products.value)
+const productSource = computed(() => isRawMaterial.value ? rawProducts.value : products.value)
+const belongsToStore = (item, storeId) => {
+  if (!storeId) return true
+  const itemStoreId = item.storeId ?? item.store_id
+  let storeIds = item.storeIds ?? item.store_ids
+  if (typeof storeIds === 'string') {
+    try { storeIds = JSON.parse(storeIds) } catch { storeIds = storeIds.split(',').map(value => value.trim()).filter(Boolean) }
+  }
+  if (itemStoreId !== undefined && itemStoreId !== null && itemStoreId !== '') {
+    return String(itemStoreId) === String(storeId)
+  }
+  if (Array.isArray(storeIds)) {
+    return storeIds.some(id => String(id) === String(storeId))
+  }
+  return false
+}
+const availableProducts = computed(() => productSource.value.filter(item => belongsToStore(item, form.storeId)))
+const filteredSuppliers = computed(() => {
+  if (!form.storeId) return suppliers.value
+  return suppliers.value.filter(item => belongsToStore(item, form.storeId))
+})
 const filteredWarehouses = computed(() => {
   if (!form.storeId) return warehouses.value
-  const filtered = warehouses.value.filter(item => String(item.storeId ?? item.store_id) === String(form.storeId))
-  return filtered.length ? filtered : warehouses.value
+  return warehouses.value.filter(item => String(item.storeId ?? item.store_id) === String(form.storeId))
 })
-const statusLabel = computed(() => ({ draft: '草稿', posted: '已过账', cancelled: '已作废' }[form.status] || '草稿'))
+const statusLabel = computed(() => ({
+  draft: reviewSubmitted.value ? '待审核' : '草稿',
+  posted: '已过账',
+  cancelled: '已作废'
+}[form.status] || '草稿'))
 const allRowsSelected = computed(() => form.items.length > 0 && form.items.every(row => selectedRows.value.includes(row._key)))
 
 const round = (value, digits = 2) => {
@@ -398,6 +425,7 @@ const setForm = (data = null, item = null) => {
       ? source.items.map(itemValue => normalizeRow(itemValue))
       : (item ? [normalizeRow(item)] : [blankRow()])
   })
+  reviewSubmitted.value = source.status === 'pending' || source.status === 'reviewing'
   selectedRows.value = []
   clearErrors()
   snapshot.value = JSON.stringify(serializableForm())
@@ -414,7 +442,7 @@ const normalizeRow = (value = {}) => ({
   expectedQty: value.expectedQty ?? value.expected_qty ?? value.receivableQty ?? null,
   receivedQty: value.receivedQty ?? value.received_qty ?? value.quantity ?? null,
   binCode: value.binCode || value.bin_code || '',
-  batchNo: value.batchNo || value.batch_no || '',
+  batchNo: value.batchNo || value.batch_no || today(),
   unitPrice: value.unitPrice ?? value.unit_price ?? value.price ?? null,
   taxRate: value.taxRate ?? value.tax_rate ?? 13,
   currentStock: value.currentStock ?? value.current_stock ?? 0,
@@ -445,10 +473,18 @@ const isDirty = computed(() => JSON.stringify(serializableForm()) !== snapshot.v
 const loadData = async () => {
   const calls = [
     request({ url: '/stores', method: 'GET' }),
-    request({ url: '/warehouses', method: 'GET' }),
+    request({
+      url: '/warehouses',
+      method: 'GET',
+      params: form.storeId ? { storeId: form.storeId } : undefined
+    }),
     request({ url: isRawMaterial.value ? '/raw-material-products' : '/products', method: 'GET' }),
     request({ url: '/products/units/measurements', method: 'GET' }),
-    request({ url: '/suppliers', method: 'GET' })
+    request({
+      url: '/suppliers',
+      method: 'GET',
+      params: form.storeId ? { storeId: form.storeId, status: 'active' } : { status: 'active' }
+    })
   ]
   const results = await Promise.allSettled(calls)
   const valueAt = index => results[index].status === 'fulfilled' ? results[index].value : []
@@ -470,6 +506,30 @@ const hydrateRows = () => {
 const handleStoreChange = () => {
   const valid = filteredWarehouses.value.some(item => String(item.id) === String(form.warehouseId))
   if (!valid) form.warehouseId = ''
+  const supplierValid = filteredSuppliers.value.some(item => String(item.id) === String(form.supplierId))
+  if (!supplierValid) form.supplierId = ''
+  form.items.forEach(row => {
+    if (row.productId && !availableProducts.value.some(item => String(item.id) === String(row.productId))) {
+      Object.assign(row, blankRow())
+    }
+  })
+  request({
+    url: '/warehouses',
+    method: 'GET',
+    params: form.storeId ? { storeId: form.storeId } : undefined
+  }).then(result => {
+    if (Array.isArray(result)) {
+      warehouses.value = result
+      if (!filteredWarehouses.value.some(item => String(item.id) === String(form.warehouseId))) form.warehouseId = ''
+    }
+  }).catch(() => {})
+  request({
+    url: '/suppliers',
+    method: 'GET',
+    params: form.storeId ? { storeId: form.storeId, status: 'active' } : { status: 'active' }
+  }).then(result => {
+    if (Array.isArray(result)) suppliers.value = result
+  }).catch(() => {})
 }
 const handleWarehouseChange = () => { if (errors.warehouseId) errors.warehouseId = '' }
 
@@ -512,7 +572,7 @@ const validate = (submit = false) => {
   if (!form.warehouseId) { errors.warehouseId = '请选择目标仓库'; valid = false }
   if (submit && isRawMaterial.value && !form.supplierId) { errors.supplierId = '请选择供应商'; valid = false }
   const validRows = form.items.filter(row => row.productId && toNumber(row.receivedQty) > 0)
-  if (submit && validRows.length === 0) { errors.items = '提交过账至少需要 1 条有效物料明细'; valid = false }
+  if (submit && validRows.length === 0) { errors.items = '提交审核至少需要 1 条有效物料明细'; valid = false }
   if (submit) {
     rowErrors.value = form.items.map(row => {
       if (!row.productId) return '请选择物料'
@@ -565,26 +625,41 @@ const showNotice = (message, type = 'success') => {
   showNotice.timer = window.setTimeout(() => { notice.visible = false }, 2600)
 }
 
-const save = async (status) => {
+const saveDraftLocal = () => {
   if (saving.value) return
-  if (!validate(status === 'posted')) { showNotice('请先完善必填信息', 'error'); return }
+  clearErrors()
+  form.status = 'draft'
+  stockDraftStore.saveInboundDraft({
+    type: normalizedType(activeType.value),
+    mode: 'create',
+    form: serializableForm()
+  })
+  snapshot.value = JSON.stringify(serializableForm())
+  emit('draft-saved', serializableForm())
+  showNotice('入库草稿已保存到当前会话')
+  window.setTimeout(() => closeWithoutSave(), 350)
+}
+
+const submitReview = async () => {
+  if (saving.value) return
+  if (!validate(true)) { showNotice('请先完善必填信息', 'error'); return }
   saving.value = true
   try {
     const response = await request({
       url: isEdit.value && activeInitialData.value?.id ? `/stock-inbounds/${activeInitialData.value.id}` : '/stock-inbounds',
       method: isEdit.value && activeInitialData.value?.id ? 'PUT' : 'POST',
-      data: payload(status)
+      // 后端目前以 draft 表示未审核，提交审核不应直接过账。
+      data: payload('draft')
     })
     const saved = response?.stockIn || response?.stockInbound || response?.receipt || response
-    form.status = status
+    form.status = 'draft'
+    reviewSubmitted.value = true
+    stockDraftStore.clearInboundDraft()
     snapshot.value = JSON.stringify(serializableForm())
-    emit('saved', saved, status)
-    if (status === 'posted') emit('submitted', saved)
-    else emit('draft-saved', saved)
-    showNotice(status === 'posted' ? '入库单已提交过账' : '入库草稿已保存')
-    if (status === 'posted') {
-      window.setTimeout(() => closeWithoutSave(), 450)
-    }
+    emit('saved', saved, 'draft')
+    emit('submitted', saved)
+    showNotice('入库单已提交审核，当前为待审核状态')
+    window.setTimeout(() => closeWithoutSave(), 450)
   } catch (error) {
     console.error('保存入库单失败', error)
     showNotice(error?.response?.data?.message || error?.message || '保存失败，请稍后重试', 'error')
@@ -611,7 +686,12 @@ const open = async (options = {}) => {
   activeMode.value = options.mode || (options.data?.id || options.initialData?.id ? 'edit' : props.mode)
   activeInitialItem.value = options.item || options.initialItem || props.initialItem
   activeInitialData.value = options.data || options.initialData || props.initialData
-  setForm(activeInitialData.value, activeInitialItem.value)
+  const canRestoreDraft = !activeInitialData.value?.id && !activeInitialItem.value && activeMode.value !== 'edit'
+  const storedDraft = canRestoreDraft && stockDraftStore.inbound
+    && normalizedType(stockDraftStore.inbound.type) === activeType.value
+    ? stockDraftStore.inbound.form || stockDraftStore.inbound
+    : null
+  setForm(storedDraft || activeInitialData.value, activeInitialItem.value)
   internalVisible.value = true
   await nextTick()
   await loadData()

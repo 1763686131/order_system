@@ -125,6 +125,10 @@
             @view-detail="handleStockRecordViewDetail"
             @red-flush="handleStockRecordRedFlush"
             @print="handleStockRecordPrint"
+            @review="handleStockRecordReview"
+            @reverse-audit="handleStockRecordReverseAudit"
+            @restart="handleStockRecordRestart"
+            @delete="handleStockRecordDelete"
           />
         </router-view>
       </main>
@@ -240,6 +244,12 @@ const handleStockRecordRedFlush = async record => {
 const handleStockRecordPrint = () => {
   // StockRecordList triggers the browser print dialog after emitting this event.
 }
+
+// 审核相关动作目前由流水组件即时维护状态；这些监听器保留给后端补充独立审核接口时接入。
+const handleStockRecordReview = () => {}
+const handleStockRecordReverseAudit = () => {}
+const handleStockRecordRestart = () => {}
+const handleStockRecordDelete = () => {}
 
 // 提供给子组件的 ship 方法
 provide('handleShip', (orderId) => {
