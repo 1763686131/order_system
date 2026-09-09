@@ -758,9 +758,44 @@ def list_stock_balances():
     receipt_type = request.args.get('type')
     with get_db() as conn:
         sql = '''
+            WITH inbound_costs AS (
+                SELECT product_type, product_id, warehouse_id, store_id, bin_code, batch_no,
+                       SUM(
+                           CASE WHEN unit_price IS NOT NULL
+                                THEN quantity * unit_price
+                                ELSE 0 END
+                       ) AS priced_amount,
+                       SUM(quantity) AS inbound_quantity
+                FROM stock_movements
+                WHERE movement_type = 'in'
+                GROUP BY product_type, product_id, warehouse_id, store_id, bin_code, batch_no
+            ),
+            valued_balances AS (
+                SELECT balance.product_type, balance.product_id,
+                       balance.warehouse_id, balance.store_id,
+                       balance.quantity, balance.updated_at,
+                       COALESCE(
+                           costs.priced_amount / NULLIF(costs.inbound_quantity, 0),
+                           0
+                       ) AS average_unit_cost
+                FROM stock_balances AS balance
+                LEFT JOIN inbound_costs AS costs
+                  ON costs.product_type = balance.product_type
+                 AND costs.product_id = balance.product_id
+                 AND costs.warehouse_id = balance.warehouse_id
+                 AND costs.store_id = balance.store_id
+                 AND costs.bin_code = balance.bin_code
+                 AND costs.batch_no = balance.batch_no
+            )
             SELECT product_type, product_id, warehouse_id, store_id,
-                   SUM(quantity) AS quantity, MAX(updated_at) AS updated_at
-            FROM stock_balances WHERE 1 = 1
+                   SUM(quantity) AS quantity,
+                   CASE WHEN ABS(SUM(quantity)) > 0.0000001
+                        THEN SUM(quantity * average_unit_cost) / SUM(quantity)
+                        ELSE 0 END AS average_unit_cost,
+                   SUM(quantity * average_unit_cost) AS inventory_amount,
+                   MAX(updated_at) AS updated_at
+            FROM valued_balances
+            WHERE 1 = 1
         '''
         params = []
         if receipt_type:
@@ -775,6 +810,8 @@ def list_stock_balances():
                 'warehouseId': row['warehouse_id'],
                 'storeId': row['store_id'],
                 'quantity': row['quantity'] or 0,
+                'averageUnitCost': round(row['average_unit_cost'] or 0, 6),
+                'inventoryAmount': round(row['inventory_amount'] or 0, 2),
                 'updatedAt': row['updated_at'],
             }
             for row in rows

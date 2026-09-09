@@ -114,7 +114,7 @@
           <span class="stat-mark mark-purple">额</span>
         </div>
         <strong>¥{{ formatNumber(overview.totalValue, 2) }}</strong>
-        <small>按参考成本价估算</small>
+        <small>按已审核入库成本估算</small>
       </article>
     </section>
 
@@ -150,6 +150,12 @@
                   {{ getSortIndicator('stock') }}
                 </span>
               </th>
+              <th class="sortable number-column" @click="sortBy('inventoryAmount')">
+                库存金额
+                <span :class="['sort-indicator', { active: sortKey === 'inventoryAmount' }]">
+                  {{ getSortIndicator('inventoryAmount') }}
+                </span>
+              </th>
               <th>单位</th>
               <th class="number-column">安全库存</th>
               <th>库存状态</th>
@@ -181,6 +187,9 @@
                   {{ formatNumber(material.stock) }}
                 </strong>
               </td>
+              <td class="number-column money-number">
+                ¥{{ formatNumber(material.inventoryAmount, 2) }}
+              </td>
               <td>{{ material.unit }}</td>
               <td class="number-column">
                 <span>{{ formatNumber(material.minStock) }}</span>
@@ -200,7 +209,7 @@
               </td>
             </tr>
             <tr v-if="paginatedMaterials.length === 0">
-              <td colspan="11" class="empty-state">
+              <td colspan="12" class="empty-state">
                 <div class="empty-title">没有匹配的原材料</div>
                 <p>可以尝试清空筛选条件后重新查看。</p>
               </td>
@@ -243,7 +252,7 @@ const stores = ref([
 const allWarehouses = ref([])
 const units = ref([])
 
-const materials = ref([
+const materialFallbacks = [
   {
     id: 1,
     code: 'RM-001',
@@ -253,11 +262,9 @@ const materials = ref([
     warehouse: '一号原料仓',
     storeId: 1,
     storeName: '绝缘门店',
-    stock: 1260,
     unit: '公斤',
     minStock: 500,
     maxStock: 2400,
-    costPrice: 18.5,
     updatedAt: '2026-09-08 10:24'
   },
   {
@@ -269,11 +276,9 @@ const materials = ref([
     warehouse: '一号原料仓',
     storeId: 1,
     storeName: '绝缘门店',
-    stock: 320,
     unit: '公斤',
     minStock: 400,
     maxStock: 1500,
-    costPrice: 22.8,
     updatedAt: '2026-09-08 09:48'
   },
   {
@@ -285,11 +290,9 @@ const materials = ref([
     warehouse: '二号原料仓',
     storeId: 2,
     storeName: '中固门店',
-    stock: 2850,
     unit: '公斤',
     minStock: 1000,
     maxStock: 5000,
-    costPrice: 1.85,
     updatedAt: '2026-09-07 16:32'
   },
   {
@@ -301,11 +304,9 @@ const materials = ref([
     warehouse: '二号原料仓',
     storeId: 2,
     storeName: '中固门店',
-    stock: 0,
     unit: '公斤',
     minStock: 600,
     maxStock: 2400,
-    costPrice: 2.4,
     updatedAt: '2026-09-06 14:10'
   },
   {
@@ -317,11 +318,9 @@ const materials = ref([
     warehouse: '一号原料仓',
     storeId: 1,
     storeName: '绝缘门店',
-    stock: 740,
     unit: '公斤',
     minStock: 600,
     maxStock: 1800,
-    costPrice: 4.6,
     updatedAt: '2026-09-08 08:16'
   },
   {
@@ -333,11 +332,9 @@ const materials = ref([
     warehouse: '二号原料仓',
     storeId: 2,
     storeName: '中固门店',
-    stock: 980,
     unit: '公斤',
     minStock: 500,
     maxStock: 1600,
-    costPrice: 16.2,
     updatedAt: '2026-09-05 11:26'
   },
   {
@@ -349,11 +346,9 @@ const materials = ref([
     warehouse: '二号原料仓',
     storeId: 2,
     storeName: '中固门店',
-    stock: 460,
     unit: '公斤',
     minStock: 500,
     maxStock: 2000,
-    costPrice: 3.1,
     updatedAt: '2026-09-04 17:05'
   },
   {
@@ -365,11 +360,9 @@ const materials = ref([
     warehouse: '辅料仓',
     storeId: 1,
     storeName: '绝缘门店',
-    stock: 82,
     unit: '公斤',
     minStock: 80,
     maxStock: 300,
-    costPrice: 32,
     updatedAt: '2026-09-03 13:42'
   },
   {
@@ -381,11 +374,9 @@ const materials = ref([
     warehouse: '辅料仓',
     storeId: 1,
     storeName: '绝缘门店',
-    stock: 165,
     unit: '公斤',
     minStock: 120,
     maxStock: 500,
-    costPrice: 12.5,
     updatedAt: '2026-09-02 15:18'
   },
   {
@@ -397,18 +388,18 @@ const materials = ref([
     warehouse: '二号原料仓',
     storeId: 2,
     storeName: '中固门店',
-    stock: 1250,
     unit: '公斤',
     minStock: 800,
     maxStock: 3000,
-    costPrice: 6.8,
     updatedAt: '2026-09-01 10:06'
   }
-])
+]
 
 const fallbackInventoryByCode = new Map(
-  materials.value.map(material => [material.code, { ...material }])
+  materialFallbacks.map(material => [material.code, { ...material }])
 )
+const materials = ref([])
+const stockBalances = ref([])
 
 const findById = (items, id) => (
   items.find(item => String(item.id) === String(id))
@@ -416,14 +407,22 @@ const findById = (items, id) => (
 
 const loadMaterialProducts = async () => {
   try {
-    const [productResponse, storeResponse, warehouseResponse, unitResponse] = await Promise.all([
+    const [
+      productResponse,
+      balanceResponse,
+      storeResponse,
+      warehouseResponse,
+      unitResponse
+    ] = await Promise.all([
       request({ url: '/raw-material-products', method: 'GET' }),
+      request({ url: '/stock-balances', method: 'GET', params: { type: 'raw-material' } }),
       request({ url: '/stores', method: 'GET' }),
       request({ url: '/warehouses', method: 'GET' }),
       request({ url: '/products/units/measurements', method: 'GET' })
     ])
 
     const rawProducts = Array.isArray(productResponse) ? productResponse : []
+    stockBalances.value = Array.isArray(balanceResponse) ? balanceResponse : []
     if (Array.isArray(storeResponse) && storeResponse.length > 0) {
       stores.value = storeResponse
     }
@@ -431,6 +430,7 @@ const loadMaterialProducts = async () => {
     units.value = getMeasurementUnits(unitResponse)
 
     if (rawProducts.length === 0) {
+      materials.value = []
       return
     }
 
@@ -452,19 +452,21 @@ const loadMaterialProducts = async () => {
         category: category?.name
           || (typeof product.category === 'string' ? product.category : fallback.category || '未分类'),
         warehouse: warehouse?.name || fallback.warehouse || '未分配',
+        defaultWarehouseName: warehouse?.name || fallback.warehouse || '未分配',
+        warehouseId: product.warehouseId ?? null,
         storeId: storeIds[0] ?? null,
         storeIds,
         storeName: storeNames || fallback.storeName || '全部门店',
-        stock: fallback.stock ?? 0,
         unit: findById(units.value, product.unitId)?.name || fallback.unit || '未设置',
-        minStock: fallback.minStock ?? 0,
-        maxStock: fallback.maxStock ?? 0,
-        costPrice: fallback.costPrice ?? 0,
-        updatedAt: product.updatedAt || fallback.updatedAt || '刚刚'
+        minStock: product.minStock ?? fallback.minStock ?? 0,
+        maxStock: product.maxStock ?? fallback.maxStock ?? 0,
+        updatedAt: product.updatedAt || ''
       }
     })
   } catch (error) {
-    console.error('加载原材料商品档案失败:', error)
+    console.error('加载原材料库存失败:', error)
+    materials.value = []
+    stockBalances.value = []
   }
 }
 
@@ -476,8 +478,85 @@ const filters = ref({
   storeId: null
 })
 
+const toFiniteNumber = value => {
+  const number = Number(value)
+  return Number.isFinite(number) ? number : 0
+}
+
+const stockBalanceMap = computed(() => {
+  const result = new Map()
+
+  stockBalances.value.forEach(balance => {
+    if (balance.productType && balance.productType !== 'raw-material') return
+    const productId = String(balance.productId)
+    if (!result.has(productId)) result.set(productId, [])
+    result.get(productId).push(balance)
+  })
+
+  return result
+})
+
+const selectedWarehouse = computed(() => {
+  if (!filters.value.warehouse) return null
+  return allWarehouses.value.find(item => item.name === filters.value.warehouse) || null
+})
+const selectedWarehouseId = computed(() => selectedWarehouse.value?.id ?? null)
+
+const inventoryMaterials = computed(() => materials.value.map(material => {
+  const balances = stockBalanceMap.value.get(String(material.id)) || []
+  const visibleBalances = balances.filter(balance => {
+    const matchesStore = filters.value.storeId === null
+      || String(balance.storeId) === String(filters.value.storeId)
+    const matchesWarehouse = !filters.value.warehouse
+      || (
+        selectedWarehouseId.value !== null
+        && String(balance.warehouseId) === String(selectedWarehouseId.value)
+      )
+    return matchesStore && matchesWarehouse
+  })
+  const stock = visibleBalances.reduce(
+    (sum, balance) => sum + toFiniteNumber(balance.quantity),
+    0
+  )
+  const inventoryAmount = visibleBalances.reduce((sum, balance) => {
+    const quantity = toFiniteNumber(balance.quantity)
+    const amount = balance.inventoryAmount
+    return sum + (
+      amount === null || amount === undefined
+        ? quantity * toFiniteNumber(balance.averageUnitCost)
+        : toFiniteNumber(amount)
+    )
+  }, 0)
+  const updatedAt = visibleBalances.reduce((latest, balance) => {
+    const value = String(balance.updatedAt || '')
+    return value > latest ? value : latest
+  }, '')
+  const visibleWarehouseNames = [...new Set(
+    visibleBalances
+      .map(balance => findById(allWarehouses.value, balance.warehouseId)?.name)
+      .filter(Boolean)
+  )]
+  const selectedStore = findById(stores.value, filters.value.storeId)
+
+  return {
+    ...material,
+    stock,
+    inventoryAmount,
+    averageUnitCost: stock > 0 ? inventoryAmount / stock : 0,
+    updatedAt: updatedAt || material.updatedAt,
+    visibleBalanceCount: visibleBalances.length,
+    warehouse: filters.value.warehouse
+      || visibleWarehouseNames.join('、')
+      || material.warehouse,
+    storeName: selectedStore?.name || material.storeName
+  }
+}))
+
 const categories = computed(() => [...new Set(materials.value.map(item => item.category))])
-const warehouses = computed(() => [...new Set(materials.value.map(item => item.warehouse))])
+const warehouses = computed(() => [...new Set([
+  ...allWarehouses.value.map(item => item.name),
+  ...materials.value.map(item => item.warehouse)
+].filter(Boolean))])
 const statusOptions = [
   { value: 'all', label: '全部' },
   { value: 'normal', label: '正常' },
@@ -510,7 +589,7 @@ const getStatusClass = (material) => `status-${getStatusKey(material)}`
 
 const filteredMaterials = computed(() => {
   const keyword = filters.value.keyword.toLowerCase()
-  const result = materials.value.filter(material => {
+  const result = inventoryMaterials.value.filter(material => {
     const matchesKeyword = !keyword || [
       material.code,
       material.name,
@@ -518,13 +597,25 @@ const filteredMaterials = computed(() => {
       material.category
     ].some(value => String(value).toLowerCase().includes(keyword))
     const matchesCategory = !filters.value.category || material.category === filters.value.category
-    const matchesWarehouse = !filters.value.warehouse || material.warehouse === filters.value.warehouse
-    const matchesStore = filters.value.storeId === null
-      || material.storeIds?.includes(filters.value.storeId)
-      || material.storeId === filters.value.storeId
+    const hasStoreFilter = filters.value.storeId !== null
+    const hasWarehouseFilter = Boolean(filters.value.warehouse)
+    const configuredStoreMatches = material.storeIds?.some(
+      storeId => String(storeId) === String(filters.value.storeId)
+    )
+    const configuredWarehouseMatches = selectedWarehouseId.value !== null
+      ? String(material.warehouseId) === String(selectedWarehouseId.value)
+      : material.defaultWarehouseName === filters.value.warehouse
+    const matchesLocation = hasStoreFilter && hasWarehouseFilter
+      ? material.visibleBalanceCount > 0
+        || (configuredStoreMatches && configuredWarehouseMatches)
+      : hasStoreFilter
+        ? material.visibleBalanceCount > 0 || configuredStoreMatches
+        : hasWarehouseFilter
+          ? material.visibleBalanceCount > 0 || configuredWarehouseMatches
+          : true
     const matchesStatus = filters.value.status === 'all' || getStatusKey(material) === filters.value.status
 
-    return matchesKeyword && matchesCategory && matchesWarehouse && matchesStore && matchesStatus
+    return matchesKeyword && matchesCategory && matchesLocation && matchesStatus
   })
 
   return result.sort((left, right) => {
@@ -551,7 +642,7 @@ const overview = computed(() => {
     totalTypes: list.length,
     totalStock: list.reduce((sum, item) => sum + item.stock, 0),
     warningCount: list.filter(item => getStatusKey(item) !== 'normal').length,
-    totalValue: list.reduce((sum, item) => sum + item.stock * item.costPrice, 0)
+    totalValue: list.reduce((sum, item) => sum + item.inventoryAmount, 0)
   }
 })
 
@@ -575,10 +666,10 @@ watch(totalPages, (value) => {
   }
 })
 
-const formatNumber = (value, digits = 0) => {
+const formatNumber = (value, digits = null) => {
   return Number(value || 0).toLocaleString('zh-CN', {
-    minimumFractionDigits: digits,
-    maximumFractionDigits: digits
+    minimumFractionDigits: digits ?? 0,
+    maximumFractionDigits: digits ?? 3
   })
 }
 
@@ -615,7 +706,7 @@ const refreshData = () => {
 }
 
 const exportInventory = () => {
-  const header = ['编号', '原材料', '分类', '规格', '仓库', '当前库存', '单位', '状态']
+  const header = ['编号', '原材料', '分类', '规格', '仓库', '当前库存', '库存金额', '单位', '状态']
   const rows = filteredMaterials.value.map(item => [
     item.code,
     item.name,
@@ -623,6 +714,7 @@ const exportInventory = () => {
     item.specification,
     item.warehouse,
     item.stock,
+    item.inventoryAmount,
     item.unit,
     getStatusText(item)
   ])
@@ -983,7 +1075,7 @@ onMounted(loadMaterialProducts)
 
 .inventory-table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 1180px;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -1067,6 +1159,12 @@ onMounted(loadMaterialProducts)
 .stock-number {
   font-size: 15px;
   font-weight: 600;
+}
+
+.money-number {
+  color: #111827 !important;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .status-normal {

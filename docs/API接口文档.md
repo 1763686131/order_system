@@ -2696,7 +2696,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 - **URL**: `/api/stock-balances`
 - **Method**: `GET`
-- **说明**: 汇总已过账入库数量，结果按物料类型、物料、仓库和门店分组
+- **说明**: 汇总已审核入库后的当前数量与库存金额，结果按物料类型、物料、仓库和门店分组
 
 **Query 参数**:
 
@@ -2714,14 +2714,19 @@ totalAmount = receivedQty × unitPrice + taxAmount
     "warehouseId": 2,
     "storeId": 1,
     "quantity": 98.5,
+    "averageUnitCost": 12.3456,
+    "inventoryAmount": 1215.04,
     "updatedAt": "2026-09-08 14:30:00"
   }
 ]
 ```
 
-### 11.11 过账规则与数据写入
+`averageUnitCost` 按同一物料、仓库、门店、货位和批次的有效入库流水进行加权计算，
+`inventoryAmount` 为当前库存余额乘以对应加权入库单价后的汇总金额（不含税）。没有单价的历史余额按 `0` 计价。
 
-提交 `status: "posted"` 后，后端在同一个 SQLite 事务中执行：
+### 11.11 审核规则与数据写入
+
+调用 `POST /api/stock-inbounds/{id}/audit` 审核入库单后，后端在同一个 SQLite 事务中执行：
 
 1. 写入或更新 `stock_inbounds` 单据头。
 2. 写入 `stock_inbound_items` 入库明细。
@@ -2729,7 +2734,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 4. 为每条有效明细写入一条 `stock_movements` 库存流水。
 5. 成品入库额外增量同步旧版 `inventory` 表，保证现有成品库存页面兼容。
 
-原材料库存使用独立 `stock_balances` 余额，不写入旧的成品 `inventory` 表。草稿不会执行第 3 至第 5 步。
+原材料库存使用独立 `stock_balances` 余额，不写入旧的成品 `inventory` 表。待审核单据不会执行第 3 至第 5 步。
 
 ---
 
