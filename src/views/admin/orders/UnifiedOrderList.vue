@@ -1,385 +1,616 @@
 <template>
   <div class="unified-order-list-page">
-    <!-- 筛选工具栏 -->
-    <div class="filter-bar">
-      <div class="filter-group">
-        <button
-          v-if="mode === 'finance'"
-          class="btn-add-order-inline"
-          type="button"
-          @click="handleAdd"
-        >
-          <span aria-hidden="true">+</span>
-          {{ addButtonText }}
-        </button>
+    <!-- 筛选工具栏 - 参考 StockRecordList 风格 -->
+    <section class="search-panel" aria-label="订单筛选">
+      <form class="search-grid" @submit.prevent="handleFilter">
+        <label class="field-group">
+          <span>关键词搜索</span>
+          <span class="input-with-icon">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-3.7-3.7"></path>
+            </svg>
+            <input
+              v-model="filters.keyword"
+              type="search"
+              :placeholder="searchPlaceholder"
+            />
+          </span>
+        </label>
 
-        <!-- 分类滑块 -->
-        <div class="category-tabs">
-          <div
-            :class="['category-tab', { active: filters.category === '' }]"
-            @click="filters.category = ''"
-          >
-            全部
-          </div>
-          <div
-            v-for="store in stores"
-            :key="store.id"
-            :class="['category-tab', { active: filters.category === store.name + '订单' }]"
-            @click="filters.category = store.name + '订单'"
-          >
-            {{ store.name }}订单
-          </div>
-        </div>
-
-        <input
-          v-model="filters.keyword"
-          type="text"
-          :placeholder="searchPlaceholder"
-          class="search-input"
-        />
-        <div v-if="mode === 'logistics'" class="shipping-method-filter">
-          <div class="filter-label" @click="toggleShippingDropdown">
-            <span>{{ selectedShippingMethodText }}</span>
-            <span class="dropdown-arrow" :class="{ open: shippingDropdownOpen }">▼</span>
-          </div>
-          <div v-if="shippingDropdownOpen" class="shipping-dropdown">
-            <label
-              v-for="method in shippingMethods"
-              :key="method"
-              class="shipping-option"
-            >
-              <input
-                type="checkbox"
-                :value="method"
-                :checked="filters.shippingMethods.includes(method)"
-                @change="toggleShippingMethod(method)"
-              />
-              <span>{{ method }}</span>
-            </label>
+        <div class="field-group date-field">
+          <span>订单日期</span>
+          <div class="date-range">
+            <input
+              v-model="filters.startDate"
+              type="date"
+              aria-label="开始日期"
+              :max="filters.endDate || undefined"
+            />
+            <span aria-hidden="true">至</span>
+            <input
+              v-model="filters.endDate"
+              type="date"
+              aria-label="结束日期"
+              :min="filters.startDate || undefined"
+            />
           </div>
         </div>
-        <input
-          v-model="filters.startDate"
-          type="date"
-          class="filter-date"
-          placeholder="开始日期"
-        />
-        <input
-          v-model="filters.endDate"
-          type="date"
-          class="filter-date"
-          placeholder="结束日期"
-        />
-        <button class="btn-filter" @click="handleFilter">筛选</button>
-        <button class="btn-reset" @click="handleReset">重置</button>
-      </div>
-      <div class="batch-actions">
-        <span class="selected-count">已选 {{ selectedOrders.length }} 项</span>
-        <button
-          class="btn-batch"
-          :disabled="selectedOrders.length === 0"
-          @click="handleBatchDelete"
-        >
-          批量删除
-        </button>
-      </div>
-    </div>
 
-    <!-- 订单表格 -->
-    <div class="table-container">
-      <table class="order-table">
-        <thead>
-          <tr>
-            <th class="col-checkbox">
-              <input
-                type="checkbox"
-                :checked="isAllSelected"
-                :indeterminate="isPagePartiallySelected"
-                @change="toggleSelectAll"
-              />
-            </th>
-            <th class="col-id">订单ID</th>
-            <th class="col-date">
-              <div class="date-header">
-                <span>日期</span>
-                <div class="sort-arrows" @click="toggleSort">
-                  <span class="arrow arrow-up" :class="{ active: sortOrder === 'asc' }">▲</span>
-                  <span class="arrow arrow-down" :class="{ active: sortOrder === 'desc' }">▼</span>
-                </div>
-              </div>
-            </th>
-            <th class="col-customer">客户</th>
-            <th class="col-receiver">收货人</th>
-            <th class="col-phone">电话</th>
-            <th class="col-address">地址</th>
-            <th class="col-goods">货物</th>
+        <label v-if="mode === 'logistics'" class="field-group">
+          <span>发货方式</span>
+          <input
+            v-model="shippingMethodInput"
+            type="search"
+            list="shipping-method-options"
+            placeholder="输入或选择发货方式"
+          />
+          <datalist id="shipping-method-options">
+            <option v-for="method in shippingMethods" :key="method" :value="method" />
+          </datalist>
+        </label>
 
-            <!-- 财务模式列 -->
-            <template v-if="mode === 'finance'">
-              <th class="col-amount">应收金额</th>
-              <th class="col-amount">已收金额</th>
-              <th class="col-amount">未收金额</th>
-            </template>
+        <div class="search-actions">
+          <button class="button button-secondary" type="button" @click="handleReset">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+              <path d="M3 4v6h6"></path>
+            </svg>
+            重置
+          </button>
+          <button class="button button-primary" type="submit">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-3.7-3.7"></path>
+            </svg>
+            查询
+          </button>
+        </div>
+      </form>
+    </section>
 
-            <!-- 物流模式列 -->
-            <template v-if="mode === 'logistics'">
-              <th class="col-weight">重量</th>
-              <th class="col-shipping">发货方式</th>
-              <th class="col-tracking">单号</th>
-              <th class="col-receipt">回单</th>
-            </template>
-
-            <th v-if="mode === 'finance'" class="col-status">状态</th>
-            <th v-if="mode === 'logistics'" class="col-freight">运费</th>
-            <th class="col-remark">备注</th>
-            <th class="col-actions">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="order in paginatedOrders"
-            :key="order.id"
-            :class="{
-              selected: isSelected(order.id)
-            }"
-            :style="{ backgroundColor: getStoreColor(order), color: getStoreTextColor(order) }"
-          >
-            <td class="col-checkbox">
-              <input
-                type="checkbox"
-                :checked="isSelected(order.id)"
-                @change="toggleSelect(order.id)"
-              />
-            </td>
-            <td class="col-id">
-              <span :class="mode === 'logistics' ? 'logistics-id' : 'order-id'">
-                {{ order.id }}
-              </span>
-            </td>
-            <td class="col-date">{{ formatDate(order) }}</td>
-            <td class="col-customer">{{ order.order_client || '-' }}</td>
-            <td class="col-receiver">{{ getContactPerson(order) }}</td>
-            <td class="col-phone">{{ getContactPhone(order) }}</td>
-            <td class="col-address">
-              <div class="expandable-cell">
-                <span class="cell-text">{{ getContactAddress(order).substring(0, 6) }}</span>
-                <span
-                  v-if="getContactAddress(order).length > 6"
-                  class="expand-icon"
-                  @click="showExpandModal(getContactAddress(order), '收货地址')"
-                >
-                  ▼
-                </span>
-              </div>
-            </td>
-            <td class="col-goods" :title="getGoodsTooltip(order)">
-              <div class="expandable-cell">
-                <span class="cell-text">{{ getGoodsDisplay(order).substring(0, 10) }}</span>
-                <span
-                  v-if="isNewOrder(order)"
-                  class="expand-icon detail-btn"
-                  @click="showOrderDetail(order)"
-                  title="查看明细"
-                >
-                  📋
-                </span>
-                <span
-                  v-else-if="getGoodsDisplay(order).length > 10"
-                  class="expand-icon"
-                  @click="showExpandModal(getGoodsDisplay(order), '货物信息')"
-                >
-                  ▼
-                </span>
-              </div>
-            </td>
-
-            <!-- 财务模式列 -->
-            <template v-if="mode === 'finance'">
-              <td class="col-amount amount-receivable">{{ getShouldReceive(order) }}</td>
-              <td class="col-amount amount-received">{{ getCurrentPayment(order) }}</td>
-              <td class="col-amount amount-unpaid">
-                <span>{{ getCurrentDebt(order) }}</span>
-              </td>
-            </template>
-
-            <!-- 物流模式列 -->
-            <template v-if="mode === 'logistics'">
-              <td class="col-weight">
-                <span class="weight-text">{{ getTotalWeight(order) }}</span>
-              </td>
-              <td class="col-shipping">
-                <span
-                  class="shipping-tag clickable"
-                  :class="{ 'can-edit': order.audit_state === 1 }"
-                  :title="order.audit_state === 1 ? '点击上传回单' : '已审核订单才能上传回单'"
-                  @click="handleShippingTagClick(order)"
-                >
-                  {{ getShippingMethodText(order) }}
-                </span>
-              </td>
-              <td class="col-tracking">
-                <span
-                  v-if="order.logistics_no"
-                  class="tracking-number clickable"
-                  :title="'点击复制单号'"
-                  @click="copyLogisticsNo(order)"
-                  v-html="order.logistics_no.replace(/-/g, '<br>')"
-                >
-                </span>
-                <span class="no-tracking" v-else>-</span>
-              </td>
-              <td class="col-receipt">
-                <span
-                  v-if="hasReceipt(order)"
-                  class="receipt-status has-receipt clickable"
-                  :title="'点击查看回单'"
-                  @click="handleReceiptClick(order)"
-                >
-                  回单
-                </span>
-              </td>
-            </template>
-
-            <td v-if="mode === 'finance'" class="col-status">
-              <span :class="['status-tag', getStatusClass(order)]">
-                {{ getStatusText(order) }}
-              </span>
-            </td>
-            <td v-if="mode === 'logistics'" class="col-freight">
-              <span
-                v-if="getFreightTotal(order) > 0"
-                class="freight-amount"
-                @click="showFreightDetail(order)"
-                :title="'点击查看运费明细'"
-              >
-                ¥{{ getFreightTotal(order).toFixed(2) }}
-              </span>
-              <span v-else class="freight-empty">-</span>
-            </td>
-            <td class="col-remark">
-              <span
-                v-if="order.remark && order.remark.length > 2"
-                class="remark-text clickable"
-                @click="showExpandModal('备注信息', order.remark)"
-                :title="'点击查看完整备注'"
-              >
-                {{ order.remark.substring(0, 2) }}...
-              </span>
-              <span v-else class="remark-text">{{ order.remark || '-' }}</span>
-            </td>
-            <td class="col-actions">
-              <div class="action-buttons">
-                <!-- 财务模式：新订单显示编辑按钮（未出库状态都可以编辑） -->
-                <button
-                  v-if="mode === 'finance' && isNewOrder(order) && order.status !== 'shipped'"
-                  class="btn-action btn-edit"
-                  @click="handleEditOrder(order)"
-                  title="编辑订单"
-                >
-                  编辑
-                </button>
-                <!-- 财务模式：仅新格式销售订单支持复制 -->
-                <button
-                  v-if="mode === 'finance' && isNewOrder(order)"
-                  class="btn-action btn-copy"
-                  @click="handleCopySalesOrder(order)"
-                  title="复制为新订单"
-                >
-                  复制
-                </button>
-                <!-- 财务模式：出库按钮 -->
-                <button
-                  v-if="mode === 'finance' && order.status === 'completed'"
-                  class="btn-action btn-ship"
-                  @click="handleShipOrder(order)"
-                  title="出库发货"
-                >
-                  出库
-                </button>
-                <!-- 物流模式：录入物流信息 -->
-                <button
-                  v-if="mode === 'logistics' && order.audit_state !== 1"
-                  class="btn-action btn-logistics"
-                  @click="handleShippingClick(order)"
-                  title="录入物流信息"
-                >
-                  录入
-                </button>
-                <!-- 物流模式：复制物流信息 -->
-                <button
-                  v-if="mode === 'logistics'"
-                  class="btn-action btn-copy"
-                  @click="handleCopyOrderInfo(order)"
-                  title="复制物流信息"
-                >
-                  复制
-                </button>
-                <!-- 物流模式：修改物流信息 -->
-                <button
-                  v-if="mode === 'logistics' && order.audit_state === 1"
-                  class="btn-action btn-edit"
-                  @click="handleEdit(order)"
-                  title="修改信息"
-                >
-                  修改
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="filteredOrders.length === 0">
-            <td :colspan="columnCount" class="empty-state">
-              <div class="empty-content">
-                <span class="empty-icon">{{ mode === 'logistics' ? '🚚' : '📦' }}</span>
-                <p>{{ emptyMessage }}</p>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- 分页 -->
-    <div class="pagination">
-      <div class="pagination-info">
-        <span>共 {{ totalOrders }} 条记录</span>
-        <div class="page-size-selector">
-          <span>每页显示</span>
-          <div class="page-size-tabs">
+    <!-- 订单记录面板 -->
+    <section class="records-panel">
+      <header class="records-toolbar">
+        <div class="toolbar-filters">
+          <!-- 门店分类标签 -->
+          <div class="material-type-tabs" role="tablist" aria-label="门店分类筛选">
             <button
-              :class="['page-size-tab', { active: !showAll && pageSize === 30 }]"
-              @click="changePageSize(30)"
-            >
-              30条
-            </button>
-            <button
-              :class="['page-size-tab', { active: !showAll && pageSize === 50 }]"
-              @click="changePageSize(50)"
-            >
-              50条
-            </button>
-            <button
-              :class="['page-size-tab', { active: showAll }]"
-              @click="changePageSize('all')"
+              :class="['status-tab', { active: filters.category === '' }]"
+              type="button"
+              @click="filters.category = ''"
             >
               全部
             </button>
+            <button
+              v-for="store in stores"
+              :key="store.id"
+              :class="['status-tab', { active: filters.category === store.name + '订单' }]"
+              type="button"
+              @click="filters.category = store.name + '订单'"
+            >
+              {{ store.name }}订单
+            </button>
           </div>
         </div>
+
+        <div class="toolbar-actions">
+          <button
+            class="icon-button refresh-button"
+            type="button"
+            title="刷新列表"
+            :disabled="loading"
+            @click="fetchOrdersData"
+          >
+            <svg :class="{ spinning: loading }" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M20 11a8.1 8.1 0 0 0-14.9-4L3 10"></path>
+              <path d="M3 4v6h6"></path>
+              <path d="M4 13a8.1 8.1 0 0 0 14.9 4L21 14"></path>
+              <path d="M15 14h6v6"></path>
+            </svg>
+          </button>
+          <button
+            v-if="mode === 'finance'"
+            class="button button-primary create-button"
+            type="button"
+            @click="handleAdd"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 5v14"></path>
+              <path d="M5 12h14"></path>
+            </svg>
+            {{ addButtonText }}
+          </button>
+        </div>
+      </header>
+
+      <div class="table-scroll">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th class="col-checkbox">
+                <input
+                  type="checkbox"
+                  :checked="isAllSelected"
+                  :indeterminate="isPagePartiallySelected"
+                  @change="toggleSelectAll"
+                />
+              </th>
+              <th class="document-column">订单ID</th>
+              <th>日期</th>
+              <th>客户</th>
+              <th>收货人</th>
+              <th>电话</th>
+              <th class="address-column">地址</th>
+              <th class="material-column">货物</th>
+
+              <!-- 财务模式列 -->
+              <template v-if="mode === 'finance'">
+                <th class="number-column">应收金额</th>
+                <th class="number-column">已收金额</th>
+                <th class="number-column">未收金额</th>
+              </template>
+
+              <!-- 物流模式列 -->
+              <template v-if="mode === 'logistics'">
+                <th>重量</th>
+                <th>发货方式</th>
+                <th>单号</th>
+                <th>回单</th>
+              </template>
+
+              <th v-if="mode === 'finance'">状态</th>
+              <th v-if="mode === 'logistics'" class="number-column">运费</th>
+              <th>备注</th>
+              <th class="operation-column">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-if="loading">
+              <tr v-for="index in 5" :key="`loading-${index}`" class="skeleton-row">
+                <td v-for="cell in columnCount" :key="cell"><span></span></td>
+              </tr>
+            </template>
+            <tr v-else-if="pagedRecords.length === 0">
+              <td :colspan="columnCount" class="empty-cell">
+                <div class="empty-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 6h16v14H4z"></path>
+                    <path d="M8 3h8v3H8z"></path>
+                    <path d="M8 11h8M8 15h5"></path>
+                  </svg>
+                </div>
+                <strong>{{ emptyMessage }}</strong>
+                <span>调整筛选条件后重新查询</span>
+              </td>
+            </tr>
+            <tr
+              v-for="order in paginatedOrders"
+              v-else
+              :key="order.id"
+              class="record-row"
+              :class="{ selected: isSelected(order.id) }"
+              tabindex="0"
+              @click="openOrderDetail(order)"
+              @keydown.enter.prevent="openOrderDetail(order)"
+            >
+              <td class="col-checkbox" @click.stop>
+                <input
+                  type="checkbox"
+                  :checked="isSelected(order.id)"
+                  @change="toggleSelect(order.id)"
+                />
+              </td>
+              <td>
+                <button class="document-link" type="button" @click.stop="openOrderDetail(order)">
+                  {{ order.id }}
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="m9 18 6-6-6-6"></path>
+                  </svg>
+                </button>
+              </td>
+              <td class="date-cell">{{ formatDate(order) }}</td>
+              <td>{{ order.order_client || '-' }}</td>
+              <td class="party-cell" :title="getContactPerson(order)">
+                {{ getContactPerson(order) }}
+              </td>
+              <td>{{ getContactPhone(order) }}</td>
+              <td class="address-cell" :title="getContactAddress(order)">
+                {{ getContactAddress(order).substring(0, 15) }}{{ getContactAddress(order).length > 15 ? '...' : '' }}
+              </td>
+              <td class="material-cell" :title="getGoodsTooltip(order)">
+                <strong>{{ getGoodsDisplay(order).substring(0, 12) }}</strong>
+                <span v-if="getGoodsDisplay(order).length > 12">...</span>
+              </td>
+
+              <!-- 财务模式列 -->
+              <template v-if="mode === 'finance'">
+                <td class="number-column numeric">{{ getShouldReceive(order) }}</td>
+                <td class="number-column numeric">{{ getCurrentPayment(order) }}</td>
+                <td class="number-column numeric">{{ getCurrentDebt(order) }}</td>
+              </template>
+
+              <!-- 物流模式列 -->
+              <template v-if="mode === 'logistics'">
+                <td>{{ getTotalWeight(order) }}</td>
+                <td>
+                  <span
+                    class="shipping-tag clickable"
+                    :class="{ 'can-edit': order.audit_state === 1 }"
+                    @click.stop="handleShippingTagClick(order)"
+                  >
+                    {{ getShippingMethodText(order) }}
+                  </span>
+                </td>
+                <td class="tracking-cell">
+                  <span
+                    v-if="order.logistics_no"
+                    class="tracking-number clickable"
+                    @click.stop="copyLogisticsNo(order)"
+                    v-html="order.logistics_no.replace(/-/g, '<br>')"
+                  >
+                  </span>
+                  <span v-else>-</span>
+                </td>
+                <td>
+                  <span
+                    v-if="hasReceipt(order)"
+                    class="receipt-status has-receipt clickable"
+                    @click.stop="handleReceiptClick(order)"
+                  >
+                    回单
+                  </span>
+                </td>
+              </template>
+
+              <td v-if="mode === 'finance'">
+                <span :class="['status-tag', getStatusClass(order)]">
+                  <i aria-hidden="true"></i>
+                  {{ getStatusText(order) }}
+                </span>
+              </td>
+              <td v-if="mode === 'logistics'" class="number-column money-value">
+                <span v-if="getFreightTotal(order) > 0" class="freight-amount" @click.stop="showFreightDetail(order)">
+                  ¥{{ getFreightTotal(order).toFixed(2) }}
+                </span>
+                <span v-else>-</span>
+              </td>
+              <td class="remark-cell">
+                {{ order.remark && order.remark.length > 4 ? order.remark.substring(0, 4) + '...' : (order.remark || '-') }}
+              </td>
+              <td class="operation-column" @click.stop>
+                <div class="row-actions">
+                  <button type="button" title="查看详情" @click="openOrderDetail(order)">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
+                      <circle cx="12" cy="12" r="2.5"></circle>
+                    </svg>
+                  </button>
+                  <button
+                    v-if="mode === 'finance' && isNewOrder(order) && order.status !== 'shipped'"
+                    type="button"
+                    title="编辑订单"
+                    @click="handleEditOrder(order)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button
+                    v-if="mode === 'finance' && order.status === 'completed'"
+                    type="button"
+                    title="出库发货"
+                    @click="handleShipOrder(order)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <rect x="1" y="3" width="15" height="13"></rect>
+                      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
+                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                    </svg>
+                  </button>
+                  <button
+                    v-if="mode === 'logistics' && order.audit_state !== 1"
+                    type="button"
+                    title="录入物流信息"
+                    @click="handleShippingClick(order)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="filteredOrders.length === 0 && !loading">
+              <td :colspan="columnCount" class="empty-cell">
+                <div class="empty-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M4 6h16v14H4z"></path>
+                    <path d="M8 3h8v3H8z"></path>
+                    <path d="M8 11h8M8 15h5"></path>
+                  </svg>
+                </div>
+                <strong>{{ emptyMessage }}</strong>
+                <span>调整筛选条件后重新查询</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-      <div v-if="mode === 'logistics'" class="freight-summary">
-        <span class="freight-label">当前页运费合计：</span>
-        <span class="freight-total">¥{{ currentPageFreightTotal.toFixed(2) }}</span>
-      </div>
-      <div class="pagination-controls">
-        <button class="page-btn" :disabled="currentPage === 1" @click="prevPage">
-          上一页
-        </button>
-        <span class="page-info">第 {{ currentPage }} / {{ totalPages }} 页</span>
-        <button class="page-btn" :disabled="currentPage === totalPages" @click="nextPage">
-          下一页
-        </button>
-      </div>
-    </div>
+
+      <footer class="table-footer">
+        <span>
+          共 <strong>{{ filteredOrders.length }}</strong> 条记录
+          <template v-if="filteredOrders.length">，当前 {{ pageStart }}-{{ pageEnd }} 条</template>
+        </span>
+        <div class="pagination" aria-label="分页">
+          <select v-model.number="pageSize" aria-label="每页条数">
+            <option :value="10">10 条 / 页</option>
+            <option :value="20">20 条 / 页</option>
+            <option :value="50">50 条 / 页</option>
+          </select>
+          <button
+            type="button"
+            title="上一页"
+            :disabled="currentPage <= 1"
+            @click="currentPage--"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
+          </button>
+          <span>{{ currentPage }} / {{ totalPages }}</span>
+          <button
+            type="button"
+            title="下一页"
+            :disabled="currentPage >= totalPages"
+            @click="currentPage++"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg>
+          </button>
+        </div>
+      </footer>
+    </section>
+
+    <!-- 订单详情抽屉 - 从左侧弹出 -->
+    <Teleport to="body">
+      <Transition name="drawer-left">
+        <div v-if="drawerOpen && selectedOrder" class="drawer-layer">
+          <div class="drawer-backdrop" @click="closeDrawer"></div>
+          <aside
+            class="detail-drawer drawer-left"
+            role="dialog"
+            aria-modal="true"
+          >
+            <header class="drawer-header">
+              <div class="drawer-title-wrap">
+                <span class="drawer-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M5 3h11l3 3v15H5z"></path>
+                    <path d="M16 3v4h4"></path>
+                    <path d="M8 12h8M8 16h6"></path>
+                  </svg>
+                </span>
+                <div>
+                  <span>订单详情</span>
+                  <h2>{{ selectedOrder.order_number || selectedOrder.id }}</h2>
+                </div>
+              </div>
+              <button class="drawer-close" type="button" @click="closeDrawer">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="m6 6 12 12M18 6 6 18"></path>
+                </svg>
+              </button>
+            </header>
+
+            <div class="drawer-body">
+              <section class="drawer-overview">
+                <div class="overview-head">
+                  <span :class="['status-tag', getStatusClass(selectedOrder)]">
+                    <i aria-hidden="true"></i>
+                    {{ getStatusText(selectedOrder) }}
+                  </span>
+                  <span>{{ getCategoryText(selectedOrder) }}</span>
+                </div>
+                <dl class="meta-grid">
+                  <div>
+                    <dt>订单日期</dt>
+                    <dd>{{ formatDate(selectedOrder) }}</dd>
+                  </div>
+                  <div>
+                    <dt>客户名称</dt>
+                    <dd>{{ selectedOrder.order_client || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>收货人</dt>
+                    <dd>{{ getContactPerson(selectedOrder) }}</dd>
+                  </div>
+                  <div>
+                    <dt>联系电话</dt>
+                    <dd>{{ getContactPhone(selectedOrder) }}</dd>
+                  </div>
+                  <div v-if="selectedOrder.project_name">
+                    <dt>工程项目</dt>
+                    <dd>{{ selectedOrder.project_name }}</dd>
+                  </div>
+                  <div>
+                    <dt>收货地址</dt>
+                    <dd>{{ getContactAddress(selectedOrder) }}</dd>
+                  </div>
+                </dl>
+
+                <!-- 财务汇总 -->
+                <div v-if="mode === 'finance' && isNewOrder(selectedOrder)" class="summary-strip">
+                  <div><span>应收金额</span><strong>{{ getShouldReceive(selectedOrder) }}</strong></div>
+                  <div><span>已收金额</span><strong>{{ getCurrentPayment(selectedOrder) }}</strong></div>
+                  <div><span>未收金额</span><strong>{{ getCurrentDebt(selectedOrder) }}</strong></div>
+                </div>
+              </section>
+
+              <!-- 商品明细 -->
+              <section v-if="isNewOrder(selectedOrder)" class="detail-section">
+                <div class="section-heading">
+                  <div>
+                    <h3>商品明细</h3>
+                    <span>共 {{ selectedOrder.order_goods?.length || 0 }} 行</span>
+                  </div>
+                </div>
+                <div class="detail-table-scroll">
+                  <table class="detail-table">
+                    <thead>
+                      <tr>
+                        <th>序号</th>
+                        <th class="material-detail-column">商品名称</th>
+                        <th>规格型号</th>
+                        <th>单位</th>
+                        <th class="number-column">件数</th>
+                        <th class="number-column">数量</th>
+                        <th class="number-column">单价</th>
+                        <th class="money-column">金额</th>
+                        <th class="money-column">含税金额</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(item, index) in selectedOrder.order_goods" :key="index">
+                        <td>{{ index + 1 }}</td>
+                        <td>
+                          <strong>{{ getGoodsItemName(item) }}</strong>
+                        </td>
+                        <td>{{ item.spec || '-' }}</td>
+                        <td>{{ item.unit || '-' }}</td>
+                        <td class="number-column numeric">{{ item.packages || '-' }}</td>
+                        <td class="number-column numeric">{{ item.quantity || '-' }}</td>
+                        <td class="number-column numeric">{{ item.price ? `¥${item.price.toFixed(2)}` : '-' }}</td>
+                        <td class="money-column item-amount">{{ item.amount ? `¥${item.amount.toFixed(2)}` : '-' }}</td>
+                        <td class="money-column item-amount">{{ item.total_amount ? `¥${item.total_amount.toFixed(2)}` : '-' }}</td>
+                      </tr>
+                      <tr v-if="!selectedOrder.order_goods || selectedOrder.order_goods.length === 0">
+                        <td colspan="9" class="drawer-empty">暂无商品明细</td>
+                      </tr>
+                    </tbody>
+                    <tfoot v-if="selectedOrder.order_goods && selectedOrder.order_goods.length > 0">
+                      <tr class="detail-total-row">
+                        <td colspan="4" class="detail-total-label">合计</td>
+                        <td class="number-column numeric">{{ calculateTotalPackages(selectedOrder) }}</td>
+                        <td class="number-column numeric">{{ calculateTotalQuantity(selectedOrder) }}</td>
+                        <td></td>
+                        <td class="money-column item-amount">¥{{ calculateSubtotal(selectedOrder) }}</td>
+                        <td class="money-column item-amount">¥{{ calculateTotalAmount(selectedOrder) }}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </section>
+
+              <!-- 财务汇总详情 -->
+              <section v-if="mode === 'finance' && isNewOrder(selectedOrder)" class="detail-section">
+                <div class="section-heading">
+                  <div>
+                    <h3>财务信息</h3>
+                  </div>
+                </div>
+                <div class="financial-summary-detail">
+                  <div class="summary-row">
+                    <span class="summary-label">小计（不含税）：</span>
+                    <span class="summary-value">¥{{ calculateSubtotal(selectedOrder) }}</span>
+                  </div>
+                  <div class="summary-row">
+                    <span class="summary-label">税额：</span>
+                    <span class="summary-value">¥{{ calculateTaxAmount(selectedOrder) }}</span>
+                  </div>
+                  <div class="summary-row highlight">
+                    <span class="summary-label">价税合计：</span>
+                    <span class="summary-value">¥{{ calculateTotalAmount(selectedOrder) }}</span>
+                  </div>
+                  <div v-if="selectedOrder.discount_amount" class="summary-row">
+                    <span class="summary-label">折扣金额：</span>
+                    <span class="summary-value">¥{{ (selectedOrder.discount_amount || 0).toFixed(2) }}</span>
+                  </div>
+                  <div v-if="selectedOrder.other_fees" class="summary-row">
+                    <span class="summary-label">其他费用：</span>
+                    <span class="summary-value">¥{{ (selectedOrder.other_fees || 0).toFixed(2) }}</span>
+                  </div>
+                  <div class="summary-row highlight">
+                    <span class="summary-label">本单应收：</span>
+                    <span class="summary-value">¥{{ (selectedOrder.should_receive || 0).toFixed(2) }}</span>
+                  </div>
+                  <div class="summary-row">
+                    <span class="summary-label">本次收款：</span>
+                    <span class="summary-value">¥{{ (selectedOrder.current_payment || 0).toFixed(2) }}</span>
+                  </div>
+                  <div class="summary-row highlight debt">
+                    <span class="summary-label">本单欠款：</span>
+                    <span class="summary-value">¥{{ (selectedOrder.current_debt || 0).toFixed(2) }}</span>
+                  </div>
+                </div>
+              </section>
+
+              <!-- 物流信息 -->
+              <section v-if="mode === 'logistics'" class="detail-section">
+                <div class="section-heading">
+                  <div>
+                    <h3>物流信息</h3>
+                  </div>
+                </div>
+                <dl class="meta-grid">
+                  <div>
+                    <dt>发货方式</dt>
+                    <dd>{{ getShippingMethodText(selectedOrder) }}</dd>
+                  </div>
+                  <div>
+                    <dt>物流单号</dt>
+                    <dd>{{ selectedOrder.logistics_no || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>总重量</dt>
+                    <dd>{{ getTotalWeight(selectedOrder) }}</dd>
+                  </div>
+                  <div v-if="getFreightTotal(selectedOrder) > 0">
+                    <dt>运费</dt>
+                    <dd>¥{{ getFreightTotal(selectedOrder).toFixed(2) }}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <!-- 备注信息 -->
+              <section v-if="selectedOrder.remark" class="detail-section">
+                <div class="section-heading">
+                  <div>
+                    <h3>备注信息</h3>
+                  </div>
+                </div>
+                <div style="padding: 15px;">
+                  <p style="margin: 0; color: #374151; line-height: 1.6;">{{ selectedOrder.remark }}</p>
+                </div>
+              </section>
+            </div>
+
+            <footer class="drawer-footer">
+              <button class="button button-secondary" type="button" @click="closeDrawer">关闭</button>
+              <div>
+                <button
+                  v-if="mode === 'finance' && isNewOrder(selectedOrder) && selectedOrder.status !== 'shipped'"
+                  class="button button-primary"
+                  type="button"
+                  @click="handleEditOrder(selectedOrder)"
+                >
+                  编辑订单
+                </button>
+                <button
+                  v-if="mode === 'finance' && selectedOrder.status === 'completed'"
+                  class="button button-primary"
+                  type="button"
+                  @click="handleShipOrder(selectedOrder)"
+                >
+                  出库发货
+                </button>
+              </div>
+            </footer>
+          </aside>
+        </div>
+      </Transition>
+    </Teleport>
 
     <!-- 展开信息弹窗 -->
     <div v-if="expandModal.visible" class="expand-modal-overlay" @click="closeExpandModal">
@@ -572,7 +803,21 @@ const handleShipFromParent = inject('handleShip', null)
 // 注入 Admin 组件提供的方法
 const setHeaderActions = inject('setHeaderActions', null)
 
-// 在组件挂载时设置顶部栏按钮
+// 订单数据
+const orders = ref([])
+const loading = ref(false)
+const stores = ref([])
+const products = ref([]) // 商品列表，用于反查商品名称
+
+// 抽屉状态
+const drawerOpen = ref(false)
+const selectedOrder = ref(null)
+
+// 发货方式输入
+const shippingMethodInput = ref('')
+
+// 排序状态
+const sortOrder = ref('desc') // 'desc' = 最近到远, 'asc' = 最远到近
 onMounted(() => {
   if (setHeaderActions) {
     // 订单列表只显示导出按钮（新增订单按钮已移到顶部）
@@ -626,14 +871,6 @@ watch(() => props.mode, () => {
   fetchOrdersData()
 })
 
-// 订单数据
-const orders = ref([])
-const loading = ref(false)
-const stores = ref([])
-const products = ref([]) // 商品列表，用于反查商品名称
-
-// 排序状态
-const sortOrder = ref('desc') // 'desc' = 最近到远, 'asc' = 最远到近
 
 // 根据 store_id 或 type 获取门店名称
 const getStoreName = (order) => {
@@ -913,14 +1150,22 @@ const filteredOrders = computed(() => {
 })
 
 const totalOrders = computed(() => filteredOrders.value.length)
-const totalPages = computed(() => Math.ceil(totalOrders.value / pageSize.value))
+const totalPages = computed(() => Math.max(1, Math.ceil(totalOrders.value / pageSize.value)))
 
 // 分页后的订单数据
 const paginatedOrders = computed(() => {
+  if (showAll.value) {
+    return filteredOrders.value
+  }
   const start = (currentPage.value - 1) * pageSize.value
   const end = start + pageSize.value
   return filteredOrders.value.slice(start, end)
 })
+
+const pagedRecords = computed(() => paginatedOrders.value)
+
+const pageStart = computed(() => filteredOrders.value.length ? (currentPage.value - 1) * pageSize.value + 1 : 0)
+const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredOrders.value.length))
 
 const isAllSelected = computed(() => {
   return paginatedOrders.value.length > 0 &&
@@ -1069,29 +1314,69 @@ const getGoodsItemName = (item) => {
   return '-'
 }
 
-// 计算订单明细中的合计件数
-const getDetailTotalPackages = (order) => {
-  if (!order || !Array.isArray(order.order_goods)) return '-'
-
+// 计算合计件数
+const calculateTotalPackages = (order) => {
+  if (!order || !Array.isArray(order.order_goods)) return 0
   return order.order_goods.reduce((total, item) => {
     return total + (Number(item.packages) || 0)
   }, 0)
 }
 
-// 计算订单明细中的合计数量
-const getDetailTotalQuantity = (order) => {
-  if (!order || !Array.isArray(order.order_goods)) return '-'
-
+// 计算合计数量
+const calculateTotalQuantity = (order) => {
+  if (!order || !Array.isArray(order.order_goods)) return '0'
   const total = order.order_goods.reduce((sum, item) => {
     return sum + (Number(item.quantity) || 0)
   }, 0)
+  return Number.isInteger(total) ? total.toString() : total.toFixed(2)
+}
 
-  return Number.isInteger(total) ? total : total.toFixed(2)
+// 计算小计（不含税）
+const calculateSubtotal = (order) => {
+  if (!order || !Array.isArray(order.order_goods)) return '0.00'
+  const subtotal = order.order_goods.reduce((sum, item) => {
+    return sum + (Number(item.amount) || 0)
+  }, 0)
+  return subtotal.toFixed(2)
+}
+
+// 计算含税总额
+const calculateTotalAmount = (order) => {
+  if (!order || !Array.isArray(order.order_goods)) return '0.00'
+  const total = order.order_goods.reduce((sum, item) => {
+    return sum + (Number(item.total_amount) || 0)
+  }, 0)
+  return total.toFixed(2)
+}
+
+// 计算税额
+const calculateTaxAmount = (order) => {
+  if (!order || !Array.isArray(order.order_goods)) return '0.00'
+  const subtotal = order.order_goods.reduce((sum, item) => {
+    return sum + (Number(item.amount) || 0)
+  }, 0)
+  const total = order.order_goods.reduce((sum, item) => {
+    return sum + (Number(item.total_amount) || 0)
+  }, 0)
+  const tax = total - subtotal
+  return tax.toFixed(2)
 }
 
 // 商品明细弹窗状态
 const orderDetailVisible = ref(false)
 const currentDetailOrder = ref(null)
+
+// 打开订单详情抽屉
+const openOrderDetail = (order) => {
+  selectedOrder.value = order
+  drawerOpen.value = true
+}
+
+// 关闭抽屉
+const closeDrawer = () => {
+  drawerOpen.value = false
+  selectedOrder.value = null
+}
 
 // 显示商品明细弹窗
 const showOrderDetail = (order) => {
@@ -1568,797 +1853,1104 @@ const changePageSize = (size) => {
 
 <style scoped>
 .unified-order-list-page {
-  width: 100%;
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --page-bg: #f4f7f8;
+  --panel-bg: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  min-width: 0;
+  min-height: calc(100vh - 100px);
+  color: var(--text);
+  background: var(--page-bg);
+  font-size: 14px;
 }
 
-/* 筛选工具栏 */
-.filter-bar {
-  background: #fff;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 20px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.record-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+/* 搜索面板 */
+.search-panel {
+  padding: 18px 20px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+}
+
+.search-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(280px, 1.45fr) minmax(160px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.field-group {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.filter-group {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  flex: 1;
-  align-items: center;
-}
-
-/* 分类滑块 */
-.category-tabs {
-  display: flex;
-  gap: 8px;
-  background: #f3f4f6;
-  padding: 4px;
-  border-radius: 8px;
-}
-
-.category-tab {
-  padding: 8px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  color: #6b7280;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.3s;
-  white-space: nowrap;
-}
-
-.category-tab:hover {
-  background: #e5e7eb;
-  color: #374151;
-}
-
-.category-tab.active {
-  background: #34d399;
-  color: #fff;
-  box-shadow: 0 2px 4px rgba(52, 211, 153, 0.3);
-}
-
-.btn-add-order-inline {
-  height: 36px;
-  padding: 0 14px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  flex: 0 0 auto;
-  background: #3b82f6;
-  color: #fff;
-  border: 1px solid #3b82f6;
-  border-radius: 6px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 0.2s ease, border-color 0.2s ease;
-}
-
-.btn-add-order-inline:hover {
-  background: #2563eb;
-  border-color: #2563eb;
-}
-
-.btn-add-order-inline span {
-  font-size: 18px;
-  line-height: 1;
-}
-
-.search-input {
-  flex: 1;
-  min-width: 250px;
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.3s;
-}
-
-.search-input:focus {
-  border-color: #34d399;
-}
-
-.filter-select,
-.filter-date {
-  padding: 8px 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  background: #fff;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.filter-select:focus,
-.filter-date:focus {
-  border-color: #34d399;
-}
-
-.btn-filter,
-.btn-reset {
-  padding: 8px 16px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-filter {
-  background: #34d399;
-  color: #fff;
-}
-
-.btn-filter:hover {
-  background: #10b981;
-}
-
-.btn-reset {
-  background: #f3f4f6;
-  color: #6b7280;
-}
-
-.btn-reset:hover {
-  background: #e5e7eb;
-}
-
-.batch-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.selected-count {
-  font-size: 14px;
-  color: #6b7280;
-}
-
-.btn-batch {
-  padding: 8px 16px;
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-batch:hover:not(:disabled) {
-  background: #dc2626;
-}
-
-.btn-batch:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 表格容器 */
-.table-container {
-  background: #fff;
-  border-radius: 8px;
-  overflow-x: auto;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  margin-bottom: 20px;
-  position: relative;
-}
-
-/* 订单表格 */
-.order-table {
-  width: 100%;
-  border-collapse: collapse;
-  min-width: 1500px;
-}
-
-.order-table thead {
-  background: #f9fafb;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.order-table th {
-  padding: 12px 8px;
-  text-align: left;
-  font-size: 13px;
-  font-weight: 600;
-  color: #6b7280;
-  border-bottom: 2px solid #e5e7eb;
-  white-space: nowrap;
-}
-
-.order-table td {
-  padding: 12px 8px;
-  font-size: 14px;
-  color: #374151;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.order-table tbody tr {
-  transition: background-color 0.2s;
-}
-
-.order-table tbody tr > td {
-  transition: background-color 0.2s;
-}
-
-.order-table tbody tr:hover > td {
-  background-color: #dbeafe !important;
-}
-
-.order-table tbody tr.selected > td {
-  background-color: #bfdbfe !important;
-}
-
-.order-table tbody tr.selected:hover > td {
-  background-color: #93c5fd !important;
-}
-
-/* 列宽 */
-.col-checkbox {
-  width: 40px;
-  text-align: center;
-}
-
-.col-id {
-  width: 120px;
-}
-
-.col-date {
-  width: 100px;
-}
-
-.date-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 4px;
-}
-
-.sort-arrows {
-  display: flex;
+  min-width: 0;
   flex-direction: column;
-  gap: 1px;
-  cursor: pointer;
-  user-select: none;
+  gap: 7px;
 }
 
-.arrow {
-  font-size: 8px;
-  color: #d1d5db;
-  transition: color 0.2s;
-  line-height: 1;
-}
-
-.arrow.active {
-  color: #34d399;
-}
-
-.sort-arrows:hover .arrow {
-  color: #9ca3af;
-}
-
-.sort-arrows:hover .arrow.active {
-  color: #10b981;
-}
-
-.col-customer {
-  width: 140px;
-}
-
-.col-receiver {
-  width: 100px;
-}
-
-.col-phone {
-  width: 120px;
-}
-
-.col-address {
-  width: 120px;
-}
-
-.col-goods {
-  width: 150px;
-}
-
-.col-amount {
-  width: 100px;
-  text-align: right;
-}
-
-.col-shipping {
-  width: 100px;
-}
-
-.col-tracking {
-  width: 140px;
-  text-align: center;
-}
-
-.tracking-number {
-  white-space: pre-line;
-  line-height: 1.5;
-}
-
-.col-receipt {
-  width: 100px;
-  text-align: center;
-}
-
-.col-remark {
-  width: 150px;
-}
-
-.col-actions {
-  width: 200px;
-  text-align: center;
-  position: sticky;
-  right: 0;
-  background: #fff;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.05);
-  z-index: 5;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  justify-content: center;
-  align-items: center;
-}
-
-.btn-action {
-  padding: 5px 12px;
-  border: none;
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  white-space: nowrap;
-}
-
-.btn-logistics {
-  background: #e0f2fe;
-  color: #0369a1;
-}
-
-.btn-logistics:hover {
-  background: #bae6fd;
-}
-
-.btn-edit {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.btn-edit:hover {
-  background: #fde68a;
-}
-
-.btn-copy {
-  background: #e0e7ff;
-  color: #4f46e5;
-}
-
-.btn-copy:hover {
-  background: #c7d2fe;
-}
-
-.btn-delete {
-  background: #fee2e2;
-  color: #dc2626;
-}
-
-.btn-delete:hover {
-  background: #fecaca;
-}
-
-.col-status {
-  width: 90px;
-  text-align: center;
-}
-
-.status-tag {
-  display: inline-block;
-  padding: 4px 10px;
-  border-radius: 12px;
+.field-group > span:first-child {
+  color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 500;
-  white-space: nowrap;
+  font-weight: 600;
 }
 
-.status-pending {
-  background: #fef3c7;
-  color: #d97706;
+.field-group input,
+.field-group select {
+  width: 100%;
+  height: 38px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 0 11px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.status-completed {
-  background: #dbeafe;
-  color: #1d4ed8;
+.field-group input::placeholder {
+  color: #a2adba;
 }
 
-.status-out {
-  background: #e0e7ff;
-  color: #6366f1;
+.field-group input:focus,
+.field-group select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
 
-.status-shipped {
-  background: #d1fae5;
-  color: #059669;
-}
-
-.btn-ship {
-  background: #dbeafe;
-  color: #1d4ed8;
-}
-
-.btn-ship:hover {
-  background: #bfdbfe;
-}
-
-/* 发货方式多选筛选 */
-.shipping-method-filter {
+.input-with-icon {
   position: relative;
-  min-width: 160px;
+  display: block;
 }
 
-.filter-label {
-  padding: 9px 16px;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  background: white;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  user-select: none;
-  font-size: 14px;
-  color: #333;
-  transition: all 0.2s;
-}
-
-.filter-label:hover {
-  border-color: #2563eb;
-  background: #f8fafc;
-}
-
-.dropdown-arrow {
-  font-size: 10px;
-  color: #666;
-  transition: transform 0.2s;
-  margin-left: 8px;
-}
-
-.dropdown-arrow.open {
-  transform: rotate(180deg);
-}
-
-.shipping-dropdown {
+.input-with-icon svg {
   position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  background: white;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  z-index: 1000;
-  padding: 8px;
-}
-
-.shipping-option {
-  display: flex;
-  align-items: center;
-  padding: 8px 12px;
-  cursor: pointer;
-  border-radius: 4px;
-  transition: background 0.2s;
-  font-size: 14px;
-  user-select: none;
-}
-
-.shipping-option:hover {
-  background: #f1f5f9;
-}
-
-.shipping-option input[type="checkbox"] {
-  margin: 0;
-  margin-right: 8px;
+  top: 11px;
+  left: 11px;
+  z-index: 1;
   width: 16px;
   height: 16px;
+  color: var(--text-muted);
+}
+
+.input-with-icon input {
+  padding-left: 35px;
+}
+
+.date-range {
+  display: grid;
+  grid-template-columns: minmax(118px, 1fr) auto minmax(118px, 1fr);
+  gap: 7px;
+  align-items: center;
+}
+
+.date-range > span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.button-primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 2px 5px rgba(var(--accent-rgb), 0.18);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+.button-secondary {
+  color: #445066;
+  background: #fff;
+  border-color: var(--border-strong);
+}
+
+.button-secondary:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+/* 记录面板 */
+.records-panel {
+  margin-top: 14px;
+  overflow: hidden;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.045);
+}
+
+.records-toolbar {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar-filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.material-type-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.status-tab {
+  display: inline-flex;
+  height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 11px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-tab:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+
+.status-tab.active {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #667085;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
   cursor: pointer;
 }
 
-.shipping-option span {
-  flex: 1;
-  color: #333;
+.icon-button:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
 }
 
-/* 表格元素样式 */
-.order-id {
-  font-weight: 600;
-  color: #2563eb;
+.icon-button svg {
+  width: 17px;
+  height: 17px;
 }
 
-.logistics-id {
-  font-weight: 600;
-  color: #7c3aed;
+.spinning {
+  animation: spin 0.8s linear infinite;
 }
 
-.category-tag {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* 表格 */
+.table-scroll {
+  overflow-x: auto;
+}
+
+.records-table {
+  width: 100%;
+  min-width: 1320px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.records-table th {
+  height: 45px;
+  padding: 0 12px;
+  color: #566176;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
-  font-weight: 500;
-  color: #666;
-  background: #e3f2fd;
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;
 }
 
-.expandable-cell {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.cell-text {
-  flex: 1;
+.records-table td {
+  height: 57px;
+  padding: 9px 12px;
   overflow: hidden;
+  color: #344054;
+  border-bottom: 1px solid #edf1f5;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.expand-icon {
-  flex-shrink: 0;
+.records-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.record-row {
   cursor: pointer;
-  color: #1890ff;
-  font-size: 12px;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: all 0.2s;
-  user-select: none;
+  transition: background 0.15s ease;
 }
 
-.expand-icon:hover {
-  background: #e6f7ff;
-  color: #0050b3;
+.record-row:hover {
+  background: rgba(var(--accent-rgb), 0.035);
 }
 
-.remark-text {
+.record-row.selected {
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.col-checkbox { width: 50px; text-align: center; }
+.document-column { width: 140px; }
+.records-table th:nth-child(3) { width: 110px; }
+.records-table th:nth-child(4) { width: 140px; }
+.records-table th:nth-child(5) { width: 100px; }
+.records-table th:nth-child(6) { width: 120px; }
+.address-column { width: 140px; }
+.material-column { width: 150px; }
+.number-column { width: 100px; text-align: right !important; }
+.money-column { width: 120px; text-align: right !important; }
+.operation-column { width: 100px; text-align: center; }
+
+.numeric,
+.money-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.document-link {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 3px 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-link:hover {
+  text-decoration: underline;
+}
+
+.document-link svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.date-cell,
+.party-cell {
+  color: var(--text-secondary);
+}
+
+.address-cell,
+.remark-cell {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.material-cell {
+  max-width: 170px;
+}
+
+.material-cell strong,
+.material-cell span {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 100%;
+}
+
+.material-cell strong {
+  color: #283548;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.material-cell span {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.money-value {
+  color: #182230 !important;
+  font-weight: 750;
+}
+
+.status-tag {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.status-tag i {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+.status-posted,
+.status-shipped {
+  color: #13734f;
+  background: #eaf8f1;
+}
+
+.status-reviewed,
+.status-completed {
+  color: #16647a;
+  background: #e7f5f8;
+}
+
+.status-pending,
+.status-out {
+  color: #a4510b;
+  background: #fff3df;
+}
+
+.status-cancelled {
+  color: #b4232f;
+  background: #f1f2f4;
 }
 
 .shipping-tag {
   display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #666;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
   background: #f3f4f6;
-  transition: all 0.3s;
+  color: #6b7280;
 }
 
-.shipping-tag.clickable {
-  cursor: pointer;
-}
-
-.shipping-tag.can-edit {
+.shipping-tag.clickable.can-edit {
   background: #e6f4ff;
   color: #1677ff;
-  border: 1px solid #91caff;
-}
-
-.shipping-tag.can-edit:hover {
-  background: #bae0ff;
-  transform: scale(1.05);
-}
-
-.clickable {
   cursor: pointer;
 }
 
-.amount-receivable {
-  color: #3b82f6;
-  font-weight: 600;
+.shipping-tag.clickable.can-edit:hover {
+  background: #bae0ff;
 }
 
-.amount-received {
-  color: #10b981;
-  font-weight: 600;
-}
-
-.amount-unpaid {
-  font-weight: 600;
-}
-
-.unpaid-warning {
-  color: #ef4444;
+.tracking-cell {
+  text-align: center;
+  font-size: 12px;
 }
 
 .tracking-number {
-  font-family: inherit;
   color: #374151;
-  font-weight: normal;
-  font-size: 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: color 0.2s;
 }
 
 .tracking-number:hover {
   color: #2563eb;
-  text-decoration: underline;
-}
-
-.no-tracking {
-  color: #d1d5db;
 }
 
 .receipt-status {
   display: inline-block;
   padding: 4px 8px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  user-select: none;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .has-receipt {
   color: #10b981;
   background: #d1fae5;
+  cursor: pointer;
 }
 
 .has-receipt:hover {
   background: #a7f3d0;
-  transform: scale(1.05);
 }
 
-/* 空状态 */
-.empty-state {
-  text-align: center;
-  padding: 60px 20px;
+.freight-amount {
+  color: #1890ff;
+  font-weight: 650;
+  cursor: pointer;
 }
 
-.empty-content {
+.freight-amount:hover {
+  text-decoration: underline;
+}
+
+.row-actions {
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+}
+
+.row-actions button {
+  display: inline-flex;
+  width: 29px;
+  height: 29px;
   align-items: center;
-  gap: 12px;
-}
-
-.empty-icon {
-  font-size: 48px;
-}
-
-.empty-content p {
-  color: #9ca3af;
-  font-size: 14px;
-  margin: 0;
-}
-
-/* 分页 */
-.pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
+  justify-content: center;
+  padding: 0;
+  color: #667085;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  border: 1px solid #d9e0e8;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
-.pagination-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+.row-actions button:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.row-actions svg {
+  width: 14px;
+  height: 14px;
+}
+
+.empty-cell {
+  height: 290px !important;
+  color: var(--text-muted) !important;
+  text-align: center;
+}
+
+.empty-cell strong,
+.empty-cell span {
+  display: block;
+}
+
+.empty-cell strong {
+  margin-top: 11px;
+  color: #4c586b;
   font-size: 14px;
-  color: #6b7280;
 }
 
-.page-size-selector {
+.empty-cell span {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.empty-mark {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  color: #9aa6b6;
+  background: #f1f4f7;
+  border-radius: 50%;
+}
+
+.empty-mark svg {
+  width: 24px;
+  height: 24px;
+}
+
+.skeleton-row td span {
+  display: block;
+  width: 78%;
+  height: 10px;
+  background: linear-gradient(90deg, #edf1f5 25%, #f8fafc 50%, #edf1f5 75%);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  animation: skeleton 1.25s infinite linear;
+}
+
+@keyframes skeleton {
+  to { background-position: -200% 0; }
+}
+
+/* 页脚 */
+.table-footer {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  color: var(--text-secondary);
+  background: #fff;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.table-footer strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.page-size-tabs {
-  display: flex;
-  gap: 4px;
-  background: #f3f4f6;
-  padding: 2px;
-  border-radius: 6px;
+.pagination select {
+  width: 103px;
+  height: 32px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-size: 12px;
+  outline: none;
 }
 
-.page-size-tab {
-  padding: 4px 12px;
-  font-size: 13px;
-  color: #6b7280;
-  background: transparent;
-  border: none;
+.pagination button {
+  display: inline-flex;
+  width: 31px;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #526074;
+  background: #fff;
+  border: 1px solid var(--border-strong);
   border-radius: 4px;
   cursor: pointer;
-  transition: all 0.2s;
-  font-weight: 500;
 }
 
-.page-size-tab:hover {
-  color: #374151;
-  background: #e5e7eb;
+.pagination button:hover:not(:disabled) {
+  color: var(--accent-dark);
+  border-color: var(--accent);
 }
 
-.page-size-tab.active {
-  color: #fff;
-  background: #3b82f6;
-  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+.pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 
-.freight-summary {
+.pagination button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pagination > span {
+  min-width: 50px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 抽屉 - 从左侧弹出 */
+.drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2147482000;
+}
+
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1px);
+}
+
+.detail-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
   display: flex;
+  width: min(820px, 88vw);
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  color: #172033;
+  background: #f4f7f9;
+  box-shadow: 18px 0 55px rgba(15, 23, 42, 0.2);
+}
+
+.drawer-left {
+  right: auto;
+  left: 0;
+  box-shadow: 18px 0 55px rgba(15, 23, 42, 0.2);
+}
+
+.drawer-header {
+  display: flex;
+  min-height: 78px;
   align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: #6b7280;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid #dfe5ec;
 }
 
-.freight-label {
-  font-size: 14px;
-  color: #6b7280;
-}
-
-.freight-total {
-  font-size: 14px;
-  font-weight: 600;
-  color: #059669;
-}
-
-.pagination-controls {
+.drawer-title-wrap {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 12px;
 }
 
-.page-btn {
-  padding: 6px 16px;
-  background: #fff;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
+.drawer-mark {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-radius: 7px;
+}
+
+.drawer-mark svg {
+  width: 21px;
+  height: 21px;
+}
+
+.drawer-title-wrap > div {
+  min-width: 0;
+}
+
+.drawer-title-wrap span:not(.drawer-mark) {
+  color: #758195;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.drawer-title-wrap h2 {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: #172033;
+  font-size: 18px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.drawer-close {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: #68758a;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.3s;
 }
 
-.page-btn:hover:not(:disabled) {
-  border-color: #34d399;
-  color: #34d399;
+.drawer-close:hover {
+  color: #273245;
+  background: #f0f3f6;
 }
 
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.drawer-close svg {
+  width: 20px;
+  height: 20px;
 }
 
-.page-info {
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.drawer-overview,
+.detail-section {
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+}
+
+.drawer-overview {
+  padding: 17px;
+}
+
+.overview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.overview-head > span:last-child {
+  color: #5e6a7e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 22px;
+  margin: 17px 0;
+}
+
+.meta-grid > div {
+  min-width: 0;
+}
+
+.meta-grid dt {
+  margin-bottom: 5px;
+  color: #8a96a8;
+  font-size: 11px;
+}
+
+.meta-grid dd {
+  margin: 0;
+  overflow: hidden;
+  color: #283548;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  background: #f8fafb;
+  border: 1px solid #e5eaf0;
+  border-radius: 6px;
+}
+
+.summary-strip > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 15px;
+  border-right: 1px solid #e5eaf0;
+}
+
+.summary-strip > div:last-child {
+  border-right: 0;
+}
+
+.summary-strip span {
+  color: #7a8698;
+  font-size: 11px;
+}
+
+.summary-strip strong {
+  overflow: hidden;
+  color: #243145;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-strip > div:last-child strong {
+  color: var(--accent-dark);
+}
+
+.detail-section {
+  margin-top: 15px;
+  overflow: hidden;
+}
+
+.section-heading {
+  display: flex;
+  min-height: 53px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 15px;
+  border-bottom: 1px solid #e5eaf0;
+}
+
+.section-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.section-heading h3 {
+  margin: 0;
+  color: #263348;
   font-size: 14px;
-  color: #6b7280;
+  letter-spacing: 0;
 }
 
-/* 展开信息弹窗 */
+.section-heading span {
+  color: #8a96a8;
+  font-size: 11px;
+}
+
+.detail-table-scroll {
+  overflow-x: auto;
+}
+
+.detail-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.detail-table th {
+  height: 39px;
+  padding: 0 8px;
+  color: #647086;
+  background: #f8fafb;
+  border-bottom: 1px solid #e5eaf0;
+  font-size: 11px;
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.detail-table td {
+  height: 50px;
+  padding: 6px 8px;
+  color: #3c485b;
+  border-bottom: 1px solid #edf1f5;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.detail-table th:nth-child(1) { width: 45px; text-align: center; }
+.detail-table .material-detail-column { width: auto; min-width: 120px; }
+.detail-table th:nth-child(3) { width: 90px; }
+.detail-table th:nth-child(4) { width: 50px; text-align: center; }
+.detail-table th:nth-child(5) { width: 55px; }
+.detail-table th:nth-child(6) { width: 65px; }
+.detail-table th:nth-child(7) { width: 75px; }
+.detail-table th:nth-child(8) { width: 85px; }
+.detail-table th:nth-child(9) { width: 95px; }
+
+.detail-table td:first-child {
+  text-align: center;
+}
+
+.detail-table td strong {
+  display: block;
+  overflow: hidden;
+  color: #283548;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-table tfoot {
+  background: #f8fafb;
+  font-weight: 600;
+}
+
+.detail-total-row td {
+  color: #111827;
+  border-top: 2px solid #e5eaf0;
+  border-bottom: none;
+  font-weight: 650;
+}
+
+.detail-total-label {
+  text-align: right !important;
+  color: #374151 !important;
+}
+
+.item-amount {
+  color: #263348 !important;
+  font-weight: 700;
+}
+
+.drawer-empty {
+  height: 150px !important;
+  color: #8a96a8 !important;
+  text-align: center;
+}
+
+/* 财务汇总详情 */
+.financial-summary-detail {
+  padding: 20px;
+}
+
+.financial-summary-detail .summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  font-size: 14px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.financial-summary-detail .summary-row:last-child {
+  border-bottom: none;
+}
+
+.financial-summary-detail .summary-label {
+  color: #6b7280;
+  font-weight: 500;
+}
+
+.financial-summary-detail .summary-value {
+  color: #111827;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.financial-summary-detail .summary-row.highlight {
+  padding: 12px 0;
+  margin: 8px 0;
+  background: #f9fafb;
+  padding: 12px 16px;
+  margin: 8px -4px;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+}
+
+.financial-summary-detail .summary-row.highlight .summary-label {
+  font-size: 15px;
+  color: #374151;
+  font-weight: 600;
+}
+
+.financial-summary-detail .summary-row.highlight .summary-value {
+  font-size: 16px;
+  color: var(--accent-dark);
+}
+
+.financial-summary-detail .summary-row.highlight.debt .summary-value {
+  color: #ef4444;
+}
+
+.drawer-footer {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  background: #fff;
+  border-top: 1px solid #dfe5ec;
+}
+
+.drawer-footer > div {
+  display: flex;
+  gap: 8px;
+}
+
+/* 抽屉动画 - 从左侧 */
+.drawer-left-enter-active,
+.drawer-left-leave-active {
+  transition: opacity 0.24s ease;
+}
+
+.drawer-left-enter-active .detail-drawer,
+.drawer-left-leave-active .detail-drawer {
+  transition: transform 0.28s ease;
+}
+
+.drawer-left-enter-from,
+.drawer-left-leave-to {
+  opacity: 0;
+}
+
+.drawer-left-enter-from .detail-drawer,
+.drawer-left-leave-to .detail-drawer {
+  transform: translateX(-100%);
+}
+
+/* 运费明细弹窗 */
 .expand-modal-overlay {
   position: fixed;
   top: 0;
@@ -2369,118 +2961,9 @@ const changePageSize = (size) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 99999 !important;
-  animation: fadeIn 0.2s ease;
+  z-index: 99999;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.expand-modal {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
-  max-width: 600px;
-  width: 90%;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.expand-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.expand-modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #1f2937;
-}
-
-.modal-close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: #9ca3af;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s;
-}
-
-.modal-close-btn:hover {
-  background: #f3f4f6;
-  color: #1f2937;
-}
-
-.expand-modal-body {
-  padding: 24px;
-  overflow-y: auto;
-  max-height: calc(80vh - 80px);
-}
-
-.expand-modal-body p {
-  margin: 0;
-  font-size: 15px;
-  line-height: 1.8;
-  color: #374151;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-/* 运费列样式 */
-.col-freight {
-  width: 100px;
-  text-align: center;
-}
-
-.freight-amount {
-  color: #1890ff;
-  font-weight: bold;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.2s;
-}
-
-.freight-amount:hover {
-  background: #e6f4ff;
-  text-decoration: underline;
-}
-
-.freight-empty {
-  color: #999;
-}
-
-/* 运费明细弹窗样式 */
 .freight-detail-modal {
   background: white;
   border-radius: 12px;
@@ -2504,6 +2987,27 @@ const changePageSize = (size) => {
   font-weight: bold;
   color: #333;
   margin: 0;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  color: #9ca3af;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.modal-close-btn:hover {
+  background: #f3f4f6;
+  color: #1f2937;
 }
 
 .freight-modal-body {
@@ -2568,185 +3072,9 @@ const changePageSize = (size) => {
 
 .freight-total {
   display: flex;
-}
-
-/* 商品明细弹窗样式 */
-.order-detail-modal {
-  background: #fff;
-  border-radius: 12px;
-  width: 90%;
-  max-width: 1200px;
-  max-height: 85vh;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  z-index: 100000 !important;
-  position: relative;
-}
-
-.order-detail-header {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid #e5e7eb;
-  background: #f9fafb;
-}
-
-.order-detail-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #111827;
-}
-
-.order-detail-body {
-  padding: 24px;
-  overflow-y: auto;
-  flex: 1;
-}
-
-.detail-section {
-  margin-bottom: 24px;
-}
-
-.detail-section h4 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #374151;
-  border-bottom: 2px solid #34d399;
-  padding-bottom: 8px;
-}
-
-.detail-row {
-  display: flex;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.detail-row:last-child {
-  border-bottom: none;
-}
-
-.detail-label {
-  min-width: 100px;
-  font-weight: 500;
-  color: #6b7280;
-  font-size: 14px;
-}
-
-.detail-value {
-  color: #111827;
-  font-size: 14px;
-}
-
-.detail-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 13px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  overflow: hidden;
-}
-
-.detail-table thead {
-  background: #f9fafb;
-}
-
-.detail-table th {
-  padding: 12px 8px;
-  text-align: center;
-  font-weight: 600;
-  color: #374151;
-  border-bottom: 2px solid #e5e7eb;
-  font-size: 13px;
-}
-
-.detail-table td {
-  padding: 10px 8px;
-  text-align: center;
-  border-bottom: 1px solid #f3f4f6;
-  color: #4b5563;
-}
-
-.detail-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.detail-table tbody tr:hover {
-  background: #f9fafb;
-}
-
-.detail-table tfoot {
-  background: #fef3c7;
-  font-weight: 600;
-}
-
-.detail-total-row td {
-  color: #111827;
-  border-top: 2px solid #f3d27a;
-  border-bottom: none;
-}
-
-.detail-total-label {
-  text-align: right !important;
-}
-
-.financial-summary {
-  background: #f9fafb;
-  padding: 20px;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  font-size: 14px;
-}
-
-.summary-label {
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.summary-value {
-  color: #111827;
-  font-weight: 600;
-}
-
-.summary-row.highlight {
-  padding: 12px 0;
+  padding-top: 12px;
   border-top: 2px solid #e5e7eb;
-  border-bottom: 2px solid #e5e7eb;
-  margin: 8px 0;
-}
-
-.summary-row.highlight .summary-label {
-  font-size: 15px;
-  color: #374151;
-  font-weight: 600;
-}
-
-.summary-row.highlight .summary-value {
-  font-size: 16px;
-  color: #34d399;
-}
-
-/* 商品列的查看明细按钮 */
-.detail-btn {
-  cursor: pointer;
-  font-size: 16px;
-  transition: transform 0.2s;
-}
-
-.detail-btn:hover {
-  transform: scale(1.2);
 }
 
 .total-label {
@@ -2759,5 +3087,21 @@ const changePageSize = (size) => {
   font-size: 20px;
   font-weight: bold;
   color: #1890ff;
+}
+
+@media (max-width: 1280px) {
+  .search-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 780px) {
+  .search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-drawer {
+    width: 100vw;
+  }
 }
 </style>
