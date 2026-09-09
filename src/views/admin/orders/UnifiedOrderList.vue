@@ -37,18 +37,32 @@
           </div>
         </div>
 
-        <label v-if="mode === 'logistics'" class="field-group">
+        <div v-if="mode === 'logistics'" class="field-group shipping-method-filter">
           <span>发货方式</span>
-          <input
-            v-model="shippingMethodInput"
-            type="search"
-            list="shipping-method-options"
-            placeholder="输入或选择发货方式"
-          />
-          <datalist id="shipping-method-options">
-            <option v-for="method in shippingMethods" :key="method" :value="method" />
-          </datalist>
-        </label>
+          <div class="multi-select-wrapper" @click.stop>
+            <div class="multi-select-trigger" @click="shippingDropdownOpen = !shippingDropdownOpen">
+              <span class="selected-text">{{ selectedShippingMethodText }}</span>
+              <svg class="dropdown-icon" :class="{ open: shippingDropdownOpen }" viewBox="0 0 24 24">
+                <path d="m6 9 6 6 6-6"></path>
+              </svg>
+            </div>
+            <div v-if="shippingDropdownOpen" class="multi-select-dropdown">
+              <label
+                v-for="method in shippingMethods"
+                :key="method"
+                class="dropdown-option"
+                @click.stop
+              >
+                <input
+                  type="checkbox"
+                  :checked="filters.shippingMethods.includes(method)"
+                  @change="toggleShippingMethod(method)"
+                />
+                <span>{{ method }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
 
         <div class="search-actions">
           <button class="button button-secondary" type="button" @click="handleReset">
@@ -973,11 +987,6 @@ const filters = ref({
 // 发货方式选项
 const shippingMethods = ['物流', '零担快运', '快递', '专车', '其它']
 const shippingDropdownOpen = ref(false)
-
-// 切换发货方式下拉框
-const toggleShippingDropdown = () => {
-  shippingDropdownOpen.value = !shippingDropdownOpen.value
-}
 
 // 切换发货方式选中状态
 const toggleShippingMethod = (method) => {
@@ -2060,6 +2069,89 @@ svg {
 .date-range > span {
   color: var(--text-muted);
   font-size: 12px;
+}
+
+/* 多选下拉框样式 */
+.multi-select-wrapper {
+  position: relative;
+}
+
+.multi-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 38px;
+  padding: 0 11px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.multi-select-trigger:hover {
+  border-color: var(--accent);
+}
+
+.multi-select-trigger .selected-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.multi-select-trigger .dropdown-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.multi-select-trigger .dropdown-icon.open {
+  transform: rotate(180deg);
+}
+
+.multi-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+}
+
+.dropdown-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.dropdown-option:hover {
+  background: var(--accent-soft);
+}
+
+.dropdown-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.dropdown-option span {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text);
 }
 
 .search-actions {
