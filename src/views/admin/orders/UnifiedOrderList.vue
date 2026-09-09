@@ -73,10 +73,10 @@
     <section class="records-panel">
       <header class="records-toolbar">
         <div class="toolbar-filters">
-          <!-- 门店分类标签 -->
-          <div class="material-type-tabs" role="tablist" aria-label="门店分类筛选">
+          <!-- 门店分类滑块 -->
+          <div class="material-type-slider" role="tablist" aria-label="门店分类筛选">
             <button
-              :class="['status-tab', { active: filters.category === '' }]"
+              :class="['slider-tab', { active: filters.category === '' }]"
               type="button"
               @click="filters.category = ''"
             >
@@ -85,12 +85,16 @@
             <button
               v-for="store in stores"
               :key="store.id"
-              :class="['status-tab', { active: filters.category === store.name + '订单' }]"
+              :class="['slider-tab', { active: filters.category === store.name + '订单' }]"
               type="button"
               @click="filters.category = store.name + '订单'"
             >
               {{ store.name }}订单
             </button>
+          </div>
+          <!-- 选中提示 -->
+          <div v-if="selectedOrders.length > 0" class="selection-count">
+            已选中 <strong>{{ selectedOrders.length }}</strong> 项
           </div>
         </div>
 
@@ -121,6 +125,23 @@
             </svg>
             {{ addButtonText }}
           </button>
+          <!-- 批量删除按钮 -->
+          <button
+            class="button button-delete"
+            :class="{ 'has-selection': selectedOrders.length > 0 }"
+            type="button"
+            :disabled="selectedOrders.length === 0"
+            @click="handleBatchDelete"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M3 6h18"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+            </svg>
+            批量删除
+          </button>
         </div>
       </header>
 
@@ -136,7 +157,7 @@
                   @change="toggleSelectAll"
                 />
               </th>
-              <th class="document-column">订单ID</th>
+              <th class="document-column">订单编号</th>
               <th>日期</th>
               <th>客户</th>
               <th>收货人</th>
@@ -203,7 +224,7 @@
               </td>
               <td>
                 <button class="document-link" type="button" @click.stop="openOrderDetail(order)">
-                  {{ order.id }}
+                  {{ order.order_number || order.id }}
                   <svg aria-hidden="true" viewBox="0 0 24 24">
                     <path d="m9 18 6-6-6-6"></path>
                   </svg>
@@ -2037,6 +2058,29 @@ svg {
   border-color: var(--accent-border);
 }
 
+/* 批量删除按钮 */
+.button-delete {
+  color: #9ca3af;
+  background: #f9fafb;
+  border-color: #e5e7eb;
+  cursor: not-allowed;
+  transition: all 0.2s ease;
+}
+
+.button-delete.has-selection {
+  color: #fff;
+  background: #ef4444;
+  border-color: #dc2626;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(239, 68, 68, 0.25);
+}
+
+.button-delete.has-selection:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #b91c1c;
+  box-shadow: 0 3px 8px rgba(239, 68, 68, 0.35);
+}
+
 /* 记录面板 */
 .records-panel {
   margin-top: 14px;
@@ -2064,35 +2108,57 @@ svg {
   gap: 10px;
 }
 
-.material-type-tabs {
+.material-type-slider {
   display: flex;
   align-items: center;
-  gap: 3px;
+  gap: 6px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.status-tab {
+.slider-tab {
   display: inline-flex;
-  height: 34px;
+  height: 36px;
   align-items: center;
   gap: 7px;
-  padding: 0 11px;
+  padding: 0 16px;
   color: var(--text-secondary);
   background: transparent;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
+  transition: all 0.2s ease;
 }
 
-.status-tab:hover {
+.slider-tab:hover {
   color: var(--accent-dark);
-  background: var(--accent-soft);
+  background: rgba(var(--accent-rgb), 0.1);
 }
 
-.status-tab.active {
+.slider-tab.active {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 2px 6px rgba(var(--accent-rgb), 0.3);
+}
+
+.selection-count {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.selection-count strong {
   color: var(--accent-dark);
-  background: var(--accent-soft);
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .toolbar-actions {
@@ -2178,14 +2244,31 @@ svg {
 }
 
 .record-row:hover {
-  background: rgba(var(--accent-rgb), 0.035);
+  background: rgba(var(--accent-rgb), 0.12);
 }
 
 .record-row.selected {
   background: rgba(var(--accent-rgb), 0.08);
 }
 
-.col-checkbox { width: 50px; text-align: center; }
+/* 增大复选框尺寸 */
+.records-table input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+
+.records-table thead input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+}
+
+.col-checkbox {
+  width: 50px;
+  text-align: center;
+  vertical-align: middle;
+}
 .document-column { width: 140px; }
 .records-table th:nth-child(3) { width: 110px; }
 .records-table th:nth-child(4) { width: 140px; }
