@@ -679,11 +679,10 @@
             </div>
 
             <footer class="detail-modal-footer">
-              <button class="button button-secondary" type="button" @click="closeDetailModal">关闭</button>
-              <div class="detail-modal-actions">
+              <div class="detail-modal-left-actions">
                 <button
                   v-if="mode === 'finance' && isSalesOrder(selectedOrder) && !isOrderAudited(selectedOrder)"
-                  class="button button-primary"
+                  class="button button-edit"
                   type="button"
                   @click="handleEditOrder(selectedOrder)"
                 >
@@ -698,6 +697,8 @@
                 >
                   删除
                 </button>
+              </div>
+              <div class="detail-modal-actions">
                 <button
                   v-if="mode === 'finance' && canAuditOrder(selectedOrder)"
                   class="button button-audit"
@@ -3008,6 +3009,12 @@ svg {
 
 /* 订单详情居中弹窗 */
 .detail-modal-layer {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --border-strong: #cbd5e1;
   position: fixed;
   inset: 0;
   display: flex;
@@ -3402,22 +3409,56 @@ svg {
   border-top: 1px solid #dfe5ec;
 }
 
+.detail-modal-left-actions,
 .detail-modal-actions {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
   gap: 8px;
+}
+
+.detail-modal-left-actions {
+  justify-content: flex-start;
+}
+
+.detail-modal-actions {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.button-edit {
+  color: #fff;
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.2);
+}
+
+.button-edit:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.detail-modal-actions .button-primary {
+  color: #fff;
+  background: var(--accent, #0f9f78);
+  border-color: var(--accent, #0f9f78);
+  box-shadow: 0 2px 5px rgba(15, 159, 120, 0.18);
+}
+
+.detail-modal-actions .button-primary:hover:not(:disabled) {
+  background: var(--accent-dark, #08745a);
+  border-color: var(--accent-dark, #08745a);
 }
 
 .button-audit {
   color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent, #0f9f78);
+  border-color: var(--accent, #0f9f78);
+  box-shadow: 0 2px 5px rgba(15, 159, 120, 0.18);
 }
 
 .button-audit:hover:not(:disabled) {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
+  background: var(--accent-dark, #08745a);
+  border-color: var(--accent-dark, #08745a);
 }
 
 .button-reverse-audit {
@@ -3627,12 +3668,13 @@ svg {
   }
 
   .detail-modal-footer {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-wrap: wrap;
   }
 
+  .detail-modal-left-actions,
   .detail-modal-actions {
-    width: 100%;
+    width: auto;
   }
 }
 </style>
