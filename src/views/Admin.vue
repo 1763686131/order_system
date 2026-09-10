@@ -103,11 +103,33 @@
           </div>
 
           <div class="header-icons">
-            <div class="icon-item notification">
-              <i class="bell-icon">🔔</i>
+            <button class="icon-btn" title="系统公告">
+              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
+                <path d="M2 17l10 5 10-5"/>
+                <path d="M2 12l10 5 10-5"/>
+              </svg>
+            </button>
+            <button class="icon-btn" title="审核通知">
+              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
               <span class="badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
-            </div>
+            </button>
+            <button class="icon-btn notification" title="留言消息">
+              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              <span class="badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
+            </button>
             <div class="user-info">
+              <div class="user-avatar">
+                <svg class="avatar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+              </div>
               <span class="user-name">{{ userStore.name || userStore.username || '用户' }}</span>
             </div>
             <button class="logout-btn" @click="logout">退出系统</button>
@@ -420,15 +442,29 @@ const logout = () => {
 
 <style scoped>
 .admin-container {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --page-bg: #f4f7f8;
+  --panel-bg: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+
   display: flex;
   height: 100vh;
   overflow: hidden;
-  background: #f5f7fa;
+  background: var(--page-bg);
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
+  color: var(--text);
+  font-size: 14px;
 }
 
 /* 侧边栏折叠状态 */
@@ -444,24 +480,25 @@ const logout = () => {
 /* 左侧边栏样式 */
 .sidebar {
   width: 240px;
-  background: #1e293b;
-  color: #fff;
+  background: #0f172a;
+  color: #f8fafc;
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 2px 0 8px rgba(15, 23, 42, 0.08);
   transition: width 0.3s ease;
 }
 
 .sidebar-header {
   padding: 20px;
-  background: #0f172a;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: #0B0E14;
+  border-bottom: 1px solid rgba(248, 250, 252, 0.08);
 }
 
 .system-name {
   font-size: 18px;
-  font-weight: bold;
-  color: #fff;
+  font-weight: 650;
+  color: #f8fafc;
+  letter-spacing: 0.3px;
 }
 
 .sidebar-nav {
@@ -481,15 +518,16 @@ const logout = () => {
 }
 
 .nav-item {
-  padding: 12px 16px;
+  padding: 11px 14px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s ease;
   color: #94a3b8;
   font-size: 14px;
-  border-radius: 8px;
+  font-weight: 500;
+  border-radius: 7px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 11px;
   position: relative;
   margin-bottom: 2px;
 }
@@ -499,9 +537,11 @@ const logout = () => {
 }
 
 .nav-icon {
-  font-size: 18px;
   width: 20px;
-  text-align: center;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
 }
 
@@ -515,11 +555,12 @@ const logout = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.3s;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
 }
 
 .nav-arrow svg {
-  transition: transform 0.3s;
+  transition: transform 0.2s ease;
 }
 
 .nav-arrow svg.rotated {
@@ -527,17 +568,17 @@ const logout = () => {
 }
 
 .nav-item:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 159, 120, 0.12);
   color: #e2e8f0;
 }
 
 .nav-item.active {
-  background: #3b82f6;
-  color: #fff;
+  background: var(--accent);
+  color: #ffffff;
 }
 
 .nav-item.expanded {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(248, 250, 252, 0.05);
   color: #e2e8f0;
 }
 
@@ -546,7 +587,7 @@ const logout = () => {
   list-style: none;
   padding: 4px 0;
   margin: 0;
-  animation: slideDown 0.3s ease;
+  animation: slideDown 0.2s ease;
 }
 
 @keyframes slideDown {
@@ -561,15 +602,16 @@ const logout = () => {
 }
 
 .nav-subitem {
-  padding: 10px 16px 10px 48px;
+  padding: 9px 14px 9px 45px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s ease;
   color: #94a3b8;
-  font-size: 14px;
-  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   margin-bottom: 2px;
 }
 
@@ -577,19 +619,20 @@ const logout = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
 }
 
 .nav-subitem:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(15, 159, 120, 0.1);
   color: #e2e8f0;
 }
 
 .nav-subitem.active {
-  background: #3b82f6;
-  color: #fff;
+  background: rgba(15, 159, 120, 0.2);
+  color: #4FD1C5;
+  font-weight: 600;
 }
 
 /* 右侧主体区域 */
@@ -602,20 +645,20 @@ const logout = () => {
 
 /* 顶部栏样式 */
 .top-header {
-  height: 60px;
-  background: #fff;
-  border-bottom: 1px solid #e5e7eb;
+  height: 62px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 24px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  padding: 0 20px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .header-left {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 18px;
 }
 
 .sidebar-toggle-btn {
@@ -624,56 +667,70 @@ const logout = () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.18s ease;
   padding: 0;
+  color: var(--text-secondary);
 }
 
 .sidebar-toggle-btn:hover {
-  background: #f3f4f6;
-  border-color: #d1d5db;
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-dark);
+}
+
+.sidebar-toggle-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .hamburger-icon {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  width: 18px;
+  gap: 3px;
+  width: 16px;
 }
 
 .hamburger-icon .line {
   width: 100%;
   height: 2px;
-  background-color: #374151;
+  background-color: currentColor;
   border-radius: 2px;
-  transition: all 0.3s;
+  transition: all 0.18s ease;
+}
+
+.arrow-icon {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .header-page-title {
-  font-size: 20px;
-  font-weight: 600;
-  color: #1f2937;
+  font-size: 18px;
+  font-weight: 650;
+  color: var(--text);
   margin: 0;
+  letter-spacing: 0.2px;
 }
 
 .header-right {
   display: flex;
   align-items: center;
-  gap: 20px;
+  gap: 16px;
 }
 
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
 .order-draft-shortcut {
   height: 36px;
-  padding: 0 14px;
+  padding: 0 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -681,17 +738,22 @@ const logout = () => {
   background: #fef2f2;
   color: #dc2626;
   border: 1px solid #fecaca;
-  border-radius: 6px;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
 }
 
 .order-draft-shortcut:hover {
   background: #fee2e2;
   border-color: #fca5a5;
   color: #b91c1c;
+}
+
+.order-draft-shortcut:focus-visible {
+  outline: 2px solid #dc2626;
+  outline-offset: 2px;
 }
 
 .order-draft-shortcut.is-edit {
@@ -712,122 +774,132 @@ const logout = () => {
 
 .order-draft-shortcut-label {
   white-space: nowrap;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
-  letter-spacing: 0.3px;
-}
-
-.header-tab {
-  padding: 8px 16px;
-  font-size: 14px;
-  color: #6b7280;
-  cursor: pointer;
-  border-radius: 6px;
-  transition: all 0.3s;
-}
-
-.header-tab:hover {
-  background: #f3f4f6;
-  color: #111827;
-}
-
-.header-tab.active {
-  background: #34d399;
-  color: #fff;
-  font-weight: 500;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.search-box input {
-  width: 280px;
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.3s;
-}
-
-.search-box input:focus {
-  border-color: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.1);
-}
-
-.search-btn {
-  height: 36px;
-  padding: 0 20px;
-  background: #34d399;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.search-btn:hover {
-  background: #10b981;
+  letter-spacing: 0.2px;
 }
 
 .header-icons {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-.icon-item {
+.icon-btn {
   position: relative;
-  cursor: pointer;
   width: 36px;
   height: 36px;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
-  transition: all 0.3s;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  padding: 0;
+  color: var(--text-secondary);
 }
 
-.icon-item:hover {
-  background: #f3f4f6;
+.icon-btn:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-dark);
 }
 
-.icon-item i {
-  font-size: 20px;
-  font-style: normal;
+.icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.icon-svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
 }
 
 .badge {
   position: absolute;
-  top: 2px;
-  right: 2px;
+  top: -4px;
+  right: -4px;
   background: #ef4444;
   color: #fff;
   font-size: 10px;
+  font-weight: 700;
   padding: 2px 5px;
-  border-radius: 10px;
-  min-width: 16px;
-  text-align: center;
+  border-radius: 999px;
+  min-width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.avatar-icon {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: var(--accent-dark);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
 }
 
 .logout-btn {
-  padding: 8px 16px;
-  background: #ef4444;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  height: 36px;
+  padding: 0 14px;
+  background: var(--panel-bg);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.3s;
+  transition: all 0.18s ease;
+  white-space: nowrap;
 }
 
 .logout-btn:hover {
-  background: #dc2626;
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #dc2626;
+}
+
+.logout-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* 主内容区 */
@@ -835,6 +907,56 @@ const logout = () => {
   flex: 1;
   padding: 20px;
   overflow-y: auto;
-  background: #f5f7fa;
+  background: var(--page-bg);
+}
+
+/* 响应式 */
+@media (max-width: 1280px) {
+  .header-page-title {
+    font-size: 16px;
+  }
+
+  .header-actions {
+    gap: 8px;
+  }
+}
+
+@media (max-width: 780px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    z-index: 1000;
+  }
+
+  .admin-container.sidebar-collapsed .sidebar {
+    width: 0;
+  }
+
+  .main-wrapper {
+    margin-left: 0;
+  }
+
+  .top-header {
+    padding: 0 12px;
+    gap: 10px;
+  }
+
+  .header-left {
+    gap: 12px;
+  }
+
+  .header-page-title {
+    font-size: 15px;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .main-content {
+    padding: 12px;
+  }
 }
 </style>

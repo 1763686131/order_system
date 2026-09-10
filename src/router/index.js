@@ -111,6 +111,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'settings',
+        name: 'admin-settings',
+        component: () => import('@/views/admin/system/Settings.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'finance/receivables',
         name: 'admin-finance-receivables',
         component: () => import('@/views/admin/finance/Receivables.vue'),
