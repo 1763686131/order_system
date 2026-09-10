@@ -140,7 +140,7 @@
               type="button"
               @click="filters.status = 'shipped'"
             >
-              已出库
+              已发货
               <span class="count-badge">{{ getStatusCount('shipped') }}</span>
             </button>
           </div>
@@ -375,7 +375,7 @@
                     </svg>
                   </button>
                   <button
-                    v-if="mode === 'finance' && isNewOrder(order) && order.status !== 'shipped'"
+                    v-if="mode === 'finance' && isNewOrder(order) && !isOrderAudited(order)"
                     type="button"
                     title="编辑订单"
                     @click="handleEditOrder(order)"
@@ -399,10 +399,10 @@
                     </svg>
                   </button>
                   <button
-                    v-if="mode === 'logistics' && order.audit_state !== 1"
+                    v-if="mode === 'logistics'"
                     type="button"
-                    title="录入物流信息"
-                    @click="handleShippingClick(order)"
+                    :title="hasLogistics(order) ? '修改物流信息' : '录入物流信息'"
+                    @click="handleLogisticsAction(order)"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24">
                       <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
@@ -461,19 +461,22 @@
       </footer>
     </section>
 
-    <!-- 订单详情抽屉 - 从左侧弹出 -->
+    <!-- 订单详情居中弹窗 -->
     <Teleport to="body">
-      <Transition name="drawer-left">
-        <div v-if="drawerOpen && selectedOrder" class="drawer-layer">
-          <div class="drawer-backdrop" @click="closeDrawer"></div>
-          <aside
-            class="detail-drawer drawer-left"
+      <Transition name="detail-modal">
+        <div v-if="detailModalOpen && selectedOrder" class="detail-modal-layer">
+          <div class="detail-modal-backdrop" @click="closeDetailModal"></div>
+          <section
+            class="detail-modal"
             role="dialog"
             aria-modal="true"
+            :aria-label="`${mode === 'logistics' ? '物流' : '订单'}详情`"
+            tabindex="-1"
+            @keydown.esc="closeDetailModal"
           >
-            <header class="drawer-header">
-              <div class="drawer-title-wrap">
-                <span class="drawer-mark" aria-hidden="true">
+            <header class="detail-modal-header">
+              <div class="detail-modal-title-wrap">
+                <span class="detail-modal-mark" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M5 3h11l3 3v15H5z"></path>
                     <path d="M16 3v4h4"></path>
@@ -481,19 +484,19 @@
                   </svg>
                 </span>
                 <div>
-                  <span>订单详情</span>
+                  <span>{{ mode === 'logistics' ? '物流详情' : '订单详情' }}</span>
                   <h2>{{ selectedOrder.order_number || selectedOrder.id }}</h2>
                 </div>
               </div>
-              <button class="drawer-close" type="button" @click="closeDrawer">
+              <button class="detail-modal-close" type="button" title="关闭" @click="closeDetailModal">
                 <svg aria-hidden="true" viewBox="0 0 24 24">
                   <path d="m6 6 12 12M18 6 6 18"></path>
                 </svg>
               </button>
             </header>
 
-            <div class="drawer-body">
-              <section class="drawer-overview">
+            <div class="detail-modal-body">
+              <section class="detail-modal-overview">
                 <div class="overview-head">
                   <span :class="['status-tag', getStatusClass(selectedOrder)]">
                     <i aria-hidden="true"></i>
@@ -574,7 +577,7 @@
                         <td class="money-column item-amount">{{ item.total_amount ? `¥${item.total_amount.toFixed(2)}` : '-' }}</td>
                       </tr>
                       <tr v-if="!selectedOrder.order_goods || selectedOrder.order_goods.length === 0">
-                        <td colspan="9" class="drawer-empty">暂无商品明细</td>
+                        <td colspan="9" class="detail-modal-empty">暂无商品明细</td>
                       </tr>
                     </tbody>
                     <tfoot v-if="selectedOrder.order_goods && selectedOrder.order_goods.length > 0">
@@ -674,16 +677,34 @@
               </section>
             </div>
 
-            <footer class="drawer-footer">
-              <button class="button button-secondary" type="button" @click="closeDrawer">关闭</button>
-              <div>
+            <footer class="detail-modal-footer">
+              <button class="button button-secondary" type="button" @click="closeDetailModal">关闭</button>
+              <div class="detail-modal-actions">
                 <button
-                  v-if="mode === 'finance' && isNewOrder(selectedOrder) && selectedOrder.status !== 'shipped'"
+                  v-if="mode === 'finance' && isNewOrder(selectedOrder) && !isOrderAudited(selectedOrder)"
                   class="button button-primary"
                   type="button"
                   @click="handleEditOrder(selectedOrder)"
                 >
-                  编辑订单
+                  修改
+                </button>
+                <button
+                  v-if="mode === 'finance' && canAuditOrder(selectedOrder)"
+                  class="button button-audit"
+                  type="button"
+                  :disabled="orderActionLoading !== ''"
+                  @click="handleAuditOrder(selectedOrder)"
+                >
+                  {{ orderActionLoading === 'audit' ? '审核中...' : '审核' }}
+                </button>
+                <button
+                  v-if="mode === 'finance' && isOrderAudited(selectedOrder)"
+                  class="button button-reverse-audit"
+                  type="button"
+                  :disabled="orderActionLoading !== ''"
+                  @click="handleReverseAuditOrder(selectedOrder)"
+                >
+                  {{ orderActionLoading === 'reverse-audit' ? '反审核中...' : '反审核' }}
                 </button>
                 <button
                   v-if="mode === 'finance' && selectedOrder.status === 'completed'"
@@ -693,9 +714,25 @@
                 >
                   出库发货
                 </button>
+                <button
+                  v-if="mode === 'logistics' && !hasLogistics(selectedOrder)"
+                  class="button button-primary"
+                  type="button"
+                  @click="handleShippingClick(selectedOrder)"
+                >
+                  录入物流
+                </button>
+                <button
+                  v-if="mode === 'logistics' && hasLogistics(selectedOrder)"
+                  class="button button-primary"
+                  type="button"
+                  @click="handleEdit(selectedOrder)"
+                >
+                  修改物流
+                </button>
               </div>
             </footer>
-          </aside>
+          </section>
         </div>
       </Transition>
     </Teleport>
@@ -897,9 +934,10 @@ const loading = ref(false)
 const stores = ref([])
 const products = ref([]) // 商品列表，用于反查商品名称
 
-// 抽屉状态
-const drawerOpen = ref(false)
+// 详情弹窗状态
+const detailModalOpen = ref(false)
 const selectedOrder = ref(null)
+const orderActionLoading = ref('')
 
 // 发货方式输入
 const shippingMethodInput = ref('')
@@ -1457,16 +1495,17 @@ const calculateTaxAmount = (order) => {
 const orderDetailVisible = ref(false)
 const currentDetailOrder = ref(null)
 
-// 打开订单详情抽屉
+// 打开订单详情弹窗
 const openOrderDetail = (order) => {
   selectedOrder.value = order
-  drawerOpen.value = true
+  detailModalOpen.value = true
 }
 
-// 关闭抽屉
-const closeDrawer = () => {
-  drawerOpen.value = false
+// 关闭详情弹窗
+const closeDetailModal = () => {
+  detailModalOpen.value = false
   selectedOrder.value = null
+  orderActionLoading.value = ''
 }
 
 // 显示商品明细弹窗
@@ -1561,7 +1600,9 @@ const handleAdd = () => {
 }
 
 const handleEdit = (order) => {
-  // 物流模式：触发打开已出库订单管理弹窗，模式为编辑
+  // 物流模式：沿用原有物流修改功能
+  orderStore.allOrders = orders.value
+  closeDetailModal()
   window.dispatchEvent(new CustomEvent('open-shipped-action-modal', {
     detail: { orderId: order.id, mode: 'edit' }
   }))
@@ -1569,6 +1610,7 @@ const handleEdit = (order) => {
 
 // 编辑订单（跳转到编辑页面）
 const handleEditOrder = (order) => {
+  closeDetailModal()
   openOrderTask({ name: 'admin-orders-edit', params: { id: order.id } })
 }
 
@@ -1692,10 +1734,62 @@ const handleReceiptClick = (order) => {
 const handleShippingClick = (order) => {
   // 更新 orderStore 数据
   orderStore.allOrders = orders.value
+  closeDetailModal()
 
-  // 打开审核弹窗（填写物流单号）
-  window.triggerShippedActionModal(order.id, 'audit')
+  // 物流录入与订单审核相互独立
+  window.triggerShippedActionModal(order.id, 'entry')
 }
+
+const handleLogisticsAction = (order) => {
+  if (hasLogistics(order)) {
+    handleEdit(order)
+    return
+  }
+  handleShippingClick(order)
+}
+
+const isOrderAudited = (order) => Number(order?.audit_state) === 1
+
+const canAuditOrder = (order) => {
+  return order?.status === 'shipped' && !isOrderAudited(order)
+}
+
+const updateOrderAuditState = async (order, audited) => {
+  if (!order || order.status !== 'shipped') return
+
+  const actionLabel = audited ? '审核' : '反审核'
+  const nextStatusLabel = audited ? '已过帐' : '已发货'
+  if (!window.confirm(`确定要${actionLabel}订单 ${order.order_number || order.id} 吗？`)) {
+    return
+  }
+
+  orderActionLoading.value = audited ? 'audit' : 'reverse-audit'
+  try {
+    await request({
+      url: `/orders/${order.id}`,
+      method: 'PUT',
+      data: {
+        status: 'shipped',
+        audit_state: audited ? 1 : 0
+      }
+    })
+
+    await fetchOrdersData()
+    selectedOrder.value = orders.value.find(item => item.id === order.id) || {
+      ...order,
+      audit_state: audited ? 1 : 0
+    }
+    window.alert(`${actionLabel}成功，订单状态已更新为${nextStatusLabel}`)
+  } catch (error) {
+    console.error(`${actionLabel}订单失败:`, error)
+    window.alert(error?.response?.data?.message || `${actionLabel}失败，请稍后重试`)
+  } finally {
+    orderActionLoading.value = ''
+  }
+}
+
+const handleAuditOrder = (order) => updateOrderAuditState(order, true)
+const handleReverseAuditOrder = (order) => updateOrderAuditState(order, false)
 
 // 点击发货方式标签 - 上传回单
 const handleShippingTagClick = (order) => {
@@ -1790,10 +1884,10 @@ const toggleSort = () => {
 
 // 获取订单状态文本
 const getStatusText = (order) => {
-  if (order.status === 'shipped' && order.audit_state === 1) {
-    return '已发货'
+  if (order.status === 'shipped' && isOrderAudited(order)) {
+    return '已过帐'
   } else if (order.status === 'shipped') {
-    return '已出库'
+    return '已发货'
   } else if (order.status === 'completed') {
     return '已完成'
   } else {
@@ -1803,10 +1897,10 @@ const getStatusText = (order) => {
 
 // 获取订单状态样式类
 const getStatusClass = (order) => {
-  if (order.status === 'shipped' && order.audit_state === 1) {
-    return 'status-shipped'
+  if (order.status === 'shipped' && isOrderAudited(order)) {
+    return 'status-posted'
   } else if (order.status === 'shipped') {
-    return 'status-out'
+    return 'status-shipped'
   } else if (order.status === 'completed') {
     return 'status-completed'
   } else {
@@ -2856,41 +2950,40 @@ svg {
   font-variant-numeric: tabular-nums;
 }
 
-/* 抽屉 - 从左侧弹出 */
-.drawer-layer {
+/* 订单详情居中弹窗 */
+.detail-modal-layer {
   position: fixed;
   inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
   z-index: 2147482000;
 }
 
-.drawer-backdrop {
+.detail-modal-backdrop {
   position: absolute;
   inset: 0;
   background: rgba(15, 23, 42, 0.42);
   backdrop-filter: blur(1px);
 }
 
-.detail-drawer {
-  position: absolute;
-  top: 0;
-  right: 0;
+.detail-modal {
+  position: relative;
   display: flex;
-  width: min(820px, 88vw);
-  height: 100%;
+  width: min(960px, calc(100vw - 48px));
+  max-height: min(880px, calc(100vh - 48px));
   flex-direction: column;
   overflow: hidden;
   color: #172033;
   background: #f4f7f9;
-  box-shadow: 18px 0 55px rgba(15, 23, 42, 0.2);
+  border: 1px solid #dfe5ec;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  outline: none;
 }
 
-.drawer-left {
-  right: auto;
-  left: 0;
-  box-shadow: 18px 0 55px rgba(15, 23, 42, 0.2);
-}
-
-.drawer-header {
+.detail-modal-header {
   display: flex;
   min-height: 78px;
   align-items: center;
@@ -2901,14 +2994,14 @@ svg {
   border-bottom: 1px solid #dfe5ec;
 }
 
-.drawer-title-wrap {
+.detail-modal-title-wrap {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 12px;
 }
 
-.drawer-mark {
+.detail-modal-mark {
   display: inline-flex;
   width: 40px;
   height: 40px;
@@ -2920,22 +3013,22 @@ svg {
   border-radius: 7px;
 }
 
-.drawer-mark svg {
+.detail-modal-mark svg {
   width: 21px;
   height: 21px;
 }
 
-.drawer-title-wrap > div {
+.detail-modal-title-wrap > div {
   min-width: 0;
 }
 
-.drawer-title-wrap span:not(.drawer-mark) {
+.detail-modal-title-wrap span:not(.detail-modal-mark) {
   color: #758195;
   font-size: 11px;
   font-weight: 600;
 }
 
-.drawer-title-wrap h2 {
+.detail-modal-title-wrap h2 {
   margin: 3px 0 0;
   overflow: hidden;
   color: #172033;
@@ -2945,7 +3038,7 @@ svg {
   white-space: nowrap;
 }
 
-.drawer-close {
+.detail-modal-close {
   display: inline-flex;
   width: 34px;
   height: 34px;
@@ -2959,30 +3052,30 @@ svg {
   cursor: pointer;
 }
 
-.drawer-close:hover {
+.detail-modal-close:hover {
   color: #273245;
   background: #f0f3f6;
 }
 
-.drawer-close svg {
+.detail-modal-close svg {
   width: 20px;
   height: 20px;
 }
 
-.drawer-body {
+.detail-modal-body {
   flex: 1;
   overflow-y: auto;
   padding: 18px;
 }
 
-.drawer-overview,
+.detail-modal-overview,
 .detail-section {
   background: #fff;
   border: 1px solid #dfe5ec;
   border-radius: 7px;
 }
 
-.drawer-overview {
+.detail-modal-overview {
   padding: 17px;
 }
 
@@ -3182,7 +3275,7 @@ svg {
   font-weight: 700;
 }
 
-.drawer-empty {
+.detail-modal-empty {
   height: 150px !important;
   color: #8a96a8 !important;
   text-align: center;
@@ -3242,7 +3335,7 @@ svg {
   color: #ef4444;
 }
 
-.drawer-footer {
+.detail-modal-footer {
   display: flex;
   min-height: 68px;
   align-items: center;
@@ -3253,30 +3346,55 @@ svg {
   border-top: 1px solid #dfe5ec;
 }
 
-.drawer-footer > div {
+.detail-modal-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
-/* 抽屉动画 - 从左侧 */
-.drawer-left-enter-active,
-.drawer-left-leave-active {
-  transition: opacity 0.24s ease;
+.button-audit {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
-.drawer-left-enter-active .detail-drawer,
-.drawer-left-leave-active .detail-drawer {
-  transition: transform 0.28s ease;
+.button-audit:hover:not(:disabled) {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
 }
 
-.drawer-left-enter-from,
-.drawer-left-leave-to {
+.button-reverse-audit {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #f5cf83;
+}
+
+.button-reverse-audit:hover:not(:disabled) {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #e7b95a;
+}
+
+.detail-modal-enter-active,
+.detail-modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.detail-modal-enter-active .detail-modal,
+.detail-modal-leave-active .detail-modal {
+  transition: transform 0.22s ease, opacity 0.2s ease;
+}
+
+.detail-modal-enter-from,
+.detail-modal-leave-to {
   opacity: 0;
 }
 
-.drawer-left-enter-from .detail-drawer,
-.drawer-left-leave-to .detail-drawer {
-  transform: translateX(-100%);
+.detail-modal-enter-from .detail-modal,
+.detail-modal-leave-to .detail-modal {
+  opacity: 0;
+  transform: translateY(12px) scale(0.985);
 }
 
 /* 运费明细弹窗 */
@@ -3429,8 +3547,24 @@ svg {
     grid-template-columns: 1fr;
   }
 
-  .detail-drawer {
+  .detail-modal-layer {
+    padding: 0;
+  }
+
+  .detail-modal {
     width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .detail-modal-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .detail-modal-actions {
+    width: 100%;
   }
 }
 </style>

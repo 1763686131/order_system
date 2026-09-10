@@ -216,7 +216,7 @@
         <div class="modal-btn-group" style="display: flex; gap: 12px; justify-content: center; margin-top: 24px; width: 100%;">
           <button id="btnAuditRevoke" @click="submitRevokeShipOrder">撤销出库</button>
           <button id="btnAuditConfirm" @click="submitAuditShipOrder">确认审核</button>
-          <button id="btnEditConfirm" @click="submitEditShipOrder" style="display: none;">修改完成</button>
+          <button id="btnEditConfirm" @click="submitEditShipOrder" style="display: none;">{{ logisticsSubmitText }}</button>
           <button id="btnReceiptDelete" @click="clearReceiptImage">清除图片</button>
           <button id="btnReceiptUpload" @click="submitReceiptImage">确认上传</button>
           <button id="btnRealDeleteReceipt" @click="deleteRealReceiptImage">删除凭证</button>
@@ -268,6 +268,7 @@ const visible = ref(false)
 const targetOrderId = ref(null)
 const modalTitle = ref('已出库订单管理')
 const modalSubtitle = ref('请选择对当前出库订单的操作指令')
+const logisticsSubmitText = ref('修改完成')
 
 // 当前订单信息（客户名称和发货方式）
 const currentOrderInfo = ref({
@@ -584,10 +585,12 @@ const open = (orderId, mode) => {
         }
       }
     }
-    // 状态 B：进入【编辑模式】
-    else if (mode === 'edit') {
-      modalTitle.value = '修改物流与运费信息'
-      modalSubtitle.value = '修改物流单号和运费信息'
+    // 状态 B：进入【物流录入 / 编辑模式】
+    else if (mode === 'entry' || mode === 'edit') {
+      const isEntryMode = mode === 'entry'
+      modalTitle.value = isEntryMode ? '录入物流与运费信息' : '修改物流与运费信息'
+      modalSubtitle.value = isEntryMode ? '录入物流单号和运费信息' : '修改物流单号和运费信息'
+      logisticsSubmitText.value = isEntryMode ? '录入完成' : '修改完成'
 
       auditContentEl.style.display = 'block'
       receiptContentEl.style.display = 'none'
@@ -886,7 +889,8 @@ const submitEditShipOrder = async () => {
         freight_costs: freightData
       }
     })
-    showMessage('物流与运费信息修改成功！', 'success')
+    const actionText = logisticsSubmitText.value === '录入完成' ? '录入' : '修改'
+    showMessage(`物流与运费信息${actionText}成功！`, 'success')
     closeShippedActionModal()
     emit('refresh')
   } catch (e) {
