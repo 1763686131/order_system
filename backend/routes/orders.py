@@ -413,6 +413,14 @@ def update_order_status_only(order_id, req_data):
         if x['id'] == order_id:
             # 新结构订单的审核状态独立于履约状态，审核/反审核不应改变发货进度。
             if 'audit_state' in req_data and 'status' not in req_data:
+                if (
+                    not str(x.get('order_number') or '').strip()
+                    or not isinstance(x.get('order_goods'), list)
+                    or not x.get('order_goods')
+                ):
+                    return jsonify({"success": False, "message": "旧结构订单不支持销售单审核"}), 409
+                if x.get('status') != 'shipped':
+                    return jsonify({"success": False, "message": "只有已发货销售订单可以审核或反审核"}), 409
                 x['audit_state'] = 1 if req_data.get('audit_state') else 0
                 changed_order = dict(x)
                 break
@@ -492,6 +500,8 @@ def update_full_order(order_id, req_data):
             return jsonify({"success": False, "message": "订单不存在"}), 404
 
         old_order = orders_list[order_index]
+        if old_order.get('audit_state') == 1:
+            return jsonify({"success": False, "message": "已过账单据不可修改，请先反审核"}), 409
 
         # 读取客户数据
         customers_data = read_customers()
@@ -651,12 +661,22 @@ def delete_order(order_id):
 
     with get_db() as conn:
         target_row = conn.execute(
-            'SELECT id, status, order_goods FROM orders WHERE id = ?',
+            'SELECT id, status, audit_state, order_number, order_goods FROM orders WHERE id = ?',
             (order_id,)
         ).fetchone()
 
     if not target_row:
         return jsonify({"success": False, "message": "找不到订单"}), 404
+
+    try:
+        order_goods = json.loads(target_row['order_goods'] or '[]')
+    except (TypeError, ValueError):
+        order_goods = []
+    if not isinstance(order_goods, list):
+        order_goods = []
+
+    if target_row['order_number'] and order_goods and target_row['audit_state'] == 1:
+        return jsonify({"success": False, "message": "已过账单据不可删除，请先反审核"}), 409
 
     needed_perm = (
         'completed.delete'
@@ -675,13 +695,6 @@ def delete_order(order_id):
 
     if not has_p:
         return jsonify({"success": False, "message": "底层权限不足，拦截删除操作"}), 403
-
-    try:
-        order_goods = json.loads(target_row['order_goods'] or '[]')
-    except (TypeError, ValueError):
-        order_goods = []
-    if not isinstance(order_goods, list):
-        order_goods = []
 
     with orders_lock:
         with get_db() as conn:

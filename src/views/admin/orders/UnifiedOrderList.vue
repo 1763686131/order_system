@@ -286,6 +286,8 @@
                 <input
                   type="checkbox"
                   :checked="isSelected(order.id)"
+                  :disabled="isSalesOrderLocked(order)"
+                  :title="isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
                   @change="toggleSelect(order.id)"
                 />
               </td>
@@ -374,7 +376,7 @@
                     </svg>
                   </button>
                   <button
-                    v-if="mode === 'finance' && isNewOrder(order) && !isOrderAudited(order)"
+                    v-if="mode === 'finance' && isSalesOrder(order) && !isOrderAudited(order)"
                     type="button"
                     title="编辑订单"
                     @click="handleEditOrder(order)"
@@ -680,12 +682,21 @@
               <button class="button button-secondary" type="button" @click="closeDetailModal">关闭</button>
               <div class="detail-modal-actions">
                 <button
-                  v-if="mode === 'finance' && isNewOrder(selectedOrder) && !isOrderAudited(selectedOrder)"
+                  v-if="mode === 'finance' && isSalesOrder(selectedOrder) && !isOrderAudited(selectedOrder)"
                   class="button button-primary"
                   type="button"
                   @click="handleEditOrder(selectedOrder)"
                 >
                   修改
+                </button>
+                <button
+                  v-if="mode === 'finance' && canDeleteOrder(selectedOrder)"
+                  class="button button-danger-light"
+                  type="button"
+                  :disabled="orderActionLoading !== ''"
+                  @click="handleDelete(selectedOrder)"
+                >
+                  删除
                 </button>
                 <button
                   v-if="mode === 'finance' && canAuditOrder(selectedOrder)"
@@ -1304,15 +1315,17 @@ const pageStart = computed(() => filteredOrders.value.length ? (currentPage.valu
 const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredOrders.value.length))
 
 const isAllSelected = computed(() => {
-  return paginatedOrders.value.length > 0 &&
-    paginatedOrders.value.every(order => selectedOrders.value.includes(order.id))
+  const deletableOrders = paginatedOrders.value.filter(canDeleteOrder)
+  return deletableOrders.length > 0 &&
+    deletableOrders.every(order => selectedOrders.value.includes(order.id))
 })
 
 const isPagePartiallySelected = computed(() => {
-  const selectedCount = paginatedOrders.value.filter(order =>
+  const deletableOrders = paginatedOrders.value.filter(canDeleteOrder)
+  const selectedCount = deletableOrders.filter(order =>
     selectedOrders.value.includes(order.id)
   ).length
-  return selectedCount > 0 && selectedCount < paginatedOrders.value.length
+  return selectedCount > 0 && selectedCount < deletableOrders.length
 })
 
 // 计算当前页运费总额
@@ -1426,8 +1439,17 @@ const getCurrentDebt = (order) => {
 
 // 判断是否为新订单（有商品明细）
 const isNewOrder = (order) => {
-  return order.order_goods && order.order_goods.length > 0
+  return Array.isArray(order?.order_goods) && order.order_goods.length > 0
 }
+
+// 新销售订单同时具备规范订单编号和商品明细，旧兼容数据不进入审核流程。
+const isSalesOrder = (order) => {
+  return Boolean(String(order?.order_number || '').trim()) && isNewOrder(order)
+}
+
+const isOrderAudited = (order) => Number(order?.audit_state) === 1
+const isSalesOrderLocked = (order) => isSalesOrder(order) && isOrderAudited(order)
+const canDeleteOrder = (order) => !isSalesOrderLocked(order)
 
 // 根据 product_id 查找商品名称
 const getProductNameById = (productId) => {
@@ -1535,6 +1557,12 @@ const closeOrderDetail = () => {
 // ========== 原有方法 ==========
 
 const toggleSelect = (orderId) => {
+  const order = orders.value.find(item => item.id === orderId)
+  if (isSalesOrderLocked(order)) {
+    window.alert('已过账单据不可删除，请先反审核')
+    return
+  }
+
   const index = selectedOrders.value.indexOf(orderId)
   if (index > -1) {
     selectedOrders.value.splice(index, 1)
@@ -1544,7 +1572,9 @@ const toggleSelect = (orderId) => {
 }
 
 const toggleSelectAll = () => {
-  const currentPageIds = paginatedOrders.value.map(order => order.id)
+  const currentPageIds = paginatedOrders.value
+    .filter(canDeleteOrder)
+    .map(order => order.id)
 
   if (isAllSelected.value) {
     selectedOrders.value = selectedOrders.value.filter(
@@ -1755,18 +1785,20 @@ const handleLogisticsAction = (order) => {
   handleShippingClick(order)
 }
 
-const isOrderAudited = (order) => Number(order?.audit_state) === 1
-
 const canAuditOrder = (order) => {
-  return isNewOrder(order) && !isOrderAudited(order)
+  return isSalesOrder(order) &&
+    order?.status === 'shipped' &&
+    !isOrderAudited(order)
 }
 
 const canReverseAuditOrder = (order) => {
-  return isNewOrder(order) && isOrderAudited(order)
+  return isSalesOrder(order) &&
+    order?.status === 'shipped' &&
+    isOrderAudited(order)
 }
 
 const updateOrderAuditState = async (order, audited) => {
-  if (!isNewOrder(order)) return
+  if (!isSalesOrder(order) || order.status !== 'shipped') return
 
   const actionLabel = audited ? '审核' : '反审核'
   const nextStatusLabel = audited ? '已过帐' : getStatusText({ ...order, audit_state: 0 })
@@ -1788,6 +1820,9 @@ const updateOrderAuditState = async (order, audited) => {
     selectedOrder.value = orders.value.find(item => item.id === order.id) || {
       ...order,
       audit_state: audited ? 1 : 0
+    }
+    if (audited) {
+      selectedOrders.value = selectedOrders.value.filter(id => id !== order.id)
     }
     window.alert(`${actionLabel}成功，订单状态已更新为${nextStatusLabel}`)
   } catch (error) {
@@ -1938,8 +1973,13 @@ const handleViewReceipt = (order) => {
 }
 
 const handleDelete = async (order) => {
+  if (isSalesOrderLocked(order)) {
+    window.alert('已过账单据不可删除，请先反审核')
+    return
+  }
+
   // 判断是否为新订单
-  const isNew = order.order_goods && order.order_goods.length > 0
+  const isNew = isNewOrder(order)
 
   // 显示提示信息
   let confirmMsg = `确定要删除订单 ${order.id} 吗？`
@@ -1954,10 +1994,12 @@ const handleDelete = async (order) => {
         method: 'DELETE'
       })
       alert('删除成功' + (isNew ? '，库存已恢复' : ''))
+      closeDetailModal()
+      selectedOrders.value = selectedOrders.value.filter(id => id !== order.id)
       await fetchOrdersData()
     } catch (error) {
       console.error('删除失败:', error)
-      alert('删除失败：' + (error.message || '未知错误'))
+      alert('删除失败：' + (error?.response?.data?.message || error.message || '未知错误'))
     }
   }
 }
@@ -1970,6 +2012,12 @@ const handleBatchDelete = async () => {
 
   // 统计新旧订单数量
   const selectedOrdersData = orders.value.filter(o => selectedOrders.value.includes(o.id))
+  const lockedOrders = selectedOrdersData.filter(isSalesOrderLocked)
+  if (lockedOrders.length > 0) {
+    alert(`选中的订单中有 ${lockedOrders.length} 个已过账单据，请先反审核`)
+    return
+  }
+
   const newOrdersCount = selectedOrdersData.filter(o => o.order_goods && o.order_goods.length > 0).length
   const oldOrdersCount = selectedOrders.value.length - newOrdersCount
 
@@ -2712,10 +2760,16 @@ svg {
   border-radius: 50%;
 }
 
-.status-posted,
+.status-posted {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border: 1px solid #93c5fd;
+}
+
 .status-shipped {
   color: #13734f;
   background: #eaf8f1;
+  border: 1px solid #a7e2c9;
 }
 
 .status-reviewed,
@@ -3376,6 +3430,18 @@ svg {
   color: #92400e;
   background: #fef3c7;
   border-color: #e7b95a;
+}
+
+.button-danger-light {
+  color: #b4232f;
+  background: #fff;
+  border-color: #efb5ba;
+}
+
+.button-danger-light:hover:not(:disabled) {
+  color: #fff;
+  background: #dc3545;
+  border-color: #c92f3e;
 }
 
 .detail-modal-enter-active,
