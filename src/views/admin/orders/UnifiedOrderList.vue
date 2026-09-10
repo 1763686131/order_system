@@ -532,12 +532,6 @@
                   </div>
                 </dl>
 
-                <!-- 财务汇总 -->
-                <div v-if="mode === 'finance' && isNewOrder(selectedOrder)" class="summary-strip">
-                  <div><span>应收金额</span><strong>{{ getShouldReceive(selectedOrder) }}</strong></div>
-                  <div><span>已收金额</span><strong>{{ getCurrentPayment(selectedOrder) }}</strong></div>
-                  <div><span>未收金额</span><strong>{{ getCurrentDebt(selectedOrder) }}</strong></div>
-                </div>
               </section>
 
               <!-- 商品明细 -->
@@ -549,7 +543,7 @@
                   </div>
                 </div>
                 <div class="detail-table-scroll">
-                  <table class="detail-table">
+                  <table class="detail-table order-goods-table">
                     <thead>
                       <tr>
                         <th>序号</th>
@@ -560,6 +554,8 @@
                         <th class="number-column">数量</th>
                         <th class="number-column">单价</th>
                         <th class="money-column">金额</th>
+                        <th class="number-column">税率</th>
+                        <th class="money-column">税额</th>
                         <th class="money-column">含税金额</th>
                       </tr>
                     </thead>
@@ -575,10 +571,12 @@
                         <td class="number-column numeric">{{ item.quantity || '-' }}</td>
                         <td class="number-column numeric">{{ item.price ? `¥${item.price.toFixed(2)}` : '-' }}</td>
                         <td class="money-column item-amount">{{ item.amount ? `¥${item.amount.toFixed(2)}` : '-' }}</td>
+                        <td class="number-column numeric">{{ formatItemTaxRate(item) }}</td>
+                        <td class="money-column numeric">¥{{ calculateItemTaxAmount(item) }}</td>
                         <td class="money-column item-amount">{{ item.total_amount ? `¥${item.total_amount.toFixed(2)}` : '-' }}</td>
                       </tr>
                       <tr v-if="!selectedOrder.order_goods || selectedOrder.order_goods.length === 0">
-                        <td colspan="9" class="detail-modal-empty">暂无商品明细</td>
+                        <td colspan="11" class="detail-modal-empty">暂无商品明细</td>
                       </tr>
                     </tbody>
                     <tfoot v-if="selectedOrder.order_goods && selectedOrder.order_goods.length > 0">
@@ -588,6 +586,8 @@
                         <td class="number-column numeric">{{ calculateTotalQuantity(selectedOrder) }}</td>
                         <td></td>
                         <td class="money-column item-amount">¥{{ calculateSubtotal(selectedOrder) }}</td>
+                        <td></td>
+                        <td class="money-column item-amount">¥{{ calculateTaxAmount(selectedOrder) }}</td>
                         <td class="money-column item-amount">¥{{ calculateTotalAmount(selectedOrder) }}</td>
                       </tr>
                     </tfoot>
@@ -595,46 +595,17 @@
                 </div>
               </section>
 
-              <!-- 财务汇总详情 -->
+              <!-- 财务信息 -->
               <section v-if="mode === 'finance' && isNewOrder(selectedOrder)" class="detail-section">
                 <div class="section-heading">
                   <div>
                     <h3>财务信息</h3>
                   </div>
                 </div>
-                <div class="financial-summary-detail">
-                  <div class="summary-row">
-                    <span class="summary-label">小计（不含税）：</span>
-                    <span class="summary-value">¥{{ calculateSubtotal(selectedOrder) }}</span>
-                  </div>
-                  <div class="summary-row">
-                    <span class="summary-label">税额：</span>
-                    <span class="summary-value">¥{{ calculateTaxAmount(selectedOrder) }}</span>
-                  </div>
-                  <div class="summary-row highlight">
-                    <span class="summary-label">价税合计：</span>
-                    <span class="summary-value">¥{{ calculateTotalAmount(selectedOrder) }}</span>
-                  </div>
-                  <div v-if="selectedOrder.discount_amount" class="summary-row">
-                    <span class="summary-label">折扣金额：</span>
-                    <span class="summary-value">¥{{ (selectedOrder.discount_amount || 0).toFixed(2) }}</span>
-                  </div>
-                  <div v-if="selectedOrder.other_fees" class="summary-row">
-                    <span class="summary-label">其他费用：</span>
-                    <span class="summary-value">¥{{ (selectedOrder.other_fees || 0).toFixed(2) }}</span>
-                  </div>
-                  <div class="summary-row highlight">
-                    <span class="summary-label">本单应收：</span>
-                    <span class="summary-value">¥{{ (selectedOrder.should_receive || 0).toFixed(2) }}</span>
-                  </div>
-                  <div class="summary-row">
-                    <span class="summary-label">本次收款：</span>
-                    <span class="summary-value">¥{{ (selectedOrder.current_payment || 0).toFixed(2) }}</span>
-                  </div>
-                  <div class="summary-row highlight debt">
-                    <span class="summary-label">本单欠款：</span>
-                    <span class="summary-value">¥{{ (selectedOrder.current_debt || 0).toFixed(2) }}</span>
-                  </div>
+                <div class="summary-strip financial-summary-strip">
+                  <div><span>应收金额</span><strong>{{ getShouldReceive(selectedOrder) }}</strong></div>
+                  <div><span>已收金额</span><strong>{{ getCurrentPayment(selectedOrder) }}</strong></div>
+                  <div><span>未收金额</span><strong>{{ getCurrentDebt(selectedOrder) }}</strong></div>
                 </div>
               </section>
 
@@ -1508,16 +1479,26 @@ const calculateTotalAmount = (order) => {
   return total.toFixed(2)
 }
 
+const getItemTaxAmount = (item) => {
+  const totalAmount = Number(item?.total_amount) || 0
+  if (totalAmount === 0) return 0
+
+  return totalAmount - (Number(item?.amount) || 0)
+}
+
+const calculateItemTaxAmount = (item) => getItemTaxAmount(item).toFixed(2)
+
+const formatItemTaxRate = (item) => {
+  const taxRate = Number(item?.tax_rate) || 0
+  return `${Number.isInteger(taxRate) ? taxRate : taxRate.toFixed(2)}%`
+}
+
 // 计算税额
 const calculateTaxAmount = (order) => {
   if (!order || !Array.isArray(order.order_goods)) return '0.00'
-  const subtotal = order.order_goods.reduce((sum, item) => {
-    return sum + (Number(item.amount) || 0)
+  const tax = order.order_goods.reduce((sum, item) => {
+    return sum + getItemTaxAmount(item)
   }, 0)
-  const total = order.order_goods.reduce((sum, item) => {
-    return sum + (Number(item.total_amount) || 0)
-  }, 0)
-  const tax = total - subtotal
   return tax.toFixed(2)
 }
 
@@ -3224,6 +3205,10 @@ svg {
   color: var(--accent-dark);
 }
 
+.financial-summary-strip {
+  margin: 15px;
+}
+
 .detail-section {
   margin-top: 15px;
   overflow: hidden;
@@ -3303,6 +3288,22 @@ svg {
 .detail-table th:nth-child(8) { width: 85px; }
 .detail-table th:nth-child(9) { width: 95px; }
 
+.order-goods-table {
+  min-width: 920px;
+}
+
+.order-goods-table th:nth-child(1) { width: 45px; text-align: center; }
+.order-goods-table .material-detail-column { width: auto; min-width: 130px; }
+.order-goods-table th:nth-child(3) { width: 90px; }
+.order-goods-table th:nth-child(4) { width: 50px; text-align: center; }
+.order-goods-table th:nth-child(5) { width: 55px; }
+.order-goods-table th:nth-child(6) { width: 65px; }
+.order-goods-table th:nth-child(7) { width: 75px; }
+.order-goods-table th:nth-child(8) { width: 88px; }
+.order-goods-table th:nth-child(9) { width: 62px; }
+.order-goods-table th:nth-child(10) { width: 85px; }
+.order-goods-table th:nth-child(11) { width: 95px; }
+
 .detail-table td:first-child {
   text-align: center;
 }
@@ -3333,6 +3334,11 @@ svg {
   color: #374151 !important;
 }
 
+.order-goods-table .detail-total-label {
+  padding-left: 20px !important;
+  text-align: left !important;
+}
+
 .item-amount {
   color: #263348 !important;
   font-weight: 700;
@@ -3342,60 +3348,6 @@ svg {
   height: 150px !important;
   color: #8a96a8 !important;
   text-align: center;
-}
-
-/* 财务汇总详情 */
-.financial-summary-detail {
-  padding: 20px;
-}
-
-.financial-summary-detail .summary-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 0;
-  font-size: 14px;
-  border-bottom: 1px solid #f3f4f6;
-}
-
-.financial-summary-detail .summary-row:last-child {
-  border-bottom: none;
-}
-
-.financial-summary-detail .summary-label {
-  color: #6b7280;
-  font-weight: 500;
-}
-
-.financial-summary-detail .summary-value {
-  color: #111827;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.financial-summary-detail .summary-row.highlight {
-  padding: 12px 0;
-  margin: 8px 0;
-  background: #f9fafb;
-  padding: 12px 16px;
-  margin: 8px -4px;
-  border-radius: 6px;
-  border: 1px solid #e5e7eb;
-}
-
-.financial-summary-detail .summary-row.highlight .summary-label {
-  font-size: 15px;
-  color: #374151;
-  font-weight: 600;
-}
-
-.financial-summary-detail .summary-row.highlight .summary-value {
-  font-size: 16px;
-  color: var(--accent-dark);
-}
-
-.financial-summary-detail .summary-row.highlight.debt .summary-value {
-  color: #ef4444;
 }
 
 .detail-modal-footer {
