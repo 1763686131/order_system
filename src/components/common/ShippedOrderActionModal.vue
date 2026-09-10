@@ -809,23 +809,47 @@ const submitAuditShipOrder = async () => {
     }
   }
 
-  // 提交给后端
+  const isAccountOrder = Boolean(
+    String(order?.order_number || '').trim() &&
+    Array.isArray(order?.order_goods) &&
+    order.order_goods.length > 0
+  )
+
+  // 新结构销售订单先保存物流，再通过独立审核请求生成客户账户流水。
+  // 旧结构订单保留原来的审核状态写入方式。
   try {
+    const logisticsPayload = {
+      status: 'shipped',
+      audit_state: isAccountOrder ? 0 : 1,
+      logistics_no: finalLogisticsNo,
+      freight_costs: freightData
+    }
+
     await request({
       url: `/orders/${id}`,
       method: 'PUT',
-      data: {
-        status: 'shipped',
-        audit_state: 1,
-        logistics_no: finalLogisticsNo,
-        freight_costs: freightData
-      }
+      data: logisticsPayload
     })
-    showMessage('物流信息录入成功！', 'success')
+
+    if (isAccountOrder) {
+      await request({
+        url: `/orders/${id}`,
+        method: 'PUT',
+        data: { audit_state: 1 }
+      })
+    }
+
+    showMessage(
+      isAccountOrder ? '物流信息已保存，订单审核入账成功！' : '物流信息录入成功！',
+      'success'
+    )
     closeShippedActionModal()
     emit('refresh')
   } catch (e) {
-    showMessage('网络通信异常，未能成功写入确认审核标识', 'error')
+    showMessage(
+      e?.response?.data?.message || '网络通信异常，未能成功完成审核',
+      'error'
+    )
   }
 }
 

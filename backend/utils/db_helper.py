@@ -581,6 +581,7 @@ def read_orders():
                 'other_fees': order['other_fees'],
                 'should_receive': order['should_receive'],
                 'current_payment': order['current_payment'],
+                'balance_applied': order.get('balance_applied', 0),
                 'current_debt': order['current_debt'],
                 'customer_receivable': order['customer_receivable'],
                 'receipt_img_url': order['receipt_img_url'],
@@ -885,6 +886,7 @@ def read_customers():
             c.phone,
             c.address,
             c.balance,
+            c.initial_receivable,
             c.receivable,
             c.bank_name,
             c.bank_account,
@@ -908,6 +910,7 @@ def read_customers():
             customer['customerName'] = customer.pop('customer_name', '')
             customer['storeId'] = customer.pop('store_id', None)
             customer['contactPerson'] = customer.pop('contact_person', '')
+            customer['initialReceivable'] = customer.pop('initial_receivable', 0)
             customer['bankName'] = customer.pop('bank_name', '')
             customer['bankAccount'] = customer.pop('bank_account', '')
             customer['bankCode'] = customer.pop('bank_code', '')
@@ -932,10 +935,10 @@ def write_customers(customers_data):
                 INSERT INTO customers (
                     id, customer_code, customer_name, store_id,
                     contact_person, phone, address,
-                    balance, receivable,
+                    balance, initial_receivable, receivable,
                     bank_name, bank_account, bank_code, tax_number,
                     remark, status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     customer_code = excluded.customer_code,
                     customer_name = excluded.customer_name,
@@ -944,6 +947,7 @@ def write_customers(customers_data):
                     phone = excluded.phone,
                     address = excluded.address,
                     balance = excluded.balance,
+                    initial_receivable = excluded.initial_receivable,
                     receivable = excluded.receivable,
                     bank_name = excluded.bank_name,
                     bank_account = excluded.bank_account,
@@ -961,6 +965,10 @@ def write_customers(customers_data):
                     customer.get('phone', ''),
                     customer.get('address', ''),
                     customer.get('balance', 0),
+                    customer.get(
+                        'initialReceivable',
+                        customer.get('receivable', 0)
+                    ),
                     customer.get('receivable', 0),
                     customer.get('bankName', ''),
                     customer.get('bankAccount', ''),

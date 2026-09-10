@@ -347,6 +347,7 @@ def _ensure_customer_schema(conn):
                     phone TEXT,
                     address TEXT,
                     balance REAL DEFAULT 0,
+                    initial_receivable REAL DEFAULT 0,
                     receivable REAL DEFAULT 0,
                     bank_name TEXT,
                     bank_account TEXT,
@@ -369,6 +370,7 @@ def _ensure_customer_schema(conn):
                 "phone": "TEXT",
                 "address": "TEXT",
                 "balance": "REAL DEFAULT 0",
+                "initial_receivable": "REAL",
                 "bank_name": "TEXT",
                 "bank_account": "TEXT",
                 "bank_code": "TEXT",
@@ -412,8 +414,54 @@ def _ensure_customer_schema(conn):
             """
             UPDATE customers
             SET balance = COALESCE(balance, 0),
+                initial_receivable = COALESCE(initial_receivable, receivable, 0),
                 receivable = COALESCE(receivable, 0),
                 status = COALESCE(NULLIF(status, ''), 'active')
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS customer_account_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                customer_id INTEGER NOT NULL,
+                order_id INTEGER,
+                order_number TEXT,
+                transaction_type TEXT NOT NULL,
+                source_transaction_id INTEGER,
+                order_receivable REAL NOT NULL DEFAULT 0,
+                stored_balance_applied REAL NOT NULL DEFAULT 0,
+                receivable_increase REAL NOT NULL DEFAULT 0,
+                debt_recovered REAL NOT NULL DEFAULT 0,
+                discount_amount REAL NOT NULL DEFAULT 0,
+                balance_change REAL NOT NULL DEFAULT 0,
+                receivable_change REAL NOT NULL DEFAULT 0,
+                balance_after REAL NOT NULL DEFAULT 0,
+                receivable_after REAL NOT NULL DEFAULT 0,
+                status TEXT NOT NULL DEFAULT 'active',
+                operator TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                reversed_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_customer_account_customer
+            ON customer_account_transactions(customer_id, created_at DESC)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_customer_account_order
+            ON customer_account_transactions(order_id, transaction_type, status)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_account_active_order_audit
+            ON customer_account_transactions(order_id)
+            WHERE transaction_type = 'order_audit' AND status = 'active'
             """
         )
 
@@ -421,6 +469,22 @@ def _ensure_customer_schema(conn):
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'orders'"
         ).fetchone()
         if orders_exists:
+            order_columns = {
+                row["name"] for row in cursor.execute("PRAGMA table_info(orders)")
+            }
+            if "balance_applied" not in order_columns:
+                cursor.execute(
+                    """
+                    ALTER TABLE orders
+                    ADD COLUMN balance_applied REAL NOT NULL DEFAULT 0
+                    """
+                )
+            cursor.execute(
+                """
+                UPDATE orders
+                SET balance_applied = COALESCE(balance_applied, 0)
+                """
+            )
             cursor.execute(
                 """
                 UPDATE customers

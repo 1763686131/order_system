@@ -1407,7 +1407,9 @@ const getShouldReceive = (order) => {
 // 获取已收金额
 const getCurrentPayment = (order) => {
   if (order.current_payment !== undefined && order.current_payment !== null) {
-    return `¥${order.current_payment.toFixed(2)}`
+    const received = Number(order.current_payment || 0) +
+      Number(order.balance_applied || 0)
+    return `¥${received.toFixed(2)}`
   }
   return '-'
 }
@@ -1419,7 +1421,9 @@ const getCurrentDebt = (order) => {
   }
   // 如果没有 current_debt，尝试计算
   if (order.should_receive !== undefined && order.current_payment !== undefined) {
-    const debt = order.should_receive - order.current_payment
+    const debt = order.should_receive -
+      Number(order.current_payment || 0) -
+      Number(order.balance_applied || 0)
     return `¥${debt.toFixed(2)}`
   }
   return '-'

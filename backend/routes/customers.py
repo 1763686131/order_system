@@ -62,6 +62,7 @@ def _customer_response(cursor, customer_id):
             c.phone,
             c.address,
             c.balance,
+            c.initial_receivable,
             c.receivable,
             c.bank_name,
             c.bank_account,
@@ -87,6 +88,7 @@ def _customer_response(cursor, customer_id):
     customer['customerName'] = customer.pop('customer_name', '')
     customer['storeId'] = customer.pop('store_id', None)
     customer['contactPerson'] = customer.pop('contact_person', '')
+    customer['initialReceivable'] = customer.pop('initial_receivable', 0)
     customer['bankName'] = customer.pop('bank_name', '')
     customer['bankAccount'] = customer.pop('bank_account', '')
     customer['bankCode'] = customer.pop('bank_code', '')
@@ -129,8 +131,11 @@ def _customer_values(data, existing=None):
             data.get('balance', existing.get('balance', 0)),
             '储值余额'
         ),
-        'receivable': _amount(
-            data.get('initialDebt', existing.get('receivable', 0)),
+        'initial_receivable': _amount(
+            data.get(
+                'initialDebt',
+                existing.get('initialReceivable', existing.get('receivable', 0))
+            ),
             '期初欠款'
         ),
         'bank_name': str(
@@ -183,6 +188,135 @@ def get_customers():
     return jsonify(customers)
 
 
+@customers_bp.route('/receivables', methods=['GET'])
+def get_customer_receivables():
+    """获取客户应收欠款汇总，供财务应收列表使用。"""
+    keyword = (request.args.get('keyword') or '').strip().lower()
+    phone = (request.args.get('phone') or '').strip()
+    debt_status = (request.args.get('debtStatus') or '').strip()
+
+    with get_db() as conn:
+        rows = conn.execute(
+            '''
+            SELECT
+                c.id,
+                c.customer_code,
+                c.customer_name,
+                c.contact_person,
+                c.phone,
+                c.balance,
+                c.initial_receivable,
+                c.receivable,
+                COALESCE(SUM(
+                    CASE
+                        WHEN t.transaction_type = 'order_audit'
+                         AND t.status = 'active'
+                        THEN t.receivable_increase
+                        ELSE 0
+                    END
+                ), 0) AS receivable_increase,
+                COALESCE(SUM(
+                    CASE
+                        WHEN t.status = 'active'
+                        THEN t.debt_recovered
+                        ELSE 0
+                    END
+                ), 0) AS debt_recovered,
+                COALESCE(SUM(
+                    CASE
+                        WHEN t.transaction_type = 'order_audit'
+                         AND t.status = 'active'
+                        THEN t.discount_amount
+                        ELSE 0
+                    END
+                ), 0) AS discount_amount
+            FROM customers c
+            LEFT JOIN customer_account_transactions t
+              ON t.customer_id = c.id
+            GROUP BY
+                c.id, c.customer_code, c.customer_name,
+                c.contact_person, c.phone, c.balance,
+                c.initial_receivable, c.receivable
+            ORDER BY c.receivable DESC, c.id DESC
+            '''
+        ).fetchall()
+
+    receivables = []
+    for row in rows:
+        item = dict(row)
+        search_text = ' '.join([
+            str(item.get('id') or ''),
+            str(item.get('customer_code') or ''),
+            str(item.get('customer_name') or ''),
+            str(item.get('contact_person') or ''),
+        ]).lower()
+        if keyword and keyword not in search_text:
+            continue
+        if phone and phone not in str(item.get('phone') or ''):
+            continue
+
+        receivable = float(item.get('receivable') or 0)
+        if debt_status == 'outstanding' and receivable <= 0:
+            continue
+        if debt_status == 'settled' and receivable > 0:
+            continue
+
+        balance = float(item.get('balance') or 0)
+        receivables.append({
+            'customerId': item.get('id'),
+            'customerCode': item.get('customer_code') or '',
+            'customerName': item.get('customer_name') or '',
+            'contactPerson': item.get('contact_person') or '',
+            'phone': item.get('phone') or '',
+            'storedBalance': round(balance, 2),
+            'initialDebt': round(
+                float(item.get('initial_receivable') or 0),
+                2
+            ),
+            'receivableIncrease': round(
+                float(item.get('receivable_increase') or 0),
+                2
+            ),
+            'debtRecovered': round(
+                float(item.get('debt_recovered') or 0),
+                2
+            ),
+            'discountAmount': round(
+                float(item.get('discount_amount') or 0),
+                2
+            ),
+            'receivable': round(receivable, 2),
+            'netAccountBalance': round(balance - receivable, 2),
+        })
+
+    return jsonify({
+        'items': receivables,
+        'total': len(receivables),
+        'summary': {
+            'initialDebt': round(
+                sum(item['initialDebt'] for item in receivables),
+                2
+            ),
+            'receivableIncrease': round(
+                sum(item['receivableIncrease'] for item in receivables),
+                2
+            ),
+            'debtRecovered': round(
+                sum(item['debtRecovered'] for item in receivables),
+                2
+            ),
+            'discountAmount': round(
+                sum(item['discountAmount'] for item in receivables),
+                2
+            ),
+            'receivable': round(
+                sum(item['receivable'] for item in receivables),
+                2
+            ),
+        }
+    })
+
+
 @customers_bp.route('/<int:customer_id>', methods=['GET'])
 def get_customer(customer_id):
     with get_db() as conn:
@@ -220,11 +354,12 @@ def create_customer():
             '''
             INSERT INTO customers (
                 customer_code, customer_name, store_id,
-                contact_person, phone, address, balance, receivable,
+                contact_person, phone, address, balance,
+                initial_receivable, receivable,
                 bank_name, bank_account, bank_code, tax_number,
                 remark, status, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 values['customer_code'],
@@ -234,7 +369,8 @@ def create_customer():
                 values['phone'],
                 values['address'],
                 values['balance'],
-                values['receivable'],
+                values['initial_receivable'],
+                values['initial_receivable'],
                 values['bank_name'],
                 values['bank_account'],
                 values['bank_code'],
@@ -280,13 +416,23 @@ def update_customer(customer_id):
         if status not in ('active', 'inactive'):
             return jsonify({'error': '客户状态无效'}), 400
 
+        receivable = (
+            existing.get('receivable', 0)
+            + values['initial_receivable']
+            - existing.get('initialReceivable', existing.get('receivable', 0))
+        )
+        if receivable < 0:
+            return jsonify({
+                'error': '期初欠款调整后不能使当前应收欠款小于0'
+            }), 400
+
         now = datetime.now().isoformat(timespec='seconds')
         cursor.execute(
             '''
             UPDATE customers
             SET customer_code = ?, customer_name = ?, store_id = ?,
                 contact_person = ?, phone = ?, address = ?,
-                balance = ?, receivable = ?,
+                balance = ?, initial_receivable = ?, receivable = ?,
                 bank_name = ?, bank_account = ?, bank_code = ?,
                 tax_number = ?, remark = ?, status = ?, updated_at = ?
             WHERE id = ?
@@ -299,7 +445,8 @@ def update_customer(customer_id):
                 values['phone'],
                 values['address'],
                 values['balance'],
-                values['receivable'],
+                values['initial_receivable'],
+                receivable,
                 values['bank_name'],
                 values['bank_account'],
                 values['bank_code'],
@@ -344,30 +491,11 @@ def delete_customer(customer_id):
 @customers_bp.route('/<int:customer_id>/receivable', methods=['GET'])
 def get_customer_receivable(customer_id):
     with get_db() as conn:
-        cursor = conn.cursor()
-        if not cursor.execute(
-            'SELECT 1 FROM customers WHERE id = ?',
-            (customer_id,)
-        ).fetchone():
-            return jsonify({'error': '客户不存在'}), 404
-
-        row = cursor.execute(
-            '''
-            SELECT COALESCE(SUM(
-                CASE
-                    WHEN current_debt IS NOT NULL THEN current_debt
-                    WHEN should_receive IS NOT NULL
-                        THEN should_receive - COALESCE(current_payment, 0)
-                    ELSE COALESCE(total_amount, 0)
-                        - COALESCE(discount_amount, 0)
-                        + COALESCE(other_fees, 0)
-                        - COALESCE(current_payment, 0)
-                END
-            ), 0) AS receivable
-            FROM orders
-            WHERE customer_id = ?
-            ''',
+        row = conn.execute(
+            'SELECT receivable FROM customers WHERE id = ?',
             (customer_id,)
         ).fetchone()
+        if not row:
+            return jsonify({'error': '客户不存在'}), 404
 
     return jsonify({'receivable': row['receivable'] or 0})

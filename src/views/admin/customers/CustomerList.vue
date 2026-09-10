@@ -535,7 +535,7 @@ const handleEdit = (customer) => {
     phone: customer.phone,
     address: customer.address,
     balance: customer.balance,
-    initialDebt: customer.receivable,
+    initialDebt: customer.initialReceivable ?? customer.receivable,
     bankName: customer.bankName || '',
     bankAccount: customer.bankAccount || '',
     bankCode: customer.bankCode || '',

@@ -1554,6 +1554,7 @@ receipt_image: File (图片文件)
     "phone": "17554354236",
     "address": "北京天安门",
     "balance": 0,
+    "initialReceivable": 5000,
     "receivable": 5000,
     "bankName": "",
     "bankAccount": "",
@@ -1582,6 +1583,7 @@ receipt_image: File (图片文件)
   "phone": "17554354236",
   "address": "北京天安门",
   "balance": 0,
+  "initialReceivable": 5000,
   "receivable": 5000,
   "bankName": "",
   "bankAccount": "",
@@ -1602,7 +1604,8 @@ receipt_image: File (图片文件)
 - `phone`: 联系电话
 - `address`: 客户地址
 - `balance`: 余额
-- `receivable`: 应收账款
+- `initialReceivable`: 期初欠款
+- `receivable`: 当前应收欠款（期初欠款 + 审核订单新增欠款 - 已收回欠款）
 - `bankName`: 开户行
 - `bankAccount`: 银行账号
 - `bankCode`: 银行代码
@@ -1624,7 +1627,7 @@ receipt_image: File (图片文件)
   "phone": "13800138000",
   "address": "客户地址",
   "balance": 0,
-  "receivable": 0,
+  "initialDebt": 0,
   "bankName": "工商银行",
   "bankAccount": "6222021234567890",
   "bankCode": "102100099996",
@@ -1646,6 +1649,7 @@ receipt_image: File (图片文件)
     "phone": "13800138000",
     "address": "客户地址",
     "balance": 0,
+    "initialReceivable": 0,
     "receivable": 0,
     "status": "active",
     "createdAt": "2026-09-06T10:30:00"
@@ -1667,7 +1671,7 @@ receipt_image: File (图片文件)
   "phone": "13900139000",
   "address": "新地址",
   "balance": 1000,
-  "receivable": 8000,
+  "initialDebt": 8000,
   "remark": "更新备注"
 }
 ```
@@ -1689,6 +1693,43 @@ receipt_image: File (图片文件)
 {
   "success": true,
   "message": "客户删除成功"
+}
+```
+
+### 7.6 获取应收欠款汇总
+
+- **URL**: `/api/customers/receivables`
+- **Method**: `GET`
+- **说明**: 获取客户期初欠款、审核订单增加的应收欠款、收回欠款、优惠和当前应收欠款。订单审核时先按订单未收金额增加应收，再以客户储值抵扣并记入收回欠款，剩余应收以正数保存；账户净额按“储值余额 - 当前应收”计算，因此欠款状态显示负数。反审核按原流水撤销。
+
+**响应示例**:
+
+```json
+{
+  "items": [
+    {
+      "customerId": 1,
+      "customerCode": "001",
+      "customerName": "李超",
+      "contactPerson": "李超",
+      "phone": "13800138000",
+      "storedBalance": 0,
+      "initialDebt": 0,
+      "receivableIncrease": 5000,
+      "debtRecovered": 3000,
+      "discountAmount": 0,
+      "receivable": 2000,
+      "netAccountBalance": -2000
+    }
+  ],
+  "total": 1,
+  "summary": {
+    "initialDebt": 0,
+    "receivableIncrease": 5000,
+    "debtRecovered": 3000,
+    "discountAmount": 0,
+    "receivable": 2000
+  }
 }
 ```
 

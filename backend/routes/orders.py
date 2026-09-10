@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify, Response, stream_with_context
 from utils.db_helper import read_orders, write_orders, read_users, read_customers, read_carrier_tags, write_carrier_tags
 from utils.db import get_db
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
 import uuid
 import json
@@ -23,6 +24,7 @@ else:
 orders_lock = threading.Lock()
 DEFAULT_GOODS_PACKAGING = '无'
 DEFAULT_LOGISTICS_SERVICE = '送货上门+回单拍照回传'
+MONEY_QUANT = Decimal('0.01')
 
 # 订单实时推送订阅者。每个前台页面对应一个队列，订单写入成功后立即广播。
 order_event_subscribers = set()
@@ -56,6 +58,17 @@ def sanitize_filename(name):
     for ch in forbidden:
         name = name.replace(ch, '_')
     return name[:50]
+
+
+def money(value):
+    """Convert stored/request values to a two-decimal monetary Decimal."""
+    try:
+        return Decimal(str(value or 0)).quantize(
+            MONEY_QUANT,
+            rounding=ROUND_HALF_UP
+        )
+    except (InvalidOperation, TypeError, ValueError):
+        return Decimal('0.00')
 
 # ==========================================
 # 订单接口
@@ -339,6 +352,7 @@ def create_new_format_order(req_data):
         "other_fees": round(other_fees, 2),
         "should_receive": round(should_receive, 2),
         "current_payment": round(current_payment, 2),
+        "balance_applied": 0,
         "current_debt": round(current_debt, 2),
         "customer_receivable": customer_receivable
     }
@@ -408,27 +422,370 @@ def update_order_status(order_id):
         # 状态更新（原有逻辑）
         return update_order_status_only(order_id, req_data)
 
+
+def update_order_audit_state(order_id, audited):
+    """审核销售订单时同步客户储值、应收欠款和客户账户流水。"""
+    operator = str(request.headers.get('Username') or '').strip()
+    now = datetime.now().isoformat(timespec='seconds')
+    account_result = None
+
+    with orders_lock:
+        with get_db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            order = conn.execute(
+                '''
+                SELECT id, status, audit_state, order_number, order_goods,
+                       customer_id, subtotal_amount, total_amount,
+                       discount_amount, other_fees, should_receive,
+                       current_payment, current_debt
+                FROM orders
+                WHERE id = ?
+                ''',
+                (order_id,)
+            ).fetchone()
+
+            if not order:
+                return jsonify({"success": False, "message": "订单不存在"}), 404
+
+            try:
+                order_goods = json.loads(order['order_goods'] or '[]')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                order_goods = []
+
+            if not str(order['order_number'] or '').strip() or not order_goods:
+                return jsonify({
+                    "success": False,
+                    "message": "旧结构订单不支持销售单审核"
+                }), 409
+            if order['status'] != 'shipped':
+                return jsonify({
+                    "success": False,
+                    "message": "只有已发货销售订单可以审核或反审核"
+                }), 409
+
+            if audited:
+                if order['audit_state'] == 1:
+                    return jsonify({
+                        "success": False,
+                        "message": "订单已经审核，请勿重复操作"
+                    }), 409
+                if not order['customer_id']:
+                    return jsonify({
+                        "success": False,
+                        "message": "订单未关联客户，不能审核入账"
+                    }), 409
+
+                customer = conn.execute(
+                    '''
+                    SELECT id, customer_name, balance, receivable
+                    FROM customers
+                    WHERE id = ?
+                    ''',
+                    (order['customer_id'],)
+                ).fetchone()
+                if not customer:
+                    return jsonify({
+                        "success": False,
+                        "message": "订单关联的客户不存在，不能审核入账"
+                    }), 409
+
+                active_transaction = conn.execute(
+                    '''
+                    SELECT id
+                    FROM customer_account_transactions
+                    WHERE order_id = ?
+                      AND transaction_type = 'order_audit'
+                      AND status = 'active'
+                    ''',
+                    (order_id,)
+                ).fetchone()
+                if active_transaction:
+                    return jsonify({
+                        "success": False,
+                        "message": "订单已有有效应收流水，请勿重复审核"
+                    }), 409
+
+                should_receive = money(order['should_receive'])
+                current_payment = money(order['current_payment'])
+                order_receivable = max(
+                    Decimal('0.00'),
+                    should_receive - current_payment
+                )
+                balance_before = money(customer['balance'])
+                receivable_before = money(customer['receivable'])
+                stored_balance_applied = min(
+                    max(balance_before, Decimal('0.00')),
+                    order_receivable
+                )
+                receivable_increase = order_receivable
+                debt_recovered = stored_balance_applied
+                receivable_change = receivable_increase - debt_recovered
+                balance_after = balance_before - stored_balance_applied
+                receivable_after = receivable_before + receivable_change
+
+                base_amount = money(order['total_amount'])
+                if base_amount <= 0:
+                    base_amount = money(order['subtotal_amount'])
+                discounted_goods_amount = money(order['discount_amount'])
+                discount_amount = max(
+                    Decimal('0.00'),
+                    base_amount - discounted_goods_amount
+                )
+
+                conn.execute(
+                    '''
+                    UPDATE customers
+                    SET balance = ?, receivable = ?, updated_at = ?
+                    WHERE id = ?
+                    ''',
+                    (
+                        float(balance_after),
+                        float(receivable_after),
+                        now,
+                        customer['id'],
+                    )
+                )
+                cursor = conn.execute(
+                    '''
+                    INSERT INTO customer_account_transactions (
+                        customer_id, order_id, order_number, transaction_type,
+                        order_receivable, stored_balance_applied,
+                        receivable_increase, debt_recovered, discount_amount,
+                        balance_change, receivable_change,
+                        balance_after, receivable_after,
+                        status, operator, created_at
+                    )
+                    VALUES (?, ?, ?, 'order_audit', ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            'active', ?, ?)
+                    ''',
+                    (
+                        customer['id'],
+                        order_id,
+                        order['order_number'],
+                        float(order_receivable),
+                        float(stored_balance_applied),
+                        float(receivable_increase),
+                        float(debt_recovered),
+                        float(discount_amount),
+                        float(-stored_balance_applied),
+                        float(receivable_change),
+                        float(balance_after),
+                        float(receivable_after),
+                        operator,
+                        now,
+                    )
+                )
+                conn.execute(
+                    '''
+                    UPDATE orders
+                    SET audit_state = 1,
+                        balance_applied = ?,
+                        current_debt = ?,
+                        customer_receivable = ?
+                    WHERE id = ?
+                    ''',
+                    (
+                        float(stored_balance_applied),
+                        float(receivable_change),
+                        float(receivable_after),
+                        order_id,
+                    )
+                )
+                account_result = {
+                    'transactionId': cursor.lastrowid,
+                    'customerId': customer['id'],
+                    'customerName': customer['customer_name'],
+                    'storedBalanceApplied': float(stored_balance_applied),
+                    'receivableIncrease': float(receivable_increase),
+                    'debtRecovered': float(debt_recovered),
+                    'receivableChange': float(receivable_change),
+                    'balanceAfter': float(balance_after),
+                    'receivableAfter': float(receivable_after),
+                }
+            else:
+                if order['audit_state'] != 1:
+                    return jsonify({
+                        "success": False,
+                        "message": "订单尚未审核"
+                    }), 409
+
+                transaction = conn.execute(
+                    '''
+                    SELECT *
+                    FROM customer_account_transactions
+                    WHERE order_id = ?
+                      AND transaction_type = 'order_audit'
+                      AND status = 'active'
+                    ORDER BY id DESC
+                    LIMIT 1
+                    ''',
+                    (order_id,)
+                ).fetchone()
+
+                if transaction:
+                    customer = conn.execute(
+                        '''
+                        SELECT id, customer_name, balance, receivable
+                        FROM customers
+                        WHERE id = ?
+                        ''',
+                        (transaction['customer_id'],)
+                    ).fetchone()
+                    if not customer:
+                        return jsonify({
+                            "success": False,
+                            "message": "原审核流水关联的客户不存在，无法反审核"
+                        }), 409
+
+                    stored_balance_applied = money(
+                        transaction['stored_balance_applied']
+                    )
+                    receivable_change = money(
+                        transaction['receivable_change']
+                    )
+                    balance_before = money(customer['balance'])
+                    receivable_before = money(customer['receivable'])
+                    if receivable_before < receivable_change:
+                        return jsonify({
+                            "success": False,
+                            "message": "本单欠款已被后续收款核销，不能直接反审核"
+                        }), 409
+
+                    balance_after = balance_before + stored_balance_applied
+                    receivable_after = receivable_before - receivable_change
+                    conn.execute(
+                        '''
+                        UPDATE customers
+                        SET balance = ?, receivable = ?, updated_at = ?
+                        WHERE id = ?
+                        ''',
+                        (
+                            float(balance_after),
+                            float(receivable_after),
+                            now,
+                            customer['id'],
+                        )
+                    )
+                    conn.execute(
+                        '''
+                        UPDATE customer_account_transactions
+                        SET status = 'reversed', reversed_at = ?
+                        WHERE id = ?
+                        ''',
+                        (now, transaction['id'])
+                    )
+                    reverse_cursor = conn.execute(
+                        '''
+                        INSERT INTO customer_account_transactions (
+                            customer_id, order_id, order_number,
+                            transaction_type, source_transaction_id,
+                            order_receivable, balance_change,
+                            receivable_change, balance_after,
+                            receivable_after, status, operator, created_at
+                        )
+                        VALUES (?, ?, ?, 'order_reverse', ?, ?, ?, ?, ?, ?,
+                                'active', ?, ?)
+                        ''',
+                        (
+                            customer['id'],
+                            order_id,
+                            order['order_number'],
+                            transaction['id'],
+                            transaction['order_receivable'],
+                            float(stored_balance_applied),
+                            float(-receivable_change),
+                            float(balance_after),
+                            float(receivable_after),
+                            operator,
+                            now,
+                        )
+                    )
+                    conn.execute(
+                        '''
+                        UPDATE orders
+                        SET audit_state = 0,
+                            balance_applied = 0,
+                            current_debt = ?,
+                            customer_receivable = ?
+                        WHERE id = ?
+                        ''',
+                        (
+                            transaction['order_receivable'],
+                            float(receivable_after),
+                            order_id,
+                        )
+                    )
+                    account_result = {
+                        'transactionId': reverse_cursor.lastrowid,
+                        'customerId': customer['id'],
+                        'customerName': customer['customer_name'],
+                        'storedBalanceRestored': float(stored_balance_applied),
+                        'receivableDecrease': float(receivable_change),
+                        'balanceAfter': float(balance_after),
+                        'receivableAfter': float(receivable_after),
+                    }
+                else:
+                    # 兼容功能上线前已经审核、但没有账户流水的历史订单。
+                    conn.execute(
+                        '''
+                        UPDATE orders
+                        SET audit_state = 0, balance_applied = 0
+                        WHERE id = ?
+                        ''',
+                        (order_id,)
+                    )
+                    account_result = {
+                        'legacyOrder': True,
+                        'message': '历史订单无账户流水，仅撤销审核状态',
+                    }
+
+    updated_order = next(
+        (
+            item for item in read_orders().get('orders', [])
+            if item.get('id') == order_id
+        ),
+        None
+    )
+    if updated_order:
+        broadcast_order_event('updated', order=updated_order)
+
+    return jsonify({
+        "success": True,
+        "message": "审核成功，客户应收已更新" if audited
+        else "反审核成功，客户应收已撤销",
+        "data": updated_order,
+        "account": account_result,
+    })
+
+
 def update_order_status_only(order_id, req_data):
     """仅更新订单状态"""
+    if 'audit_state' in req_data and 'status' not in req_data:
+        return update_order_audit_state(
+            order_id,
+            bool(req_data.get('audit_state'))
+        )
+
     ns = req_data.get('status')
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
     changed_order = None
     for x in orders_list:
         if x['id'] == order_id:
-            # 新结构订单的审核状态独立于履约状态，审核/反审核不应改变发货进度。
-            if 'audit_state' in req_data and 'status' not in req_data:
-                if (
-                    not str(x.get('order_number') or '').strip()
-                    or not isinstance(x.get('order_goods'), list)
-                    or not x.get('order_goods')
-                ):
-                    return jsonify({"success": False, "message": "旧结构订单不支持销售单审核"}), 409
-                if x.get('status') != 'shipped':
-                    return jsonify({"success": False, "message": "只有已发货销售订单可以审核或反审核"}), 409
-                x['audit_state'] = 1 if req_data.get('audit_state') else 0
-                changed_order = dict(x)
-                break
+            is_account_order = (
+                bool(str(x.get('order_number') or '').strip())
+                and isinstance(x.get('order_goods'), list)
+                and len(x.get('order_goods')) > 0
+            )
+            if (
+                is_account_order
+                and 'status' in req_data
+                and bool(req_data.get('audit_state'))
+            ):
+                return jsonify({
+                    "success": False,
+                    "message": "销售订单审核请单独提交审核操作"
+                }), 400
 
             # 如果只是更新物流单号和运费，不改变状态
             if 'logistics_no' in req_data and 'status' not in req_data:
@@ -439,6 +796,11 @@ def update_order_status_only(order_id, req_data):
                 break
 
             # 正常的状态更新流程
+            if x.get('audit_state') == 1:
+                return jsonify({
+                    "success": False,
+                    "message": "已过账单据请先反审核，再修改订单状态"
+                }), 409
             x['status'] = ns
 
             if ns == 'completed':
@@ -642,6 +1004,7 @@ def update_full_order(order_id, req_data):
             "other_fees": round(other_fees, 2),
             "should_receive": round(should_receive, 2),
             "current_payment": round(current_payment, 2),
+            "balance_applied": old_order.get('balance_applied', 0),
             "current_debt": round(current_debt, 2),
             "customer_receivable": customer_receivable,
 
