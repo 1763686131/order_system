@@ -280,7 +280,7 @@
               :style="{ '--store-bg-color': getStoreColor(order) }"
               tabindex="0"
               @click="openOrderDetail(order)"
-              @keydown.enter.prevent="openOrderDetail(order)"
+              @keydown.enter.self.prevent="openOrderDetail(order)"
             >
               <td class="col-checkbox" @click.stop>
                 <input
@@ -369,10 +369,26 @@
               </td>
               <td class="operation-column" @click.stop>
                 <div class="row-actions">
-                  <button type="button" title="查看详情" @click="openOrderDetail(order)">
+                  <button
+                    v-if="mode === 'finance' && isNewOrder(order)"
+                    type="button"
+                    title="复制为新订单"
+                    @click="handleCopySalesOrder(order)"
+                  >
                     <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"></path>
-                      <circle cx="12" cy="12" r="2.5"></circle>
+                      <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+                      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+                    </svg>
+                  </button>
+                  <button
+                    v-if="mode === 'logistics'"
+                    type="button"
+                    title="复制物流信息"
+                    @click="handleCopyOrderInfo(order)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+                      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
                     </svg>
                   </button>
                   <button
@@ -3243,6 +3259,7 @@ svg {
 
 .detail-table-scroll {
   overflow-x: auto;
+  padding-right: 12px;
 }
 
 .detail-table {
@@ -3289,7 +3306,7 @@ svg {
 .detail-table th:nth-child(9) { width: 95px; }
 
 .order-goods-table {
-  min-width: 920px;
+  min-width: 880px;
 }
 
 .order-goods-table th:nth-child(1) { width: 45px; text-align: center; }
@@ -3303,6 +3320,11 @@ svg {
 .order-goods-table th:nth-child(9) { width: 62px; }
 .order-goods-table th:nth-child(10) { width: 85px; }
 .order-goods-table th:nth-child(11) { width: 95px; }
+
+.order-goods-table th:last-child,
+.order-goods-table td:last-child {
+  padding-right: 14px;
+}
 
 .detail-table td:first-child {
   text-align: center;
