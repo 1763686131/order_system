@@ -92,12 +92,19 @@
               :aria-label="`返回${orderDraftStore.draftTitle}`"
               @click="restoreOrderDraft"
             >
-              <span class="order-draft-shortcut-mark" aria-hidden="true">
-                {{ orderDraftStore.draftMark }}
-              </span>
+              <svg class="draft-icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path v-if="orderDraftStore.draftMode === 'create'" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline v-if="orderDraftStore.draftMode === 'create'" points="14 2 14 8 20 8"/>
+                <line v-if="orderDraftStore.draftMode === 'create'" x1="12" y1="18" x2="12" y2="12"/>
+                <line v-if="orderDraftStore.draftMode === 'create'" x1="9" y1="15" x2="15" y2="15"/>
+
+                <path v-if="orderDraftStore.draftMode === 'edit'" d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path v-if="orderDraftStore.draftMode === 'edit'" d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
               <span class="order-draft-shortcut-label">
                 {{ orderDraftStore.draftShortLabel }}
               </span>
+              <span class="pulse-dot" aria-hidden="true"></span>
             </button>
             <component v-if="headerActions" :is="headerActions"></component>
           </div>
@@ -734,7 +741,7 @@ const logout = () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 7px;
   background: #fef2f2;
   color: #dc2626;
   border: 1px solid #fecaca;
@@ -743,29 +750,64 @@ const logout = () => {
   font-size: 13px;
   font-weight: 600;
   transition: all 0.18s ease;
+  position: relative;
+  animation: pulseButton 2s ease-in-out infinite;
+}
+
+@keyframes pulseButton {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0);
+  }
 }
 
 .order-draft-shortcut:hover {
   background: #fee2e2;
   border-color: #fca5a5;
   color: #b91c1c;
+  animation: none;
 }
 
 .order-draft-shortcut:focus-visible {
   outline: 2px solid #dc2626;
   outline-offset: 2px;
+  animation: none;
 }
 
 .order-draft-shortcut.is-edit {
   background: #fff7ed;
   color: #d97706;
   border: 1px solid #fdba74;
+  animation: pulseButtonEdit 2s ease-in-out infinite;
+}
+
+@keyframes pulseButtonEdit {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(217, 119, 6, 0);
+  }
 }
 
 .order-draft-shortcut.is-edit:hover {
   background: #ffedd5;
   border-color: #fbbf24;
   color: #b45309;
+  animation: none;
+}
+
+.draft-icon {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
 }
 
 .order-draft-shortcut-mark {
@@ -777,6 +819,29 @@ const logout = () => {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.2px;
+}
+
+.pulse-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  background: #ef4444;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  animation: pulseDot 1.5s ease-in-out infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.3);
+    opacity: 0.8;
+  }
 }
 
 .header-icons {
