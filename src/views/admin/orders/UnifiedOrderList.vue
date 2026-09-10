@@ -620,8 +620,8 @@
                 </div>
                 <div class="summary-strip financial-summary-strip">
                   <div><span>应收金额</span><strong>{{ getShouldReceive(selectedOrder) }}</strong></div>
-                  <div><span>已收金额</span><strong>{{ getCurrentPayment(selectedOrder) }}</strong></div>
-                  <div><span>未收金额</span><strong>{{ getCurrentDebt(selectedOrder) }}</strong></div>
+                  <div class="received-amount"><span>已收金额</span><strong>{{ getCurrentPayment(selectedOrder) }}</strong></div>
+                  <div class="outstanding-amount"><span>未收金额</span><strong>{{ getCurrentDebt(selectedOrder) }}</strong></div>
                 </div>
               </section>
 
@@ -3217,8 +3217,12 @@ svg {
   white-space: nowrap;
 }
 
-.summary-strip > div:last-child strong {
-  color: var(--accent-dark);
+.financial-summary-strip .received-amount strong {
+  color: #07805f;
+}
+
+.financial-summary-strip .outstanding-amount strong {
+  color: #dc3545;
 }
 
 .financial-summary-strip {
