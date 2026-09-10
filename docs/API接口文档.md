@@ -10,6 +10,7 @@
 
 ## 版本历史
 
+- **v2.4** (2026-09-10) - 新增收款单、审核入账、反审核和客户应收联动接口
 - **v2.3** (2026-09-08) - 新增供应商、入库单、库存余额与事务过账接口
 - **v2.2** (2026-09-08) - 新增原材料商品档案接口，补充单位分组接口
 - **v2.1** (2026-09-07) - 补充人事检测报告文件管理接口文档
@@ -31,6 +32,7 @@
 9. [运费记录管理](#9-运费记录管理)
 10. [人事检测报告文件管理](#10-人事检测报告文件管理)
 11. [供应商与入库管理](#11-供应商与入库管理)
+12. [收款单与应收核销](#12-收款单与应收核销)
 
 ---
 
@@ -2779,6 +2781,130 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 ---
 
+## 12. 收款单与应收核销
+
+收款单采用“先保存、后审核”的单据模式。保存草稿只写入 `payment_receipts`，不会修改客户欠款和储值；审核时才在同一个 SQLite 事务中更新客户账户并写入可追溯流水。
+
+### 12.1 获取收款单列表
+
+- **URL**: `/api/payment-receipts`
+- **Method**: `GET`
+- **Query 参数**:
+  - `storeId` - 可选，按门店 ID 筛选
+  - `status` - 可选，`draft` 或 `audited`
+  - `keyword` - 可选，匹配单据编号、客户、制单人或备注
+
+**响应示例**:
+
+```json
+{
+  "items": [
+    {
+      "id": 1,
+      "documentNo": "SK20260910001",
+      "documentDate": "2026-09-10",
+      "storeId": 1,
+      "storeName": "绝缘",
+      "customerId": 2,
+      "customerCode": "002",
+      "customerName": "雷安电器",
+      "settlementAccount": "绝缘结算账户",
+      "paymentMethod": "银行转账",
+      "paymentAmount": 2200.0,
+      "discountAmount": 100.0,
+      "totalAmount": 2300.0,
+      "writeoffAmount": 2000.0,
+      "advanceAmount": 300.0,
+      "creator": "王醒",
+      "remark": "",
+      "attachmentUrl": "",
+      "status": "audited",
+      "auditedBy": "admin",
+      "auditedAt": "2026-09-10T10:00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+### 12.2 获取下一收款单号
+
+- **URL**: `/api/payment-receipts/next-number`
+- **Method**: `GET`
+- **Query 参数**:
+  - `date` - 单据日期，格式 `YYYY-MM-DD`
+
+单据编号格式为 `SK + YYYYMMDD + 三位流水号`。预览编号仅供录入界面展示，最终编号在保存事务内重新生成，防止并发重复。
+
+### 12.3 上传收款附件
+
+- **URL**: `/api/payment-receipts/attachments`
+- **Method**: `POST`
+- **Content-Type**: `multipart/form-data`
+- **文件字段**: `attachment`
+- **限制**: 支持 JPG、JPEG、PNG、WebP、GIF，最大 10MB
+
+接口把图片保存到 `uploads/payment-receipts/YYYY-MM/`，数据库仅保存返回的 `attachmentUrl`。
+
+### 12.4 新增收款单草稿
+
+- **URL**: `/api/payment-receipts`
+- **Method**: `POST`
+
+**请求示例**:
+
+```json
+{
+  "documentDate": "2026-09-10",
+  "customerId": 2,
+  "paymentMethod": "银行转账",
+  "paymentAmount": 2200,
+  "discountAmount": 100,
+  "creator": "王醒",
+  "remark": "9月货款",
+  "attachmentUrl": "/uploads/payment-receipts/2026-09/payment_xxx.jpg"
+}
+```
+
+后端根据客户所属门店生成结算账户，并保存预计核销金额与预计预收金额。此时状态为 `draft`，客户的 `receivable` 和 `balance` 保持不变。
+
+### 12.5 修改或删除草稿
+
+- **修改 URL**: `/api/payment-receipts/<id>`
+- **修改 Method**: `PUT`
+- **删除 URL**: `/api/payment-receipts/<id>`
+- **删除 Method**: `DELETE`
+
+只有 `draft` 状态可以修改或删除。已审核单据必须先反审核；删除草稿时会同时清理该单据关联的附件图片。
+
+### 12.6 审核收款单
+
+- **URL**: `/api/payment-receipts/<id>/audit`
+- **Method**: `POST`
+- **Header**: `Username` 用作审核人和账户流水操作人
+
+审核时按客户实时账户计算：
+
+1. 优惠金额先抵减客户应收欠款。
+2. 实际收款再抵减剩余欠款。
+3. 实际收款超过剩余欠款的部分计入 `advanceAmount`，增加客户 `balance` 储值。
+4. 核销总额写入 `writeoffAmount`，客户 `receivable` 按该金额减少。
+5. 写入一条 `customer_payment` 客户账户流水，并把流水 ID 回写收款单。
+
+例如客户欠款 2000 元，收款 2200 元，优惠 100 元：核销欠款 2000 元，本次预收 300 元。
+
+### 12.7 反审核收款单
+
+- **URL**: `/api/payment-receipts/<id>/audit`
+- **Method**: `DELETE`
+- **Header**: `Username` 用作反审核操作人
+
+反审核会恢复本单核销的客户欠款，撤回本单产生的预收储值，将原入账流水标记为 `reversed`，并写入 `customer_payment_reverse` 反向流水。
+
+如果本单产生的预收储值已经被后续订单使用，当前储值不足以撤回，接口返回 `409`，必须先处理后续关联业务，避免客户账户出现错误负数。
+
+---
+
 ## 错误响应格式
 
 多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
@@ -2821,6 +2947,8 @@ totalAmount = receivedQty × unitPrice + taxAmount
 - `stock_inbound_items` - 入库单明细表
 - `stock_balances` - 按物料、仓库、门店、货位和批次保存的库存余额表
 - `stock_movements` - 入库过账库存流水表
+- `payment_receipts` - 收款单草稿、审核状态、核销和预收快照表
+- `customer_account_transactions` - 订单审核、收款、反审核的客户账户流水表
 
 **辅助表**:
 - `units` - 计量单位和包装表，通过 `unit_type` 分组
@@ -3016,6 +3144,13 @@ SQLite 支持**多读一写**模式：
 - ✅ 支持草稿保存、事务过账、防止重复过账和未过账单据作废
 - ✅ 成品过账同步旧版 `inventory` 表，原材料使用独立库存余额
 - ✅ 两个库存页面接入公共 `StockInOrderModal.vue` 入库单弹窗
+
+### v2.4.0 (2026-09-10)
+- ✅ 新增收款历史列表、门店滑块、Excel 导出和收款单打印
+- ✅ 新增收款单草稿、附件、修改、删除、审核与反审核接口
+- ✅ 审核时自动核销客户应收，多收金额转为储值预收
+- ✅ 反审核按原流水恢复客户应收和储值，并防止撤回已被使用的预收
+- ✅ 应收欠款汇总联动收回欠款与优惠金额
 
 ### v2.2.0 (2026-09-08)
 - ✅ 新增原材料商品档案 CRUD 接口和 `raw_material_products` 独立数据表
