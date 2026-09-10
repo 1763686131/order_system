@@ -427,6 +427,8 @@ def _ensure_customer_schema(conn):
                 customer_id INTEGER NOT NULL,
                 order_id INTEGER,
                 order_number TEXT,
+                payment_id INTEGER,
+                payment_number TEXT,
                 transaction_type TEXT NOT NULL,
                 source_transaction_id INTEGER,
                 order_receivable REAL NOT NULL DEFAULT 0,
@@ -445,6 +447,26 @@ def _ensure_customer_schema(conn):
             )
             """
         )
+        account_columns = {
+            row["name"]
+            for row in cursor.execute(
+                "PRAGMA table_info(customer_account_transactions)"
+            )
+        }
+        if "payment_id" not in account_columns:
+            cursor.execute(
+                """
+                ALTER TABLE customer_account_transactions
+                ADD COLUMN payment_id INTEGER
+                """
+            )
+        if "payment_number" not in account_columns:
+            cursor.execute(
+                """
+                ALTER TABLE customer_account_transactions
+                ADD COLUMN payment_number TEXT
+                """
+            )
         cursor.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_customer_account_customer
@@ -462,6 +484,69 @@ def _ensure_customer_schema(conn):
             CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_account_active_order_audit
             ON customer_account_transactions(order_id)
             WHERE transaction_type = 'order_audit' AND status = 'active'
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_customer_account_payment
+            ON customer_account_transactions(payment_id, transaction_type, status)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_customer_account_active_payment
+            ON customer_account_transactions(payment_id)
+            WHERE transaction_type = 'customer_payment' AND status = 'active'
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS payment_receipts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_no TEXT NOT NULL UNIQUE,
+                document_date TEXT NOT NULL,
+                store_id INTEGER NOT NULL,
+                customer_id INTEGER NOT NULL,
+                settlement_account TEXT NOT NULL DEFAULT '',
+                payment_method TEXT NOT NULL DEFAULT '',
+                payment_amount REAL NOT NULL DEFAULT 0,
+                discount_amount REAL NOT NULL DEFAULT 0,
+                total_amount REAL NOT NULL DEFAULT 0,
+                writeoff_amount REAL NOT NULL DEFAULT 0,
+                advance_amount REAL NOT NULL DEFAULT 0,
+                debt_before REAL NOT NULL DEFAULT 0,
+                debt_after REAL NOT NULL DEFAULT 0,
+                balance_before REAL NOT NULL DEFAULT 0,
+                balance_after REAL NOT NULL DEFAULT 0,
+                creator TEXT NOT NULL DEFAULT '',
+                remark TEXT NOT NULL DEFAULT '',
+                attachment_url TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'draft',
+                account_transaction_id INTEGER,
+                audited_by TEXT,
+                audited_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_payment_receipts_store_date
+            ON payment_receipts(store_id, document_date DESC, id DESC)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_payment_receipts_customer
+            ON payment_receipts(customer_id, document_date DESC, id DESC)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_payment_receipts_status
+            ON payment_receipts(status, document_date DESC, id DESC)
             """
         )
 

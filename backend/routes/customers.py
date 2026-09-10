@@ -224,7 +224,7 @@ def get_customer_receivables():
                 ), 0) AS debt_recovered,
                 COALESCE(SUM(
                     CASE
-                        WHEN t.transaction_type = 'order_audit'
+                        WHEN t.transaction_type = 'customer_payment'
                          AND t.status = 'active'
                         THEN t.discount_amount
                         ELSE 0
