@@ -3,6 +3,8 @@ dist
 dist-ssr
 *.local
 .DS_Store
+__pycache__/
+*.py[cod]
 
 uploads
 frontend
