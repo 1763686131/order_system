@@ -661,18 +661,9 @@ const open = (orderId, mode) => {
       btnReceiptUploadEl.style.display = 'block'
       if (btnEditConfirm) btnEditConfirm.style.display = 'none'
 
-      // 权限控制
-      if (userStore.hasPerm('shipped.delete_receipt')) {
-        btnReceiptDeleteEl.style.display = 'inline-block'
-      } else {
-        btnReceiptDeleteEl.style.display = 'none'
-      }
-
-      if (userStore.hasPerm('shipped.upload_receipt')) {
-        btnReceiptUploadEl.style.display = 'inline-block'
-      } else {
-        btnReceiptUploadEl.style.display = 'none'
-      }
+      // 回单选择与上传不再依赖审核状态或角色权限
+      btnReceiptDeleteEl.style.display = 'inline-block'
+      btnReceiptUploadEl.style.display = 'inline-block'
 
       // 清除图片按钮点击事件
       if (btnReceiptDeleteEl) {
@@ -1018,10 +1009,6 @@ const submitReceiptImage = async () => {
   try {
     const response = await fetch(`/api/orders/${id}/upload_receipt`, {
       method: 'POST',
-      headers: {
-        'Username': String(userStore.user?.username || ''),
-        'Role': String(userStore.user?.role || '')
-      },
       body: formData
     })
 

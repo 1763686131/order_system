@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia'
 import request from '@/api/request'
-import { useUserStore } from './user'
 
 export const useOrderStore = defineStore('order', {
   state: () => ({
@@ -169,13 +168,8 @@ export const useOrderStore = defineStore('order', {
     async uploadReceipt(orderId, formData) {
       try {
         // 使用原生fetch，因为需要发送FormData
-        const userStore = useUserStore()
         const response = await fetch(`/api/orders/${orderId}/upload_receipt`, {
           method: 'POST',
-          headers: {
-            'Username': String(userStore.username),
-            'Role': String(userStore.role)
-          },
           body: formData
         })
 

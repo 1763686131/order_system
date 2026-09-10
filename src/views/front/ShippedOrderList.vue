@@ -253,24 +253,12 @@ const getMethodTagTitle = (order) => {
 
 // 获取物流单号标签样式
 const getLogisticsTagStyle = (order) => {
-  const isAudited = order.audit_state === 1
-
-  if (isAudited) {
-    return 'background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; transition: all 0.2s;'
-  } else {
-    return 'background:#e6f7ff; color:#1890ff; border:1px solid #b7e1ff; cursor: not-allowed;'
-  }
+  return 'background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; transition: all 0.2s;'
 }
 
 // 获取物流单号标签提示
 const getLogisticsTagTitle = (order) => {
-  const isAudited = order.audit_state === 1
-
-  if (isAudited) {
-    return '点击管理回单图片'
-  } else {
-    return '请先完成【确认审核】后再上传回单图片'
-  }
+  return order.receipt_img_url ? '点击管理回单图片' : '点击上传回单图片'
 }
 
 // 处理标签悬停
@@ -293,11 +281,7 @@ const handleMethodClick = (order) => {
 
 // 处理物流单号点击
 const handleLogisticsClick = (order) => {
-  const isAudited = order.audit_state === 1
-
-  if (isAudited) {
-    emit('manage-receipt', order.id)
-  }
+  emit('manage-receipt', order.id)
 }
 
 // 展开/收起货物列表

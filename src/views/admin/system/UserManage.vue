@@ -231,7 +231,6 @@ const permissionsConfig = [
     children: [
       { key: 'shipped.audit', label: '发货方式标签（出库审核与撤销）' },
       { key: 'shipped.view_receipt', label: '回单标签（查看与下载凭证）' },
-      { key: 'shipped.upload_receipt', label: '单号标签（上传与管理回单图片）' },
       { key: 'shipped.delete_receipt', label: '弹窗操作：允许删除回单图片' }
     ]
   },

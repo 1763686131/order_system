@@ -411,6 +411,12 @@ def update_order_status_only(order_id, req_data):
     changed_order = None
     for x in orders_list:
         if x['id'] == order_id:
+            # 新结构订单的审核状态独立于履约状态，审核/反审核不应改变发货进度。
+            if 'audit_state' in req_data and 'status' not in req_data:
+                x['audit_state'] = 1 if req_data.get('audit_state') else 0
+                changed_order = dict(x)
+                break
+
             # 如果只是更新物流单号和运费，不改变状态
             if 'logistics_no' in req_data and 'status' not in req_data:
                 x['logistics_no'] = req_data.get('logistics_no')

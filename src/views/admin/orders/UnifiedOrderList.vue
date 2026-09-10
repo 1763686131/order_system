@@ -323,8 +323,7 @@
                 <td>{{ getTotalWeight(order) }}</td>
                 <td>
                   <span
-                    class="shipping-tag clickable"
-                    :class="{ 'can-edit': order.audit_state === 1 }"
+                    class="shipping-tag clickable can-edit"
                     @click.stop="handleShippingTagClick(order)"
                   >
                     {{ getShippingMethodText(order) }}
@@ -698,7 +697,7 @@
                   {{ orderActionLoading === 'audit' ? '审核中...' : '审核' }}
                 </button>
                 <button
-                  v-if="mode === 'finance' && isOrderAudited(selectedOrder)"
+                  v-if="mode === 'finance' && canReverseAuditOrder(selectedOrder)"
                   class="button button-reverse-audit"
                   type="button"
                   :disabled="orderActionLoading !== ''"
@@ -729,6 +728,14 @@
                   @click="handleEdit(selectedOrder)"
                 >
                   修改物流
+                </button>
+                <button
+                  v-if="mode === 'logistics'"
+                  class="button button-secondary"
+                  type="button"
+                  @click="handleShippingTagClick(selectedOrder)"
+                >
+                  {{ hasReceipt(selectedOrder) ? '管理回单' : '上传回单' }}
                 </button>
               </div>
             </footer>
@@ -1751,14 +1758,18 @@ const handleLogisticsAction = (order) => {
 const isOrderAudited = (order) => Number(order?.audit_state) === 1
 
 const canAuditOrder = (order) => {
-  return order?.status === 'shipped' && !isOrderAudited(order)
+  return isNewOrder(order) && !isOrderAudited(order)
+}
+
+const canReverseAuditOrder = (order) => {
+  return isNewOrder(order) && isOrderAudited(order)
 }
 
 const updateOrderAuditState = async (order, audited) => {
-  if (!order || order.status !== 'shipped') return
+  if (!isNewOrder(order)) return
 
   const actionLabel = audited ? '审核' : '反审核'
-  const nextStatusLabel = audited ? '已过帐' : '已发货'
+  const nextStatusLabel = audited ? '已过帐' : getStatusText({ ...order, audit_state: 0 })
   if (!window.confirm(`确定要${actionLabel}订单 ${order.order_number || order.id} 吗？`)) {
     return
   }
@@ -1769,7 +1780,6 @@ const updateOrderAuditState = async (order, audited) => {
       url: `/orders/${order.id}`,
       method: 'PUT',
       data: {
-        status: 'shipped',
         audit_state: audited ? 1 : 0
       }
     })
@@ -1791,25 +1801,17 @@ const updateOrderAuditState = async (order, audited) => {
 const handleAuditOrder = (order) => updateOrderAuditState(order, true)
 const handleReverseAuditOrder = (order) => updateOrderAuditState(order, false)
 
-// 点击发货方式标签 - 上传回单
+// 点击发货方式标签 - 回单随时可上传或管理
 const handleShippingTagClick = (order) => {
-  // 更新 orderStore 数据
   orderStore.allOrders = orders.value
-
-  if (order.audit_state === 1) {
-    // 已审核的订单，打开回单上传窗口
-    window.triggerShippedActionModal(order.id, 'receipt')
-  }
+  closeDetailModal()
+  window.triggerShippedActionModal(order.id, 'receipt')
 }
 
 const handleLogisticsClick = (order) => {
-  // 更新 orderStore 数据
   orderStore.allOrders = orders.value
-
-  if (order.audit_state === 1) {
-    // 已审核的订单，打开填写单号弹窗
-    window.triggerShippedActionModal(order.id, 'receipt')
-  }
+  closeDetailModal()
+  window.triggerShippedActionModal(order.id, 'receipt')
 }
 
 // 复制单号
@@ -1884,7 +1886,7 @@ const toggleSort = () => {
 
 // 获取订单状态文本
 const getStatusText = (order) => {
-  if (order.status === 'shipped' && isOrderAudited(order)) {
+  if (isNewOrder(order) && isOrderAudited(order)) {
     return '已过帐'
   } else if (order.status === 'shipped') {
     return '已发货'
@@ -1897,7 +1899,7 @@ const getStatusText = (order) => {
 
 // 获取订单状态样式类
 const getStatusClass = (order) => {
-  if (order.status === 'shipped' && isOrderAudited(order)) {
+  if (isNewOrder(order) && isOrderAudited(order)) {
     return 'status-posted'
   } else if (order.status === 'shipped') {
     return 'status-shipped'
