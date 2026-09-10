@@ -328,6 +328,7 @@ const setHeaderActions = inject('setHeaderActions', null)
 
 // 含税开关状态
 const showTaxColumns = ref(false)
+const DEFAULT_TAX_RATE = 13
 
 // 手动修改的合计件数
 const manualTotalPackages = ref(null)
@@ -426,7 +427,7 @@ const formData = ref({
   salesPerson: '柯晓',
   creator: '下单员',
   orderRemark: '',
-  taxRate: 13,
+  taxRate: 0,
   discountAmount: null,
   otherFees: null,
   settlementAccount: '',
@@ -516,6 +517,7 @@ const restoreDraft = async (draft) => {
     filteredProducts: []
   }))
   showTaxColumns.value = Boolean(draft.showTaxColumns)
+  normalizeTaxRows(showTaxColumns.value, true)
   manualTotalPackages.value = draft.manualTotalPackages ?? null
 
   // 金额联动的 watcher 会在恢复商品行后执行，下一帧再还原用户手工输入值。
@@ -713,7 +715,6 @@ const loadOrderData = async (orderId) => {
       formData.value.salesPerson = response.sales_person || ''
       formData.value.creator = response.creator || ''
       formData.value.orderRemark = response.remark || ''
-      formData.value.taxRate = response.tax_rate || 13
       formData.value.discountAmount = response.discount_amount || null
       formData.value.otherFees = response.other_fees || null
       formData.value.settlementAccount = response.settlement_account || ''
@@ -724,6 +725,18 @@ const loadOrderData = async (orderId) => {
       // 填充商品明细
       if (response.order_goods && response.order_goods.length > 0) {
         console.log('开始填充商品明细，order_goods:', response.order_goods)
+        const taxEnabled = response.order_goods.some(item =>
+          Number(item.tax_rate) > 0 ||
+          Number(item.tax_included_price) > 0 ||
+          Number(item.total_amount) > 0
+        ) || Number(response.tax_amount) > 0
+        const savedTaxRate = response.order_goods.find(item => Number(item.tax_rate) > 0)?.tax_rate
+
+        showTaxColumns.value = taxEnabled
+        formData.value.taxRate = taxEnabled
+          ? (Number(savedTaxRate) || DEFAULT_TAX_RATE)
+          : 0
+
         formData.value.items = response.order_goods.map(item => ({
           productId: item.product_id || '',
           goodsName: item.goods_name || '',
@@ -735,10 +748,10 @@ const loadOrderData = async (orderId) => {
           packages: item.packages || null,
           quantity: item.quantity || null,
           price: item.price || null,
-          taxRate: item.tax_rate || 13,
-          taxIncludedPrice: item.tax_included_price || null,
+          taxRate: taxEnabled ? (Number(item.tax_rate) || DEFAULT_TAX_RATE) : 0,
+          taxIncludedPrice: taxEnabled ? (Number(item.tax_included_price) || 0) : 0,
           amount: item.amount || null,
-          totalAmount: item.total_amount || null,
+          totalAmount: taxEnabled ? (Number(item.total_amount) || 0) : 0,
           remark: item.remark || '',
           showDropdown: false,
           filteredProducts: [],
@@ -761,10 +774,10 @@ const loadOrderData = async (orderId) => {
             packages: null,
             quantity: null,
             price: null,
-            taxRate: 13,
-            taxIncludedPrice: null,
+            taxRate: taxEnabled ? DEFAULT_TAX_RATE : 0,
+            taxIncludedPrice: 0,
             amount: null,
-            totalAmount: null,
+            totalAmount: 0,
             remark: '',
             showDropdown: false,
             filteredProducts: [],
@@ -779,6 +792,8 @@ const loadOrderData = async (orderId) => {
             await updateStockInfo(item)
           }
         }
+
+        normalizeTaxRows(taxEnabled, true)
       }
 
       // 加载客户欠款
@@ -975,8 +990,10 @@ const selectProduct = (index, product) => {
   }
 
   item.price = product.price || 0
-  item.taxRate = 13
-  item.taxIncludedPrice = product.price ? parseFloat((product.price * 1.13).toFixed(2)) : 0
+  item.taxRate = showTaxColumns.value ? DEFAULT_TAX_RATE : 0
+  item.taxIncludedPrice = showTaxColumns.value && product.price
+    ? parseFloat((product.price * (1 + DEFAULT_TAX_RATE / 100)).toFixed(2))
+    : 0
 
   // 保存单位换算信息
   item.unitConversions = product.unitConversions || []
@@ -1036,6 +1053,14 @@ const updateStockInfo = async (item) => {
 // 单价改变时自动计算含税单价
 const onPriceChange = (index) => {
   const item = formData.value.items[index]
+
+  if (!showTaxColumns.value) {
+    item.taxRate = 0
+    item.taxIncludedPrice = 0
+    calculateRowAmount(index)
+    return
+  }
+
   const taxRate = item.taxRate !== null && item.taxRate !== undefined ? item.taxRate : 0
 
   if (item.price !== null && item.price !== undefined && item.price !== '') {
@@ -1049,6 +1074,14 @@ const onPriceChange = (index) => {
 // 含税单价改变时自动计算单价
 const onTaxIncludedPriceChange = (index) => {
   const item = formData.value.items[index]
+
+  if (!showTaxColumns.value) {
+    item.taxRate = 0
+    item.taxIncludedPrice = 0
+    item.totalAmount = 0
+    return
+  }
+
   const taxRate = item.taxRate !== null && item.taxRate !== undefined ? item.taxRate : 0
 
   if (item.taxIncludedPrice !== null && item.taxIncludedPrice !== undefined && item.taxIncludedPrice !== '') {
@@ -1062,6 +1095,13 @@ const onTaxIncludedPriceChange = (index) => {
 // 行税率改变时重新计算含税单价
 const onItemTaxRateChange = (index) => {
   const item = formData.value.items[index]
+
+  if (!showTaxColumns.value) {
+    item.taxRate = 0
+    item.taxIncludedPrice = 0
+    item.totalAmount = 0
+    return
+  }
 
   // 如果有单价，则重新计算含税单价
   if (item.price !== null && item.price !== undefined && item.price !== '') {
@@ -1097,7 +1137,40 @@ const onQuantityChange = (index) => {
 const calculateRowAmount = (index) => {
   const item = formData.value.items[index]
   item.amount = (item.quantity || 0) * (item.price || 0)
-  item.totalAmount = (item.quantity || 0) * (item.taxIncludedPrice || 0)
+  item.totalAmount = showTaxColumns.value
+    ? (item.quantity || 0) * (item.taxIncludedPrice || 0)
+    : 0
+}
+
+const normalizeTaxRows = (taxEnabled, preserveExisting = false) => {
+  formData.value.taxRate = taxEnabled
+    ? (Number(formData.value.taxRate) || DEFAULT_TAX_RATE)
+    : 0
+
+  formData.value.items.forEach((item, index) => {
+    if (!taxEnabled) {
+      item.taxRate = 0
+      item.taxIncludedPrice = 0
+      item.totalAmount = 0
+      calculateRowAmount(index)
+      return
+    }
+
+    item.taxRate = Number(item.taxRate) || DEFAULT_TAX_RATE
+    const price = Number(item.price) || 0
+    const existingTaxIncludedPrice = Number(item.taxIncludedPrice)
+    const hasExistingTaxIncludedPrice =
+      item.taxIncludedPrice !== null &&
+      item.taxIncludedPrice !== '' &&
+      Number.isFinite(existingTaxIncludedPrice)
+
+    if (!preserveExisting || !hasExistingTaxIncludedPrice) {
+      item.taxIncludedPrice = price
+        ? parseFloat((price * (1 + item.taxRate / 100)).toFixed(2))
+        : 0
+    }
+    calculateRowAmount(index)
+  })
 }
 
 // 添加行
@@ -1155,6 +1228,7 @@ const totalAmount = computed(() => {
 })
 
 const totalTaxAmount = computed(() => {
+  if (!showTaxColumns.value) return 0
   return formData.value.items.reduce((sum, item) => sum + (item.totalAmount || 0), 0)
 })
 
@@ -1182,6 +1256,10 @@ watch(() => formData.value.items.map(item => item.packages), () => {
     manualTotalPackages.value = totalPackagesCalculated.value
   }
 }, { deep: true })
+
+watch(showTaxColumns, (taxEnabled) => {
+  normalizeTaxRows(taxEnabled)
+})
 
 // 监听含税金额变化，自动更新折扣金额
 watch(
@@ -1296,6 +1374,7 @@ const handleSave = async (printAfterSave = false) => {
     const validItems = formData.value.items.filter(item =>
       item.productId
     )
+    const taxEnabled = showTaxColumns.value
 
     // 4. 构建请求数据
     const requestData = {
@@ -1313,7 +1392,10 @@ const handleSave = async (printAfterSave = false) => {
       salesPerson: formData.value.salesPerson,
       creator: formData.value.creator,
       orderRemark: formData.value.orderRemark,
-      taxRate: formData.value.taxRate,
+      taxEnabled,
+      taxRate: taxEnabled
+        ? (Number(formData.value.taxRate) || DEFAULT_TAX_RATE)
+        : 0,
       discountAmount: formData.value.discountAmount || 0,
       otherFees: formData.value.otherFees || 0,
       settlementAccount: formData.value.settlementAccount,
@@ -1327,10 +1409,10 @@ const handleSave = async (printAfterSave = false) => {
         packages: Number(item.packages) || 0,
         quantity: Number(item.quantity) || 0,
         price: Number(item.price) || 0,
-        taxRate: Number(item.taxRate) || 13,
-        taxIncludedPrice: Number(item.taxIncludedPrice) || 0,
+        taxRate: taxEnabled ? (Number(item.taxRate) || DEFAULT_TAX_RATE) : 0,
+        taxIncludedPrice: taxEnabled ? (Number(item.taxIncludedPrice) || 0) : 0,
         amount: Number(item.amount) || 0,
-        totalAmount: Number(item.totalAmount) || 0,
+        totalAmount: taxEnabled ? (Number(item.totalAmount) || 0) : 0,
         remark: item.remark || ''
       }))
     }
@@ -1436,12 +1518,14 @@ const handleClearForm = () => {
     formData.value.salesPerson = '柯晓'
     formData.value.creator = '下单员'
     formData.value.orderRemark = ''
+    formData.value.taxRate = 0
     formData.value.discountAmount = null
     formData.value.otherFees = null
     formData.value.currentPayment = 0
 
     // 清空商品列表
     initEmptyRows()
+    showTaxColumns.value = false
 
     // 重置手动合计
     manualTotalPackages.value = null

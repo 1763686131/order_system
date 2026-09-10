@@ -209,6 +209,7 @@ def create_new_format_order(req_data):
 
     # 处理商品明细
     items = req_data.get('items', [])
+    tax_enabled = bool(req_data.get('taxEnabled', False))
     order_goods = []
     goods_name_parts = []
     total_quantity = 0
@@ -241,10 +242,10 @@ def create_new_format_order(req_data):
             "packages": item.get('packages', 0),
             "quantity": quantity,
             "price": item.get('price', 0),
-            "tax_rate": item.get('taxRate', 13),
-            "tax_included_price": item.get('taxIncludedPrice', 0),
+            "tax_rate": item.get('taxRate', 0) if tax_enabled else 0,
+            "tax_included_price": item.get('taxIncludedPrice', 0) if tax_enabled else 0,
             "amount": item.get('amount', 0),
-            "total_amount": item.get('totalAmount', 0),
+            "total_amount": item.get('totalAmount', 0) if tax_enabled else 0,
             "remark": item.get('remark', '')
         })
 
@@ -259,9 +260,13 @@ def create_new_format_order(req_data):
 
     # 计算财务字段
     subtotal_amount = sum(item['amount'] for item in order_goods)
-    tax_amount = sum(item['total_amount'] - item['amount'] for item in order_goods)
-    total_amount = sum(item['total_amount'] for item in order_goods)
-    discount_amount = req_data.get('discountAmount', total_amount)
+    tax_amount = (
+        sum(item['total_amount'] - item['amount'] for item in order_goods)
+        if tax_enabled else 0
+    )
+    total_amount = sum(item['total_amount'] for item in order_goods) if tax_enabled else 0
+    default_receivable = total_amount if tax_enabled else subtotal_amount
+    discount_amount = req_data.get('discountAmount', default_receivable)
     other_fees = req_data.get('otherFees', 0)
     should_receive = discount_amount + other_fees
     current_payment = req_data.get('currentPayment', 0)
@@ -524,6 +529,7 @@ def update_full_order(order_id, req_data):
 
         # 处理商品明细
         items = req_data.get('items', [])
+        tax_enabled = bool(req_data.get('taxEnabled', False))
         order_goods = []
         goods_name_parts = []
         total_quantity = 0
@@ -543,10 +549,10 @@ def update_full_order(order_id, req_data):
                 "packages": item.get('packages', 0),
                 "quantity": item.get('quantity', 0),
                 "price": item.get('price', 0),
-                "tax_rate": item.get('taxRate', 13),
-                "tax_included_price": item.get('taxIncludedPrice', 0),
+                "tax_rate": item.get('taxRate', 0) if tax_enabled else 0,
+                "tax_included_price": item.get('taxIncludedPrice', 0) if tax_enabled else 0,
                 "amount": item.get('amount', 0),
-                "total_amount": item.get('totalAmount', 0),
+                "total_amount": item.get('totalAmount', 0) if tax_enabled else 0,
                 "remark": item.get('remark', '')
             })
 
@@ -559,9 +565,13 @@ def update_full_order(order_id, req_data):
 
         # 计算财务字段
         subtotal_amount = sum(item['amount'] for item in order_goods)
-        tax_amount = sum(item['total_amount'] - item['amount'] for item in order_goods)
-        total_amount = sum(item['total_amount'] for item in order_goods)
-        discount_amount = req_data.get('discountAmount', total_amount)
+        tax_amount = (
+            sum(item['total_amount'] - item['amount'] for item in order_goods)
+            if tax_enabled else 0
+        )
+        total_amount = sum(item['total_amount'] for item in order_goods) if tax_enabled else 0
+        default_receivable = total_amount if tax_enabled else subtotal_amount
+        discount_amount = req_data.get('discountAmount', default_receivable)
         other_fees = req_data.get('otherFees', 0)
         should_receive = discount_amount + other_fees
         current_payment = req_data.get('currentPayment', 0)
