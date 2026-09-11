@@ -122,7 +122,8 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['refresh', 'view-detail', 'view-receipt', 'audit', 'manage-receipt'])
+const emit = defineEmits(['refresh', 'view-detail', 'view-receipt', 'audit', 'manage-receipt', 'logistics'])
+
 
 const userStore = useUserStore()
 const stores = ref([])
@@ -218,11 +219,14 @@ const getShippingMethod = (order) => {
   } else if (order.logistics_type) {
     return order.logistics_type
   }
-  return '其它'
+  return order.status === 'completed' ? '未选择' : '其它'
 }
 
 // 获取发货方式标签样式
 const getMethodTagStyle = (order) => {
+  if (order.status === 'completed') {
+    return 'background:#f3f4f6; color:#9ca3af; border:1px solid #d1d5db; cursor: pointer; transition: all 0.2s;'
+  }
   const isAudited = order.audit_state === 1
 
   if (isAudited) {
@@ -238,6 +242,7 @@ const getMethodTagStyle = (order) => {
 
 // 获取发货方式标签提示
 const getMethodTagTitle = (order) => {
+  if (order.status === 'completed') return '点击录入物流信息'
   const isAudited = order.audit_state === 1
 
   if (isAudited) {
@@ -252,12 +257,21 @@ const getMethodTagTitle = (order) => {
 }
 
 // 获取物流单号标签样式
+const hasLogisticsNumber = (order) => {
+  const value = String(order?.logistics_no || '').trim()
+  return Boolean(value) && !['暂未录入单号', '无单号记录', '暂无记录'].includes(value)
+}
+
 const getLogisticsTagStyle = (order) => {
+  if (!hasLogisticsNumber(order)) {
+    return 'background:#f3f4f6; color:#9ca3af; border:1px solid #d1d5db; cursor: pointer; transition: all 0.2s;'
+  }
   return 'background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; transition: all 0.2s;'
 }
 
 // 获取物流单号标签提示
 const getLogisticsTagTitle = (order) => {
+  if (!hasLogisticsNumber(order)) return '点击录入物流信息'
   return order.receipt_img_url ? '点击管理回单图片' : '点击上传回单图片'
 }
 
@@ -272,6 +286,10 @@ const handleTagHover = (event, isEntering) => {
 
 // 处理发货方式点击
 const handleMethodClick = (order) => {
+  if (order.status === 'completed') {
+    emit('logistics', order.id)
+    return
+  }
   const isAudited = order.audit_state === 1
 
   if (!isAudited && userStore.hasPerm('shipped.audit')) {
@@ -281,6 +299,10 @@ const handleMethodClick = (order) => {
 
 // 处理物流单号点击
 const handleLogisticsClick = (order) => {
+  if (!hasLogisticsNumber(order)) {
+    emit('logistics', order.id)
+    return
+  }
   emit('manage-receipt', order.id)
 }
 

@@ -21,13 +21,17 @@ export const useOrderStore = defineStore('order', {
     },
 
     shippedOrders: (state) => {
-      return state.allOrders.filter(order => order.status === 'shipped')
+      return state.allOrders.filter(order =>
+        order.status === 'completed' || order.status === 'shipped'
+      )
     },
 
     currentOrders: (state) => {
       if (state.currentTab === 0) return state.allOrders.filter(o => o.status === 'pending')
       if (state.currentTab === 1) return state.allOrders.filter(o => o.status === 'completed')
-      if (state.currentTab === 2) return state.allOrders.filter(o => o.status === 'shipped')
+      if (state.currentTab === 2) {
+        return state.allOrders.filter(o => o.status === 'completed' || o.status === 'shipped')
+      }
       return []
     }
   },

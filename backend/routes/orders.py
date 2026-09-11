@@ -790,6 +790,10 @@ def update_order_status_only(order_id, req_data):
             # 如果只是更新物流单号和运费，不改变状态
             if 'logistics_no' in req_data and 'status' not in req_data:
                 x['logistics_no'] = req_data.get('logistics_no')
+                if 'shipping_method' in req_data:
+                    x['shipping_method'] = req_data.get('shipping_method')
+                if 'shipping_custom' in req_data:
+                    x['shipping_custom'] = req_data.get('shipping_custom', '')
                 if 'freight_costs' in req_data:
                     x['freight_costs'] = req_data.get('freight_costs', [])
                 changed_order = dict(x)
@@ -812,6 +816,10 @@ def update_order_status_only(order_id, req_data):
                 x['audit_state'] = 0
 
             elif ns == 'shipped':
+                if 'shipping_method' in req_data:
+                    x['shipping_method'] = req_data.get('shipping_method')
+                if 'shipping_custom' in req_data:
+                    x['shipping_custom'] = req_data.get('shipping_custom', '')
                 if 'audit_state' in req_data:
                     x['audit_state'] = req_data.get('audit_state', 0)
                     # 🎯 核心修复：在审核操作时，必须接住前端传来的物流单号并更新进数据库！

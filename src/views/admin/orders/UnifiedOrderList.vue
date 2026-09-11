@@ -325,7 +325,7 @@
                 <td>{{ getTotalWeight(order) }}</td>
                 <td>
                   <span
-                    class="shipping-tag clickable can-edit"
+                    :class="['shipping-tag', 'clickable', { 'can-edit': hasLogistics(order) }]"
                     @click.stop="handleShippingTagClick(order)"
                   >
                     {{ getShippingMethodText(order) }}
@@ -405,14 +405,12 @@
                   <button
                     v-if="mode === 'finance' && order.status === 'completed'"
                     type="button"
-                    title="出库发货"
-                    @click="handleShipOrder(order)"
+                    title="撤销已完成"
+                    @click="handleUncompleteOrder(order)"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <rect x="1" y="3" width="15" height="13"></rect>
-                      <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
-                      <circle cx="5.5" cy="18.5" r="2.5"></circle>
-                      <circle cx="18.5" cy="18.5" r="2.5"></circle>
+                      <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                      <path d="M3 4v6h6"></path>
                     </svg>
                   </button>
                   <button
@@ -706,11 +704,12 @@
                 </button>
                 <button
                   v-if="mode === 'finance' && selectedOrder.status === 'completed'"
-                  class="button button-primary"
+                  class="button button-reverse-audit"
                   type="button"
-                  @click="handleShipOrder(selectedOrder)"
+                  :disabled="orderActionLoading !== ''"
+                  @click="handleUncompleteOrder(selectedOrder)"
                 >
-                  出库发货
+                  {{ orderActionLoading === 'uncomplete' ? '撤销中...' : '撤销已完成' }}
                 </button>
                 <button
                   v-if="mode === 'logistics' && !hasLogistics(selectedOrder)"
@@ -923,13 +922,8 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['ship', 'refresh'])
-
 const orderStore = useOrderStore()
 const orderDraftStore = useOrderDraftStore()
-
-// 从父组件注入 handleShip 方法
-const handleShipFromParent = inject('handleShip', null)
 
 // 注入 Admin 组件提供的方法
 const setHeaderActions = inject('setHeaderActions', null)
@@ -946,8 +940,6 @@ const selectedOrder = ref(null)
 const orderActionLoading = ref('')
 
 // 发货方式输入
-const shippingMethodInput = ref('')
-
 // 排序状态
 const sortOrder = ref('desc') // 'desc' = 最近到远, 'asc' = 最远到近
 onMounted(() => {
@@ -1133,9 +1125,11 @@ const fetchOrdersData = async () => {
       // 更新 orderStore 的所有订单数据
       orderStore.setOrders(ordersResponse)
 
-      // 物流模式只显示已出库订单
+      // 完成后的订单直接进入物流列表，录入物流信息后再转为已发货。
       if (props.mode === 'logistics') {
-        orders.value = ordersResponse.filter(order => order.status === 'shipped')
+        orders.value = ordersResponse.filter(order =>
+          order.status === 'completed' || order.status === 'shipped'
+        )
       } else {
         orders.value = ordersResponse
       }
@@ -1176,7 +1170,7 @@ const getShippingMethodText = (order) => {
   } else if (order.logistics_type) {
     return order.logistics_type
   }
-  return '其它'
+  return '未选择'
 }
 
 // 检查是否有回单
@@ -1840,6 +1834,10 @@ const handleReverseAuditOrder = (order) => updateOrderAuditState(order, false)
 
 // 点击发货方式标签 - 回单随时可上传或管理
 const handleShippingTagClick = (order) => {
+  if (order?.status === 'completed' || !hasLogistics(order)) {
+    handleShippingClick(order)
+    return
+  }
   orderStore.allOrders = orders.value
   closeDetailModal()
   window.triggerShippedActionModal(order.id, 'receipt')
@@ -1955,16 +1953,25 @@ const handleClickOutside = (event) => {
   }
 }
 
-// 处理出库发货
-const handleShipOrder = (order) => {
-  // 更新 orderStore 数据
-  orderStore.allOrders = orders.value
+const handleUncompleteOrder = async (order) => {
+  if (!order || order.status !== 'completed') return
+  if (!window.confirm(`确定撤销订单 ${order.order_number || order.id} 的已完成状态吗？`)) return
 
-  // 使用注入的方法或者 emit
-  if (handleShipFromParent) {
-    handleShipFromParent(order.id)
-  } else {
-    emit('ship', order.id)
+  orderActionLoading.value = 'uncomplete'
+  try {
+    await request({
+      url: `/orders/${order.id}`,
+      method: 'PUT',
+      data: { status: 'pending' }
+    })
+    closeDetailModal()
+    await fetchOrdersData()
+    window.alert('已撤销完成，订单已恢复为未完成状态')
+  } catch (error) {
+    console.error('撤销已完成失败:', error)
+    window.alert(error?.response?.data?.message || '撤销失败，请稍后重试')
+  } finally {
+    orderActionLoading.value = ''
   }
 }
 

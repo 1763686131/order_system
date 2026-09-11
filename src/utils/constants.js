@@ -20,7 +20,6 @@ export const PERMISSIONS = {
 
   COMPLETED_EDIT: 'completed.edit',
   COMPLETED_DELETE: 'completed.delete',
-  COMPLETED_SHIP: 'completed.ship',
 
   SHIPPED_AUDIT: 'shipped.audit',
   SHIPPED_RECEIPT: 'shipped.receipt',

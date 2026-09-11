@@ -266,7 +266,6 @@ const permissionModules = ref([
     label: '已完成订单 (核对发货)',
     icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
     children: [
-      { id: 'completed.ship', label: '操作：发货并出库' },
       { id: 'completed.uncomplete', label: '操作：撤销回未完成' },
       { id: 'completed.copy', label: '显示：复制物流信息' },
       { id: 'completed.delete', label: '操作：物理删除订单' }

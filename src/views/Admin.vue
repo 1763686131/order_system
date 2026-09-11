@@ -165,7 +165,6 @@
 
     <!-- 弹窗组件 -->
     <ShippedOrderActionModal ref="shippedActionModal" @refresh="handleRefresh" />
-    <ShipOrderModal ref="shipOrderModal" @refresh="handleRefresh" />
     <StockInOrderModal ref="stockRecordModal" @saved="handleStockRecordSaved" />
   </div>
 </template>
@@ -177,7 +176,6 @@ import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import request from '@/api/request'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
-import ShipOrderModal from '@/components/front/ShipOrderModal.vue'
 import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
 
 const router = useRouter()
@@ -187,7 +185,6 @@ const orderDraftStore = useOrderDraftStore()
 
 const notificationCount = ref(3)
 const shippedActionModal = ref(null)
-const shipOrderModal = ref(null)
 const stockRecordModal = ref(null)
 const activeContentRef = ref(null)
 
@@ -215,11 +212,6 @@ onMounted(() => {
     }
   }
 
-  window.triggerShipOrderModal = (orderId) => {
-    if (shipOrderModal.value) {
-      shipOrderModal.value.open(orderId)
-    }
-  }
 })
 
 // 处理刷新事件
@@ -279,13 +271,6 @@ const handleStockRecordReview = () => {}
 const handleStockRecordReverseAudit = () => {}
 const handleStockRecordRestart = () => {}
 const handleStockRecordDelete = () => {}
-
-// 提供给子组件的 ship 方法
-provide('handleShip', (orderId) => {
-  if (shipOrderModal.value) {
-    shipOrderModal.value.open(orderId)
-  }
-})
 
 // SVG 图标定义
 const icons = {

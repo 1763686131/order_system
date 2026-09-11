@@ -181,14 +181,7 @@
           class="btn btn-default"
           @click="$emit('uncomplete', order.id)"
         >
-          撤销
-        </button>
-        <button
-          v-if="userStore.hasPerm('completed.ship')"
-          class="btn btn-primary"
-          @click="$emit('ship', order.id)"
-        >
-          出库
+          撤销已完成
         </button>
         <button
           v-if="userStore.hasPerm('completed.delete')"
@@ -224,8 +217,7 @@ const props = defineProps({
     required: true // 'pending' 或 'completed'
   }
 })
-
-defineEmits(['complete', 'uncomplete', 'ship', 'delete', 'edit', 'copy'])
+defineEmits(['complete', 'uncomplete', 'delete', 'edit', 'copy'])
 
 const userStore = useUserStore()
 const stores = ref([])

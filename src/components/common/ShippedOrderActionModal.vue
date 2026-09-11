@@ -34,16 +34,41 @@
 
         <!-- 审核填写物流单号窗口 -->
         <div id="auditContent" style="display: block;">
-          <!-- 显示客户和发货方式 -->
-          <div v-if="currentOrderInfo.customer || currentOrderInfo.shippingMethod" style="margin-bottom: 16px; padding: 10px 14px; background: #f5f5f5; border-radius: 6px; font-size: 13px; display: flex; gap: 24px;">
+          <!-- 显示客户并选择发货方式 -->
+          <div style="margin-bottom: 16px; padding: 10px 14px; background: #f5f5f5; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 24px;">
             <div v-if="currentOrderInfo.customer" style="flex: 1;">
               <span style="color: #666; font-weight: 500;">客户名称：</span>
               <span style="color: #333; font-weight: bold;">{{ currentOrderInfo.customer }}</span>
             </div>
-            <div v-if="currentOrderInfo.shippingMethod" style="flex: 1;">
-              <span style="color: #666; font-weight: 500;">发货方式：</span>
-              <span style="color: #333; font-weight: bold;">{{ currentOrderInfo.shippingMethod }}</span>
+            <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
+              <label for="shippingMethodSelect" style="color: #666; font-weight: 500; white-space: nowrap;">发货方式：</label>
+              <select
+                id="shippingMethodSelect"
+                v-model="shippingMethod"
+                class="modern-input"
+                style="height: 34px; padding: 0 10px;"
+              >
+                <option
+                  v-for="option in shippingMethodOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </option>
+              </select>
             </div>
+          </div>
+
+          <div v-if="shippingMethod === '4'" class="form-item" style="margin: -4px 0 16px;">
+            <label for="shippingCustom" style="font-weight: 600; color: #4a4a4a; margin-bottom: 8px; display: block; font-size: 13px;">
+              自定义发货方式
+            </label>
+            <input
+              id="shippingCustom"
+              v-model="shippingCustom"
+              class="modern-input"
+              placeholder="请输入发货方式名称"
+            />
           </div>
 
           <!-- 商品信息展示区（新订单） -->
@@ -269,11 +294,11 @@ const targetOrderId = ref(null)
 const modalTitle = ref('已出库订单管理')
 const modalSubtitle = ref('请选择对当前出库订单的操作指令')
 const logisticsSubmitText = ref('修改完成')
+const currentMode = ref('entry')
 
-// 当前订单信息（客户名称和发货方式）
+// 当前订单信息
 const currentOrderInfo = ref({
   customer: '',
-  shippingMethod: '',
   goodsInfo: '' // 新增：商品信息文本
 })
 
@@ -372,6 +397,15 @@ const handleMouseUp = () => {
 const carrierName = ref('')
 const logisticsNo = ref('')
 const carrierTags = ref([])
+const shippingMethod = ref('0')
+const shippingCustom = ref('')
+const shippingMethodOptions = [
+  { value: '0', label: '物流' },
+  { value: '1', label: '零担快运' },
+  { value: '2', label: '快递' },
+  { value: '3', label: '专车' },
+  { value: '4', label: '其它' }
+]
 
 // 运费相关
 const freightCost = ref(0)
@@ -462,44 +496,31 @@ const clearReceiptImage = () => {
 // 打开弹窗 - 完全照搬原生逻辑
 const open = (orderId, mode) => {
   targetOrderId.value = orderId
+  currentMode.value = mode
 
   // 同步本地订单数据
   allOrdersLocal = orderStore.allOrders
+
+  carrierName.value = ''
+  logisticsNo.value = ''
+  freightCost.value = 0
+  otherCosts.value = []
+  shippingMethod.value = '0'
+  shippingCustom.value = ''
 
   // 获取订单信息，填充客户名称和发货方式
   const order = allOrdersLocal.find(o => o.id === orderId)
   if (order) {
     currentOrderInfo.value.customer = order.order_client || ''
-
-    // 获取发货方式文本
-    const methodMap = { 0: '物流', 1: '零担快运', 2: '快递', 3: '专车', 4: '其它' }
-    if (order.shipping_method !== undefined && order.shipping_method !== '') {
-      let method = methodMap[order.shipping_method] || '其它'
-      if (order.shipping_method === 4 && order.shipping_custom) {
-        method = order.shipping_custom
-      }
-      currentOrderInfo.value.shippingMethod = method
-    } else if (order.logistics_type) {
-      currentOrderInfo.value.shippingMethod = order.logistics_type
-    } else {
-      currentOrderInfo.value.shippingMethod = '其它'
-    }
+    const existingMethod = String(order.shipping_method ?? '')
+    shippingMethod.value = shippingMethodOptions.some(option => option.value === existingMethod)
+      ? existingMethod
+      : '0'
+    shippingCustom.value = order.shipping_custom || ''
 
     // 🎯 新增：获取商品信息文本
     currentOrderInfo.value.goodsInfo = getGoodsDisplayText(order)
   }
-
-  const title = document.getElementById('actionModalTitle')
-  const subtitle = document.getElementById('actionModalSubtitle')
-  const auditContent = document.getElementById('auditContent')
-  const receiptContent = document.getElementById('receiptContent')
-
-  const btnAuditRevoke = document.getElementById('btnAuditRevoke')
-  const btnAuditConfirm = document.getElementById('btnAuditConfirm')
-  const btnReceiptDelete = document.getElementById('btnReceiptDelete')
-  const btnReceiptUpload = document.getElementById('btnReceiptUpload')
-  const btnRealDelete = document.getElementById('btnRealDeleteReceipt')
-  const btnDownload = document.getElementById('btnDownloadReceipt')
 
   // 先显示弹窗
   visible.value = true
@@ -510,8 +531,6 @@ const open = (orderId, mode) => {
   // 等待DOM渲染
   nextTick(() => {
     // 重新获取DOM元素
-    const titleEl = document.getElementById('actionModalTitle')
-    const subtitleEl = document.getElementById('actionModalSubtitle')
     const auditContentEl = document.getElementById('auditContent')
     const receiptContentEl = document.getElementById('receiptContent')
     const btnAuditRevokeEl = document.getElementById('btnAuditRevoke')
@@ -761,10 +780,9 @@ const submitAuditShipOrder = async () => {
   const no = logisticsNo.value.trim()
 
   let finalLogisticsNo = ''
-  if (carrier && no) {
+  const shouldPersistCarrier = !['3', '4'].includes(shippingMethod.value)
+  if (carrier && no && shouldPersistCarrier) {
     finalLogisticsNo = `${carrier}-${no}`
-  } else if (carrier) {
-    finalLogisticsNo = carrier
   } else if (no) {
     finalLogisticsNo = no
   } else {
@@ -794,10 +812,10 @@ const submitAuditShipOrder = async () => {
     }
   })
 
-  // 保存历史标签
+  // 保存历史标签。专车和其它属于临时信息，不进入快捷标签库。
   const order = allOrdersLocal.find(o => o.id == id)
-  const isSpecialTruck = order && (order.shipping_method === 3 || order.shipping_method === '3')
-  if (!isSpecialTruck && carrier !== '') {
+  const shouldSaveCarrierTag = ['0', '1', '2'].includes(shippingMethod.value) && carrier !== ''
+  if (shouldSaveCarrierTag) {
     try {
       await request({
         url: '/carrier_tags',
@@ -821,6 +839,8 @@ const submitAuditShipOrder = async () => {
     const logisticsPayload = {
       status: 'shipped',
       audit_state: isAccountOrder ? 0 : 1,
+      shipping_method: Number(shippingMethod.value),
+      shipping_custom: shippingMethod.value === '4' ? shippingCustom.value.trim() : '',
       logistics_no: finalLogisticsNo,
       freight_costs: freightData
     }
@@ -861,10 +881,9 @@ const submitEditShipOrder = async () => {
   const no = logisticsNo.value.trim()
 
   let finalLogisticsNo = ''
-  if (carrier && no) {
+  const shouldPersistCarrier = !['3', '4'].includes(shippingMethod.value)
+  if (carrier && no && shouldPersistCarrier) {
     finalLogisticsNo = `${carrier}-${no}`
-  } else if (carrier) {
-    finalLogisticsNo = carrier
   } else if (no) {
     finalLogisticsNo = no
   } else {
@@ -894,17 +913,38 @@ const submitEditShipOrder = async () => {
     }
   })
 
+  const isEntryMode = currentMode.value === 'entry'
+  const payload = {
+    shipping_method: Number(shippingMethod.value),
+    shipping_custom: shippingMethod.value === '4' ? shippingCustom.value.trim() : '',
+    logistics_no: finalLogisticsNo,
+    freight_costs: freightData
+  }
+  if (isEntryMode) {
+    payload.status = 'shipped'
+  }
+
   // 提交给后端
   try {
     await request({
       url: `/orders/${id}`,
       method: 'PUT',
-      data: {
-        logistics_no: finalLogisticsNo,
-        freight_costs: freightData
-      }
+      data: payload
     })
-    const actionText = logisticsSubmitText.value === '录入完成' ? '录入' : '修改'
+
+    if (['0', '1', '2'].includes(shippingMethod.value) && carrier) {
+      try {
+        await request({
+          url: '/carrier_tags',
+          method: 'POST',
+          data: { tag: carrier }
+        })
+      } catch (error) {
+        console.error('保存承运商快捷标签失败:', error)
+      }
+    }
+
+    const actionText = isEntryMode ? '录入' : '修改'
     showMessage(`物流与运费信息${actionText}成功！`, 'success')
     closeShippedActionModal()
     emit('refresh')

@@ -219,7 +219,6 @@ const permissionsConfig = [
     group: 'completed_order',
     label: '已完成订单 (核对发货)',
     children: [
-      { key: 'completed.ship', label: '操作：发货并出库' },
       { key: 'completed.uncomplete', label: '操作：撤销回未完成' },
       { key: 'completed.copy', label: '显示：复制物流信息' },
       { key: 'completed.delete', label: '操作：物理删除订单' }

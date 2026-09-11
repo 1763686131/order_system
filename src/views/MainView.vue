@@ -38,13 +38,12 @@
         :orders="completedOrders"
         status-type="completed"
         @uncomplete="handleUncomplete"
-        @ship="handleShip"
         @delete="handleDelete"
         @copy="handleCopy"
       />
     </div>
 
-    <!-- Tab 2: 已出库订单 -->
+    <!-- Tab 2: 物流订单 -->
     <div
       id="tab-2"
       class="tab-pane"
@@ -56,6 +55,7 @@
         :filter-end="orderStore.nomiActiveFilterEnd"
         @refresh="fetchOrders"
         @audit="handleAudit"
+        @logistics="handleLogistics"
         @manage-receipt="handleManageReceipt"
         @view-receipt="handleViewReceipt"
       />
@@ -74,7 +74,6 @@
 
     <!-- 各种弹窗组件 -->
     <ConfirmModal ref="confirmModal" />
-    <ShipOrderModal ref="shipOrderModal" />
     <ShippedOrderActionModal ref="shippedActionModal" />
     <OrderFormModal ref="orderFormModal" />
     <UploadMaterialModal ref="uploadMaterialModal" />
@@ -103,7 +102,6 @@ import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import SearchOrderModal from '@/components/common/SearchOrderModal.vue'
 import SmartCalculator from '@/components/common/SmartCalculator.vue'
-import ShipOrderModal from '@/components/front/ShipOrderModal.vue'
 import OrderFormModal from '@/components/front/OrderFormModal.vue'
 import UploadMaterialModal from '@/components/front/UploadMaterialModal.vue'
 import UserManage from '@/views/admin/system/UserManage.vue'
@@ -117,7 +115,6 @@ const navBarHidden = ref(false)
 
 // 弹窗引用
 const confirmModal = ref(null)
-const shipOrderModal = ref(null)
 const shippedActionModal = ref(null)
 const orderFormModal = ref(null)
 const uploadMaterialModal = ref(null)
@@ -128,7 +125,7 @@ const smartCalculator = ref(null)
 const tabs = [
   { label: '未完成订单' },
   { label: '已完成订单' },
-  { label: '已出库订单' },
+  { label: '物流订单' },
   { label: '原材料数据' }
 ]
 
@@ -146,7 +143,7 @@ const completedOrders = computed(() => {
 })
 
 const shippedOrders = computed(() => {
-  let orders = orderStore.allOrders.filter(o => o.status === 'shipped')
+  let orders = orderStore.allOrders.filter(o => o.status === 'completed' || o.status === 'shipped')
 
   // 日期筛选逻辑
   const { nomiActiveFilterStart, nomiActiveFilterEnd } = orderStore
@@ -225,11 +222,6 @@ const handleUncomplete = (orderId) => {
   }
 }
 
-// 处理出库
-const handleShip = (orderId) => {
-  window.triggerShipModal(orderId)
-}
-
 // 处理编辑
 const handleEdit = (orderId) => {
   window.openEditOrderModal(orderId)
@@ -248,6 +240,13 @@ const handleCopy = (orderId) => {
 // 处理审核（已出库订单）
 const handleAudit = (orderId) => {
   window.triggerShippedActionModal(orderId, 'audit')
+}
+
+const handleLogistics = (orderId) => {
+  const order = orderStore.allOrders.find(item => item.id === orderId)
+  const logistics = String(order?.logistics_no || '').trim()
+  const hasNumber = Boolean(logistics) && !['暂未录入单号', '无单号记录', '暂无记录'].includes(logistics)
+  window.triggerShippedActionModal(orderId, hasNumber ? 'edit' : 'entry')
 }
 
 // 处理管理回单
@@ -404,9 +403,6 @@ onMounted(() => {
   // 挂载全局函数（供子组件和原始逻辑调用）
   window.triggerStatusConfirm = (order, status) => {
     confirmModal.value?.open(order, status)
-  }
-  window.triggerShipModal = (orderId) => {
-    shipOrderModal.value?.open(orderId)
   }
   window.triggerShippedActionModal = (orderId, mode) => {
     shippedActionModal.value?.open(orderId, mode)
