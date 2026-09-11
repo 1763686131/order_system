@@ -75,10 +75,7 @@
     <!-- 各种弹窗组件 -->
     <ConfirmModal ref="confirmModal" />
     <ShippedOrderActionModal ref="shippedActionModal" />
-    <OrderFormModal ref="orderFormModal" />
     <UploadMaterialModal ref="uploadMaterialModal" />
-    <SearchOrderModal ref="searchOrderModal" />
-    <SmartCalculator ref="smartCalculator" />
 
     <!-- 小圆智能助手 -->
     <NomiFloatingAI
@@ -100,9 +97,6 @@ import ShippedOrderList from '@/views/front/ShippedOrderList.vue'
 import MaterialDisplay from '@/views/front/MaterialDisplay.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
-import SearchOrderModal from '@/components/common/SearchOrderModal.vue'
-import SmartCalculator from '@/components/common/SmartCalculator.vue'
-import OrderFormModal from '@/components/front/OrderFormModal.vue'
 import UploadMaterialModal from '@/components/front/UploadMaterialModal.vue'
 import NomiFloatingAI from '@/components/common/NomiFloatingAI.vue'
 
@@ -115,10 +109,7 @@ const navBarHidden = ref(false)
 // 弹窗引用
 const confirmModal = ref(null)
 const shippedActionModal = ref(null)
-const orderFormModal = ref(null)
 const uploadMaterialModal = ref(null)
-const searchOrderModal = ref(null)
-const smartCalculator = ref(null)
 
 const tabs = [
   { label: '未完成订单' },
@@ -265,7 +256,7 @@ const getCurrentTabName = () => {
 
 // 小圆组件：创建订单
 const handleCreateOrder = () => {
-  orderFormModal.value?.open()
+  console.log('创建订单功能已移除')
 }
 
 // 小圆组件：创建原材料
@@ -275,7 +266,7 @@ const handleCreateMaterial = () => {
 
 // 小圆组件：搜索订单
 const handleSearchOrder = () => {
-  searchOrderModal.value?.open()
+  console.log('搜索订单功能已移除')
 }
 
 // 小圆组件：日期筛选
@@ -408,12 +399,6 @@ onMounted(() => {
   }
   window.openUploadMaterialModal = () => {
     uploadMaterialModal.value?.open()
-  }
-  window.openSearchOrderModal = () => {
-    searchOrderModal.value?.open()
-  }
-  window.toggleSmartCalculator = () => {
-    smartCalculator.value?.toggle()
   }
 
   // 日期筛选气泡触发
