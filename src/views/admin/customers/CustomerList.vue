@@ -1,408 +1,712 @@
 <template>
   <div class="customer-list-page">
-    <!-- 搜索栏 -->
-    <div class="search-bar">
-      <div class="search-group store-slider">
-        <label>门店分类</label>
-        <div class="store-tabs">
-          <div
-            :class="['store-tab', { active: filters.storeId === null }]"
-            @click="handleStoreChange(null)"
+    <!-- 筛选工具栏 -->
+    <section class="search-panel" aria-label="客户筛选">
+      <form class="search-grid" @submit.prevent="handleSearch">
+        <label class="field-group">
+          <span>关键词搜索</span>
+          <span class="input-with-icon">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-3.7-3.7"></path>
+            </svg>
+            <input
+              v-model="filters.keyword"
+              type="search"
+              placeholder="搜索客户名称、编号、联系人、电话..."
+            />
+          </span>
+        </label>
+
+        <div class="field-group">
+          <span>客户状态</span>
+          <select v-model="filters.status">
+            <option value="">全部状态</option>
+            <option value="active">活跃</option>
+            <option value="inactive">不活跃</option>
+          </select>
+        </div>
+
+        <div class="search-actions">
+          <button class="button button-secondary" type="button" @click="handleReset">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+              <path d="M3 4v6h6"></path>
+            </svg>
+            重置
+          </button>
+          <button class="button button-primary" type="submit">
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="7"></circle>
+              <path d="m20 20-3.7-3.7"></path>
+            </svg>
+            查询
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- 客户记录面板 -->
+    <section class="records-panel">
+      <header class="records-toolbar">
+        <div class="toolbar-filters">
+          <!-- 门店筛选滑块 -->
+          <div class="material-type-slider" role="tablist" aria-label="门店筛选">
+            <button
+              :class="['slider-tab', { active: filters.storeId === null }]"
+              type="button"
+              @click="filters.storeId = null"
+            >
+              全部
+            </button>
+            <button
+              v-for="store in allStores"
+              :key="store.id"
+              :class="['slider-tab', { active: filters.storeId === store.id }]"
+              type="button"
+              @click="filters.storeId = store.id"
+            >
+              {{ store.name }}
+            </button>
+          </div>
+        </div>
+
+        <div class="toolbar-actions">
+          <button
+            class="icon-button refresh-button"
+            type="button"
+            title="刷新列表"
+            :disabled="loading"
+            @click="loadCustomers"
           >
-            全部
-          </div>
-          <div
-            v-for="store in allStores"
-            :key="store.id"
-            :class="['store-tab', { active: filters.storeId === store.id }]"
-            @click="handleStoreChange(store.id)"
+            <svg :class="{ spinning: loading }" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M20 11a8.1 8.1 0 0 0-14.9-4L3 10"></path>
+              <path d="M3 4v6h6"></path>
+              <path d="M4 13a8.1 8.1 0 0 0 14.9 4L21 14"></path>
+              <path d="M15 14h6v6"></path>
+            </svg>
+          </button>
+          <button
+            class="button button-export"
+            type="button"
+            title="导出Excel"
+            @click="handleExport"
           >
-            {{ store.name }}
-          </div>
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            导出 Excel
+          </button>
+          <button
+            class="button button-primary create-button"
+            type="button"
+            @click="handleAdd"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 5v14"></path>
+              <path d="M5 12h14"></path>
+            </svg>
+            新增客户
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div class="search-group">
-        <label>客户名称</label>
-        <input
-          v-model="filters.customerName"
-          type="text"
-          placeholder="请输入客户名称"
-          class="search-input"
-        />
-      </div>
-
-      <div class="search-group">
-        <label>联系电话</label>
-        <input
-          v-model="filters.phone"
-          type="text"
-          placeholder="请输入联系电话"
-          class="search-input"
-        />
-      </div>
-
-      <div class="search-group">
-        <label>客户状态</label>
-        <select v-model="filters.status" class="search-select">
-          <option value="">全部</option>
-          <option value="active">活跃</option>
-          <option value="inactive">不活跃</option>
-        </select>
-      </div>
-
-      <button class="btn-search" @click="handleSearch">
-        <span class="icon">🔍</span> 搜索
-      </button>
-
-      <button class="btn-reset" @click="handleReset">
-        <span class="icon">↻</span> 重置
-      </button>
-
-      <button class="btn-add" @click="handleAdd">
-        <span class="icon">➕</span> 新增客户
-      </button>
-    </div>
-
-    <!-- 数据表格 -->
-    <div class="table-container">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>客户编号</th>
-            <th>客户名称</th>
-            <th>所属门店</th>
-            <th>联系人</th>
-            <th>联系电话</th>
-            <th>储值余额</th>
-            <th>应收欠款</th>
-            <th>状态</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading">
-            <td colspan="10" class="loading-cell">
-              <div class="loading-spinner"></div>
-              <span>加载中...</span>
-            </td>
-          </tr>
-          <tr v-else-if="customers.length === 0">
-            <td colspan="10" class="empty-cell">暂无数据</td>
-          </tr>
-          <tr v-else v-for="customer in customers" :key="customer.id">
-            <td>{{ customer.customerCode }}</td>
-            <td>{{ customer.customerName }}</td>
-            <td>{{ customer.storeName }}</td>
-            <td>{{ customer.contactPerson }}</td>
-            <td>{{ customer.phone }}</td>
-            <td class="amount balance">¥{{ formatAmount(customer.balance) }}</td>
-            <td class="amount">
-              <span :class="{ 'debt-amount': customer.receivable > 0 }">
-                ¥{{ formatAmount(customer.receivable) }}
-              </span>
-            </td>
-            <td>
-              <span :class="['status-badge', customer.status]">
-                {{ customer.status === 'active' ? '活跃' : '不活跃' }}
-              </span>
-            </td>
-            <td>{{ formatDate(customer.createdAt) }}</td>
-            <td class="actions">
-              <button class="btn-action btn-view" @click="handleView(customer)" title="查看详情">
-                👁️
-              </button>
-              <button class="btn-action btn-edit" @click="handleEdit(customer)" title="编辑">
-                ✏️
-              </button>
-              <button class="btn-action btn-delete" @click="handleDelete(customer)" title="删除">
-                🗑️
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-
-    <!-- 分页 -->
-    <div class="pagination">
-      <div class="pagination-info">
-        共 {{ total }} 条记录，每页 {{ pageSize }} 条
-      </div>
-      <div class="pagination-controls">
-        <button
-          class="btn-page"
-          :disabled="currentPage === 1"
-          @click="changePage(currentPage - 1)"
-        >
-          上一页
-        </button>
-        <span class="page-info">{{ currentPage }} / {{ totalPages }}</span>
-        <button
-          class="btn-page"
-          :disabled="currentPage === totalPages"
-          @click="changePage(currentPage + 1)"
-        >
-          下一页
-        </button>
-      </div>
-    </div>
-
-    <!-- 客户详情弹窗 -->
-    <div v-if="showDetailModal" class="modal-overlay" @click="closeDetailModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>客户详情</h3>
-          <button class="btn-close" @click="closeDetailModal">✕</button>
-        </div>
-        <div class="modal-body">
-          <div class="detail-section">
-            <h4>基本信息</h4>
-            <div class="detail-grid">
-              <div class="detail-item">
-                <label>客户编号</label>
-                <span>{{ selectedCustomer?.customerCode }}</span>
-              </div>
-              <div class="detail-item">
-                <label>客户名称</label>
-                <span>{{ selectedCustomer?.customerName }}</span>
-              </div>
-              <div class="detail-item">
-                <label>所属门店</label>
-                <span>{{ selectedCustomer?.storeName }}</span>
-              </div>
-              <div class="detail-item">
-                <label>联系人</label>
-                <span>{{ selectedCustomer?.contactPerson }}</span>
-              </div>
-              <div class="detail-item">
-                <label>联系电话</label>
-                <span>{{ selectedCustomer?.phone }}</span>
-              </div>
-              <div class="detail-item">
-                <label>联系地址</label>
-                <span>{{ selectedCustomer?.address }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="detail-section">
-            <h4>财务信息</h4>
-            <div class="detail-grid">
-              <div class="detail-item">
-                <label>储值余额</label>
-                <span class="amount balance">¥{{ formatAmount(selectedCustomer?.balance) }}</span>
-              </div>
-              <div class="detail-item">
-                <label>应收欠款</label>
-                <span class="amount" :class="{ 'debt-amount': selectedCustomer?.receivable > 0 }">
-                  ¥{{ formatAmount(selectedCustomer?.receivable) }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- 编辑/新增弹窗 -->
-    <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
-      <div class="modal-content modal-large" @click.stop>
-        <div class="modal-header">
-          <h3>{{ isEditMode ? '编辑客户' : '新增客户' }}</h3>
-          <button class="btn-close" @click="closeEditModal">✕</button>
-        </div>
-        <div class="modal-body">
-          <form @submit.prevent="handleSubmit">
-            <!-- 第一排：所属门店（独占一排，点击高亮单选） -->
-            <div class="form-row">
-              <div class="form-group form-group-full">
-                <label>所属门店 <span class="required">*</span></label>
-                <div v-if="allStores.length > 0" class="store-selector">
-                  <div
-                    v-for="store in allStores"
-                    :key="store.id"
-                    :class="['store-option', { active: formData.storeId === store.id }]"
-                    @click="formData.storeId = store.id"
-                  >
-                    {{ store.name }}
-                  </div>
+      <div class="table-scroll">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th class="document-column">客户编号</th>
+              <th>客户名称</th>
+              <th>所属门店</th>
+              <th>联系人</th>
+              <th>联系电话</th>
+              <th class="address-column">联系地址</th>
+              <th class="number-column">储值余额</th>
+              <th class="number-column">应收欠款</th>
+              <th>状态</th>
+              <th>创建时间</th>
+              <th class="operation-column">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <template v-if="loading">
+              <tr v-for="index in 5" :key="`loading-${index}`" class="skeleton-row">
+                <td v-for="cell in 11" :key="cell"><span></span></td>
+              </tr>
+            </template>
+            <tr v-else-if="filteredCustomers.length === 0">
+              <td colspan="11" class="empty-cell">
+                <div class="empty-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+                  </svg>
                 </div>
-                <div v-else class="empty-store-hint">
-                  <span>暂无门店数据</span>
-                  <button type="button" class="btn-add-store" @click="goToStorePage">
-                    <span class="icon">➕</span> 新增门店
+                <strong>暂无客户数据</strong>
+                <span>调整筛选条件后重新查询</span>
+              </td>
+            </tr>
+            <tr
+              v-for="customer in paginatedCustomers"
+              v-else
+              :key="customer.id"
+              class="record-row"
+              tabindex="0"
+              @click="handleView(customer)"
+              @keydown.enter.self.prevent="handleView(customer)"
+            >
+              <td>
+                <button class="document-link" type="button" @click.stop="handleView(customer)">
+                  {{ customer.customerCode }}
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="m9 18 6-6-6-6"></path>
+                  </svg>
+                </button>
+              </td>
+              <td class="customer-name">{{ customer.customerName }}</td>
+              <td class="date-cell">{{ customer.storeName }}</td>
+              <td class="party-cell">{{ customer.contactPerson || '-' }}</td>
+              <td>{{ customer.phone || '-' }}</td>
+              <td class="address-cell" :title="customer.address">
+                {{ truncateText(customer.address, 15) }}
+              </td>
+              <td class="number-column numeric money-value balance-amount">
+                ¥{{ formatAmount(customer.balance) }}
+              </td>
+              <td class="number-column numeric money-value" :class="{ 'debt-amount': customer.receivable > 0 }">
+                ¥{{ formatAmount(customer.receivable) }}
+              </td>
+              <td>
+                <span :class="['status-tag', customer.status === 'active' ? 'status-active' : 'status-inactive']">
+                  <i aria-hidden="true"></i>
+                  {{ customer.status === 'active' ? '活跃' : '不活跃' }}
+                </span>
+              </td>
+              <td class="date-cell">{{ formatDate(customer.createdAt) }}</td>
+              <td class="operation-column" @click.stop>
+                <div class="row-actions">
+                  <button
+                    type="button"
+                    title="编辑"
+                    @click="handleEdit(customer)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    title="删除"
+                    @click="handleDelete(customer)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M3 6h18"></path>
+                      <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                      <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                    </svg>
                   </button>
                 </div>
-              </div>
-            </div>
-
-            <!-- 第二排：客户名称 + 编号 -->
-            <div class="form-row">
-              <div class="form-group">
-                <label>客户名称 <span class="required">*</span></label>
-                <input
-                  v-model="formData.customerName"
-                  type="text"
-                  placeholder="请输入客户名称"
-                  required
-                />
-              </div>
-              <div class="form-group">
-                <label>客户编号 <span class="required">*</span></label>
-                <input
-                  v-model="formData.customerCode"
-                  type="text"
-                  placeholder="请输入客户编号"
-                  required
-                />
-              </div>
-            </div>
-
-            <!-- 第三排：联系人 + 联系电话 -->
-            <div class="form-row">
-              <div class="form-group">
-                <label>联系人</label>
-                <input
-                  v-model="formData.contactPerson"
-                  type="text"
-                  placeholder="请输入联系人"
-                />
-              </div>
-              <div class="form-group">
-                <label>联系电话</label>
-                <input
-                  v-model="formData.phone"
-                  type="tel"
-                  placeholder="请输入联系电话"
-                />
-              </div>
-            </div>
-
-            <!-- 第四排：联系地址（独占一排） -->
-            <div class="form-row">
-              <div class="form-group form-group-full">
-                <label>联系地址</label>
-                <textarea
-                  v-model="formData.address"
-                  placeholder="请输入联系地址"
-                  rows="2"
-                ></textarea>
-              </div>
-            </div>
-
-            <!-- 第五排：储值余额 + 期初欠款 -->
-            <div class="form-row">
-              <div class="form-group">
-                <label>储值余额</label>
-                <input
-                  v-model.number="formData.balance"
-                  type="number"
-                  step="0.01"
-                  placeholder="请输入储值余额"
-                />
-              </div>
-              <div class="form-group">
-                <label>期初欠款</label>
-                <input
-                  v-model.number="formData.initialDebt"
-                  type="number"
-                  step="0.01"
-                  placeholder="请输入期初欠款"
-                />
-              </div>
-            </div>
-
-            <!-- 财务信息标题 -->
-            <div class="form-section-title">财务信息</div>
-
-            <!-- 第六排：开户行 + 银行账号 -->
-            <div class="form-row">
-              <div class="form-group">
-                <label>开户行</label>
-                <input
-                  v-model="formData.bankName"
-                  type="text"
-                  placeholder="请输入开户行"
-                />
-              </div>
-              <div class="form-group">
-                <label>银行账号</label>
-                <input
-                  v-model="formData.bankAccount"
-                  type="text"
-                  placeholder="请输入银行账号"
-                />
-              </div>
-            </div>
-
-            <!-- 第七排：行号 + 税号 -->
-            <div class="form-row">
-              <div class="form-group">
-                <label>行号</label>
-                <input
-                  v-model="formData.bankCode"
-                  type="text"
-                  placeholder="请输入行号"
-                />
-              </div>
-              <div class="form-group">
-                <label>税号</label>
-                <input
-                  v-model="formData.taxNumber"
-                  type="text"
-                  placeholder="请输入税号"
-                />
-              </div>
-            </div>
-
-            <!-- 最后一排：备注（独占一排） -->
-            <div class="form-row">
-              <div class="form-group form-group-full">
-                <label>备注</label>
-                <textarea
-                  v-model="formData.remark"
-                  placeholder="请输入备注信息"
-                  rows="3"
-                ></textarea>
-              </div>
-            </div>
-
-            <div class="form-actions">
-              <button type="button" class="btn-cancel" @click="closeEditModal">取消</button>
-              <button type="submit" class="btn-submit">{{ isEditMode ? '保存' : '创建' }}</button>
-            </div>
-          </form>
-        </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
       </div>
-    </div>
+
+      <footer class="table-footer">
+        <span>
+          共 <strong>{{ filteredCustomers.length }}</strong> 条记录
+          <template v-if="filteredCustomers.length">，当前 {{ pageStart }}-{{ pageEnd }} 条</template>
+        </span>
+        <div class="pagination" aria-label="分页">
+          <select v-model.number="pageSize" aria-label="每页条数">
+            <option :value="20">20 条 / 页</option>
+            <option :value="50">50 条 / 页</option>
+            <option :value="99999">全部</option>
+          </select>
+          <button
+            type="button"
+            title="上一页"
+            :disabled="currentPage <= 1"
+            @click="currentPage--"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path></svg>
+          </button>
+          <span>{{ currentPage }} / {{ totalPages }}</span>
+          <button
+            type="button"
+            title="下一页"
+            :disabled="currentPage >= totalPages"
+            @click="currentPage++"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg>
+          </button>
+        </div>
+      </footer>
+    </section>
+
+    <!-- 客户详情弹窗 -->
+    <Teleport to="body">
+      <Transition name="detail-modal">
+        <div v-if="showDetailModal && selectedCustomer" class="detail-modal-layer">
+          <div class="detail-modal-backdrop" @click="closeDetailModal"></div>
+          <section
+            class="detail-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="客户详情"
+            tabindex="-1"
+            @keydown.esc="closeDetailModal"
+          >
+            <header class="detail-modal-header">
+              <div class="detail-modal-title-wrap">
+                <span class="detail-modal-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+                  </svg>
+                </span>
+                <div>
+                  <span>客户详情</span>
+                  <h2>{{ selectedCustomer.customerName }}</h2>
+                </div>
+              </div>
+              <button class="detail-modal-close" type="button" title="关闭" @click="closeDetailModal">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="m6 6 12 12M18 6 6 18"></path>
+                </svg>
+              </button>
+            </header>
+
+            <div class="detail-modal-body">
+              <section class="detail-modal-overview">
+                <div class="overview-head">
+                  <span :class="['status-tag', selectedCustomer.status === 'active' ? 'status-active' : 'status-inactive']">
+                    <i aria-hidden="true"></i>
+                    {{ selectedCustomer.status === 'active' ? '活跃' : '不活跃' }}
+                  </span>
+                  <span>{{ selectedCustomer.storeName }}</span>
+                </div>
+                <dl class="meta-grid">
+                  <div>
+                    <dt>客户编号</dt>
+                    <dd>{{ selectedCustomer.customerCode }}</dd>
+                  </div>
+                  <div>
+                    <dt>客户名称</dt>
+                    <dd>{{ selectedCustomer.customerName }}</dd>
+                  </div>
+                  <div>
+                    <dt>联系人</dt>
+                    <dd>{{ selectedCustomer.contactPerson || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>联系电话</dt>
+                    <dd>{{ selectedCustomer.phone || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>联系地址</dt>
+                    <dd>{{ selectedCustomer.address || '-' }}</dd>
+                  </div>
+                  <div>
+                    <dt>创建时间</dt>
+                    <dd>{{ formatDate(selectedCustomer.createdAt) }}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <!-- 财务信息 -->
+              <section class="detail-section">
+                <div class="section-heading">
+                  <div>
+                    <h3>财务信息</h3>
+                  </div>
+                </div>
+                <div class="summary-strip financial-summary-strip">
+                  <div>
+                    <span>储值余额</span>
+                    <strong class="balance-amount">¥{{ formatAmount(selectedCustomer.balance) }}</strong>
+                  </div>
+                  <div>
+                    <span>期初欠款</span>
+                    <strong>¥{{ formatAmount(selectedCustomer.initialReceivable || 0) }}</strong>
+                  </div>
+                  <div>
+                    <span>应收欠款</span>
+                    <strong :class="{ 'debt-amount': selectedCustomer.receivable > 0 }">
+                      ¥{{ formatAmount(selectedCustomer.receivable) }}
+                    </strong>
+                  </div>
+                </div>
+              </section>
+
+              <!-- 银行信息 -->
+              <section v-if="selectedCustomer.bankName || selectedCustomer.bankAccount" class="detail-section">
+                <div class="section-heading">
+                  <div>
+                    <h3>银行信息</h3>
+                  </div>
+                </div>
+                <dl class="meta-grid">
+                  <div v-if="selectedCustomer.bankName">
+                    <dt>开户行</dt>
+                    <dd>{{ selectedCustomer.bankName }}</dd>
+                  </div>
+                  <div v-if="selectedCustomer.bankAccount">
+                    <dt>银行账号</dt>
+                    <dd>{{ selectedCustomer.bankAccount }}</dd>
+                  </div>
+                  <div v-if="selectedCustomer.bankCode">
+                    <dt>行号</dt>
+                    <dd>{{ selectedCustomer.bankCode }}</dd>
+                  </div>
+                  <div v-if="selectedCustomer.taxNumber">
+                    <dt>税号</dt>
+                    <dd>{{ selectedCustomer.taxNumber }}</dd>
+                  </div>
+                </dl>
+              </section>
+
+              <!-- 备注信息 -->
+              <section v-if="selectedCustomer.remark" class="detail-section">
+                <div class="section-heading">
+                  <div>
+                    <h3>备注信息</h3>
+                  </div>
+                </div>
+                <div style="padding: 15px;">
+                  <p style="margin: 0; color: #374151; line-height: 1.6;">{{ selectedCustomer.remark }}</p>
+                </div>
+              </section>
+            </div>
+
+            <footer class="detail-modal-footer">
+              <div class="detail-modal-left-actions">
+                <button
+                  class="button button-danger-light"
+                  type="button"
+                  @click="handleDelete(selectedCustomer)"
+                >
+                  删除
+                </button>
+              </div>
+              <div class="detail-modal-actions">
+                <button
+                  class="button button-edit"
+                  type="button"
+                  @click="handleEdit(selectedCustomer)"
+                >
+                  编辑
+                </button>
+                <button
+                  class="button button-secondary"
+                  type="button"
+                  @click="closeDetailModal"
+                >
+                  关闭
+                </button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- 编辑/新增弹窗 -->
+    <Teleport to="body">
+      <Transition name="detail-modal">
+        <div v-if="showEditModal" class="detail-modal-layer">
+          <div class="detail-modal-backdrop" @click="closeEditModal"></div>
+          <section
+            class="detail-modal create-modal"
+            role="dialog"
+            aria-modal="true"
+            :aria-label="isEditMode ? '编辑客户' : '新增客户'"
+            tabindex="-1"
+            @keydown.esc="closeEditModal"
+          >
+            <header class="detail-modal-header">
+              <div class="detail-modal-title-wrap">
+                <span class="detail-modal-mark" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="9" cy="7" r="4"></circle>
+                    <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"></path>
+                  </svg>
+                </span>
+                <div>
+                  <span>客户管理</span>
+                  <h2>{{ isEditMode ? '编辑客户' : '新增客户' }}</h2>
+                </div>
+              </div>
+              <button class="detail-modal-close" type="button" title="关闭" @click="closeEditModal">
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="m6 6 12 12M18 6 6 18"></path>
+                </svg>
+              </button>
+            </header>
+
+            <div class="detail-modal-body">
+              <form class="customer-form" @submit.prevent="handleSubmit">
+                <!-- 所属门店（突出显示） -->
+                <section class="form-highlight-section">
+                  <label class="form-field-inline">
+                    <span class="field-label-inline">
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                      </svg>
+                      所属门店 <em>*</em>
+                    </span>
+                    <div v-if="allStores.length > 0" class="store-pill-group">
+                      <button
+                        v-for="store in allStores"
+                        :key="store.id"
+                        type="button"
+                        :class="['store-pill', { active: formData.storeId === store.id }]"
+                        @click="formData.storeId = store.id"
+                      >
+                        {{ store.name }}
+                      </button>
+                    </div>
+                    <div v-else class="empty-hint">
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="12" y1="8" x2="12" y2="12"></line>
+                        <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                      </svg>
+                      暂无门店数据，请先添加门店
+                    </div>
+                  </label>
+                </section>
+
+                <!-- 基本信息 -->
+                <section class="form-card">
+                  <div class="form-card-header">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="9" cy="7" r="4"></circle>
+                      <line x1="19" y1="8" x2="19" y2="14"></line>
+                      <line x1="22" y1="11" x2="16" y2="11"></line>
+                    </svg>
+                    <h4>基本信息</h4>
+                  </div>
+                  <div class="form-card-body">
+                    <div class="form-row">
+                      <label class="form-field">
+                        <span class="field-label">客户名称 <em>*</em></span>
+                        <input
+                          v-model="formData.customerName"
+                          type="text"
+                          placeholder="请输入客户名称"
+                          required
+                        />
+                      </label>
+
+                      <label class="form-field">
+                        <span class="field-label">客户编号 <em>*</em></span>
+                        <input
+                          v-model="formData.customerCode"
+                          type="text"
+                          placeholder="请输入客户编号"
+                          required
+                        />
+                      </label>
+                    </div>
+
+                    <div class="form-row">
+                      <label class="form-field">
+                        <span class="field-label">联系人</span>
+                        <input
+                          v-model="formData.contactPerson"
+                          type="text"
+                          placeholder="请输入联系人姓名"
+                        />
+                      </label>
+
+                      <label class="form-field">
+                        <span class="field-label">联系电话</span>
+                        <input
+                          v-model="formData.phone"
+                          type="tel"
+                          placeholder="请输入联系电话"
+                        />
+                      </label>
+                    </div>
+
+                    <label class="form-field">
+                      <span class="field-label">联系地址</span>
+                      <textarea
+                        v-model="formData.address"
+                        rows="2"
+                        placeholder="请输入详细联系地址"
+                      ></textarea>
+                    </label>
+                  </div>
+                </section>
+
+                <!-- 财务信息 -->
+                <section class="form-card">
+                  <div class="form-card-header">
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <line x1="12" y1="1" x2="12" y2="23"></line>
+                      <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    <h4>财务信息</h4>
+                  </div>
+                  <div class="form-card-body">
+                    <div class="form-row">
+                      <label class="form-field">
+                        <span class="field-label">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" style="width: 14px; height: 14px;">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 6v6l4 2"></path>
+                          </svg>
+                          储值余额
+                        </span>
+                        <div class="input-with-prefix">
+                          <span class="input-prefix">¥</span>
+                          <input
+                            v-model.number="formData.balance"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </label>
+
+                      <label class="form-field">
+                        <span class="field-label">
+                          <svg aria-hidden="true" viewBox="0 0 24 24" style="width: 14px; height: 14px;">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16c0 1.1.9 2 2 2h12a2 2 0 0 0 2-2V8l-6-6z"></path>
+                            <path d="M14 3v5h5M16 13H8M16 17H8M10 9H8"></path>
+                          </svg>
+                          期初欠款
+                        </span>
+                        <div class="input-with-prefix">
+                          <span class="input-prefix">¥</span>
+                          <input
+                            v-model.number="formData.initialDebt"
+                            type="number"
+                            step="0.01"
+                            placeholder="0.00"
+                          />
+                        </div>
+                      </label>
+                    </div>
+
+                    <div class="form-row">
+                      <label class="form-field">
+                        <span class="field-label">开户行</span>
+                        <input
+                          v-model="formData.bankName"
+                          type="text"
+                          placeholder="如：中国工商银行"
+                        />
+                      </label>
+
+                      <label class="form-field">
+                        <span class="field-label">银行账号</span>
+                        <input
+                          v-model="formData.bankAccount"
+                          type="text"
+                          placeholder="请输入银行账号"
+                        />
+                      </label>
+                    </div>
+
+                    <div class="form-row">
+                      <label class="form-field">
+                        <span class="field-label">行号</span>
+                        <input
+                          v-model="formData.bankCode"
+                          type="text"
+                          placeholder="请输入银行行号"
+                        />
+                      </label>
+
+                      <label class="form-field">
+                        <span class="field-label">税号</span>
+                        <input
+                          v-model="formData.taxNumber"
+                          type="text"
+                          placeholder="请输入纳税人识别号"
+                        />
+                      </label>
+                    </div>
+
+                    <label class="form-field">
+                      <span class="field-label">备注信息</span>
+                      <textarea
+                        v-model="formData.remark"
+                        rows="3"
+                        placeholder="可输入其他补充说明信息..."
+                      ></textarea>
+                    </label>
+                  </div>
+                </section>
+              </form>
+            </div>
+
+            <footer class="detail-modal-footer">
+              <div class="detail-modal-left-actions"></div>
+              <div class="detail-modal-actions">
+                <button
+                  class="button button-secondary"
+                  type="button"
+                  @click="closeEditModal"
+                >
+                  取消
+                </button>
+                <button
+                  class="button button-primary"
+                  type="button"
+                  :disabled="submitting"
+                  @click="handleSubmit"
+                >
+                  {{ submitting ? '提交中...' : (isEditMode ? '保存' : '创建') }}
+                </button>
+              </div>
+            </footer>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import request from '@/api/request'
 
+// 数据状态
 const loading = ref(false)
 const customers = ref([])
-const total = ref(0)
-const currentPage = ref(1)
-const pageSize = ref(20)
+const allStores = ref([])
 
+// 筛选条件
 const filters = ref({
-  customerName: '',
-  phone: '',
+  keyword: '',
   storeId: null,
   status: ''
 })
 
-const allStores = ref([])
-
+// 弹窗状态
 const showDetailModal = ref(false)
 const showEditModal = ref(false)
 const isEditMode = ref(false)
 const selectedCustomer = ref(null)
+const submitting = ref(false)
 
+// 分页
+const currentPage = ref(1)
+const pageSize = ref(20)
+
+// 表单数据
 const formData = ref({
   customerName: '',
   customerCode: '',
@@ -419,9 +723,46 @@ const formData = ref({
   remark: ''
 })
 
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value))
+// 计算属性
+const filteredCustomers = computed(() => {
+  let result = [...customers.value]
 
-// 加载门店数据
+  // 关键词搜索
+  if (filters.value.keyword) {
+    const keyword = filters.value.keyword.toLowerCase()
+    result = result.filter(customer =>
+      customer.customerName?.toLowerCase().includes(keyword) ||
+      customer.customerCode?.toLowerCase().includes(keyword) ||
+      customer.contactPerson?.toLowerCase().includes(keyword) ||
+      customer.phone?.toLowerCase().includes(keyword)
+    )
+  }
+
+  // 门店筛选
+  if (filters.value.storeId !== null) {
+    result = result.filter(customer => customer.storeId === filters.value.storeId)
+  }
+
+  // 状态筛选
+  if (filters.value.status) {
+    result = result.filter(customer => customer.status === filters.value.status)
+  }
+
+  return result
+})
+
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredCustomers.value.length / pageSize.value)))
+
+const paginatedCustomers = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredCustomers.value.slice(start, end)
+})
+
+const pageStart = computed(() => filteredCustomers.value.length ? (currentPage.value - 1) * pageSize.value + 1 : 0)
+const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredCustomers.value.length))
+
+// 方法
 const loadStores = async () => {
   try {
     const response = await request({
@@ -429,32 +770,22 @@ const loadStores = async () => {
       method: 'GET'
     })
     if (response && Array.isArray(response)) {
-      allStores.value = response
+      allStores.value = response.filter(store => store.status === 'active')
     }
   } catch (error) {
     console.error('加载门店失败:', error)
   }
 }
 
-// 加载客户列表
 const loadCustomers = async () => {
   loading.value = true
   try {
-    const params = {
-      customerName: filters.value.customerName,
-      phone: filters.value.phone,
-      storeId: filters.value.storeId,
-      status: filters.value.status
-    }
-
     const response = await request({
       url: '/customers',
-      method: 'GET',
-      params
+      method: 'GET'
     })
 
     if (response && Array.isArray(response)) {
-      // 关联门店名称
       customers.value = response.map(customer => {
         const store = allStores.value.find(s => s.id === customer.storeId)
         return {
@@ -462,7 +793,6 @@ const loadCustomers = async () => {
           storeName: store ? store.name : '未知门店'
         }
       })
-      total.value = customers.value.length
     }
   } catch (error) {
     console.error('加载客户列表失败:', error)
@@ -471,32 +801,19 @@ const loadCustomers = async () => {
   }
 }
 
-// 搜索
 const handleSearch = () => {
   currentPage.value = 1
-  loadCustomers()
 }
 
-// 门店筛选
-const handleStoreChange = (storeId) => {
-  filters.value.storeId = storeId
-  currentPage.value = 1
-  loadCustomers()
-}
-
-// 重置
 const handleReset = () => {
   filters.value = {
-    customerName: '',
-    phone: '',
+    keyword: '',
     storeId: null,
     status: ''
   }
   currentPage.value = 1
-  loadCustomers()
 }
 
-// 新增
 const handleAdd = () => {
   isEditMode.value = false
   formData.value = {
@@ -517,13 +834,11 @@ const handleAdd = () => {
   showEditModal.value = true
 }
 
-// 查看详情
 const handleView = (customer) => {
   selectedCustomer.value = customer
   showDetailModal.value = true
 }
 
-// 编辑
 const handleEdit = (customer) => {
   isEditMode.value = true
   selectedCustomer.value = customer
@@ -531,42 +846,47 @@ const handleEdit = (customer) => {
     customerName: customer.customerName,
     customerCode: customer.customerCode,
     storeId: customer.storeId,
-    contactPerson: customer.contactPerson,
-    phone: customer.phone,
-    address: customer.address,
-    balance: customer.balance,
-    initialDebt: customer.initialReceivable ?? customer.receivable,
+    contactPerson: customer.contactPerson || '',
+    phone: customer.phone || '',
+    address: customer.address || '',
+    balance: customer.balance || 0,
+    initialDebt: customer.initialReceivable || customer.receivable || 0,
     bankName: customer.bankName || '',
     bankAccount: customer.bankAccount || '',
     bankCode: customer.bankCode || '',
     taxNumber: customer.taxNumber || '',
     remark: customer.remark || ''
   }
+  closeDetailModal()
   showEditModal.value = true
 }
 
-// 删除
 const handleDelete = async (customer) => {
-  if (confirm(`确定要删除客户"${customer.customerName}"吗？`)) {
-    try {
-      await request({
-        url: `/customers/${customer.id}`,
-        method: 'DELETE'
-      })
-      alert('删除成功')
-      await loadCustomers()
-    } catch (error) {
-      console.error('删除失败:', error)
-      alert('删除失败：' + (error.response?.data?.error || error.message))
-    }
+  if (!confirm(`确定要删除客户"${customer.customerName}"吗？`)) return
+
+  try {
+    await request({
+      url: `/customers/${customer.id}`,
+      method: 'DELETE'
+    })
+    alert('删除成功')
+    closeDetailModal()
+    await loadCustomers()
+  } catch (error) {
+    console.error('删除失败:', error)
+    alert('删除失败：' + (error.response?.data?.error || error.message))
   }
 }
 
-// 提交表单
 const handleSubmit = async () => {
+  if (!formData.value.customerName || !formData.value.customerCode || !formData.value.storeId) {
+    alert('请填写必填项')
+    return
+  }
+
+  submitting.value = true
   try {
     if (isEditMode.value) {
-      // 更新客户
       await request({
         url: `/customers/${selectedCustomer.value.id}`,
         method: 'PUT',
@@ -574,7 +894,6 @@ const handleSubmit = async () => {
       })
       alert('保存成功')
     } else {
-      // 创建客户
       await request({
         url: '/customers',
         method: 'POST',
@@ -587,54 +906,40 @@ const handleSubmit = async () => {
   } catch (error) {
     console.error('保存失败:', error)
     alert(error.response?.data?.error || '保存失败')
+  } finally {
+    submitting.value = false
   }
 }
 
-// 关闭详情弹窗
 const closeDetailModal = () => {
   showDetailModal.value = false
   selectedCustomer.value = null
 }
 
-// 关闭编辑弹窗
 const closeEditModal = () => {
   showEditModal.value = false
   isEditMode.value = false
   selectedCustomer.value = null
 }
 
-// 跳转到门店页面
-const goToStorePage = () => {
-  window.location.href = '/#/admin/stores'
+const handleExport = () => {
+  alert('导出功能待实现')
 }
 
-// 分页
-const changePage = (page) => {
-  if (page < 1 || page > totalPages.value) return
-  currentPage.value = page
-  loadCustomers()
-}
-
-// 格式化金额
 const formatAmount = (amount) => {
   return amount ? amount.toFixed(2) : '0.00'
 }
 
-// 格式化日期
 const formatDate = (dateStr) => {
-  if (!dateStr) return ''
+  if (!dateStr) return '-'
   const date = new Date(dateStr)
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-// 获取客户类型标签
-const getCustomerTypeLabel = (type) => {
-  const labels = {
-    retail: '零售客户',
-    wholesale: '批发客户',
-    vip: 'VIP客户'
-  }
-  return labels[type] || type
+const truncateText = (text, length) => {
+  if (!text) return '-'
+  if (text.length <= length) return text
+  return text.substring(0, length) + '...'
 }
 
 onMounted(async () => {
@@ -645,194 +950,312 @@ onMounted(async () => {
 
 <style scoped>
 .customer-list-page {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* 搜索栏 */
-.search-bar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  align-items: flex-end;
-}
-
-.search-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.search-group label {
-  font-size: 13px;
-  color: #666;
-  font-weight: 500;
-}
-
-.store-slider {
-  flex: 1;
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --page-bg: #f4f7f8;
+  --panel-bg: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
   min-width: 0;
-  max-width: 600px;
-}
-
-.store-tabs {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 4px 0;
-}
-
-.store-tabs::-webkit-scrollbar {
-  height: 4px;
-}
-
-.store-tabs::-webkit-scrollbar-thumb {
-  background: #d1d5db;
-  border-radius: 2px;
-}
-
-.store-tab {
-  padding: 8px 16px;
-  background: #f3f4f6;
-  border: 1px solid #e5e7eb;
-  border-radius: 6px;
+  min-height: calc(100vh - 100px);
+  color: var(--text);
+  background: var(--page-bg);
   font-size: 14px;
-  color: #6b7280;
-  cursor: pointer;
-  transition: all 0.3s;
-  white-space: nowrap;
-  flex-shrink: 0;
 }
 
-.store-tab:hover {
-  background: #e5e7eb;
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+.record-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+/* 搜索面板 */
+.search-panel {
+  padding: 18px 20px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+}
+
+.search-grid {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) minmax(160px, 0.8fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.field-group {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field-group > span:first-child {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.field-group input,
+.field-group select {
+  width: 100%;
+  height: 38px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 0 11px;
+  outline: none;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.field-group input::placeholder {
+  color: #a2adba;
+}
+
+.field-group input:focus,
+.field-group select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+.input-with-icon {
+  position: relative;
+  display: block;
+}
+
+.input-with-icon svg {
+  position: absolute;
+  top: 11px;
+  left: 11px;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
+}
+
+.input-with-icon input {
+  padding-left: 35px;
+}
+
+.search-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.button {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.button-primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  box-shadow: 0 2px 5px rgba(var(--accent-rgb), 0.18);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+.button-secondary {
+  color: #445066;
+  background: #fff;
+  border-color: var(--border-strong);
+}
+
+.button-secondary:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.button-export {
+  color: #374151;
+  background: #fff;
   border-color: #d1d5db;
 }
 
-.store-tab.active {
-  background: #34d399;
+.button-export:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.button-edit {
   color: #fff;
-  border-color: #34d399;
-}
-
-.search-input,
-.search-select {
-  height: 36px;
-  padding: 0 12px;
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  font-size: 14px;
-  outline: none;
-  transition: all 0.3s;
-  min-width: 180px;
-}
-
-.search-input:focus,
-.search-select:focus {
-  border-color: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.1);
-}
-
-.btn-search,
-.btn-reset,
-.btn-add {
-  height: 36px;
-  padding: 0 20px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.btn-search {
-  background: #34d399;
-  color: #fff;
-}
-
-.btn-search:hover {
-  background: #10b981;
-}
-
-.btn-reset {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.btn-reset:hover {
-  background: #e5e7eb;
-}
-
-.btn-add {
-  background: #3b82f6;
-  color: #fff;
-  margin-left: auto;
-}
-
-.btn-add:hover {
   background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.2);
 }
 
-/* 表格 */
-.table-container {
-  overflow-x: auto;
+.button-edit:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
 }
 
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
+.button-danger-light {
+  color: #b4232f;
+  background: #fff;
+  border-color: #efb5ba;
 }
 
-.data-table thead {
-  background: #f9fafb;
+.button-danger-light:hover:not(:disabled) {
+  color: #fff;
+  background: #dc3545;
+  border-color: #c92f3e;
 }
 
-.data-table th {
-  padding: 12px 16px;
-  text-align: left;
-  font-weight: 600;
-  color: #374151;
-  border-bottom: 2px solid #e5e7eb;
-  white-space: nowrap;
+/* 记录面板 */
+.records-panel {
+  margin-top: 14px;
+  overflow: hidden;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 3px 14px rgba(15, 23, 42, 0.045);
 }
 
-.data-table td {
-  padding: 12px 16px;
-  border-bottom: 1px solid #f3f4f6;
-  color: #6b7280;
-}
-
-.data-table tbody tr:hover {
-  background: #f9fafb;
-}
-
-.loading-cell,
-.empty-cell {
-  text-align: center;
-  padding: 40px !important;
-  color: #9ca3af;
-}
-
-.loading-cell {
+.records-toolbar {
   display: flex;
+  min-height: 62px;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar-filters {
+  display: flex;
+  min-width: 0;
+  align-items: center;
   gap: 10px;
 }
 
-.loading-spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid #e5e7eb;
-  border-top-color: #34d399;
-  border-radius: 50%;
+.material-type-slider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  background: #f1f5f9;
+  border-radius: 8px;
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.slider-tab {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 16px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+
+.slider-tab:hover {
+  color: var(--accent-dark);
+  background: rgba(var(--accent-rgb), 0.1);
+}
+
+.slider-tab.active {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 2px 6px rgba(var(--accent-rgb), 0.3);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.icon-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #667085;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.icon-button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.spinning {
   animation: spin 0.8s linear infinite;
 }
 
@@ -840,326 +1263,794 @@ onMounted(async () => {
   to { transform: rotate(360deg); }
 }
 
-.amount {
-  font-weight: 600;
-  color: #059669;
+/* 表格 */
+.table-scroll {
+  overflow-x: auto;
 }
 
-.amount.balance {
-  color: #0891b2;
+.records-table {
+  width: 100%;
+  min-width: 1400px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.records-table th {
+  height: 45px;
+  padding: 0 12px;
+  color: #566176;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.records-table td {
+  height: 57px;
+  padding: 9px 12px;
+  overflow: hidden;
+  color: #344054;
+  border-bottom: 1px solid #edf1f5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.records-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.record-row {
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.record-row:hover {
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.document-column { width: 140px; }
+.address-column { width: 160px; }
+.number-column { width: 110px; text-align: right !important; }
+.operation-column { width: 100px; text-align: center; }
+
+.numeric,
+.money-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.money-value {
+  color: #182230 !important;
+  font-weight: 750;
+}
+
+.balance-amount {
+  color: #0891b2 !important;
 }
 
 .debt-amount {
   color: #ef4444 !important;
 }
 
-.type-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
+.document-link {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  gap: 4px;
+  overflow: hidden;
+  padding: 3px 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-link:hover {
+  text-decoration: underline;
+}
+
+.document-link svg {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+}
+
+.customer-name {
+  color: #283548;
+  font-weight: 600;
+}
+
+.date-cell,
+.party-cell,
+.address-cell {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.status-tag {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 650;
+  white-space: nowrap;
 }
 
-.type-retail {
-  background: #dbeafe;
-  color: #1e40af;
+.status-tag i {
+  width: 6px;
+  height: 6px;
+  background: currentColor;
+  border-radius: 50%;
 }
 
-.type-wholesale {
-  background: #fef3c7;
-  color: #92400e;
+.status-active {
+  color: #13734f;
+  background: #eaf8f1;
+  border: 1px solid #a7e2c9;
 }
 
-.type-vip {
-  background: #fce7f3;
-  color: #9f1239;
-}
-
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-badge.active {
-  background: #d1fae5;
-  color: #065f46;
-}
-
-.status-badge.inactive {
-  background: #f3f4f6;
+.status-inactive {
   color: #6b7280;
+  background: #f3f4f6;
+  border: 1px solid #d1d5db;
 }
 
-.actions {
+.row-actions {
   display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+
+.row-actions button {
+  display: inline-flex;
+  width: 29px;
+  height: 29px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #667085;
+  background: #fff;
+  border: 1px solid #d9e0e8;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.row-actions button:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.row-actions svg {
+  width: 14px;
+  height: 14px;
+}
+
+.empty-cell {
+  height: 290px !important;
+  color: var(--text-muted) !important;
+  text-align: center;
+}
+
+.empty-cell strong,
+.empty-cell span {
+  display: block;
+}
+
+.empty-cell strong {
+  margin-top: 11px;
+  color: #4c586b;
+  font-size: 14px;
+}
+
+.empty-cell span {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.empty-mark {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  color: #9aa6b6;
+  background: #f1f4f7;
+  border-radius: 50%;
+}
+
+.empty-mark svg {
+  width: 24px;
+  height: 24px;
+}
+
+.skeleton-row td span {
+  display: block;
+  width: 78%;
+  height: 10px;
+  background: linear-gradient(90deg, #edf1f5 25%, #f8fafc 50%, #edf1f5 75%);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  animation: skeleton 1.25s infinite linear;
+}
+
+@keyframes skeleton {
+  to { background-position: -200% 0; }
+}
+
+/* 页脚 */
+.table-footer {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  color: var(--text-secondary);
+  background: #fff;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.table-footer strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
   gap: 8px;
 }
 
-.btn-action {
-  width: 32px;
+.pagination select {
+  width: 103px;
   height: 32px;
-  border: none;
-  border-radius: 6px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-size: 12px;
+  outline: none;
+}
+
+.pagination button {
+  display: inline-flex;
+  width: 31px;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #526074;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
   cursor: pointer;
-  transition: all 0.3s;
-  font-size: 16px;
+}
+
+.pagination button:hover:not(:disabled) {
+  color: var(--accent-dark);
+  border-color: var(--accent);
+}
+
+.pagination button:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+.pagination button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.pagination > span {
+  min-width: 50px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 弹窗 */
+.detail-modal-layer {
+  position: fixed;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 24px;
+  z-index: 2147482000;
 }
 
-.btn-view {
-  background: #dbeafe;
+.detail-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1px);
 }
 
-.btn-view:hover {
-  background: #bfdbfe;
-}
-
-.btn-edit {
-  background: #fef3c7;
-}
-
-.btn-edit:hover {
-  background: #fde68a;
-}
-
-.btn-delete {
-  background: #fee2e2;
-}
-
-.btn-delete:hover {
-  background: #fecaca;
-}
-
-/* 分页 */
-.pagination {
+.detail-modal {
+  position: relative;
   display: flex;
-  justify-content: space-between;
+  width: min(960px, calc(100vw - 48px));
+  max-height: min(880px, calc(100vh - 48px));
+  flex-direction: column;
+  overflow: hidden;
+  color: #172033;
+  background: #f4f7f9;
+  border: 1px solid #dfe5ec;
+  border-radius: 8px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  outline: none;
+}
+
+.create-modal {
+  width: min(800px, calc(100vw - 48px));
+}
+
+.detail-modal-header {
+  display: flex;
+  min-height: 78px;
   align-items: center;
-  margin-top: 20px;
-  padding-top: 20px;
-  border-top: 1px solid #e5e7eb;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid #dfe5ec;
 }
 
-.pagination-info {
-  font-size: 14px;
-  color: #6b7280;
-}
-
-.pagination-controls {
+.detail-modal-title-wrap {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 12px;
 }
 
-.btn-page {
-  padding: 8px 16px;
-  border: 1px solid #d1d5db;
-  background: #fff;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-page:hover:not(:disabled) {
-  background: #f9fafb;
-  border-color: #34d399;
-}
-
-.btn-page:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-info {
-  font-size: 14px;
-  color: #374151;
-}
-
-/* 弹窗 */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
+.detail-modal-mark {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-radius: 7px;
 }
 
-.modal-content {
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-  max-width: 600px;
-  width: 90%;
-  max-height: 90vh;
+.detail-modal-mark svg {
+  width: 21px;
+  height: 21px;
+}
+
+.detail-modal-title-wrap > div {
+  min-width: 0;
+}
+
+.detail-modal-title-wrap span:not(.detail-modal-mark) {
+  color: #758195;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.detail-modal-title-wrap h2 {
+  margin: 3px 0 0;
   overflow: hidden;
+  color: #172033;
+  font-size: 18px;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-modal-close {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: #68758a;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.detail-modal-close:hover {
+  color: #273245;
+  background: #f0f3f6;
+}
+
+.detail-modal-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.detail-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.detail-modal-overview,
+.detail-section {
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+}
+
+.detail-modal-overview {
+  padding: 17px;
+}
+
+.overview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.overview-head > span:last-child {
+  color: #5e6a7e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 22px;
+  margin: 17px 0;
+}
+
+.meta-grid > div {
+  min-width: 0;
+}
+
+.meta-grid dt {
+  margin-bottom: 5px;
+  color: #8a96a8;
+  font-size: 11px;
+}
+
+.meta-grid dd {
+  margin: 0;
+  overflow: hidden;
+  color: #283548;
+  font-size: 13px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  background: #f8fafb;
+  border: 1px solid #e5eaf0;
+  border-radius: 6px;
+}
+
+.summary-strip > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 13px 15px;
+  border-right: 1px solid #e5eaf0;
+}
+
+.summary-strip > div:last-child {
+  border-right: 0;
+}
+
+.summary-strip span {
+  color: #7a8698;
+  font-size: 11px;
+}
+
+.summary-strip strong {
+  overflow: hidden;
+  color: #243145;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.financial-summary-strip {
+  margin: 15px;
+}
+
+.detail-section {
+  margin-top: 15px;
+  overflow: hidden;
+}
+
+.section-heading {
+  display: flex;
+  min-height: 53px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 11px 15px;
+  border-bottom: 1px solid #e5eaf0;
+}
+
+.section-heading > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.section-heading h3 {
+  margin: 0;
+  color: #263348;
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.detail-modal-footer {
+  display: flex;
+  min-height: 68px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  background: #fff;
+  border-top: 1px solid #dfe5ec;
+}
+
+.detail-modal-left-actions,
+.detail-modal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.detail-modal-actions {
+  justify-content: flex-end;
+  margin-left: auto;
+}
+
+/* 表单样式 */
+.customer-form {
   display: flex;
   flex-direction: column;
-  position: relative;
-}
-
-.modal-large {
-  max-width: 800px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  color: #111827;
-}
-
-.btn-close {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: #f3f4f6;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 18px;
-  color: #6b7280;
-  transition: all 0.3s;
-}
-
-.btn-close:hover {
-  background: #e5e7eb;
-  color: #111827;
-}
-
-.modal-body {
-  padding: 20px;
-  overflow-y: auto;
-  flex: 1;
-  padding-bottom: 100px;
-}
-
-/* 详情页 */
-.detail-section {
-  margin-bottom: 24px;
-}
-
-.detail-section:last-child {
-  margin-bottom: 0;
-}
-
-.detail-section h4 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  color: #111827;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e5e7eb;
-}
-
-.detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
   gap: 16px;
 }
 
-.detail-item {
+/* 突出显示区域（门店选择） */
+.form-highlight-section {
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.08) 0%, rgba(var(--accent-rgb), 0.02) 100%);
+  border: 1px solid rgba(var(--accent-rgb), 0.2);
+  border-radius: 8px;
+  padding: 18px;
+}
+
+.form-field-inline {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
 }
 
-.detail-item label {
+.field-label-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
   font-size: 13px;
-  color: #6b7280;
+  font-weight: 650;
 }
 
-.detail-item span {
+.field-label-inline svg {
+  width: 17px;
+  height: 17px;
+  color: var(--accent-dark);
+}
+
+.field-label-inline em {
+  color: #ef4444;
+  font-style: normal;
+  margin-left: -2px;
+}
+
+.store-pill-group {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.store-pill {
+  padding: 10px 20px;
+  background: #fff;
+  border: 1.5px solid #cbd5e1;
+  border-radius: 8px;
   font-size: 14px;
-  color: #111827;
+  font-weight: 600;
+  color: #475569;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }
 
-/* 表单 */
+.store-pill:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-dark);
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(var(--accent-rgb), 0.15);
+}
+
+.store-pill.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  box-shadow: 0 3px 10px rgba(var(--accent-rgb), 0.35);
+}
+
+/* 表单卡片 */
+.form-card {
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.form-card-header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 15px 18px;
+  background: linear-gradient(to bottom, #fafbfc 0%, #f8fafb 100%);
+  border-bottom: 1px solid #e5eaf0;
+}
+
+.form-card-header svg {
+  width: 18px;
+  height: 18px;
+  color: var(--accent-dark);
+}
+
+.form-card-header h4 {
+  margin: 0;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.form-card-body {
+  padding: 20px 18px;
+}
+
 .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
 }
 
-.form-section-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #374151;
-  margin: 24px 0 16px 0;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #e5e7eb;
+.form-row:last-child {
+  margin-bottom: 0;
 }
 
-.form-group {
+.form-field {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.form-group-full {
-  grid-column: 1 / -1;
+.field-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 600;
 }
 
-.form-group label {
-  display: block;
-  margin-bottom: 8px;
-  font-size: 14px;
-  color: #374151;
-  font-weight: 500;
+.field-label svg {
+  flex-shrink: 0;
 }
 
-.required {
+.field-label em {
   color: #ef4444;
+  font-style: normal;
+  margin-left: -2px;
 }
 
-.form-group input,
-.form-group select,
-.form-group textarea {
+.form-field input,
+.form-field select,
+.form-field textarea {
   width: 100%;
-  padding: 10px 12px;
-  border: 1px solid #d1d5db;
+  min-height: 40px;
+  color: var(--text);
+  background: #fff;
+  border: 1.5px solid #cbd5e1;
   border-radius: 6px;
-  font-size: 14px;
+  padding: 10px 12px;
   outline: none;
-  transition: all 0.3s;
-  box-sizing: border-box;
+  transition: all 0.2s ease;
+  font-size: 14px;
 }
 
-.form-group input:focus,
-.form-group select:focus,
-.form-group textarea:focus {
-  border-color: #34d399;
-  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.1);
+.form-field input::placeholder,
+.form-field textarea::placeholder {
+  color: #94a3b8;
 }
 
-.form-group textarea {
+.form-field textarea {
   resize: vertical;
   font-family: inherit;
+  line-height: 1.6;
+  min-height: 44px;
 }
 
-/* 门店选择器样式 */
+.form-field input:focus,
+.form-field select:focus,
+.form-field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+  background: #fefffe;
+}
+
+/* 带前缀的输入框 */
+.input-with-prefix {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input-prefix {
+  position: absolute;
+  left: 12px;
+  color: #64748b;
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.input-with-prefix input {
+  padding-left: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+.empty-hint {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  background: #fef3e7;
+  border: 1.5px solid #f9d8a5;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #92400e;
+}
+
+.empty-hint svg {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: #d97706;
+}
+
 .store-selector {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  padding: 8px 0;
+  padding: 4px 0;
 }
 
 .store-option {
@@ -1180,99 +2071,69 @@ onMounted(async () => {
 }
 
 .store-option.active {
-  background: #34d399;
+  background: var(--accent);
   color: #fff;
-  border-color: #34d399;
+  border-color: var(--accent);
 }
 
-.empty-store-hint {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: #fef3c7;
-  border: 1px solid #fbbf24;
-  border-radius: 6px;
-  font-size: 14px;
-  color: #92400e;
+.detail-modal-enter-active,
+.detail-modal-leave-active {
+  transition: opacity 0.2s ease;
 }
 
-.btn-add-store {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  background: #34d399;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.3s;
-  white-space: nowrap;
+.detail-modal-enter-active .detail-modal,
+.detail-modal-leave-active .detail-modal {
+  transition: transform 0.22s ease, opacity 0.2s ease;
 }
 
-.btn-add-store:hover {
-  background: #10b981;
+.detail-modal-enter-from,
+.detail-modal-leave-to {
+  opacity: 0;
 }
 
-.btn-add-store .icon {
-  font-size: 12px;
+.detail-modal-enter-from .detail-modal,
+.detail-modal-leave-to .detail-modal {
+  opacity: 0;
+  transform: translateY(12px) scale(0.985);
 }
 
-.form-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid #e5e7eb;
-  background: #fff;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  margin: 0;
-  z-index: 10;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.btn-cancel,
-.btn-submit {
-  padding: 10px 24px;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.btn-cancel {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.btn-cancel:hover {
-  background: #e5e7eb;
-}
-
-.btn-submit {
-  background: #34d399;
-  color: #fff;
-}
-
-.btn-submit:hover {
-  background: #10b981;
-}
-
-/* 响应式布局 */
-@media (max-width: 768px) {
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 16px;
+@media (max-width: 1280px) {
+  .search-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .modal-large {
-    max-width: 95%;
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-modal-layer {
+    padding: 0;
+  }
+
+  .detail-modal {
+    width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .detail-modal-footer {
+    flex-wrap: wrap;
+  }
+
+  .store-pill-group {
+    flex-direction: column;
+  }
+
+  .store-pill {
+    width: 100%;
+    text-align: center;
   }
 }
 </style>
