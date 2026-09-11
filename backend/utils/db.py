@@ -23,6 +23,8 @@ _raw_material_schema_lock = Lock()
 _raw_material_schema_ready = False
 _stock_inbound_schema_lock = Lock()
 _stock_inbound_schema_ready = False
+_system_settings_schema_lock = Lock()
+_system_settings_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 
@@ -119,6 +121,34 @@ def _ensure_hr_reports_schema(conn):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hr_reports_type ON hr_reports(file_type)")
 
         conn.commit()
+
+
+def _ensure_system_settings_schema(conn):
+    """Create the small key/value store used by server-side system settings."""
+    global _system_settings_schema_ready
+    if _system_settings_schema_ready:
+        return
+
+    with _system_settings_schema_lock:
+        if _system_settings_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS system_settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL DEFAULT '',
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_system_settings_updated "
+            "ON system_settings(updated_at)"
+        )
+        conn.commit()
+        _system_settings_schema_ready = True
 
 
 def _ensure_raw_material_products_schema(conn):
@@ -611,6 +641,7 @@ def get_db():
         _ensure_units_schema(conn)
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)
+        _ensure_system_settings_schema(conn)
         _ensure_raw_material_products_schema(conn)
         _ensure_stock_inbound_schema(conn)
         yield conn

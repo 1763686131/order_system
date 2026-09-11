@@ -45,7 +45,10 @@
                   class="config-input"
                   placeholder="/var/data/reports"
                 />
-                <button class="btn-secondary btn-sm" title="测试路径">
+                <button class="btn-secondary btn-sm" type="button" @click="openDirectoryBrowser">
+                  获取文件夹
+                </button>
+                <button class="btn-secondary btn-sm" type="button" title="测试路径" @click="testPath('reportPath')">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                   </svg>
@@ -66,7 +69,7 @@
                   class="config-input"
                   placeholder="/var/data/documents"
                 />
-                <button class="btn-secondary btn-sm" title="测试路径">
+                <button class="btn-secondary btn-sm" type="button" title="测试路径" @click="testPath('documentPath')">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                   </svg>
@@ -87,7 +90,7 @@
                   class="config-input"
                   placeholder="/var/data/receipts"
                 />
-                <button class="btn-secondary btn-sm" title="测试路径">
+                <button class="btn-secondary btn-sm" type="button" title="测试路径" @click="testPath('receiptPath')">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                   </svg>
@@ -98,7 +101,7 @@
           </div>
 
           <div class="section-actions">
-            <button class="btn-primary" @click="savePathConfig">
+            <button class="btn-primary" :disabled="pathSaving" @click="savePathConfig">
               <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
@@ -616,10 +619,79 @@
       </div>
     </div>
   </div>
+  <div
+    v-if="directoryBrowserVisible"
+    class="directory-browser-mask"
+    @click.self="directoryBrowserVisible = false"
+  >
+    <section class="directory-browser" role="dialog" aria-modal="true" aria-label="选择服务器文件夹">
+      <div class="directory-browser-header">
+        <div>
+          <h3>选择服务器文件夹</h3>
+          <p>这里显示的是 Docker 容器可访问的 NAS 挂载目录。</p>
+        </div>
+        <button class="directory-browser-close" type="button" @click="directoryBrowserVisible = false">×</button>
+      </div>
+
+      <div class="directory-browser-path">
+        <input
+          v-model="directoryBrowser.path"
+          class="config-input"
+          type="text"
+          placeholder="/mnt/nas/reports"
+          @keyup.enter="loadDirectories(directoryBrowser.path)"
+        />
+        <button class="btn-secondary btn-sm" type="button" @click="loadDirectories(directoryBrowser.path)">
+          打开
+        </button>
+      </div>
+
+      <p v-if="directoryBrowser.message" class="directory-browser-message">
+        {{ directoryBrowser.message }}
+      </p>
+
+      <div class="directory-browser-actions">
+        <button
+          class="btn-secondary btn-sm"
+          type="button"
+          :disabled="!directoryBrowser.parentPath || directoryBrowser.loading"
+          @click="loadDirectories(directoryBrowser.parentPath)"
+        >
+          返回上级
+        </button>
+        <button
+          class="btn-primary btn-sm"
+          type="button"
+          :disabled="!directoryBrowser.path || directoryBrowser.loading"
+          @click="useCurrentDirectory"
+        >
+          使用当前目录
+        </button>
+      </div>
+
+      <div v-if="directoryBrowser.loading" class="directory-browser-empty">正在读取目录…</div>
+      <div v-else class="directory-list">
+        <button
+          v-for="directory in directoryBrowser.directories"
+          :key="directory.path"
+          class="directory-item"
+          type="button"
+          @click="loadDirectories(directory.path)"
+        >
+          <span class="directory-icon">📁</span>
+          <span>{{ directory.name }}</span>
+        </button>
+        <div v-if="!directoryBrowser.directories.length" class="directory-browser-empty">
+          当前目录下没有可读取的子文件夹。
+        </div>
+      </div>
+    </section>
+  </div>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
+import request from '@/api/request'
 
 // 控制各区块展开/收起
 const expandedSections = reactive({
@@ -634,6 +706,16 @@ const pathConfig = reactive({
   reportPath: '/var/data/reports',
   documentPath: '/var/data/documents',
   receiptPath: '/var/data/receipts'
+})
+
+const pathSaving = ref(false)
+const directoryBrowserVisible = ref(false)
+const directoryBrowser = reactive({
+  loading: false,
+  path: '',
+  parentPath: '',
+  directories: [],
+  message: ''
 })
 
 // 消息配置
@@ -685,9 +767,85 @@ const toggleSection = (section) => {
 }
 
 // 保存各配置
-const savePathConfig = () => {
-  console.log('保存路径配置:', pathConfig)
-  alert('路径配置已保存')
+const loadPathConfig = async () => {
+  try {
+    const response = await request.get('/settings/paths')
+    if (response.success && response.data) {
+      Object.assign(pathConfig, {
+        reportPath: response.data.reportPath || '',
+        documentPath: response.data.documentPath || '',
+        receiptPath: response.data.receiptPath || ''
+      })
+    }
+  } catch (error) {
+    console.error('加载路径配置失败:', error)
+  }
+}
+
+const savePathConfig = async () => {
+  if (pathSaving.value) return
+  pathSaving.value = true
+  try {
+    const response = await request.put('/settings/paths', { ...pathConfig })
+    if (!response.success) {
+      throw new Error(response.message || '保存失败')
+    }
+    Object.assign(pathConfig, {
+      reportPath: response.data?.reportPath || pathConfig.reportPath,
+      documentPath: response.data?.documentPath || pathConfig.documentPath,
+      receiptPath: response.data?.receiptPath || pathConfig.receiptPath
+    })
+    alert(response.message || '路径配置已保存')
+  } catch (error) {
+    alert(error.response?.data?.message || error.message || '保存路径配置失败')
+  } finally {
+    pathSaving.value = false
+  }
+}
+
+const testPath = async (key) => {
+  try {
+    const response = await request.post('/settings/paths/test', {
+      path: pathConfig[key]
+    })
+    alert(response.message || (response.success ? '路径可用' : '路径不可用'))
+  } catch (error) {
+    alert(error.response?.data?.message || '路径测试失败')
+  }
+}
+
+const loadDirectories = async (path = '') => {
+  directoryBrowser.loading = true
+  try {
+    const response = await request.get('/settings/directories', {
+      params: path ? { path } : {}
+    })
+    if (!response.success) {
+      throw new Error(response.message || '读取服务器目录失败')
+    }
+    Object.assign(directoryBrowser, {
+      path: response.data.path || '',
+      parentPath: response.data.parent_path || '',
+      directories: response.data.directories || [],
+      message: response.data.message || ''
+    })
+  } catch (error) {
+    directoryBrowser.message = error.response?.data?.message || error.message || '读取服务器目录失败'
+    directoryBrowser.directories = []
+  } finally {
+    directoryBrowser.loading = false
+  }
+}
+
+const openDirectoryBrowser = async () => {
+  directoryBrowserVisible.value = true
+  await loadDirectories()
+}
+
+const useCurrentDirectory = () => {
+  if (!directoryBrowser.path) return
+  pathConfig.reportPath = directoryBrowser.path
+  directoryBrowserVisible.value = false
 }
 
 const saveMessageConfig = () => {
@@ -706,6 +864,7 @@ const saveSecurityConfig = () => {
 }
 
 onMounted(() => {
+  loadPathConfig()
   // 这里可以加载配置数据
   console.log('设置页面已加载')
 })
@@ -1191,6 +1350,133 @@ onMounted(() => {
   }
 
   .btn-primary {
+    width: 100%;
+  }
+}
+.directory-browser-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.directory-browser {
+  width: min(720px, 100%);
+  max-height: min(680px, calc(100vh - 40px));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px;
+  overflow: hidden;
+  border-radius: 10px;
+  background: var(--panel-bg);
+  box-shadow: 0 24px 64px rgba(15, 23, 42, 0.3);
+}
+
+.directory-browser-header,
+.directory-browser-actions,
+.directory-browser-path {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.directory-browser-header {
+  justify-content: space-between;
+}
+
+.directory-browser-header h3,
+.directory-browser-header p {
+  margin: 0;
+}
+
+.directory-browser-header h3 {
+  font-size: 16px;
+}
+
+.directory-browser-header p,
+.directory-browser-message {
+  margin: 4px 0 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.directory-browser-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.directory-browser-close:hover {
+  background: #f1f5f9;
+  color: var(--text);
+}
+
+.directory-browser-path .config-input {
+  min-width: 0;
+}
+
+.directory-browser-actions {
+  justify-content: space-between;
+}
+
+.directory-list {
+  min-height: 180px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.directory-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.directory-item:last-child {
+  border-bottom: 0;
+}
+
+.directory-item:hover {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.directory-icon {
+  font-size: 16px;
+}
+
+.directory-browser-empty {
+  padding: 28px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 780px) {
+  .directory-browser-path {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .directory-browser-path .btn-secondary {
     width: 100%;
   }
 }

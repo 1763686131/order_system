@@ -9,6 +9,7 @@ import hashlib
 import uuid
 from datetime import datetime, timedelta
 from utils.db import get_db
+from utils.system_settings import get_report_path, inspect_directory, normalize_server_path
 import mimetypes
 
 hr_reports_bp = Blueprint('hr_reports', __name__, url_prefix='/api/hr/reports')
@@ -22,6 +23,42 @@ else:
 
 # 确保上传目录存在
 os.makedirs(UPLOAD_BASE_PATH, exist_ok=True)
+
+
+def get_reports_root():
+    """Resolve the configured directory for this request."""
+    return normalize_server_path(get_report_path())
+
+
+def ensure_report_root():
+    root = get_reports_root()
+    status = inspect_directory(root)
+    if not status['is_directory'] or not status['readable']:
+        raise FileNotFoundError(f"检测报告目录不可用：{status['message']}")
+    return root
+
+
+def safe_relative_path(relative_path, allow_empty=False):
+    """Normalize a DB/form relative path and reject traversal attempts."""
+    value = str(relative_path or '').replace('\\', '/').strip()
+    if not value and allow_empty:
+        return ''
+    if not value or value.startswith('/') or value.startswith('../') or '/../' in value:
+        raise ValueError('文件路径不合法')
+    normalized = os.path.normpath(value).replace('\\', '/')
+    if normalized in ('', '.', '..') or normalized.startswith('../') or '/../' in normalized:
+        raise ValueError('文件路径不合法')
+    return normalized
+
+
+def path_under_root(root, relative_path, allow_empty=False):
+    """Join a relative path to the configured root without escaping it."""
+    relative = safe_relative_path(relative_path, allow_empty=allow_empty)
+    candidate = os.path.realpath(os.path.join(root, relative)) if relative else os.path.realpath(root)
+    root_real = os.path.realpath(root)
+    if candidate != root_real and not candidate.startswith(root_real + os.sep):
+        raise ValueError('文件路径超出报告目录')
+    return candidate
 
 # 允许的文件类型
 ALLOWED_EXTENSIONS = {
@@ -98,7 +135,8 @@ def sync_files():
                         })
 
         # 开始扫描
-        scan_directory(UPLOAD_BASE_PATH)
+        report_root = ensure_report_root()
+        scan_directory(report_root)
 
         with get_db() as conn:
             cursor = conn.cursor()
@@ -260,7 +298,7 @@ def upload_file():
             return jsonify({'success': False, 'message': '没有文件'}), 400
 
         file = request.files['file']
-        folder_path = request.form.get('folder_path', '')
+        folder_path = safe_relative_path(request.form.get('folder_path', ''), allow_empty=True)
 
         if file.filename == '':
             return jsonify({'success': False, 'message': '文件名为空'}), 400
@@ -272,15 +310,20 @@ def upload_file():
 
         # 安全的文件名
         filename = secure_filename(file.filename)
+        if not filename:
+            return jsonify({'success': False, 'message': '文件名不合法'}), 400
 
         # 构建保存路径
         if folder_path:
-            save_dir = os.path.join(UPLOAD_BASE_PATH, folder_path)
+            save_dir = path_under_root(ensure_report_root(), folder_path)
         else:
-            save_dir = UPLOAD_BASE_PATH
+            save_dir = ensure_report_root()
 
         os.makedirs(save_dir, exist_ok=True)
-        save_path = os.path.join(save_dir, filename)
+        save_path = path_under_root(
+            ensure_report_root(),
+            os.path.join(folder_path, filename).replace('\\', '/') if folder_path else filename
+        )
 
         # 保存文件
         file.save(save_path)
@@ -345,7 +388,7 @@ def download_file(file_id):
         if not row:
             return jsonify({'success': False, 'message': '文件不存在'}), 404
 
-        file_path = os.path.join(UPLOAD_BASE_PATH, row['file_path'])
+        file_path = path_under_root(ensure_report_root(), row['file_path'])
 
         if not os.path.exists(file_path):
             return jsonify({'success': False, 'message': '文件已丢失'}), 404
@@ -467,7 +510,7 @@ def download_shared_file(share_token):
                 # 如果日期解析失败，记录错误但不阻止访问
                 print(f"日期解析错误: {e}, 原始值: {row['share_expire']}")
 
-        file_path = os.path.join(UPLOAD_BASE_PATH, row['file_path'])
+        file_path = path_under_root(ensure_report_root(), row['file_path'])
 
         if not os.path.exists(file_path):
             return jsonify({'success': False, 'message': '文件已丢失'}), 404
@@ -508,7 +551,7 @@ def delete_file(file_id):
                 return jsonify({'success': False, 'message': '文件不存在'}), 404
 
             # 删除物理文件
-            file_path = os.path.join(UPLOAD_BASE_PATH, row['file_path'])
+            file_path = path_under_root(ensure_report_root(), row['file_path'])
             if os.path.exists(file_path):
                 os.remove(file_path)
 
@@ -539,7 +582,10 @@ def rename_folder():
             return jsonify({'success': False, 'message': '参数不完整'}), 400
 
         # 构建新旧路径
-        old_full_path = os.path.join(UPLOAD_BASE_PATH, old_path)
+        old_path = safe_relative_path(old_path)
+        new_name = safe_relative_path(new_name)
+        report_root = ensure_report_root()
+        old_full_path = path_under_root(report_root, old_path)
 
         # 获取父目录和新路径
         parent_dir = os.path.dirname(old_full_path)
@@ -605,7 +651,8 @@ def delete_folder():
         if not folder_path:
             return jsonify({'success': False, 'message': '参数不完整'}), 400
 
-        full_path = os.path.join(UPLOAD_BASE_PATH, folder_path)
+        folder_path = safe_relative_path(folder_path)
+        full_path = path_under_root(ensure_report_root(), folder_path)
 
         if not os.path.exists(full_path):
             return jsonify({'success': False, 'message': '文件夹不存在'}), 404
@@ -659,17 +706,18 @@ def move_file():
             if not row:
                 return jsonify({'success': False, 'message': '文件不存在'}), 404
 
-            old_file_path = os.path.join(UPLOAD_BASE_PATH, row['file_path'])
+            report_root = ensure_report_root()
+            old_file_path = path_under_root(report_root, row['file_path'])
 
             # 构建新路径
             if target_folder:
                 new_relative_path = os.path.join(target_folder, row['filename']).replace('\\', '/')
-                new_file_path = os.path.join(UPLOAD_BASE_PATH, target_folder, row['filename'])
-                target_dir = os.path.join(UPLOAD_BASE_PATH, target_folder)
+                new_file_path = path_under_root(report_root, new_relative_path)
+                target_dir = path_under_root(report_root, target_folder)
             else:
                 new_relative_path = row['filename']
-                new_file_path = os.path.join(UPLOAD_BASE_PATH, row['filename'])
-                target_dir = UPLOAD_BASE_PATH
+                new_file_path = path_under_root(report_root, row['filename'])
+                target_dir = report_root
 
             # 确保目标目录存在
             os.makedirs(target_dir, exist_ok=True)

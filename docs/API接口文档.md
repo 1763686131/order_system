@@ -10,6 +10,7 @@
 
 ## 版本历史
 
+- **v2.5** (2026-09-11) - 新增服务器路径配置、目录浏览和 NAS 检测报告动态扫描接口
 - **v2.4** (2026-09-10) - 新增收款单、审核入账、反审核和客户应收联动接口
 - **v2.3** (2026-09-08) - 新增供应商、入库单、库存余额与事务过账接口
 - **v2.2** (2026-09-08) - 新增原材料商品档案接口，补充单位分组接口
@@ -33,6 +34,7 @@
 10. [人事检测报告文件管理](#10-人事检测报告文件管理)
 11. [供应商与入库管理](#11-供应商与入库管理)
 12. [收款单与应收核销](#12-收款单与应收核销)
+13. [系统设置与服务器路径](#13-系统设置与服务器路径)
 
 ---
 
@@ -2022,7 +2024,7 @@ receipt_image: File (图片文件)
 - **URL**: `/api/hr/reports/sync`
 - **Method**: `POST`
 - **Content-Type**: 无请求体
-- **说明**: 递归扫描服务端人事报告上传目录，将允许类型的文件同步到 `hr_reports` 数据表。
+- **说明**: 递归扫描当前系统配置的检测报告目录，将允许类型的文件同步到 `hr_reports` 数据表。扫描路径由 `reports.path` 系统设置决定；未设置时使用部署环境的默认目录。
 
 **支持的文件扩展名**:
 
@@ -2052,6 +2054,9 @@ receipt_image: File (图片文件)
 - 只同步上述允许类型的文件。
 - 根据文件路径和 MD5 哈希判断新增、修改和删除。
 - 如果物理文件已经不存在，对应的数据库记录会被删除。
+- 每次调用同步接口时都会重新读取服务器中的路径配置，无需重启服务。
+- 配置目录不存在、不是文件夹或当前后端进程没有读取权限时，同步失败并返回路径不可用信息。
+- 修改检测报告根目录后，建议立即执行一次同步。旧目录对应的数据库记录会根据新目录的扫描结果清理。
 
 ### 10.2 获取文件列表
 - **URL**: `/api/hr/reports/list`
@@ -2326,7 +2331,21 @@ GET /api/hr/reports/share/6d6f4c5e-1be1-4f91-b6e6-123456789abc
 | `created_at` | TEXT | 创建时间 |
 | `updated_at` | TEXT | 更新时间 |
 
-文件物理存储在后端 `uploads/hr_reports` 目录下；Linux 容器环境中如果存在 `/app/uploads`，则使用 `/app/uploads/hr_reports`。
+文件根目录由系统设置键 `reports.path` 决定。未配置时：
+
+- Docker/Linux 生产环境默认使用 `/app/uploads/hr_reports`。
+- 本地开发环境默认使用项目根目录下的 `uploads/hr_reports`。
+
+数据库中的 `file_path` 始终保存相对于当前报告根目录的路径，不保存 NAS 主机路径。上传、下载、预览、移动、重命名和删除操作都会在每次请求时读取当前配置，并限制文件操作不能越过报告根目录。
+
+如需使用 NAS 目录，必须先将 NAS 主机目录挂载到 Docker 容器，再通过第 13 章的路径配置接口保存“容器内路径”。例如：
+
+```yaml
+volumes:
+  - /vol2/1000/检测报告:/mnt/nas/reports
+```
+
+系统中应保存 `/mnt/nas/reports`，而不是主机侧的 `/vol2/1000/检测报告`。
 
 ---
 
@@ -2905,6 +2924,180 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 ---
 
+## 13. 系统设置与服务器路径
+
+模块前缀：`/api/settings`
+
+系统路径配置保存在 SQLite 的 `system_settings` 表中。检测报告模块使用键 `reports.path` 保存报告根目录；报告扫描、上传、下载、预览、移动、重命名和删除接口都会在请求时读取该配置。
+
+### 13.1 获取路径配置
+
+- **URL**: `/api/settings/paths`
+- **Method**: `GET`
+- **说明**: 获取当前检测报告、公司资料和回单上传路径，以及检测报告路径状态。
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "reportPath": "/mnt/nas/reports",
+    "documentPath": "/var/data/documents",
+    "receiptPath": "/var/data/receipts",
+    "reportPathConfigured": true,
+    "reportPathDefault": "/app/uploads/hr_reports",
+    "reportStatus": {
+      "path": "/mnt/nas/reports",
+      "exists": true,
+      "is_directory": true,
+      "readable": true,
+      "writable": true,
+      "message": "路径可用"
+    }
+  }
+}
+```
+
+`reportPathConfigured` 为 `false` 时，表示尚未保存自定义路径，当前使用 `reportPathDefault`。
+
+### 13.2 保存路径配置
+
+- **URL**: `/api/settings/paths`
+- **Method**: `PUT`
+- **Content-Type**: `application/json`
+- **说明**: 保存系统路径配置。`reportPath` 必须是后端服务器可访问的已存在文件夹，并且至少具有读取权限。
+
+**请求示例**:
+
+```json
+{
+  "reportPath": "/mnt/nas/reports",
+  "documentPath": "/var/data/documents",
+  "receiptPath": "/var/data/receipts"
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "路径配置已保存",
+  "data": {
+    "reportPath": "/mnt/nas/reports",
+    "documentPath": "/var/data/documents",
+    "receiptPath": "/var/data/receipts",
+    "reportStatus": {
+      "path": "/mnt/nas/reports",
+      "exists": true,
+      "is_directory": true,
+      "readable": true,
+      "writable": true,
+      "message": "路径可用"
+    }
+  }
+}
+```
+
+将 `reportPath` 传为空字符串会清除自定义配置，恢复使用部署环境默认路径。检测报告路径不可用时返回 HTTP `400`，不会保存本次路径。
+
+### 13.3 测试服务器路径
+
+- **URL**: `/api/settings/paths/test`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+- **说明**: 只检查路径，不修改系统配置。
+
+**请求示例**:
+
+```json
+{
+  "path": "/mnt/nas/reports"
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "路径可用",
+  "data": {
+    "path": "/mnt/nas/reports",
+    "exists": true,
+    "is_directory": true,
+    "readable": true,
+    "writable": true,
+    "message": "路径可用"
+  }
+}
+```
+
+### 13.4 浏览服务器目录
+
+- **URL**: `/api/settings/directories`
+- **Method**: `GET`
+- **说明**: 返回后端进程可以读取的服务器目录，用于系统设置页的“获取文件夹”功能。此接口浏览的是 Docker 容器内路径，不是访问者电脑的本地路径。
+
+首次打开时不带查询参数，返回由 `REPORTS_BROWSE_ROOTS` 环境变量配置的可浏览根目录：
+
+```text
+GET /api/settings/directories
+```
+
+浏览某个目录时传入 `path`：
+
+```text
+GET /api/settings/directories?path=/mnt/nas
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "path": "/mnt/nas",
+    "parent_path": "/mnt",
+    "directories": [
+      {
+        "name": "reports",
+        "path": "/mnt/nas/reports"
+      }
+    ],
+    "message": "读取成功"
+  }
+}
+```
+
+如果 NAS 挂载点不在目录浏览器的初始根目录中，仍可在弹窗中直接输入容器内绝对路径，然后点击“打开”或使用“测试路径”按钮确认。
+
+### 13.5 NAS/Docker 路径配置规则
+
+NAS 主机目录必须先挂载到后端容器，应用只能使用容器内可见的路径。例如：
+
+```yaml
+services:
+  order-board:
+    volumes:
+      - /vol2/1000/检测报告:/mnt/nas/reports
+```
+
+挂载完成并重启容器后，在系统设置中保存：
+
+```text
+/mnt/nas/reports
+```
+
+不能直接保存 NAS 主机侧的 `/vol2/1000/检测报告`，除非该路径本身也是后端运行环境可见的路径。挂载目录需要根据实际功能授予权限：
+
+- 只扫描和预览：后端进程需要读取权限；
+- 上传、移动、重命名和删除：后端进程还需要写入权限；
+- 修改路径后建议立即调用 `POST /api/hr/reports/sync`，让 `hr_reports` 表与新目录内容同步。
+
+---
+
 ## 错误响应格式
 
 多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
@@ -2949,6 +3142,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 - `stock_movements` - 入库过账库存流水表
 - `payment_receipts` - 收款单草稿、审核状态、核销和预收快照表
 - `customer_account_transactions` - 订单审核、收款、反审核的客户账户流水表
+- `system_settings` - 系统键值配置表，包括检测报告根目录 `reports.path`
 
 **辅助表**:
 - `units` - 计量单位和包装表，通过 `unit_type` 分组
@@ -3143,6 +3337,11 @@ SQLite 支持**多读一写**模式：
 - ✅ 审核时自动核销客户应收，多收金额转为储值预收
 - ✅ 反审核按原流水恢复客户应收和储值，并防止撤回已被使用的预收
 - ✅ 应收欠款汇总联动收回欠款与优惠金额
+
+### v2.5.0 (2026-09-11)
+- ✅ 新增系统路径配置、服务器目录浏览和路径测试接口
+- ✅ 人事检测报告扫描、上传、下载、移动和删除支持自定义服务器/NAS 路径
+- ✅ 补充 Docker NAS 挂载与容器内路径使用说明
 
 ### v2.3.0 (2026-09-08)
 - ✅ 新增供应商 CRUD 与 `suppliers` 数据表

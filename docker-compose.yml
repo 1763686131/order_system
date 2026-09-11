@@ -11,8 +11,12 @@ services:
       - /vol2/1000/Docker/order_system/data:/app/data
       - /vol2/1000/Docker/order_system/uploads:/app/uploads
       - /vol2/1000/Docker/order_system/frontend:/app/frontend
+      # 将 NAS 上的检测报告目录挂载到容器后，再在“系统设置”中填写容器内路径。
+      # 示例：- /vol2/1000/检测报告:/mnt/nas/reports
     working_dir: /app
     environment:
       - TZ=Asia/Shanghai
+      # 目录选择器初始可浏览的容器目录；可按 NAS 实际挂载点调整。
+      - REPORTS_BROWSE_ROOTS=/mnt,/media,/volume1,/data,/app/uploads
     command: sh -c "pip install flask flask-cors -i https://pypi.tuna.tsinghua.edu.cn/simple && python app.py"
     restart: always
