@@ -305,7 +305,7 @@ const menuItems = ref([
     children: [
       { label: '销售订单', path: '/admin/orders' },
       { label: '物流列表', path: '/admin/orders/logistics' },
-      { label: '退货订单', path: '/admin/orders/completed' }
+      { label: '退货订单', path: '/admin/orders/returns' }
     ]
   },
   {

@@ -166,6 +166,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'orders/returns',
+        name: 'admin-orders-returns',
+        component: () => import('@/views/admin/orders/ReturnOrderList.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'hr/reports',
         name: 'admin-hr-reports',
         component: () => import('@/views/admin/hr/Reports.vue'),
