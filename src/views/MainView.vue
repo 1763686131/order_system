@@ -104,7 +104,6 @@ import SearchOrderModal from '@/components/common/SearchOrderModal.vue'
 import SmartCalculator from '@/components/common/SmartCalculator.vue'
 import OrderFormModal from '@/components/front/OrderFormModal.vue'
 import UploadMaterialModal from '@/components/front/UploadMaterialModal.vue'
-import UserManage from '@/views/admin/system/UserManage.vue'
 import NomiFloatingAI from '@/components/common/NomiFloatingAI.vue'
 
 const orderStore = useOrderStore()
@@ -119,7 +118,6 @@ const shippedActionModal = ref(null)
 const orderFormModal = ref(null)
 const uploadMaterialModal = ref(null)
 const searchOrderModal = ref(null)
-const userManageModal = ref(null)
 const smartCalculator = ref(null)
 
 const tabs = [
@@ -293,11 +291,6 @@ const handleDateFilter = ({ type, startDate, endDate }) => {
   }
 }
 
-// 小圆组件：账户管理
-const handleUserManage = () => {
-  userManageModal.value?.open()
-}
-
 // 移动端导航栏隐藏逻辑
 let lastScrollY = 0
 let ticking = false
@@ -418,9 +411,6 @@ onMounted(() => {
   }
   window.openSearchOrderModal = () => {
     searchOrderModal.value?.open()
-  }
-  window.openUserManageModal = () => {
-    userManageModal.value?.open()
   }
   window.toggleSmartCalculator = () => {
     smartCalculator.value?.toggle()

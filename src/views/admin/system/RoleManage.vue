@@ -1,185 +1,253 @@
 <template>
   <div class="role-manage-page">
-    <!-- 顶部操作栏 -->
-    <div class="page-header">
-      <button class="btn-add" @click="openCreateModal">+ 新增角色</button>
-    </div>
-
-    <!-- 角色列表表格 -->
-    <div class="table-container">
-      <table class="role-table">
-        <thead>
-          <tr>
-            <th>角色名称</th>
-            <th>角色ID</th>
-            <th>权限</th>
-            <th>创建时间</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="role in roles" :key="role.username">
-            <td>{{ role.name }}</td>
-            <td>{{ role.username }}</td>
-            <td>
-              <span class="status-badge" :class="getRoleClass(role.role)">
-                {{ getRoleName(role.role) }}
-              </span>
-            </td>
-            <td>{{ formatDate(role.createdAt) }}</td>
-            <td>
-              <div class="action-buttons">
-                <button class="btn-link btn-modify" @click="openEditModal(role)">修改</button>
-                <button
-                  class="btn-link btn-delete"
-                  @click="deleteRole(role)"
-                  :disabled="!canDelete(role)"
-                  :style="{ opacity: !canDelete(role) ? 0.5 : 1, cursor: !canDelete(role) ? 'not-allowed' : 'pointer' }"
-                >
-                  删除
-                </button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-
-      <!-- 分页 -->
-      <div class="pagination">
-        <span class="total-info">共 {{ totalRoles }} 条记录</span>
-        <div class="page-controls">
-          <span class="page-size">{{ pageSize }}/页</span>
-          <div class="page-buttons">
-            <button @click="goToPage(1)" :disabled="currentPage === 1">首页</button>
-            <button @click="goToPage(currentPage - 1)" :disabled="currentPage === 1">上一页</button>
-            <button
-              v-for="page in visiblePages"
-              :key="page"
-              :class="{ active: currentPage === page }"
-              @click="goToPage(page)"
-            >
-              {{ page }}
-            </button>
-            <button @click="goToPage(currentPage + 1)" :disabled="currentPage === totalPages">下一页</button>
-            <button @click="goToPage(totalPages)" :disabled="currentPage === totalPages">末页</button>
-          </div>
-        </div>
+    <section class="page-intro" aria-labelledby="role-page-title">
+      <div>
+        <span class="eyebrow">系统权限</span>
+        <h1 id="role-page-title">角色管理</h1>
+        <p>统一维护账号角色、权限范围与可执行操作。</p>
       </div>
-    </div>
+      <button class="button button-primary" type="button" @click="openCreateModal">
+        <span aria-hidden="true">+</span>
+        新增角色
+      </button>
+    </section>
 
-    <!-- 权限配置抽屉 -->
-    <div v-if="showPermissionDrawer" class="drawer-overlay" @click.self="closePermissionDrawer">
-      <div class="drawer-container">
-        <div class="drawer-header">
-          <h3>修改</h3>
-          <button class="btn-close" @click="closePermissionDrawer">×</button>
+    <section class="records-panel" aria-labelledby="role-list-title">
+      <header class="records-toolbar">
+        <div class="toolbar-title">
+          <div>
+            <span class="section-kicker">权限目录</span>
+            <h2 id="role-list-title">角色列表</h2>
+          </div>
+          <span class="count-badge">{{ totalRoles }}</span>
         </div>
+        <span class="toolbar-hint">点击修改可调整角色信息和授权范围</span>
+      </header>
+
+      <div class="table-scroll">
+        <table class="records-table">
+          <thead>
+            <tr>
+              <th>角色</th>
+              <th>角色 ID</th>
+              <th>权限级别</th>
+              <th>授权数量</th>
+              <th>创建时间</th>
+              <th class="operation-column">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="loading" class="state-row">
+              <td colspan="6">
+                <span class="loading-dot" aria-hidden="true"></span>
+                正在加载角色列表…
+              </td>
+            </tr>
+            <tr v-else-if="paginatedRoles.length === 0" class="state-row">
+              <td colspan="6">
+                <span class="empty-mark" aria-hidden="true">⌁</span>
+                <strong>暂无角色数据</strong>
+                <span>可以点击右上角“新增角色”创建第一个角色。</span>
+              </td>
+            </tr>
+            <tr v-for="role in paginatedRoles" v-else :key="role.username">
+              <td>
+                <strong class="role-name">{{ role.name || role.username }}</strong>
+                <span class="role-secondary">{{ role.description || '未填写备注' }}</span>
+              </td>
+              <td class="mono-value">{{ role.username }}</td>
+              <td>
+                <span class="status-badge" :class="getRoleClass(role.role)">
+                  <span class="status-dot" aria-hidden="true"></span>
+                  {{ getRoleName(role.role) }}
+                </span>
+              </td>
+              <td class="number-value">{{ getPermissionCount(role) }}</td>
+              <td class="date-value">{{ formatDate(role.createdAt || role.created_at) }}</td>
+              <td class="operation-column">
+                <div class="row-actions">
+                  <button class="action-button action-edit" type="button" @click="openEditModal(role)">
+                    修改
+                  </button>
+                  <button
+                    class="action-button action-delete"
+                    type="button"
+                    :disabled="!canDelete(role)"
+                    :title="canDelete(role) ? '删除角色' : getDeleteDisabledReason(role)"
+                    @click="deleteRole(role)"
+                  >
+                    删除
+                  </button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <footer class="table-footer">
+        <span class="table-summary">共 <strong>{{ totalRoles }}</strong> 条角色记录</span>
+        <div class="pagination">
+          <label class="page-size-control">
+            <span>每页</span>
+            <select v-model.number="pageSize" aria-label="每页条数">
+              <option :value="10">10</option>
+              <option :value="20">20</option>
+              <option :value="50">50</option>
+            </select>
+            <span>条</span>
+          </label>
+          <button class="page-button" type="button" :disabled="currentPage === 1" @click="goToPage(1)">首页</button>
+          <button class="page-button" type="button" :disabled="currentPage === 1" @click="goToPage(currentPage - 1)">上一页</button>
+          <button
+            v-for="page in visiblePages"
+            :key="page"
+            class="page-button page-number"
+            :class="{ active: currentPage === page }"
+            type="button"
+            @click="goToPage(page)"
+          >
+            {{ page }}
+          </button>
+          <button class="page-button" type="button" :disabled="currentPage === totalPages" @click="goToPage(currentPage + 1)">下一页</button>
+          <button class="page-button" type="button" :disabled="currentPage === totalPages" @click="goToPage(totalPages)">末页</button>
+        </div>
+      </footer>
+    </section>
+
+    <Transition name="notice">
+      <div
+        v-if="notice.visible"
+        class="page-notice"
+        :class="notice.type"
+        :role="notice.type === 'error' || notice.type === 'warning' ? 'alert' : 'status'"
+        :aria-live="notice.type === 'error' || notice.type === 'warning' ? 'assertive' : 'polite'"
+      >
+        <span class="page-notice-icon" aria-hidden="true">{{ noticeIcon }}</span>
+        <span class="page-notice-text">{{ notice.message }}</span>
+        <button class="page-notice-close" type="button" aria-label="关闭通知" @click="hideNotice">×</button>
+      </div>
+    </Transition>
+
+    <div v-if="showPermissionDrawer" class="drawer-overlay" @click.self="closePermissionDrawer">
+      <aside class="drawer-container" role="dialog" aria-modal="true" aria-labelledby="role-drawer-title">
+        <header class="drawer-header">
+          <div>
+            <span class="section-kicker">{{ isEditMode ? '编辑角色' : '新建角色' }}</span>
+            <h2 id="role-drawer-title">{{ isEditMode ? '角色权限配置' : '创建角色' }}</h2>
+          </div>
+          <button class="icon-button" type="button" aria-label="关闭角色配置" @click="closePermissionDrawer">×</button>
+        </header>
 
         <div class="drawer-body">
-          <!-- 角色基本信息 -->
-          <div class="form-section">
-            <div class="form-item-inline">
-              <label><span class="required">*</span> 角色名称</label>
-              <input v-model="currentRole.name" placeholder="请输入" />
+          <section class="form-card">
+            <div class="form-card-header">
+              <div>
+                <h3>基本信息</h3>
+                <p>角色名称和登录凭据用于识别账号。</p>
+              </div>
             </div>
-
-            <div class="form-item-inline">
-              <label>角色ID</label>
-              <input v-model="currentRole.username" placeholder="请输入" :disabled="isEditMode" />
+            <div class="form-grid">
+              <label class="form-field">
+                <span>角色名称 <b>*</b></span>
+                <input v-model="currentRole.name" type="text" placeholder="例如：仓库主管" />
+              </label>
+              <label class="form-field">
+                <span>角色 ID <b>*</b></span>
+                <input v-model="currentRole.username" type="text" placeholder="用于登录和接口识别" :disabled="isEditMode" />
+              </label>
+              <label class="form-field">
+                <span>权限级别 <b>*</b></span>
+                <select v-model="currentRole.role" :disabled="isEditMode && currentRole.role === 'super_admin'">
+                  <option value="employee">普通员工</option>
+                  <option value="operator">操作员</option>
+                  <option value="admin">管理员</option>
+                  <option v-if="userStore.user?.role === 'super_admin'" value="super_admin">超级管理员</option>
+                </select>
+              </label>
+              <label class="form-field">
+                <span>密码 <b v-if="!isEditMode">*</b></span>
+                <input v-model="currentRole.password" type="password" :placeholder="isEditMode ? '留空表示不修改' : '请输入登录密码'" />
+              </label>
+              <label class="form-field">
+                <span>创建时间</span>
+                <input v-model="currentRole.createdAt" type="text" :disabled="!isEditMode" :placeholder="isEditMode ? '创建时间' : '保存后自动生成'" />
+              </label>
+              <label class="form-field form-field-wide">
+                <span>备注</span>
+                <input v-model="currentRole.description" type="text" placeholder="补充角色职责或适用范围" />
+              </label>
             </div>
+          </section>
 
-            <div class="form-item-inline">
-              <label><span class="required">*</span> 权限</label>
-              <select v-model="currentRole.role" :disabled="isEditMode && currentRole.role === 'super_admin'">
-                <option value="employee">普通员工</option>
-                <option value="operator">操作员</option>
-                <option value="admin">管理员</option>
-                <option value="super_admin" v-if="userStore.user?.role === 'super_admin'">超级管理员</option>
-              </select>
+          <section class="form-card permission-card">
+            <div class="form-card-header">
+              <div>
+                <h3>授权范围</h3>
+                <p>按模块选择页面访问、业务操作和回单权限。</p>
+              </div>
+              <span class="permission-total">{{ currentRole.permissions.length }} 项</span>
             </div>
-
-            <div class="form-item-inline">
-              <label><span class="required" v-if="!isEditMode">*</span> 密码</label>
-              <input
-                v-model="currentRole.password"
-                type="password"
-                :placeholder="isEditMode ? '留空表示不修改' : '请输入密码'"
-              />
-            </div>
-
-            <div class="form-item-inline">
-              <label>创建时间</label>
-              <input
-                v-model="currentRole.createdAt"
-                :placeholder="isEditMode ? '请输入创建时间' : '自动生成当前时间'"
-                :disabled="!isEditMode"
-              />
-            </div>
-
-            <div class="form-item-full">
-              <label>备注</label>
-              <input v-model="currentRole.description" placeholder="请输入" />
-            </div>
-          </div>
-
-          <!-- 权限配置树 -->
-          <div class="permission-section">
-            <h4>授权</h4>
             <div class="permission-tree">
-              <div v-for="module in permissionModules" :key="module.id" class="permission-module">
-                <div class="module-header">
-                  <label>
-                    <input
-                      type="checkbox"
-                      :checked="isModuleChecked(module)"
-                      @change="toggleModule(module, $event)"
-                    />
-                    <span class="module-icon" v-html="module.icon"></span>
-                    {{ module.label }}
-                  </label>
-                </div>
-
+              <article
+                v-for="module in permissionModules"
+                :key="module.id"
+                class="permission-module"
+              >
+                <label class="module-header" :class="{ 'is-partial': isModulePartiallyChecked(module) }">
+                  <input
+                    type="checkbox"
+                    :checked="isModuleChecked(module)"
+                    :indeterminate="isModulePartiallyChecked(module)"
+                    @change="toggleModule(module, $event)"
+                  />
+                  <span class="module-icon" v-html="module.icon"></span>
+                  <span>{{ module.label }}</span>
+                </label>
                 <div class="module-children">
-                  <div v-for="item in module.children" :key="item.id" class="permission-item">
-                    <label>
-                      <input
-                        type="checkbox"
-                        :value="item.id"
-                        v-model="currentRole.permissions"
-                      />
-                      <span class="item-icon" v-html="item.icon"></span>
-                      {{ item.label }}
+                  <div v-for="item in module.children" :key="item.id" class="permission-group">
+                    <label class="permission-item">
+                      <input type="checkbox" :value="item.id" v-model="currentRole.permissions" />
+                      <span>{{ item.label }}</span>
                     </label>
-
-                    <!-- 子权限 -->
                     <div v-if="item.children" class="permission-actions">
-                      <label v-for="action in item.children" :key="action.id">
-                        <input
-                          type="checkbox"
-                          :value="action.id"
-                          v-model="currentRole.permissions"
-                        />
-                        {{ action.label }}
+                      <label v-for="action in item.children" :key="action.id" class="permission-item">
+                        <input type="checkbox" :value="action.id" v-model="currentRole.permissions" />
+                        <span>{{ action.label }}</span>
                       </label>
                     </div>
                   </div>
                 </div>
-              </div>
+              </article>
             </div>
-          </div>
+          </section>
         </div>
 
-        <div class="drawer-footer">
-          <button class="btn-cancel" @click="closePermissionDrawer">取消</button>
-          <button class="btn-confirm" @click="saveRole">确认</button>
+        <footer class="drawer-footer">
+          <button class="button button-secondary" type="button" @click="closePermissionDrawer">取消</button>
+          <button class="button button-primary" type="button" :disabled="saving" @click="saveRole">
+            {{ saving ? '保存中…' : '保存角色' }}
+          </button>
+        </footer>
+      </aside>
+    </div>
+
+    <div v-if="confirmDialog.visible" class="custom-modal-overlay" @click.self="closeConfirmDialog">
+      <section class="custom-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
+        <div class="confirm-icon" aria-hidden="true">!</div>
+        <h2 id="confirm-title">{{ confirmDialog.title }}</h2>
+        <p>{{ confirmDialog.message }}</p>
+        <div class="confirm-actions">
+          <button class="button button-secondary" type="button" @click="closeConfirmDialog">取消</button>
+          <button class="button button-danger" type="button" @click="confirmAction">{{ confirmDialog.confirmText }}</button>
         </div>
-      </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, inject } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, inject } from 'vue'
 import { useUserStore } from '@/stores/user'
 import request from '@/api/request'
 
@@ -188,24 +256,67 @@ const userStore = useUserStore()
 // 注入 Admin 组件提供的方法
 const setHeaderActions = inject('setHeaderActions', null)
 
-// 角色管理页面不需要顶部按钮，清空
-onMounted(async () => {
-  if (setHeaderActions) {
-    setHeaderActions(null)
-  }
-  await loadRoles()
-})
-
 // 角色列表数据
 const roles = ref([])
+const loading = ref(false)
+const saving = ref(false)
+
+const notice = ref({
+  visible: false,
+  type: 'success',
+  message: ''
+})
+let noticeTimer = null
+
+const noticeIcon = computed(() => {
+  const icons = {
+    success: '✓',
+    info: 'i',
+    warning: '!',
+    error: '×'
+  }
+  return icons[notice.value.type] || icons.info
+})
+
+const showNotice = (message, type = 'success', duration) => {
+  if (noticeTimer) {
+    clearTimeout(noticeTimer)
+  }
+
+  notice.value = {
+    visible: true,
+    type,
+    message
+  }
+
+  const timeout = duration ?? (type === 'error' || type === 'warning' ? 5000 : 3000)
+  if (timeout > 0) {
+    noticeTimer = setTimeout(() => {
+      notice.value.visible = false
+      noticeTimer = null
+    }, timeout)
+  }
+}
+
+const hideNotice = () => {
+  if (noticeTimer) {
+    clearTimeout(noticeTimer)
+    noticeTimer = null
+  }
+  notice.value.visible = false
+}
 
 // 加载角色列表
 const loadRoles = async () => {
+  loading.value = true
   try {
     const response = await request({ url: '/users', method: 'GET' })
-    roles.value = response || []
+    roles.value = Array.isArray(response) ? response : (response?.data || [])
   } catch (error) {
     console.error('获取角色列表失败:', error)
+    showNotice('角色列表加载失败，请稍后重试', 'error')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -214,7 +325,12 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const totalRoles = computed(() => roles.value.length)
 
-const totalPages = computed(() => Math.ceil(totalRoles.value / pageSize.value))
+const totalPages = computed(() => Math.max(1, Math.ceil(totalRoles.value / pageSize.value)))
+
+const paginatedRoles = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  return roles.value.slice(start, start + pageSize.value)
+})
 
 const visiblePages = computed(() => {
   const pages = []
@@ -233,6 +349,26 @@ const goToPage = (page) => {
   }
 }
 
+watch([totalPages, pageSize], () => {
+  if (currentPage.value > totalPages.value) {
+    currentPage.value = totalPages.value
+  }
+})
+
+// 角色管理页面使用页面自身的工具栏
+onMounted(async () => {
+  if (setHeaderActions) {
+    setHeaderActions(null)
+  }
+  await loadRoles()
+})
+
+onUnmounted(() => {
+  if (noticeTimer) {
+    clearTimeout(noticeTimer)
+  }
+})
+
 // 权限配置
 const showPermissionDrawer = ref(false)
 const currentRole = ref({
@@ -245,6 +381,13 @@ const currentRole = ref({
   permissions: []
 })
 const isEditMode = ref(false)
+const confirmDialog = ref({
+  visible: false,
+  title: '',
+  message: '',
+  confirmText: '确认',
+  onConfirm: null
+})
 
 // 权限模块配置（映射自用户管理的权限配置）
 const permissionModules = ref([
@@ -322,7 +465,7 @@ const openEditModal = (role) => {
   currentRole.value = {
     ...role,
     password: '', // 编辑时密码为空，表示不修改
-    permissions: role.permissions || []
+    permissions: Array.isArray(role.permissions) ? [...role.permissions] : []
   }
   showPermissionDrawer.value = true
 }
@@ -332,7 +475,7 @@ const openPermissionDrawer = (role) => {
   isEditMode.value = true
   currentRole.value = {
     ...role,
-    permissions: role.permissions || []
+    permissions: Array.isArray(role.permissions) ? [...role.permissions] : []
   }
   showPermissionDrawer.value = true
 }
@@ -342,35 +485,52 @@ const closePermissionDrawer = () => {
   showPermissionDrawer.value = false
 }
 
-// 检查模块是否全选
-const isModuleChecked = (module) => {
+const closeConfirmDialog = () => {
+  confirmDialog.value.visible = false
+  confirmDialog.value.onConfirm = null
+}
+
+const confirmAction = async () => {
+  const action = confirmDialog.value.onConfirm
+  closeConfirmDialog()
+  if (action) {
+    await action()
+  }
+}
+
+const getModulePermissionIds = (module) => {
+  const ids = []
   if (!module.children || module.children.length === 0) {
-    return currentRole.value.permissions.includes(module.id)
+    ids.push(module.id)
+    return ids
   }
 
-  const allIds = module.children.map(item => item.id)
-  return allIds.every(id => currentRole.value.permissions.includes(id))
+  module.children.forEach(item => {
+    ids.push(item.id)
+    if (Array.isArray(item.children)) {
+      ids.push(...item.children.map(action => action.id))
+    }
+  })
+
+  return ids
+}
+
+// 检查模块是否全选
+const isModuleChecked = (module) => {
+  const allIds = getModulePermissionIds(module)
+  return allIds.length > 0 && allIds.every(id => currentRole.value.permissions.includes(id))
+}
+
+const isModulePartiallyChecked = (module) => {
+  const allIds = getModulePermissionIds(module)
+  const selectedCount = allIds.filter(id => currentRole.value.permissions.includes(id)).length
+  return selectedCount > 0 && selectedCount < allIds.length
 }
 
 // 切换模块
 const toggleModule = (module, event) => {
   const checked = event.target.checked
-
-  if (!module.children || module.children.length === 0) {
-    if (checked) {
-      if (!currentRole.value.permissions.includes(module.id)) {
-        currentRole.value.permissions.push(module.id)
-      }
-    } else {
-      const index = currentRole.value.permissions.indexOf(module.id)
-      if (index > -1) {
-        currentRole.value.permissions.splice(index, 1)
-      }
-    }
-    return
-  }
-
-  const allIds = module.children.map(item => item.id)
+  const allIds = getModulePermissionIds(module)
 
   if (checked) {
     allIds.forEach(id => {
@@ -388,20 +548,25 @@ const toggleModule = (module, event) => {
   }
 }
 
+const getPermissionCount = (role) => {
+  return Array.isArray(role.permissions) ? role.permissions.length : 0
+}
+
 // 保存角色
 const saveRole = async () => {
+  const username = currentRole.value.username.trim()
+  const name = currentRole.value.name.trim()
+  const password = currentRole.value.password.trim()
+
+  if (!username || !name) {
+    showNotice('角色 ID 和角色名称不能为空', 'warning')
+    return
+  }
+
   if (!isEditMode.value) {
-    // 新建角色（使用用户管理的新增员工接口）
-    const username = currentRole.value.username.trim()
-    const name = currentRole.value.name.trim()
-    const password = currentRole.value.password.trim()
-
-    if (!username || !name) {
-      return alert('角色ID和角色名称不能为空！')
-    }
-
     if (!password) {
-      return alert('密码不能为空！')
+      showNotice('新建角色时必须设置登录密码', 'warning')
+      return
     }
 
     const payload = {
@@ -412,48 +577,52 @@ const saveRole = async () => {
       permissions: currentRole.value.permissions
     }
 
+    saving.value = true
     try {
       const res = await request({ url: '/users', method: 'POST', data: payload })
       if (res) {
-        alert('角色创建成功')
         await loadRoles()
         closePermissionDrawer()
+        showNotice('角色创建成功', 'success')
       }
     } catch (error) {
-      alert('角色已存在或无权限！')
+      showNotice('角色创建失败，可能已存在或当前账号无权限', 'error')
+    } finally {
+      saving.value = false
     }
   } else {
-    // 编辑现有角色（使用用户管理的更新权限接口）
     const payload = {
-      name: currentRole.value.name.trim(),
+      name,
       permissions: currentRole.value.permissions,
       role: currentRole.value.role || 'employee',
-      createdAt: currentRole.value.createdAt // 新增：发送创建时间
+      createdAt: currentRole.value.createdAt
     }
 
+    saving.value = true
     try {
       const res = await request({
-        url: `/users/${currentRole.value.username}/permissions`,
+        url: `/users/${username}/permissions`,
         method: 'PUT',
         data: payload
       })
 
-      // 如果填写了密码，调用修改密码接口
-      if (currentRole.value.password.trim()) {
+      if (password) {
         await request({
-          url: `/users/${currentRole.value.username}/password`,
+          url: `/users/${username}/password`,
           method: 'PUT',
-          data: { password: currentRole.value.password.trim() }
+          data: { password }
         })
       }
 
       if (res) {
-        alert('角色更新成功')
         await loadRoles()
         closePermissionDrawer()
+        showNotice('角色更新成功', 'success')
       }
     } catch (error) {
-      alert('更新失败，权限不足')
+      showNotice('角色更新失败，请检查权限或稍后重试', 'error')
+    } finally {
+      saving.value = false
     }
   }
 }
@@ -479,30 +648,37 @@ const canDelete = (role) => {
   return false
 }
 
+const getDeleteDisabledReason = (role) => {
+  if (role.username === userStore.username) {
+    return '不能删除当前登录账号'
+  }
+  if (userStore.role === 'admin') {
+    return '管理员只能删除普通员工和操作员'
+  }
+  return '当前账号没有删除权限'
+}
+
 // 删除角色
 const deleteRole = async (role) => {
   if (!canDelete(role)) {
-    const currentUser = userStore.user
-    if (role.username === currentUser?.username) {
-      alert('不能删除自己的账号！')
-    } else if (currentUser?.role === 'admin') {
-      alert('管理员只能删除普通员工和操作员！')
-    } else {
-      alert('权限不足，无法删除此角色！')
+    showNotice(getDeleteDisabledReason(role), 'warning')
+    return
+  }
+
+  confirmDialog.value = {
+    visible: true,
+    title: '确认删除角色？',
+    message: `删除“${role.name || role.username}”后，该账号将无法继续登录，且此操作不可恢复。`,
+    confirmText: '确认删除',
+    onConfirm: async () => {
+      try {
+        await request({ url: `/users/${role.username}`, method: 'DELETE' })
+        await loadRoles()
+        showNotice('角色已删除', 'success')
+      } catch (error) {
+        showNotice('删除失败，请稍后重试', 'error')
+      }
     }
-    return
-  }
-
-  if (!confirm(`确定要删除角色 ${role.name} 吗？`)) {
-    return
-  }
-
-  try {
-    await request({ url: `/users/${role.username}`, method: 'DELETE' })
-    alert('角色已删除')
-    await loadRoles()
-  } catch (error) {
-    alert('删除失败')
   }
 }
 
@@ -1045,5 +1221,968 @@ input[type="checkbox"] {
 .drawer-body::-webkit-scrollbar-thumb:hover,
 .permission-tree::-webkit-scrollbar-thumb:hover {
   background: #4a4d55;
+}
+</style>
+
+<style scoped>
+.role-manage-page {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --page-bg: #f4f7f8;
+  --panel-bg: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 100%;
+  padding: 24px;
+  color: var(--text);
+  background: var(--page-bg);
+}
+
+.role-manage-page *,
+.role-manage-page *::before,
+.role-manage-page *::after {
+  box-sizing: border-box;
+}
+
+.page-intro {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 18px;
+}
+
+.eyebrow,
+.section-kicker {
+  display: block;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page-intro h1 {
+  margin: 4px 0 5px;
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.page-intro p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease,
+    color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.button-primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.22);
+}
+
+.button-secondary {
+  color: var(--text-secondary);
+  background: var(--panel-bg);
+  border-color: var(--border-strong);
+}
+
+.button-secondary:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.button-danger {
+  color: #fff;
+  background: #d14352;
+  border-color: #d14352;
+}
+
+.button-danger:hover:not(:disabled) {
+  background: #b4232f;
+  border-color: #b4232f;
+  box-shadow: 0 4px 12px rgba(209, 67, 82, 0.22);
+}
+
+.records-panel {
+  overflow: hidden;
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
+}
+
+.records-toolbar {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.toolbar-title {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+
+.toolbar-title h2 {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.count-badge,
+.permission-total {
+  display: inline-flex;
+  min-width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.toolbar-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.records-table {
+  width: 100%;
+  min-width: 880px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.records-table th,
+.records-table td {
+  border-bottom: 1px solid #edf1f5;
+}
+
+.records-table th {
+  height: 45px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: left;
+}
+
+.records-table th:nth-child(1) {
+  width: 21%;
+}
+
+.records-table th:nth-child(2) {
+  width: 18%;
+}
+
+.records-table th:nth-child(3) {
+  width: 16%;
+}
+
+.records-table th:nth-child(4) {
+  width: 14%;
+}
+
+.records-table th:nth-child(5) {
+  width: 16%;
+}
+
+.records-table th:nth-child(6) {
+  width: 15%;
+}
+
+.records-table td {
+  height: 64px;
+  padding: 9px 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  vertical-align: middle;
+}
+
+.records-table tbody tr:not(.state-row):hover {
+  background: rgba(var(--accent-rgb), 0.045);
+}
+
+.role-name,
+.role-secondary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-name {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.role-secondary {
+  max-width: 220px;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.mono-value,
+.number-value {
+  font-variant-numeric: tabular-nums;
+}
+
+.mono-value {
+  color: var(--text-secondary);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 12px;
+}
+
+.number-value {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.date-value {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.status-badge {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+.role-super-admin {
+  color: #b4232f;
+  background: #fff1f2;
+}
+
+.role-admin {
+  color: #8a4b0b;
+  background: #fff3df;
+}
+
+.role-operator {
+  color: #16647a;
+  background: #e7f5f8;
+}
+
+.role-employee,
+.role-default {
+  color: #13734f;
+  background: #eaf8f1;
+}
+
+.operation-column {
+  text-align: center !important;
+}
+
+.row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.action-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.action-edit {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.action-edit:hover {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.action-delete {
+  color: #b4232f;
+  background: #fff;
+  border-color: #f0a5ad;
+}
+
+.action-delete:hover:not(:disabled) {
+  color: #fff;
+  background: #d14352;
+  border-color: #d14352;
+}
+
+.action-delete:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.state-row td {
+  height: 220px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.state-row strong,
+.state-row span {
+  display: block;
+}
+
+.state-row strong {
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.state-row span:last-child {
+  margin-top: 5px;
+  font-size: 12px;
+}
+
+.empty-mark {
+  display: inline-flex !important;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  color: var(--text-muted);
+  background: #f1f4f7;
+  border-radius: 50%;
+  font-size: 24px;
+}
+
+.loading-dot {
+  display: inline-block !important;
+  width: 10px;
+  height: 10px;
+  margin: 0 auto 9px;
+  background: var(--accent);
+  border-radius: 50%;
+  animation: role-pulse 1s ease-in-out infinite;
+}
+
+.table-footer {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+}
+
+.table-summary {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.table-summary strong {
+  color: var(--text);
+  font-weight: 750;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-size-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.page-size-control select {
+  width: 58px;
+  height: 32px;
+  padding: 0 7px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+}
+
+.page-button {
+  display: inline-flex;
+  min-width: 31px;
+  height: 31px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.page-button:hover:not(:disabled),
+.page-button.active {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.page-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.drawer-overlay,
+.custom-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: stretch;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1px);
+}
+
+.drawer-container {
+  display: flex;
+  width: min(680px, 100vw);
+  height: 100%;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--page-bg);
+  box-shadow: -20px 0 50px rgba(15, 23, 42, 0.18);
+}
+
+.drawer-header {
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+
+.drawer-header h2 {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-size: 18px;
+}
+
+.icon-button,
+.page-notice-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.icon-button {
+  width: 34px;
+  height: 34px;
+  color: var(--text-secondary);
+  background: transparent;
+  font-size: 22px;
+}
+
+.icon-button:hover {
+  color: var(--text);
+  background: #f1f5f9;
+}
+
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px;
+}
+
+.form-card {
+  margin-bottom: 12px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.form-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 15px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.form-card-header h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.form-card-header p {
+  margin: 3px 0 0;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.form-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.form-field-wide {
+  grid-column: 1 / -1;
+}
+
+.form-field b {
+  color: #d14352;
+}
+
+.form-field input,
+.form-field select {
+  width: 100%;
+  height: 38px;
+  padding: 0 11px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  outline: none;
+  font: inherit;
+  font-weight: 400;
+}
+
+.form-field input:focus,
+.form-field select:focus,
+.page-size-control select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+.form-field input:disabled,
+.form-field select:disabled {
+  color: var(--text-muted);
+  background: #f8fafc;
+  cursor: not-allowed;
+}
+
+.permission-card {
+  margin-bottom: 0;
+}
+
+.permission-tree {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.permission-module {
+  min-width: 0;
+  padding: 12px;
+  background: #fafcfd;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.module-header,
+.permission-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--text);
+  cursor: pointer;
+  line-height: 1.45;
+}
+
+.module-header {
+  align-items: center;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.module-header.is-partial {
+  color: var(--accent-dark);
+}
+
+.module-icon {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-dark);
+}
+
+.module-icon :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.module-children {
+  display: grid;
+  gap: 8px;
+  margin: 11px 0 0 26px;
+  padding-top: 10px;
+  border-top: 1px solid #edf1f5;
+}
+
+.permission-group {
+  display: grid;
+  gap: 7px;
+}
+
+.permission-actions {
+  display: grid;
+  gap: 7px;
+  margin-left: 24px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+}
+
+.permission-item {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.permission-item:hover {
+  color: var(--accent-dark);
+}
+
+.module-header input,
+.permission-item input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.drawer-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 12px 20px;
+  background: #fff;
+  border-top: 1px solid var(--border);
+}
+
+.custom-modal-overlay {
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.custom-modal {
+  width: min(400px, 100%);
+  padding: 24px;
+  text-align: center;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
+}
+
+.confirm-icon {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #c98216;
+  border-radius: 50%;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.custom-modal h2 {
+  margin: 14px 0 7px;
+  color: var(--text);
+  font-size: 18px;
+}
+
+.custom-modal p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.page-notice {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  z-index: 100001;
+  display: flex;
+  width: max-content;
+  min-width: 280px;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transform: translateX(-50%);
+}
+
+.page-notice-icon {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.page-notice-text {
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.page-notice-close {
+  width: 28px;
+  height: 28px;
+  color: currentColor;
+  background: transparent;
+  font-size: 18px;
+}
+
+.page-notice-close:hover {
+  background: rgba(15, 23, 42, 0.07);
+}
+
+.page-notice.success {
+  color: #166b50;
+  background: #eaf8f1;
+  border-color: var(--accent-border);
+}
+
+.page-notice.success .page-notice-icon {
+  color: #fff;
+  background: var(--accent);
+}
+
+.page-notice.warning {
+  color: #8a4b0b;
+  background: #fff3df;
+  border-color: #f3c887;
+}
+
+.page-notice.warning .page-notice-icon {
+  color: #fff;
+  background: #c98216;
+}
+
+.page-notice.error {
+  color: #a12635;
+  background: #fff1f2;
+  border-color: #f0a5ad;
+}
+
+.page-notice.error .page-notice-icon {
+  color: #fff;
+  background: #d14352;
+}
+
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+}
+
+.role-manage-page button:focus-visible,
+.role-manage-page input:focus-visible,
+.role-manage-page select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@keyframes role-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (max-width: 1280px) {
+  .role-manage-page {
+    padding: 18px;
+  }
+
+  .toolbar-hint {
+    display: none;
+  }
+}
+
+@media (max-width: 780px) {
+  .role-manage-page {
+    padding: 12px;
+  }
+
+  .page-intro {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .page-intro .button {
+    width: 100%;
+  }
+
+  .records-toolbar,
+  .table-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .pagination {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .permission-tree,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-field-wide {
+    grid-column: auto;
+  }
+
+  .drawer-header,
+  .drawer-footer {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  .drawer-body {
+    padding: 10px;
+  }
+
+  .page-notice {
+    top: 12px;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-enter-active,
+  .notice-leave-active,
+  .loading-dot {
+    animation: none;
+    transition: none;
+  }
 }
 </style>

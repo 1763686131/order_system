@@ -95,7 +95,7 @@ const routes = [
       {
         path: 'users',
         name: 'admin-users',
-        component: () => import('@/views/admin/system/UserManage.vue'),
+        redirect: '/admin/roles',
         meta: { requiresAuth: true }
       },
       {
