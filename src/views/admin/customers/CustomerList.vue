@@ -1873,30 +1873,31 @@ svg {
 
 .store-pill {
   padding: 10px 20px;
-  background: #fff;
-  border: 1.5px solid #cbd5e1;
+  background: #f8fafc;
+  border: 1.5px solid #94a3b8;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #475569;
+  color: #334155;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
 .store-pill:hover {
   background: var(--accent-soft);
-  border-color: var(--accent-border);
+  border-color: var(--accent);
   color: var(--accent-dark);
   transform: translateY(-1px);
-  box-shadow: 0 3px 8px rgba(var(--accent-rgb), 0.15);
+  box-shadow: 0 3px 8px rgba(var(--accent-rgb), 0.2);
 }
 
 .store-pill.active {
-  background: var(--accent);
-  color: #fff;
-  border-color: var(--accent);
-  box-shadow: 0 3px 10px rgba(var(--accent-rgb), 0.35);
+  background: var(--accent-dark);
+  color: #ffffff;
+  border-color: var(--accent-dark);
+  box-shadow: 0 3px 10px rgba(8, 116, 90, 0.4);
+  font-weight: 700;
 }
 
 /* 表单卡片 */
