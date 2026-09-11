@@ -522,11 +522,11 @@ const open = (orderId, mode) => {
     currentOrderInfo.value.goodsInfo = getGoodsDisplayText(order)
   }
 
-  // 先显示弹窗
-  visible.value = true
-
   // 加载保存的位置
   loadModalPosition()
+
+  // 位置准备好后再显示弹窗，避免先居中渲染再跳到上次位置
+  visible.value = true
 
   // 等待DOM渲染
   nextTick(() => {
@@ -1229,6 +1229,11 @@ onMounted(() => {
   max-height: 90vh;
   overflow-y: auto;
   user-select: none;
+}
+
+/* 全局 .modal-content 的 scaleUp 动画会覆盖内联 transform，导致弹窗先居中再跳到已保存位置 */
+#shippedOrderActionModal .modal-content {
+  animation: none !important;
 }
 
 .modal-content.is-dragging {

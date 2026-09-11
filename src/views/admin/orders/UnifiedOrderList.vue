@@ -193,6 +193,7 @@
           </button>
           <!-- 批量删除按钮 -->
           <button
+            v-if="mode === 'finance'"
             class="button button-delete"
             :class="{ 'has-selection': selectedOrders.length > 0 }"
             type="button"
@@ -286,8 +287,8 @@
                 <input
                   type="checkbox"
                   :checked="isSelected(order.id)"
-                  :disabled="isSalesOrderLocked(order)"
-                  :title="isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
+                  :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
+                  :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
                   @change="toggleSelect(order.id)"
                 />
               </td>
@@ -1296,18 +1297,23 @@ const pagedRecords = computed(() => paginatedOrders.value)
 const pageStart = computed(() => filteredOrders.value.length ? (currentPage.value - 1) * pageSize.value + 1 : 0)
 const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredOrders.value.length))
 
+// 物流列表没有删除操作，所有订单都允许勾选；财务列表仍排除已过账订单
+const selectableOrders = computed(() => {
+  return props.mode === 'logistics'
+    ? paginatedOrders.value
+    : paginatedOrders.value.filter(canDeleteOrder)
+})
+
 const isAllSelected = computed(() => {
-  const deletableOrders = paginatedOrders.value.filter(canDeleteOrder)
-  return deletableOrders.length > 0 &&
-    deletableOrders.every(order => selectedOrders.value.includes(order.id))
+  return selectableOrders.value.length > 0 &&
+    selectableOrders.value.every(order => selectedOrders.value.includes(order.id))
 })
 
 const isPagePartiallySelected = computed(() => {
-  const deletableOrders = paginatedOrders.value.filter(canDeleteOrder)
-  const selectedCount = deletableOrders.filter(order =>
+  const selectedCount = selectableOrders.value.filter(order =>
     selectedOrders.value.includes(order.id)
   ).length
-  return selectedCount > 0 && selectedCount < deletableOrders.length
+  return selectedCount > 0 && selectedCount < selectableOrders.value.length
 })
 
 // 计算当前页运费总额
@@ -1554,7 +1560,7 @@ const closeOrderDetail = () => {
 
 const toggleSelect = (orderId) => {
   const order = orders.value.find(item => item.id === orderId)
-  if (isSalesOrderLocked(order)) {
+  if (props.mode !== 'logistics' && isSalesOrderLocked(order)) {
     window.alert('已过账单据不可删除，请先反审核')
     return
   }
@@ -1568,9 +1574,7 @@ const toggleSelect = (orderId) => {
 }
 
 const toggleSelectAll = () => {
-  const currentPageIds = paginatedOrders.value
-    .filter(canDeleteOrder)
-    .map(order => order.id)
+  const currentPageIds = selectableOrders.value.map(order => order.id)
 
   if (isAllSelected.value) {
     selectedOrders.value = selectedOrders.value.filter(
