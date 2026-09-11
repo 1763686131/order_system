@@ -955,7 +955,7 @@ onMounted(async () => {
   --accent-dark: #08745a;
   --accent-soft: #e9f8f3;
   --accent-border: #a9e5d2;
-  --page-bg: #f4f7f8;
+  --page-bg: #f4f8f5;
   --panel-bg: #ffffff;
   --border: #e2e8f0;
   --border-strong: #cbd5e1;
@@ -1101,14 +1101,15 @@ svg {
 }
 
 .button-primary {
-  color: #fff;
-  background: var(--accent);
+  color: #ffffff;
+  background: #08745a;
   border-color: var(--accent);
   box-shadow: 0 2px 5px rgba(var(--accent-rgb), 0.18);
+  font-weight: 700;
 }
 
 .button-primary:hover:not(:disabled) {
-  background: var(--accent-dark);
+  background: #08745a;
   border-color: var(--accent-dark);
 }
 
@@ -1873,8 +1874,8 @@ svg {
 
 .store-pill {
   padding: 10px 20px;
-  background: #f8fafc;
-  border: 1.5px solid #94a3b8;
+  background: #ffffff;
+  border: 1.5px solid #cbd5e1;
   border-radius: 8px;
   font-size: 14px;
   font-weight: 600;
@@ -1885,7 +1886,7 @@ svg {
 }
 
 .store-pill:hover {
-  background: var(--accent-soft);
+  background: #ffffff;
   border-color: var(--accent);
   color: var(--accent-dark);
   transform: translateY(-1px);
@@ -1893,10 +1894,10 @@ svg {
 }
 
 .store-pill.active {
-  background: var(--accent-dark);
+  background: #08745a;
   color: #ffffff;
-  border-color: var(--accent-dark);
-  box-shadow: 0 3px 10px rgba(8, 116, 90, 0.4);
+  border-color: var(--accent);
+  box-shadow: 0 3px 10px rgba(var(--accent-rgb), 0.35);
   font-weight: 700;
 }
 
