@@ -129,6 +129,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'finance/bank-accounts',
+        name: 'admin-finance-bank-accounts',
+        component: () => import('@/views/admin/finance/BankAccounts.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'finance/logistics-truck',
         name: 'admin-finance-logistics-truck',
         component: () => import('@/views/admin/finance/LogisticsTruckReconciliation.vue'),

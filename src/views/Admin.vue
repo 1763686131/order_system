@@ -342,6 +342,7 @@ const menuItems = ref([
     children: [
       { label: '应收欠款', path: '/admin/finance/receivables' },
       { label: '收款历史', path: '/admin/finance/payment-history' },
+      { label: '银行账户', path: '/admin/finance/bank-accounts' },
       { label: '物流/专车对账', path: '/admin/finance/logistics-truck' },
       { label: '快运/快递对账', path: '/admin/finance/express-courier' }
     ]
