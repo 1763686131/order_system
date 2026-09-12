@@ -66,9 +66,6 @@
               <!-- 光泽效果 -->
               <ellipse cx="15" cy="15" rx="8" ry="8" fill="#f4e5c2" opacity="0.3"/>
             </svg>
-            <svg class="contactless" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
-              <path d="M15 20c0-5 4-9 9-9m-6 6c0-3 2-5 5-5m-3 3c0-1 1-2 2-2" stroke="currentColor" fill="none" stroke-width="3"/>
-            </svg>
             <div class="bank-name-with-icon">
               <img v-if="account.bankIcon" :src="account.bankIcon" alt="银行图标" class="bank-icon" />
               <p class="bank-name">{{ account.bankName }}</p>
@@ -78,10 +75,10 @@
           <div class="card-middle">
             <p class="card-number">{{ formatCardNumber(account.accountNumber) }}</p>
             <div class="card-logo">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
-                <circle cx="18" cy="24" r="12" fill="#ff9800"/>
-                <circle cx="30" cy="24" r="12" fill="#d50000"/>
-                <path d="M24 15c-2 1.4-3.3 3.7-3.3 6.3s1.3 4.9 3.3 6.3c2-1.4 3.3-3.7 3.3-6.3S26 16.4 24 15z" fill="#ff3d00"/>
+              <svg t="1789231170272" class="icon" viewBox="0 0 1616 1024" version="1.1" xmlns="http://www.w3.org/2000/svg">
+                <path d="M319.595789 0h407.282527c56.481684 0 92.483368 46.888421 78.524631 103.531789l-189.709473 816.936422C602.543158 977.973895 545.253053 1024 488.825263 1024H81.542737C25.061053 1024-10.940632 977.111579 3.018105 920.468211L192.727579 103.477895C205.877895 46.888421 262.305684 0 319.595789 0" fill="#E03333"></path>
+                <path d="M691.361684 0h459.776c55.511579 0 30.558316 46.888421 17.677474 103.531789l-186.47579 816.936422C969.458526 977.973895 973.500632 1024 917.234526 1024H457.404632c-56.266105 0-90.812632-46.888421-77.177264-103.531789l186.47579-816.936422C579.691789 46.888421 635.149474 0 691.415579 0" fill="#004889"></path>
+                <path d="M1128.286316 0h406.905263c57.344 0 92.537263 46.888421 78.632421 103.531789L1423.845053 920.522105C1410.748632 977.973895 1353.458526 1024 1296.976842 1024h-406.905263c-57.344 0-92.537263-46.888421-78.632421-103.531789L1001.418105 103.477895C1014.514526 46.888421 1071.804632 0 1128.286316 0" fill="#008089"></path>
               </svg>
             </div>
           </div>
@@ -640,28 +637,23 @@ onMounted(() => {
 .card-header {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  gap: 16px;
   margin-bottom: 40px;
 }
 
 .chip {
   width: 50px;
   height: 50px;
-}
-
-.contactless {
-  width: 32px;
-  height: 32px;
-  color: #F8FAFC;
-  opacity: 0.6;
+  flex-shrink: 0;
 }
 
 .bank-name {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.5px;
   margin: 0;
-  opacity: 0.8;
+  color: #F8FAFC;
+  white-space: nowrap;
 }
 
 .bank-name-with-icon {
