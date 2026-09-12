@@ -325,12 +325,24 @@ const formatCardNumber = (number) => {
   return number.replace(/(\d{4})(?=\d)/g, '$1 ')
 }
 
+const clickTimer = ref(null)
+
 const toggleFlip = (accountId) => {
-  if (flippedCardId.value === accountId) {
-    flippedCardId.value = null
-  } else {
-    flippedCardId.value = accountId
+  // 清除之前的单击延迟
+  if (clickTimer.value) {
+    clearTimeout(clickTimer.value)
+    clickTimer.value = null
   }
+
+  // 延迟200毫秒执行翻转（如果双击则会被取消）
+  clickTimer.value = setTimeout(() => {
+    if (flippedCardId.value === accountId) {
+      flippedCardId.value = null
+    } else {
+      flippedCardId.value = accountId
+    }
+    clickTimer.value = null
+  }, 200)
 }
 
 const openAddDialog = () => {
@@ -350,6 +362,12 @@ const openAddDialog = () => {
 }
 
 const editAccount = (account) => {
+  // 取消单击延迟的翻转
+  if (clickTimer.value) {
+    clearTimeout(clickTimer.value)
+    clickTimer.value = null
+  }
+
   flippedCardId.value = null
   isEditMode.value = true
   formData.value = {
@@ -782,7 +800,7 @@ onMounted(() => {
   width: 100%;
   height: 50px;
   background: linear-gradient(180deg, #1a1a1a 0%, #000 50%, #1a1a1a 100%);
-  margin: -30px -30px 30px -30px;
+  margin: 0 -30px 30px -30px;
   position: relative;
 }
 
