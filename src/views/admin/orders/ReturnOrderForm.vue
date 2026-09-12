@@ -94,7 +94,6 @@
                     v-model="item.goodsName"
                     class="product-input"
                     type="text"
-                    placeholder="输入编号或商品名称"
                     @focus="showProductDropdown(index)"
                     @blur="hideProductDropdown(index)"
                     @input="filterProducts(index)"
@@ -130,7 +129,6 @@
               <td><input v-model="item.specification" type="text" readonly class="readonly-input" /></td>
               <td class="unit-cell">
                 <input v-model="item.unit" type="text" readonly class="readonly-input" />
-                <small v-if="item.conversionRate">1 {{ item.unit || '件' }} = {{ item.conversionRate }} 基础单位</small>
               </td>
               <td>
                 <select v-model="item.warehouseId" @change="onItemWarehouseChange(item)">
@@ -140,15 +138,32 @@
                   </option>
                 </select>
               </td>
-              <td class="right"><input :value="number(item.currentStock)" type="text" readonly class="readonly-input" /></td>
+              <td class="right"><input :value="item.productId ? number(item.currentStock) : ''" type="text" readonly class="readonly-input" /></td>
               <td><input v-model.number="item.packages" type="number" min="0" step="0.01" @input="onPackagesChange(item)" /></td>
               <td><input v-model.number="item.quantity" type="number" min="0" step="0.01" @input="onQuantityChange(item)" /></td>
               <td><input v-model.number="item.price" type="number" min="0" step="0.01" @input="calculateRow(item)" /></td>
-              <td v-if="form.taxEnabled"><input v-model.number="item.taxRate" type="number" min="0" max="100" step="0.01" @input="calculateRow(item)" /></td>
-              <td v-if="form.taxEnabled"><input v-model.number="item.taxIncludedPrice" type="number" min="0" step="0.01" @input="calculateFromTaxIncluded(item)" /></td>
-              <td class="right"><input :value="money(item.amount)" type="text" readonly class="readonly-input" /></td>
-              <td v-if="form.taxEnabled" class="right">{{ money(item.taxAmount) }}</td>
-              <td v-if="form.taxEnabled" class="right">{{ money(item.taxIncludedAmount) }}</td>
+              <td v-if="form.taxEnabled">
+                <input
+                  :value="item.productId ? item.taxRate : ''"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  @input="item.taxRate = $event.target.value === '' ? null : Number($event.target.value); calculateRow(item)"
+                />
+              </td>
+              <td v-if="form.taxEnabled">
+                <input
+                  :value="item.productId ? item.taxIncludedPrice : ''"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  @input="item.taxIncludedPrice = $event.target.value === '' ? null : Number($event.target.value); calculateFromTaxIncluded(item)"
+                />
+              </td>
+              <td class="right"><input :value="item.productId ? money(item.amount) : ''" type="text" readonly class="readonly-input" /></td>
+              <td v-if="form.taxEnabled" class="right">{{ item.productId ? money(item.taxAmount) : '' }}</td>
+              <td v-if="form.taxEnabled" class="right">{{ item.productId ? money(item.taxIncludedAmount) : '' }}</td>
               <td><input v-model="item.remark" type="text" /></td>
             </tr>
             <tr class="total-row">
@@ -690,7 +705,7 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 .return-form {
   display: flex;
   gap: 0;
-  min-height: 100vh;
+  min-height: 0;
   flex-direction: column;
 }
 
@@ -857,7 +872,7 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 }
 
 .products-table-wrapper {
-  flex: 1;
+  flex: none;
   overflow-x: auto;
   background: var(--panel-bg);
 }

@@ -221,6 +221,126 @@ def _normalize_items(conn, data, product_type):
     return normalized
 
 
+def _post_return_inventory(conn, return_id, return_number, store_id, item_id, item):
+    """退货入库：写库存余额、库存流水，并同步成品旧库存接口。"""
+    quantity = float(item['quantity'] or 0)
+    product_id = item['product_id']
+    if quantity <= 0 or product_id is None:
+        return
+
+    warehouse_id = int(item['warehouse_id'] or 0)
+    now = _now()
+    conn.execute(
+        '''
+        INSERT INTO stock_balances (
+            product_type, product_id, warehouse_id, store_id,
+            bin_code, batch_no, quantity, updated_at
+        ) VALUES (?, ?, ?, ?, '', '', ?, ?)
+        ON CONFLICT(product_type, product_id, warehouse_id, store_id, bin_code, batch_no)
+        DO UPDATE SET quantity = stock_balances.quantity + excluded.quantity,
+                      updated_at = excluded.updated_at
+        ''',
+        (
+            item['product_type'], int(product_id), warehouse_id, int(store_id),
+            quantity, now,
+        ),
+    )
+    conn.execute(
+        '''
+        INSERT INTO stock_movements (
+            movement_type, receipt_type, source_document_id, source_document_no,
+            source_item_id, product_type, product_id, warehouse_id, store_id,
+            bin_code, batch_no, quantity, unit_price, tax_rate, total_amount, created_at
+        ) VALUES ('in', ?, ?, ?, ?, ?, ?, ?, ?, '', '', ?, ?, ?, ?, ?)
+        ''',
+        (
+            item['product_type'], int(return_id), return_number, int(item_id),
+            item['product_type'], int(product_id), warehouse_id, int(store_id),
+            quantity, float(item['price'] or 0), float(item['tax_rate'] or 0),
+            float(item['amount'] or 0), now,
+        ),
+    )
+
+    if item['product_type'] == 'finished-product':
+        conn.execute(
+            '''
+            INSERT INTO inventory (product_id, stock, min_stock, max_stock, updated_at)
+            VALUES (?, ?, 0, 0, ?)
+            ON CONFLICT(product_id) DO UPDATE SET
+                stock = COALESCE(inventory.stock, 0) + excluded.stock,
+                updated_at = excluded.updated_at
+            ''',
+            (int(product_id), quantity, now),
+        )
+
+
+def _reverse_return_inventory(conn, return_id, return_number):
+    """撤销退货时扣回退货入库库存，避免删除单据后库存虚增。"""
+    movements = conn.execute(
+        '''
+        SELECT * FROM stock_movements
+        WHERE movement_type = 'in'
+          AND source_document_id = ?
+          AND source_document_no = ?
+        ORDER BY id
+        ''',
+        (int(return_id), return_number),
+    ).fetchall()
+
+    for movement in movements:
+        quantity = float(movement['quantity'] or 0)
+        balance = conn.execute(
+            '''
+            SELECT quantity FROM stock_balances
+            WHERE product_type = ? AND product_id = ? AND warehouse_id = ?
+              AND store_id = ? AND bin_code = ? AND batch_no = ?
+            ''',
+            (
+                movement['product_type'], movement['product_id'],
+                movement['warehouse_id'], movement['store_id'],
+                movement['bin_code'], movement['batch_no'],
+            ),
+        ).fetchone()
+        if not balance or float(balance['quantity'] or 0) + 0.0000001 < quantity:
+            raise ValueError(
+                f'商品 {movement["product_id"]} 当前库存不足，无法撤销退货入库'
+            )
+
+        conn.execute(
+            '''
+            UPDATE stock_balances
+            SET quantity = quantity - ?, updated_at = ?
+            WHERE product_type = ? AND product_id = ? AND warehouse_id = ?
+              AND store_id = ? AND bin_code = ? AND batch_no = ?
+            ''',
+            (
+                quantity, _now(), movement['product_type'], movement['product_id'],
+                movement['warehouse_id'], movement['store_id'],
+                movement['bin_code'], movement['batch_no'],
+            ),
+        )
+        if movement['product_type'] == 'finished-product':
+            conn.execute(
+                '''
+                UPDATE inventory
+                SET stock = COALESCE(stock, 0) - ?, updated_at = ?
+                WHERE product_id = ?
+                ''',
+                (quantity, _now(), movement['product_id']),
+            )
+
+    conn.execute(
+        '''
+        DELETE FROM stock_movements
+        WHERE movement_type = 'in'
+          AND source_document_id = ?
+          AND source_document_no = ?
+        ''',
+        (int(return_id), return_number),
+    )
+    conn.execute('DELETE FROM stock_balances WHERE ABS(quantity) < 0.0000001')
+
+
 @returns_bp.route('', methods=['GET'])
 def list_returns():
     store_id = request.args.get('storeId', type=int)
@@ -379,7 +499,7 @@ def create_return():
                 )
                 return_id = cursor.lastrowid
                 for line_no, item in enumerate(items, start=1):
-                    conn.execute(
+                    item_cursor = conn.execute(
                         '''
                         INSERT INTO return_order_items (
                             return_id, line_no, product_type, product_id,
@@ -400,6 +520,10 @@ def create_return():
                             float(item['tax_amount']),
                             float(item['tax_included_amount']), item['remark'],
                         ),
+                    )
+                    _post_return_inventory(
+                        conn, return_id, return_number, store_id,
+                        item_cursor.lastrowid, item,
                     )
 
                 conn.execute(
@@ -441,7 +565,7 @@ def create_return():
             'success': True,
             'message': (
                 f'退货单保存成功，客户应收已核销{return_amount:.2f}元；'
-                f'实际退款{refund_amount:.2f}元'
+                f'实际退款{refund_amount:.2f}元；库存已返还'
             ),
             'returnNumber': result['returnNumber'],
             'returnId': result['id'],
@@ -484,6 +608,7 @@ def delete_return(return_id):
                 if current_debt + return_amount < 0:
                     return jsonify({'success': False, 'message': '客户应收状态异常，无法撤销'}), 409
                 debt_after = current_debt + return_amount
+                _reverse_return_inventory(conn, return_id, item['return_number'])
                 conn.execute(
                     'UPDATE customers SET receivable = ?, updated_at = ? WHERE id = ?',
                     (float(debt_after), now, customer['id']),
@@ -497,6 +622,8 @@ def delete_return(return_id):
                     (now, transaction['id']),
                 )
                 conn.execute('DELETE FROM return_orders WHERE id = ?', (return_id,))
-        return jsonify({'success': True, 'message': '退货单已删除，客户应收已恢复'})
+        return jsonify({'success': True, 'message': '退货单已删除，客户应收和库存已恢复'})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 409
     except Exception as exc:
         return jsonify({'success': False, 'message': f'删除退货单失败：{exc}'}), 500

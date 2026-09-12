@@ -400,6 +400,11 @@ const currentMenuLabel = computed(() => {
   if (currentPath.value.startsWith('/admin/orders/edit/')) {
     return '订单/修改订单'
   }
+  if (currentPath.value === '/admin/orders/returns/create') {
+    return route.query.productType === 'raw-material'
+      ? '订单/录入原材料退货单'
+      : '订单/录入退货单'
+  }
 
   // 先尝试从子菜单中查找
   for (const item of menuItems.value) {
