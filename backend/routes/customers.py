@@ -194,6 +194,7 @@ def get_customer_receivables():
     keyword = (request.args.get('keyword') or '').strip().lower()
     phone = (request.args.get('phone') or '').strip()
     debt_status = (request.args.get('debtStatus') or '').strip()
+    store_id = request.args.get('storeId', type=int)
 
     with get_db() as conn:
         rows = conn.execute(
@@ -204,6 +205,8 @@ def get_customer_receivables():
                 c.customer_name,
                 c.contact_person,
                 c.phone,
+                c.store_id,
+                s.name AS store_name,
                 c.balance,
                 c.initial_receivable,
                 c.receivable,
@@ -234,14 +237,18 @@ def get_customer_receivables():
                     END
                 ), 0) AS discount_amount
             FROM customers c
+            LEFT JOIN stores s
+              ON s.id = c.store_id
             LEFT JOIN customer_account_transactions t
               ON t.customer_id = c.id
+            WHERE (? IS NULL OR c.store_id = ?)
             GROUP BY
                 c.id, c.customer_code, c.customer_name,
-                c.contact_person, c.phone, c.balance,
+                c.contact_person, c.phone, c.store_id, s.name, c.balance,
                 c.initial_receivable, c.receivable
             ORDER BY c.receivable DESC, c.id DESC
-            '''
+            ''',
+            (store_id, store_id)
         ).fetchall()
 
     receivables = []
@@ -271,6 +278,8 @@ def get_customer_receivables():
             'customerName': item.get('customer_name') or '',
             'contactPerson': item.get('contact_person') or '',
             'phone': item.get('phone') or '',
+            'storeId': item.get('store_id'),
+            'storeName': item.get('store_name') or '',
             'storedBalance': round(balance, 2),
             'initialDebt': round(
                 float(item.get('initial_receivable') or 0),

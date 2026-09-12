@@ -31,37 +31,64 @@
 
     <section class="records-panel">
       <header class="records-toolbar">
-        <div class="status-filter-slider" role="tablist" aria-label="欠款状态筛选">
-          <button
-            :class="['slider-tab', { active: filters.debtStatus === '' }]"
-            type="button"
-            role="tab"
-            :aria-selected="filters.debtStatus === ''"
-            @click="setDebtStatus('')"
-          >
-            全部
-            <span class="count-badge">{{ receivables.length }}</span>
-          </button>
-          <button
-            :class="['slider-tab', { active: filters.debtStatus === 'outstanding' }]"
-            type="button"
-            role="tab"
-            :aria-selected="filters.debtStatus === 'outstanding'"
-            @click="setDebtStatus('outstanding')"
-          >
-            有欠款
-            <span class="count-badge">{{ outstandingCount }}</span>
-          </button>
-          <button
-            :class="['slider-tab', { active: filters.debtStatus === 'settled' }]"
-            type="button"
-            role="tab"
-            :aria-selected="filters.debtStatus === 'settled'"
-            @click="setDebtStatus('settled')"
-          >
-            无欠款
-            <span class="count-badge">{{ settledCount }}</span>
-          </button>
+        <div class="filter-sliders">
+          <div class="store-filter-slider" role="tablist" aria-label="门店筛选">
+            <button
+              :class="['slider-tab', { active: selectedStoreId === null }]"
+              type="button"
+              role="tab"
+              :aria-selected="selectedStoreId === null"
+              @click="setStore(null)"
+            >
+              全部门店
+              <span class="count-badge">{{ allReceivables.length }}</span>
+            </button>
+            <button
+              v-for="store in activeStores"
+              :key="store.id"
+              :class="['slider-tab', { active: selectedStoreId === store.id }]"
+              type="button"
+              role="tab"
+              :aria-selected="selectedStoreId === store.id"
+              @click="setStore(store.id)"
+            >
+              {{ store.name }}
+              <span class="count-badge">{{ storeCount(store.id) }}</span>
+            </button>
+          </div>
+
+          <div class="status-filter-slider" role="tablist" aria-label="欠款状态筛选">
+            <button
+              :class="['slider-tab', { active: filters.debtStatus === '' }]"
+              type="button"
+              role="tab"
+              :aria-selected="filters.debtStatus === ''"
+              @click="setDebtStatus('')"
+            >
+              全部
+              <span class="count-badge">{{ storeReceivables.length }}</span>
+            </button>
+            <button
+              :class="['slider-tab', { active: filters.debtStatus === 'outstanding' }]"
+              type="button"
+              role="tab"
+              :aria-selected="filters.debtStatus === 'outstanding'"
+              @click="setDebtStatus('outstanding')"
+            >
+              有欠款
+              <span class="count-badge">{{ outstandingCount }}</span>
+            </button>
+            <button
+              :class="['slider-tab', { active: filters.debtStatus === 'settled' }]"
+              type="button"
+              role="tab"
+              :aria-selected="filters.debtStatus === 'settled'"
+              @click="setDebtStatus('settled')"
+            >
+              无欠款
+              <span class="count-badge">{{ settledCount }}</span>
+            </button>
+          </div>
         </div>
 
         <form class="toolbar-search" aria-label="应收欠款筛选" @submit.prevent="handleFilter">
@@ -254,13 +281,22 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import request from '@/api/request'
 
 const receivables = ref([])
+const allReceivables = ref([])
+const stores = ref([])
+const selectedStoreId = ref(null)
 const loading = ref(false)
+const storesLoaded = ref(false)
+let loadRequestToken = 0
 const currentPage = ref(1)
 const pageSize = ref(20)
 const filters = reactive({
   keyword: '',
   debtStatus: ''
 })
+
+const activeStores = computed(() => stores.value.filter(store => store.status !== 'inactive'))
+
+const storeReceivables = computed(() => receivables.value)
 
 const matchesSearch = item => {
   const keyword = filters.keyword.toLowerCase()
@@ -275,7 +311,7 @@ const matchesSearch = item => {
   return !keyword || searchText.includes(keyword)
 }
 
-const filteredReceivables = computed(() => receivables.value.filter(item => {
+const filteredReceivables = computed(() => storeReceivables.value.filter(item => {
   if (!matchesSearch(item)) return false
   if (filters.debtStatus === 'outstanding') return Number(item.receivable) > 0
   if (filters.debtStatus === 'settled') return Number(item.receivable) <= 0
@@ -283,12 +319,16 @@ const filteredReceivables = computed(() => receivables.value.filter(item => {
 }))
 
 const outstandingCount = computed(() =>
-  receivables.value.filter(item => Number(item.receivable) > 0).length
+  storeReceivables.value.filter(item => Number(item.receivable) > 0).length
 )
 
 const settledCount = computed(() =>
-  receivables.value.filter(item => Number(item.receivable) <= 0).length
+  storeReceivables.value.filter(item => Number(item.receivable) <= 0).length
 )
+
+const storeCount = storeId => allReceivables.value.filter(
+  item => Number(item.storeId) === Number(storeId)
+).length
 
 const totalPages = computed(() =>
   Math.max(1, Math.ceil(filteredReceivables.value.length / pageSize.value))
@@ -332,19 +372,41 @@ const formatSignedMoney = value => {
 }
 
 const loadReceivables = async () => {
+  const requestStoreId = selectedStoreId.value
+  const requestToken = ++loadRequestToken
   loading.value = true
   try {
-    const response = await request({
+    const receivableRequest = request({
       url: '/customers/receivables',
-      method: 'GET'
+      method: 'GET',
+      params: requestStoreId === null ? {} : { storeId: requestStoreId }
     })
+    const storeRequest = storesLoaded.value
+      ? Promise.resolve(null)
+      : request({ url: '/stores', method: 'GET' })
+    const [receivableResult, storeResult] = await Promise.allSettled([
+      receivableRequest,
+      storeRequest
+    ])
+
+    if (requestToken !== loadRequestToken) return
+    if (receivableResult.status === 'rejected') throw receivableResult.reason
+
+    if (storeResult.status === 'fulfilled' && Array.isArray(storeResult.value)) {
+      stores.value = storeResult.value
+      storesLoaded.value = true
+    }
+
+    const response = receivableResult.value
     receivables.value = Array.isArray(response?.items) ? response.items : []
+    if (requestStoreId === null) allReceivables.value = receivables.value
   } catch (error) {
+    if (requestToken !== loadRequestToken) return
     console.error('加载应收欠款失败:', error)
     receivables.value = []
     window.alert(error?.response?.data?.error || '加载应收欠款失败，请稍后重试')
   } finally {
-    loading.value = false
+    if (requestToken === loadRequestToken) loading.value = false
   }
 }
 
@@ -355,7 +417,17 @@ const handleFilter = () => {
 const handleReset = () => {
   filters.keyword = ''
   filters.debtStatus = ''
+  selectedStoreId.value = null
   currentPage.value = 1
+  receivables.value = []
+  loadReceivables()
+}
+
+const setStore = storeId => {
+  selectedStoreId.value = storeId === null ? null : Number(storeId)
+  currentPage.value = 1
+  receivables.value = []
+  loadReceivables()
 }
 
 const setDebtStatus = status => {
@@ -636,7 +708,15 @@ svg {
   border-bottom: 1px solid var(--border);
 }
 
-.records-toolbar > .status-filter-slider {
+.filter-sliders {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.records-toolbar > .filter-sliders {
   flex: 0 0 auto;
 }
 
@@ -645,14 +725,26 @@ svg {
   margin-left: auto;
 }
 
+.store-filter-slider,
 .status-filter-slider {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 6px;
   padding: 4px;
   background: #f1f5f9;
   border-radius: 8px;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.store-filter-slider {
+  max-width: 390px;
+  overflow-x: auto;
+}
+
+.store-filter-slider .slider-tab {
+  padding-right: 13px;
+  padding-left: 13px;
 }
 
 .slider-tab {
@@ -1018,8 +1110,18 @@ svg {
 }
 
 @media (max-width: 1280px) {
+  .records-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .filter-sliders {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
   .toolbar-search {
-    flex-basis: 420px;
+    min-width: 300px;
+    flex: 1 1 420px;
   }
 
   .search-actions {
@@ -1123,6 +1225,12 @@ svg {
     margin-left: 0;
   }
 
+  .filter-sliders {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .store-filter-slider,
   .status-filter-slider {
     max-width: 100%;
     overflow-x: auto;
