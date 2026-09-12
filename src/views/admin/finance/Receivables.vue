@@ -476,19 +476,33 @@ svg {
 
 .toolbar-search {
   display: flex;
-  min-width: 260px;
-  flex: 1 1 440px;
-  align-items: end;
-  gap: 10px;
+  min-width: 220px;
+  flex: 0 1 520px;
+  align-items: center;
+  gap: 8px;
 }
 
 .toolbar-search .field-group {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.toolbar-search .field-group > span:first-child {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.toolbar-search .input-with-icon {
   flex: 1 1 auto;
   min-width: 0;
 }
 
 .toolbar-search .search-actions {
-  align-self: end;
+  align-self: center;
   justify-content: flex-start;
 }
 
@@ -1005,7 +1019,7 @@ svg {
 
 @media (max-width: 1280px) {
   .toolbar-search {
-    flex-basis: 360px;
+    flex-basis: 420px;
   }
 
   .search-actions {
@@ -1081,6 +1095,12 @@ svg {
     width: 100%;
     min-width: 0;
     align-items: stretch;
+  }
+
+  .toolbar-search .field-group {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 7px;
   }
 
   .toolbar-search .field-group,
