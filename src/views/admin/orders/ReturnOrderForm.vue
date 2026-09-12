@@ -131,12 +131,13 @@
                 <input v-model="item.unit" type="text" readonly class="readonly-input" />
               </td>
               <td>
-                <select v-model="item.warehouseId" @change="onItemWarehouseChange(item)">
-                  <option value="">请选择</option>
+                <select v-if="item.productId" v-model="item.warehouseId" @change="onItemWarehouseChange(item)">
+                  <option value="">请选择仓库</option>
                   <option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="String(warehouse.id)">
                     {{ warehouse.name }}
                   </option>
                 </select>
+                <span v-else class="blank-cell" aria-hidden="true"></span>
               </td>
               <td class="right"><input :value="item.productId ? number(item.currentStock) : ''" type="text" readonly class="readonly-input" /></td>
               <td><input v-model.number="item.packages" type="number" min="0" step="0.01" @input="onPackagesChange(item)" /></td>
@@ -1041,6 +1042,11 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
   font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.blank-cell {
+  display: block;
+  min-height: 28px;
 }
 
 .btn-icon {
