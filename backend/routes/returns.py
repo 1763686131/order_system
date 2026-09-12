@@ -341,6 +341,130 @@ def _reverse_return_inventory(conn, return_id, return_number):
     conn.execute('DELETE FROM stock_balances WHERE ABS(quantity) < 0.0000001')
 
 
+def _validate_store_customer(conn, store_id, customer_id):
+    store = conn.execute(
+        'SELECT id, name, status FROM stores WHERE id = ?', (store_id,)
+    ).fetchone()
+    if not store or store['status'] != 'active':
+        raise ValueError('门店不存在或已停用')
+
+    customer = conn.execute(
+        '''
+        SELECT id, customer_name, store_id, receivable, status, balance
+        FROM customers WHERE id = ?
+        ''',
+        (customer_id,),
+    ).fetchone()
+    if not customer or customer['status'] != 'active':
+        raise ValueError('客户不存在或已停用')
+    if customer['store_id'] != store_id:
+        raise ValueError('客户与门店不匹配')
+    return store, customer
+
+
+def _return_totals(items):
+    return {
+        'total_quantity': sum((item['quantity'] for item in items), Decimal('0')),
+        'total_packages': sum((item['packages'] for item in items), Decimal('0')),
+        'item_amount': sum((item['amount'] for item in items), Decimal('0')),
+        'total_tax_amount': sum((item['tax_amount'] for item in items), Decimal('0')),
+        'total_tax_included': sum(
+            (item['tax_included_amount'] for item in items), Decimal('0')
+        ),
+    }
+
+
+def _insert_return_items(conn, return_id, items, post_inventory=False,
+                         return_number=None, store_id=None):
+    for line_no, item in enumerate(items, start=1):
+        cursor = conn.execute(
+            '''
+            INSERT INTO return_order_items (
+                return_id, line_no, product_type, product_id,
+                product_code, goods_name, specification, unit,
+                warehouse_id, packages, quantity, price, amount,
+                tax_rate, tax_included_price, tax_amount,
+                tax_included_amount, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''',
+            (
+                return_id, line_no, item['product_type'],
+                item['product_id'], item['product_code'],
+                item['goods_name'], item['specification'], item['unit'],
+                item['warehouse_id'], float(item['packages']),
+                float(item['quantity']), float(item['price']),
+                float(item['amount']), float(item['tax_rate']),
+                float(item['tax_included_price']),
+                float(item['tax_amount']),
+                float(item['tax_included_amount']), item['remark'],
+            ),
+        )
+        if post_inventory:
+            _post_return_inventory(
+                conn, return_id, return_number, store_id,
+                cursor.lastrowid, item,
+            )
+
+
+def _create_return_transaction(conn, return_row, customer, return_amount,
+                               refund_amount, now):
+    debt_before = max(
+        _money(customer['receivable'], '客户欠款'),
+        Decimal('0.00'),
+    )
+    if return_amount > debt_before:
+        raise ValueError(
+            f'实退金额不能超过客户当前欠款（{debt_before:.2f}元）'
+        )
+    if refund_amount > return_amount:
+        raise ValueError('本次退款不能超过实退金额')
+
+    debt_after = (debt_before - return_amount).quantize(
+        _MONEY_QUANT, rounding=ROUND_HALF_UP
+    )
+    writeoff_amount = return_amount - refund_amount
+    transaction_cursor = conn.execute(
+        '''
+        INSERT INTO customer_account_transactions (
+            customer_id, order_number, transaction_type,
+            order_receivable, discount_amount, balance_change,
+            receivable_change, balance_after, receivable_after,
+            status, operator, created_at
+        ) VALUES (?, ?, 'customer_return', ?, ?, 0, ?, ?, ?,
+                  'active', ?, ?)
+        ''',
+        (
+            customer['id'], return_row['return_number'], float(return_amount),
+            float(writeoff_amount), float(-return_amount),
+            float(customer['balance'] or 0), float(debt_after),
+            _operator(), now,
+        ),
+    )
+    conn.execute(
+        '''
+        UPDATE customers
+        SET receivable = ?, updated_at = ?
+        WHERE id = ?
+        ''',
+        (float(debt_after), now, customer['id']),
+    )
+    conn.execute(
+        '''
+        UPDATE return_orders
+        SET refund_amount = ?, writeoff_amount = ?, debt_before = ?,
+            debt_after = ?, account_transaction_id = ?, status = 'audited',
+            updated_at = ?
+        WHERE id = ?
+        ''',
+        (
+            float(refund_amount), float(writeoff_amount),
+            float(debt_before), float(debt_after),
+            transaction_cursor.lastrowid, now, return_row['id'],
+        ),
+    )
+    return debt_before, debt_after, writeoff_amount
+
+
 @returns_bp.route('', methods=['GET'])
 def list_returns():
     store_id = request.args.get('storeId', type=int)
@@ -350,7 +474,8 @@ def list_returns():
         sql = '''
             SELECT r.*, c.customer_code, c.customer_name, c.contact_person,
                    c.phone, s.name AS store_name,
-                   GROUP_CONCAT(i.goods_name, '、') AS goods_name
+                   GROUP_CONCAT(i.goods_name, '、') AS goods_name,
+                   GROUP_CONCAT(i.unit, '、') AS units
             FROM return_orders r
             JOIN customers c ON c.id = r.customer_id
             LEFT JOIN stores s ON s.id = r.store_id
@@ -373,6 +498,7 @@ def list_returns():
         for row in rows:
             item = _serialize_return(conn, row['id'], include_items=False)
             item['goodsName'] = row['goods_name'] or ''
+            item['units'] = row['units'] or ''
             items.append(item)
         return jsonify(items)
 
@@ -386,7 +512,7 @@ def get_return(return_id):
         return jsonify(item)
 
 
-@returns_bp.route('', methods=['POST'])
+@returns_bp.route('/legacy-create', methods=['POST'])
 def create_return():
     data = request.get_json(silent=True) or {}
     try:
@@ -577,7 +703,210 @@ def create_return():
         return jsonify({'success': False, 'message': f'保存退货单失败：{exc}'}), 500
 
 
+@returns_bp.route('', methods=['POST'])
+def create_return_draft():
+    data = request.get_json(silent=True) or {}
+    try:
+        product_type = _text(data.get('productType'), 30) or 'finished-product'
+        if product_type not in ('finished-product', 'raw-material'):
+            raise ValueError('商品类型无效')
+        store_id = _int(data.get('storeId'), '门店', required=True)
+        customer_id = _int(data.get('customerId'), '客户', required=True)
+        return_date = _date(data.get('returnDate'))
+        original_order_number = _text(data.get('originalOrderNumber'), 80)
+        if not original_order_number:
+            raise ValueError('原订单号不能为空')
+        refund_amount = _money(data.get('refundAmount'), '本次退款')
+        if refund_amount < 0:
+            raise ValueError('本次退款不能小于0')
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                store, _customer = _validate_store_customer(conn, store_id, customer_id)
+                items = _normalize_items(conn, data, product_type)
+                totals = _return_totals(items)
+                return_amount = _money(data.get('returnAmount', data.get('totalAmount')), '实退金额')
+                if return_amount <= 0:
+                    return_amount = totals['item_amount'].quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+                if return_amount <= 0:
+                    raise ValueError('实退金额必须大于0')
+                if refund_amount > return_amount:
+                    raise ValueError('本次退款不能超过实退金额')
+                now = _now()
+                return_number = _text(data.get('returnNumber'), 60) or _next_return_number(conn, return_date)
+                if conn.execute('SELECT 1 FROM return_orders WHERE return_number = ?', (return_number,)).fetchone():
+                    raise ValueError('退货单号已存在')
+                writeoff_amount = return_amount - refund_amount
+                cursor = conn.execute(
+                    '''INSERT INTO return_orders (
+                        return_number, original_order_number, return_date, store_id, customer_id,
+                        product_type, tax_enabled, total_quantity, total_packages, total_amount,
+                        total_tax_amount, total_tax_included_amount, refund_amount, writeoff_amount,
+                        debt_before, debt_after, settlement_account, sales_person, creator, packaging,
+                        remark, status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?, ?, ?, ?, 'draft', ?, ?)''',
+                    (return_number, original_order_number, return_date, store_id, customer_id,
+                     product_type, int(bool(data.get('taxEnabled'))), float(totals['total_quantity']),
+                     float(totals['total_packages']), float(return_amount), float(totals['total_tax_amount']),
+                     float(totals['total_tax_included']), float(refund_amount), float(writeoff_amount),
+                     _text(data.get('settlementAccount') or f"{store['name']}结算账户", 120),
+                     _text(data.get('salesPerson'), 80), _text(data.get('creator'), 80),
+                     _text(data.get('packaging'), 80), _text(data.get('remark'), 1000), now, now),
+                )
+                return_id = cursor.lastrowid
+                _insert_return_items(conn, return_id, items)
+                result = _serialize_return(conn, return_id)
+        return jsonify({'success': True, 'message': '退货单草稿保存成功，请审核后计入客户流水和库存',
+                        'returnNumber': result['returnNumber'], 'returnId': result['id'], 'returnOrder': result}), 201
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'message': f'保存退货单失败：{exc}'}), 500
+
+
+@returns_bp.route('/<int:return_id>', methods=['PUT'])
+def update_return_draft(return_id):
+    data = request.get_json(silent=True) or {}
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                current = conn.execute('SELECT * FROM return_orders WHERE id = ?', (return_id,)).fetchone()
+                if not current:
+                    return jsonify({'success': False, 'message': '退货单不存在'}), 404
+                if current['status'] in ('audited', 'completed') or current['account_transaction_id']:
+                    return jsonify({'success': False, 'message': '已审核单据不能修改，请先反审核'}), 409
+                product_type = _text(data.get('productType'), 30) or current['product_type'] or 'finished-product'
+                if product_type not in ('finished-product', 'raw-material'):
+                    raise ValueError('商品类型无效')
+                store_id = _int(data.get('storeId'), '门店', required=True)
+                customer_id = _int(data.get('customerId'), '客户', required=True)
+                return_date = _date(data.get('returnDate'))
+                original_order_number = _text(data.get('originalOrderNumber'), 80)
+                if not original_order_number:
+                    raise ValueError('原订单号不能为空')
+                store, _customer = _validate_store_customer(conn, store_id, customer_id)
+                items = _normalize_items(conn, data, product_type)
+                totals = _return_totals(items)
+                return_amount = _money(data.get('returnAmount', data.get('totalAmount')), '实退金额')
+                if return_amount <= 0:
+                    return_amount = totals['item_amount'].quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+                refund_amount = _money(data.get('refundAmount'), '本次退款')
+                if return_amount <= 0:
+                    raise ValueError('实退金额必须大于0')
+                if refund_amount < 0 or refund_amount > return_amount:
+                    raise ValueError('本次退款不能超过实退金额')
+                now = _now()
+                writeoff_amount = return_amount - refund_amount
+                conn.execute(
+                    '''UPDATE return_orders SET original_order_number=?, return_date=?, store_id=?, customer_id=?,
+                       product_type=?, tax_enabled=?, total_quantity=?, total_packages=?, total_amount=?,
+                       total_tax_amount=?, total_tax_included_amount=?, refund_amount=?, writeoff_amount=?,
+                       debt_before=0, debt_after=0, settlement_account=?, sales_person=?, creator=?, packaging=?,
+                       remark=?, status='draft', account_transaction_id=NULL, updated_at=? WHERE id=?''',
+                    (original_order_number, return_date, store_id, customer_id, product_type,
+                     int(bool(data.get('taxEnabled'))), float(totals['total_quantity']), float(totals['total_packages']),
+                     float(return_amount), float(totals['total_tax_amount']), float(totals['total_tax_included']),
+                     float(refund_amount), float(writeoff_amount), _text(data.get('settlementAccount') or f"{store['name']}结算账户", 120),
+                     _text(data.get('salesPerson'), 80), _text(data.get('creator'), 80), _text(data.get('packaging'), 80),
+                     _text(data.get('remark'), 1000), now, return_id),
+                )
+                conn.execute('DELETE FROM return_order_items WHERE return_id = ?', (return_id,))
+                _insert_return_items(conn, return_id, items)
+                result = _serialize_return(conn, return_id)
+        return jsonify({'success': True, 'message': '退货单草稿已更新', 'returnOrder': result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'message': f'更新退货单失败：{exc}'}), 500
+
+
+@returns_bp.route('/<int:return_id>/audit', methods=['POST'])
+def audit_return(return_id):
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                row = conn.execute('SELECT * FROM return_orders WHERE id = ?', (return_id,)).fetchone()
+                if not row:
+                    return jsonify({'success': False, 'message': '退货单不存在'}), 404
+                if row['status'] in ('audited', 'completed') or row['account_transaction_id']:
+                    return jsonify({'success': False, 'message': '退货单已审核'}), 409
+                store, customer = _validate_store_customer(conn, row['store_id'], row['customer_id'])
+                return_amount = _money(row['total_amount'], '实退金额')
+                refund_amount = _money(row['refund_amount'], '本次退款')
+                if return_amount <= 0:
+                    raise ValueError('实退金额必须大于0')
+                items = conn.execute('SELECT * FROM return_order_items WHERE return_id = ? ORDER BY line_no, id', (return_id,)).fetchall()
+                if not items:
+                    raise ValueError('退货单没有商品明细')
+                for item_row in items:
+                    item = dict(item_row)
+                    item['quantity'] = Decimal(str(item.get('quantity') or 0))
+                    item['price'] = Decimal(str(item.get('price') or 0))
+                    item['amount'] = Decimal(str(item.get('amount') or 0))
+                    item['tax_rate'] = Decimal(str(item.get('tax_rate') or 0))
+                    _post_return_inventory(conn, return_id, row['return_number'], store['id'], item_row['id'], item)
+                debt_before, debt_after, _writeoff = _create_return_transaction(
+                    conn, row, customer, return_amount, refund_amount, _now()
+                )
+                result = _serialize_return(conn, return_id)
+        return jsonify({'success': True, 'message': f'退货单已审核，核销客户应收 {return_amount:.2f} 元并返还库存',
+                        'debtBefore': float(debt_before), 'debtAfter': float(debt_after), 'returnOrder': result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 409
+    except Exception as exc:
+        return jsonify({'success': False, 'message': f'审核退货单失败：{exc}'}), 500
+
+
+@returns_bp.route('/<int:return_id>/reverse-audit', methods=['POST'])
+def reverse_audit_return(return_id):
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                row = conn.execute('SELECT * FROM return_orders WHERE id = ?', (return_id,)).fetchone()
+                if not row:
+                    return jsonify({'success': False, 'message': '退货单不存在'}), 404
+                if row['status'] not in ('audited', 'completed') or not row['account_transaction_id']:
+                    return jsonify({'success': False, 'message': '退货单尚未审核'}), 409
+                tx = conn.execute("SELECT * FROM customer_account_transactions WHERE id = ? AND status = 'active'", (row['account_transaction_id'],)).fetchone()
+                customer = conn.execute('SELECT * FROM customers WHERE id = ?', (row['customer_id'],)).fetchone()
+                if not tx or not customer:
+                    return jsonify({'success': False, 'message': '审核流水不存在，无法反审核'}), 409
+                _reverse_return_inventory(conn, return_id, row['return_number'])
+                debt_after = (_money(customer['receivable']) + _money(row['total_amount'])).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+                now = _now()
+                conn.execute('UPDATE customers SET receivable = ?, updated_at = ? WHERE id = ?', (float(debt_after), now, customer['id']))
+                conn.execute("UPDATE customer_account_transactions SET status = 'reversed', reversed_at = ? WHERE id = ?", (now, tx['id']))
+                conn.execute("UPDATE return_orders SET status='draft', account_transaction_id=NULL, debt_before=0, debt_after=0, updated_at=? WHERE id=?", (now, return_id))
+                result = _serialize_return(conn, return_id)
+        return jsonify({'success': True, 'message': '退货单已反审核，客户流水和库存已恢复', 'returnOrder': result})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 409
+    except Exception as exc:
+        return jsonify({'success': False, 'message': f'反审核退货单失败：{exc}'}), 500
+
+
 @returns_bp.route('/<int:return_id>', methods=['DELETE'])
+def delete_return_draft(return_id):
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                item = conn.execute('SELECT * FROM return_orders WHERE id = ?', (return_id,)).fetchone()
+                if not item:
+                    return jsonify({'success': False, 'message': '退货单不存在'}), 404
+                if item['status'] in ('audited', 'completed') or item['account_transaction_id']:
+                    return jsonify({'success': False, 'message': '已审核单据不能删除，请先反审核'}), 409
+                conn.execute('DELETE FROM return_order_items WHERE return_id = ?', (return_id,))
+                conn.execute('DELETE FROM return_orders WHERE id = ?', (return_id,))
+        return jsonify({'success': True, 'message': '退货单草稿已删除'})
+    except Exception as exc:
+        return jsonify({'success': False, 'message': f'删除退货单失败：{exc}'}), 500
+
+
+@returns_bp.route('/legacy-delete/<int:return_id>', methods=['DELETE'])
 def delete_return(return_id):
     """删除退货单并反向恢复客户应收，仅允许撤销最近的账户流水。"""
     now = _now()

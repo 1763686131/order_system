@@ -181,6 +181,16 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'orders/returns/edit/:id',
+        name: 'admin-orders-return-edit',
+        component: () => import('@/views/admin/orders/ReturnOrderForm.vue'),
+        props: route => ({
+          returnId: Number(route.params.id),
+          productType: route.query.productType || 'finished-product'
+        }),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'hr/reports',
         name: 'admin-hr-reports',
         component: () => import('@/views/admin/hr/Reports.vue'),

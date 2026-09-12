@@ -86,7 +86,7 @@
               type="button"
               @click="filters.status = 'pending'"
             >
-              待处理
+              待审核
               <span class="count-badge">{{ getStatusCount('pending') }}</span>
             </button>
             <button
@@ -173,8 +173,8 @@
               <th>客户名称</th>
               <th class="material-column">退货商品</th>
               <th class="number-column">退货数量</th>
-              <th class="number-column">退货金额</th>
-              <th class="reason-column">退货原因</th>
+              <th class="number-column">单位</th>
+              <th class="number-column">实退货金额</th>
               <th>处理状态</th>
               <th class="remark-column">备注</th>
               <th class="operation-column">操作</th>
@@ -232,10 +232,8 @@
                 <span v-if="item.goods_name.length > 12">...</span>
               </td>
               <td class="number-column numeric">{{ item.quantity }}</td>
-              <td class="number-column numeric money-value">¥{{ item.amount.toFixed(2) }}</td>
-              <td class="reason-cell" :title="item.reason">
-                {{ item.reason.length > 10 ? item.reason.substring(0, 10) + '...' : item.reason }}
-              </td>
+              <td class="number-column">{{ item.unit }}</td>
+              <td class="number-column numeric money-value">¥{{ Number(item.actual_return_amount || 0).toFixed(2) }}</td>
               <td>
                 <span :class="['status-tag', getStatusClass(item.status)]">
                   <i aria-hidden="true"></i>
@@ -250,13 +248,34 @@
                   <button
                     v-if="item.status === 'pending'"
                     type="button"
-                    title="处理退货"
-                    @click="handleProcess(item)"
+                    title="修改退货单"
+                    @click="handleEdit(item)"
                   >
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
+                    修改
+                  </button>
+                  <button
+                    v-if="item.status === 'pending'"
+                    type="button"
+                    title="审核退货单"
+                    @click="handleAudit(item)"
+                  >
+                    审核
+                  </button>
+                  <button
+                    v-if="item.status === 'pending'"
+                    type="button"
+                    title="删除退货单"
+                    @click="handleDelete(item)"
+                  >
+                    删除
+                  </button>
+                  <button
+                    v-if="['audited', 'completed'].includes(item.status)"
+                    type="button"
+                    title="反审核退货单"
+                    @click="handleReverseAudit(item)"
+                  >
+                    反审核
                   </button>
                   <button
                     type="button"
@@ -372,8 +391,8 @@
                     <dd>{{ selectedReturn.return_date }}</dd>
                   </div>
                   <div>
-                    <dt>退货原因</dt>
-                    <dd>{{ selectedReturn.reason }}</dd>
+                    <dt>实退货金额</dt>
+                    <dd class="amount-text">¥{{ Number(selectedReturn.actual_return_amount || 0).toFixed(2) }}</dd>
                   </div>
                 </dl>
               </section>
@@ -395,8 +414,8 @@
                     <strong>{{ selectedReturn.quantity }}</strong>
                   </div>
                   <div>
-                    <span>退货金额</span>
-                    <strong class="amount-text">¥{{ selectedReturn.amount.toFixed(2) }}</strong>
+                    <span>单位</span>
+                    <strong>{{ selectedReturn.unit || '-' }}</strong>
                   </div>
                 </div>
               </section>
@@ -421,9 +440,25 @@
                   v-if="selectedReturn.status === 'pending'"
                   class="button button-primary"
                   type="button"
-                  @click="handleProcess(selectedReturn)"
+                  @click="handleAudit(selectedReturn)"
                 >
-                  处理退货
+                  审核
+                </button>
+                <button
+                  v-if="selectedReturn.status === 'pending'"
+                  class="button button-secondary"
+                  type="button"
+                  @click="handleEdit(selectedReturn)"
+                >
+                  修改
+                </button>
+                <button
+                  v-if="['audited', 'completed'].includes(selectedReturn.status)"
+                  class="button button-secondary"
+                  type="button"
+                  @click="handleReverseAudit(selectedReturn)"
+                >
+                  反审核
                 </button>
                 <button
                   class="button button-secondary"
@@ -557,7 +592,9 @@ const filteredReturns = computed(() => {
 
   // 状态筛选
   if (filters.value.status) {
-    result = result.filter(item => item.status === filters.value.status)
+    result = result.filter(item => filters.value.status === 'completed'
+      ? ['completed', 'audited'].includes(item.status)
+      : item.status === filters.value.status)
   }
 
   // 日期筛选
@@ -613,9 +650,10 @@ const fetchData = () => {
           goods_name: item.goodsName || (item.items || []).map(row => row.goodsName).join('、'),
           quantity: Number(item.totalQuantity || 0),
           amount: Number(item.totalAmount || 0),
-          reason: item.reason || '-',
-          status: item.status || 'completed',
-          remark: item.remark || ''
+           unit: item.units || item.unit || '-',
+           actual_return_amount: Number(item.totalAmount || 0),
+           status: item.status === 'draft' ? 'pending' : (item.status || 'completed'),
+           remark: item.remark || ''
         }))
       }
     })
@@ -644,12 +682,15 @@ const handleReset = () => {
 
 const getStatusCount = (status) => {
   if (!status) return returnOrders.value.length
-  return returnOrders.value.filter(item => item.status === status).length
+  return returnOrders.value.filter(item => status === 'completed'
+    ? ['completed', 'audited'].includes(item.status)
+    : item.status === status).length
 }
 
 const getStatusText = (status) => {
   const statusMap = {
-    pending: '待处理',
+    audited: '已审核',
+    pending: '待审核',
     processing: '处理中',
     completed: '已完成',
     rejected: '已拒绝'
@@ -659,6 +700,7 @@ const getStatusText = (status) => {
 
 const getStatusClass = (status) => {
   const classMap = {
+    audited: 'status-completed',
     pending: 'status-pending',
     processing: 'status-processing',
     completed: 'status-completed',
@@ -711,9 +753,48 @@ const closeDetailModal = () => {
   selectedReturn.value = null
 }
 
-const handleProcess = (item) => {
+const handleEdit = item => {
+  if (['audited', 'completed'].includes(item.status)) return
   closeDetailModal()
-  alert(`处理退货单：${item.return_number}\n\n此功能需要在实际业务中实现具体处理流程`)
+  router.push({
+    name: 'admin-orders-return-edit',
+    params: { id: item.id },
+    query: { productType: item.productType || 'finished-product' }
+  })
+}
+
+const runReturnAction = async (item, action, message) => {
+  try {
+    const response = await request({ url: `/returns/${item.id}/${action}`, method: 'POST' })
+    if (!response?.success) throw new Error(response?.message || message)
+    window.alert(response.message || message)
+    closeDetailModal()
+    await fetchData()
+  } catch (error) {
+    window.alert(error?.response?.data?.message || error.message || message)
+  }
+}
+
+const handleAudit = item => {
+  if (item.status !== 'pending' || !window.confirm(`确认审核退货单 ${item.return_number}？审核后将核销客户应收并返还库存。`)) return
+  runReturnAction(item, 'audit', '退货单审核成功')
+}
+
+const handleReverseAudit = item => {
+  if (!['audited', 'completed'].includes(item.status) || !window.confirm(`确认反审核退货单 ${item.return_number}？`)) return
+  runReturnAction(item, 'reverse-audit', '退货单已反审核')
+}
+
+const handleDelete = async item => {
+  if (item.status !== 'pending' || !window.confirm(`确认删除退货单 ${item.return_number}？`)) return
+  try {
+    const response = await request({ url: `/returns/${item.id}`, method: 'DELETE' })
+    if (!response?.success) throw new Error(response?.message || '删除失败')
+    window.alert(response.message || '退货单已删除')
+    await fetchData()
+  } catch (error) {
+    window.alert(error?.response?.data?.message || error.message || '删除退货单失败')
+  }
 }
 
 const handleExport = () => {
@@ -1138,7 +1219,7 @@ svg {
 .material-column { width: 150px; }
 .reason-column { width: 120px; }
 .remark-column { width: 100px; }
-.operation-column { width: 100px; text-align: center; }
+.operation-column { width: 220px; text-align: center; }
 
 .numeric,
 .money-value {
@@ -1242,17 +1323,18 @@ svg {
 
 .row-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 6px;
 }
 
 .row-actions button {
   display: inline-flex;
-  width: 29px;
+  min-width: 29px;
   height: 29px;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  padding: 0 7px;
   color: #667085;
   background: #fff;
   border: 1px solid #d9e0e8;

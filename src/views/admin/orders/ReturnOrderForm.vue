@@ -248,6 +248,10 @@ const props = defineProps({
   productType: {
     type: String,
     default: 'finished-product'
+  },
+  returnId: {
+    type: Number,
+    default: null
   }
 })
 
@@ -549,6 +553,53 @@ const loadData = async () => {
   }
 }
 
+const loadExistingReturn = async () => {
+  if (!props.returnId) return
+  try {
+    const data = await request({ url: `/returns/${props.returnId}`, method: 'GET' })
+    form.value.storeId = data.storeId ? String(data.storeId) : ''
+    form.value.customerId = data.customerId ? String(data.customerId) : ''
+    form.value.warehouseId = data.items?.[0]?.warehouseId ? String(data.items[0].warehouseId) : ''
+    form.value.returnDate = data.returnDate || today()
+    form.value.originalOrderNumber = data.originalOrderNumber || ''
+    form.value.taxEnabled = Boolean(data.taxEnabled)
+    form.value.refundAmount = Number(data.refundAmount || 0)
+    form.value.settlementAccount = data.settlementAccount || ''
+    form.value.salesPerson = data.salesPerson || ''
+    form.value.creator = data.creator || ''
+    form.value.packaging = data.packaging || '无'
+    form.value.remark = data.remark || ''
+    const rows = (data.items || []).map(item => {
+      const product = products.value.find(candidate => idEquals(candidate.id, item.productId)) || {}
+      return {
+        ...blankItem(),
+        productId: item.productId ? String(item.productId) : '',
+        productCode: item.productCode || '',
+        goodsName: item.goodsName || '',
+        specification: item.specification || '',
+        unit: item.unit || '',
+        warehouseId: item.warehouseId ? String(item.warehouseId) : '',
+        currentStock: getProductStock(product, item),
+        packages: Number(item.packages || 0),
+        quantity: Number(item.quantity || 0),
+        price: Number(item.price || 0),
+        amount: Number(item.amount || 0),
+        taxRate: Number(item.taxRate || 0),
+        taxIncludedPrice: Number(item.taxIncludedPrice || 0),
+        taxAmount: Number(item.taxAmount || 0),
+        taxIncludedAmount: Number(item.taxIncludedAmount || 0),
+        conversionRate: Number(product.unitConversions?.[0]?.value || 0) || null,
+        unitConversions: Array.isArray(product.unitConversions) ? product.unitConversions : [],
+        remark: item.remark || ''
+      }
+    })
+    form.value.items = rows.concat(Array.from({ length: Math.max(8 - rows.length, 0) }, blankItem))
+    form.value.returnAmount = Number(data.totalAmount || 0)
+  } catch (error) {
+    window.alert(error?.response?.data?.message || '加载退货单失败')
+  }
+}
+
 const save = async printAfterSave => {
   if (saving.value) return
   const validItems = form.value.items.filter(item => item.productId && Number(item.quantity) > 0)
@@ -572,8 +623,8 @@ const save = async printAfterSave => {
   saving.value = true
   try {
     const response = await request({
-      url: '/returns',
-      method: 'POST',
+      url: props.returnId ? `/returns/${props.returnId}` : '/returns',
+      method: props.returnId ? 'PUT' : 'POST',
       data: {
         productType: props.productType,
         storeId: Number(form.value.storeId),
@@ -617,7 +668,10 @@ const save = async printAfterSave => {
   }
 }
 
-onMounted(loadData)
+onMounted(async () => {
+  await loadData()
+  await loadExistingReturn()
+})
 </script>
 
 <style scoped>

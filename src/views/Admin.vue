@@ -393,6 +393,11 @@ const showOrderDraftShortcut = computed(() => {
 })
 
 const currentMenuLabel = computed(() => {
+  if (currentPath.value.startsWith('/admin/orders/returns/edit/')) {
+    return route.query.productType === 'raw-material'
+      ? '订单/修改原材料退货单'
+      : '订单/修改退货单'
+  }
   // 特殊路由处理
   if (currentPath.value === '/admin/orders/create') {
     return '订单/新增订单'
