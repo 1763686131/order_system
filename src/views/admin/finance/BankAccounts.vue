@@ -35,59 +35,77 @@
       <div
         v-for="account in accounts"
         :key="account.id"
-        class="bank-card"
-        :style="getCardStyle(account)"
-        @click="editAccount(account)"
+        class="bank-card-wrapper"
+        :class="{ 'is-flipped': flippedCardId === account.id }"
+        @click="toggleFlip(account.id)"
+        @dblclick="editAccount(account)"
       >
-        <div class="bank-card-content">
-          <div class="card-header">
-            <svg class="chip" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
-              <defs>
-                <linearGradient id="chipGold" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style="stop-color:#f4e5c2;stop-opacity:1" />
-                  <stop offset="50%" style="stop-color:#d4af37;stop-opacity:1" />
-                  <stop offset="100%" style="stop-color:#b8941f;stop-opacity:1" />
-                </linearGradient>
-                <linearGradient id="chipDark" x1="0%" y1="0%" x2="100%" y2="100%">
-                  <stop offset="0%" style="stop-color:#8b7622;stop-opacity:1" />
-                  <stop offset="100%" style="stop-color:#5c4f15;stop-opacity:1" />
-                </linearGradient>
-              </defs>
-              <!-- 芯片外框 -->
-              <rect x="5" y="5" width="40" height="40" rx="6" fill="url(#chipGold)" stroke="#8b7622" stroke-width="0.5"/>
-              <!-- 中间网格 -->
-              <rect x="12" y="12" width="11" height="11" rx="1" fill="url(#chipDark)"/>
-              <rect x="27" y="12" width="11" height="11" rx="1" fill="url(#chipDark)"/>
-              <rect x="12" y="27" width="11" height="11" rx="1" fill="url(#chipDark)"/>
-              <rect x="27" y="27" width="11" height="11" rx="1" fill="url(#chipDark)"/>
-              <!-- 中间分隔线 -->
-              <line x1="24" y1="10" x2="24" y2="40" stroke="#8b7622" stroke-width="1"/>
-              <line x1="10" y1="24" x2="40" y2="24" stroke="#8b7622" stroke-width="1"/>
-              <!-- 光泽效果 -->
-              <ellipse cx="15" cy="15" rx="8" ry="8" fill="#f4e5c2" opacity="0.3"/>
-            </svg>
-            <div class="bank-name-with-icon">
-              <img v-if="account.bankIcon" :src="account.bankIcon" alt="银行图标" class="bank-icon" />
-              <p class="bank-name">{{ account.bankName }}</p>
-            </div>
-          </div>
-
-          <div class="card-middle">
-            <p class="card-number">{{ formatCardNumber(account.accountNumber) }}</p>
-            <div class="card-logo">
-              <img src="@/assets/icon/pay.png" alt="UnionPay">
-            </div>
-          </div>
-
-          <div class="card-footer">
-            <div class="card-info">
-              <div class="info-item">
-                <span class="label">行号</span>
-                <span class="value">{{ account.bankCode || '-' }}</span>
+        <div class="bank-card-inner">
+          <!-- 正面 -->
+          <div class="bank-card bank-card-front" :style="getCardStyle(account)">
+            <div class="bank-card-content">
+              <div class="card-header">
+                <svg class="chip" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+                  <defs>
+                    <linearGradient id="chipGold" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" style="stop-color:#f4e5c2;stop-opacity:1" />
+                      <stop offset="50%" style="stop-color:#d4af37;stop-opacity:1" />
+                      <stop offset="100%" style="stop-color:#b8941f;stop-opacity:1" />
+                    </linearGradient>
+                    <linearGradient id="chipDark" x1="0%" y1="0%" x2="100%" y2="100%">
+                      <stop offset="0%" style="stop-color:#8b7622;stop-opacity:1" />
+                      <stop offset="100%" style="stop-color:#5c4f15;stop-opacity:1" />
+                    </linearGradient>
+                  </defs>
+                  <rect x="5" y="5" width="40" height="40" rx="6" fill="url(#chipGold)" stroke="#8b7622" stroke-width="0.5"/>
+                  <rect x="12" y="12" width="11" height="11" rx="1" fill="url(#chipDark)"/>
+                  <rect x="27" y="12" width="11" height="11" rx="1" fill="url(#chipDark)"/>
+                  <rect x="12" y="27" width="11" height="11" rx="1" fill="url(#chipDark)"/>
+                  <rect x="27" y="27" width="11" height="11" rx="1" fill="url(#chipDark)"/>
+                  <line x1="24" y1="10" x2="24" y2="40" stroke="#8b7622" stroke-width="1"/>
+                  <line x1="10" y1="24" x2="40" y2="24" stroke="#8b7622" stroke-width="1"/>
+                  <ellipse cx="15" cy="15" rx="8" ry="8" fill="#f4e5c2" opacity="0.3"/>
+                </svg>
+                <div class="bank-name-with-icon">
+                  <img v-if="account.bankIcon" :src="account.bankIcon" alt="银行图标" class="bank-icon" />
+                  <p class="bank-name">{{ account.bankName }}</p>
+                </div>
               </div>
-              <div class="info-item">
-                <span class="label">户名</span>
-                <span class="value">{{ account.accountName }}</span>
+
+              <div class="card-middle">
+                <p class="card-number">{{ formatCardNumber(account.accountNumber) }}</p>
+                <div class="card-logo">
+                  <img src="@/assets/icon/pay.png" alt="UnionPay">
+                </div>
+              </div>
+
+              <div class="card-footer">
+                <div class="card-info">
+                  <div class="info-item">
+                    <span class="label">行号</span>
+                    <span class="value">{{ account.bankCode || '-' }}</span>
+                  </div>
+                  <div class="info-item">
+                    <span class="label">户名</span>
+                    <span class="value">{{ account.accountName }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 背面 -->
+          <div class="bank-card bank-card-back">
+            <div class="bank-card-content">
+              <div class="magnetic-stripe"></div>
+              <div class="card-back-info">
+                <div class="signature-panel">
+                  <div class="signature-label">授权签名</div>
+                </div>
+                <div class="cvv-panel">
+                  <div class="cvv-label">安全码</div>
+                  <div class="cvv-value">***</div>
+                </div>
               </div>
             </div>
           </div>
@@ -288,6 +306,7 @@ const loading = ref(false)
 const dialogVisible = ref(false)
 const isEditMode = ref(false)
 const submitting = ref(false)
+const flippedCardId = ref(null)
 const formData = ref({
   id: null,
   storeId: '',
@@ -304,6 +323,14 @@ const formData = ref({
 const formatCardNumber = (number) => {
   if (!number) return ''
   return number.replace(/(\d{4})(?=\d)/g, '$1 ')
+}
+
+const toggleFlip = (accountId) => {
+  if (flippedCardId.value === accountId) {
+    flippedCardId.value = null
+  } else {
+    flippedCardId.value = accountId
+  }
 }
 
 const openAddDialog = () => {
@@ -323,6 +350,7 @@ const openAddDialog = () => {
 }
 
 const editAccount = (account) => {
+  flippedCardId.value = null
   isEditMode.value = true
   formData.value = {
     id: account.id,
@@ -592,36 +620,47 @@ onMounted(() => {
 }
 
 /* 银行卡样式 */
+.bank-card-wrapper {
+  perspective: 1000px;
+  cursor: pointer;
+}
+
+.bank-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.6s;
+  transform-style: preserve-3d;
+}
+
+.bank-card-wrapper.is-flipped .bank-card-inner {
+  transform: rotateY(180deg);
+}
+
 .bank-card {
   border-radius: 16px;
   padding: 30px;
-  cursor: pointer;
   transition: all 0.3s ease;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
   position: relative;
   overflow: hidden;
+  backface-visibility: hidden;
 }
 
-.bank-card::before {
-  content: '';
+.bank-card-front {
+  position: relative;
+}
+
+.bank-card-back {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
-  bottom: 0;
-  background: linear-gradient(135deg, rgba(255, 152, 0, 0.1) 0%, rgba(213, 0, 0, 0.1) 100%);
-  opacity: 0;
-  transition: opacity 0.3s ease;
+  width: 100%;
+  height: 100%;
+  transform: rotateY(180deg);
+  background: #2a2a2a;
 }
 
-.bank-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.4);
-}
-
-.bank-card:hover::before {
-  opacity: 1;
-}
 
 .bank-card-content {
   position: relative;
@@ -736,6 +775,77 @@ onMounted(() => {
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
+}
+
+/* 卡片背面样式 */
+.magnetic-stripe {
+  width: 100%;
+  height: 50px;
+  background: linear-gradient(180deg, #1a1a1a 0%, #000 50%, #1a1a1a 100%);
+  margin: -30px -30px 30px -30px;
+  position: relative;
+}
+
+.magnetic-stripe::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg,
+    #333 0px,
+    #333 10px,
+    #1a1a1a 10px,
+    #1a1a1a 20px
+  );
+}
+
+.card-back-info {
+  display: flex;
+  gap: 20px;
+  margin-top: 80px;
+}
+
+.signature-panel {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  padding: 8px 12px;
+  height: 40px;
+}
+
+.signature-label {
+  font-size: 10px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cvv-panel {
+  background: white;
+  border-radius: 4px;
+  padding: 8px 12px;
+  min-width: 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cvv-label {
+  font-size: 9px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.cvv-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: #000;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
 }
 
 /* 按钮 */
