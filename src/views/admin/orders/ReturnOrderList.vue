@@ -307,184 +307,6 @@
       </footer>
     </section>
 
-    <!-- 录入退货单弹窗 -->
-    <Teleport to="body">
-      <Transition name="detail-modal">
-        <div v-if="false && createModalOpen" class="detail-modal-layer">
-          <div class="detail-modal-backdrop" @click="closeCreateModal"></div>
-          <section
-            class="detail-modal create-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="录入退货单"
-            tabindex="-1"
-            @keydown.esc="closeCreateModal"
-          >
-            <header class="detail-modal-header">
-              <div class="detail-modal-title-wrap">
-                <span class="detail-modal-mark" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                    <polyline points="14 2 14 8 20 8"></polyline>
-                    <line x1="16" y1="13" x2="8" y2="13"></line>
-                    <line x1="16" y1="17" x2="8" y2="17"></line>
-                    <polyline points="10 9 9 9 8 9"></polyline>
-                  </svg>
-                </span>
-                <div>
-                  <span>退货管理</span>
-                  <h2>录入退货单</h2>
-                </div>
-              </div>
-              <button class="detail-modal-close" type="button" title="关闭" @click="closeCreateModal">
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="m6 6 12 12M18 6 6 18"></path>
-                </svg>
-              </button>
-            </header>
-
-            <div class="detail-modal-body">
-              <form class="return-form" @submit.prevent="handleSubmit">
-                <div class="form-section">
-                  <h3>基本信息</h3>
-                  <div class="form-grid">
-                    <label class="form-field">
-                      <span class="field-label">原订单号 <em>*</em></span>
-                      <input
-                        v-model="formData.original_order_number"
-                        type="text"
-                        placeholder="请输入原订单号"
-                        required
-                      />
-                    </label>
-
-                    <label class="form-field">
-                      <span class="field-label">退货日期 <em>*</em></span>
-                      <input
-                        v-model="formData.return_date"
-                        type="date"
-                        required
-                      />
-                    </label>
-
-                    <label class="form-field">
-                      <span class="field-label">客户名称 <em>*</em></span>
-                      <input
-                        v-model="formData.customer_name"
-                        type="text"
-                        placeholder="请输入客户名称"
-                        required
-                      />
-                    </label>
-
-                    <label class="form-field">
-                      <span class="field-label">联系电话</span>
-                      <input
-                        v-model="formData.contact_phone"
-                        type="tel"
-                        placeholder="请输入联系电话"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div class="form-section">
-                  <h3>退货商品信息</h3>
-                  <div class="form-grid">
-                    <label class="form-field full-width">
-                      <span class="field-label">商品名称 <em>*</em></span>
-                      <input
-                        v-model="formData.goods_name"
-                        type="text"
-                        placeholder="请输入商品名称"
-                        required
-                      />
-                    </label>
-
-                    <label class="form-field">
-                      <span class="field-label">退货数量 <em>*</em></span>
-                      <input
-                        v-model.number="formData.quantity"
-                        type="number"
-                        min="1"
-                        placeholder="请输入数量"
-                        required
-                      />
-                    </label>
-
-                    <label class="form-field">
-                      <span class="field-label">退货金额 <em>*</em></span>
-                      <input
-                        v-model.number="formData.amount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="请输入金额"
-                        required
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                <div class="form-section">
-                  <h3>退货原因及备注</h3>
-                  <div class="form-grid">
-                    <label class="form-field full-width">
-                      <span class="field-label">退货原因 <em>*</em></span>
-                      <select v-model="formData.reason" required>
-                        <option value="">请选择退货原因</option>
-                        <option value="质量问题">质量问题</option>
-                        <option value="发错货">发错货</option>
-                        <option value="规格不符">规格不符</option>
-                        <option value="客户取消">客户取消</option>
-                        <option value="其他原因">其他原因</option>
-                      </select>
-                    </label>
-
-                    <label class="form-field full-width">
-                      <span class="field-label">备注</span>
-                      <textarea
-                        v-model="formData.remark"
-                        rows="3"
-                        placeholder="请输入备注信息"
-                      ></textarea>
-                    </label>
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            <footer class="detail-modal-footer">
-              <div class="detail-modal-left-actions"></div>
-              <div class="detail-modal-actions">
-                <button
-                  class="button button-secondary"
-                  type="button"
-                  @click="closeCreateModal"
-                >
-                  取消
-                </button>
-                <button
-                  class="button button-primary"
-                  type="button"
-                  :disabled="submitting"
-                  @click="handleSubmit"
-                >
-                  {{ submitting ? '提交中...' : '提交' }}
-                </button>
-              </div>
-            </footer>
-          </section>
-        </div>
-      </Transition>
-    </Teleport>
-
-    <ReturnOrderFormModal
-      v-if="createModalOpen"
-      @close="closeCreateModal"
-      @saved="handleReturnSaved"
-    />
-
     <!-- 退货详情弹窗 -->
     <Teleport to="body">
       <Transition name="detail-modal">
@@ -621,8 +443,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import request from '@/api/request'
-import ReturnOrderFormModal from '@/components/admin/ReturnOrderFormModal.vue'
+
+const router = useRouter()
 
 // 筛选条件
 const filters = ref({
@@ -635,27 +459,12 @@ const filters = ref({
 // 数据状态
 const loading = ref(false)
 const selectedReturns = ref([])
-const createModalOpen = ref(false)
 const detailModalOpen = ref(false)
 const selectedReturn = ref(null)
-const submitting = ref(false)
 
 // 分页
 const currentPage = ref(1)
 const pageSize = ref(30)
-
-// 表单数据
-const formData = ref({
-  original_order_number: '',
-  return_date: new Date().toISOString().split('T')[0],
-  customer_name: '',
-  contact_phone: '',
-  goods_name: '',
-  quantity: 1,
-  amount: 0,
-  reason: '',
-  remark: ''
-})
 
 // 模拟退货数据
 const returnOrders = ref([
@@ -886,50 +695,10 @@ const toggleSelectAll = () => {
 }
 
 const openCreateModal = () => {
-  createModalOpen.value = true
-}
-
-const closeCreateModal = () => {
-  createModalOpen.value = false
-}
-
-const handleSubmit = () => {
-  // 验证表单
-  if (!formData.value.original_order_number || !formData.value.customer_name ||
-      !formData.value.goods_name || !formData.value.reason) {
-    alert('请填写必填项')
-    return
-  }
-
-  submitting.value = true
-
-  // 模拟提交
-  setTimeout(() => {
-    // 生成新的退货单号
-    const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
-    const count = returnOrders.value.filter(item =>
-      item.return_number.includes(today)
-    ).length + 1
-    const newReturnNumber = `RT${today}${String(count).padStart(4, '0')}`
-
-    // 添加到列表
-    returnOrders.value.unshift({
-      id: Date.now(),
-      return_number: newReturnNumber,
-      ...formData.value,
-      status: 'pending'
-    })
-
-    submitting.value = false
-    closeCreateModal()
-    alert('退货单录入成功！\n退货单号：' + newReturnNumber)
-  }, 1000)
-}
-
-const handleReturnSaved = (response) => {
-  createModalOpen.value = false
-  fetchData()
-  window.alert(response?.message || `退货单保存成功：${response?.returnNumber || ''}`)
+  router.push({
+    name: 'admin-orders-return-create',
+    query: { productType: 'finished-product' }
+  })
 }
 
 const openDetailModal = (item) => {
