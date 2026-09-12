@@ -75,7 +75,7 @@
           <div class="card-middle">
             <p class="card-number">{{ formatCardNumber(account.accountNumber) }}</p>
             <div class="card-logo">
-              <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 80'%3E%3Cdefs%3E%3ClinearGradient id='r' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%23e94542'/%3E%3Cstop offset='1' stop-color='%23d02f2c'/%3E%3C/linearGradient%3E%3ClinearGradient id='b' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%230066b3'/%3E%3Cstop offset='1' stop-color='%2300568f'/%3E%3C/linearGradient%3E%3ClinearGradient id='g' x1='0' y1='0' x2='0' y2='1'%3E%3Cstop offset='0' stop-color='%2300a4a7'/%3E%3Cstop offset='1' stop-color='%2300888b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='120' height='80' rx='8' fill='%23fff'/%3E%3Cpath d='M8 10h28c2 0 3 1 2.5 3l-6 54c-.5 2-2 3-4 3H4c-2 0-3-1-2.5-3l6-54c.5-2 2-3 4-3z' fill='url(%23r)'/%3E%3Cpath d='M38 10h35c2 0 1 1 .5 3l-6 54c-.5 2-.5 3-3 3H36c-2 0-3-1-2.5-3l6-54c.5-2 2-3 4-3z' fill='url(%23b)'/%3E%3Cpath d='M75 10h32c2 0 3 1 2.5 3l-6 54c-.5 2-2 3-4 3H68c-2 0-3-1-2.5-3l6-54c.5-2 2-3 4-3z' fill='url(%23g)'/%3E%3Ctext x='15' y='35' fill='%23fff' font-family='Arial,sans-serif' font-weight='700' font-size='11'%3EUnion%3C/text%3E%3Ctext x='15' y='48' fill='%23fff' font-family='Arial,sans-serif' font-weight='700' font-size='11'%3EPay%3C/text%3E%3Ctext x='60' y='45' fill='%23fff' font-family='Microsoft YaHei,SimHei,sans-serif' font-weight='700' font-size='16'%3E银联%3C/text%3E%3C/svg%3E" alt="UnionPay">
+              <img src="@/assets/icon/pay.png" alt="UnionPay">
             </div>
           </div>
 
@@ -684,15 +684,16 @@ onMounted(() => {
 
 .card-logo {
   position: absolute;
-  right: 0;
-  bottom: 0;
-  width: 60px;
-  height: 36px;
+  right: -8px;
+  bottom: -108px;
+  width: 80px;
+  height: 50px;
 }
 
-.card-logo svg {
+.card-logo img {
   width: 100%;
   height: 100%;
+  object-fit: contain;
 }
 
 .card-footer {
