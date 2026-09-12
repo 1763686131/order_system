@@ -90,7 +90,6 @@
                 <span class="value">{{ account.accountName }}</span>
               </div>
             </div>
-            <div class="store-tag">{{ account.storeName }}</div>
           </div>
         </div>
       </div>
