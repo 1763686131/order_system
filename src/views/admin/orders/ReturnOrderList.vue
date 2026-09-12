@@ -310,7 +310,7 @@
     <!-- 录入退货单弹窗 -->
     <Teleport to="body">
       <Transition name="detail-modal">
-        <div v-if="createModalOpen" class="detail-modal-layer">
+        <div v-if="false && createModalOpen" class="detail-modal-layer">
           <div class="detail-modal-backdrop" @click="closeCreateModal"></div>
           <section
             class="detail-modal create-modal"
@@ -479,6 +479,12 @@
       </Transition>
     </Teleport>
 
+    <ReturnOrderFormModal
+      v-if="createModalOpen"
+      @close="closeCreateModal"
+      @saved="handleReturnSaved"
+    />
+
     <!-- 退货详情弹窗 -->
     <Teleport to="body">
       <Transition name="detail-modal">
@@ -615,6 +621,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import request from '@/api/request'
+import ReturnOrderFormModal from '@/components/admin/ReturnOrderFormModal.vue'
 
 // 筛选条件
 const filters = ref({
@@ -783,9 +791,32 @@ const isPartiallySelected = computed(() => {
 // 方法
 const fetchData = () => {
   loading.value = true
-  setTimeout(() => {
+  request({ url: '/returns', method: 'GET' })
+    .then(response => {
+      if (Array.isArray(response)) {
+        returnOrders.value = response.map(item => ({
+          ...item,
+          return_number: item.returnNumber,
+          original_order_number: item.originalOrderNumber,
+          return_date: item.returnDate,
+          customer_name: item.customerName,
+          contact_phone: item.phone,
+          goods_name: item.goodsName || (item.items || []).map(row => row.goodsName).join('、'),
+          quantity: Number(item.totalQuantity || 0),
+          amount: Number(item.totalAmount || 0),
+          reason: item.reason || '-',
+          status: item.status || 'completed',
+          remark: item.remark || ''
+        }))
+      }
+    })
+    .catch(error => {
+      console.error('加载退货单失败:', error)
+      window.alert(error?.response?.data?.message || '加载退货单失败')
+    })
+    .finally(() => {
     loading.value = false
-  }, 500)
+    })
 }
 
 const handleFilter = () => {
@@ -855,17 +886,6 @@ const toggleSelectAll = () => {
 }
 
 const openCreateModal = () => {
-  formData.value = {
-    original_order_number: '',
-    return_date: new Date().toISOString().split('T')[0],
-    customer_name: '',
-    contact_phone: '',
-    goods_name: '',
-    quantity: 1,
-    amount: 0,
-    reason: '',
-    remark: ''
-  }
   createModalOpen.value = true
 }
 
@@ -904,6 +924,12 @@ const handleSubmit = () => {
     closeCreateModal()
     alert('退货单录入成功！\n退货单号：' + newReturnNumber)
   }, 1000)
+}
+
+const handleReturnSaved = (response) => {
+  createModalOpen.value = false
+  fetchData()
+  window.alert(response?.message || `退货单保存成功：${response?.returnNumber || ''}`)
 }
 
 const openDetailModal = (item) => {

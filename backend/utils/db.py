@@ -23,6 +23,8 @@ _raw_material_schema_lock = Lock()
 _raw_material_schema_ready = False
 _stock_inbound_schema_lock = Lock()
 _stock_inbound_schema_ready = False
+_return_schema_lock = Lock()
+_return_schema_ready = False
 _system_settings_schema_lock = Lock()
 _system_settings_schema_ready = False
 
@@ -350,6 +352,97 @@ def _ensure_stock_inbound_schema(conn):
         _stock_inbound_schema_ready = True
 
 
+def _ensure_return_schema(conn):
+    """Create the reusable sales/raw-material return document tables."""
+    global _return_schema_ready
+    if _return_schema_ready:
+        return
+
+    with _return_schema_lock:
+        if _return_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS return_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                return_number TEXT NOT NULL UNIQUE,
+                original_order_number TEXT NOT NULL DEFAULT '',
+                return_date TEXT NOT NULL,
+                store_id INTEGER NOT NULL,
+                customer_id INTEGER NOT NULL,
+                product_type TEXT NOT NULL DEFAULT 'finished-product',
+                tax_enabled INTEGER NOT NULL DEFAULT 0,
+                total_quantity REAL NOT NULL DEFAULT 0,
+                total_packages REAL NOT NULL DEFAULT 0,
+                total_amount REAL NOT NULL DEFAULT 0,
+                total_tax_amount REAL NOT NULL DEFAULT 0,
+                total_tax_included_amount REAL NOT NULL DEFAULT 0,
+                refund_amount REAL NOT NULL DEFAULT 0,
+                writeoff_amount REAL NOT NULL DEFAULT 0,
+                debt_before REAL NOT NULL DEFAULT 0,
+                debt_after REAL NOT NULL DEFAULT 0,
+                settlement_account TEXT NOT NULL DEFAULT '',
+                sales_person TEXT NOT NULL DEFAULT '',
+                creator TEXT NOT NULL DEFAULT '',
+                packaging TEXT NOT NULL DEFAULT '',
+                remark TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'completed',
+                account_transaction_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS return_order_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                return_id INTEGER NOT NULL,
+                line_no INTEGER NOT NULL,
+                product_type TEXT NOT NULL DEFAULT 'finished-product',
+                product_id INTEGER,
+                product_code TEXT NOT NULL DEFAULT '',
+                goods_name TEXT NOT NULL DEFAULT '',
+                specification TEXT NOT NULL DEFAULT '',
+                unit TEXT NOT NULL DEFAULT '',
+                warehouse_id INTEGER,
+                packages REAL NOT NULL DEFAULT 0,
+                quantity REAL NOT NULL DEFAULT 0,
+                price REAL NOT NULL DEFAULT 0,
+                amount REAL NOT NULL DEFAULT 0,
+                tax_rate REAL NOT NULL DEFAULT 0,
+                tax_included_price REAL NOT NULL DEFAULT 0,
+                tax_amount REAL NOT NULL DEFAULT 0,
+                tax_included_amount REAL NOT NULL DEFAULT 0,
+                remark TEXT NOT NULL DEFAULT '',
+                FOREIGN KEY(return_id) REFERENCES return_orders(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_return_orders_filter
+            ON return_orders(store_id, return_date DESC, id DESC)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_return_orders_customer
+            ON return_orders(customer_id, return_date DESC, id DESC)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_return_order_items_return
+            ON return_order_items(return_id, line_no)
+            """
+        )
+        conn.commit()
+        _return_schema_ready = True
+
+
 def _ensure_customer_schema(conn):
     """Migrate the legacy customers table to the fields used by the API."""
     global _schema_ready
@@ -644,6 +737,7 @@ def get_db():
         _ensure_system_settings_schema(conn)
         _ensure_raw_material_products_schema(conn)
         _ensure_stock_inbound_schema(conn)
+        _ensure_return_schema(conn)
         yield conn
         conn.commit()
     except Exception:

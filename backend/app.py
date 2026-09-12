@@ -36,6 +36,7 @@ from routes.hr_reports import hr_reports_bp
 from routes.settings import settings_bp
 from routes.stock_inbounds import stock_inbounds_bp
 from routes.payment_receipts import payment_receipts_bp
+from routes.returns import returns_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(orders_bp)
@@ -50,6 +51,7 @@ app.register_blueprint(hr_reports_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(stock_inbounds_bp)
 app.register_blueprint(payment_receipts_bp)
+app.register_blueprint(returns_bp)
 
 # ==========================================
 # 健康检查接口
