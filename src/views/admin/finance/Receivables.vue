@@ -1,48 +1,32 @@
 <template>
   <div class="receivables-page">
-    <section class="search-panel" aria-label="应收欠款筛选">
-      <form class="search-grid" @submit.prevent="handleFilter">
-        <label class="field-group">
-          <span>客户搜索</span>
-          <span class="input-with-icon">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="7"></circle>
-              <path d="m20 20-3.7-3.7"></path>
-            </svg>
-            <input
-              v-model.trim="filters.keyword"
-              type="search"
-              placeholder="客户ID、客户名称或联系人"
-            />
-          </span>
-        </label>
-
-        <label class="field-group">
-          <span>联系电话</span>
-          <input
-            v-model.trim="filters.phone"
-            type="search"
-            placeholder="请输入联系电话"
-          />
-        </label>
-
-        <div class="search-actions">
-          <button class="button button-secondary" type="button" @click="handleReset">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M3 12a9 9 0 1 0 3-6.7"></path>
-              <path d="M3 4v6h6"></path>
-            </svg>
-            重置
-          </button>
-          <button class="button button-primary" type="submit">
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <circle cx="11" cy="11" r="7"></circle>
-              <path d="m20 20-3.7-3.7"></path>
-            </svg>
-            查询
-          </button>
+    <section class="summary-panel" aria-label="应收欠款合计">
+      <div class="summary-formula">
+        <div class="summary-item summary-item-result">
+          <span>应收欠款</span>
+          <strong>{{ formatMoney(totals.receivable) }}</strong>
         </div>
-      </form>
+        <span class="summary-operator" aria-hidden="true">=</span>
+        <div class="summary-item">
+          <span>期初欠款</span>
+          <strong>{{ formatMoney(totals.initialDebt) }}</strong>
+        </div>
+        <span class="summary-operator" aria-hidden="true">+</span>
+        <div class="summary-item">
+          <span>增加应收欠款</span>
+          <strong>{{ formatMoney(totals.receivableIncrease) }}</strong>
+        </div>
+        <span class="summary-operator" aria-hidden="true">-</span>
+        <div class="summary-item">
+          <span>收回欠款</span>
+          <strong>{{ formatMoney(totals.debtRecovered) }}</strong>
+        </div>
+        <span class="summary-operator" aria-hidden="true">-</span>
+        <div class="summary-item">
+          <span>优惠</span>
+          <strong>{{ formatMoney(totals.discountAmount) }}</strong>
+        </div>
+      </div>
     </section>
 
     <section class="records-panel">
@@ -80,11 +64,41 @@
           </button>
         </div>
 
+        <form class="toolbar-search" aria-label="应收欠款筛选" @submit.prevent="handleFilter">
+          <label class="field-group">
+            <span>客户搜索 / 联系电话</span>
+            <span class="input-with-icon">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="m20 20-3.7-3.7"></path>
+              </svg>
+              <input
+                v-model.trim="filters.keyword"
+                type="search"
+                placeholder="客户ID、客户名称、联系人或联系电话"
+              />
+            </span>
+          </label>
+
+          <div class="search-actions">
+            <button class="button button-secondary" type="button" @click="handleReset">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                <path d="M3 4v6h6"></path>
+              </svg>
+              重置
+            </button>
+            <button class="button button-primary" type="submit">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="7"></circle>
+                <path d="m20 20-3.7-3.7"></path>
+              </svg>
+              查询
+            </button>
+          </div>
+        </form>
+
         <div class="toolbar-actions">
-          <span class="receivable-total">
-            当前应收合计
-            <strong>{{ formatMoney(filteredReceivablesTotal) }}</strong>
-          </span>
           <button
             class="icon-button"
             type="button"
@@ -106,8 +120,9 @@
         <table class="records-table">
           <thead>
             <tr>
-              <th class="customer-column">客户ID</th>
-              <th>客户联系人</th>
+              <th class="customer-id-column">客户ID</th>
+              <th class="customer-name-column">客户</th>
+              <th class="contact-column">客户联系人</th>
               <th class="phone-column">电话</th>
               <th class="money-column">期初欠款</th>
               <th class="money-column">增加的应收欠款</th>
@@ -120,12 +135,12 @@
           <tbody>
             <template v-if="loading">
               <tr v-for="index in 5" :key="`loading-${index}`" class="skeleton-row">
-                <td v-for="cell in 9" :key="cell"><span></span></td>
+                <td v-for="cell in 10" :key="cell"><span></span></td>
               </tr>
             </template>
 
             <tr v-else-if="pagedReceivables.length === 0">
-              <td colspan="9" class="empty-cell">
+              <td colspan="10" class="empty-cell">
                 <div class="empty-mark" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M4 6h16v14H4z"></path>
@@ -140,11 +155,13 @@
 
             <template v-else>
               <tr v-for="item in pagedReceivables" :key="item.customerId">
-                <td class="customer-cell">
+                <td class="customer-id-cell">
                   <strong>#{{ item.customerId }}</strong>
-                  <span :title="item.customerName">{{ item.customerName || '-' }}</span>
                 </td>
-                <td>{{ item.contactPerson || '-' }}</td>
+                <td class="customer-name-cell">
+                  <strong :title="item.customerName">{{ item.customerName || '-' }}</strong>
+                </td>
+                <td class="contact-cell">{{ item.contactPerson || '-' }}</td>
                 <td class="phone-cell">{{ item.phone || '-' }}</td>
                 <td class="money-cell">{{ formatMoney(item.initialDebt) }}</td>
                 <td class="money-cell increase-amount">
@@ -183,7 +200,7 @@
           </tbody>
           <tfoot v-if="!loading && filteredReceivables.length > 0">
             <tr>
-              <td colspan="3" class="total-label">合计</td>
+              <td colspan="4" class="total-label">合计</td>
               <td class="money-cell">{{ formatMoney(totals.initialDebt) }}</td>
               <td class="money-cell">{{ formatMoney(totals.receivableIncrease) }}</td>
               <td class="money-cell recovered-amount">{{ formatMoney(totals.debtRecovered) }}</td>
@@ -242,7 +259,6 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const filters = reactive({
   keyword: '',
-  phone: '',
   debtStatus: ''
 })
 
@@ -252,11 +268,11 @@ const matchesSearch = item => {
     item.customerId,
     item.customerCode,
     item.customerName,
-    item.contactPerson
+    item.contactPerson,
+    item.phone
   ].join(' ').toLowerCase()
 
-  return (!keyword || searchText.includes(keyword)) &&
-    (!filters.phone || String(item.phone || '').includes(filters.phone))
+  return !keyword || searchText.includes(keyword)
 }
 
 const filteredReceivables = computed(() => receivables.value.filter(item => {
@@ -298,8 +314,6 @@ const totals = computed(() => filteredReceivables.value.reduce((result, item) =>
   receivable: 0
 }))
 
-const filteredReceivablesTotal = computed(() => totals.value.receivable)
-
 const formatMoney = value => {
   const amount = Number(value) || 0
   return `¥${amount.toLocaleString('zh-CN', {
@@ -340,7 +354,6 @@ const handleFilter = () => {
 
 const handleReset = () => {
   filters.keyword = ''
-  filters.phone = ''
   filters.debtStatus = ''
   currentPage.value = 1
 }
@@ -407,19 +420,80 @@ svg {
   stroke-width: 1.8;
 }
 
-.search-panel {
-  padding: 18px 20px;
+.summary-panel {
+  overflow-x: auto;
+  padding: 14px 18px;
   background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 7px;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
 }
 
-.search-grid {
-  display: grid;
-  grid-template-columns: minmax(240px, 1.3fr) minmax(220px, 1fr) auto;
-  gap: 14px;
+.summary-formula {
+  display: flex;
+  min-width: 760px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.summary-item {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  text-align: center;
+}
+
+.summary-item span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.summary-item strong {
+  overflow: hidden;
+  color: #243145;
+  font-size: 21px;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-item-result strong {
+  color: #243145;
+}
+
+.summary-operator {
+  flex: 0 0 24px;
+  color: #8a96a8;
+  font-size: 16px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.toolbar-search {
+  display: flex;
+  min-width: 260px;
+  flex: 1 1 440px;
   align-items: end;
+  gap: 10px;
+}
+
+.toolbar-search .field-group {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toolbar-search .search-actions {
+  align-self: end;
+  justify-content: flex-start;
+}
+
+.toolbar-search .button {
+  padding: 0 12px;
 }
 
 .field-group {
@@ -540,12 +614,21 @@ svg {
 
 .records-toolbar {
   display: flex;
-  min-height: 62px;
+  min-height: 88px;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 11px 16px;
+  justify-content: flex-start;
+  gap: 14px;
+  padding: 13px 16px;
   border-bottom: 1px solid var(--border);
+}
+
+.records-toolbar > .status-filter-slider {
+  flex: 0 0 auto;
+}
+
+.records-toolbar > .toolbar-actions {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .status-filter-slider {
@@ -602,18 +685,6 @@ svg {
   background: rgba(255, 255, 255, 0.25);
 }
 
-.receivable-total {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.receivable-total strong {
-  margin-left: 5px;
-  color: #dc3545;
-  font-size: 15px;
-  font-variant-numeric: tabular-nums;
-}
-
 .icon-button {
   display: inline-flex;
   width: 36px;
@@ -658,7 +729,7 @@ svg {
 
 .records-table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 1420px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -689,17 +760,25 @@ svg {
   background: rgba(var(--accent-rgb), 0.08);
 }
 
-.customer-column {
-  width: 170px;
+.customer-id-column {
+  width: 90px;
+}
+
+.customer-name-column {
+  width: 180px;
+}
+
+.contact-column {
+  width: 105px;
 }
 
 .phone-column {
-  width: 130px;
+  width: 120px;
 }
 
 .money-column,
 .money-cell {
-  width: 135px;
+  width: 150px;
   text-align: right !important;
   font-variant-numeric: tabular-nums;
 }
@@ -709,26 +788,32 @@ svg {
   text-align: center !important;
 }
 
-.customer-cell strong,
-.customer-cell span {
+.customer-id-cell strong,
+.customer-name-cell strong {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.customer-cell strong {
+.customer-id-cell strong {
   color: var(--accent-dark);
+  font-size: 13px;
   font-weight: 700;
 }
 
-.customer-cell span {
-  margin-top: 3px;
+.customer-name-cell strong {
+  color: #243145;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.contact-cell,
+.phone-cell {
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .phone-cell {
-  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -919,23 +1004,88 @@ svg {
 }
 
 @media (max-width: 1280px) {
-  .search-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .toolbar-search {
+    flex-basis: 360px;
   }
 
   .search-actions {
-    grid-column: 1 / -1;
     justify-content: flex-end;
   }
 }
 
 @media (max-width: 780px) {
-  .search-grid {
-    grid-template-columns: 1fr;
+  .summary-panel {
+    overflow-x: visible;
   }
 
-  .search-actions {
-    grid-column: auto;
+  .summary-formula {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 24px minmax(0, 1fr);
+    row-gap: 10px;
+  }
+
+  .summary-formula .summary-item {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .summary-formula .summary-item-result {
+    grid-column: 1 / -1;
+    align-items: center;
+    text-align: center;
+  }
+
+  .summary-formula .summary-operator:nth-child(2) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .summary-formula .summary-item:nth-child(3) {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .summary-formula .summary-operator:nth-child(4) {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .summary-formula .summary-item:nth-child(5) {
+    grid-column: 2;
+    grid-row: 3;
+  }
+
+  .summary-formula .summary-operator:nth-child(6) {
+    grid-column: 1;
+    grid-row: 4;
+  }
+
+  .summary-formula .summary-item:nth-child(7) {
+    grid-column: 2;
+    grid-row: 4;
+  }
+
+  .summary-formula .summary-operator:nth-child(8) {
+    grid-column: 1;
+    grid-row: 5;
+  }
+
+  .summary-formula .summary-item:nth-child(9) {
+    grid-column: 2;
+    grid-row: 5;
+  }
+
+  .toolbar-search {
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
+    align-items: stretch;
+  }
+
+  .toolbar-search .field-group,
+  .toolbar-search .search-actions {
+    width: 100%;
   }
 
   .records-toolbar,
@@ -946,7 +1096,11 @@ svg {
 
   .toolbar-actions {
     width: 100%;
-    justify-content: space-between;
+    justify-content: flex-end;
+  }
+
+  .records-toolbar > .toolbar-actions {
+    margin-left: 0;
   }
 
   .status-filter-slider {
