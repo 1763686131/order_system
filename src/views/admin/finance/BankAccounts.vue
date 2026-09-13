@@ -102,9 +102,9 @@
                 <div class="signature-panel">
                   <div class="signature-label">授权签名</div>
                 </div>
-                <div class="cvv-panel">
-                  <div class="cvv-label">安全码</div>
-                  <div class="cvv-value">***</div>
+                <div class="balance-panel">
+                  <div class="balance-label">账户余额</div>
+                  <div class="balance-value">¥ {{ formatBalance(account.balance) }}</div>
                 </div>
               </div>
             </div>
@@ -176,6 +176,20 @@
                   placeholder="请输入银行行号"
                 />
               </label>
+
+              <label class="field-group">
+                <span>账户余额 <em>*</em></span>
+                <input
+                  v-model.number="formData.balance"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="请输入账户余额"
+                  required
+                />
+              </label>
+
+              <div class="field-group-empty"></div>
 
               <label class="field-group">
                 <span>背景颜色</span>
@@ -276,7 +290,8 @@ const accounts = ref([
     accountName: '深圳市某某科技有限公司',
     accountNumber: '6222021234567890123',
     bankName: '中国工商银行深圳分行',
-    bankCode: '102584000012'
+    bankCode: '102584000012',
+    balance: 125680.50
   },
   {
     id: 2,
@@ -285,7 +300,8 @@ const accounts = ref([
     accountName: '广州某某贸易有限公司',
     accountNumber: '6225881234567890456',
     bankName: '中国建设银行广州分行',
-    bankCode: '105581000023'
+    bankCode: '105581000023',
+    balance: 58900.00
   },
   {
     id: 3,
@@ -294,7 +310,8 @@ const accounts = ref([
     accountName: '深圳市某某科技有限公司',
     accountNumber: '6212261234567890789',
     bankName: '中国银行深圳分行',
-    bankCode: '104584000034'
+    bankCode: '104584000034',
+    balance: 342156.78
   }
 ])
 const stores = ref([
@@ -314,6 +331,7 @@ const formData = ref({
   accountNumber: '',
   bankName: '',
   bankCode: '',
+  balance: 0,
   cardColor: '#1a1a1a',
   cardBgImage: '',
   bankIcon: ''
@@ -323,6 +341,14 @@ const formData = ref({
 const formatCardNumber = (number) => {
   if (!number) return ''
   return number.replace(/(\d{4})(?=\d)/g, '$1 ')
+}
+
+const formatBalance = (balance) => {
+  if (balance === null || balance === undefined) return '0.00'
+  return Number(balance).toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })
 }
 
 const clickTimer = ref(null)
@@ -354,6 +380,7 @@ const openAddDialog = () => {
     accountNumber: '',
     bankName: '',
     bankCode: '',
+    balance: 0,
     cardColor: '#1a1a1a',
     cardBgImage: '',
     bankIcon: ''
@@ -377,6 +404,7 @@ const editAccount = (account) => {
     accountNumber: account.accountNumber,
     bankName: account.bankName,
     bankCode: account.bankCode,
+    balance: account.balance || 0,
     cardColor: account.cardColor || '#1a1a1a',
     cardBgImage: account.cardBgImage || '',
     bankIcon: account.bankIcon || ''
@@ -822,12 +850,12 @@ onMounted(() => {
 
 .card-back-info {
   display: flex;
+  flex-direction: column;
   gap: 20px;
-  margin-top: 80px;
+  margin-top: 30px;
 }
 
 .signature-panel {
-  flex: 1;
   background: rgba(255, 255, 255, 0.9);
   border-radius: 4px;
   padding: 8px 12px;
@@ -841,29 +869,27 @@ onMounted(() => {
   letter-spacing: 0.5px;
 }
 
-.cvv-panel {
-  background: white;
-  border-radius: 4px;
-  padding: 8px 12px;
-  min-width: 80px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.balance-panel {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
 }
 
-.cvv-label {
-  font-size: 9px;
-  color: #666;
+.balance-label {
+  font-size: 12px;
+  color: rgba(248, 250, 252, 0.6);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
 }
 
-.cvv-value {
-  font-size: 14px;
+.balance-value {
+  font-size: 32px;
   font-weight: 700;
-  color: #000;
+  color: #F8FAFC;
   font-family: 'Courier New', monospace;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
 }
 
 /* 按钮 */
