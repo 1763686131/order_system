@@ -14,6 +14,11 @@
           <span class="target-label">{{ targetLabel }}</span>
           <strong class="target-name">{{ targetName }}</strong>
         </div>
+        <button type="button" class="close-button" @click="goBack" title="返回上一级">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M18 6L6 18M6 6l12 12"></path>
+          </svg>
+        </button>
       </div>
       <div class="summary-amount">
         <span class="amount-label">合计</span>
@@ -135,6 +140,8 @@
               <th class="date-column">业务日期</th>
               <th class="doc-number-column">单据编号</th>
               <th class="type-column">业务类型</th>
+              <th class="product-column">商品详情</th>
+              <th class="price-column">单价</th>
               <th class="money-column">原单欠款</th>
               <th class="money-column">{{ type === 'receivable' ? '应收欠款' : '应付欠款' }}</th>
               <th class="money-column">当前欠款</th>
@@ -143,12 +150,12 @@
           <tbody>
             <template v-if="loading">
               <tr v-for="index in 5" :key="`loading-${index}`" class="skeleton-row">
-                <td v-for="cell in 6" :key="cell"><span></span></td>
+                <td v-for="cell in 8" :key="cell"><span></span></td>
               </tr>
             </template>
 
             <tr v-else-if="pagedRecords.length === 0">
-              <td colspan="6" class="empty-cell">
+              <td colspan="8" class="empty-cell">
                 <div class="empty-mark" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M4 6h16v14H4z"></path>
@@ -162,24 +169,72 @@
             </tr>
 
             <template v-else>
-              <tr v-for="item in pagedRecords" :key="item.id">
-                <td class="date-cell">{{ formatDate(item.businessDate) }}</td>
-                <td class="doc-number-cell">
-                  <strong>{{ item.docNumber }}</strong>
-                </td>
-                <td class="type-cell">
-                  <span class="type-badge" :class="`type-${item.businessType.toLowerCase()}`">
-                    {{ formatBusinessType(item.businessType) }}
-                  </span>
-                </td>
-                <td class="money-cell">{{ formatMoney(item.originalDebt) }}</td>
-                <td class="money-cell" :class="item.debtAmount > 0 ? 'increase-amount' : 'decrease-amount'">
-                  {{ formatMoney(item.debtAmount) }}
-                </td>
-                <td class="money-cell current-debt-cell">
-                  <strong>{{ formatMoney(item.currentDebt) }}</strong>
-                </td>
-              </tr>
+              <template v-for="item in pagedRecords" :key="item.id">
+                <!-- 主行 -->
+                <tr
+                  class="main-row"
+                  :class="{ 'has-products': item.products && item.products.length > 1, 'expanded': expandedRows[item.id] }"
+                >
+                  <td class="date-cell">
+                    <div class="cell-with-icon">
+                      <svg
+                        v-if="item.products && item.products.length > 1"
+                        class="expand-icon"
+                        :class="{ rotated: expandedRows[item.id] }"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        @click.stop="toggleRow(item.id)"
+                      >
+                        <path d="m9 18 6-6-6-6"></path>
+                      </svg>
+                      <span>{{ formatDate(item.businessDate) }}</span>
+                    </div>
+                  </td>
+                  <td class="doc-number-cell">
+                    <strong>{{ item.docNumber }}</strong>
+                  </td>
+                  <td class="type-cell">
+                    <span class="type-badge" :class="`type-${item.businessType.toLowerCase()}`">
+                      {{ formatBusinessType(item.businessType) }}
+                    </span>
+                  </td>
+                  <td class="product-cell">
+                    <span v-if="item.products && item.products.length > 0">
+                      {{ item.products[0].name }}
+                      <span v-if="item.products.length > 1" class="more-badge">+{{ item.products.length - 1 }}</span>
+                    </span>
+                    <span v-else class="empty-text">-</span>
+                  </td>
+                  <td class="price-cell">
+                    <span v-if="item.products && item.products.length > 0">
+                      {{ formatMoney(item.products[0].price) }}
+                    </span>
+                    <span v-else class="empty-text">-</span>
+                  </td>
+                  <td class="money-cell">{{ formatMoney(item.originalDebt) }}</td>
+                  <td class="money-cell" :class="item.debtAmount > 0 ? 'increase-amount' : 'decrease-amount'">
+                    {{ formatMoney(item.debtAmount) }}
+                  </td>
+                  <td class="money-cell current-debt-cell">
+                    <strong>{{ formatMoney(item.currentDebt) }}</strong>
+                  </td>
+                </tr>
+
+                <!-- 展开的商品行 -->
+                <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
+                  <tr
+                    v-for="(product, index) in item.products.slice(1)"
+                    :key="`${item.id}-product-${index + 1}`"
+                    class="expanded-product-row"
+                  >
+                    <td colspan="3"></td>
+                    <td class="product-cell">{{ product.name }}</td>
+                    <td class="price-cell">{{ formatMoney(product.price) }}</td>
+                    <td colspan="3"></td>
+                  </tr>
+                </template>
+              </template>
             </template>
           </tbody>
         </table>
@@ -225,6 +280,9 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const props = defineProps({
   type: {
@@ -247,6 +305,7 @@ const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
 const sortOrder = ref('asc')
+const expandedRows = reactive({})
 
 const filters = reactive({
   businessType: '',
@@ -342,6 +401,14 @@ const toggleSort = () => {
   sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc'
 }
 
+const toggleRow = (itemId) => {
+  expandedRows[itemId] = !expandedRows[itemId]
+}
+
+const goBack = () => {
+  router.back()
+}
+
 const exportTable = () => {
   window.alert('导出功能开发中')
 }
@@ -362,7 +429,11 @@ const loadData = async () => {
       docNumber: 'SO202609010001',
       businessType: 'ORDER',
       originalDebt: 0,
-      debtAmount: 5000
+      debtAmount: 5000,
+      products: [
+        { name: '商品A', price: 120.50 },
+        { name: '商品B', price: 85.00 }
+      ]
     },
     {
       id: 2,
@@ -370,7 +441,10 @@ const loadData = async () => {
       docNumber: 'SO202609020001',
       businessType: 'ORDER',
       originalDebt: 5000,
-      debtAmount: 1000
+      debtAmount: 1000,
+      products: [
+        { name: '商品C', price: 200.00 }
+      ]
     },
     {
       id: 3,
@@ -378,7 +452,8 @@ const loadData = async () => {
       docNumber: 'PM202609030001',
       businessType: 'PAYMENT',
       originalDebt: 6000,
-      debtAmount: -2000
+      debtAmount: -2000,
+      products: []
     },
     {
       id: 4,
@@ -386,7 +461,12 @@ const loadData = async () => {
       docNumber: 'SO202609050001',
       businessType: 'ORDER',
       originalDebt: 4000,
-      debtAmount: 3500
+      debtAmount: 3500,
+      products: [
+        { name: '商品D', price: 150.00 },
+        { name: '商品E', price: 90.00 },
+        { name: '商品F', price: 110.00 }
+      ]
     },
     {
       id: 5,
@@ -394,7 +474,8 @@ const loadData = async () => {
       docNumber: 'DIS202609080001',
       businessType: 'DISCOUNT',
       originalDebt: 7500,
-      debtAmount: -500
+      debtAmount: -500,
+      products: []
     }
   ]
 
@@ -454,7 +535,7 @@ select {
 .summary-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 24px;
   margin-bottom: 20px;
   padding-bottom: 16px;
   border-bottom: 1px solid var(--border);
@@ -483,17 +564,45 @@ select {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  justify-content: center;
 }
 
 .target-label {
   font-size: 13px;
-  color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .target-name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
+  color: var(--accent);
+}
+
+.close-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+}
+
+.close-button:hover {
+  background: #f8fafc;
+  border-color: var(--border-strong);
   color: var(--text);
+}
+
+.close-button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .summary-amount {
@@ -720,11 +829,77 @@ select {
   width: 120px;
 }
 
+.product-column,
+.product-cell {
+  width: 200px;
+}
+
+.price-column,
+.price-cell {
+  width: 120px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .money-column,
 .money-cell {
   width: 140px;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.cell-with-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expand-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: transform 0.2s;
+  flex-shrink: 0;
+}
+
+.expand-icon.rotated {
+  transform: rotate(90deg);
+}
+
+.expand-icon:hover {
+  color: var(--text);
+}
+
+.main-row.has-products {
+  cursor: default;
+}
+
+.main-row.expanded {
+  background: #f8fafc;
+}
+
+.expanded-product-row {
+  background: #f8fafc;
+}
+
+.expanded-product-row:hover {
+  background: #f1f5f9 !important;
+}
+
+.more-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 6px;
+  background: #e2e8f0;
+  color: var(--text-secondary);
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.empty-text {
+  color: var(--text-muted);
 }
 
 .type-badge {
