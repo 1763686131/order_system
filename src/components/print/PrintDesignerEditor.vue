@@ -40,21 +40,149 @@ const templateName = ref('')
 const configured = ref(false)
 
 const defaultVariables = {
-  orderNo: 'XS20260913001',
-  orderDate: '2026-09-13',
+  storeId: 'store-001',
+  storeName: '示例门店',
+  customerId: 'customer-001',
   customerName: '示例客户',
+  warehouseId: 'warehouse-001',
   warehouseName: '默认仓库',
-  totalAmount: '0.00',
+  orderDate: '2026-09-13',
+  orderNumber: 'ZG20260913001',
+  orderNo: 'ZG20260913001',
+  contactPerson: '张三',
+  contactPhone: '13800000000',
+  contactAddress: '浙江省杭州市示例地址',
+  projectName: '示例工程项目',
+  logisticsService: '送货上门',
+  goodsPackaging: '袋装',
+  packaging: '袋装',
+  salesPerson: '柯晓',
+  creator: '下单员',
+  orderRemark: '这是订单备注',
+  taxEnabled: true,
+  taxRate: 13,
+  totalPackages: 2,
+  totalQuantity: 100,
+  totalAmount: '1250.00',
+  totalTaxAmount: '1412.50',
+  discountAmount: '1250.00',
+  otherFees: '0.00',
+  settlementAccount: '默认结算账户',
+  customerReceivable: '0.00',
+  shouldReceive: '1250.00',
+  currentPayment: '1250.00',
+  currentDebt: '0.00',
   items: [
     {
-      productName: '示例商品',
+      productId: 'product-001',
+      goodsName: '示例商品',
       spec: '标准规格',
-      quantity: 1,
-      unitPrice: '0.00',
-      amount: '0.00'
+      unit: '公斤',
+      warehouseId: 'warehouse-001',
+      warehouseName: '默认仓库',
+      currentStock: 1000,
+      baseUnitId: 'unit-kg',
+      conversionRate: 50,
+      unitConversions: [{ unit: '袋', value: 50 }],
+      packages: 2,
+      quantity: 100,
+      price: 12.5,
+      taxRate: 13,
+      taxIncludedPrice: 14.13,
+      amount: 1250,
+      totalAmount: 1412.5,
+      remark: '商品备注'
     }
   ]
 }
+
+const availableVariables = [
+  {
+    id: 'orderInfo',
+    label: '订单信息',
+    children: [
+      { id: 'orderNumber', label: '单据编号' },
+      { id: 'orderNo', label: '订单号（兼容别名）' },
+      { id: 'orderDate', label: '单据日期' },
+      { id: 'storeName', label: '门店名称' },
+      { id: 'customerName', label: '客户名称' },
+      { id: 'warehouseName', label: '仓库名称' },
+      { id: 'storeId', label: '门店ID' },
+      { id: 'customerId', label: '客户ID' },
+      { id: 'warehouseId', label: '仓库ID' }
+    ]
+  },
+  {
+    id: 'contactInfo',
+    label: '联系人信息',
+    children: [
+      { id: 'contactPerson', label: '联系人' },
+      { id: 'contactPhone', label: '联系方式' },
+      { id: 'contactAddress', label: '联系地址' },
+      { id: 'projectName', label: '工程项目' }
+    ]
+  },
+  {
+    id: 'businessInfo',
+    label: '业务信息',
+    children: [
+      { id: 'logisticsService', label: '物流服务' },
+      { id: 'goodsPackaging', label: '包装方式' },
+      { id: 'packaging', label: '包装' },
+      { id: 'salesPerson', label: '业务员' },
+      { id: 'creator', label: '制单人' },
+      { id: 'orderRemark', label: '订单备注' }
+    ]
+  },
+  {
+    id: 'items',
+    label: '商品明细（拖入表格）',
+    isArray: true,
+    children: [
+      { id: 'productId', label: '商品ID' },
+      { id: 'goodsName', label: '商品信息' },
+      { id: 'spec', label: '规格型号' },
+      { id: 'unit', label: '单位（公斤/吨/件等）' },
+      { id: 'warehouseName', label: '所属仓库' },
+      { id: 'currentStock', label: '当前库存' },
+      { id: 'baseUnitId', label: '基础单位ID' },
+      { id: 'conversionRate', label: '单位换算比例' },
+      { id: 'packages', label: '件数/包装数' },
+      { id: 'quantity', label: '数量（可表示公斤数）' },
+      { id: 'price', label: '单价（元）' },
+      { id: 'taxRate', label: '税率（%）' },
+      { id: 'taxIncludedPrice', label: '含税单价' },
+      { id: 'amount', label: '金额（元）' },
+      { id: 'totalAmount', label: '含税金额' },
+      { id: 'remark', label: '商品备注' }
+    ]
+  },
+  {
+    id: 'summaryInfo',
+    label: '合计与收款',
+    children: [
+      { id: 'totalPackages', label: '合计件数' },
+      { id: 'totalQuantity', label: '合计数量' },
+      { id: 'totalAmount', label: '合计金额' },
+      { id: 'totalTaxAmount', label: '合计含税金额' },
+      { id: 'discountAmount', label: '折扣金额/本单金额' },
+      { id: 'otherFees', label: '其他费用' },
+      { id: 'settlementAccount', label: '结算账户' },
+      { id: 'customerReceivable', label: '客户欠款' },
+      { id: 'shouldReceive', label: '本单应收' },
+      { id: 'currentPayment', label: '本次收款' },
+      { id: 'currentDebt', label: '本单欠款' }
+    ]
+  },
+  {
+    id: 'taxInfo',
+    label: '税务信息',
+    children: [
+      { id: 'taxEnabled', label: '是否含税' },
+      { id: 'taxRate', label: '默认税率（%）' }
+    ]
+  }
+]
 
 const defaultTemplateData = {
   canvasSize: { width: 794, height: 529 },
@@ -62,14 +190,7 @@ const defaultTemplateData = {
   unit: 'mm',
   testData: defaultVariables,
   ext: {
-    availableVariables: [
-      { id: 'orderNo', label: '订单号' },
-      { id: 'orderDate', label: '订单日期' },
-      { id: 'customerName', label: '客户名称' },
-      { id: 'warehouseName', label: '仓库名称' },
-      { id: 'totalAmount', label: '合计金额' },
-      { id: 'items', label: '商品明细', isArray: true }
-    ]
+    availableVariables
   }
 }
 
