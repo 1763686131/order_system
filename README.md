@@ -222,6 +222,7 @@ order_system/
 │  │     │  ├─ Receivables.vue        # 客户应收欠款汇总
 │  │     │  ├─ PaymentHistory.vue     # 收款历史、收款单录入与审核
 │  │     │  ├─ BankAccounts.vue       # 银行账户管理（卡片展示、翻转查看余额）
+│  │     │  ├─ DebtDetails.vue        # 欠款详情页面（应收/应付通用）
 │  │     │  └─ ...                   # 物流、快递运费对账
 │  │     ├─ system/                  # 用户、角色、门店和系统配置
 │  │     │  └─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
@@ -364,6 +365,7 @@ order_system/
 | `/admin/finance/receivables` | 应收欠款 | `/api/customers/receivables` |
 | `/admin/finance/payment-history` | 收款历史 | `/api/payment-receipts` |
 | `/admin/finance/bank-accounts` | 银行账户管理 | 前端模拟数据（待接入后端 API） |
+| `/admin/finance/debt-details/:type/:targetId` | 欠款详情 | 前端模拟数据（待接入后端 API） |
 
 ## 库存关键接口
 
@@ -516,3 +518,22 @@ docker restart my_order_app
 - [SQLite 迁移说明](MIGRATION_SQLITE.md)
 - [SQLite 使用说明](README_SQLITE.md)
 - [BUG 及优化记录](docs/BUG及优化文档.md)
+
+## 更新日志
+
+### 2026-09-13 - 财务欠款详情模块
+
+新增欠款详情页面组件 `DebtDetails.vue`，支持应收和应付两种模式复用：
+
+- ✅ 欠款详情页面，可通过路由参数 `type`（`receivable`/`payable`）和 `targetId` 加载对应客户或供应商的欠款明细
+- ✅ 顶部汇总卡片展示应收/应付欠款合计，并显示目标名称（客户/供应商）
+- ✅ 支持按业务类型（销售订单、采购订单、退货单、收付款、优惠调整）筛选
+- ✅ 支持按开始日期和结束日期范围筛选
+- ✅ 支持时间从前往后或从后往前排序
+- ✅ 数据表格展示业务日期、单据编号、业务类型、原单欠款、应收/应付欠款、当前欠款
+- ✅ 当前欠款字段采用从前往后依次累加逻辑（例如：9-1日应收50，9-2日应收10，则9-2日当前欠款显示60）
+- ✅ 提供刷新、导出表格、发送对账单功能入口（预留）
+- ✅ 应收欠款汇总页面"欠款详情"按钮已关联，点击跳转至详情页
+- ✅ 样式遵循 `后台列表页视觉与组件样式规范.md`
+- ✅ 路由配置：`/admin/finance/debt-details/:type/:targetId`，支持通过 `query.name` 传递目标名称
+

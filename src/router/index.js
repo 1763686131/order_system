@@ -147,6 +147,17 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'finance/debt-details/:type/:targetId',
+        name: 'admin-finance-debt-details',
+        component: () => import('@/views/admin/finance/DebtDetails.vue'),
+        meta: { requiresAuth: true },
+        props: (route) => ({
+          type: route.params.type,
+          targetId: route.params.targetId,
+          targetName: route.query.name || ''
+        })
+      },
+      {
         path: 'inventory/warehouse',
         name: 'admin-inventory-warehouse',
         component: () => import('@/views/admin/inventory/WarehouseManage.vue'),

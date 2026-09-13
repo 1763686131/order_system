@@ -209,7 +209,7 @@
                     <button
                       class="action-button"
                       type="button"
-                      @click="showPendingFeature('欠款详情', item)"
+                      @click="viewDebtDetails(item)"
                     >
                       欠款详情
                     </button>
@@ -436,7 +436,14 @@ const setDebtStatus = status => {
 }
 
 const showPendingFeature = (action, item) => {
-  window.alert(`${item.customerName || item.customerCode}的“${action}”功能入口已预留`)
+  window.alert(`${item.customerName || item.customerCode}的”${action}”功能入口已预留`)
+}
+
+const viewDebtDetails = (item) => {
+  window.open(
+    `/admin/finance/debt-details/receivable/${item.customerId}?name=${encodeURIComponent(item.customerName || '')}`,
+    '_blank'
+  )
 }
 
 watch(totalPages, pages => {
