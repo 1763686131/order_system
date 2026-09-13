@@ -269,6 +269,14 @@
           <input type="checkbox" v-model="formData.printAfterSave" />
           保存后打印
         </label>
+        <button
+          type="button"
+          class="btn-print-template"
+          @click="openPrintTemplateSelector"
+          :disabled="saving"
+        >
+          🖨️ 打印
+        </button>
         <button class="btn-save-and-print" @click="handleSaveAndPrint" :disabled="saving">
           {{ saving ? '⏳ 保存中...' : '💾 保存并打印' }}
         </button>
@@ -277,6 +285,65 @@
         </button>
       </div>
     </div>
+
+    <!-- 打印模板选择弹窗 -->
+    <div
+      v-if="showPrintTemplateModal"
+      class="custom-modal-overlay"
+      @click.self="closePrintTemplateSelector"
+    >
+      <div class="custom-modal print-template-selector-modal">
+        <div class="modal-header">
+          <div class="modal-icon print">🖨</div>
+          <h3>选择打印模板</h3>
+        </div>
+        <div class="modal-body print-template-selector-body">
+          <p class="print-template-selector-hint">
+            请选择一个销售模板预览当前订单数据，暂不提交打印任务。
+          </p>
+          <div v-if="printTemplateLoading" class="print-template-empty">
+            正在加载模板...
+          </div>
+          <div v-else-if="!printTemplates.length" class="print-template-empty">
+            暂无可用销售模板，请先在“打印模板”中设计并保存模板。
+          </div>
+          <div v-else class="print-template-list">
+            <div
+              v-for="template in printTemplates"
+              :key="template.id"
+              class="print-template-option"
+            >
+              <div class="print-template-option-info">
+                <strong>{{ template.name }}</strong>
+                <span>
+                  {{ getPrintTemplatePaperLabel(template) }}
+                  <em v-if="template.isDefault">默认</em>
+                </span>
+              </div>
+              <button
+                type="button"
+                class="btn-template-preview"
+                @click="previewOrderWithTemplate(template)"
+              >
+                预览
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn-modal-cancel" @click="closePrintTemplateSelector">
+            关闭
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <OrderPrintPreview
+      :visible="showOrderPrintPreview"
+      :template="selectedPrintTemplate"
+      :variables="orderPrintVariables"
+      @close="closeOrderPrintPreview"
+    />
 
     <!-- 清空确认弹窗 -->
     <div v-if="showClearConfirmModal" class="custom-modal-overlay" @click.self="cancelClear">
@@ -337,6 +404,7 @@ import { ref, computed, inject, nextTick, onBeforeUnmount, onMounted, watch } fr
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useOrderDraftStore } from '@/stores/orderDraft'
+import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -355,6 +423,14 @@ const showCloseConfirmModal = ref(false)
 
 // 清空确认弹窗
 const showClearConfirmModal = ref(false)
+
+// 打印模板预览
+const printTemplateStorageKey = 'order-system-print-templates'
+const showPrintTemplateModal = ref(false)
+const printTemplateLoading = ref(false)
+const printTemplates = ref([])
+const showOrderPrintPreview = ref(false)
+const selectedPrintTemplate = ref(null)
 
 // Props 定义
 const props = defineProps({
@@ -569,9 +645,149 @@ const filteredWarehouses = computed(() => {
 
 // 选中的门店名称（用于结算账户显示）
 const selectedStoreName = computed(() => {
-  const store = stores.value.find(s => s.id === formData.value.storeId)
+  const store = stores.value.find(s => String(s.id) === String(formData.value.storeId))
   return store ? store.name : ''
 })
+
+const selectedCustomerName = computed(() => {
+  const customer = customers.value.find(
+    item => String(item.id) === String(formData.value.customerId)
+  )
+  return customer ? (customer.customerName || customer.name || '') : ''
+})
+
+const selectedWarehouseName = computed(() => {
+  const warehouse = warehouses.value.find(
+    item => String(item.id) === String(formData.value.warehouseId)
+  )
+  return warehouse ? warehouse.name : ''
+})
+
+const orderPrintVariables = computed(() => {
+  const taxEnabled = showTaxColumns.value
+  const validItems = formData.value.items
+    .filter(item => item.productId || item.goodsName)
+    .map((item, index) => ({
+      index: index + 1,
+      productId: item.productId || '',
+      goodsName: item.goodsName || '',
+      spec: item.spec || '',
+      unit: item.unit || '',
+      warehouseId: item.warehouseId || '',
+      warehouseName: item.warehouseName || selectedWarehouseName.value,
+      currentStock: Number(item.currentStock) || 0,
+      baseUnitId: item.baseUnitId || '',
+      conversionRate: Number(item.conversionRate) || 0,
+      unitConversions: Array.isArray(item.unitConversions) ? item.unitConversions : [],
+      packages: Number(item.packages) || 0,
+      quantity: Number(item.quantity) || 0,
+      price: Number(item.price) || 0,
+      taxRate: taxEnabled ? (Number(item.taxRate) || DEFAULT_TAX_RATE) : 0,
+      taxIncludedPrice: taxEnabled ? (Number(item.taxIncludedPrice) || 0) : 0,
+      amount: Number(item.amount) || 0,
+      totalAmount: taxEnabled ? (Number(item.totalAmount) || 0) : 0,
+      remark: item.remark || ''
+    }))
+
+  // 设计器中直接放入表格单元格的 @goodsName、@quantity 等变量，
+  // 默认按根对象解析。单据通常至少有一条商品明细，因此将第一条明细
+  // 同步为根级别别名，保证单元格预览能显示当前订单数据。
+  const firstItem = validItems[0] || {}
+  const discountAmount = Number(formData.value.discountAmount) || 0
+  const otherFees = Number(formData.value.otherFees) || 0
+  const currentPayment = Number(formData.value.currentPayment) || 0
+
+  return {
+    ...firstItem,
+    storeId: formData.value.storeId || '',
+    storeName: selectedStoreName.value,
+    customerId: formData.value.customerId || '',
+    customerName: selectedCustomerName.value,
+    warehouseId: formData.value.warehouseId || '',
+    warehouseName: selectedWarehouseName.value,
+    orderDate: formData.value.orderDate || '',
+    orderNumber: formData.value.orderNumber || '',
+    orderNo: formData.value.orderNumber || '',
+    contactPerson: formData.value.contactPerson || '',
+    contactPhone: formData.value.contactPhone || '',
+    contactAddress: formData.value.contactAddress || '',
+    projectName: formData.value.projectName || '',
+    logisticsService: formData.value.logisticsService || '',
+    goodsPackaging: formData.value.packaging || '',
+    packaging: formData.value.packaging || '',
+    salesPerson: formData.value.salesPerson || '',
+    creator: formData.value.creator || '',
+    orderRemark: formData.value.orderRemark || '',
+    taxEnabled,
+    taxRate: taxEnabled ? (Number(formData.value.taxRate) || DEFAULT_TAX_RATE) : 0,
+    totalPackages: Number(totalPackages.value) || 0,
+    totalQuantity: Number(totalQuantity.value) || 0,
+    totalAmount: Number(totalAmount.value) || 0,
+    totalTaxAmount: Number(totalTaxAmount.value) || 0,
+    discountAmount,
+    otherFees,
+    settlementAccount: formData.value.settlementAccount || selectedStoreName.value,
+    customerReceivable: Number(customerReceivable.value) || 0,
+    shouldReceive: Number(shouldReceive.value) || 0,
+    currentPayment,
+    currentDebt: discountAmount + otherFees - currentPayment,
+    items: validItems
+  }
+})
+
+const getPrintTemplatePaperLabel = (template) => {
+  const width = template.pageWidth || 210
+  const height = template.pageHeight || 140
+  return `${template.paperType || '自定义'} · ${width}×${height}mm`
+}
+
+const loadPrintTemplates = () => {
+  printTemplateLoading.value = true
+  try {
+    const raw = localStorage.getItem(printTemplateStorageKey)
+    const parsed = raw ? JSON.parse(raw) : []
+    const source = Array.isArray(parsed)
+      ? parsed
+      : (Array.isArray(parsed?.templates) ? parsed.templates : [])
+
+    printTemplates.value = source
+      .filter(template => (
+        template &&
+        template.enabled !== false &&
+        (!template.businessType || template.businessType === 'sale')
+      ))
+      .sort((left, right) => Number(right.isDefault) - Number(left.isDefault))
+  } catch (error) {
+    console.warn('读取打印模板失败:', error)
+    printTemplates.value = []
+  } finally {
+    printTemplateLoading.value = false
+  }
+}
+
+const openPrintTemplateSelector = () => {
+  loadPrintTemplates()
+  showPrintTemplateModal.value = true
+}
+
+const closePrintTemplateSelector = () => {
+  showPrintTemplateModal.value = false
+}
+
+const previewOrderWithTemplate = (template) => {
+  if (!template?.design && !template?.data) {
+    showErrorModal('该模板还没有保存设计内容，请先在打印模板页面完成设计。')
+    return
+  }
+  selectedPrintTemplate.value = template
+  showPrintTemplateModal.value = false
+  showOrderPrintPreview.value = true
+}
+
+const closeOrderPrintPreview = () => {
+  showOrderPrintPreview.value = false
+  selectedPrintTemplate.value = null
+}
 
 // 过滤商品（根据当前选择的门店和仓库）
 const filteredProducts = computed(() => {
@@ -2186,6 +2402,133 @@ input:checked + .slider:before {
   align-items: center;
   gap: 12px;
   justify-content: flex-end;
+}
+
+.btn-print-template {
+  height: 38px;
+  padding: 0 18px;
+  background: #fff;
+  color: var(--accent-dark);
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  white-space: nowrap;
+}
+
+.btn-print-template:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.btn-print-template:disabled {
+  color: var(--text-muted);
+  background: #f8fafc;
+  border-color: var(--border-strong);
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.print-template-selector-modal {
+  width: 560px;
+  max-width: 92vw;
+}
+
+.modal-icon.print {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 26px;
+}
+
+.print-template-selector-body {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+
+.print-template-selector-hint {
+  margin: 0 0 14px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.6;
+  text-align: left;
+}
+
+.print-template-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.print-template-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 13px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: #fff;
+  text-align: left;
+}
+
+.print-template-option:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.print-template-option-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.print-template-option-info strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.print-template-option-info span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.print-template-option-info em {
+  margin-left: 8px;
+  color: var(--accent-dark);
+  font-style: normal;
+}
+
+.btn-template-preview {
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 16px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-template-preview:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+.print-template-empty {
+  padding: 28px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+  text-align: center;
 }
 
 .finance-item {
