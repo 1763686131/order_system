@@ -115,7 +115,7 @@
 
     <!-- 账户表单弹窗 -->
     <Teleport to="body">
-      <div v-if="dialogVisible" class="modal-overlay" @click.self="closeDialog">
+      <div v-if="dialogVisible" class="modal-overlay">
         <div class="modal-container">
           <header class="modal-header">
             <h3>{{ isEditMode ? '修改账户' : '添加账户' }}</h3>
