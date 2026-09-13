@@ -1,18 +1,11 @@
 <template>
   <div class="debt-details-page">
     <!-- 顶部汇总卡片 -->
-    <div class="summary-card" :class="`summary-card-${type}`">
+    <div class="summary-card">
       <div class="summary-header">
         <div class="summary-title">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="2" y="5" width="20" height="14" rx="2"></rect>
-            <path d="M2 10h20"></path>
-          </svg>
-          <h2>{{ summaryTitle }}</h2>
-        </div>
-        <div class="target-info">
+          <h2>{{ targetName }}</h2>
           <span class="target-label">{{ targetLabel }}</span>
-          <strong class="target-name">{{ targetName }}</strong>
         </div>
         <button type="button" class="close-button" @click="handleClose" title="返回上一级">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -21,27 +14,27 @@
         </button>
       </div>
       <div class="summary-stats">
-        <div class="stat-item">
+        <div class="stat-box">
           <span class="stat-label">{{ type === 'receivable' ? '应收欠款' : '应付欠款' }}</span>
-          <strong class="stat-value highlight">{{ formatMoney(totalReceivable) }}</strong>
+          <strong class="stat-value">{{ formatMoney(totalReceivable) }}</strong>
         </div>
-        <span class="stat-operator">=</span>
-        <div class="stat-item">
+        <div class="stat-operator">=</div>
+        <div class="stat-box">
           <span class="stat-label">期初欠款</span>
           <strong class="stat-value">{{ formatMoney(initialDebt) }}</strong>
         </div>
-        <span class="stat-operator">+</span>
-        <div class="stat-item">
+        <div class="stat-operator">+</div>
+        <div class="stat-box">
           <span class="stat-label">{{ type === 'receivable' ? '增加应收欠款' : '增加应付欠款' }}</span>
           <strong class="stat-value">{{ formatMoney(totalIncrease) }}</strong>
         </div>
-        <span class="stat-operator">-</span>
-        <div class="stat-item">
+        <div class="stat-operator">-</div>
+        <div class="stat-box">
           <span class="stat-label">{{ type === 'receivable' ? '收回欠款' : '支付欠款' }}</span>
           <strong class="stat-value">{{ formatMoney(totalRecovered) }}</strong>
         </div>
-        <span class="stat-operator">-</span>
-        <div class="stat-item">
+        <div class="stat-operator">-</div>
+        <div class="stat-box">
           <span class="stat-label">优惠</span>
           <strong class="stat-value">{{ formatMoney(totalDiscount) }}</strong>
         </div>
@@ -164,8 +157,11 @@
               <th class="doc-number-column">单据编号</th>
               <th class="type-column">业务类型</th>
               <th class="product-column">商品详情</th>
+              <th class="quantity-column">数量</th>
+              <th class="unit-column">单位</th>
               <th class="price-column">单价</th>
               <th class="money-column">原单欠款</th>
+              <th class="money-column">部分付款</th>
               <th class="money-column">{{ type === 'receivable' ? '应收欠款' : '应付欠款' }}</th>
               <th class="money-column">当前欠款</th>
             </tr>
@@ -173,12 +169,12 @@
           <tbody>
             <template v-if="loading">
               <tr v-for="index in 5" :key="`loading-${index}`" class="skeleton-row">
-                <td v-for="cell in 9" :key="cell"><span></span></td>
+                <td v-for="cell in 12" :key="cell"><span></span></td>
               </tr>
             </template>
 
             <tr v-else-if="pagedRecords.length === 0">
-              <td colspan="9" class="empty-cell">
+              <td colspan="12" class="empty-cell">
                 <div class="empty-mark" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M4 6h16v14H4z"></path>
@@ -231,13 +227,32 @@
                       </svg>
                     </div>
                   </td>
+                  <td class="quantity-cell">
+                    <span v-if="item.products && item.products.length > 0">
+                      {{ item.products[0].quantity || 1 }}
+                    </span>
+                    <span v-else class="empty-text">-</span>
+                  </td>
+                  <td class="unit-cell">
+                    <span v-if="item.products && item.products.length > 0">
+                      {{ item.products[0].unit || '个' }}
+                    </span>
+                    <span v-else class="empty-text">-</span>
+                  </td>
                   <td class="price-cell">
                     <span v-if="item.products && item.products.length > 0">
                       {{ formatMoney(item.products[0].price) }}
                     </span>
                     <span v-else class="empty-text">-</span>
                   </td>
-                  <td class="money-cell">{{ formatMoney(item.originalDebt) }}</td>
+                  <td class="money-cell">
+                    <span v-if="item.businessType === 'ORDER'">{{ formatMoney(item.orderAmount) }}</span>
+                    <span v-else class="empty-text">-</span>
+                  </td>
+                  <td class="money-cell">
+                    <span v-if="item.businessType === 'ORDER' && item.paidAmount > 0">{{ formatMoney(item.paidAmount) }}</span>
+                    <span v-else class="empty-text">-</span>
+                  </td>
                   <td class="money-cell" :class="item.debtAmount > 0 ? 'increase-amount' : 'decrease-amount'">
                     {{ formatMoney(item.debtAmount) }}
                   </td>
@@ -258,7 +273,10 @@
                     <td class="doc-number-cell"></td>
                     <td class="type-cell"></td>
                     <td class="product-cell">{{ product.name }}</td>
+                    <td class="quantity-cell">{{ product.quantity || 1 }}</td>
+                    <td class="unit-cell">{{ product.unit || '个' }}</td>
                     <td class="price-cell">{{ formatMoney(product.price) }}</td>
+                    <td class="money-cell"></td>
                     <td class="money-cell"></td>
                     <td class="money-cell"></td>
                     <td class="money-cell"></td>
@@ -376,10 +394,24 @@ const filteredRecords = computed(() => {
     return sortOrder.value === 'asc' ? dateA - dateB : dateB - dateA
   })
 
-  let cumulativeDebt = 0
-  result.forEach(record => {
+  // 无论排序方向如何，当前欠款始终从最早的记录开始累计
+  // 所以需要先按时间正序排列来计算累计值
+  const sortedForCalculation = [...result].sort((a, b) => {
+    const dateA = new Date(a.businessDate)
+    const dateB = new Date(b.businessDate)
+    return dateA - dateB
+  })
+
+  let cumulativeDebt = initialDebt.value
+  const debtMap = new Map()
+  sortedForCalculation.forEach(record => {
     cumulativeDebt += record.debtAmount
-    record.currentDebt = cumulativeDebt
+    debtMap.set(record.id, cumulativeDebt)
+  })
+
+  // 将计算好的累计值赋给实际显示的记录
+  result.forEach(record => {
+    record.currentDebt = debtMap.get(record.id)
   })
 
   return result
@@ -484,11 +516,12 @@ const loadData = async () => {
       businessDate: '2026-09-01',
       docNumber: 'SO202609010001',
       businessType: 'ORDER',
-      originalDebt: 0,
+      orderAmount: 5000,
+      paidAmount: 0,
       debtAmount: 5000,
       products: [
-        { name: '商品A', price: 120.50 },
-        { name: '商品B', price: 85.00 }
+        { name: '商品A', quantity: 10, unit: '箱', price: 120.50 },
+        { name: '商品B', quantity: 5, unit: '件', price: 85.00 }
       ]
     },
     {
@@ -496,40 +529,56 @@ const loadData = async () => {
       businessDate: '2026-09-02',
       docNumber: 'SO202609020001',
       businessType: 'ORDER',
-      originalDebt: 5000,
+      orderAmount: 6000,
+      paidAmount: 5000,
       debtAmount: 1000,
       products: [
-        { name: '商品C', price: 200.00 }
+        { name: '商品C', quantity: 8, unit: '套', price: 200.00 }
       ]
     },
     {
       id: 3,
       businessDate: '2026-09-03',
-      docNumber: 'PM202609030001',
+      docNumber: 'RT202609030001',
+      businessType: 'RETURN',
+      orderAmount: 0,
+      paidAmount: 0,
+      debtAmount: -1500,
+      products: [
+        { name: '商品A', quantity: 3, unit: '箱', price: 120.50 }
+      ]
+    },
+    {
+      id: 4,
+      businessDate: '2026-09-04',
+      docNumber: 'PM202609040001',
       businessType: 'PAYMENT',
-      originalDebt: 6000,
+      orderAmount: 0,
+      paidAmount: 0,
       debtAmount: -2000,
       products: []
     },
     {
-      id: 4,
+      id: 5,
       businessDate: '2026-09-05',
       docNumber: 'SO202609050001',
       businessType: 'ORDER',
-      originalDebt: 4000,
+      orderAmount: 7500,
+      paidAmount: 4000,
       debtAmount: 3500,
       products: [
-        { name: '商品D', price: 150.00 },
-        { name: '商品E', price: 90.00 },
-        { name: '商品F', price: 110.00 }
+        { name: '商品D', quantity: 12, unit: '盒', price: 150.00 },
+        { name: '商品E', quantity: 20, unit: '个', price: 90.00 },
+        { name: '商品F', quantity: 6, unit: '包', price: 110.00 }
       ]
     },
     {
-      id: 5,
+      id: 6,
       businessDate: '2026-09-08',
       docNumber: 'DIS202609080001',
       businessType: 'DISCOUNT',
-      originalDebt: 7500,
+      orderAmount: 0,
+      paidAmount: 0,
       debtAmount: -500,
       products: []
     }
@@ -578,61 +627,32 @@ select {
   margin-bottom: 24px;
 }
 
-.summary-card-receivable {
-  --accent: #0f9f78;
-  --accent-soft: #e9f8f3;
-}
-
-.summary-card-payable {
-  --accent: #f97316;
-  --accent-soft: #fff4ed;
-}
-
 .summary-header {
   display: flex;
   align-items: center;
-  gap: 24px;
+  justify-content: space-between;
   margin-bottom: 20px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
 }
 
 .summary-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.summary-title svg {
-  width: 24px;
-  height: 24px;
-  color: var(--accent);
+  gap: 12px;
 }
 
 .summary-title h2 {
   margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.target-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-  justify-content: center;
-}
-
-.target-label {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.target-name {
   font-size: 20px;
   font-weight: 600;
   color: var(--text);
+}
+
+.target-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 4px;
 }
 
 .close-button {
@@ -665,27 +685,30 @@ select {
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
-  padding: 16px 20px;
-  background: var(--accent-soft);
-  border-radius: 6px;
+  gap: 16px;
   flex-wrap: wrap;
 }
 
-.stat-item {
+.stat-box {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 8px;
+  padding: 16px 24px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 140px;
 }
 
 .stat-label {
-  font-size: 14px;
-  color: var(--text-secondary);
+  font-size: 13px;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .stat-operator {
-  font-size: 16px;
+  font-size: 18px;
   font-weight: 500;
   color: #94a3b8;
   flex-shrink: 0;
@@ -696,11 +719,6 @@ select {
   font-weight: 600;
   color: var(--text);
   font-variant-numeric: tabular-nums;
-}
-
-.stat-value.highlight {
-  font-size: 24px;
-  color: var(--accent);
 }
 
 .content-section {
@@ -918,6 +936,19 @@ select {
   width: 220px;
 }
 
+.quantity-column,
+.quantity-cell {
+  width: 80px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.unit-column,
+.unit-cell {
+  width: 60px;
+  text-align: center;
+}
+
 .price-column,
 .price-cell {
   width: 100px;
@@ -930,6 +961,10 @@ select {
   width: 130px;
   text-align: right !important;
   font-variant-numeric: tabular-nums;
+}
+
+.current-debt-cell {
+  padding-right: 24px !important;
 }
 
 .product-cell {
