@@ -797,10 +797,10 @@ onMounted(() => {
 
 /* 卡片背面样式 */
 .magnetic-stripe {
-  width: 100%;
+  width: calc(100% + 60px);
   height: 50px;
   background: linear-gradient(180deg, #1a1a1a 0%, #000 50%, #1a1a1a 100%);
-  margin: 0 -30px 30px -30px;
+  margin: -30px -30px 30px -30px;
   position: relative;
 }
 
