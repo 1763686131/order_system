@@ -407,7 +407,11 @@ const configureDesigner = async () => {
   designer.setLanguage('zh')
   await designer.setTestData(defaultVariables, { merge: false })
   await designer.setTemplateVariables(defaultVariables, { merge: false })
-  designer.loadTemplateData(normalizeTableFooters(props.template?.design || defaultTemplateData))
+  designer.loadTemplateData(normalizeTableFooters(
+    props.template?.design ||
+    props.template?.data ||
+    defaultTemplateData
+  ))
   startFooterFixTimer()
 }
 
@@ -440,10 +444,12 @@ const handlePreview = async () => {
   await designer.preview()
 }
 
-const handleSave = () => {
+const handleSave = async () => {
   const designer = designerRef.value
   if (!designer) return
+  await nextTick()
   ensureLiveTableFooters()
+  const design = normalizeTableFooters(designer.getTemplateData())
   emit('save', {
     ...props.template,
     name: templateName.value || props.template?.name || '销售三联单',
@@ -452,7 +458,8 @@ const handleSave = () => {
     pageWidth: 210,
     pageHeight: 140,
     enabled: props.template?.enabled !== false,
-    design: normalizeTableFooters(designer.getTemplateData())
+    design,
+    updatedAt: Date.now()
   })
 }
 

@@ -789,6 +789,12 @@ const closeOrderPrintPreview = () => {
   selectedPrintTemplate.value = null
 }
 
+const handlePrintTemplatesUpdated = () => {
+  if (showPrintTemplateModal.value) {
+    loadPrintTemplates()
+  }
+}
+
 // 过滤商品（根据当前选择的门店和仓库）
 const filteredProducts = computed(() => {
   let result = products.value
@@ -1786,6 +1792,8 @@ watch(
 
 // 初始化
 onMounted(async () => {
+  window.addEventListener('order-system-print-templates-updated', handlePrintTemplatesUpdated)
+  window.addEventListener('storage', handlePrintTemplatesUpdated)
   console.log('OrderForm mounted, props.orderId:', props.orderId)
   console.log('isEditMode:', isEditMode.value)
 
@@ -1844,6 +1852,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('order-system-print-templates-updated', handlePrintTemplatesUpdated)
+  window.removeEventListener('storage', handlePrintTemplatesUpdated)
   clearTimeout(draftSaveTimer)
   persistDraft()
 })

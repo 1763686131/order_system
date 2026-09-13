@@ -406,13 +406,30 @@ const closeDesigner = () => {
 }
 
 const handleDesignerSave = (template) => {
-  const existingIndex = templates.value.findIndex((item) => item.id === template.id)
+  const nextId = template?.id ?? Date.now()
+  const savedTemplate = JSON.parse(JSON.stringify({
+    ...template,
+    id: nextId,
+    updatedAt: template?.updatedAt || Date.now()
+  }))
+  const existingIndex = templates.value.findIndex((item) => (
+    String(item.id) === String(nextId)
+  ))
+
   if (existingIndex >= 0) {
-    templates.value[existingIndex] = { ...templates.value[existingIndex], ...template }
+    templates.value.splice(existingIndex, 1, {
+      ...templates.value[existingIndex],
+      ...savedTemplate
+    })
   } else {
-    templates.value.push({ ...template, id: Date.now() })
+    templates.value.push(savedTemplate)
   }
+
+  templates.value = [...templates.value]
   localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
+  window.dispatchEvent(new CustomEvent('order-system-print-templates-updated', {
+    detail: { id: nextId, updatedAt: savedTemplate.updatedAt }
+  }))
   closeDesigner()
 }
 
@@ -478,6 +495,8 @@ const handleSaveTemplate = () => {
     templates.value.push(newTemplate)
   }
 
+  localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
+  window.dispatchEvent(new CustomEvent('order-system-print-templates-updated'))
   showTemplateModal.value = false
   console.log('保存模板:', templateForm.value)
 }
