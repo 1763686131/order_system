@@ -25,7 +25,7 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 
@@ -74,6 +74,7 @@ const defaultVariables = {
   currentDebt: '0.00',
   items: [
     {
+      index: 1,
       productId: 'product-001',
       goodsName: '示例商品',
       spec: '标准规格',
@@ -136,9 +137,10 @@ const availableVariables = [
   },
   {
     id: 'items',
-    label: '商品明细（拖入表格）',
+    label: '商品明细（用于表格数据变量）',
     isArray: true,
     children: [
+      { id: 'index', label: '序号' },
       { id: 'productId', label: '商品ID' },
       { id: 'goodsName', label: '商品信息' },
       { id: 'spec', label: '规格型号' },
@@ -194,6 +196,204 @@ const defaultTemplateData = {
   }
 }
 
+const normalizeVariableKey = (value) => {
+  const token = String(value ?? '').trim()
+  if (!token) return ''
+  if (token.startsWith('@')) return token.slice(1).trim()
+  if (token.startsWith('{#') && token.endsWith('}')) {
+    return token.slice(2, -1).trim()
+  }
+  return token
+}
+
+const getCellVariableKey = (cell) => {
+  const value = cell && typeof cell === 'object' ? cell.value : cell
+  if (typeof value !== 'string') return ''
+  const match = value.match(/@[A-Za-z0-9_.-]+/)
+  return match ? normalizeVariableKey(match[0]) : ''
+}
+
+const tableHeaderFieldMap = {
+  序号: 'index',
+  商品名称: 'goodsName',
+  商品信息: 'goodsName',
+  规格型号: 'spec',
+  单位: 'unit',
+  数量: 'quantity',
+  件数: 'packages',
+  包装数: 'packages',
+  单价: 'price',
+  金额: 'amount',
+  含税单价: 'taxIncludedPrice',
+  含税金额: 'totalAmount',
+  备注: 'remark'
+}
+
+const normalizeTableDetailBinding = (element) => {
+  if (!element || !['table', 'TABLE'].includes(element.type)) return
+
+  const dataVariableKey = normalizeVariableKey(element.variable)
+  const columnsVariableKey = normalizeVariableKey(element.columnsVariable)
+
+  // @items 是明细行数据源，不是列定义。误放到“列定义变量”时自动纠正。
+  if (columnsVariableKey === 'items') {
+    if (!dataVariableKey) {
+      element.variable = '@items'
+    }
+    element.columnsVariable = ''
+  }
+  if (normalizeVariableKey(element.footerDataVariable) === 'items') {
+    element.footerDataVariable = ''
+  }
+
+  if (normalizeVariableKey(element.variable) !== 'items') return
+
+  const sampleItem = defaultVariables.items?.[0] || {}
+  const columns = Array.isArray(element.columns) ? element.columns : []
+  const layoutRows = Array.isArray(element.data) ? element.data : []
+  const fieldMap = new Map()
+
+  columns.forEach((column) => {
+    const currentField = String(column?.field || '').trim()
+    if (!currentField) return
+    if (Object.prototype.hasOwnProperty.call(sampleItem, currentField)) {
+      fieldMap.set(currentField, currentField)
+      return
+    }
+
+    const sampleCell = layoutRows
+      .map(row => row?.[currentField])
+      .find(cell => getCellVariableKey(cell))
+    const variableKey = getCellVariableKey(sampleCell)
+    if (variableKey && Object.prototype.hasOwnProperty.call(sampleItem, variableKey)) {
+      fieldMap.set(currentField, variableKey)
+      return
+    }
+
+    const header = String(column?.header || '').trim()
+    const headerField = tableHeaderFieldMap[header]
+    if (headerField && Object.prototype.hasOwnProperty.call(sampleItem, headerField)) {
+      fieldMap.set(currentField, headerField)
+    }
+  })
+
+  if (fieldMap.size === 0) return
+
+  element.columns = columns.map((column) => ({
+    ...column,
+    field: fieldMap.get(column.field) || column.field
+  }))
+  element.data = layoutRows.map((row) => {
+    const nextRow = { ...row }
+    fieldMap.forEach((targetField, sourceField) => {
+      if (sourceField === targetField || row?.[sourceField] === undefined) return
+      if (nextRow[targetField] === undefined) {
+        nextRow[targetField] = nextRow[sourceField]
+      }
+      delete nextRow[sourceField]
+    })
+    return nextRow
+  })
+  element.footerData = (element.footerData || []).map((row) => {
+    const nextRow = { ...row }
+    fieldMap.forEach((targetField, sourceField) => {
+      if (sourceField === targetField || row?.[sourceField] === undefined) return
+      if (nextRow[targetField] === undefined) {
+        nextRow[targetField] = nextRow[sourceField]
+      }
+      delete nextRow[sourceField]
+    })
+    return nextRow
+  })
+}
+
+const getTableFooterVariable = (column) => {
+  const field = String(column?.field || '').trim().toLowerCase()
+  const header = String(column?.header || '').trim()
+
+  if (field === 'packages' || field === 'package' || field === 'qtypackages' || header.includes('件数') || header.includes('包装')) {
+    return '@totalPackages'
+  }
+  if (field === 'quantity' || field === 'qty' || header.includes('数量')) {
+    return '@totalQuantity'
+  }
+  if (field === 'totalamount' || field === 'taxamount' || header.includes('含税金额')) {
+    return '@totalTaxAmount'
+  }
+  if (field === 'amount' || field === 'total' || header.includes('金额')) {
+    return '@totalAmount'
+  }
+  return ''
+}
+
+const createDefaultTableFooter = (columns) => {
+  const footerRow = {}
+
+  columns.forEach((column, index) => {
+    const field = String(column?.field || `col${index + 1}`).trim()
+    const variable = getTableFooterVariable(column)
+    footerRow[field] = {
+      value: index === 0 ? '合计' : variable
+    }
+  })
+
+  return footerRow
+}
+
+const normalizeTableFooters = (design) => {
+  const cloned = JSON.parse(JSON.stringify(design || {}))
+  cloned.ext = {
+    ...(cloned.ext || {}),
+    availableVariables
+  }
+
+  ;(cloned.pages || []).forEach((page) => {
+    ;(page.elements || []).forEach((element) => {
+      if (!element || !['table', 'TABLE'].includes(element.type)) return
+      normalizeTableDetailBinding(element)
+      if (!Array.isArray(element.columns) || element.columns.length === 0) return
+
+      if (!Array.isArray(element.footerData) || element.footerData.length === 0) {
+        element.footerData = [createDefaultTableFooter(element.columns)]
+      }
+    })
+  })
+
+  return cloned
+}
+
+let footerFixTimer = null
+
+const ensureLiveTableFooters = () => {
+  const designer = designerRef.value
+  const pages = designer?.designerStore?.pages
+  if (!Array.isArray(pages)) return
+
+  pages.forEach((page) => {
+    ;(page.elements || []).forEach((element) => {
+      if (!element || !['table', 'TABLE'].includes(element.type)) return
+      normalizeTableDetailBinding(element)
+      if (!Array.isArray(element.columns) || element.columns.length === 0) return
+
+      if (!Array.isArray(element.footerData) || element.footerData.length === 0) {
+        element.footerData = [createDefaultTableFooter(element.columns)]
+      }
+    })
+  })
+}
+
+const startFooterFixTimer = () => {
+  if (footerFixTimer !== null) return
+  ensureLiveTableFooters()
+  footerFixTimer = window.setInterval(ensureLiveTableFooters, 300)
+}
+
+const stopFooterFixTimer = () => {
+  if (footerFixTimer === null) return
+  window.clearInterval(footerFixTimer)
+  footerFixTimer = null
+}
+
 const configureDesigner = async () => {
   const designer = designerRef.value
   if (!designer || configured.value || !designer.getTemplateData?.()) return
@@ -207,7 +407,8 @@ const configureDesigner = async () => {
   designer.setLanguage('zh')
   await designer.setTestData(defaultVariables, { merge: false })
   await designer.setTemplateVariables(defaultVariables, { merge: false })
-  designer.loadTemplateData(props.template?.design || defaultTemplateData)
+  designer.loadTemplateData(normalizeTableFooters(props.template?.design || defaultTemplateData))
+  startFooterFixTimer()
 }
 
 const openDesigner = async () => {
@@ -223,13 +424,18 @@ const openDesigner = async () => {
 watch(
   () => props.visible,
   (visible) => {
-    if (visible) openDesigner()
+    if (visible) {
+      openDesigner()
+    } else {
+      stopFooterFixTimer()
+    }
   }
 )
 
 const handlePreview = async () => {
   const designer = designerRef.value
   if (!designer) return
+  ensureLiveTableFooters()
   await designer.setVariables(defaultVariables, { merge: false })
   await designer.preview()
 }
@@ -237,6 +443,7 @@ const handlePreview = async () => {
 const handleSave = () => {
   const designer = designerRef.value
   if (!designer) return
+  ensureLiveTableFooters()
   emit('save', {
     ...props.template,
     name: templateName.value || props.template?.name || '销售三联单',
@@ -245,11 +452,13 @@ const handleSave = () => {
     pageWidth: 210,
     pageHeight: 140,
     enabled: props.template?.enabled !== false,
-    design: designer.getTemplateData()
+    design: normalizeTableFooters(designer.getTemplateData())
   })
 }
 
 const handleClose = () => emit('close')
+
+onBeforeUnmount(stopFooterFixTimer)
 </script>
 
 <style scoped>

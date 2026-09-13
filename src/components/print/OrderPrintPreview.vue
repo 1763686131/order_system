@@ -85,6 +85,63 @@ const getCellVariableKey = (cell) => {
   return match ? normalizeVariableKey(match[0]) : ''
 }
 
+const getTableFooterVariable = (column) => {
+  const field = String(column?.field || '').trim().toLowerCase()
+  const header = String(column?.header || '').trim()
+
+  if (field === 'packages' || field === 'package' || field === 'qtypackages' || header.includes('件数') || header.includes('包装')) {
+    return '@totalPackages'
+  }
+  if (field === 'quantity' || field === 'qty' || header.includes('数量')) {
+    return '@totalQuantity'
+  }
+  if (field === 'totalamount' || field === 'taxamount' || header.includes('含税金额')) {
+    return '@totalTaxAmount'
+  }
+  if (field === 'amount' || field === 'total' || header.includes('金额')) {
+    return '@totalAmount'
+  }
+  return ''
+}
+
+const createDefaultTableFooter = (columns) => columns.reduce((row, column, index) => {
+  const field = String(column?.field || `col${index + 1}`).trim()
+  const variable = getTableFooterVariable(column)
+  row[field] = { value: index === 0 ? '合计' : variable }
+  return row
+}, {})
+
+const fillTableFooterDefaults = (element) => {
+  const columns = Array.isArray(element?.columns) ? element.columns : []
+  if (columns.length === 0) return
+
+  if (!Array.isArray(element.footerData) || element.footerData.length === 0) {
+    element.footerData = [createDefaultTableFooter(columns)]
+    return
+  }
+
+  element.footerData = element.footerData.map((row, rowIndex) => {
+    const nextRow = { ...(row || {}) }
+
+    columns.forEach((column, columnIndex) => {
+      const field = String(column?.field || `col${columnIndex + 1}`).trim()
+      const variable = getTableFooterVariable(column)
+      if (!variable && !(rowIndex === 0 && columnIndex === 0)) return
+
+      const current = nextRow[field]
+      const currentValue = current && typeof current === 'object' ? current.value : current
+      if (currentValue !== undefined && currentValue !== null && String(currentValue) !== '') return
+
+      nextRow[field] = {
+        ...(current && typeof current === 'object' ? current : {}),
+        value: rowIndex === 0 && columnIndex === 0 ? '合计' : variable
+      }
+    })
+
+    return nextRow
+  })
+}
+
 const clonePreviewDesign = (design, variables) => {
   const cloned = JSON.parse(JSON.stringify(design))
   const runtimeVariables = variables && typeof variables === 'object' ? variables : {}
@@ -95,7 +152,7 @@ const clonePreviewDesign = (design, variables) => {
     ...runtimeVariables
   }
 
-  if (!items.length || !Array.isArray(cloned.pages)) {
+  if (!Array.isArray(cloned.pages)) {
     return cloned
   }
 
@@ -132,6 +189,10 @@ const clonePreviewDesign = (design, variables) => {
       const columnsVariableKey = normalizeVariableKey(element.columnsVariable)
       const footerDataVariableKey = normalizeVariableKey(element.footerDataVariable)
 
+      // 自定义表格默认没有 footerData，打开“显示表脚”也不会凭空生成表脚行。
+      // 预览时补一行可绑定订单合计的表脚，用户仍可在设计器中继续编辑它。
+      fillTableFooterDefaults(element)
+
       // @items 是明细数据源，不是列定义或页脚数据源。
       // 如果设计器误把它保存到了这两个属性，必须清掉，否则列标题会被
       // 商品对象覆盖，最终只剩下空白表格。
@@ -140,6 +201,10 @@ const clonePreviewDesign = (design, variables) => {
       }
       if (footerDataVariableKey === 'items') {
         element.footerDataVariable = ''
+      }
+
+      if (items.length === 0) {
+        return
       }
 
       columns.forEach((column) => {
@@ -198,6 +263,18 @@ const clonePreviewDesign = (design, variables) => {
           })
           return nextRow
         })
+        element.footerData = (element.footerData || []).map((row) => {
+          const nextRow = { ...row }
+          fieldMap.forEach((targetField, sourceField) => {
+            if (sourceField === targetField || row?.[sourceField] === undefined) return
+            if (nextRow[targetField] === undefined) {
+              nextRow[targetField] = nextRow[sourceField]
+            }
+            delete nextRow[sourceField]
+          })
+          return nextRow
+        })
+        fillTableFooterDefaults(element)
       }
 
       const serialized = JSON.stringify({
