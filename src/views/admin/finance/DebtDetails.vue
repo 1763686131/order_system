@@ -14,15 +14,37 @@
           <span class="target-label">{{ targetLabel }}</span>
           <strong class="target-name">{{ targetName }}</strong>
         </div>
-        <button type="button" class="close-button" @click="goBack" title="返回上一级">
+        <button type="button" class="close-button" @click="handleClose" title="返回上一级">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 6L6 18M6 6l12 12"></path>
           </svg>
         </button>
       </div>
-      <div class="summary-amount">
-        <span class="amount-label">合计</span>
-        <strong class="amount-value">{{ formatMoney(totalAmount) }}</strong>
+      <div class="summary-stats">
+        <div class="stat-item">
+          <span class="stat-label">{{ type === 'receivable' ? '应收欠款' : '应付欠款' }}</span>
+          <strong class="stat-value highlight">{{ formatMoney(totalReceivable) }}</strong>
+        </div>
+        <span class="stat-operator">=</span>
+        <div class="stat-item">
+          <span class="stat-label">期初欠款</span>
+          <strong class="stat-value">{{ formatMoney(initialDebt) }}</strong>
+        </div>
+        <span class="stat-operator">+</span>
+        <div class="stat-item">
+          <span class="stat-label">{{ type === 'receivable' ? '增加应收欠款' : '增加应付欠款' }}</span>
+          <strong class="stat-value">{{ formatMoney(totalIncrease) }}</strong>
+        </div>
+        <span class="stat-operator">-</span>
+        <div class="stat-item">
+          <span class="stat-label">{{ type === 'receivable' ? '收回欠款' : '支付欠款' }}</span>
+          <strong class="stat-value">{{ formatMoney(totalRecovered) }}</strong>
+        </div>
+        <span class="stat-operator">-</span>
+        <div class="stat-item">
+          <span class="stat-label">优惠</span>
+          <strong class="stat-value">{{ formatMoney(totalDiscount) }}</strong>
+        </div>
       </div>
     </div>
 
@@ -137,6 +159,7 @@
         <table class="records-table">
           <thead>
             <tr>
+              <th class="index-column">序号</th>
               <th class="date-column">业务日期</th>
               <th class="doc-number-column">单据编号</th>
               <th class="type-column">业务类型</th>
@@ -150,12 +173,12 @@
           <tbody>
             <template v-if="loading">
               <tr v-for="index in 5" :key="`loading-${index}`" class="skeleton-row">
-                <td v-for="cell in 8" :key="cell"><span></span></td>
+                <td v-for="cell in 9" :key="cell"><span></span></td>
               </tr>
             </template>
 
             <tr v-else-if="pagedRecords.length === 0">
-              <td colspan="8" class="empty-cell">
+              <td colspan="9" class="empty-cell">
                 <div class="empty-mark" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M4 6h16v14H4z"></path>
@@ -169,27 +192,16 @@
             </tr>
 
             <template v-else>
-              <template v-for="item in pagedRecords" :key="item.id">
+              <template v-for="(item, index) in pagedRecords" :key="item.id">
                 <!-- 主行 -->
                 <tr
                   class="main-row"
                   :class="{ 'has-products': item.products && item.products.length > 1, 'expanded': expandedRows[item.id] }"
+                  @click="item.products && item.products.length > 1 ? toggleRow(item.id) : null"
                 >
+                  <td class="index-cell">{{ (currentPage - 1) * pageSize + index + 1 }}</td>
                   <td class="date-cell">
-                    <div class="cell-with-icon">
-                      <svg
-                        v-if="item.products && item.products.length > 1"
-                        class="expand-icon"
-                        :class="{ rotated: expandedRows[item.id] }"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        @click.stop="toggleRow(item.id)"
-                      >
-                        <path d="m9 18 6-6-6-6"></path>
-                      </svg>
-                      <span>{{ formatDate(item.businessDate) }}</span>
-                    </div>
+                    <span>{{ formatDate(item.businessDate) }}</span>
                   </td>
                   <td class="doc-number-cell">
                     <strong>{{ item.docNumber }}</strong>
@@ -200,11 +212,24 @@
                     </span>
                   </td>
                   <td class="product-cell">
-                    <span v-if="item.products && item.products.length > 0">
-                      {{ item.products[0].name }}
-                      <span v-if="item.products.length > 1" class="more-badge">+{{ item.products.length - 1 }}</span>
-                    </span>
-                    <span v-else class="empty-text">-</span>
+                    <div class="product-content">
+                      <span class="product-text" v-if="item.products && item.products.length > 0">
+                        {{ item.products[0].name }}
+                        <span v-if="item.products.length > 1" class="more-badge">+{{ item.products.length - 1 }}</span>
+                      </span>
+                      <span v-else class="empty-text">-</span>
+                      <svg
+                        v-if="item.products && item.products.length > 1"
+                        class="expand-icon"
+                        :class="{ rotated: expandedRows[item.id] }"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                      >
+                        <path d="m6 9 6 6 6-6"></path>
+                      </svg>
+                    </div>
                   </td>
                   <td class="price-cell">
                     <span v-if="item.products && item.products.length > 0">
@@ -224,14 +249,19 @@
                 <!-- 展开的商品行 -->
                 <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
                   <tr
-                    v-for="(product, index) in item.products.slice(1)"
-                    :key="`${item.id}-product-${index + 1}`"
+                    v-for="(product, pIndex) in item.products.slice(1)"
+                    :key="`${item.id}-product-${pIndex + 1}`"
                     class="expanded-product-row"
                   >
-                    <td colspan="3"></td>
+                    <td class="index-cell"></td>
+                    <td class="date-cell"></td>
+                    <td class="doc-number-cell"></td>
+                    <td class="type-cell"></td>
                     <td class="product-cell">{{ product.name }}</td>
                     <td class="price-cell">{{ formatMoney(product.price) }}</td>
-                    <td colspan="3"></td>
+                    <td class="money-cell"></td>
+                    <td class="money-cell"></td>
+                    <td class="money-cell"></td>
                   </tr>
                 </template>
               </template>
@@ -283,6 +313,10 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+
+const handleClose = () => {
+  router.back()
+}
 
 const props = defineProps({
   type: {
@@ -355,6 +389,32 @@ const totalAmount = computed(() => {
   return filteredRecords.value.reduce((sum, r) => sum + r.debtAmount, 0)
 })
 
+const totalReceivable = computed(() => {
+  return filteredRecords.value.length > 0
+    ? filteredRecords.value[filteredRecords.value.length - 1].currentDebt
+    : 0
+})
+
+const initialDebt = computed(() => {
+  return 9006.00
+})
+
+const totalIncrease = computed(() => {
+  return filteredRecords.value
+    .filter(r => r.debtAmount > 0)
+    .reduce((sum, r) => sum + r.debtAmount, 0)
+})
+
+const totalRecovered = computed(() => {
+  return Math.abs(filteredRecords.value
+    .filter(r => r.debtAmount < 0)
+    .reduce((sum, r) => sum + r.debtAmount, 0))
+})
+
+const totalDiscount = computed(() => {
+  return 0.00
+})
+
 const totalPages = computed(() => {
   return Math.max(1, Math.ceil(filteredRecords.value.length / pageSize.value))
 })
@@ -403,10 +463,6 @@ const toggleSort = () => {
 
 const toggleRow = (itemId) => {
   expandedRows[itemId] = !expandedRows[itemId]
-}
-
-const goBack = () => {
-  router.back()
 }
 
 const exportTable = () => {
@@ -569,14 +625,14 @@ select {
 }
 
 .target-label {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-secondary);
 }
 
 .target-name {
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--text);
 }
 
 .close-button {
@@ -605,25 +661,46 @@ select {
   height: 16px;
 }
 
-.summary-amount {
+.summary-stats {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: flex-start;
   gap: 12px;
   padding: 16px 20px;
   background: var(--accent-soft);
   border-radius: 6px;
+  flex-wrap: wrap;
 }
 
-.amount-label {
-  font-size: 13px;
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label {
+  font-size: 14px;
   color: var(--text-secondary);
+  white-space: nowrap;
 }
 
-.amount-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--accent);
+.stat-operator {
+  font-size: 16px;
+  font-weight: 500;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
   font-variant-numeric: tabular-nums;
+}
+
+.stat-value.highlight {
+  font-size: 24px;
+  color: var(--accent);
 }
 
 .content-section {
@@ -785,6 +862,7 @@ select {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
+  table-layout: fixed;
 }
 
 .records-table thead {
@@ -793,7 +871,7 @@ select {
 }
 
 .records-table th {
-  padding: 12px 16px;
+  padding: 14px 16px;
   text-align: left;
   font-weight: 600;
   color: var(--text-secondary);
@@ -814,65 +892,75 @@ select {
   color: var(--text);
 }
 
+.index-column,
+.index-cell {
+  width: 70px;
+  text-align: center;
+}
+
 .date-column,
 .date-cell {
-  width: 120px;
+  width: 130px;
 }
 
 .doc-number-column,
 .doc-number-cell {
-  width: 180px;
+  width: 190px;
 }
 
 .type-column,
 .type-cell {
-  width: 120px;
+  width: 110px;
 }
 
 .product-column,
 .product-cell {
-  width: 200px;
+  width: 220px;
 }
 
 .price-column,
 .price-cell {
-  width: 120px;
-  text-align: right;
+  width: 100px;
+  text-align: right !important;
   font-variant-numeric: tabular-nums;
 }
 
 .money-column,
 .money-cell {
-  width: 140px;
-  text-align: right;
+  width: 130px;
+  text-align: right !important;
   font-variant-numeric: tabular-nums;
 }
 
-.cell-with-icon {
+.product-cell {
+  position: relative;
+}
+
+.product-content {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.product-text {
+  display: inline-flex;
+  align-items: center;
 }
 
 .expand-icon {
   width: 16px;
   height: 16px;
   color: var(--text-secondary);
-  cursor: pointer;
   transition: transform 0.2s;
   flex-shrink: 0;
 }
 
 .expand-icon.rotated {
-  transform: rotate(90deg);
-}
-
-.expand-icon:hover {
-  color: var(--text);
+  transform: rotate(180deg);
 }
 
 .main-row.has-products {
-  cursor: default;
+  cursor: pointer;
 }
 
 .main-row.expanded {

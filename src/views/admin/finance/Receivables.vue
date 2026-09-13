@@ -278,7 +278,10 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import request from '@/api/request'
+
+const router = useRouter()
 
 const receivables = ref([])
 const allReceivables = ref([])
@@ -440,10 +443,10 @@ const showPendingFeature = (action, item) => {
 }
 
 const viewDebtDetails = (item) => {
-  window.open(
-    `/admin/finance/debt-details/receivable/${item.customerId}?name=${encodeURIComponent(item.customerName || '')}`,
-    '_blank'
-  )
+  router.push({
+    path: `/admin/finance/debt-details/receivable/${item.customerId}`,
+    query: { name: item.customerName || '' }
+  })
 }
 
 watch(totalPages, pages => {
