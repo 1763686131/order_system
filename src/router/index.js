@@ -212,6 +212,12 @@ const routes = [
         name: 'admin-hr-reports',
         component: () => import('@/views/admin/hr/Reports.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'system/print-template',
+        name: 'admin-print-template',
+        component: () => import('@/views/admin/system/PrintTemplate.vue'),
+        meta: { requiresAuth: true }
       }
     ]
   }
