@@ -254,10 +254,20 @@
                     <span v-else class="empty-text">-</span>
                   </td>
                   <td class="money-cell" :class="item.debtAmount > 0 ? 'increase-amount' : 'decrease-amount'">
-                    {{ formatMoney(item.debtAmount) }}
+                    <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
+                      {{ formatMoney(calculateProductDebt(item, 0)) }}
+                    </template>
+                    <template v-else>
+                      {{ formatMoney(item.debtAmount) }}
+                    </template>
                   </td>
                   <td class="money-cell current-debt-cell">
-                    <strong>{{ formatMoney(item.currentDebt) }}</strong>
+                    <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
+                      <strong>{{ formatMoney(calculateProductCurrentDebt((currentPage - 1) * pageSize + index, 0)) }}</strong>
+                    </template>
+                    <template v-else>
+                      <strong>{{ formatMoney(item.currentDebt) }}</strong>
+                    </template>
                   </td>
                 </tr>
 
@@ -278,8 +288,12 @@
                     <td class="price-cell">{{ formatMoney(product.price) }}</td>
                     <td class="money-cell"></td>
                     <td class="money-cell"></td>
-                    <td class="money-cell"></td>
-                    <td class="money-cell"></td>
+                    <td class="money-cell" :class="calculateProductDebt(item, pIndex + 1) > 0 ? 'increase-amount' : 'decrease-amount'">
+                      {{ formatMoney(calculateProductDebt(item, pIndex + 1)) }}
+                    </td>
+                    <td class="money-cell current-debt-cell">
+                      <strong>{{ formatMoney(calculateProductCurrentDebt((currentPage - 1) * pageSize + index, pIndex + 1)) }}</strong>
+                    </td>
                   </tr>
                 </template>
               </template>
@@ -476,6 +490,73 @@ const formatBusinessType = (type) => {
     DISCOUNT: '优惠调整'
   }
   return typeMap[type] || type
+}
+
+// 计算商品级别的分摊欠款
+const calculateProductDebt = (item, productIndex) => {
+  if (!item.products || item.products.length === 0) {
+    return 0
+  }
+
+  // 计算总金额（所有商品的小计）
+  const totalAmount = item.products.reduce((sum, p) => {
+    return sum + (p.quantity || 1) * (p.price || 0)
+  }, 0)
+
+  if (totalAmount === 0) {
+    return item.debtAmount / item.products.length
+  }
+
+  // 当前商品的小计
+  const product = item.products[productIndex]
+  const productAmount = (product.quantity || 1) * (product.price || 0)
+
+  // 按比例分摊欠款
+  return (productAmount / totalAmount) * item.debtAmount
+}
+
+// 计算展开后商品行的当前欠款（累计值）
+const calculateProductCurrentDebt = (pageIndex, productIndex) => {
+  const item = pagedRecords.value[pageIndex]
+  if (!item) return 0
+
+  // 从所有已筛选的记录中找到这条记录之前的所有欠款
+  const recordIndex = filteredRecords.value.findIndex(r => r.id === item.id)
+  if (recordIndex === -1) return 0
+
+  // 累计到当前记录之前的所有欠款（不包括当前记录）
+  let cumulativeBefore = initialDebt.value
+  for (let i = 0; i < recordIndex; i++) {
+    const sortedForCalculation = [...filteredRecords.value].sort((a, b) => {
+      const dateA = new Date(a.businessDate)
+      const dateB = new Date(b.businessDate)
+      return dateA - dateB
+    })
+    cumulativeBefore = initialDebt.value
+    for (let j = 0; j <= i; j++) {
+      cumulativeBefore += sortedForCalculation[j].debtAmount
+    }
+  }
+
+  // 重新按时间排序计算
+  const sortedRecords = [...filteredRecords.value].sort((a, b) => {
+    const dateA = new Date(a.businessDate)
+    const dateB = new Date(b.businessDate)
+    return dateA - dateB
+  })
+
+  const sortedIndex = sortedRecords.findIndex(r => r.id === item.id)
+  let cumulative = initialDebt.value
+  for (let i = 0; i < sortedIndex; i++) {
+    cumulative += sortedRecords[i].debtAmount
+  }
+
+  // 加上当前记录中，当前商品及之前商品的分摊欠款
+  for (let i = 0; i <= productIndex; i++) {
+    cumulative += calculateProductDebt(item, i)
+  }
+
+  return cumulative
 }
 
 const handleSearch = () => {
