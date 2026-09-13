@@ -290,15 +290,24 @@
         </div>
       </Transition>
     </Teleport>
+
+    <PrintDesignerEditor
+      :visible="showDesigner"
+      :template="designerTemplate"
+      @save="handleDesignerSave"
+      @close="closeDesigner"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import PrintDesignerEditor from '@/components/print/PrintDesignerEditor.vue'
 
 // ==================== 数据 ====================
 const loading = ref(false)
 const templates = ref([])
+const templateStorageKey = 'order-system-print-templates'
 
 const searchForm = ref({
   templateName: '',
@@ -307,6 +316,8 @@ const searchForm = ref({
 })
 
 const showTemplateModal = ref(false)
+const showDesigner = ref(false)
+const designerTemplate = ref(null)
 const isEditing = ref(false)
 const templateForm = ref({
   id: null,
@@ -366,28 +377,48 @@ const handleRefresh = () => {
 }
 
 const handleCreate = () => {
-  isEditing.value = false
-  templateForm.value = {
+  designerTemplate.value = {
     id: null,
-    name: '',
-    businessType: '',
-    paperType: '',
+    name: '销售三联单',
+    businessType: 'sale',
+    paperType: '三联单',
     pageWidth: 210,
     pageHeight: 140,
     enabled: true,
-    isDefault: false
+    isDefault: false,
+    design: null
   }
-  showTemplateModal.value = true
+  showDesigner.value = true
 }
 
 const handleDesign = (template) => {
-  console.log('设计模板:', template)
-  // TODO: 跳转到设计器页面或打开设计器弹窗
+  designerTemplate.value = template
+  showDesigner.value = true
+}
+
+const handleView = (template) => {
+  handleDesign(template)
+}
+
+const closeDesigner = () => {
+  showDesigner.value = false
+  designerTemplate.value = null
+}
+
+const handleDesignerSave = (template) => {
+  const existingIndex = templates.value.findIndex((item) => item.id === template.id)
+  if (existingIndex >= 0) {
+    templates.value[existingIndex] = { ...templates.value[existingIndex], ...template }
+  } else {
+    templates.value.push({ ...template, id: Date.now() })
+  }
+  localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
+  closeDesigner()
 }
 
 const handlePreview = (template) => {
-  console.log('查看设计:', template)
-  // TODO: 打开预览弹窗
+  designerTemplate.value = template
+  showDesigner.value = true
 }
 
 const handleSetDefault = (template) => {
@@ -413,6 +444,7 @@ const handleDelete = (template) => {
     if (index > -1) {
       templates.value.splice(index, 1)
     }
+    localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
     console.log('已删除:', template)
   }
 }
@@ -452,50 +484,61 @@ const handleSaveTemplate = () => {
 
 const loadTemplates = () => {
   loading.value = true
-  // 模拟加载数据
   setTimeout(() => {
-    templates.value = [
-      {
-        id: 1,
-        name: '墨绿产品代码模板',
-        businessType: 'sale',
-        paperType: '二等分',
-        pageWidth: 210,
-        pageHeight: 139,
-        isDefault: true,
-        enabled: true
-      },
-      {
-        id: 2,
-        name: '销售单无毛叠加运生托货款',
-        businessType: 'sale',
-        paperType: '二等分',
-        pageWidth: 210,
-        pageHeight: 139,
-        isDefault: false,
-        enabled: true
-      },
-      {
-        id: 3,
-        name: '销售单无单价板',
-        businessType: 'sale',
-        paperType: '二等分',
-        pageWidth: 210,
-        pageHeight: 140,
-        isDefault: false,
-        enabled: true
-      },
-      {
-        id: 4,
-        name: '销售单有单价板',
-        businessType: 'sale',
-        paperType: '二等分',
-        pageWidth: 210,
-        pageHeight: 140,
-        isDefault: false,
-        enabled: true
+    const storedTemplates = localStorage.getItem(templateStorageKey)
+    if (storedTemplates) {
+      try {
+        const parsedTemplates = JSON.parse(storedTemplates)
+        templates.value = Array.isArray(parsedTemplates) ? parsedTemplates : []
+      } catch {
+        templates.value = []
       }
-    ]
+    }
+    if (!templates.value.length) {
+      templates.value = [
+        {
+          id: 1,
+          name: '墨绿产品代码模板',
+          businessType: 'sale',
+          paperType: '二等分',
+          pageWidth: 210,
+          pageHeight: 139,
+          isDefault: true,
+          enabled: true
+        },
+        {
+          id: 2,
+          name: '销售单无毛叠加运生托货款',
+          businessType: 'sale',
+          paperType: '二等分',
+          pageWidth: 210,
+          pageHeight: 139,
+          isDefault: false,
+          enabled: true
+        },
+        {
+          id: 3,
+          name: '销售单无单价板',
+          businessType: 'sale',
+          paperType: '二等分',
+          pageWidth: 210,
+          pageHeight: 140,
+          isDefault: false,
+          enabled: true
+        },
+        {
+          id: 4,
+          name: '销售单有单价板',
+          businessType: 'sale',
+          paperType: '二等分',
+          pageWidth: 210,
+          pageHeight: 140,
+          isDefault: false,
+          enabled: true
+        }
+      ]
+      localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
+    }
     loading.value = false
   }, 500)
 }
