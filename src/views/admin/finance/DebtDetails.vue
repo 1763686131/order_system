@@ -473,7 +473,7 @@ const formatMoney = (value) => {
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
-  return String(dateStr).replace('T', ' ').slice(0, 19)
+  return String(dateStr).slice(0, 10)
 }
 
 const formatBusinessType = (type) => {
