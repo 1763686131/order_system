@@ -682,12 +682,27 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- 自定义弹窗 -->
+    <CustomModal
+      v-model:visible="modal.visible"
+      :type="modal.type"
+      :title="modal.title"
+      :message="modal.message"
+      :confirm-text="modal.confirmText"
+      :cancel-text="modal.cancelText"
+      :show-cancel="modal.showCancel"
+      :danger="modal.danger"
+      @confirm="handleModalConfirm"
+      @cancel="handleModalCancel"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import request from '@/api/request'
+import CustomModal from '@/components/CustomModal.vue'
 
 // 数据状态
 const loading = ref(false)
@@ -707,6 +722,19 @@ const showEditModal = ref(false)
 const isEditMode = ref(false)
 const selectedCustomer = ref(null)
 const submitting = ref(false)
+
+// 自定义弹窗状态
+const modal = ref({
+  visible: false,
+  type: 'warning',
+  title: '',
+  message: '',
+  confirmText: '确定',
+  cancelText: '取消',
+  showCancel: true,
+  danger: false,
+  onConfirm: null
+})
 
 // 分页
 const currentPage = ref(1)
@@ -769,7 +797,46 @@ const paginatedCustomers = computed(() => {
 const pageStart = computed(() => filteredCustomers.value.length ? (currentPage.value - 1) * pageSize.value + 1 : 0)
 const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredCustomers.value.length))
 
-// 方法
+// 显示提示弹窗
+const showAlert = (message, type = 'success', title = '') => {
+  modal.value = {
+    visible: true,
+    type: type,
+    title: title || (type === 'success' ? '操作成功' : type === 'error' ? '操作失败' : '提示'),
+    message: message,
+    confirmText: '确定',
+    showCancel: false,
+    danger: false,
+    onConfirm: null
+  }
+}
+
+// 显示确认弹窗
+const showConfirm = (message, title = '确认操作', onConfirm, danger = false) => {
+  modal.value = {
+    visible: true,
+    type: 'warning',
+    title: title,
+    message: message,
+    confirmText: danger ? '确定删除' : '确定',
+    cancelText: '取消',
+    showCancel: true,
+    danger: danger,
+    onConfirm: onConfirm
+  }
+}
+
+// 处理弹窗确认
+const handleModalConfirm = () => {
+  if (modal.value.onConfirm) {
+    modal.value.onConfirm()
+  }
+}
+
+// 处理弹窗取消
+const handleModalCancel = () => {
+  modal.value.visible = false
+}
 const loadStores = async () => {
   try {
     const response = await request({
@@ -871,25 +938,30 @@ const handleEdit = (customer) => {
 }
 
 const handleDelete = async (customer) => {
-  if (!confirm(`确定要删除客户"${customer.customerName}"吗？`)) return
-
-  try {
-    await request({
-      url: `/customers/${customer.id}`,
-      method: 'DELETE'
-    })
-    alert('删除成功')
-    closeDetailModal()
-    await loadCustomers()
-  } catch (error) {
-    console.error('删除失败:', error)
-    alert('删除失败：' + (error.response?.data?.error || error.message))
-  }
+  showConfirm(
+    `确定要删除客户"${customer.customerName}"吗？`,
+    '删除确认',
+    async () => {
+      try {
+        await request({
+          url: `/customers/${customer.id}`,
+          method: 'DELETE'
+        })
+        showAlert('删除成功', 'success')
+        closeDetailModal()
+        await loadCustomers()
+      } catch (error) {
+        console.error('删除失败:', error)
+        showAlert(error.response?.data?.error || error.message || '删除失败', 'error', '删除失败')
+      }
+    },
+    true
+  )
 }
 
 const handleSubmit = async () => {
   if (!formData.value.customerName || !formData.value.customerCode || !formData.value.storeId) {
-    alert('请填写必填项')
+    showAlert('请填写必填项', 'warning', '提示')
     return
   }
 
@@ -897,7 +969,7 @@ const handleSubmit = async () => {
   try {
     if (isEditMode.value) {
       if (!formData.value.id) {
-        alert('客户ID缺失，无法保存')
+        showAlert('客户ID缺失，无法保存', 'error', '错误')
         return
       }
       await request({
@@ -905,20 +977,20 @@ const handleSubmit = async () => {
         method: 'PUT',
         data: formData.value
       })
-      alert('保存成功')
+      showAlert('保存成功', 'success')
     } else {
       await request({
         url: '/customers',
         method: 'POST',
         data: formData.value
       })
-      alert('创建成功')
+      showAlert('创建成功', 'success')
     }
     closeEditModal()
     await loadCustomers()
   } catch (error) {
     console.error('保存失败:', error)
-    alert(error.response?.data?.error || '保存失败')
+    showAlert(error.response?.data?.error || '保存失败', 'error', '保存失败')
   } finally {
     submitting.value = false
   }
@@ -953,7 +1025,7 @@ const closeEditModal = () => {
 }
 
 const handleExport = () => {
-  alert('导出功能待实现')
+  showAlert('导出功能待实现', 'info', '提示')
 }
 
 const formatAmount = (amount) => {

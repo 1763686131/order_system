@@ -8,7 +8,7 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 应用版本 | `3.0.0` |
+| 应用版本 | `3.1.0` |
 | 文档更新 | `2026-09-14` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX |
 | 后端 | Python、Flask、SQLite |
@@ -35,6 +35,25 @@
 - 原材料使用/生产流水记录
 
 ## 2026-09-14 更新
+
+### 客户财务管理优化
+
+- **客户期初欠款与储值**：客户数据增加 `initial_receivable`（期初欠款）、`initial_receivable_at`（期初欠款录入时间）、`balance`（储值余额）、`balance_at`（储值调整时间）四个字段。
+- **客户编辑弹窗**：支持录入和修改期初欠款与储值余额，录入时自动生成时间戳，修改时更新时间戳为当前时间。
+- **数据清除规则**：输入 0 或留空保存时，系统会清除对应的金额和时间戳；修改期初欠款会自动重新计算客户的应收欠款总额。
+- **对账单集成**：客户对账单接口返回期初欠款和储值作为独立记录，businessType 分别为 `INITIAL` 和 `BALANCE`，按时间排序并计入累计欠款计算。
+- **视觉标识**：期初欠款记录使用黄色标签，储值记录使用蓝色标签，与普通订单和收款记录明确区分。
+- **后端逻辑修复**：修复 SQLite 参数绑定类型错误，所有 Decimal 数值在执行 SQL 前显式转换为 float 类型，确保数据库操作稳定可靠。
+
+### 自定义弹窗组件
+
+- **替代浏览器原生弹窗**：根据设计规范 `docs/组件样式规范.md` 要求，使用自定义 CustomModal 组件替代所有 `alert()` 和 `confirm()` 原生弹窗。
+- **统一视觉风格**：弹窗设计完全符合项目视觉规范，包括颜色、字体、圆角、阴影、按钮样式和动画效果，提供一致的用户体验。
+- **三种弹窗类型**：支持 success（成功）、error（错误）、warning（警告）三种类型，每种类型使用不同的图标颜色和语义。
+- **危险操作确认**：删除等危险操作使用红色确认按钮，并要求明确的二次确认，防止误操作。
+- **移动端适配**：弹窗在移动端自动调整宽度和间距，保持良好的响应式体验。
+- **优雅动画**：进入和退出动画使用透明度 + 轻微上移，符合设计规范的克制原则。
+- **通用封装**：提供 `showAlert()` 和 `showConfirm()` 辅助函数，简化弹窗调用，所有业务页面统一使用。
 
 ### 订单录入与列表
 
@@ -199,6 +218,7 @@ order_system/
 │  │  ├─ material.js                 # 原材料业务流水
 │  │  └─ nomi.js                     # 辅助工具状态
 │  ├─ components/
+│  │  ├─ CustomModal.vue             # 自定义通用弹窗组件（符合设计规范）
 │  │  ├─ common/
 │  │  │  ├─ StockInOrderModal.vue    # 原材料/成品共用入库弹窗
 │  │  │  ├─ ConfirmModal.vue         # 通用确认弹窗
@@ -227,11 +247,12 @@ order_system/
 │  │     │  └─ ReturnOrderForm.vue   # 退货单录入和编辑表单
 │  │     ├─ inventory/               # 仓库管理
 │  │     ├─ customers/               # 客户管理
+│  │     │  └─ CustomerList.vue      # 客户列表、编辑弹窗（支持期初欠款和储值管理）
 │  │     ├─ finance/
 │  │     │  ├─ Receivables.vue        # 客户应收欠款汇总
 │  │     │  ├─ PaymentHistory.vue     # 收款历史、收款单录入与审核
 │  │     │  ├─ BankAccounts.vue       # 银行账户管理（卡片展示、翻转查看余额）
-│  │     │  ├─ DebtDetails.vue        # 欠款详情页面（应收/应付通用）
+│  │     │  ├─ DebtDetails.vue        # 欠款详情页面（应收/应付通用，显示期初欠款和储值记录）
 │  │     │  └─ ...                   # 物流、快递运费对账
 │  │     ├─ system/                  # 用户、角色、门店和系统配置
 │  │     │  └─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
@@ -264,8 +285,11 @@ order_system/
 
 ### 账户口径
 
-- `customers.initial_receivable` 保存客户期初欠款。
-- `customers.receivable` 保存当前应收欠款，欠款始终使用正数。
+- `customers.initial_receivable` 保存客户期初欠款，`initial_receivable_at` 保存录入或最后修改时间。
+- `customers.balance` 保存客户储值余额，`balance_at` 保存储值调整时间。
+- `customers.receivable` 保存客户当前应收欠款，由期初欠款、订单欠款、收款和退货联动计算。
+- 修改期初欠款时，应收欠款自动调整：`新应收 = 旧应收 - 旧期初欠款 + 新期初欠款`。
+- 输入 0 或留空保存客户时，系统会清空对应的金额字段和时间戳字段。tomers.receivable` 保存当前应收欠款，欠款始终使用正数。
 - `customers.balance` 保存客户可用的预收储值余额。
 - 客户账户净额按 `balance - receivable` 计算；结果为负数表示客户仍有欠款。
 - `customer_account_transactions` 保存订单审核、收款审核及其反审核流水，用于后续对账和追溯。

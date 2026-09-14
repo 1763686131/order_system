@@ -10,10 +10,11 @@
 
 ## 版本历史
 
-- **v2.5** (2026-09-11) - 新增服务器路径配置、目录浏览和 NAS 检测报告动态扫描接口
-- **v2.6** (2026-09-14) - 新增退货单草稿、修改、审核、反审核及客户应收和库存联动接口
-- **v2.7** (2026-09-14) - 新增银行账户、银行卡图片上传及结算账户动态关联接口
+- **v3.0** (2026-09-14) - 客户期初欠款与储值字段优化，新增 `initial_receivable_at` 和 `balance_at` 时间戳字段
 - **v2.8** (2026-09-14) - 新增客户应收对账单详情接口，复用审核流水并支持商品级欠款分摊
+- **v2.7** (2026-09-14) - 新增银行账户、银行卡图片上传及结算账户动态关联接口
+- **v2.6** (2026-09-14) - 新增退货单草稿、修改、审核、反审核及客户应收和库存联动接口
+- **v2.5** (2026-09-11) - 新增服务器路径配置、目录浏览和 NAS 检测报告动态扫描接口
 - **v2.4** (2026-09-10) - 新增收款单、审核入账、反审核和客户应收联动接口
 - **v2.3** (2026-09-08) - 新增供应商、入库单、库存余额与事务过账接口
 - **v2.2** (2026-09-08) - 新增原材料商品档案接口，补充单位分组接口
@@ -1617,17 +1618,34 @@ receipt_image: File (图片文件)
 - `contactPerson`: 联系人
 - `phone`: 联系电话
 - `address`: 客户地址
-- `balance`: 当前储值余额
-- `balanceAt`: 当前储值余额最近一次录入/修改时间；储值为 0 时为 `null`
-- `initialReceivable`: 期初欠款金额
+- `balance`: 当前储值余额（客户预付款，可用于抵扣订单）
+- `balanceAt`: 储值余额最近一次录入/修改时间；储值为 0 时为 `null`
+- `initialReceivable`: 期初欠款金额（客户的历史欠款，作为应收起点）
 - `initialReceivableAt`: 期初欠款最近一次录入/修改时间；期初欠款为 0 时为 `null`
-- `receivable`: 当前应收欠款（期初欠款 + 审核订单新增欠款 - 已收回欠款）
+- `receivable`: 当前应收欠款（期初欠款 + 审核订单新增欠款 - 已收回欠款 - 优惠）
 - `bankName`: 开户行
 - `bankAccount`: 银行账号
 - `bankCode`: 银行代码
 - `taxNumber`: 税号
 - `remark`: 备注
 - `status`: 客户状态（active/inactive）
+
+**储值与期初欠款业务规则**:
+1. **录入新客户时**：
+   - 填入 `balance` 大于 0：自动生成 `balanceAt` 为当前时间
+   - 填入 `initialDebt` 大于 0：自动生成 `initialReceivableAt` 为当前时间，同时设置 `receivable = initialDebt`
+   - 留空或为 0：对应的金额和时间字段均为 `null`
+
+2. **修改客户时**：
+   - 修改 `balance` 为新值：更新 `balanceAt` 为当前时间
+   - 修改 `initialDebt` 为新值：更新 `initialReceivableAt` 为当前时间，并重新计算 `receivable = 旧receivable - 旧initialDebt + 新initialDebt`
+   - 输入 0 或留空：清空对应的金额字段和时间戳字段
+   - 如果修改期初欠款导致 `receivable < 0`，接口返回 400 错误
+
+3. **对账单显示**：
+   - 期初欠款和储值会在对账单接口中作为独立记录返回
+   - 期初欠款的 `businessType` 为 `INITIAL`，储值的 `businessType` 为 `BALANCE`
+   - 按时间排序时使用对应的时间戳字段
 
 ### 7.3 创建客户
 - **URL**: `/api/customers`
@@ -1675,7 +1693,20 @@ receipt_image: File (图片文件)
 }
 ```
 
-`balance` 表示储值，`initialDebt` 表示期初欠款。服务端会在金额大于 0 时自动记录对应的 `balanceAt` 或 `initialReceivableAt`。
+`balance` 表示储值余额，`initialDebt` 表示期初欠款。服务端会在金额大于 0 时自动记录对应的 `balanceAt` 或 `initialReceivableAt` 时间戳。
+
+**数据类型转换说明**：
+- 前端传递的 `balance` 和 `initialDebt` 会被后端转换为 float 类型
+- 所有财务计算使用 Decimal 类型确保精度，但在执行 SQL 前会显式转换为 float
+- 这样可以避免 SQLite 参数绑定的类型错误
+
+**示例场景**：
+1. 新增客户，期初欠款 5000 元，储值 0 元：
+   - `initialDebt: 5000` → `initialReceivable: 5000`, `initialReceivableAt: "2026-09-14T10:30:00"`, `receivable: 5000`
+   - `balance: 0` → `balance: 0`, `balanceAt: null`
+
+2. 客户充值 1000 元储值：
+   - `balance: 1000` → `balance: 1000`, `balanceAt: "2026-09-14T11:00:00"`
 
 ### 7.4 更新客户信息
 - **URL**: `/api/customers/<int:customer_id>`
@@ -1696,7 +1727,35 @@ receipt_image: File (图片文件)
 }
 ```
 
-更新客户时，`balance` 和 `initialDebt` 都是覆盖写入：传入新的正数会覆盖原金额并生成本次操作时间；传入 `0`、空字符串或空值时，会清除对应金额和时间字段。期初欠款的变化会同步调整客户当前应收，若调整后当前应收小于 0，接口返回 `400` 并拒绝保存。
+更新客户时，`balance` 和 `initialDebt` 都是覆盖写入：
+- 传入新的正数：覆盖原金额并更新时间戳为当前时间
+- 传入 `0`、空字符串或 `null`：清除对应金额字段和时间戳字段
+- 修改期初欠款：自动调整当前应收欠款 = `旧receivable - 旧initialDebt + 新initialDebt`
+- 若调整后当前应收小于 0：接口返回 `400` 错误并拒绝保存
+
+**数据库字段映射**：
+| 前端字段 | 后端字段 | 数据库字段 | 类型 | 说明 |
+|---------|---------|-----------|------|------|
+| balance | balance | balance | REAL | 储值余额 |
+| - | balanceAt | balance_at | TEXT | 储值调整时间 |
+| initialDebt | initial_receivable | initial_receivable | REAL | 期初欠款 |
+| - | initialReceivableAt | initial_receivable_at | TEXT | 期初欠款时间 |
+
+**修改示例**：
+1. 修改期初欠款从 5000 元到 8000 元：
+   - 旧数据：`receivable: 12000`, `initialReceivable: 5000`
+   - 新数据：`initialDebt: 8000`
+   - 结果：`receivable: 15000`, `initialReceivable: 8000`, `initialReceivableAt: "2026-09-14T14:30:00"`
+
+2. 清空期初欠款（输入 0）：
+   - 旧数据：`receivable: 12000`, `initialReceivable: 5000`
+   - 新数据：`initialDebt: 0`
+   - 结果：`receivable: 7000`, `initialReceivable: 0`, `initialReceivableAt: null`
+
+3. 修改储值从 0 到 2000 元：
+   - 旧数据：`balance: 0`, `balanceAt: null`
+   - 新数据：`balance: 2000`
+   - 结果：`balance: 2000`, `balanceAt: "2026-09-14T15:00:00"`
 
 **响应示例**:
 ```json
@@ -1837,10 +1896,51 @@ receipt_image: File (图片文件)
 **计算与状态规则**:
 
 1. 只纳入 `customer_account_transactions.status = 'active'` 的 `order_audit`、`customer_return`、`customer_payment` 流水；已反审核流水及反向流水不展示。当前期初欠款会生成一条 `INITIAL` 记录，当前储值会生成一条 `BALANCE` 记录。
-2. `debtAmount` 使用流水的 `receivable_change`：销售订单为正数，退货和收款通常为负数；因此能准确反映储值抵扣、实退核销及收款后的客户应收变化。
-3. `currentDebt` 按业务日期、流水 ID 顺序累计，`INITIAL` 记录作为累计起点，`BALANCE` 记录不改变应收欠款。接口内部按时间正序计算后返回，前端默认按最新时间倒序展示，因此修改期初欠款或储值后会显示在最新发生时间的位置。日期或业务类型筛选只影响列表，不改变累计欠款结果。
-4. `expandProducts=true` 时，商品按小计占比拆分 `debtAmount`；商品金额合计为 0 时平均分摊，最后一项用差额修正，确保分摊合计与本单欠款精确到分。
-5. 收款单不包含商品明细；优惠金额保留在原订单/收款流水字段中，接口不生成独立优惠调整行。
+
+2. **期初欠款记录格式**（businessType: INITIAL）：
+   ```json
+   {
+     "id": "initial-5",
+     "businessDate": "2026-09-01T12:58:31",
+     "docNumber": "期初欠款",
+     "businessType": "INITIAL",
+     "orderAmount": 5000.00,
+     "paidAmount": 0.00,
+     "debtAmount": 5000.00,
+     "currentDebt": 5000.00,
+     "products": [],
+     "hasMultipleProducts": false,
+     "productCount": 0,
+     "remark": "客户期初欠款"
+   }
+   ```
+
+3. **储值记录格式**（businessType: BALANCE）：
+   ```json
+   {
+     "id": "balance-5",
+     "businessDate": "2026-09-12T09:30:00",
+     "docNumber": "储值调整",
+     "businessType": "BALANCE",
+     "balanceAmount": 800.00,
+     "debtAmount": 0.00,
+     "currentDebt": 5000.00,
+     "products": [],
+     "hasMultipleProducts": false,
+     "productCount": 0,
+     "remark": "客户储值余额"
+   }
+   ```
+
+4. `debtAmount` 使用流水的 `receivable_change`：销售订单为正数，退货和收款通常为负数；因此能准确反映储值抵扣、实退核销及收款后的客户应收变化。期初欠款的 `debtAmount` 为正数，储值的 `debtAmount` 为 0（不影响应收欠款）。
+
+5. `currentDebt` 按业务日期、流水 ID 顺序累计，`INITIAL` 记录作为累计起点，`BALANCE` 记录不改变应收欠款。接口内部按时间正序计算后返回，前端默认按最新时间倒序展示（时间近的在上面），因此修改期初欠款或储值后会显示在最新发生时间的位置。日期或业务类型筛选只影响列表，不改变累计欠款结果。
+
+6. `expandProducts=true` 时，商品按小计占比拆分 `debtAmount`；商品金额合计为 0 时平均分摊，最后一项用差额修正，确保分摊合计与本单欠款精确到分。
+
+7. 收款单不包含商品明细；优惠金额保留在原订单/收款流水字段中，接口不生成独立优惠调整行。
+
+8. **前端视觉标识**：期初欠款记录使用黄色标签（#d97706 背景），储值记录使用蓝色标签（#0891b2 背景），与普通订单和收款记录明确区分。
 
 ---
 
