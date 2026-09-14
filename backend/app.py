@@ -38,6 +38,7 @@ from routes.stock_inbounds import stock_inbounds_bp
 from routes.payment_receipts import payment_receipts_bp
 from routes.returns import returns_bp
 from routes.bank_accounts import bank_accounts_bp, upload_bp as bank_account_upload_bp
+from routes.print_templates import print_templates_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(orders_bp)
@@ -55,6 +56,7 @@ app.register_blueprint(payment_receipts_bp)
 app.register_blueprint(returns_bp)
 app.register_blueprint(bank_accounts_bp)
 app.register_blueprint(bank_account_upload_bp)
+app.register_blueprint(print_templates_bp)
 
 # ==========================================
 # 健康检查接口

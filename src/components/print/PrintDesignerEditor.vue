@@ -408,6 +408,7 @@ const configureDesigner = async () => {
   await designer.setTestData(defaultVariables, { merge: false })
   await designer.setTemplateVariables(defaultVariables, { merge: false })
   designer.loadTemplateData(normalizeTableFooters(
+    props.template?.content ||
     props.template?.design ||
     props.template?.data ||
     defaultTemplateData
@@ -458,7 +459,7 @@ const handleSave = async () => {
     pageWidth: 210,
     pageHeight: 140,
     enabled: props.template?.enabled !== false,
-    design,
+    content: design,  // 后端期望的是 content 字段
     updatedAt: Date.now()
   })
 }

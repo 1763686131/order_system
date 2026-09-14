@@ -302,6 +302,14 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import {
+  getTemplates,
+  createTemplate,
+  updateTemplate,
+  deleteTemplate,
+  setDefaultTemplate,
+  migrateTemplates
+} from '@/api/printTemplate'
 import PrintDesignerEditor from '@/components/print/PrintDesignerEditor.vue'
 
 // ==================== 数据 ====================
@@ -372,8 +380,8 @@ const handleSearch = () => {
   console.log('执行搜索')
 }
 
-const handleRefresh = () => {
-  loadTemplates()
+const handleRefresh = async () => {
+  await loadTemplates()
 }
 
 const handleCreate = () => {
@@ -386,14 +394,34 @@ const handleCreate = () => {
     pageHeight: 140,
     enabled: true,
     isDefault: false,
-    design: null
+    content: null
   }
   showDesigner.value = true
 }
 
-const handleDesign = (template) => {
-  designerTemplate.value = template
-  showDesigner.value = true
+const handleDesign = async (template) => {
+  try {
+    // 保存模板的设计内容
+    const response = await updateTemplate(template.id, {
+      ...template,
+      content: designerTemplate.value?.content || template.content
+    })
+
+    if (response.success) {
+      designerTemplate.value = template
+      showDesigner.value = true
+
+      // 触发全局事件
+      window.dispatchEvent(new CustomEvent('order-system-print-templates-updated', {
+        detail: { id: template.id, updatedAt: new Date().toISOString() }
+      }))
+    } else {
+      alert(response.message || '加载设计器失败')
+    }
+  } catch (error) {
+    console.error('加载设计器失败:', error)
+    alert('加载设计器失败，请稍后重试')
+  }
 }
 
 const handleView = (template) => {
@@ -405,32 +433,51 @@ const closeDesigner = () => {
   designerTemplate.value = null
 }
 
-const handleDesignerSave = (template) => {
-  const nextId = template?.id ?? Date.now()
-  const savedTemplate = JSON.parse(JSON.stringify({
-    ...template,
-    id: nextId,
-    updatedAt: template?.updatedAt || Date.now()
-  }))
-  const existingIndex = templates.value.findIndex((item) => (
-    String(item.id) === String(nextId)
-  ))
+const handleDesignerSave = async (template) => {
+  try {
+    const nextId = template?.id ?? Date.now()
+    const savedTemplate = {
+      ...template,
+      id: nextId,
+      updatedAt: new Date().toISOString()
+    }
 
-  if (existingIndex >= 0) {
-    templates.value.splice(existingIndex, 1, {
-      ...templates.value[existingIndex],
-      ...savedTemplate
-    })
-  } else {
-    templates.value.push(savedTemplate)
+    let response
+    const existingIndex = templates.value.findIndex((item) => (
+      String(item.id) === String(nextId)
+    ))
+
+    if (existingIndex >= 0) {
+      // 更新现有模板
+      response = await updateTemplate(nextId, savedTemplate)
+      if (response.success) {
+        templates.value.splice(existingIndex, 1, {
+          ...templates.value[existingIndex],
+          ...savedTemplate
+        })
+      }
+    } else {
+      // 新增模板
+      response = await createTemplate(savedTemplate)
+      if (response.success) {
+        templates.value.push(savedTemplate)
+      }
+    }
+
+    if (response.success) {
+      templates.value = [...templates.value]
+      window.dispatchEvent(new CustomEvent('order-system-print-templates-updated', {
+        detail: { id: nextId, updatedAt: savedTemplate.updatedAt }
+      }))
+      closeDesigner()
+      console.log('模板保存成功')
+    } else {
+      alert(response.message || '保存模板失败')
+    }
+  } catch (error) {
+    console.error('保存模板失败:', error)
+    alert('保存模板失败，请稍后重试')
   }
-
-  templates.value = [...templates.value]
-  localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
-  window.dispatchEvent(new CustomEvent('order-system-print-templates-updated', {
-    detail: { id: nextId, updatedAt: savedTemplate.updatedAt }
-  }))
-  closeDesigner()
 }
 
 const handlePreview = (template) => {
@@ -438,16 +485,24 @@ const handlePreview = (template) => {
   showDesigner.value = true
 }
 
-const handleSetDefault = (template) => {
-  // 取消其他默认模板
-  templates.value.forEach((t) => {
-    if (t.businessType === template.businessType) {
-      t.isDefault = false
+const handleSetDefault = async (template) => {
+  try {
+    const response = await setDefaultTemplate(template.id)
+    if (response.success) {
+      // 更新本地状态
+      templates.value.forEach((t) => {
+        if (t.businessType === template.businessType) {
+          t.isDefault = t.id === template.id
+        }
+      })
+      console.log('已设为默认:', template)
+    } else {
+      alert(response.message || '设置默认模板失败')
     }
-  })
-  // 设置当前为默认
-  template.isDefault = true
-  console.log('已设为默认:', template)
+  } catch (error) {
+    console.error('设置默认模板失败:', error)
+    alert('设置默认模板失败，请稍后重试')
+  }
 }
 
 const handleUse = (template) => {
@@ -455,18 +510,34 @@ const handleUse = (template) => {
   // TODO: 打开打印预览
 }
 
-const handleDelete = (template) => {
-  if (confirm(`确定要删除模板"${template.name}"吗？`)) {
-    const index = templates.value.findIndex((t) => t.id === template.id)
-    if (index > -1) {
-      templates.value.splice(index, 1)
+const handleDelete = async (template) => {
+  if (template.isDefault) {
+    alert('默认模板不能删除，请先设置其他模板为默认')
+    return
+  }
+
+  if (!confirm(`确定要删除模板"${template.name}"吗？`)) {
+    return
+  }
+
+  try {
+    const response = await deleteTemplate(template.id)
+    if (response.success) {
+      const index = templates.value.findIndex((t) => t.id === template.id)
+      if (index > -1) {
+        templates.value.splice(index, 1)
+      }
+      console.log('已删除:', template)
+    } else {
+      alert(response.message || '删除模板失败')
     }
-    localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
-    console.log('已删除:', template)
+  } catch (error) {
+    console.error('删除模板失败:', error)
+    alert('删除模板失败，请稍后重试')
   }
 }
 
-const handleSaveTemplate = () => {
+const handleSaveTemplate = async () => {
   if (!templateForm.value.name) {
     alert('请输入模板名称')
     return
@@ -480,86 +551,73 @@ const handleSaveTemplate = () => {
     return
   }
 
-  if (isEditing.value) {
-    // 编辑
-    const index = templates.value.findIndex((t) => t.id === templateForm.value.id)
-    if (index > -1) {
-      templates.value[index] = { ...templateForm.value }
+  try {
+    let response
+    if (isEditing.value) {
+      // 编辑模板
+      response = await updateTemplate(templateForm.value.id, templateForm.value)
+    } else {
+      // 新增模板
+      response = await createTemplate(templateForm.value)
     }
-  } else {
-    // 新增
-    const newTemplate = {
-      ...templateForm.value,
-      id: Date.now()
-    }
-    templates.value.push(newTemplate)
-  }
 
-  localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
-  window.dispatchEvent(new CustomEvent('order-system-print-templates-updated'))
-  showTemplateModal.value = false
-  console.log('保存模板:', templateForm.value)
+    if (response.success) {
+      showTemplateModal.value = false
+      // 重新加载模板列表
+      await loadTemplates()
+      console.log('保存模板成功:', response.data)
+    } else {
+      alert(response.message || '保存模板失败')
+    }
+  } catch (error) {
+    console.error('保存模板失败:', error)
+    alert('保存模板失败，请稍后重试')
+  }
 }
 
-const loadTemplates = () => {
+const loadTemplates = async () => {
   loading.value = true
-  setTimeout(() => {
-    const storedTemplates = localStorage.getItem(templateStorageKey)
-    if (storedTemplates) {
-      try {
-        const parsedTemplates = JSON.parse(storedTemplates)
-        templates.value = Array.isArray(parsedTemplates) ? parsedTemplates : []
-      } catch {
-        templates.value = []
+  try {
+    const response = await getTemplates()
+    if (response.success) {
+      templates.value = response.data || []
+
+      // 如果数据库没有数据，尝试从 localStorage 迁移
+      if (templates.value.length === 0) {
+        await migrateFromLocalStorage()
       }
+    } else {
+      console.error('加载模板失败:', response.message)
+      templates.value = []
     }
-    if (!templates.value.length) {
-      templates.value = [
-        {
-          id: 1,
-          name: '墨绿产品代码模板',
-          businessType: 'sale',
-          paperType: '二等分',
-          pageWidth: 210,
-          pageHeight: 139,
-          isDefault: true,
-          enabled: true
-        },
-        {
-          id: 2,
-          name: '销售单无毛叠加运生托货款',
-          businessType: 'sale',
-          paperType: '二等分',
-          pageWidth: 210,
-          pageHeight: 139,
-          isDefault: false,
-          enabled: true
-        },
-        {
-          id: 3,
-          name: '销售单无单价板',
-          businessType: 'sale',
-          paperType: '二等分',
-          pageWidth: 210,
-          pageHeight: 140,
-          isDefault: false,
-          enabled: true
-        },
-        {
-          id: 4,
-          name: '销售单有单价板',
-          businessType: 'sale',
-          paperType: '二等分',
-          pageWidth: 210,
-          pageHeight: 140,
-          isDefault: false,
-          enabled: true
-        }
-      ]
-      localStorage.setItem(templateStorageKey, JSON.stringify(templates.value))
-    }
+  } catch (error) {
+    console.error('加载模板失败:', error)
+    // 如果后端请求失败，尝试从 localStorage 加载
+    await migrateFromLocalStorage()
+  } finally {
     loading.value = false
-  }, 500)
+  }
+}
+
+const migrateFromLocalStorage = async () => {
+  const storedTemplates = localStorage.getItem(templateStorageKey)
+  if (storedTemplates) {
+    try {
+      const parsedTemplates = JSON.parse(storedTemplates)
+      if (Array.isArray(parsedTemplates) && parsedTemplates.length > 0) {
+        // 迁移到数据库
+        const response = await migrateTemplates(parsedTemplates)
+        if (response.success) {
+          console.log('数据迁移成功:', response.data)
+          templates.value = parsedTemplates
+          // 清除 localStorage 中的数据
+          localStorage.removeItem(templateStorageKey)
+        }
+      }
+    } catch (error) {
+      console.error('数据迁移失败:', error)
+    }
+  }
 }
 
 // ==================== 生命周期 ====================

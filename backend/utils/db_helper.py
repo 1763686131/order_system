@@ -1017,4 +1017,130 @@ def write_carrier_tags(tags):
         for tag in tags:
             cursor.execute('INSERT INTO carrier_tags (tag) VALUES (?)', (tag,))
 
+
+# ==========================================
+# 打印模板相关
+# ==========================================
+
+def read_print_templates():
+    """读取所有打印模板"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT id, name, business_type, paper_type, page_width, page_height,
+                   is_default, enabled, content, created_at, updated_at
+            FROM print_templates
+            ORDER BY created_at DESC
+        ''')
+        rows = cursor.fetchall()
+
+        templates = []
+        for row in rows:
+            template = dict(row)
+            # 解析 content JSON
+            if template.get('content'):
+                try:
+                    template['content'] = json.loads(template['content'])
+                except:
+                    template['content'] = None
+            templates.append(template)
+        return templates
+
+
+def create_print_template(template_data):
+    """创建打印模板"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # 序列化 content
+        content_json = None
+        if template_data.get('content'):
+            content_json = json.dumps(template_data['content'], ensure_ascii=False)
+
+        cursor.execute('''
+            INSERT INTO print_templates (
+                name, business_type, paper_type, page_width, page_height,
+                is_default, enabled, content, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+        ''', (
+            template_data.get('name'),
+            template_data.get('businessType') or template_data.get('business_type'),
+            template_data.get('paperType') or template_data.get('paper_type'),
+            template_data.get('pageWidth') or template_data.get('page_width'),
+            template_data.get('pageHeight') or template_data.get('page_height'),
+            1 if template_data.get('isDefault') or template_data.get('is_default') else 0,
+            1 if template_data.get('enabled', True) else 0,
+            content_json
+        ))
+
+        return cursor.lastrowid
+
+
+def update_print_template(template_id, template_data):
+    """更新打印模板"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # 序列化 content
+        content_json = None
+        if template_data.get('content'):
+            content_json = json.dumps(template_data['content'], ensure_ascii=False)
+
+        cursor.execute('''
+            UPDATE print_templates SET
+                name = ?, business_type = ?, paper_type = ?,
+                page_width = ?, page_height = ?,
+                is_default = ?, enabled = ?, content = ?,
+                updated_at = datetime('now')
+            WHERE id = ?
+        ''', (
+            template_data.get('name'),
+            template_data.get('businessType') or template_data.get('business_type'),
+            template_data.get('paperType') or template_data.get('paper_type'),
+            template_data.get('pageWidth') or template_data.get('page_width'),
+            template_data.get('pageHeight') or template_data.get('page_height'),
+            1 if template_data.get('isDefault') or template_data.get('is_default') else 0,
+            1 if template_data.get('enabled', True) else 0,
+            content_json,
+            template_id
+        ))
+
+        return cursor.rowcount > 0
+
+
+def delete_print_template(template_id):
+    """删除打印模板"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM print_templates WHERE id = ?', (template_id,))
+        return cursor.rowcount > 0
+
+
+def set_print_template_default(template_id):
+    """设置默认打印模板"""
+    with get_db() as conn:
+        cursor = conn.cursor()
+
+        # 先获取该模板的业务类型
+        cursor.execute('SELECT business_type FROM print_templates WHERE id = ?', (template_id,))
+        row = cursor.fetchone()
+        if not row:
+            return False
+
+        business_type = row['business_type']
+
+        # 取消同业务类型的其他默认模板
+        cursor.execute('''
+            UPDATE print_templates SET is_default = 0
+            WHERE business_type = ? AND id != ?
+        ''', (business_type, template_id))
+
+        # 设置当前模板为默认
+        cursor.execute('''
+            UPDATE print_templates SET is_default = 1, updated_at = datetime('now')
+            WHERE id = ?
+        ''', (template_id,))
+
+        return cursor.rowcount > 0
+
         conn.commit()

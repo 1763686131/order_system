@@ -29,6 +29,8 @@ _system_settings_schema_lock = Lock()
 _system_settings_schema_ready = False
 _bank_accounts_schema_lock = Lock()
 _bank_accounts_schema_ready = False
+_print_templates_schema_lock = Lock()
+_print_templates_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 
@@ -432,6 +434,68 @@ def _ensure_stock_inbound_schema(conn):
         )
         conn.commit()
         _stock_inbound_schema_ready = True
+
+
+def _ensure_print_templates_schema(conn):
+    """创建打印模板表"""
+    global _print_templates_schema_ready
+    if _print_templates_schema_ready:
+        return
+
+    with _print_templates_schema_lock:
+        if _print_templates_schema_ready:
+            return
+
+        cursor = conn.cursor()
+
+        # 检查表是否存在
+        table_exists = cursor.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'print_templates'"
+        ).fetchone()
+
+        if not table_exists:
+            # 创建打印模板表
+            cursor.execute('''
+                CREATE TABLE print_templates (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    business_type TEXT NOT NULL,
+                    paper_type TEXT,
+                    page_width INTEGER NOT NULL,
+                    page_height INTEGER NOT NULL,
+                    is_default INTEGER DEFAULT 0,
+                    enabled INTEGER DEFAULT 1,
+                    content TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT
+                )
+            ''')
+
+            # 创建索引
+            cursor.execute('''
+                CREATE INDEX idx_print_templates_business_type
+                ON print_templates(business_type)
+            ''')
+
+            cursor.execute('''
+                CREATE INDEX idx_print_templates_is_default
+                ON print_templates(is_default)
+            ''')
+
+            # 插入默认模板
+            cursor.execute('''
+                INSERT INTO print_templates (
+                    name, business_type, paper_type,
+                    page_width, page_height, is_default, enabled
+                ) VALUES
+                ('销售出库单-标准模板', 'sale', '二等分', 210, 140, 1, 1),
+                ('采购入库单-标准模板', 'purchase', '二等分', 210, 140, 1, 1),
+                ('退货单-标准模板', 'return', '二等分', 210, 140, 1, 1)
+            ''')
+
+            conn.commit()
+
+        _print_templates_schema_ready = True
 
 
 def _ensure_return_schema(conn):
@@ -847,6 +911,7 @@ def get_db():
         _ensure_raw_material_products_schema(conn)
         _ensure_stock_inbound_schema(conn)
         _ensure_return_schema(conn)
+        _ensure_print_templates_schema(conn)
         yield conn
         conn.commit()
     except Exception:
