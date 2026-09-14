@@ -11,7 +11,7 @@ def resolve_settlement_account(conn, store_id, requested="", fallback=""):
             FROM bank_accounts
             WHERE store_id = ?
               AND (account_name = ? OR account_number = ? OR bank_name = ?)
-            ORDER BY id
+            ORDER BY is_default DESC, id
             LIMIT 1
             """,
             (store_id, requested, requested, requested),
@@ -26,7 +26,7 @@ def resolve_settlement_account(conn, store_id, requested="", fallback=""):
         SELECT account_name
         FROM bank_accounts
         WHERE store_id = ?
-        ORDER BY id
+        ORDER BY is_default DESC, id
         LIMIT 1
         """,
         (store_id,),
@@ -49,7 +49,7 @@ def adjust_bank_account_balance(conn, store_id, settlement_account, delta):
         FROM bank_accounts
         WHERE store_id = ?
           AND (account_name = ? OR account_number = ? OR bank_name = ?)
-        ORDER BY id
+        ORDER BY is_default DESC, id
         LIMIT 1
         """,
         (store_id, value, value, value),

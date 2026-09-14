@@ -665,9 +665,10 @@ const selectedStoreName = computed(() => {
   return store ? store.name : ''
 })
 
-const storeBankAccounts = computed(() => bankAccounts.value.filter(
-  account => String(account.storeId) === String(formData.value.storeId)
-))
+const storeBankAccounts = computed(() => bankAccounts.value
+  .filter(account => String(account.storeId) === String(formData.value.storeId))
+  .slice()
+  .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault))))
 
 const selectedCustomerName = computed(() => {
   const customer = customers.value.find(
@@ -1134,7 +1135,10 @@ const onStoreChange = () => {
   formData.value.contactPerson = ''
   formData.value.contactPhone = ''
   formData.value.contactAddress = ''
-  formData.value.settlementAccount = ''
+  const defaultAccount = storeBankAccounts.value.find(account => account.isDefault)
+    || storeBankAccounts.value[0]
+  formData.value.settlementAccount = defaultAccount?.value ||
+    defaultAccount?.accountName || ''
 
   // 清空商品列表
   clearProductItems()
@@ -1796,6 +1800,7 @@ const confirmClear = () => {
   formData.value.contactPerson = ''
   formData.value.contactPhone = ''
   formData.value.contactAddress = ''
+  formData.value.settlementAccount = ''
   formData.value.projectName = ''
   formData.value.packaging = '无'
   formData.value.logisticsService = logisticsServiceOptions[0]

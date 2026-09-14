@@ -545,7 +545,10 @@ const selectedCustomer = computed(() =>
 )
 const customerBankAccounts = computed(() => {
   const storeId = selectedCustomer.value?.storeId
-  return bankAccounts.value.filter(account => Number(account.storeId) === Number(storeId))
+  return bankAccounts.value
+    .filter(account => Number(account.storeId) === Number(storeId))
+    .slice()
+    .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)))
 })
 const currentDebt = computed(() =>
   Math.max(0, Number(selectedCustomer.value?.receivable) || 0)
@@ -675,7 +678,8 @@ const handleCustomerChange = () => {
   const store = stores.value.find(
     item => Number(item.id) === Number(selectedCustomer.value?.storeId)
   )
-  const account = customerBankAccounts.value[0]
+  const account = customerBankAccounts.value.find(item => item.isDefault) ||
+    customerBankAccounts.value[0]
   form.settlementAccount = account?.value || account?.accountName || (
     store ? `${store.name}结算账户` : ''
   )

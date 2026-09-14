@@ -3105,6 +3105,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
       "bankName": "中国工商银行深圳分行",
       "bankCode": "102584000012",
       "balance": 125680.5,
+      "isDefault": true,
       "cardColor": "#1a1a1a",
       "cardBgImage": "/uploads/bank-cards/backgrounds/bank_card_bg_20260914120000_x.jpg",
       "bankIcon": "/uploads/bank-cards/icons/bank_icon_20260914120000_x.png",
@@ -3142,7 +3143,8 @@ totalAmount = receivedQty × unitPrice + taxAmount
   "balance": 0,
   "cardColor": "#1a1a1a",
   "cardBgImage": "",
-  "bankIcon": ""
+  "bankIcon": "",
+  "isDefault": true
 }
 ```
 
@@ -3680,3 +3682,4 @@ SQLite 支持**多读一写**模式：
 - 项目文档: [README_SQLITE.md](../README_SQLITE.md)
 - 迁移文档: [MIGRATION_SQLITE.md](../MIGRATION_SQLITE.md)
 - 测试脚本: [backend/test_sqlite.py](../backend/test_sqlite.py)
+默认账户规则：`isDefault` 表示门店默认结算账户。每个门店最多一个默认账户，新增或修改时提交 `isDefault: true` 会在同一事务内取消旧默认标记；接口按默认账户优先返回。订单录入、收款历史和退货单录入选择门店后会自动带出默认账户，没有默认账户时回退到该门店第一条账户。

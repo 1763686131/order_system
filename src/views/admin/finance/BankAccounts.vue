@@ -69,6 +69,7 @@
                 <div class="bank-name-with-icon">
                   <img v-if="account.bankIcon" :src="account.bankIcon" alt="银行图标" class="bank-icon" />
                   <p class="bank-name">{{ account.bankName }}</p>
+                  <span v-if="account.isDefault" class="default-badge">默认</span>
                 </div>
               </div>
 
@@ -92,7 +93,7 @@
                 </div>
               </div>
             </div>
-            <div class="card-actions" @click.stop>
+            <div class="card-actions card-actions-front" @click.stop>
               <button type="button" title="修改账户" @click.stop="editAccount(account)">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M12 20h9" />
@@ -112,6 +113,22 @@
 
           <!-- 背面 -->
           <div class="bank-card bank-card-back">
+            <div class="card-actions card-actions-back" @click.stop>
+              <button type="button" title="修改账户" @click.stop="editAccount(account)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
+              <button type="button" title="删除账户" @click.stop="deleteAccount(account)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4h8v2" />
+                  <path d="M19 6l-1 14H6L5 6" />
+                  <path d="M10 11v5M14 11v5" />
+                </svg>
+              </button>
+            </div>
             <div class="bank-card-content">
               <div class="magnetic-stripe"></div>
               <div class="card-back-info">
@@ -205,6 +222,13 @@
                 />
               </label>
 
+              <label class="field-group default-account-field">
+                <span>默认账户</span>
+                <span class="default-toggle">
+                  <input v-model="formData.isDefault" type="checkbox" />
+                  <span>设为该门店默认结算账户</span>
+                </span>
+              </label>
               <div class="field-group-empty"></div>
 
               <label class="field-group">
@@ -313,6 +337,7 @@ const formData = ref({
   bankName: '',
   bankCode: '',
   balance: 0,
+  isDefault: false,
   cardColor: '#1a1a1a',
   cardBgImage: '',
   bankIcon: ''
@@ -362,6 +387,7 @@ const openAddDialog = () => {
     bankName: '',
     bankCode: '',
     balance: 0,
+    isDefault: false,
     cardColor: '#1a1a1a',
     cardBgImage: '',
     bankIcon: ''
@@ -386,6 +412,7 @@ const editAccount = (account) => {
     bankName: account.bankName,
     bankCode: account.bankCode,
     balance: account.balance || 0,
+    isDefault: Boolean(account.isDefault),
     cardColor: account.cardColor || '#1a1a1a',
     cardBgImage: account.cardBgImage || '',
     bankIcon: account.bankIcon || ''
@@ -516,6 +543,7 @@ const handleSubmit = async () => {
       bankName: formData.value.bankName,
       bankCode: formData.value.bankCode,
       balance: Number(formData.value.balance) || 0,
+      isDefault: Boolean(formData.value.isDefault),
       cardColor: formData.value.cardColor,
       cardBgImage: formData.value.cardBgImage,
       bankIcon: formData.value.bankIcon
@@ -715,6 +743,17 @@ onMounted(() => {
   background: #2a2a2a;
 }
 
+.card-actions-front {
+  display: none !important;
+}
+
+.card-actions-back {
+  top: auto !important;
+  right: 18px !important;
+  bottom: 18px !important;
+  left: auto !important;
+}
+
 
 .bank-card-content {
   position: relative;
@@ -751,6 +790,20 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.default-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(167, 243, 208, 0.55);
+  border-radius: 999px;
+  background: rgba(15, 159, 120, 0.35);
+  color: #d1fae5;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 .bank-icon {
@@ -1077,6 +1130,23 @@ onMounted(() => {
 
 .field-group-empty {
   /* 占位元素，用于保持网格布局 */
+}
+
+.default-toggle {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  color: #596579 !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+}
+
+.default-toggle input {
+  width: 16px;
+  height: 16px;
+  accent-color: #0f9f78;
 }
 
 .field-group span {

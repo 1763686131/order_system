@@ -75,6 +75,12 @@ def _payload_value(data, camel, snake, default=None):
     return default
 
 
+def _boolean(value):
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return value in (True, 1)
+
+
 def _serialize(row):
     if not row:
         return None
@@ -88,6 +94,7 @@ def _serialize(row):
         "bankName": item.get("bank_name") or "",
         "bankCode": item.get("bank_code") or "",
         "balance": round(float(item.get("balance") or 0), 2),
+        "isDefault": bool(item.get("is_default")),
         "cardColor": item.get("card_color") or "#1a1a1a",
         "cardBgImage": item.get("card_bg_image") or "",
         "bankIcon": item.get("bank_icon") or "",
@@ -197,6 +204,16 @@ def _validate_payload(conn, data, existing=None):
             80,
         ),
         "balance": balance,
+        "is_default": int(
+            _boolean(
+                _payload_value(
+                    data,
+                    "isDefault",
+                    "is_default",
+                    existing["is_default"] if existing else False,
+                )
+            )
+        ),
         "card_color": _text(
             _payload_value(
                 data,
@@ -312,7 +329,7 @@ def list_bank_accounts():
         if store_id is not None:
             sql += " AND a.store_id = ?"
             params.append(store_id)
-        sql += " ORDER BY a.store_id, a.id"
+        sql += " ORDER BY a.store_id, a.is_default DESC, a.id"
         rows = conn.execute(sql, params).fetchall()
     items = [_serialize(row) for row in rows]
     return jsonify({"success": True, "data": items, "items": items, "total": len(items)})
@@ -325,7 +342,7 @@ def list_bank_account_options():
     with get_db() as conn:
         sql = """
             SELECT a.id, a.store_id, a.account_name, a.account_number,
-                   a.bank_name, s.name AS store_name
+                   a.bank_name, a.is_default, s.name AS store_name
             FROM bank_accounts a
             LEFT JOIN stores s ON s.id = a.store_id
             WHERE 1 = 1
@@ -334,7 +351,7 @@ def list_bank_account_options():
         if store_id is not None:
             sql += " AND a.store_id = ?"
             params.append(store_id)
-        sql += " ORDER BY a.store_id, a.id"
+        sql += " ORDER BY a.store_id, a.is_default DESC, a.id"
         rows = conn.execute(sql, params).fetchall()
     items = [
         {
@@ -344,6 +361,7 @@ def list_bank_account_options():
             "accountName": row["account_name"],
             "accountNumber": row["account_number"],
             "bankName": row["bank_name"],
+            "isDefault": bool(row["is_default"]),
             "label": f"{row['account_name']}（{row['bank_name']}）",
             "value": row["account_name"],
         }
@@ -369,15 +387,26 @@ def create_bank_account():
             with get_db() as conn:
                 conn.execute("BEGIN IMMEDIATE")
                 values = _validate_payload(conn, data)
+                account_count = conn.execute(
+                    "SELECT COUNT(*) AS count FROM bank_accounts WHERE store_id = ?",
+                    (values["store_id"],),
+                ).fetchone()["count"]
+                if not account_count:
+                    values["is_default"] = 1
+                if values["is_default"]:
+                    conn.execute(
+                        "UPDATE bank_accounts SET is_default = 0 WHERE store_id = ?",
+                        (values["store_id"],),
+                    )
                 now = datetime.now().isoformat(timespec="seconds")
                 cursor = conn.execute(
                     """
                     INSERT INTO bank_accounts (
                         store_id, account_name, account_number, bank_name,
-                        bank_code, balance, card_color, card_bg_image,
+                        bank_code, balance, is_default, card_color, card_bg_image,
                         bank_icon, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         values["store_id"],
@@ -386,6 +415,7 @@ def create_bank_account():
                         values["bank_name"],
                         values["bank_code"],
                         float(values["balance"]),
+                        values["is_default"],
                         values["card_color"],
                         values["card_bg_image"],
                         values["bank_icon"],
@@ -418,6 +448,15 @@ def update_bank_account(account_id):
                 if not existing:
                     return jsonify({"success": False, "message": "银行账户不存在"}), 404
                 values = _validate_payload(conn, request.get_json(silent=True) or {}, existing)
+                if values["is_default"]:
+                    conn.execute(
+                        """
+                        UPDATE bank_accounts
+                        SET is_default = 0
+                        WHERE store_id IN (?, ?)
+                        """,
+                        (existing["store_id"], values["store_id"]),
+                    )
                 old_images = [existing["card_bg_image"], existing["bank_icon"]]
                 new_images = [values["card_bg_image"], values["bank_icon"]]
                 now = datetime.now().isoformat(timespec="seconds")
@@ -425,7 +464,7 @@ def update_bank_account(account_id):
                     """
                     UPDATE bank_accounts
                     SET store_id = ?, account_name = ?, account_number = ?,
-                        bank_name = ?, bank_code = ?, balance = ?,
+                        bank_name = ?, bank_code = ?, balance = ?, is_default = ?,
                         card_color = ?, card_bg_image = ?, bank_icon = ?,
                         updated_at = ?
                     WHERE id = ?
@@ -437,6 +476,7 @@ def update_bank_account(account_id):
                         values["bank_name"],
                         values["bank_code"],
                         float(values["balance"]),
+                        values["is_default"],
                         values["card_color"],
                         values["card_bg_image"],
                         values["bank_icon"],
@@ -495,7 +535,25 @@ def delete_bank_account(account_id):
                         }
                     ), 409
 
+                store_id = account["store_id"]
+                was_default = bool(account["is_default"])
                 conn.execute("DELETE FROM bank_accounts WHERE id = ?", (account_id,))
+                if was_default:
+                    replacement = conn.execute(
+                        """
+                        SELECT id
+                        FROM bank_accounts
+                        WHERE store_id = ?
+                        ORDER BY is_default DESC, id
+                        LIMIT 1
+                        """,
+                        (store_id,),
+                    ).fetchone()
+                    if replacement:
+                        conn.execute(
+                            "UPDATE bank_accounts SET is_default = 1 WHERE id = ?",
+                            (replacement["id"],),
+                        )
                 images = [account["card_bg_image"], account["bank_icon"]]
         for image in images:
             _remove_stored_file(image)

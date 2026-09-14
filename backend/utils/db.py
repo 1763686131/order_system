@@ -176,6 +176,7 @@ def _ensure_bank_accounts_schema(conn):
                 bank_name TEXT NOT NULL,
                 bank_code TEXT NOT NULL DEFAULT '',
                 balance REAL NOT NULL DEFAULT 0,
+                is_default INTEGER NOT NULL DEFAULT 0,
                 card_color TEXT NOT NULL DEFAULT '#1a1a1a',
                 card_bg_image TEXT NOT NULL DEFAULT '',
                 bank_icon TEXT NOT NULL DEFAULT '',
@@ -184,10 +185,18 @@ def _ensure_bank_accounts_schema(conn):
             )
             """
         )
+        columns = {
+            row["name"]
+            for row in cursor.execute("PRAGMA table_info(bank_accounts)").fetchall()
+        }
+        if "is_default" not in columns:
+            cursor.execute(
+                "ALTER TABLE bank_accounts ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0"
+            )
         cursor.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_bank_accounts_store
-            ON bank_accounts(store_id, id)
+            ON bank_accounts(store_id, is_default DESC, id)
             """
         )
         cursor.execute(
@@ -195,6 +204,31 @@ def _ensure_bank_accounts_schema(conn):
             CREATE UNIQUE INDEX IF NOT EXISTS idx_bank_accounts_store_number
             ON bank_accounts(store_id, account_number)
             WHERE trim(account_number) <> ''
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_bank_accounts_store_default
+            ON bank_accounts(store_id)
+            WHERE is_default = 1
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE bank_accounts
+            SET is_default = 1
+            WHERE is_default = 0
+              AND id IN (
+                SELECT MIN(id)
+                FROM bank_accounts
+                GROUP BY store_id
+              )
+              AND NOT EXISTS (
+                SELECT 1
+                FROM bank_accounts existing_default
+                WHERE existing_default.store_id = bank_accounts.store_id
+                  AND existing_default.is_default = 1
+              )
             """
         )
         conn.commit()

@@ -348,9 +348,10 @@ const filteredWarehouses = computed(() => {
   return warehouses.value.filter(item => idEquals(item.storeId ?? item.store_id, form.value.storeId))
 })
 
-const storeBankAccounts = computed(() => bankAccounts.value.filter(
-  account => idEquals(account.storeId, form.value.storeId)
-))
+const storeBankAccounts = computed(() => bankAccounts.value
+  .filter(account => idEquals(account.storeId, form.value.storeId))
+  .slice()
+  .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault))))
 
 const productsForItem = item => {
   if (!form.value.storeId) return []
@@ -437,8 +438,10 @@ const resetItems = () => {
 const onStoreChange = () => {
   form.value.customerId = ''
   form.value.warehouseId = ''
-  form.value.settlementAccount = storeBankAccounts.value[0]?.value ||
-    storeBankAccounts.value[0]?.accountName || ''
+  const defaultAccount = storeBankAccounts.value.find(account => account.isDefault) ||
+    storeBankAccounts.value[0]
+  form.value.settlementAccount = defaultAccount?.value ||
+    defaultAccount?.accountName || ''
   resetItems()
 }
 
