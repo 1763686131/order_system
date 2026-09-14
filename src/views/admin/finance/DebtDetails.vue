@@ -13,7 +13,7 @@
           </svg>
         </button>
       </div>
-      <div class="summary-stats">
+        <div class="summary-stats">
         <div class="stat-box">
           <span class="stat-label">{{ type === 'receivable' ? '应收欠款' : '应付欠款' }}</span>
           <strong class="stat-value">{{ formatMoney(totalReceivable) }}</strong>
@@ -38,6 +38,10 @@
           <span class="stat-label">优惠</span>
           <strong class="stat-value">{{ formatMoney(totalDiscount) }}</strong>
         </div>
+        <div class="stat-box stored-balance-stat">
+          <span class="stat-label">当前储值</span>
+          <strong class="stat-value">{{ formatMoney(storedBalance) }}</strong>
+        </div>
       </div>
     </div>
 
@@ -53,6 +57,8 @@
               <option value="ORDER">销售订单</option>
               <option value="RETURN">退货单</option>
               <option value="PAYMENT">收款单</option>
+              <option value="INITIAL">期初欠款</option>
+              <option value="BALANCE">储值调整</option>
             </select>
           </label>
 
@@ -244,11 +250,14 @@
                     <span v-else class="empty-text">-</span>
                   </td>
                   <td class="money-cell">
-                    <span v-if="item.businessType === 'ORDER'">{{ formatMoney(item.orderAmount) }}</span>
+                    <span v-if="item.businessType === 'ORDER' || item.businessType === 'INITIAL'">
+                      {{ formatMoney(item.orderAmount) }}
+                    </span>
                     <span v-else class="empty-text">-</span>
                   </td>
                   <td class="money-cell">
                     <span v-if="item.businessType === 'ORDER' && item.paidAmount > 0">{{ formatMoney(item.paidAmount) }}</span>
+                    <span v-else-if="item.businessType === 'BALANCE'">{{ formatMoney(item.balanceAmount) }}</span>
                     <span v-else class="empty-text">-</span>
                   </td>
                   <td class="money-cell" :class="item.debtAmount > 0 ? 'increase-amount' : 'decrease-amount'">
@@ -256,7 +265,8 @@
                       {{ formatMoney(calculateProductDebt(item, 0)) }}
                     </template>
                     <template v-else>
-                      {{ formatMoney(item.debtAmount) }}
+                      <span v-if="item.businessType !== 'BALANCE'">{{ formatMoney(item.debtAmount) }}</span>
+                      <span v-else class="empty-text">-</span>
                     </template>
                   </td>
                   <td class="money-cell current-debt-cell">
@@ -369,7 +379,7 @@ const records = ref([])
 const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = ref(20)
-const sortOrder = ref('asc')
+const sortOrder = ref('desc')
 const expandedRows = reactive({})
 const customerInfo = ref({})
 const summary = ref({
@@ -377,6 +387,7 @@ const summary = ref({
   receivableIncrease: 0,
   debtRecovered: 0,
   discountAmount: 0,
+  storedBalance: 0,
   receivable: 0
 })
 
@@ -406,13 +417,24 @@ const filteredRecords = computed(() => {
   })
 
   return result.sort((left, right) => {
-    const dateResult = String(left.businessDate || '').slice(0, 10).localeCompare(
-      String(right.businessDate || '').slice(0, 10)
+    const dateResult = String(left.businessDate || '').localeCompare(
+      String(right.businessDate || '')
     )
     if (dateResult !== 0) {
+      // sortOrder === 'desc' 表示降序,时间近的在前(大的在前)
+      // sortOrder === 'asc' 表示升序,时间远的在前(小的在前)
       return sortOrder.value === 'asc' ? dateResult : -dateResult
     }
-    const idResult = Number(left.transactionId || left.id) - Number(right.transactionId || right.id)
+    const leftId = Number(left.transactionId)
+    const rightId = Number(right.transactionId)
+    const idResult = (
+      (Number.isFinite(leftId) ? leftId : 0)
+      - (Number.isFinite(rightId) ? rightId : 0)
+    )
+    if (idResult === 0) {
+      const textResult = String(left.id || '').localeCompare(String(right.id || ''))
+      return sortOrder.value === 'asc' ? textResult : -textResult
+    }
     return sortOrder.value === 'asc' ? idResult : -idResult
   })
 })
@@ -428,6 +450,9 @@ const initialDebt = computed(() => {
 const totalIncrease = computed(() => summary.value.receivableIncrease ?? 0)
 const totalRecovered = computed(() => summary.value.debtRecovered ?? 0)
 const totalDiscount = computed(() => 0)
+const storedBalance = computed(() => (
+  summary.value.storedBalance ?? customerInfo.value.storedBalance ?? 0
+))
 
 const totalPages = computed(() => {
   return Math.max(1, Math.ceil(filteredRecords.value.length / pageSize.value))
@@ -455,7 +480,9 @@ const formatBusinessType = (type) => {
   const typeMap = {
     ORDER: '销售订单',
     RETURN: '退货单',
-    PAYMENT: '收款单'
+    PAYMENT: '收款单',
+    INITIAL: '期初欠款',
+    BALANCE: '储值调整'
   }
   return typeMap[type] || type
 }
@@ -548,6 +575,7 @@ const loadData = async () => {
       receivableIncrease: 0,
       debtRecovered: 0,
       discountAmount: 0,
+      storedBalance: response?.storedBalance || 0,
       receivable: response?.totalReceivable || 0
     }
     records.value = Array.isArray(response?.records) ? response.records : []
@@ -1029,6 +1057,20 @@ select {
 .type-discount {
   background: #fff4ed;
   color: #f97316;
+}
+
+.type-initial {
+  background: #fff9e6;
+  color: #d97706;
+  border: 1px solid #f59e0b;
+  font-weight: 600;
+}
+
+.type-balance {
+  background: #e0f2fe;
+  color: #0891b2;
+  border: 1px solid #06b6d4;
+  font-weight: 600;
 }
 
 .increase-amount {

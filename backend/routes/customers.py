@@ -324,7 +324,9 @@ def _customer_response(cursor, customer_id):
             c.phone,
             c.address,
             c.balance,
+            c.balance_at,
             c.initial_receivable,
+            c.initial_receivable_at,
             c.receivable,
             c.bank_name,
             c.bank_account,
@@ -350,7 +352,12 @@ def _customer_response(cursor, customer_id):
     customer['customerName'] = customer.pop('customer_name', '')
     customer['storeId'] = customer.pop('store_id', None)
     customer['contactPerson'] = customer.pop('contact_person', '')
+    customer['balanceAt'] = customer.pop('balance_at', None)
     customer['initialReceivable'] = customer.pop('initial_receivable', 0)
+    customer['initialReceivableAt'] = customer.pop(
+        'initial_receivable_at',
+        None,
+    )
     customer['bankName'] = customer.pop('bank_name', '')
     customer['bankAccount'] = customer.pop('bank_account', '')
     customer['bankCode'] = customer.pop('bank_code', '')
@@ -378,6 +385,22 @@ def _customer_values(data, existing=None):
     store_id = data.get('storeId', existing.get('storeId'))
     store_id = _optional_int(store_id, '门店ID')
 
+    balance = _amount(
+        data.get('balance', existing.get('balance', 0)),
+        '储值余额'
+    )
+    initial_receivable = _amount(
+        data.get(
+            'initialDebt',
+            existing.get('initialReceivable', 0)
+        ),
+        '期初欠款'
+    )
+    if balance < 0:
+        raise ValueError('储值余额不能小于0')
+    if initial_receivable < 0:
+        raise ValueError('期初欠款不能小于0')
+
     return {
         'customer_code': customer_code,
         'customer_name': customer_name,
@@ -389,17 +412,8 @@ def _customer_values(data, existing=None):
         'address': str(
             data.get('address', existing.get('address', '')) or ''
         ).strip(),
-        'balance': _amount(
-            data.get('balance', existing.get('balance', 0)),
-            '储值余额'
-        ),
-        'initial_receivable': _amount(
-            data.get(
-                'initialDebt',
-                existing.get('initialReceivable', existing.get('receivable', 0))
-            ),
-            '期初欠款'
-        ),
+        'balance': balance,
+        'initial_receivable': initial_receivable,
         'bank_name': str(
             data.get('bankName', existing.get('bankName', '')) or ''
         ).strip(),
@@ -593,11 +607,13 @@ def get_customer_receivables():
 
 @customers_bp.route('/<int:customer_id>/debt-details', methods=['GET'])
 def get_customer_debt_details(customer_id):
-    """获取客户对账单：销售订单、退货单和收款单三类有效账户流水。"""
+    """获取客户对账单及期初欠款、储值虚拟记录。"""
     requested_type = (request.args.get('businessType') or '').strip().upper()
-    allowed_types = {'', 'ORDER', 'RETURN', 'PAYMENT'}
+    allowed_types = {'', 'ORDER', 'RETURN', 'PAYMENT', 'INITIAL', 'BALANCE'}
     if requested_type not in allowed_types:
-        return jsonify({'error': '业务类型仅支持ORDER、RETURN、PAYMENT'}), 400
+        return jsonify({
+            'error': '业务类型仅支持ORDER、RETURN、PAYMENT、INITIAL、BALANCE'
+        }), 400
 
     start_date = (request.args.get('startDate') or '').strip()
     end_date = (request.args.get('endDate') or '').strip()
@@ -611,7 +627,9 @@ def get_customer_debt_details(customer_id):
         customer = cursor.execute(
             '''
             SELECT c.id, c.customer_code, c.customer_name, c.store_id,
-                   c.initial_receivable, c.receivable, s.name AS store_name
+                   c.balance, c.balance_at,
+                   c.initial_receivable, c.initial_receivable_at,
+                   c.receivable, c.created_at, s.name AS store_name
             FROM customers c
             LEFT JOIN stores s ON s.id = c.store_id
             WHERE c.id = ?
@@ -640,14 +658,66 @@ def get_customer_debt_details(customer_id):
                 continue
             records.append(record)
 
+        initial_debt = _debt_money(customer['initial_receivable'])
+        if initial_debt > 0:
+            records.append({
+                'id': f'initial-{customer_id}',
+                'transactionId': 0,
+                'businessDate': (
+                    customer['initial_receivable_at']
+                    or customer['created_at']
+                    or ''
+                ),
+                'docNumber': '期初欠款',
+                'businessType': 'INITIAL',
+                'orderAmount': _debt_float(initial_debt),
+                'paidAmount': 0.0,
+                'storedBalanceApplied': 0.0,
+                # 期初欠款已经单独计入 summary.initialDebt；这里仅作为
+                # 对账起点参与 currentDebt，避免在新增应收里重复计算。
+                '_receivableIncrease': 0.0,
+                'debtAmount': _debt_float(initial_debt),
+                'currentDebt': 0.0,
+                'products': [],
+                'hasMultipleProducts': False,
+                'productCount': 0,
+                'remark': '客户期初欠款',
+            })
+
+        stored_balance = _debt_money(customer['balance'])
+        if stored_balance > 0:
+            records.append({
+                'id': f'balance-{customer_id}',
+                'transactionId': 0,
+                'businessDate': (
+                    customer['balance_at']
+                    or customer['created_at']
+                    or ''
+                ),
+                'docNumber': '储值调整',
+                'businessType': 'BALANCE',
+                'orderAmount': 0.0,
+                'paidAmount': 0.0,
+                'balanceAmount': _debt_float(stored_balance),
+                'storedBalanceApplied': 0.0,
+                '_receivableIncrease': 0.0,
+                'debtAmount': 0.0,
+                'currentDebt': 0.0,
+                'products': [],
+                'hasMultipleProducts': False,
+                'productCount': 0,
+                'remark': '客户储值余额',
+            })
+
     # 账务累计必须基于全部有效流水计算，不能因筛选日期/类型而改变历史累计欠款。
     records.sort(
         key=lambda item: (
-            str(item['businessDate'] or '')[:10],
-            item['transactionId'],
+            str(item['businessDate'] or '').replace('T', ' '),
+            item.get('transactionId') or 0,
+            item['id'],
         )
     )
-    cumulative = _debt_money(customer['initial_receivable'])
+    cumulative = Decimal('0.00')
     for record in records:
         debt_amount = _debt_money(record['debtAmount'])
         record['debtAmount'] = _debt_float(debt_amount)
@@ -679,6 +749,7 @@ def get_customer_debt_details(customer_id):
     ]
 
     initial_debt = _debt_money(customer['initial_receivable'])
+    stored_balance = _debt_money(customer['balance'])
     receivable_increase = sum(
         (_debt_money(record.get('_receivableIncrease'))
          for record in records
@@ -706,9 +777,13 @@ def get_customer_debt_details(customer_id):
         'storeId': customer['store_id'],
         'storeName': customer['store_name'] or '',
         'initialDebt': _debt_float(initial_debt),
+        'initialDebtAt': customer['initial_receivable_at'],
+        'storedBalance': _debt_float(stored_balance),
+        'balanceAt': customer['balance_at'],
         'totalReceivable': _debt_float(customer['receivable']),
         'summary': {
             'initialDebt': _debt_float(initial_debt),
+            'storedBalance': _debt_float(stored_balance),
             'receivableIncrease': _debt_float(receivable_increase),
             'debtRecovered': _debt_float(debt_recovered),
             # 对账单不单独展示优惠调整，优惠金额仍留在原收款/订单流水中。
@@ -753,16 +828,21 @@ def create_customer():
         except ValueError as error:
             return jsonify({'error': str(error)}), 400
 
+        # 将数值转为float以避免SQLite绑定错误
+        balance_float = float(values['balance'])
+        initial_receivable_float = float(values['initial_receivable'])
+
         cursor.execute(
             '''
             INSERT INTO customers (
                 customer_code, customer_name, store_id,
                 contact_person, phone, address, balance,
-                initial_receivable, receivable,
+                balance_at, initial_receivable, initial_receivable_at,
+                receivable,
                 bank_name, bank_account, bank_code, tax_number,
                 remark, status, created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 values['customer_code'],
@@ -771,9 +851,11 @@ def create_customer():
                 values['contact_person'],
                 values['phone'],
                 values['address'],
-                values['balance'],
-                values['initial_receivable'],
-                values['initial_receivable'],
+                balance_float,
+                now if balance_float > 0 else None,
+                initial_receivable_float,
+                now if initial_receivable_float > 0 else None,
+                initial_receivable_float,
                 values['bank_name'],
                 values['bank_account'],
                 values['bank_code'],
@@ -819,10 +901,14 @@ def update_customer(customer_id):
         if status not in ('active', 'inactive'):
             return jsonify({'error': '客户状态无效'}), 400
 
+        old_initial = _debt_money(existing.get('initialReceivable', 0))
+        new_initial = _debt_money(values['initial_receivable'])
+        old_balance = _debt_money(existing.get('balance', 0))
+        new_balance = _debt_money(values['balance'])
         receivable = (
-            existing.get('receivable', 0)
-            + values['initial_receivable']
-            - existing.get('initialReceivable', existing.get('receivable', 0))
+            _debt_money(existing.get('receivable', 0))
+            + new_initial
+            - old_initial
         )
         if receivable < 0:
             return jsonify({
@@ -830,12 +916,31 @@ def update_customer(customer_id):
             }), 400
 
         now = datetime.now().isoformat(timespec='seconds')
+        initial_receivable_at = existing.get('initialReceivableAt')
+        if new_initial != old_initial:
+            initial_receivable_at = now if new_initial > 0 else None
+        elif new_initial > 0 and not initial_receivable_at:
+            initial_receivable_at = existing.get('createdAt') or now
+
+        balance_at = existing.get('balanceAt')
+        if new_balance != old_balance:
+            balance_at = now if new_balance > 0 else None
+        elif new_balance > 0 and not balance_at:
+            balance_at = existing.get('createdAt') or now
+
+        # 将Decimal转为float以避免SQLite绑定错误
+        balance_float = float(values['balance'])
+        initial_receivable_float = float(values['initial_receivable'])
+        receivable_float = float(receivable)
+
         cursor.execute(
             '''
             UPDATE customers
             SET customer_code = ?, customer_name = ?, store_id = ?,
                 contact_person = ?, phone = ?, address = ?,
-                balance = ?, initial_receivable = ?, receivable = ?,
+                balance = ?, balance_at = ?,
+                initial_receivable = ?, initial_receivable_at = ?,
+                receivable = ?,
                 bank_name = ?, bank_account = ?, bank_code = ?,
                 tax_number = ?, remark = ?, status = ?, updated_at = ?
             WHERE id = ?
@@ -847,9 +952,11 @@ def update_customer(customer_id):
                 values['contact_person'],
                 values['phone'],
                 values['address'],
-                values['balance'],
-                values['initial_receivable'],
-                receivable,
+                balance_float,
+                balance_at,
+                initial_receivable_float,
+                initial_receivable_at,
+                receivable_float,
                 values['bank_name'],
                 values['bank_account'],
                 values['bank_code'],

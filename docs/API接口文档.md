@@ -1564,7 +1564,9 @@ receipt_image: File (图片文件)
     "phone": "17554354236",
     "address": "北京天安门",
     "balance": 0,
+    "balanceAt": null,
     "initialReceivable": 5000,
+    "initialReceivableAt": "2026-09-01T12:58:31",
     "receivable": 5000,
     "bankName": "",
     "bankAccount": "",
@@ -1593,7 +1595,9 @@ receipt_image: File (图片文件)
   "phone": "17554354236",
   "address": "北京天安门",
   "balance": 0,
+  "balanceAt": null,
   "initialReceivable": 5000,
+  "initialReceivableAt": "2026-09-01T12:58:31",
   "receivable": 5000,
   "bankName": "",
   "bankAccount": "",
@@ -1613,8 +1617,10 @@ receipt_image: File (图片文件)
 - `contactPerson`: 联系人
 - `phone`: 联系电话
 - `address`: 客户地址
-- `balance`: 余额
-- `initialReceivable`: 期初欠款
+- `balance`: 当前储值余额
+- `balanceAt`: 当前储值余额最近一次录入/修改时间；储值为 0 时为 `null`
+- `initialReceivable`: 期初欠款金额
+- `initialReceivableAt`: 期初欠款最近一次录入/修改时间；期初欠款为 0 时为 `null`
 - `receivable`: 当前应收欠款（期初欠款 + 审核订单新增欠款 - 已收回欠款）
 - `bankName`: 开户行
 - `bankAccount`: 银行账号
@@ -1659,13 +1665,17 @@ receipt_image: File (图片文件)
     "phone": "13800138000",
     "address": "客户地址",
     "balance": 0,
+    "balanceAt": null,
     "initialReceivable": 0,
+    "initialReceivableAt": null,
     "receivable": 0,
     "status": "active",
     "createdAt": "2026-09-06T10:30:00"
   }
 }
 ```
+
+`balance` 表示储值，`initialDebt` 表示期初欠款。服务端会在金额大于 0 时自动记录对应的 `balanceAt` 或 `initialReceivableAt`。
 
 ### 7.4 更新客户信息
 - **URL**: `/api/customers/<int:customer_id>`
@@ -1685,6 +1695,8 @@ receipt_image: File (图片文件)
   "remark": "更新备注"
 }
 ```
+
+更新客户时，`balance` 和 `initialDebt` 都是覆盖写入：传入新的正数会覆盖原金额并生成本次操作时间；传入 `0`、空字符串或空值时，会清除对应金额和时间字段。期初欠款的变化会同步调整客户当前应收，若调整后当前应收小于 0，接口返回 `400` 并拒绝保存。
 
 **响应示例**:
 ```json
@@ -1747,7 +1759,7 @@ receipt_image: File (图片文件)
 
 - **URL**: `/api/customers/<int:customer_id>/debt-details`
 - **Method**: `GET`
-- **说明**: 获取指定客户的应收对账单，统一展示已审核且仍有效的销售订单、退货单和收款单流水。接口直接读取 `customer_account_transactions`，并关联原业务单据及商品明细，不新增重复账务表，也不会单独生成“优惠调整”记录。
+- **说明**: 获取指定客户的应收对账单，统一展示已审核且仍有效的销售订单、退货单和收款单流水，并将当前期初欠款、储值作为虚拟记录加入同一账单。接口直接读取 `customer_account_transactions`，并关联原业务单据及商品明细，不新增重复账务表，也不会单独生成“优惠调整”记录。
 
 **Query 参数**:
 
@@ -1755,7 +1767,7 @@ receipt_image: File (图片文件)
 |------|------|------|------|
 | `startDate` | string | 否 | 开始日期，格式 `YYYY-MM-DD`，只过滤列表 |
 | `endDate` | string | 否 | 结束日期，格式 `YYYY-MM-DD`，只过滤列表 |
-| `businessType` | string | 否 | `ORDER` 销售订单、`RETURN` 退货单、`PAYMENT` 收款单；为空表示全部 |
+| `businessType` | string | 否 | `ORDER` 销售订单、`RETURN` 退货单、`PAYMENT` 收款单、`INITIAL` 期初欠款、`BALANCE` 储值调整；为空表示全部 |
 | `expandProducts` | boolean | 否 | 是否返回商品级明细及分摊欠款，默认 `false`；详情页应传 `true` |
 
 **响应示例**:
@@ -1768,9 +1780,13 @@ receipt_image: File (图片文件)
   "storeId": 1,
   "storeName": "总部店",
   "initialDebt": 5000.00,
+  "initialDebtAt": "2026-09-01T12:58:31",
+  "storedBalance": 800.00,
+  "balanceAt": "2026-09-12T09:30:00",
   "totalReceivable": 8542.50,
   "summary": {
     "initialDebt": 5000.00,
+    "storedBalance": 800.00,
     "receivableIncrease": 5542.50,
     "debtRecovered": 2000.00,
     "discountAmount": 0.00,
@@ -1820,9 +1836,9 @@ receipt_image: File (图片文件)
 
 **计算与状态规则**:
 
-1. 只纳入 `customer_account_transactions.status = 'active'` 的 `order_audit`、`customer_return`、`customer_payment` 流水；已反审核流水及反向流水不展示。
+1. 只纳入 `customer_account_transactions.status = 'active'` 的 `order_audit`、`customer_return`、`customer_payment` 流水；已反审核流水及反向流水不展示。当前期初欠款会生成一条 `INITIAL` 记录，当前储值会生成一条 `BALANCE` 记录。
 2. `debtAmount` 使用流水的 `receivable_change`：销售订单为正数，退货和收款通常为负数；因此能准确反映储值抵扣、实退核销及收款后的客户应收变化。
-3. `currentDebt` 从客户 `initial_receivable` 开始，按业务日期、流水 ID 顺序累计。日期或业务类型筛选只影响列表，不改变累计欠款结果。
+3. `currentDebt` 按业务日期、流水 ID 顺序累计，`INITIAL` 记录作为累计起点，`BALANCE` 记录不改变应收欠款。接口内部按时间正序计算后返回，前端默认按最新时间倒序展示，因此修改期初欠款或储值后会显示在最新发生时间的位置。日期或业务类型筛选只影响列表，不改变累计欠款结果。
 4. `expandProducts=true` 时，商品按小计占比拆分 `debtAmount`；商品金额合计为 0 时平均分摊，最后一项用差额修正，确保分摊合计与本单欠款精确到分。
 5. 收款单不包含商品明细；优惠金额保留在原订单/收款流水字段中，接口不生成独立优惠调整行。
 

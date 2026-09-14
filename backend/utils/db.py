@@ -552,7 +552,9 @@ def _ensure_customer_schema(conn):
                     phone TEXT,
                     address TEXT,
                     balance REAL DEFAULT 0,
+                    balance_at TEXT,
                     initial_receivable REAL DEFAULT 0,
+                    initial_receivable_at TEXT,
                     receivable REAL DEFAULT 0,
                     bank_name TEXT,
                     bank_account TEXT,
@@ -575,7 +577,9 @@ def _ensure_customer_schema(conn):
                 "phone": "TEXT",
                 "address": "TEXT",
                 "balance": "REAL DEFAULT 0",
+                "balance_at": "TEXT",
                 "initial_receivable": "REAL",
+                "initial_receivable_at": "TEXT",
                 "bank_name": "TEXT",
                 "bank_account": "TEXT",
                 "bank_code": "TEXT",
@@ -622,6 +626,28 @@ def _ensure_customer_schema(conn):
                 initial_receivable = COALESCE(initial_receivable, receivable, 0),
                 receivable = COALESCE(receivable, 0),
                 status = COALESCE(NULLIF(status, ''), 'active')
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE customers
+            SET balance_at = COALESCE(NULLIF(balance_at, ''), created_at)
+            WHERE balance > 0
+              AND (balance_at IS NULL OR trim(balance_at) = '')
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE customers
+            SET initial_receivable_at = COALESCE(
+                    NULLIF(initial_receivable_at, ''),
+                    created_at
+                )
+            WHERE initial_receivable > 0
+              AND (
+                    initial_receivable_at IS NULL
+                    OR trim(initial_receivable_at) = ''
+              )
             """
         )
 

@@ -573,10 +573,13 @@
                           <input
                             v-model.number="formData.balance"
                             type="number"
+                            min="0"
                             step="0.01"
                             placeholder="0.00"
+                            @input="handleBalanceInput"
                           />
                         </div>
+                        <small class="field-hint">{{ isEditMode ? '修改后会更新储值调整时间' : '录入时会自动生成时间' }}</small>
                       </label>
 
                       <label class="form-field">
@@ -592,10 +595,13 @@
                           <input
                             v-model.number="formData.initialDebt"
                             type="number"
+                            min="0"
                             step="0.01"
                             placeholder="0.00"
+                            @input="handleInitialDebtInput"
                           />
                         </div>
+                        <small class="field-hint">{{ isEditMode ? '修改后会更新期初欠款时间,输入0或留空则删除' : '录入时会自动生成时间' }}</small>
                       </label>
                     </div>
 
@@ -708,6 +714,7 @@ const pageSize = ref(20)
 
 // 表单数据
 const formData = ref({
+  id: null,
   customerName: '',
   customerCode: '',
   storeId: '',
@@ -817,6 +824,7 @@ const handleReset = () => {
 const handleAdd = () => {
   isEditMode.value = false
   formData.value = {
+    id: null,
     customerName: '',
     customerCode: '',
     storeId: allStores.value.length > 0 ? allStores.value[0].id : '',
@@ -843,14 +851,15 @@ const handleEdit = (customer) => {
   isEditMode.value = true
   selectedCustomer.value = customer
   formData.value = {
+    id: customer.id,
     customerName: customer.customerName,
     customerCode: customer.customerCode,
     storeId: customer.storeId,
     contactPerson: customer.contactPerson || '',
     phone: customer.phone || '',
     address: customer.address || '',
-    balance: customer.balance || 0,
-    initialDebt: customer.initialReceivable || customer.receivable || 0,
+    balance: customer.balance ?? 0,
+    initialDebt: customer.initialReceivable ?? 0,
     bankName: customer.bankName || '',
     bankAccount: customer.bankAccount || '',
     bankCode: customer.bankCode || '',
@@ -887,8 +896,12 @@ const handleSubmit = async () => {
   submitting.value = true
   try {
     if (isEditMode.value) {
+      if (!formData.value.id) {
+        alert('客户ID缺失，无法保存')
+        return
+      }
       await request({
-        url: `/customers/${selectedCustomer.value.id}`,
+        url: `/customers/${formData.value.id}`,
         method: 'PUT',
         data: formData.value
       })
@@ -920,6 +933,23 @@ const closeEditModal = () => {
   showEditModal.value = false
   isEditMode.value = false
   selectedCustomer.value = null
+  // 重置表单数据
+  formData.value = {
+    id: null,
+    customerName: '',
+    customerCode: '',
+    storeId: '',
+    contactPerson: '',
+    phone: '',
+    address: '',
+    balance: 0,
+    initialDebt: 0,
+    bankName: '',
+    bankAccount: '',
+    bankCode: '',
+    taxNumber: '',
+    remark: ''
+  }
 }
 
 const handleExport = () => {
@@ -940,6 +970,20 @@ const truncateText = (text, length) => {
   if (!text) return '-'
   if (text.length <= length) return text
   return text.substring(0, length) + '...'
+}
+
+// 处理储值余额输入
+const handleBalanceInput = () => {
+  if (!formData.value.balance || formData.value.balance < 0) {
+    formData.value.balance = 0
+  }
+}
+
+// 处理期初欠款输入
+const handleInitialDebtInput = () => {
+  if (!formData.value.initialDebt || formData.value.initialDebt < 0) {
+    formData.value.initialDebt = 0
+  }
 }
 
 onMounted(async () => {
@@ -2027,6 +2071,14 @@ svg {
 .input-with-prefix input {
   padding-left: 28px;
   font-variant-numeric: tabular-nums;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 .empty-hint {
