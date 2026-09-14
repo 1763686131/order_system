@@ -13,6 +13,7 @@
 - **v2.5** (2026-09-11) - 新增服务器路径配置、目录浏览和 NAS 检测报告动态扫描接口
 - **v2.6** (2026-09-14) - 新增退货单草稿、修改、审核、反审核及客户应收和库存联动接口
 - **v2.7** (2026-09-14) - 新增银行账户、银行卡图片上传及结算账户动态关联接口
+- **v2.8** (2026-09-14) - 新增客户应收对账单详情接口，复用审核流水并支持商品级欠款分摊
 - **v2.4** (2026-09-10) - 新增收款单、审核入账、反审核和客户应收联动接口
 - **v2.3** (2026-09-08) - 新增供应商、入库单、库存余额与事务过账接口
 - **v2.2** (2026-09-08) - 新增原材料商品档案接口，补充单位分组接口
@@ -1741,6 +1742,89 @@ receipt_image: File (图片文件)
   }
 }
 ```
+
+### 7.7 获取客户应收欠款详情（对账单）
+
+- **URL**: `/api/customers/<int:customer_id>/debt-details`
+- **Method**: `GET`
+- **说明**: 获取指定客户的应收对账单，统一展示已审核且仍有效的销售订单、退货单和收款单流水。接口直接读取 `customer_account_transactions`，并关联原业务单据及商品明细，不新增重复账务表，也不会单独生成“优惠调整”记录。
+
+**Query 参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `startDate` | string | 否 | 开始日期，格式 `YYYY-MM-DD`，只过滤列表 |
+| `endDate` | string | 否 | 结束日期，格式 `YYYY-MM-DD`，只过滤列表 |
+| `businessType` | string | 否 | `ORDER` 销售订单、`RETURN` 退货单、`PAYMENT` 收款单；为空表示全部 |
+| `expandProducts` | boolean | 否 | 是否返回商品级明细及分摊欠款，默认 `false`；详情页应传 `true` |
+
+**响应示例**:
+
+```json
+{
+  "customerId": 5,
+  "customerCode": "001",
+  "customerName": "武汉海威船舶",
+  "storeId": 1,
+  "storeName": "总部店",
+  "initialDebt": 5000.00,
+  "totalReceivable": 8542.50,
+  "summary": {
+    "initialDebt": 5000.00,
+    "receivableIncrease": 5542.50,
+    "debtRecovered": 2000.00,
+    "discountAmount": 0.00,
+    "receivable": 8542.50
+  },
+  "records": [
+    {
+      "id": "tx-123",
+      "transactionId": 123,
+      "businessDate": "2026-09-10",
+      "docNumber": "SO20260910001",
+      "businessType": "ORDER",
+      "orderAmount": 2542.50,
+      "paidAmount": 1000.00,
+      "storedBalanceApplied": 0.00,
+      "debtAmount": 1542.50,
+      "currentDebt": 6542.50,
+      "hasMultipleProducts": true,
+      "productCount": 2,
+      "products": [
+        {
+          "productId": 10,
+          "name": "碳纤维胶",
+          "quantity": 10,
+          "unit": "桶",
+          "price": 100.00,
+          "subtotal": 1000.00,
+          "allocatedDebt": 685.56,
+          "cumulativeDebt": 5685.56
+        },
+        {
+          "productId": 15,
+          "name": "环氧树脂",
+          "quantity": 25,
+          "unit": "桶",
+          "price": 50.00,
+          "subtotal": 1250.00,
+          "allocatedDebt": 856.94,
+          "cumulativeDebt": 6542.50
+        }
+      ]
+    }
+  ],
+  "total": 1
+}
+```
+
+**计算与状态规则**:
+
+1. 只纳入 `customer_account_transactions.status = 'active'` 的 `order_audit`、`customer_return`、`customer_payment` 流水；已反审核流水及反向流水不展示。
+2. `debtAmount` 使用流水的 `receivable_change`：销售订单为正数，退货和收款通常为负数；因此能准确反映储值抵扣、实退核销及收款后的客户应收变化。
+3. `currentDebt` 从客户 `initial_receivable` 开始，按业务日期、流水 ID 顺序累计。日期或业务类型筛选只影响列表，不改变累计欠款结果。
+4. `expandProducts=true` 时，商品按小计占比拆分 `debtAmount`；商品金额合计为 0 时平均分摊，最后一项用差额修正，确保分摊合计与本单欠款精确到分。
+5. 收款单不包含商品明细；优惠金额保留在原订单/收款流水字段中，接口不生成独立优惠调整行。
 
 ---
 

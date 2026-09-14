@@ -4,7 +4,7 @@
     <div class="summary-card">
       <div class="summary-header">
         <div class="summary-title">
-          <h2>{{ targetName }}</h2>
+          <h2>{{ displayTargetName }}</h2>
           <span class="target-label">{{ targetLabel }}</span>
         </div>
         <button type="button" class="close-button" @click="handleClose" title="返回上一级">
@@ -51,10 +51,8 @@
             <select v-model="filters.businessType">
               <option value="">全部类型</option>
               <option value="ORDER">销售订单</option>
-              <option value="PURCHASE">采购订单</option>
               <option value="RETURN">退货单</option>
-              <option value="PAYMENT">收付款</option>
-              <option value="DISCOUNT">优惠调整</option>
+              <option value="PAYMENT">收款单</option>
             </select>
           </label>
 
@@ -343,6 +341,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import request from '@/api/request'
 
 const router = useRouter()
 
@@ -372,6 +371,14 @@ const currentPage = ref(1)
 const pageSize = ref(20)
 const sortOrder = ref('asc')
 const expandedRows = reactive({})
+const customerInfo = ref({})
+const summary = ref({
+  initialDebt: 0,
+  receivableIncrease: 0,
+  debtRecovered: 0,
+  discountAmount: 0,
+  receivable: 0
+})
 
 const filters = reactive({
   businessType: '',
@@ -379,87 +386,48 @@ const filters = reactive({
   endDate: ''
 })
 
-const summaryTitle = computed(() => {
-  return props.type === 'receivable' ? '应收欠款合计' : '应付欠款合计'
-})
-
 const targetLabel = computed(() => {
   return props.type === 'receivable' ? '客户' : '供应商'
 })
 
-const filteredRecords = computed(() => {
-  let result = [...records.value]
-
-  if (filters.businessType) {
-    result = result.filter(r => r.businessType === filters.businessType)
-  }
-
-  if (filters.startDate) {
-    result = result.filter(r => r.businessDate >= filters.startDate)
-  }
-
-  if (filters.endDate) {
-    result = result.filter(r => r.businessDate <= filters.endDate)
-  }
-
-  result.sort((a, b) => {
-    const dateA = new Date(a.businessDate)
-    const dateB = new Date(b.businessDate)
-    return sortOrder.value === 'asc' ? dateA - dateB : dateB - dateA
-  })
-
-  // 无论排序方向如何，当前欠款始终从最早的记录开始累计
-  // 所以需要先按时间正序排列来计算累计值
-  const sortedForCalculation = [...result].sort((a, b) => {
-    const dateA = new Date(a.businessDate)
-    const dateB = new Date(b.businessDate)
-    return dateA - dateB
-  })
-
-  let cumulativeDebt = initialDebt.value
-  const debtMap = new Map()
-  sortedForCalculation.forEach(record => {
-    cumulativeDebt += record.debtAmount
-    debtMap.set(record.id, cumulativeDebt)
-  })
-
-  // 将计算好的累计值赋给实际显示的记录
-  result.forEach(record => {
-    record.currentDebt = debtMap.get(record.id)
-  })
-
-  return result
+const displayTargetName = computed(() => {
+  return props.targetName || customerInfo.value.customerName || `客户#${props.targetId}`
 })
 
-const totalAmount = computed(() => {
-  return filteredRecords.value.reduce((sum, r) => sum + r.debtAmount, 0)
+const filteredRecords = computed(() => {
+  const result = records.value.filter((record) => {
+    if (filters.businessType && record.businessType !== filters.businessType) {
+      return false
+    }
+    const date = String(record.businessDate || '').slice(0, 10)
+    if (filters.startDate && date < filters.startDate) return false
+    if (filters.endDate && date > filters.endDate) return false
+    return true
+  })
+
+  return result.sort((left, right) => {
+    const dateResult = String(left.businessDate || '').slice(0, 10).localeCompare(
+      String(right.businessDate || '').slice(0, 10)
+    )
+    if (dateResult !== 0) {
+      return sortOrder.value === 'asc' ? dateResult : -dateResult
+    }
+    const idResult = Number(left.transactionId || left.id) - Number(right.transactionId || right.id)
+    return sortOrder.value === 'asc' ? idResult : -idResult
+  })
 })
 
 const totalReceivable = computed(() => {
-  return filteredRecords.value.length > 0
-    ? filteredRecords.value[filteredRecords.value.length - 1].currentDebt
-    : 0
+  return summary.value.receivable ?? customerInfo.value.receivable ?? 0
 })
 
 const initialDebt = computed(() => {
-  return 9006.00
+  return summary.value.initialDebt ?? customerInfo.value.initialReceivable ?? 0
 })
 
-const totalIncrease = computed(() => {
-  return filteredRecords.value
-    .filter(r => r.debtAmount > 0)
-    .reduce((sum, r) => sum + r.debtAmount, 0)
-})
-
-const totalRecovered = computed(() => {
-  return Math.abs(filteredRecords.value
-    .filter(r => r.debtAmount < 0)
-    .reduce((sum, r) => sum + r.debtAmount, 0))
-})
-
-const totalDiscount = computed(() => {
-  return 0.00
-})
+const totalIncrease = computed(() => summary.value.receivableIncrease ?? 0)
+const totalRecovered = computed(() => summary.value.debtRecovered ?? 0)
+const totalDiscount = computed(() => 0)
 
 const totalPages = computed(() => {
   return Math.max(1, Math.ceil(filteredRecords.value.length / pageSize.value))
@@ -471,92 +439,46 @@ const pagedRecords = computed(() => {
 })
 
 const formatMoney = (value) => {
-  if (value == null) return '¥0.00'
-  const num = Number(value)
-  return `¥${num.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const num = Number(value || 0)
+  return `¥${num.toLocaleString('zh-CN', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`
 }
 
 const formatDate = (dateStr) => {
   if (!dateStr) return '-'
-  return dateStr
+  return String(dateStr).replace('T', ' ').slice(0, 19)
 }
 
 const formatBusinessType = (type) => {
   const typeMap = {
     ORDER: '销售订单',
-    PURCHASE: '采购订单',
     RETURN: '退货单',
-    PAYMENT: '收付款',
-    DISCOUNT: '优惠调整'
+    PAYMENT: '收款单'
   }
   return typeMap[type] || type
 }
 
-// 计算商品级别的分摊欠款
 const calculateProductDebt = (item, productIndex) => {
-  if (!item.products || item.products.length === 0) {
-    return 0
-  }
+  const product = item.products?.[productIndex]
+  if (!product) return 0
+  if (product.allocatedDebt != null) return product.allocatedDebt
 
-  // 计算总金额（所有商品的小计）
-  const totalAmount = item.products.reduce((sum, p) => {
-    return sum + (p.quantity || 1) * (p.price || 0)
-  }, 0)
-
-  if (totalAmount === 0) {
-    return item.debtAmount / item.products.length
-  }
-
-  // 当前商品的小计
-  const product = item.products[productIndex]
-  const productAmount = (product.quantity || 1) * (product.price || 0)
-
-  // 按比例分摊欠款
-  return (productAmount / totalAmount) * item.debtAmount
+  const products = item.products || []
+  const total = products.reduce(
+    (sum, current) => sum + Number(current.subtotal ?? (current.quantity || 0) * (current.price || 0)),
+    0
+  )
+  if (!total) return Number(item.debtAmount || 0) / products.length
+  return Number(item.debtAmount || 0) * Number(product.subtotal || 0) / total
 }
 
-// 计算展开后商品行的当前欠款（累计值）
 const calculateProductCurrentDebt = (pageIndex, productIndex) => {
   const item = pagedRecords.value[pageIndex]
-  if (!item) return 0
-
-  // 从所有已筛选的记录中找到这条记录之前的所有欠款
-  const recordIndex = filteredRecords.value.findIndex(r => r.id === item.id)
-  if (recordIndex === -1) return 0
-
-  // 累计到当前记录之前的所有欠款（不包括当前记录）
-  let cumulativeBefore = initialDebt.value
-  for (let i = 0; i < recordIndex; i++) {
-    const sortedForCalculation = [...filteredRecords.value].sort((a, b) => {
-      const dateA = new Date(a.businessDate)
-      const dateB = new Date(b.businessDate)
-      return dateA - dateB
-    })
-    cumulativeBefore = initialDebt.value
-    for (let j = 0; j <= i; j++) {
-      cumulativeBefore += sortedForCalculation[j].debtAmount
-    }
-  }
-
-  // 重新按时间排序计算
-  const sortedRecords = [...filteredRecords.value].sort((a, b) => {
-    const dateA = new Date(a.businessDate)
-    const dateB = new Date(b.businessDate)
-    return dateA - dateB
-  })
-
-  const sortedIndex = sortedRecords.findIndex(r => r.id === item.id)
-  let cumulative = initialDebt.value
-  for (let i = 0; i < sortedIndex; i++) {
-    cumulative += sortedRecords[i].debtAmount
-  }
-
-  // 加上当前记录中，当前商品及之前商品的分摊欠款
-  for (let i = 0; i <= productIndex; i++) {
-    cumulative += calculateProductDebt(item, i)
-  }
-
-  return cumulative
+  const product = item?.products?.[productIndex]
+  if (product?.cumulativeDebt != null) return product.cumulativeDebt
+  return item?.currentDebt ?? 0
 }
 
 const handleSearch = () => {
@@ -579,98 +501,68 @@ const toggleRow = (itemId) => {
 }
 
 const exportTable = () => {
-  window.alert('导出功能开发中')
+  const header = ['业务日期', '单据编号', '业务类型', '商品信息', '数量', '单位', '单价', '本单欠款', '当前欠款']
+  const rows = filteredRecords.value.map((record) => {
+    const firstProduct = record.products?.[0] || {}
+    return [
+      formatDate(record.businessDate),
+      record.docNumber || '',
+      formatBusinessType(record.businessType),
+      firstProduct.name || '',
+      firstProduct.quantity ?? '',
+      firstProduct.unit || '',
+      firstProduct.price ?? '',
+      record.debtAmount ?? 0,
+      record.currentDebt ?? 0
+    ]
+  })
+  const csv = [header, ...rows]
+    .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `${displayTargetName.value}-对账单.csv`
+  anchor.click()
+  URL.revokeObjectURL(url)
 }
 
 const sendStatement = () => {
-  window.alert('发送对账单功能开发中')
+  window.alert('对账单已生成，可先导出后发送给客户')
 }
 
 const loadData = async () => {
   loading.value = true
-
-  await new Promise(resolve => setTimeout(resolve, 800))
-
-  records.value = [
-    {
-      id: 1,
-      businessDate: '2026-09-01',
-      docNumber: 'SO202609010001',
-      businessType: 'ORDER',
-      orderAmount: 5000,
-      paidAmount: 0,
-      debtAmount: 5000,
-      products: [
-        { name: '商品A', quantity: 10, unit: '箱', price: 120.50 },
-        { name: '商品B', quantity: 5, unit: '件', price: 85.00 }
-      ]
-    },
-    {
-      id: 2,
-      businessDate: '2026-09-02',
-      docNumber: 'SO202609020001',
-      businessType: 'ORDER',
-      orderAmount: 6000,
-      paidAmount: 5000,
-      debtAmount: 1000,
-      products: [
-        { name: '商品C', quantity: 8, unit: '套', price: 200.00 }
-      ]
-    },
-    {
-      id: 3,
-      businessDate: '2026-09-03',
-      docNumber: 'RT202609030001',
-      businessType: 'RETURN',
-      orderAmount: 0,
-      paidAmount: 0,
-      debtAmount: -1500,
-      products: [
-        { name: '商品A', quantity: 3, unit: '箱', price: 120.50 }
-      ]
-    },
-    {
-      id: 4,
-      businessDate: '2026-09-04',
-      docNumber: 'PM202609040001',
-      businessType: 'PAYMENT',
-      orderAmount: 0,
-      paidAmount: 0,
-      debtAmount: -2000,
-      products: []
-    },
-    {
-      id: 5,
-      businessDate: '2026-09-05',
-      docNumber: 'SO202609050001',
-      businessType: 'ORDER',
-      orderAmount: 7500,
-      paidAmount: 4000,
-      debtAmount: 3500,
-      products: [
-        { name: '商品D', quantity: 12, unit: '盒', price: 150.00 },
-        { name: '商品E', quantity: 20, unit: '个', price: 90.00 },
-        { name: '商品F', quantity: 6, unit: '包', price: 110.00 }
-      ]
-    },
-    {
-      id: 6,
-      businessDate: '2026-09-08',
-      docNumber: 'DIS202609080001',
-      businessType: 'DISCOUNT',
-      orderAmount: 0,
-      paidAmount: 0,
-      debtAmount: -500,
-      products: []
+  try {
+    const response = await request({
+      url: `/customers/${props.targetId}/debt-details`,
+      method: 'GET',
+      params: {
+        expandProducts: true
+      }
+    })
+    customerInfo.value = response || {}
+    summary.value = response?.summary || {
+      initialDebt: response?.initialDebt || 0,
+      receivableIncrease: 0,
+      debtRecovered: 0,
+      discountAmount: 0,
+      receivable: response?.totalReceivable || 0
     }
-  ]
-
-  loading.value = false
+    records.value = Array.isArray(response?.records) ? response.records : []
+    currentPage.value = 1
+    Object.keys(expandedRows).forEach((key) => delete expandedRows[key])
+  } catch (error) {
+    records.value = []
+    customerInfo.value = {}
+    window.alert(error?.response?.data?.error || '加载客户对账单失败')
+  } finally {
+    loading.value = false
+  }
 }
 
-onMounted(() => {
-  loadData()
-})
+onMounted(loadData)
 </script>
 
 <style scoped>

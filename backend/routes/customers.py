@@ -1,4 +1,6 @@
+import json
 from datetime import datetime
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from math import isfinite
 
 from flask import Blueprint, jsonify, request
@@ -8,6 +10,13 @@ from utils.db_helper import read_customers
 
 
 customers_bp = Blueprint('customers', __name__, url_prefix='/api/customers')
+
+_MONEY_QUANT = Decimal('0.01')
+_DEBT_TRANSACTION_TYPES = (
+    'order_audit',
+    'customer_return',
+    'customer_payment',
+)
 
 
 def _payload():
@@ -33,6 +42,259 @@ def _amount(value, field_name, default=0):
     if not isfinite(result):
         raise ValueError(f'{field_name}必须是有效数字')
     return result
+
+
+def _debt_money(value):
+    """将账务金额统一转换为两位小数，避免商品分摊出现浮点尾差。"""
+    if value in (None, ''):
+        value = 0
+    try:
+        return Decimal(str(value)).quantize(
+            _MONEY_QUANT,
+            rounding=ROUND_HALF_UP,
+        )
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal('0.00')
+
+
+def _debt_float(value):
+    return float(_debt_money(value))
+
+
+def _debt_json_list(value):
+    if isinstance(value, list):
+        return value
+    if not value:
+        return []
+    try:
+        parsed = json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return []
+    return parsed if isinstance(parsed, list) else []
+
+
+def _debt_product(item):
+    """统一订单商品 JSON 与退货商品表的字段。"""
+    item = dict(item or {})
+    quantity = item.get('quantity', 0)
+    price = item.get('price', 0)
+    subtotal = item.get('amount')
+    if subtotal in (None, ''):
+        subtotal = item.get('total_amount')
+    if subtotal in (None, ''):
+        subtotal = _debt_money(quantity) * _debt_money(price)
+
+    return {
+        'productId': item.get('product_id', item.get('productId')),
+        'productCode': item.get('product_code', item.get('productCode', '')) or '',
+        'name': (
+            item.get('goods_name')
+            or item.get('goodsName')
+            or item.get('name')
+            or item.get('productName')
+            or ''
+        ),
+        'specification': (
+            item.get('specification')
+            or item.get('spec')
+            or item.get('specificationName')
+            or ''
+        ),
+        'quantity': _debt_float(quantity),
+        'unit': item.get('unit') or '',
+        'price': _debt_float(price),
+        'subtotal': _debt_float(subtotal),
+        'warehouseId': item.get('warehouse_id', item.get('warehouseId')),
+        'remark': item.get('remark') or '',
+    }
+
+
+def _allocate_debt(products, debt_amount, cumulative_before):
+    """按商品小计分摊一条流水，并把累计欠款精确到分。"""
+    if not products:
+        return []
+
+    debt_amount = _debt_money(debt_amount)
+    total_subtotal = sum(
+        (_debt_money(product.get('subtotal')) for product in products),
+        Decimal('0.00'),
+    )
+    product_count = len(products)
+    allocated = []
+    allocated_before = Decimal('0.00')
+
+    for index, product in enumerate(products):
+        if index == product_count - 1:
+            amount = debt_amount - allocated_before
+        elif total_subtotal == 0:
+            amount = (debt_amount / product_count).quantize(
+                _MONEY_QUANT,
+                rounding=ROUND_HALF_UP,
+            )
+        else:
+            amount = (
+                debt_amount
+                * _debt_money(product.get('subtotal'))
+                / total_subtotal
+            ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+        allocated_before += amount
+        cumulative_before += amount
+        product['allocatedDebt'] = _debt_float(amount)
+        product['cumulativeDebt'] = _debt_float(cumulative_before)
+        allocated.append(product)
+
+    return allocated
+
+
+def _order_row_for_transaction(cursor, transaction):
+    order = None
+    if transaction['order_id']:
+        order = cursor.execute(
+            'SELECT * FROM orders WHERE id = ?',
+            (transaction['order_id'],),
+        ).fetchone()
+    if not order and transaction['order_number']:
+        order = cursor.execute(
+            '''
+            SELECT * FROM orders
+            WHERE order_number = ?
+            ORDER BY id DESC
+            LIMIT 1
+            ''',
+            (transaction['order_number'],),
+        ).fetchone()
+    return order
+
+
+def _return_row_for_transaction(cursor, transaction):
+    return cursor.execute(
+        '''
+        SELECT *
+        FROM return_orders
+        WHERE account_transaction_id = ?
+           OR return_number = ?
+        ORDER BY id DESC
+        LIMIT 1
+        ''',
+        (transaction['id'], transaction['order_number'] or ''),
+    ).fetchone()
+
+
+def _payment_row_for_transaction(cursor, transaction):
+    payment = None
+    if transaction['payment_id']:
+        payment = cursor.execute(
+            'SELECT * FROM payment_receipts WHERE id = ?',
+            (transaction['payment_id'],),
+        ).fetchone()
+    if not payment and transaction['payment_number']:
+        payment = cursor.execute(
+            '''
+            SELECT *
+            FROM payment_receipts
+            WHERE document_no = ?
+            ORDER BY id DESC
+            LIMIT 1
+            ''',
+            (transaction['payment_number'],),
+        ).fetchone()
+    return payment
+
+
+def _debt_record_from_transaction(cursor, transaction):
+    tx_type = transaction['transaction_type']
+    record_id = transaction['id']
+    products = []
+    record = {
+        'id': f'tx-{record_id}',
+        'transactionId': record_id,
+        'businessDate': transaction['created_at'] or '',
+        'docNumber': (
+            transaction['order_number']
+            or transaction['payment_number']
+            or f'TX{record_id}'
+        ),
+        'businessType': '',
+        'orderAmount': 0.0,
+        'paidAmount': 0.0,
+        'storedBalanceApplied': _debt_float(
+            transaction['stored_balance_applied']
+        ),
+        '_receivableIncrease': _debt_float(
+            transaction['receivable_increase']
+        ),
+        'debtAmount': _debt_float(transaction['receivable_change']),
+        'currentDebt': _debt_float(transaction['receivable_after']),
+        'products': products,
+        'hasMultipleProducts': False,
+        'productCount': 0,
+        'remark': '',
+    }
+
+    if tx_type == 'order_audit':
+        order = _order_row_for_transaction(cursor, transaction)
+        if order and order['audit_state'] != 1:
+            return None
+        if order:
+            record.update({
+                'businessDate': order['date'] or record['businessDate'],
+                'docNumber': order['order_number'] or record['docNumber'],
+                'orderAmount': _debt_float(order['should_receive']),
+                'paidAmount': _debt_float(
+                    _debt_money(order['current_payment'])
+                    + _debt_money(transaction['stored_balance_applied'])
+                ),
+                'remark': order['remark'] or '',
+            })
+            products = [
+                _debt_product(item)
+                for item in _debt_json_list(order['order_goods'])
+                if isinstance(item, dict)
+            ]
+        record['businessType'] = 'ORDER'
+    elif tx_type == 'customer_return':
+        return_row = _return_row_for_transaction(cursor, transaction)
+        if return_row and return_row['status'] not in ('audited', 'completed'):
+            return None
+        if return_row:
+            record.update({
+                'businessDate': return_row['return_date'] or record['businessDate'],
+                'docNumber': return_row['return_number'] or record['docNumber'],
+                'orderAmount': _debt_float(return_row['total_amount']),
+                'paidAmount': _debt_float(return_row['refund_amount']),
+                'remark': return_row['remark'] or '',
+            })
+            item_rows = cursor.execute(
+                '''
+                SELECT *
+                FROM return_order_items
+                WHERE return_id = ?
+                ORDER BY line_no, id
+                ''',
+                (return_row['id'],),
+            ).fetchall()
+            products = [_debt_product(item) for item in item_rows]
+        record['businessType'] = 'RETURN'
+    elif tx_type == 'customer_payment':
+        payment = _payment_row_for_transaction(cursor, transaction)
+        if payment and payment['status'] != 'audited':
+            return None
+        if payment:
+            record.update({
+                'businessDate': payment['document_date'] or record['businessDate'],
+                'docNumber': payment['document_no'] or record['docNumber'],
+                'paidAmount': _debt_float(payment['payment_amount']),
+                'remark': payment['remark'] or '',
+            })
+        record['businessType'] = 'PAYMENT'
+    else:
+        return None
+
+    record['products'] = products
+    record['productCount'] = len(products)
+    record['hasMultipleProducts'] = len(products) > 1
+    return record
 
 
 def _validate_store(cursor, store_id):
@@ -326,6 +588,135 @@ def get_customer_receivables():
                 2
             ),
         }
+    })
+
+
+@customers_bp.route('/<int:customer_id>/debt-details', methods=['GET'])
+def get_customer_debt_details(customer_id):
+    """获取客户对账单：销售订单、退货单和收款单三类有效账户流水。"""
+    requested_type = (request.args.get('businessType') or '').strip().upper()
+    allowed_types = {'', 'ORDER', 'RETURN', 'PAYMENT'}
+    if requested_type not in allowed_types:
+        return jsonify({'error': '业务类型仅支持ORDER、RETURN、PAYMENT'}), 400
+
+    start_date = (request.args.get('startDate') or '').strip()
+    end_date = (request.args.get('endDate') or '').strip()
+    expand_products = (
+        str(request.args.get('expandProducts', 'false')).lower()
+        in ('1', 'true', 'yes')
+    )
+
+    with get_db() as conn:
+        cursor = conn.cursor()
+        customer = cursor.execute(
+            '''
+            SELECT c.id, c.customer_code, c.customer_name, c.store_id,
+                   c.initial_receivable, c.receivable, s.name AS store_name
+            FROM customers c
+            LEFT JOIN stores s ON s.id = c.store_id
+            WHERE c.id = ?
+            ''',
+            (customer_id,),
+        ).fetchone()
+        if not customer:
+            return jsonify({'error': '客户不存在'}), 404
+
+        transactions = cursor.execute(
+            '''
+            SELECT *
+            FROM customer_account_transactions
+            WHERE customer_id = ?
+              AND status = 'active'
+              AND transaction_type IN (?, ?, ?)
+            ORDER BY created_at ASC, id ASC
+            ''',
+            (customer_id, *_DEBT_TRANSACTION_TYPES),
+        ).fetchall()
+
+        records = []
+        for transaction in transactions:
+            record = _debt_record_from_transaction(cursor, transaction)
+            if not record:
+                continue
+            records.append(record)
+
+    # 账务累计必须基于全部有效流水计算，不能因筛选日期/类型而改变历史累计欠款。
+    records.sort(
+        key=lambda item: (
+            str(item['businessDate'] or '')[:10],
+            item['transactionId'],
+        )
+    )
+    cumulative = _debt_money(customer['initial_receivable'])
+    for record in records:
+        debt_amount = _debt_money(record['debtAmount'])
+        record['debtAmount'] = _debt_float(debt_amount)
+        if expand_products and record['products']:
+            record['products'] = _allocate_debt(
+                record['products'],
+                debt_amount,
+                cumulative,
+            )
+            cumulative = (
+                _debt_money(record['products'][-1]['cumulativeDebt'])
+                if record['products']
+                else cumulative + debt_amount
+            )
+        else:
+            cumulative += debt_amount
+        record['currentDebt'] = _debt_float(cumulative)
+        if not expand_products:
+            record['products'] = []
+            record['productCount'] = 0
+            record['hasMultipleProducts'] = False
+
+    # 日期筛选只影响列表，不影响每条记录已计算好的累计欠款。
+    filtered_records = [
+        record for record in records
+        if (not requested_type or record['businessType'] == requested_type)
+        and (not start_date or str(record['businessDate'])[:10] >= start_date)
+        and (not end_date or str(record['businessDate'])[:10] <= end_date)
+    ]
+
+    initial_debt = _debt_money(customer['initial_receivable'])
+    receivable_increase = sum(
+        (_debt_money(record.get('_receivableIncrease'))
+         for record in records
+         if _debt_money(record.get('_receivableIncrease')) > 0),
+        Decimal('0.00'),
+    )
+    debt_recovered = max(
+        Decimal('0.00'),
+        initial_debt + receivable_increase
+        - _debt_money(customer['receivable']),
+    )
+
+    response_records = []
+    for record in filtered_records:
+        response_record = dict(record)
+        response_record.pop('_receivableIncrease', None)
+        if not expand_products:
+            response_record.pop('products', None)
+        response_records.append(response_record)
+
+    return jsonify({
+        'customerId': customer['id'],
+        'customerCode': customer['customer_code'] or '',
+        'customerName': customer['customer_name'] or '',
+        'storeId': customer['store_id'],
+        'storeName': customer['store_name'] or '',
+        'initialDebt': _debt_float(initial_debt),
+        'totalReceivable': _debt_float(customer['receivable']),
+        'summary': {
+            'initialDebt': _debt_float(initial_debt),
+            'receivableIncrease': _debt_float(receivable_increase),
+            'debtRecovered': _debt_float(debt_recovered),
+            # 对账单不单独展示优惠调整，优惠金额仍留在原收款/订单流水中。
+            'discountAmount': 0.0,
+            'receivable': _debt_float(customer['receivable']),
+        },
+        'records': response_records,
+        'total': len(response_records),
     })
 
 
