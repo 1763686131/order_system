@@ -72,6 +72,8 @@
 - 新增”银行账户”页面，采用真实银行卡样式展示企业账户信息，支持卡片 3D 翻转查看账户余额。
 - 银行账户管理支持录入账户名称、账号、开户行、行号、账户余额等信息。
 - 银行卡片支持自定义背景颜色、背景图片和银行 LOGO 图标，图片上传路径可在系统配置中管理。
+- 银行账户数据已接入 SQLite；订单录入、收款历史和退货单会按当前门店加载真实结算账户下拉选项。
+- 银行账户图片通过后端上传接口保存，审核销售收款会增加账户余额，收款单反审核会回退余额，退货实际退款会减少账户余额。
 - 卡片正面展示芯片、银行名称、卡号（每 4 位分组）和行号信息；背面展示磁条、签名区和账户余额（大号金额显示）。
 - 单击卡片触发 3D 翻转查看余额，双击打开编辑弹窗修改账户信息。
 
@@ -371,7 +373,7 @@ order_system/
 | `/admin/customers` | 客户管理 | `/api/customers` |
 | `/admin/finance/receivables` | 应收欠款 | `/api/customers/receivables` |
 | `/admin/finance/payment-history` | 收款历史 | `/api/payment-receipts` |
-| `/admin/finance/bank-accounts` | 银行账户管理 | 前端模拟数据（待接入后端 API） |
+| `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
 | `/admin/finance/debt-details/:type/:targetId` | 欠款详情 | 前端模拟数据（待接入后端 API） |
 
 ## 库存关键接口
@@ -409,6 +411,15 @@ order_system/
 | `DELETE` | `/api/payment-receipts/:id` | 删除待审核收款单及其附件 |
 | `POST` | `/api/payment-receipts/:id/audit` | 审核入账并更新客户欠款、储值和账户流水 |
 | `DELETE` | `/api/payment-receipts/:id/audit` | 反审核并回退客户账户数据 |
+| `GET` | `/api/bank-accounts` | 查询银行账户，可按门店筛选 |
+| `GET` | `/api/bank-accounts/options` | 查询订单、收款单和退货单使用的结算账户选项 |
+| `POST` | `/api/bank-accounts` | 新增银行账户 |
+| `PUT` | `/api/bank-accounts/:id` | 修改银行账户 |
+| `DELETE` | `/api/bank-accounts/:id` | 删除未被业务单据引用的银行账户 |
+| `POST` | `/api/upload/bank-card-background` | 上传银行卡背景图（不超过 5 MB） |
+| `POST` | `/api/upload/bank-icon` | 上传银行图标（不超过 2 MB） |
+
+银行账户图片目录由 `/api/settings/paths` 的 `bankCardBgPath` 和 `bankIconPath` 配置；数据库只保存 `/uploads/bank-cards/...` 访问路径。
 
 ## 退货单关键接口
 
@@ -444,6 +455,7 @@ order_system/
 
 - `customers`：客户档案、期初欠款、当前应收欠款和预收储值余额
 - `payment_receipts`：收款单草稿、审核状态以及核销和预收快照
+- `bank_accounts`：门店银行账户、卡片样式、图片访问路径和余额
 - `return_orders`：退货单头、实退金额、退款金额、审核状态和客户流水关联
 - `return_order_items`：退货商品、仓库、数量、单价、税额和备注明细
 - `customer_account_transactions`：订单审核、收款审核和反审核产生的客户账户流水
@@ -507,9 +519,13 @@ docker restart my_order_app
 
 系统会保护已经发生后续业务的账户流水。收款单产生的预收储值被后续订单使用后不能直接反审核；销售订单形成的欠款被后续收款核销后也不能直接反审核。需要先按时间倒序撤销关联的后续业务。
 
-### 收款单的结算账户为什么不能手工填写
+### 结算账户从哪里来
 
-结算账户根据所选客户归属门店自动生成，格式为“门店名称 + 结算账户”，用来避免收款单记入错误门店。收款方式仍可选填。
+结算账户来自“银行账户”页面中当前门店的账户配置。订单、收款单和退货单会按门店过滤下拉选项；如果门店暂未配置银行账户，仍兼容历史的“门店名称 + 结算账户”文字。
+
+### 银行账户余额什么时候变化
+
+草稿保存和修改不会改变银行账户余额。审核销售订单或收款单时增加实际收款，退货单审核时仅按“本次退款”减少余额；反审核会回退相反金额。实退金额用于核销客户应收，不等同于现金退款。
 
 ### 提交入库单后库存没有变化
 

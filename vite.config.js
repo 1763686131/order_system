@@ -24,6 +24,11 @@ export default defineConfig({
         // target: 'http://192.168.31.236:7899',
         target: 'http://localhost:7899',
         changeOrigin: true
+      },
+      '/uploads': {
+        // 让开发环境也能直接预览后端保存的银行卡图片。
+        target: 'http://localhost:7899',
+        changeOrigin: true
       }
     }
   }

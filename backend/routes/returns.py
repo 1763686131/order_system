@@ -8,6 +8,10 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
+from utils.bank_account_helpers import (
+    adjust_bank_account_balance,
+    resolve_settlement_account,
+)
 
 
 returns_bp = Blueprint('returns', __name__, url_prefix='/api/returns')
@@ -615,7 +619,15 @@ def create_return():
                         float(total_tax_included), float(refund_amount),
                         float(writeoff_amount), float(debt_before),
                         float(debt_after),
-                        _text(data.get('settlementAccount') or f"{store['name']}结算账户", 120),
+                        _text(
+                            resolve_settlement_account(
+                                conn,
+                                store['id'],
+                                data.get('settlementAccount'),
+                                f"{store['name']}结算账户",
+                            ),
+                            120,
+                        ),
                         _text(data.get('salesPerson'), 80),
                         _text(data.get('creator'), 80),
                         _text(data.get('packaging'), 80),
@@ -685,6 +697,17 @@ def create_return():
                     ''',
                     (transaction_cursor.lastrowid, return_id),
                 )
+                adjust_bank_account_balance(
+                    conn,
+                    store_id,
+                    resolve_settlement_account(
+                        conn,
+                        store_id,
+                        data.get('settlementAccount'),
+                        f"{store['name']}结算账户",
+                    ),
+                    -refund_amount,
+                )
                 result = _serialize_return(conn, return_id)
 
         return jsonify({
@@ -749,7 +772,15 @@ def create_return_draft():
                      product_type, int(bool(data.get('taxEnabled'))), float(totals['total_quantity']),
                      float(totals['total_packages']), float(return_amount), float(totals['total_tax_amount']),
                      float(totals['total_tax_included']), float(refund_amount), float(writeoff_amount),
-                     _text(data.get('settlementAccount') or f"{store['name']}结算账户", 120),
+                     _text(
+                         resolve_settlement_account(
+                             conn,
+                             store['id'],
+                             data.get('settlementAccount'),
+                             f"{store['name']}结算账户",
+                         ),
+                         120,
+                     ),
                      _text(data.get('salesPerson'), 80), _text(data.get('creator'), 80),
                      _text(data.get('packaging'), 80), _text(data.get('remark'), 1000), now, now),
                 )
@@ -807,7 +838,16 @@ def update_return_draft(return_id):
                     (original_order_number, return_date, store_id, customer_id, product_type,
                      int(bool(data.get('taxEnabled'))), float(totals['total_quantity']), float(totals['total_packages']),
                      float(return_amount), float(totals['total_tax_amount']), float(totals['total_tax_included']),
-                     float(refund_amount), float(writeoff_amount), _text(data.get('settlementAccount') or f"{store['name']}结算账户", 120),
+                     float(refund_amount), float(writeoff_amount),
+                     _text(
+                         resolve_settlement_account(
+                             conn,
+                             store['id'],
+                             data.get('settlementAccount'),
+                             f"{store['name']}结算账户",
+                         ),
+                         120,
+                     ),
                      _text(data.get('salesPerson'), 80), _text(data.get('creator'), 80), _text(data.get('packaging'), 80),
                      _text(data.get('remark'), 1000), now, return_id),
                 )
@@ -850,6 +890,12 @@ def audit_return(return_id):
                 debt_before, debt_after, _writeoff = _create_return_transaction(
                     conn, row, customer, return_amount, refund_amount, _now()
                 )
+                adjust_bank_account_balance(
+                    conn,
+                    row['store_id'],
+                    row['settlement_account'],
+                    -refund_amount,
+                )
                 result = _serialize_return(conn, return_id)
         return jsonify({'success': True, 'message': f'退货单已审核，核销客户应收 {return_amount:.2f} 元并返还库存',
                         'debtBefore': float(debt_before), 'debtAfter': float(debt_after), 'returnOrder': result})
@@ -877,6 +923,12 @@ def reverse_audit_return(return_id):
                 _reverse_return_inventory(conn, return_id, row['return_number'])
                 debt_after = (_money(customer['receivable']) + _money(row['total_amount'])).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
                 now = _now()
+                adjust_bank_account_balance(
+                    conn,
+                    row['store_id'],
+                    row['settlement_account'],
+                    _money(row['refund_amount']),
+                )
                 conn.execute('UPDATE customers SET receivable = ?, updated_at = ? WHERE id = ?', (float(debt_after), now, customer['id']))
                 conn.execute("UPDATE customer_account_transactions SET status = 'reversed', reversed_at = ? WHERE id = ?", (now, tx['id']))
                 conn.execute("UPDATE return_orders SET status='draft', account_transaction_id=NULL, debt_before=0, debt_after=0, updated_at=? WHERE id=?", (now, return_id))

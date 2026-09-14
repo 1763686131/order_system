@@ -285,9 +285,22 @@
                 <div class="form-grid payment-grid">
                   <label class="form-field">
                     <span>结算账户</span>
-                    <span class="readonly-value">
-                      {{ form.settlementAccount || '选择客户后匹配门店' }}
-                    </span>
+                    <select v-model="form.settlementAccount" class="form-input">
+                      <option value="">请选择结算账户</option>
+                      <option
+                        v-if="form.settlementAccount && !customerBankAccounts.some(account => (account.value || account.accountName) === form.settlementAccount)"
+                        :value="form.settlementAccount"
+                      >
+                        {{ form.settlementAccount }}
+                      </option>
+                      <option
+                        v-for="account in customerBankAccounts"
+                        :key="account.id"
+                        :value="account.value || account.accountName"
+                      >
+                        {{ account.label || account.accountName }}
+                      </option>
+                    </select>
                   </label>
                   <label class="form-field">
                     <span>收款方式</span>
@@ -451,6 +464,7 @@ import request from '@/api/request'
 const receipts = ref([])
 const stores = ref([])
 const customers = ref([])
+const bankAccounts = ref([])
 const selectedStoreId = ref(null)
 const selectedIds = ref([])
 const currentPage = ref(1)
@@ -529,6 +543,10 @@ const modalCustomers = computed(() => {
 const selectedCustomer = computed(() =>
   customers.value.find(customer => Number(customer.id) === Number(form.customerId))
 )
+const customerBankAccounts = computed(() => {
+  const storeId = selectedCustomer.value?.storeId
+  return bankAccounts.value.filter(account => Number(account.storeId) === Number(storeId))
+})
 const currentDebt = computed(() =>
   Math.max(0, Number(selectedCustomer.value?.receivable) || 0)
 )
@@ -562,14 +580,18 @@ const showNotice = (message, type = 'success') => {
 const loadData = async () => {
   loading.value = true
   try {
-    const [storeResponse, customerResponse, receiptResponse] = await Promise.all([
+    const [storeResponse, customerResponse, receiptResponse, bankAccountResponse] = await Promise.all([
       request({ url: '/stores', method: 'GET' }),
       request({ url: '/customers', method: 'GET', params: { status: 'active' } }),
-      request({ url: '/payment-receipts', method: 'GET' })
+      request({ url: '/payment-receipts', method: 'GET' }),
+      request({ url: '/bank-accounts/options', method: 'GET' })
     ])
     stores.value = Array.isArray(storeResponse) ? storeResponse : []
     customers.value = Array.isArray(customerResponse) ? customerResponse : []
     receipts.value = Array.isArray(receiptResponse?.items) ? receiptResponse.items : []
+    bankAccounts.value = Array.isArray(bankAccountResponse?.data)
+      ? bankAccountResponse.data
+      : (Array.isArray(bankAccountResponse?.items) ? bankAccountResponse.items : [])
     selectedIds.value = selectedIds.value.filter(id =>
       receipts.value.some(item => item.id === id)
     )
@@ -653,7 +675,10 @@ const handleCustomerChange = () => {
   const store = stores.value.find(
     item => Number(item.id) === Number(selectedCustomer.value?.storeId)
   )
-  form.settlementAccount = store ? `${store.name}结算账户` : ''
+  const account = customerBankAccounts.value[0]
+  form.settlementAccount = account?.value || account?.accountName || (
+    store ? `${store.name}结算账户` : ''
+  )
 }
 
 const handleAttachment = event => {

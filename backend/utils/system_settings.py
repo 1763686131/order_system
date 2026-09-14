@@ -11,6 +11,23 @@ DEFAULT_DOCUMENT_PATH = "/var/data/documents"
 DEFAULT_RECEIPT_PATH = "/var/data/receipts"
 
 
+def _default_upload_root():
+    if os.path.exists("/app/frontend/index.html") and os.path.isdir("/app/uploads"):
+        return "/app/uploads"
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+    return os.path.join(project_root, "uploads")
+
+
+DEFAULT_BANK_CARD_BG_PATH = os.path.join(
+    _default_upload_root(), "bank-cards", "backgrounds"
+)
+DEFAULT_BANK_ICON_PATH = os.path.join(
+    _default_upload_root(), "bank-cards", "icons"
+)
+
+
 def get_default_report_path():
     """Return the path used before an administrator chooses a custom folder."""
     if os.path.exists("/app/frontend/index.html") and os.path.isdir("/app/uploads"):
@@ -178,4 +195,3 @@ def list_directories(path=None):
         "directories": [{"name": path, "path": path} for path in candidates],
         "message": "请选择服务器目录",
     }
-

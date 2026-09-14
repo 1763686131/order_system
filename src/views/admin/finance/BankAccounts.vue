@@ -92,6 +92,22 @@
                 </div>
               </div>
             </div>
+            <div class="card-actions" @click.stop>
+              <button type="button" title="修改账户" @click.stop="editAccount(account)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                </svg>
+              </button>
+              <button type="button" title="删除账户" @click.stop="deleteAccount(account)">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M3 6h18" />
+                  <path d="M8 6V4h8v2" />
+                  <path d="M19 6l-1 14H6L5 6" />
+                  <path d="M10 11v5M14 11v5" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <!-- 背面 -->
@@ -280,46 +296,11 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-// import request from '@/utils/request'
+import request from '@/api/request'
 
-const accounts = ref([
-  {
-    id: 1,
-    storeId: 1,
-    storeName: '总店',
-    accountName: '深圳市某某科技有限公司',
-    accountNumber: '6222021234567890123',
-    bankName: '中国工商银行深圳分行',
-    bankCode: '102584000012',
-    balance: 125680.50
-  },
-  {
-    id: 2,
-    storeId: 2,
-    storeName: '分店A',
-    accountName: '广州某某贸易有限公司',
-    accountNumber: '6225881234567890456',
-    bankName: '中国建设银行广州分行',
-    bankCode: '105581000023',
-    balance: 58900.00
-  },
-  {
-    id: 3,
-    storeId: 1,
-    storeName: '总店',
-    accountName: '深圳市某某科技有限公司',
-    accountNumber: '6212261234567890789',
-    bankName: '中国银行深圳分行',
-    bankCode: '104584000034',
-    balance: 342156.78
-  }
-])
-const stores = ref([
-  { id: 1, name: '总店', status: 'active' },
-  { id: 2, name: '分店A', status: 'active' },
-  { id: 3, name: '分店B', status: 'active' }
-])
-const loading = ref(false)
+const accounts = ref([])
+const stores = ref([])
+const loading = ref(true)
 const dialogVisible = ref(false)
 const isEditMode = ref(false)
 const submitting = ref(false)
@@ -414,23 +395,48 @@ const editAccount = (account) => {
 
 const handleIconUpload = (event) => {
   const file = event.target.files[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      formData.value.bankIcon = e.target.result
-    }
-    reader.readAsDataURL(file)
-  }
+  uploadImage(file, 'icon', event)
 }
 
 const handleBgImageUpload = (event) => {
   const file = event.target.files[0]
-  if (file) {
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      formData.value.cardBgImage = e.target.result
-    }
-    reader.readAsDataURL(file)
+  uploadImage(file, 'background', event)
+}
+
+const uploadImage = async (file, type, event) => {
+  if (!file) return
+  const maxSize = type === 'icon' ? 2 : 5
+  if (!file.type.startsWith('image/')) {
+    window.alert('请选择图片格式的文件')
+    event.target.value = ''
+    return
+  }
+  if (file.size > maxSize * 1024 * 1024) {
+    window.alert(`图片不能超过${maxSize}MB`)
+    event.target.value = ''
+    return
+  }
+
+  try {
+    const body = new FormData()
+    body.append('file', file)
+    const response = await request({
+      url: type === 'icon'
+        ? '/upload/bank-icon'
+        : '/upload/bank-card-background',
+      method: 'POST',
+      data: body,
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+    const path = response?.data?.url || response?.data?.path || response?.url || response?.path
+    if (!path) throw new Error(response?.message || '上传失败')
+    if (type === 'icon') formData.value.bankIcon = path
+    else formData.value.cardBgImage = path
+  } catch (error) {
+    console.error('上传银行图片失败:', error)
+    window.alert(error?.response?.data?.message || error.message || '上传图片失败')
+  } finally {
+    event.target.value = ''
   }
 }
 
@@ -473,85 +479,87 @@ const closeDialog = () => {
 }
 
 const loadAccounts = async () => {
-  // loading.value = true
-  // try {
-  //   const response = await request({
-  //     url: '/bank-accounts',
-  //     method: 'GET'
-  //   })
-  //   accounts.value = Array.isArray(response) ? response : []
-  // } catch (error) {
-  //   console.error('加载账户失败:', error)
-  //   accounts.value = []
-  // } finally {
-  //   loading.value = false
-  // }
-
-  // 暂时使用假数据，方便查看样式
-  console.log('使用假数据展示')
+  loading.value = true
+  try {
+    const response = await request({ url: '/bank-accounts', method: 'GET' })
+    accounts.value = Array.isArray(response?.data)
+      ? response.data
+      : (Array.isArray(response?.items) ? response.items : [])
+  } catch (error) {
+    console.error('加载账户失败:', error)
+    accounts.value = []
+    window.alert(error?.response?.data?.message || '加载银行账户失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const loadStores = async () => {
-  // try {
-  //   const response = await request({
-  //     url: '/stores',
-  //     method: 'GET'
-  //   })
-  //   stores.value = Array.isArray(response) ? response.filter(s => s.status === 'active') : []
-  // } catch (error) {
-  //   console.error('加载门店失败:', error)
-  //   stores.value = []
-  // }
-
-  // 暂时使用假数据
-  console.log('使用假数据展示')
+  try {
+    const response = await request({ url: '/stores', method: 'GET' })
+    stores.value = Array.isArray(response)
+      ? response.filter(store => store.status !== 'inactive')
+      : []
+  } catch (error) {
+    console.error('加载门店失败:', error)
+    stores.value = []
+  }
 }
 
 const handleSubmit = async () => {
   submitting.value = true
   try {
-    // const method = isEditMode.value ? 'PUT' : 'POST'
-    // const url = isEditMode.value ? `/bank-accounts/${formData.value.id}` : '/bank-accounts'
-
-    // await request({
-    //   url,
-    //   method,
-    //   data: {
-    //     storeId: formData.value.storeId,
-    //     accountName: formData.value.accountName,
-    //     accountNumber: formData.value.accountNumber,
-    //     bankName: formData.value.bankName,
-    //     bankCode: formData.value.bankCode
-    //   }
-    // })
-
-    // 模拟添加/修改
-    const storeName = stores.value.find(s => s.id === Number(formData.value.storeId))?.name || '未知门店'
-
-    if (isEditMode.value) {
-      const index = accounts.value.findIndex(a => a.id === formData.value.id)
-      if (index > -1) {
-        accounts.value[index] = {
-          ...formData.value,
-          storeName
-        }
-      }
-    } else {
-      accounts.value.push({
-        id: Date.now(),
-        ...formData.value,
-        storeName
-      })
+    const payload = {
+      storeId: Number(formData.value.storeId),
+      accountName: formData.value.accountName,
+      accountNumber: formData.value.accountNumber,
+      bankName: formData.value.bankName,
+      bankCode: formData.value.bankCode,
+      balance: Number(formData.value.balance) || 0,
+      cardColor: formData.value.cardColor,
+      cardBgImage: formData.value.cardBgImage,
+      bankIcon: formData.value.bankIcon
     }
-
-    window.alert(`账户${isEditMode.value ? '修改' : '添加'}成功`)
+    const response = await request({
+      url: isEditMode.value
+        ? `/bank-accounts/${formData.value.id}`
+        : '/bank-accounts',
+      method: isEditMode.value ? 'PUT' : 'POST',
+      data: payload
+    })
+    if (!response?.success) throw new Error(response?.message || '保存失败')
+    const saved = response.data || response.account
+    if (saved) {
+      const index = accounts.value.findIndex(item => item.id === saved.id)
+      if (index >= 0) accounts.value.splice(index, 1, saved)
+      else accounts.value.push(saved)
+    } else {
+      await loadAccounts()
+    }
+    window.alert(response.message || `账户${isEditMode.value ? '修改' : '添加'}成功`)
     closeDialog()
-    // loadAccounts()
   } catch (error) {
     console.error('保存账户失败:', error)
-    window.alert(error?.response?.data?.error || `账户${isEditMode.value ? '修改' : '添加'}失败`)
+    window.alert(error?.response?.data?.message || error.message || `账户${isEditMode.value ? '修改' : '添加'}失败`)
   } finally {
     submitting.value = false
+  }
+}
+
+const deleteAccount = async (account) => {
+  if (!window.confirm(`确定删除账户“${account.accountName}”吗？`)) return
+  try {
+    const response = await request({
+      url: `/bank-accounts/${account.id}`,
+      method: 'DELETE'
+    })
+    if (!response?.success) throw new Error(response?.message || '删除失败')
+    accounts.value = accounts.value.filter(item => item.id !== account.id)
+    if (flippedCardId.value === account.id) flippedCardId.value = null
+    window.alert(response.message || '银行账户已删除')
+  } catch (error) {
+    console.error('删除账户失败:', error)
+    window.alert(error?.response?.data?.message || error.message || '删除账户失败')
   }
 }
 
@@ -784,6 +792,42 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
+}
+
+.card-actions {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  z-index: 3;
+  display: flex;
+  gap: 6px;
+}
+
+.card-actions button {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(248, 250, 252, 0.35);
+  border-radius: 5px;
+  background: rgba(15, 23, 42, 0.26);
+  color: #F8FAFC;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.card-actions button:hover {
+  background: rgba(15, 23, 42, 0.56);
+  border-color: rgba(248, 250, 252, 0.7);
+}
+
+.card-actions svg {
+  width: 15px;
+  height: 15px;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .card-info {

@@ -27,6 +27,8 @@ _return_schema_lock = Lock()
 _return_schema_ready = False
 _system_settings_schema_lock = Lock()
 _system_settings_schema_ready = False
+_bank_accounts_schema_lock = Lock()
+_bank_accounts_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 
@@ -151,6 +153,52 @@ def _ensure_system_settings_schema(conn):
         )
         conn.commit()
         _system_settings_schema_ready = True
+
+
+def _ensure_bank_accounts_schema(conn):
+    """Create the bank account table used by settlement-account selectors."""
+    global _bank_accounts_schema_ready
+    if _bank_accounts_schema_ready:
+        return
+
+    with _bank_accounts_schema_lock:
+        if _bank_accounts_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS bank_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                store_id INTEGER NOT NULL,
+                account_name TEXT NOT NULL,
+                account_number TEXT NOT NULL,
+                bank_name TEXT NOT NULL,
+                bank_code TEXT NOT NULL DEFAULT '',
+                balance REAL NOT NULL DEFAULT 0,
+                card_color TEXT NOT NULL DEFAULT '#1a1a1a',
+                card_bg_image TEXT NOT NULL DEFAULT '',
+                bank_icon TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_bank_accounts_store
+            ON bank_accounts(store_id, id)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_bank_accounts_store_number
+            ON bank_accounts(store_id, account_number)
+            WHERE trim(account_number) <> ''
+            """
+        )
+        conn.commit()
+        _bank_accounts_schema_ready = True
 
 
 def _ensure_raw_material_products_schema(conn):
@@ -735,6 +783,7 @@ def get_db():
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)
         _ensure_system_settings_schema(conn)
+        _ensure_bank_accounts_schema(conn)
         _ensure_raw_material_products_schema(conn)
         _ensure_stock_inbound_schema(conn)
         _ensure_return_schema(conn)

@@ -241,7 +241,22 @@
         </div>
         <div class="finance-item">
           <label>结算账户</label>
-          <input type="text" :value="selectedStoreName" readonly class="readonly-input" />
+          <select v-model="formData.settlementAccount">
+            <option value="">请选择结算账户</option>
+            <option
+              v-if="formData.settlementAccount && !storeBankAccounts.some(account => (account.value || account.accountName) === formData.settlementAccount)"
+              :value="formData.settlementAccount"
+            >
+              {{ formData.settlementAccount }}
+            </option>
+            <option
+              v-for="account in storeBankAccounts"
+              :key="account.id"
+              :value="account.value || account.accountName"
+            >
+              {{ account.label || account.accountName }}
+            </option>
+          </select>
         </div>
       </div>
 
@@ -496,6 +511,7 @@ const warehouses = ref([])
 const products = ref([])
 const units = ref([])
 const packagingUnits = ref([])
+const bankAccounts = ref([])
 
 const DEFAULT_PACKAGING_OPTIONS = ['无', '桶装', '纸箱', '托盘', '袋装']
 const ADD_PACKAGING_VALUE = '__add_packaging__'
@@ -648,6 +664,10 @@ const selectedStoreName = computed(() => {
   const store = stores.value.find(s => String(s.id) === String(formData.value.storeId))
   return store ? store.name : ''
 })
+
+const storeBankAccounts = computed(() => bankAccounts.value.filter(
+  account => String(account.storeId) === String(formData.value.storeId)
+))
 
 const selectedCustomerName = computed(() => {
   const customer = customers.value.find(
@@ -922,6 +942,18 @@ const loadUnits = async () => {
   }
 }
 
+const loadBankAccounts = async () => {
+  try {
+    const response = await request({ url: '/bank-accounts/options', method: 'GET' })
+    bankAccounts.value = Array.isArray(response?.data)
+      ? response.data
+      : (Array.isArray(response?.items) ? response.items : [])
+  } catch (error) {
+    console.error('加载结算账户失败:', error)
+    bankAccounts.value = []
+  }
+}
+
 // 加载订单数据（编辑模式）
 const loadOrderData = async (orderId) => {
   console.log('loadOrderData 被调用，订单ID:', orderId)
@@ -1102,6 +1134,7 @@ const onStoreChange = () => {
   formData.value.contactPerson = ''
   formData.value.contactPhone = ''
   formData.value.contactAddress = ''
+  formData.value.settlementAccount = ''
 
   // 清空商品列表
   clearProductItems()
@@ -1806,7 +1839,8 @@ onMounted(async () => {
     loadCustomers(),
     loadWarehouses(),
     loadProducts(),
-    loadUnits()
+    loadUnits(),
+    loadBankAccounts()
   ])
 
   let savedDraft = orderDraftStore.draft

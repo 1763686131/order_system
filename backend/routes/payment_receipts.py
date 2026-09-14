@@ -8,6 +8,10 @@ import uuid
 from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
+from utils.bank_account_helpers import (
+    adjust_bank_account_balance,
+    resolve_settlement_account,
+)
 
 
 payment_receipts_bp = Blueprint(
@@ -93,6 +97,7 @@ def _serialize(row):
     if not row:
         return None
     item = dict(row)
+
     return {
         'id': item['id'],
         'documentNo': item.get('document_no') or '',
@@ -172,12 +177,18 @@ def _validate_values(conn, data):
     cash_writeoff = min(payment_amount, debt_before - discount_amount)
     writeoff_amount = discount_amount + cash_writeoff
     advance_amount = payment_amount - cash_writeoff
+    settlement_account = resolve_settlement_account(
+        conn,
+        store["id"],
+        data.get("settlementAccount"),
+        f"{store['name']}结算账户",
+    )
 
     return {
         'document_date': _date(data.get('documentDate')),
         'store_id': store['id'],
         'customer_id': customer['id'],
-        'settlement_account': f"{store['name']}结算账户",
+        'settlement_account': settlement_account,
         'payment_method': str(data.get('paymentMethod') or '').strip(),
         'payment_amount': payment_amount,
         'discount_amount': discount_amount,
@@ -574,6 +585,12 @@ def audit_payment_receipt(receipt_id):
                         now,
                     )
                 )
+                adjust_bank_account_balance(
+                    conn,
+                    receipt['store_id'],
+                    receipt['settlement_account'],
+                    payment_amount,
+                )
                 conn.execute(
                     '''
                     UPDATE payment_receipts
@@ -672,6 +689,13 @@ def reverse_payment_receipt(receipt_id):
 
                 balance_after = balance_before - advance_amount
                 receivable_after = receivable_before + writeoff_amount
+                payment_amount = _money(receipt['payment_amount'])
+                adjust_bank_account_balance(
+                    conn,
+                    receipt['store_id'],
+                    receipt['settlement_account'],
+                    -payment_amount,
+                )
                 conn.execute(
                     '''
                     UPDATE customers
@@ -719,7 +743,6 @@ def reverse_payment_receipt(receipt_id):
                     )
                 )
 
-                payment_amount = _money(receipt['payment_amount'])
                 discount_amount = _money(receipt['discount_amount'])
                 preview_cash = min(
                     payment_amount,

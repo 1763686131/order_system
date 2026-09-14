@@ -37,6 +37,7 @@ from routes.settings import settings_bp
 from routes.stock_inbounds import stock_inbounds_bp
 from routes.payment_receipts import payment_receipts_bp
 from routes.returns import returns_bp
+from routes.bank_accounts import bank_accounts_bp, upload_bp as bank_account_upload_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(orders_bp)
@@ -52,6 +53,8 @@ app.register_blueprint(settings_bp)
 app.register_blueprint(stock_inbounds_bp)
 app.register_blueprint(payment_receipts_bp)
 app.register_blueprint(returns_bp)
+app.register_blueprint(bank_accounts_bp)
+app.register_blueprint(bank_account_upload_bp)
 
 # ==========================================
 # 健康检查接口
@@ -119,7 +122,26 @@ def login():
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """访问上传的文件"""
-    return send_from_directory('/app/uploads', filename)
+    # 银行卡图片目录可在系统设置中修改；其它历史上传仍使用默认 uploads 根目录。
+    if filename.startswith('bank-cards/backgrounds/'):
+        from utils.system_settings import DEFAULT_BANK_CARD_BG_PATH, get_setting, normalize_server_path
+        root = normalize_server_path(
+            get_setting('bank_cards.bg_path', DEFAULT_BANK_CARD_BG_PATH)
+            or DEFAULT_BANK_CARD_BG_PATH
+        )
+        return send_from_directory(root, filename.removeprefix('bank-cards/backgrounds/'))
+    if filename.startswith('bank-cards/icons/'):
+        from utils.system_settings import DEFAULT_BANK_ICON_PATH, get_setting, normalize_server_path
+        root = normalize_server_path(
+            get_setting('bank_cards.icon_path', DEFAULT_BANK_ICON_PATH)
+            or DEFAULT_BANK_ICON_PATH
+        )
+        return send_from_directory(root, filename.removeprefix('bank-cards/icons/'))
+
+    upload_root = '/app/uploads'
+    if not os.path.isdir(upload_root):
+        upload_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
+    return send_from_directory(upload_root, filename)
 
 # ==========================================
 # 前端静态文件路由（必须放在最后）

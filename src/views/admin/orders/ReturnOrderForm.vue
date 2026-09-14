@@ -211,7 +211,22 @@
           </div>
           <div class="finance-item">
             <label>结算账户</label>
-            <input v-model.trim="form.settlementAccount" type="text" />
+            <select v-model="form.settlementAccount">
+              <option value="">请选择结算账户</option>
+              <option
+                v-if="form.settlementAccount && !storeBankAccounts.some(account => (account.value || account.accountName) === form.settlementAccount)"
+                :value="form.settlementAccount"
+              >
+                {{ form.settlementAccount }}
+              </option>
+              <option
+                v-for="account in storeBankAccounts"
+                :key="account.id"
+                :value="account.value || account.accountName"
+              >
+                {{ account.label || account.accountName }}
+              </option>
+            </select>
           </div>
         </div>
 
@@ -263,6 +278,7 @@ const warehouses = ref([])
 const products = ref([])
 const units = ref([])
 const stockBalances = ref([])
+const bankAccounts = ref([])
 const focusedRow = ref(-1)
 let rowKey = 0
 
@@ -331,6 +347,10 @@ const filteredWarehouses = computed(() => {
   if (!form.value.storeId) return []
   return warehouses.value.filter(item => idEquals(item.storeId ?? item.store_id, form.value.storeId))
 })
+
+const storeBankAccounts = computed(() => bankAccounts.value.filter(
+  account => idEquals(account.storeId, form.value.storeId)
+))
 
 const productsForItem = item => {
   if (!form.value.storeId) return []
@@ -417,7 +437,8 @@ const resetItems = () => {
 const onStoreChange = () => {
   form.value.customerId = ''
   form.value.warehouseId = ''
-  form.value.settlementAccount = ''
+  form.value.settlementAccount = storeBankAccounts.value[0]?.value ||
+    storeBankAccounts.value[0]?.accountName || ''
   resetItems()
 }
 
@@ -531,7 +552,7 @@ const loadData = async () => {
     const productUrl = props.productType === 'raw-material'
       ? '/raw-material-products'
       : '/products/inventory'
-    const [storeData, customerData, warehouseData, productData, unitData, stockData] = await Promise.all([
+    const [storeData, customerData, warehouseData, productData, unitData, stockData, bankAccountData] = await Promise.all([
       request({ url: '/stores', method: 'GET' }),
       request({ url: '/customers', method: 'GET' }),
       request({ url: '/warehouses', method: 'GET' }),
@@ -539,7 +560,8 @@ const loadData = async () => {
       request({ url: '/products/units/measurements', method: 'GET' }),
       props.productType === 'raw-material'
         ? request({ url: '/stock-balances', method: 'GET', params: { type: 'raw-material' } })
-        : Promise.resolve([])
+        : Promise.resolve([]),
+      request({ url: '/bank-accounts/options', method: 'GET' })
     ])
     stores.value = Array.isArray(storeData) ? storeData.filter(item => item.status !== 'inactive') : []
     customers.value = Array.isArray(customerData) ? customerData.filter(item => item.status !== 'inactive') : []
@@ -547,6 +569,9 @@ const loadData = async () => {
     products.value = Array.isArray(productData) ? productData.filter(item => item.enabled !== false) : []
     units.value = Array.isArray(unitData) ? unitData : []
     stockBalances.value = Array.isArray(stockData) ? stockData : []
+    bankAccounts.value = Array.isArray(bankAccountData?.data)
+      ? bankAccountData.data
+      : (Array.isArray(bankAccountData?.items) ? bankAccountData.items : [])
   } catch (error) {
     console.error('加载退货单基础数据失败:', error)
     window.alert(error?.response?.data?.message || '加载退货单基础数据失败')

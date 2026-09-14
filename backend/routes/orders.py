@@ -4,6 +4,10 @@
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from utils.db_helper import read_orders, write_orders, read_users, read_customers, read_carrier_tags, write_carrier_tags
 from utils.db import get_db
+from utils.bank_account_helpers import (
+    adjust_bank_account_balance,
+    resolve_settlement_account,
+)
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
@@ -219,6 +223,11 @@ def create_new_format_order(req_data):
     store_id = req_data.get('storeId')
     store = next((s for s in stores_list if s['id'] == store_id), None)
     store_name = store['name'] if store else ''
+    settlement_account = req_data.get('settlementAccount') or ''
+    with get_db() as conn:
+        settlement_account = resolve_settlement_account(
+            conn, store_id, settlement_account, f'{store_name}结算账户'
+        )
 
     # 处理商品明细
     items = req_data.get('items', [])
@@ -339,7 +348,7 @@ def create_new_format_order(req_data):
         "project_name": req_data.get('projectName', ''),
         "sales_person": req_data.get('salesPerson', ''),
         "creator": req_data.get('creator', ''),
-        "settlement_account": store_name,
+        "settlement_account": settlement_account,
 
         # 商品明细
         "order_goods": order_goods,
@@ -437,7 +446,8 @@ def update_order_audit_state(order_id, audited):
                 SELECT id, status, audit_state, order_number, order_goods,
                        customer_id, subtotal_amount, total_amount,
                        discount_amount, other_fees, should_receive,
-                       current_payment, current_debt
+                       current_payment, current_debt, store_id,
+                       settlement_account
                 FROM orders
                 WHERE id = ?
                 ''',
@@ -575,6 +585,12 @@ def update_order_audit_state(order_id, audited):
                         now,
                     )
                 )
+                adjust_bank_account_balance(
+                    conn,
+                    order['store_id'],
+                    order['settlement_account'],
+                    current_payment,
+                )
                 conn.execute(
                     '''
                     UPDATE orders
@@ -653,6 +669,12 @@ def update_order_audit_state(order_id, audited):
 
                     balance_after = balance_before + stored_balance_applied
                     receivable_after = receivable_before - receivable_change
+                    adjust_bank_account_balance(
+                        conn,
+                        order['store_id'],
+                        order['settlement_account'],
+                        -money(order['current_payment']),
+                    )
                     conn.execute(
                         '''
                         UPDATE customers
@@ -896,6 +918,11 @@ def update_full_order(order_id, req_data):
         store_id = req_data.get('storeId')
         store = next((s for s in stores_list if s['id'] == store_id), None)
         store_name = store['name'] if store else ''
+        settlement_account = req_data.get('settlementAccount') or ''
+        with get_db() as conn:
+            settlement_account = resolve_settlement_account(
+                conn, store_id, settlement_account, f'{store_name}结算账户'
+            )
 
         # 处理商品明细
         items = req_data.get('items', [])
@@ -999,7 +1026,7 @@ def update_full_order(order_id, req_data):
             "project_name": req_data.get('projectName', ''),
             "sales_person": req_data.get('salesPerson', ''),
             "creator": old_order.get('creator', ''),
-            "settlement_account": store_name,
+            "settlement_account": settlement_account,
 
             # 更新商品明细
             "order_goods": order_goods,

@@ -12,6 +12,7 @@
 
 - **v2.5** (2026-09-11) - 新增服务器路径配置、目录浏览和 NAS 检测报告动态扫描接口
 - **v2.6** (2026-09-14) - 新增退货单草稿、修改、审核、反审核及客户应收和库存联动接口
+- **v2.7** (2026-09-14) - 新增银行账户、银行卡图片上传及结算账户动态关联接口
 - **v2.4** (2026-09-10) - 新增收款单、审核入账、反审核和客户应收联动接口
 - **v2.3** (2026-09-08) - 新增供应商、入库单、库存余额与事务过账接口
 - **v2.2** (2026-09-08) - 新增原材料商品档案接口，补充单位分组接口
@@ -36,7 +37,8 @@
 11. [供应商与入库管理](#11-供应商与入库管理)
 12. [收款单与应收核销](#12-收款单与应收核销)
 13. [退货单与客户应收、库存联动](#13-退货单与客户应收库存联动)
-14. [系统设置与服务器路径](#14-系统设置与服务器路径)
+14. [银行账户与结算账户](#14-银行账户与结算账户)
+15. [系统设置与服务器路径](#15-系统设置与服务器路径)
 
 ---
 
@@ -64,6 +66,7 @@
 - `stock_inbounds.receipt_type/status/document_date` - 入库单列表筛选优化
 - `stock_balances.product_type/product_id/warehouse_id` - 库存余额查询优化
 - `stock_movements.product_type/product_id/warehouse_id/created_at` - 库存流水查询优化
+- `bank_accounts.store_id/account_number` - 按门店查询并保证门店内账号唯一
 
 ---
 
@@ -3077,17 +3080,137 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 ---
 
-## 14. 系统设置与服务器路径
+## 14. 银行账户与结算账户
+
+银行账户数据保存在 `bank_accounts` 表中，按门店维护。订单、收款单和退货单保存时会优先使用所选门店下的真实账户名称；没有配置账户时继续兼容历史的“门店结算账户”文字。
+
+### 14.1 获取银行账户列表
+
+- **URL**: `/api/bank-accounts`
+- **Method**: `GET`
+- **Query 参数**: `storeId`（可选，按门店筛选）
+
+响应同时提供 `data`、`items` 字段，便于列表页和下拉框使用：
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "storeId": 1,
+      "storeName": "总店",
+      "accountName": "深圳某某科技有限公司",
+      "accountNumber": "6222021234567890123",
+      "bankName": "中国工商银行深圳分行",
+      "bankCode": "102584000012",
+      "balance": 125680.5,
+      "cardColor": "#1a1a1a",
+      "cardBgImage": "/uploads/bank-cards/backgrounds/bank_card_bg_20260914120000_x.jpg",
+      "bankIcon": "/uploads/bank-cards/icons/bank_icon_20260914120000_x.png",
+      "createdAt": "2026-09-14T12:00:00",
+      "updatedAt": "2026-09-14T12:00:00"
+    }
+  ],
+  "total": 1
+}
+```
+
+### 14.2 获取结算账户下拉选项
+
+- **URL**: `/api/bank-accounts/options`
+- **Method**: `GET`
+- **Query 参数**: `storeId`（可选）
+
+返回精简字段 `id`、`storeId`、`accountName`、`accountNumber`、`bankName`、`label` 和 `value`。订单、收款单和退货单页面按门店过滤此列表，`value` 默认是账户名称。
+
+### 14.3 新增银行账户
+
+- **URL**: `/api/bank-accounts`
+- **Method**: `POST`
+- **响应状态**: `201`
+
+必填字段为 `storeId`、`accountName`、`accountNumber` 和 `bankName`。可选字段包括 `bankCode`、`balance`、`cardColor`、`cardBgImage` 和 `bankIcon`。同一门店下银行账号不能重复。
+
+```json
+{
+  "storeId": 1,
+  "accountName": "深圳某某科技有限公司",
+  "accountNumber": "6222021234567890123",
+  "bankName": "中国工商银行深圳分行",
+  "bankCode": "102584000012",
+  "balance": 0,
+  "cardColor": "#1a1a1a",
+  "cardBgImage": "",
+  "bankIcon": ""
+}
+```
+
+### 14.4 修改和删除银行账户
+
+- **修改**：`PUT /api/bank-accounts/<id>`，请求字段与新增相同，未传字段沿用原值。
+- **删除**：`DELETE /api/bank-accounts/<id>`。
+
+已被订单、收款单或退货单的 `settlement_account` 使用的账户不能删除，接口返回 `409`。修改或删除账户时，系统会清理不再使用的本系统银行卡图片文件；外部 URL 和历史自由文本不会被删除。
+
+### 14.5 上传银行卡背景图
+
+- **URL**: `/api/upload/bank-card-background`
+- **Method**: `POST`
+- **Content-Type**: `multipart/form-data`
+- **字段**: `file`（兼容 `image` 字段）
+- **限制**: 仅支持 JPG、PNG、WEBP、GIF，建议不超过 5 MB
+
+文件保存到系统设置 `bank_cards.bg_path` 指定的目录，返回的路径保存到 `bank_accounts.card_bg_image`：
+
+```json
+{
+  "success": true,
+  "message": "图片上传成功",
+  "data": {
+    "path": "/uploads/bank-cards/backgrounds/bank_card_bg_20260914120000_x.jpg",
+    "url": "/uploads/bank-cards/backgrounds/bank_card_bg_20260914120000_x.jpg"
+  }
+}
+```
+
+### 14.6 上传银行图标
+
+- **URL**: `/api/upload/bank-icon`
+- **Method**: `POST`
+- **Content-Type**: `multipart/form-data`
+- **字段**: `file`（兼容 `image` 字段）
+- **限制**: 仅支持 JPG、PNG、WEBP、GIF，建议不超过 2 MB
+
+文件保存到 `bank_cards.icon_path` 指定的目录，返回格式与背景图上传一致，访问前缀为 `/uploads/bank-cards/icons/`。
+
+### 14.7 账户余额与业务单据
+
+`balance` 使用两位小数保存账户余额。审核业务单据时才产生余额变化，草稿保存和修改不改变账户余额：
+
+| 业务动作 | 账户余额变化 |
+| --- | --- |
+| 销售订单审核，存在本次收款 | 增加 `currentPayment` |
+| 收款单审核 | 增加 `paymentAmount` |
+| 收款单反审核 | 减少原 `paymentAmount` |
+| 退货单审核 | 减少 `refundAmount`，实退金额核销不产生现金变化 |
+| 退货单反审核 | 加回原 `refundAmount` |
+
+例如客户应收 5000 元，退货实退金额 500 元、本次退款 0 元：客户应收核销为 4500 元，银行账户余额不变化。
+
+---
+
+## 15. 系统设置与服务器路径
 
 模块前缀：`/api/settings`
 
-系统路径配置保存在 SQLite 的 `system_settings` 表中。检测报告模块使用键 `reports.path` 保存报告根目录；报告扫描、上传、下载、预览、移动、重命名和删除接口都会在请求时读取该配置。
+系统路径配置保存在 SQLite 的 `system_settings` 表中。检测报告模块使用键 `reports.path` 保存报告根目录；银行卡背景图和银行图标分别使用 `bank_cards.bg_path`、`bank_cards.icon_path`。相关上传和静态访问接口都会在请求时读取这些配置。
 
-### 14.1 获取路径配置
+### 15.1 获取路径配置
 
 - **URL**: `/api/settings/paths`
 - **Method**: `GET`
-- **说明**: 获取当前检测报告、公司资料和回单上传路径，以及检测报告路径状态。
+- **说明**: 获取当前检测报告、公司资料、回单上传路径以及银行卡背景图和银行图标上传路径。
 
 **响应示例**:
 
@@ -3098,6 +3221,8 @@ totalAmount = receivedQty × unitPrice + taxAmount
     "reportPath": "/mnt/nas/reports",
     "documentPath": "/var/data/documents",
     "receiptPath": "/var/data/receipts",
+    "bankCardBgPath": "/app/uploads/bank-cards/backgrounds",
+    "bankIconPath": "/app/uploads/bank-cards/icons",
     "reportPathConfigured": true,
     "reportPathDefault": "/app/uploads/hr_reports",
     "reportStatus": {
@@ -3114,7 +3239,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 `reportPathConfigured` 为 `false` 时，表示尚未保存自定义路径，当前使用 `reportPathDefault`。
 
-### 14.2 保存路径配置
+### 15.2 保存路径配置
 
 - **URL**: `/api/settings/paths`
 - **Method**: `PUT`
@@ -3127,7 +3252,9 @@ totalAmount = receivedQty × unitPrice + taxAmount
 {
   "reportPath": "/mnt/nas/reports",
   "documentPath": "/var/data/documents",
-  "receiptPath": "/var/data/receipts"
+  "receiptPath": "/var/data/receipts",
+  "bankCardBgPath": "/app/uploads/bank-cards/backgrounds",
+  "bankIconPath": "/app/uploads/bank-cards/icons"
 }
 ```
 
@@ -3141,6 +3268,24 @@ totalAmount = receivedQty × unitPrice + taxAmount
     "reportPath": "/mnt/nas/reports",
     "documentPath": "/var/data/documents",
     "receiptPath": "/var/data/receipts",
+    "bankCardBgPath": "/app/uploads/bank-cards/backgrounds",
+    "bankIconPath": "/app/uploads/bank-cards/icons",
+    "bankCardBgStatus": {
+      "path": "/app/uploads/bank-cards/backgrounds",
+      "exists": true,
+      "is_directory": true,
+      "readable": true,
+      "writable": true,
+      "message": "路径可用"
+    },
+    "bankIconStatus": {
+      "path": "/app/uploads/bank-cards/icons",
+      "exists": true,
+      "is_directory": true,
+      "readable": true,
+      "writable": true,
+      "message": "路径可用"
+    },
     "reportStatus": {
       "path": "/mnt/nas/reports",
       "exists": true,
@@ -3153,9 +3298,9 @@ totalAmount = receivedQty × unitPrice + taxAmount
 }
 ```
 
-将 `reportPath` 传为空字符串会清除自定义配置，恢复使用部署环境默认路径。检测报告路径不可用时返回 HTTP `400`，不会保存本次路径。
+`bankCardBgPath` 和 `bankIconPath` 保存时会自动创建目录并检查读写权限；路径不可用返回 HTTP `400`。将 `reportPath` 传为空字符串会清除自定义配置，恢复使用部署环境默认路径。
 
-### 14.3 测试服务器路径
+### 15.3 测试服务器路径
 
 - **URL**: `/api/settings/paths/test`
 - **Method**: `POST`
@@ -3187,7 +3332,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 }
 ```
 
-### 14.4 浏览服务器目录
+### 15.4 浏览服务器目录
 
 - **URL**: `/api/settings/directories`
 - **Method**: `GET`
@@ -3226,7 +3371,7 @@ GET /api/settings/directories?path=/mnt/nas
 
 如果 NAS 挂载点不在目录浏览器的初始根目录中，仍可在弹窗中直接输入容器内绝对路径，然后点击“打开”或使用“测试路径”按钮确认。
 
-### 14.5 NAS/Docker 路径配置规则
+### 15.5 NAS/Docker 路径配置规则
 
 NAS 主机目录必须先挂载到后端容器，应用只能使用容器内可见的路径。例如：
 
