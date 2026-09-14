@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0` |
-| 文档更新 | `2026-09-11` |
+| 文档更新 | `2026-09-14` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -19,7 +19,7 @@
 ## 主要功能
 
 - 销售订单创建、编辑、复制、查询及状态流转
-- 退货订单管理、录入退货单及退货处理流程
+- 退货订单管理、退货单录入、审核、反审核及客户应收/库存联动
 - 成品和原材料档案独立维护
 - 门店、仓库、客户、供应商和单位等基础资料管理
 - 客户期初欠款、储值余额和应收欠款汇总
@@ -34,7 +34,7 @@
 - 用户、角色和细粒度权限管理
 - 原材料使用/生产流水记录
 
-## 2026-09-11 更新
+## 2026-09-14 更新
 
 ### 订单录入与列表
 
@@ -47,13 +47,17 @@
 
 ### 退货订单管理
 
-- 新增退货订单列表页面 (`/admin/orders/returns`)，支持退货单录入、查询、筛选、分页和状态管理。
-- 退货单支持按待处理、处理中、已完成和已拒绝四种状态筛选，每个状态显示实时数量徽章。
-- 录入退货单弹窗包含基本信息（原订单号、退货日期、客户信息）、退货商品信息和退货原因及备注三个部分。
-- 退货单号自动生成，格式为 `RTYYYYMMDDNNNN`，与收款单号 `SK` 前缀区分。
-- 退货详情弹窗展示完整退货信息，包括退货单号、原订单号、客户名称、退货商品、退货数量、退货金额和处理状态。
-- 待处理状态的退货单显示”处理退货”操作按钮，已完成和已拒绝状态仅支持查看详情。
+- 退货订单列表页面 (`/admin/orders/returns`) 使用 `/api/returns` 加载真实数据，支持关键词、日期、状态筛选、分页和导出入口。
+- 录入退货单为独立页面 (`/admin/orders/returns/create`)，原材料退货通过 `?productType=raw-material` 复用同一表单；编辑地址为 `/admin/orders/returns/edit/:id`。
+- 门店联动客户、仓库和商品；选择商品后自动带出规格、单位、多单位、库存和价格，含税字段按含税开关显示。
+- 退货单保存为 `draft` 待审核草稿，不会立即改变客户应收或库存；草稿可修改、删除和审核。
+- 审核后状态为 `audited`，按实退货金额核销客户应收并返还库存；已审核单据不能修改或删除，只能反审核。
+- 反审核会恢复客户应收、回退库存流水并将单据恢复为待审核草稿。
+- 退货单号自动生成，格式为 `THYYYYMMDDNNNN`，与收款单号 `SK` 前缀区分。
+- 列表和详情展示退货数量、单位、实退货金额、备注和审核状态；详情可直接执行修改、审核或反审核。
 - 页面设计遵循后台列表页视觉规范，保持与订单列表、收款历史等页面的视觉一致性。
+
+退货金额规则示例：客户当前应收 5000 元，实退货金额 500 元、本次退款 0 元，审核后客户应收变为 4500 元，500 元全部核销，不产生现金退款。完整字段和接口说明见 [API 接口文档](docs/API接口文档.md#13-退货单与客户应收库存联动)。
 
 ### 财务收款模块
 
@@ -215,7 +219,8 @@ order_system/
 │  │     ├─ orders/                  # 后台销售订单
 │  │     │  ├─ UnifiedOrderList.vue  # 销售订单和物流订单列表
 │  │     │  ├─ OrderForm.vue         # 订单录入和编辑表单
-│  │     │  └─ ReturnOrderList.vue   # 退货订单列表
+│  │     │  ├─ ReturnOrderList.vue   # 退货订单列表
+│  │     │  └─ ReturnOrderForm.vue   # 退货单录入和编辑表单
 │  │     ├─ inventory/               # 仓库管理
 │  │     ├─ customers/               # 客户管理
 │  │     ├─ finance/
@@ -235,7 +240,7 @@ order_system/
 │  └─ backup_before_cleanup/         # 历史 JSON 备份
 ├─ docs/
 │  ├─ API接口文档.md                 # 完整 API 参数、响应和业务规则
-│  ├─ 后台列表页视觉与组件样式规范.md # 后台页面视觉和组件复用规范
+│  ├─ 组件样式规范.md                 # 后台页面视觉和组件复用规范
 │  ├─ 数据库表单说明.md              # 数据表说明
 │  ├─ 银行账户管理-后端开发提示词.md  # 银行账户模块后端开发指引
 │  └─ BUG及优化文档.md               # 问题与优化记录
@@ -360,7 +365,9 @@ order_system/
 | `/admin/stock/out` | 出库记录 | `/api/orders` |
 | `/admin/inventory/warehouse` | 仓库管理 | `/api/warehouses` |
 | `/admin/orders` | 销售订单 | `/api/orders` |
-| `/admin/orders/returns` | 退货订单 | 前端模拟数据（待接入后端 API） |
+| `/admin/orders/returns` | 退货订单 | `/api/returns` |
+| `/admin/orders/returns/create` | 新增退货单 | `/api/stores`、`/api/customers`、`/api/warehouses`、`/api/returns` |
+| `/admin/orders/returns/edit/:id` | 修改退货单草稿 | `/api/returns/:id` |
 | `/admin/customers` | 客户管理 | `/api/customers` |
 | `/admin/finance/receivables` | 应收欠款 | `/api/customers/receivables` |
 | `/admin/finance/payment-history` | 收款历史 | `/api/payment-receipts` |
@@ -403,6 +410,20 @@ order_system/
 | `POST` | `/api/payment-receipts/:id/audit` | 审核入账并更新客户欠款、储值和账户流水 |
 | `DELETE` | `/api/payment-receipts/:id/audit` | 反审核并回退客户账户数据 |
 
+## 退货单关键接口
+
+| 方法 | 地址 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/returns` | 查询退货单列表，可按门店、客户和状态筛选 |
+| `GET` | `/api/returns/:id` | 查询退货单及商品明细 |
+| `POST` | `/api/returns` | 新增待审核退货单草稿，不影响客户和库存 |
+| `PUT` | `/api/returns/:id` | 修改待审核退货单草稿 |
+| `POST` | `/api/returns/:id/audit` | 审核退货单，核销客户应收并返还库存 |
+| `POST` | `/api/returns/:id/reverse-audit` | 反审核，恢复客户应收并回退库存 |
+| `DELETE` | `/api/returns/:id` | 删除待审核草稿；已审核单据需先反审核 |
+
+退货单状态为 `draft`（待审核）和 `audited`（已审核），`completed` 仅用于兼容历史已入账数据。保存、修改、审核、反审核和删除均在后端事务中执行，避免只更新客户账户或只更新库存的半成功状态。
+
 销售订单审核请求体为 `{ "audit_state": 1 }`，反审核为 `{ "audit_state": 0 }`。收款附件仅支持 `jpg`、`jpeg`、`png`、`webp` 和 `gif`，整个 multipart 请求体不能超过 `10 MiB`。完整参数和响应示例见 [API 接口文档](docs/API接口文档.md#12-收款单与应收核销)。
 
 ## 数据存储
@@ -423,7 +444,11 @@ order_system/
 
 - `customers`：客户档案、期初欠款、当前应收欠款和预收储值余额
 - `payment_receipts`：收款单草稿、审核状态以及核销和预收快照
+- `return_orders`：退货单头、实退金额、退款金额、审核状态和客户流水关联
+- `return_order_items`：退货商品、仓库、数量、单价、税额和备注明细
 - `customer_account_transactions`：订单审核、收款审核和反审核产生的客户账户流水
+
+退货单审核会在 `stock_balances`、`stock_movements` 中留下可追溯的库存返还记录；反审核按退货单号删除对应库存流水并恢复审核前库存。
 
 收款附件保存到 `uploads/payment-receipts/YYYY-MM/`，数据库仅保存附件访问地址。删除待审核收款单或替换附件时，后端会同步清理不再使用的文件。
 
@@ -440,7 +465,7 @@ order_system/
 - 临时表单状态使用 Pinia；需要跨刷新保存的数据必须明确设计持久化方案。
 - 不引入在线 CDN、远程字体或在线矢量图标。
 - 金额和数量显示使用千分位、固定精度和 `tabular-nums`。
-- 后台列表、筛选栏、状态标签、表格、分页和弹窗优先遵循 [后台列表页视觉与组件样式规范](docs/后台列表页视觉与组件样式规范.md)。
+- 后台列表、筛选栏、状态标签、表格、分页和弹窗优先遵循 [后台列表页视觉与组件样式规范](docs/组件样式规范.md)。
 - 提交代码前至少运行一次 `npm run build`。
 
 ## 部署说明
@@ -490,6 +515,14 @@ docker restart my_order_app
 
 提交审核只创建待审核单据。请进入“入库记录”，打开单据抽屉并点击“审核”。只有审核接口成功返回后，库存才会增加。
 
+### 保存退货单后客户欠款和库存没有变化
+
+退货单保存只是创建 `draft` 待审核草稿，不会入账或返还库存。请在退货订单列表点击“审核”；审核成功后才会按实退货金额核销客户应收，并按商品明细返还对应门店和仓库库存。
+
+### 退货单为什么不能修改或删除
+
+`audited`（以及兼容历史 `completed`）单据已经写入客户流水和库存流水，系统会隐藏修改、删除操作。先点击“反审核”恢复为 `draft`，确认客户应收和库存恢复后再修改或删除。
+
 ### 审核按钮一直没有变成反审核
 
 检查 `/api/stock-inbounds/:id/audit` 是否返回成功，并确认后端容器运行的是最新代码。挂载代码更新后如未生效，重启 `my_order_app`。
@@ -513,7 +546,7 @@ docker restart my_order_app
 ## 相关文档
 
 - [API 接口文档](docs/API接口文档.md)
-- [后台列表页视觉与组件样式规范](docs/后台列表页视觉与组件样式规范.md)
+- [后台列表页视觉与组件样式规范](docs/组件样式规范.md)
 - [数据库表单说明](docs/数据库表单说明.md)
 - [SQLite 迁移说明](MIGRATION_SQLITE.md)
 - [SQLite 使用说明](README_SQLITE.md)
@@ -534,6 +567,6 @@ docker restart my_order_app
 - ✅ 当前欠款字段采用从前往后依次累加逻辑（例如：9-1日应收50，9-2日应收10，则9-2日当前欠款显示60）
 - ✅ 提供刷新、导出表格、发送对账单功能入口（预留）
 - ✅ 应收欠款汇总页面"欠款详情"按钮已关联，点击跳转至详情页
-- ✅ 样式遵循 `后台列表页视觉与组件样式规范.md`
+- ✅ 样式遵循 `组件样式规范.md`
 - ✅ 路由配置：`/admin/finance/debt-details/:type/:targetId`，支持通过 `query.name` 传递目标名称
 

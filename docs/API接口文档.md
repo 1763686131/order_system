@@ -11,6 +11,7 @@
 ## 版本历史
 
 - **v2.5** (2026-09-11) - 新增服务器路径配置、目录浏览和 NAS 检测报告动态扫描接口
+- **v2.6** (2026-09-14) - 新增退货单草稿、修改、审核、反审核及客户应收和库存联动接口
 - **v2.4** (2026-09-10) - 新增收款单、审核入账、反审核和客户应收联动接口
 - **v2.3** (2026-09-08) - 新增供应商、入库单、库存余额与事务过账接口
 - **v2.2** (2026-09-08) - 新增原材料商品档案接口，补充单位分组接口
@@ -34,7 +35,8 @@
 10. [人事检测报告文件管理](#10-人事检测报告文件管理)
 11. [供应商与入库管理](#11-供应商与入库管理)
 12. [收款单与应收核销](#12-收款单与应收核销)
-13. [系统设置与服务器路径](#13-系统设置与服务器路径)
+13. [退货单与客户应收、库存联动](#13-退货单与客户应收库存联动)
+14. [系统设置与服务器路径](#14-系统设置与服务器路径)
 
 ---
 
@@ -2924,13 +2926,164 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 ---
 
-## 13. 系统设置与服务器路径
+## 13. 退货单与客户应收、库存联动
+
+退货单使用“保存草稿、审核入账”的状态模型。保存和修改只写入退货单及商品明细，不改变客户应收、客户储值或库存；审核时才在同一个 SQLite 事务中核销客户应收并返还库存。接口前缀为 `/api/returns`，成品和原材料通过 `productType` 区分。
+
+### 13.1 状态与可执行操作
+
+| 数据库状态 | 页面显示 | 客户流水/库存 | 可执行操作 |
+| --- | --- | --- | --- |
+| `draft` | 待审核 | 不影响 | 修改、审核、删除、查看 |
+| `audited` | 已审核 | 已核销并返还库存 | 反审核、查看 |
+| `completed` | 已审核（历史兼容） | 视历史数据而定 | 反审核、查看 |
+
+已审核单据不能直接修改或删除，必须先反审核。反审核成功后单据恢复为 `draft`，客户应收和库存回到审核前状态。
+
+### 13.2 获取退货单列表
+
+- **URL**: `/api/returns`
+- **Method**: `GET`
+- **Query 参数**:
+  - `storeId`：可选，按门店 ID 筛选
+  - `customerId`：可选，按客户 ID 筛选
+  - `status`：可选，按 `draft`、`audited` 或历史状态筛选
+
+列表返回数组。每条记录包含 `returnNumber`、`originalOrderNumber`、`returnDate`、门店/客户信息、`totalQuantity`、`totalAmount`（实退货金额）、`refundAmount`、`writeoffAmount`、`status`、`remark` 等字段，并额外提供 `goodsName` 和 `units` 用于列表摘要。
+
+### 13.3 获取退货单详情
+
+- **URL**: `/api/returns/<id>`
+- **Method**: `GET`
+
+除列表字段外，详情响应包含 `items` 明细数组。明细字段包括 `productId`、`goodsName`、`specification`、`unit`、`warehouseId`、`packages`、`quantity`、`price`、`amount`、`taxRate`、`taxIncludedPrice`、`taxAmount`、`taxIncludedAmount` 和 `remark`。
+
+### 13.4 新增退货单草稿
+
+- **URL**: `/api/returns`
+- **Method**: `POST`
+- **响应状态**: `201`
+
+**请求示例**:
+
+```json
+{
+  "productType": "finished-product",
+  "storeId": 1,
+  "customerId": 2,
+  "returnDate": "2026-09-14",
+  "originalOrderNumber": "ZG20260912001",
+  "taxEnabled": false,
+  "returnAmount": 500,
+  "refundAmount": 0,
+  "settlementAccount": "绝缘结算账户",
+  "salesPerson": "王醒",
+  "creator": "制单员",
+  "packaging": "无",
+  "remark": "包装破损",
+  "items": [
+    {
+      "productId": 1,
+      "productCode": "DA-Z",
+      "goodsName": "粘钢胶",
+      "specification": "40kg/组",
+      "unit": "组",
+      "warehouseId": 2,
+      "packages": 1,
+      "quantity": 1,
+      "price": 500,
+      "amount": 500,
+      "taxRate": 0,
+      "taxIncludedPrice": 0,
+      "remark": ""
+    }
+  ]
+}
+```
+
+`productType` 只能是 `finished-product` 或 `raw-material`。`returnAmount` 为实退货金额，未传或小于等于零时按明细金额合计；`refundAmount` 为本次实际退款，必须满足 `0 <= refundAmount <= returnAmount`。保存成功后返回 `returnId`、`returnNumber` 和 `returnOrder`，状态为 `draft`。此时不会写入客户账户流水，也不会增加库存。
+
+**成功响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "退货单草稿保存成功，请审核后计入客户流水和库存",
+  "returnId": 12,
+  "returnNumber": "TH202609140001",
+  "returnOrder": {
+    "id": 12,
+    "returnNumber": "TH202609140001",
+    "storeId": 1,
+    "customerId": 2,
+    "productType": "finished-product",
+    "totalQuantity": 1,
+    "totalAmount": 500.0,
+    "refundAmount": 0.0,
+    "writeoffAmount": 500.0,
+    "status": "draft",
+    "accountTransactionId": null
+  }
+}
+```
+
+### 13.5 修改退货单草稿
+
+- **URL**: `/api/returns/<id>`
+- **Method**: `PUT`
+
+请求结构与新增接口相同。只有 `draft`（以及未入账的历史待处理状态）可以修改；后端会替换单据头和全部明细，保留原退货单号。已审核单据返回 `409`，需先调用反审核接口。
+
+### 13.6 审核退货单
+
+- **URL**: `/api/returns/<id>/audit`
+- **Method**: `POST`
+- **Header**: `Username` 可选，用作客户流水操作人
+
+审核在一个数据库事务中完成：
+
+1. 校验门店、客户归属和实退金额；实退金额不能超过客户当前应收欠款。
+2. 按每条明细的门店、仓库、商品和数量增加 `stock_balances`，并写入 `stock_movements` 入库流水；成品同时兼容更新旧版 `inventory` 表。
+3. 客户 `receivable` 减少 `returnAmount`；`refundAmount` 作为实际退款，差额写入 `writeoffAmount`。
+4. 写入一条 `customer_return` 客户账户流水，并把流水 ID 写回退货单。
+5. 单据状态更新为 `audited`，记录 `debtBefore` 和 `debtAfter`。
+
+例如客户当前应收 5000 元，实退金额 500 元、本次退款 0 元：审核后客户应收为 4500 元，500 元全部作为核销金额；不会产生现金退款。
+
+### 13.7 反审核退货单
+
+- **URL**: `/api/returns/<id>/reverse-audit`
+- **Method**: `POST`
+
+仅 `audited` 或历史 `completed` 且存在有效客户流水的单据可以反审核。接口会删除本单库存流水、扣回本单返还的库存、恢复客户 `receivable`，并将原客户流水标记为 `reversed`；单据恢复为 `draft`。如果库存不足或审核流水不存在，返回 `409`，不会提交部分变更。
+
+### 13.8 删除退货单草稿
+
+- **URL**: `/api/returns/<id>`
+- **Method**: `DELETE`
+
+只有未审核草稿可以删除。删除会同时删除退货商品明细，不会操作客户应收或库存。已审核单据返回 `409`，必须先反审核。
+
+### 13.9 退货单错误响应
+
+```json
+{
+  "success": false,
+  "message": "已审核单据不能修改，请先反审核"
+}
+```
+
+常见状态码：`400` 参数或业务校验失败，`404` 单据不存在，`409` 状态冲突、客户欠款不足、库存不足或无法反审核，`500` 服务端异常。
+
+---
+
+## 14. 系统设置与服务器路径
 
 模块前缀：`/api/settings`
 
 系统路径配置保存在 SQLite 的 `system_settings` 表中。检测报告模块使用键 `reports.path` 保存报告根目录；报告扫描、上传、下载、预览、移动、重命名和删除接口都会在请求时读取该配置。
 
-### 13.1 获取路径配置
+### 14.1 获取路径配置
 
 - **URL**: `/api/settings/paths`
 - **Method**: `GET`
@@ -2961,7 +3114,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 `reportPathConfigured` 为 `false` 时，表示尚未保存自定义路径，当前使用 `reportPathDefault`。
 
-### 13.2 保存路径配置
+### 14.2 保存路径配置
 
 - **URL**: `/api/settings/paths`
 - **Method**: `PUT`
@@ -3002,7 +3155,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 将 `reportPath` 传为空字符串会清除自定义配置，恢复使用部署环境默认路径。检测报告路径不可用时返回 HTTP `400`，不会保存本次路径。
 
-### 13.3 测试服务器路径
+### 14.3 测试服务器路径
 
 - **URL**: `/api/settings/paths/test`
 - **Method**: `POST`
@@ -3034,7 +3187,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 }
 ```
 
-### 13.4 浏览服务器目录
+### 14.4 浏览服务器目录
 
 - **URL**: `/api/settings/directories`
 - **Method**: `GET`
@@ -3073,7 +3226,7 @@ GET /api/settings/directories?path=/mnt/nas
 
 如果 NAS 挂载点不在目录浏览器的初始根目录中，仍可在弹窗中直接输入容器内绝对路径，然后点击“打开”或使用“测试路径”按钮确认。
 
-### 13.5 NAS/Docker 路径配置规则
+### 14.5 NAS/Docker 路径配置规则
 
 NAS 主机目录必须先挂载到后端容器，应用只能使用容器内可见的路径。例如：
 
