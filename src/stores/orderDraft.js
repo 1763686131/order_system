@@ -49,13 +49,13 @@ export const useOrderDraftStore = defineStore('orderDraft', {
       }
 
       if (state.draft.mode === 'edit' && state.draft.orderId) {
-        return `/admin/orders/edit/${state.draft.orderId}`
+        return `/admin/sales/edit/${state.draft.orderId}`
       }
 
       const copyFrom = state.draft.route?.query?.copyFrom
       return copyFrom
-        ? `/admin/orders/create?copyFrom=${encodeURIComponent(copyFrom)}`
-        : '/admin/orders/create'
+        ? `/admin/sales/create?copyFrom=${encodeURIComponent(copyFrom)}`
+        : '/admin/sales/create'
     },
     draftTitle: (state) => {
       if (!state.draft) return ''

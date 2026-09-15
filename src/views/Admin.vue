@@ -224,7 +224,7 @@ const handleRefresh = () => {
 
 const handleStockRecordCreate = ({ mode } = {}) => {
   if (mode === 'OUTBOUND') {
-    router.push('/admin/orders/create')
+    router.push('/admin/sales/create')
     return
   }
   stockRecordModal.value?.open({ type: 'raw-material' })
@@ -282,7 +282,8 @@ const icons = {
   users: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   dollar: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
   briefcase: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
-  settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>'
+  settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>',
+  truck: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>'
 }
 
 const menuItems = ref([
@@ -300,12 +301,13 @@ const menuItems = ref([
     ]
   },
   {
-    label: '订单',
+    label: '销售',
     icon: icons.cart,
     children: [
-      { label: '销售订单', path: '/admin/orders' },
-      { label: '物流列表', path: '/admin/orders/logistics' },
-      { label: '退货订单', path: '/admin/orders/returns' }
+      { label: '销售订单', path: '/admin/sales' },
+      { label: '物流列表', path: '/admin/sales/logistics' },
+      { label: '退货订单', path: '/admin/sales/returns' },
+      { label: '客户列表', path: '/admin/sales/customers' }
     ]
   },
   {
@@ -318,22 +320,6 @@ const menuItems = ref([
       { label: '出库记录', path: '/admin/stock/out' },
       { label: '供应商管理', path: '/admin/suppliers' },
       { label: '仓库管理', path: '/admin/inventory/warehouse' }
-    ]
-  },
-  {
-    label: '运营',
-    icon: icons.trending,
-    children: [
-      { label: '数据统计', path: '/admin/analytics' },
-      { label: '营销活动', path: '/admin/marketing' }
-    ]
-  },
-  {
-    label: '客户',
-    icon: icons.users,
-    children: [
-      { label: '客户列表', path: '/admin/customers' },
-      { label: '客户分组', path: '/admin/customers/groups' }
     ]
   },
   {
@@ -395,22 +381,22 @@ const showOrderDraftShortcut = computed(() => {
 })
 
 const currentMenuLabel = computed(() => {
-  if (currentPath.value.startsWith('/admin/orders/returns/edit/')) {
+  if (currentPath.value.startsWith('/admin/sales/returns/edit/')) {
     return route.query.productType === 'raw-material'
-      ? '订单/修改原材料退货单'
-      : '订单/修改退货单'
+      ? '销售/修改原材料退货单'
+      : '销售/修改退货单'
   }
   // 特殊路由处理
-  if (currentPath.value === '/admin/orders/create') {
-    return '订单/新增订单'
+  if (currentPath.value === '/admin/sales/create') {
+    return '销售/新增订单'
   }
-  if (currentPath.value.startsWith('/admin/orders/edit/')) {
-    return '订单/修改订单'
+  if (currentPath.value.startsWith('/admin/sales/edit/')) {
+    return '销售/修改订单'
   }
-  if (currentPath.value === '/admin/orders/returns/create') {
+  if (currentPath.value === '/admin/sales/returns/create') {
     return route.query.productType === 'raw-material'
-      ? '订单/录入原材料退货单'
-      : '订单/录入退货单'
+      ? '销售/录入原材料退货单'
+      : '销售/录入退货单'
   }
 
   // 先尝试从子菜单中查找
