@@ -271,7 +271,7 @@
                   </td>
                   <td class="money-cell current-debt-cell">
                     <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
-                      <strong>{{ formatMoney(calculateProductCurrentDebt((currentPage - 1) * pageSize + index, 0)) }}</strong>
+                      <strong>{{ formatMoney(calculateProductCurrentDebt(item, 0)) }}</strong>
                     </template>
                     <template v-else>
                       <strong>{{ formatMoney(item.currentDebt) }}</strong>
@@ -304,7 +304,7 @@
                       {{ formatMoney(calculateProductDebt(item, pIndex + 1)) }}
                     </td>
                     <td class="money-cell current-debt-cell">
-                      <strong>{{ formatMoney(calculateProductCurrentDebt((currentPage - 1) * pageSize + index, pIndex + 1)) }}</strong>
+                      <strong>{{ formatMoney(calculateProductCurrentDebt(item, pIndex + 1)) }}</strong>
                     </td>
                   </tr>
                 </template>
@@ -505,11 +505,21 @@ const calculateProductDebt = (item, productIndex) => {
   return Number(item.debtAmount || 0) * Number(product.subtotal || 0) / total
 }
 
-const calculateProductCurrentDebt = (pageIndex, productIndex) => {
-  const item = pagedRecords.value[pageIndex]
-  const product = item?.products?.[productIndex]
-  if (product?.cumulativeDebt != null) return product.cumulativeDebt
-  return item?.currentDebt ?? 0
+const calculateProductCurrentDebt = (item, productIndex) => {
+  const products = item?.products || []
+  if (!item || !products[productIndex]) return item?.currentDebt ?? 0
+
+  // 当前欠款是流水累计值：先还原本单发生前的欠款，再按商品分摊金额逐项累加。
+  // 不直接读取商品上的 cumulativeDebt，避免旧数据或重复分摊造成当前欠款跳变。
+  const debtBefore = Number(item.currentDebt || 0) - Number(item.debtAmount || 0)
+  const debtThroughProduct = products
+    .slice(0, productIndex + 1)
+    .reduce(
+      (sum, product, index) => sum + Number(calculateProductDebt(item, index) || 0),
+      debtBefore
+    )
+
+  return Number(debtThroughProduct.toFixed(2))
 }
 
 const handleSearch = () => {
