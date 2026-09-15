@@ -287,8 +287,12 @@
                     class="expanded-product-row"
                   >
                     <td class="index-cell"></td>
-                    <td class="date-cell"></td>
-                    <td class="doc-number-cell"></td>
+                    <td class="date-cell expanded-meta-cell">
+                      {{ formatDate(item.businessDate) }}
+                    </td>
+                    <td class="doc-number-cell expanded-meta-cell">
+                      {{ item.docNumber || '-' }}
+                    </td>
                     <td class="type-cell"></td>
                     <td class="product-cell">{{ product.name }}</td>
                     <td class="quantity-cell">{{ product.quantity || 1 }}</td>
@@ -1005,6 +1009,12 @@ select {
 
 .expanded-product-row {
   background: #f8fafc;
+}
+
+.expanded-product-row .expanded-meta-cell {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .expanded-product-row:hover {

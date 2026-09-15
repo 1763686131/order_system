@@ -915,6 +915,10 @@ const handleView = (customer) => {
 }
 
 const handleEdit = (customer) => {
+  if (!customer?.id) {
+    showAlert('客户信息已失效，请重新打开编辑', 'warning', '提示')
+    return
+  }
   isEditMode.value = true
   selectedCustomer.value = customer
   formData.value = {
@@ -933,7 +937,8 @@ const handleEdit = (customer) => {
     taxNumber: customer.taxNumber || '',
     remark: customer.remark || ''
   }
-  closeDetailModal()
+  // 关闭详情视图但保留 selectedCustomer，编辑提交仍需要当前客户 ID。
+  showDetailModal.value = false
   showEditModal.value = true
 }
 
