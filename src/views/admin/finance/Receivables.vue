@@ -4,7 +4,9 @@
       <div class="summary-formula">
         <div class="summary-item summary-item-result">
           <span>应收欠款</span>
-          <strong>{{ formatMoney(totals.receivable) }}</strong>
+          <strong :class="{ 'negative-amount': Number(totals.receivable) < 0 }">
+            {{ formatMoney(totals.receivable) }}
+          </strong>
         </div>
         <span class="summary-operator" aria-hidden="true">=</span>
         <div class="summary-item">
@@ -200,9 +202,11 @@
                 <td class="money-cell discount-amount">
                   {{ formatMoney(item.discountAmount) }}
                 </td>
-                <td class="money-cell receivable-amount">
+                <td
+                  class="money-cell receivable-amount"
+                  :class="{ 'negative-amount': Number(item.receivable) < 0 }"
+                >
                   <strong>{{ formatMoney(item.receivable) }}</strong>
-                  <span>净额 {{ formatSignedMoney(item.netAccountBalance) }}</span>
                 </td>
                 <td class="operation-column">
                   <div class="row-actions">
@@ -232,7 +236,12 @@
               <td class="money-cell">{{ formatMoney(totals.receivableIncrease) }}</td>
               <td class="money-cell recovered-amount">{{ formatMoney(totals.debtRecovered) }}</td>
               <td class="money-cell discount-amount">{{ formatMoney(totals.discountAmount) }}</td>
-              <td class="money-cell receivable-amount">{{ formatMoney(totals.receivable) }}</td>
+              <td
+                class="money-cell receivable-amount"
+                :class="{ 'negative-amount': Number(totals.receivable) < 0 }"
+              >
+                {{ formatMoney(totals.receivable) }}
+              </td>
               <td></td>
             </tr>
           </tfoot>
@@ -360,15 +369,6 @@ const totals = computed(() => filteredReceivables.value.reduce((result, item) =>
 const formatMoney = value => {
   const amount = Number(value) || 0
   return `¥${amount.toLocaleString('zh-CN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })}`
-}
-
-const formatSignedMoney = value => {
-  const amount = Number(value) || 0
-  const sign = amount < 0 ? '-' : amount > 0 ? '+' : ''
-  return `${sign}¥${Math.abs(amount).toLocaleString('zh-CN', {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   })}`
@@ -937,6 +937,13 @@ svg {
 .receivable-amount {
   color: #dc3545 !important;
   font-weight: 700;
+}
+
+.negative-amount,
+.summary-item-result strong.negative-amount,
+.receivable-amount.negative-amount,
+.receivable-amount.negative-amount strong {
+  color: #07805f !important;
 }
 
 .receivable-amount strong,

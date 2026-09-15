@@ -236,6 +236,19 @@ def _debt_record_from_transaction(cursor, transaction):
         order = _order_row_for_transaction(cursor, transaction)
         if order and order['audit_state'] != 1:
             return None
+        stored_balance_applied = _debt_money(
+            transaction['stored_balance_applied']
+        )
+        # 对账单把储值抵扣视为本次订单对应的应收增加，保证“应收-
+        # 储值”净额在商品明细和累计欠款中保持一致。
+        record['debtAmount'] = _debt_float(
+            _debt_money(transaction['receivable_change'])
+            + stored_balance_applied
+        )
+        record['_receivableIncrease'] = _debt_float(
+            _debt_money(transaction['receivable_increase'])
+            + stored_balance_applied
+        )
         if order:
             record.update({
                 'businessDate': order['date'] or record['businessDate'],
@@ -272,6 +285,8 @@ def _debt_record_from_transaction(cursor, transaction):
             record['debtAmount'] = _debt_float(
                 -_debt_money(return_row['writeoff_amount'])
             )
+            # 退货会直接减少净应收。
+            record['_receivableIncrease'] = record['debtAmount']
             item_rows = cursor.execute(
                 '''
                 SELECT *
@@ -287,6 +302,15 @@ def _debt_record_from_transaction(cursor, transaction):
         payment = _payment_row_for_transaction(cursor, transaction)
         if payment and payment['status'] != 'audited':
             return None
+        advance_amount = max(
+            _debt_money(transaction['balance_change']),
+            Decimal('0.00'),
+        )
+        # 收款产生的预收仍保留在储值字段中，但对账单中的净应收
+        # 需要把这部分一并扣除，才能显示“收款超过应收”为负数。
+        record['debtAmount'] = _debt_float(
+            _debt_money(transaction['receivable_change']) - advance_amount
+        )
         if payment:
             record.update({
                 'businessDate': payment['document_date'] or record['businessDate'],
@@ -498,13 +522,19 @@ def get_customer_receivables():
                         WHEN t.transaction_type = 'order_audit'
                          AND t.status = 'active'
                         THEN t.receivable_increase
+                             + COALESCE(t.stored_balance_applied, 0)
+                        WHEN t.transaction_type = 'customer_return'
+                         AND t.status = 'active'
+                        THEN t.receivable_change
                         ELSE 0
                     END
                 ), 0) AS receivable_increase,
                 COALESCE(SUM(
                     CASE
-                        WHEN t.status = 'active'
+                        WHEN t.transaction_type = 'customer_payment'
+                         AND t.status = 'active'
                         THEN t.debt_recovered
+                             + MAX(COALESCE(t.balance_change, 0), 0)
                         ELSE 0
                     END
                 ), 0) AS debt_recovered,
@@ -548,13 +578,16 @@ def get_customer_receivables():
         if phone and phone not in str(item.get('phone') or ''):
             continue
 
-        receivable = float(item.get('receivable') or 0)
+        actual_receivable = float(item.get('receivable') or 0)
+        balance = float(item.get('balance') or 0)
+        # 储值/预收属于客户信用，财务应收列表按“应收 - 储值”
+        # 展示，因此收款超过应收时会得到负数。
+        receivable = actual_receivable - balance
         if debt_status == 'outstanding' and receivable <= 0:
             continue
         if debt_status == 'settled' and receivable > 0:
             continue
 
-        balance = float(item.get('balance') or 0)
         receivables.append({
             'customerId': item.get('id'),
             'customerCode': item.get('customer_code') or '',
@@ -581,7 +614,7 @@ def get_customer_receivables():
                 2
             ),
             'receivable': round(receivable, 2),
-            'netAccountBalance': round(balance - receivable, 2),
+            'netAccountBalance': round(balance - actual_receivable, 2),
         })
 
     return jsonify({
@@ -692,6 +725,21 @@ def get_customer_debt_details(customer_id):
             })
 
         stored_balance = _debt_money(customer['balance'])
+        payment_advance_total = sum(
+            (
+                max(
+                    _debt_money(transaction['balance_change']),
+                    Decimal('0.00'),
+                )
+                for transaction in transactions
+                if transaction['transaction_type'] == 'customer_payment'
+            ),
+            Decimal('0.00'),
+        )
+        unallocated_balance = max(
+            stored_balance - payment_advance_total,
+            Decimal('0.00'),
+        )
         if stored_balance > 0:
             records.append({
                 'id': f'balance-{customer_id}',
@@ -708,7 +756,9 @@ def get_customer_debt_details(customer_id):
                 'balanceAmount': _debt_float(stored_balance),
                 'storedBalanceApplied': 0.0,
                 '_receivableIncrease': 0.0,
-                'debtAmount': 0.0,
+                # 付款流水已经将其产生的预收计入净应收；这里只补记
+                # 手工录入且尚未被付款流水覆盖的储值，避免重复扣减。
+                'debtAmount': _debt_float(-unallocated_balance),
                 'currentDebt': 0.0,
                 'products': [],
                 'hasMultipleProducts': False,
@@ -759,14 +809,14 @@ def get_customer_debt_details(customer_id):
     stored_balance = _debt_money(customer['balance'])
     receivable_increase = sum(
         (_debt_money(record.get('_receivableIncrease'))
-         for record in records
-         if _debt_money(record.get('_receivableIncrease')) > 0),
+         for record in records),
         Decimal('0.00'),
     )
+    net_receivable = _debt_money(customer['receivable']) - stored_balance
     debt_recovered = max(
         Decimal('0.00'),
         initial_debt + receivable_increase
-        - _debt_money(customer['receivable']),
+        - net_receivable,
     )
 
     response_records = []
@@ -787,7 +837,7 @@ def get_customer_debt_details(customer_id):
         'initialDebtAt': customer['initial_receivable_at'],
         'storedBalance': _debt_float(stored_balance),
         'balanceAt': customer['balance_at'],
-        'totalReceivable': _debt_float(customer['receivable']),
+        'totalReceivable': _debt_float(net_receivable),
         'summary': {
             'initialDebt': _debt_float(initial_debt),
             'storedBalance': _debt_float(stored_balance),
@@ -795,7 +845,7 @@ def get_customer_debt_details(customer_id):
             'debtRecovered': _debt_float(debt_recovered),
             # 对账单不单独展示优惠调整，优惠金额仍留在原收款/订单流水中。
             'discountAmount': 0.0,
-            'receivable': _debt_float(customer['receivable']),
+            'receivable': _debt_float(net_receivable),
         },
         'records': response_records,
         'total': len(response_records),
@@ -917,10 +967,6 @@ def update_customer(customer_id):
             + new_initial
             - old_initial
         )
-        if receivable < 0:
-            return jsonify({
-                'error': '期初欠款调整后不能使当前应收欠款小于0'
-            }), 400
 
         now = datetime.now().isoformat(timespec='seconds')
         initial_receivable_at = existing.get('initialReceivableAt')

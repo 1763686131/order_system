@@ -1781,7 +1781,7 @@ receipt_image: File (图片文件)
 
 - **URL**: `/api/customers/receivables`
 - **Method**: `GET`
-- **说明**: 获取客户期初欠款、审核订单增加的应收欠款、收回欠款、优惠和当前应收欠款。订单审核时先按订单未收金额增加应收，再以客户储值抵扣并记入收回欠款，剩余应收以正数保存；账户净额按“储值余额 - 当前应收”计算，因此欠款状态显示负数。反审核按原流水撤销。
+- **说明**: 获取客户期初欠款、订单/退货产生的净应收变动、收回欠款、优惠和当前净应收欠款。储值/预收仍单独保存，但列表中的 `receivable` 按“实际应收 - 储值余额”计算；收款超过应收时保留负数，表示客户储值信用。反审核按原流水撤销。
 
 **响应示例**:
 
@@ -1799,8 +1799,7 @@ receipt_image: File (图片文件)
       "receivableIncrease": 5000,
       "debtRecovered": 3000,
       "discountAmount": 0,
-      "receivable": 2000,
-      "netAccountBalance": -2000
+      "receivable": 2000
     }
   ],
   "total": 1,
@@ -1842,14 +1841,14 @@ receipt_image: File (图片文件)
   "initialDebtAt": "2026-09-01T12:58:31",
   "storedBalance": 800.00,
   "balanceAt": "2026-09-12T09:30:00",
-  "totalReceivable": 8542.50,
+  "totalReceivable": 7742.50,
   "summary": {
     "initialDebt": 5000.00,
     "storedBalance": 800.00,
     "receivableIncrease": 5542.50,
-    "debtRecovered": 2000.00,
+    "debtRecovered": 2800.00,
     "discountAmount": 0.00,
-    "receivable": 8542.50
+    "receivable": 7742.50
   },
   "records": [
     {
@@ -1932,9 +1931,9 @@ receipt_image: File (图片文件)
    }
    ```
 
-4. `debtAmount` 使用流水的 `receivable_change`：销售订单为正数，退货和收款通常为负数；因此能准确反映储值抵扣、实退核销及收款后的客户应收变化。期初欠款的 `debtAmount` 为正数，储值的 `debtAmount` 为 0（不影响应收欠款）。
+4. `debtAmount` 使用净应收变动：销售订单会加上本单使用的储值抵扣，退货按实际核销金额减少应收，收款会把本次预收一并计入负数，因此收款超过应收时可显示为负数。期初欠款的 `debtAmount` 为正数，已由付款流水覆盖的储值记录不重复计入。
 
-5. `currentDebt` 按业务日期、流水 ID 顺序累计，`INITIAL` 记录作为累计起点，`BALANCE` 记录不改变应收欠款。接口内部按时间正序计算后返回，前端默认按最新时间倒序展示（时间近的在上面），因此修改期初欠款或储值后会显示在最新发生时间的位置。日期或业务类型筛选只影响列表，不改变累计欠款结果。
+5. `currentDebt` 按业务日期、流水 ID 顺序累计净应收变动，`INITIAL` 记录作为累计起点，`BALANCE` 只补记未被付款流水覆盖的手工储值。接口内部按时间正序计算后返回，前端默认按最新时间倒序展示（时间近的在上面），因此修改期初欠款或储值后会显示在最新发生时间的位置。日期或业务类型筛选只影响列表，不改变累计欠款结果。
 
 6. `expandProducts=true` 时，商品按小计占比拆分 `debtAmount`；商品金额合计为 0 时平均分摊，最后一项用差额修正，确保分摊合计与本单欠款精确到分。
 

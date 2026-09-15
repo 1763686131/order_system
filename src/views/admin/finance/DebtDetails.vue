@@ -16,7 +16,12 @@
         <div class="summary-stats">
         <div class="stat-box">
           <span class="stat-label">{{ type === 'receivable' ? '应收欠款' : '应付欠款' }}</span>
-          <strong class="stat-value">{{ formatMoney(totalReceivable) }}</strong>
+          <strong
+            class="stat-value"
+            :class="{ 'negative-amount': Number(totalReceivable) < 0 }"
+          >
+            {{ formatMoney(totalReceivable) }}
+          </strong>
         </div>
         <div class="stat-operator">=</div>
         <div class="stat-box">
@@ -264,7 +269,11 @@
                      </template>
                   </td>
                   <td class="money-cell">
-                    <span v-if="item.businessType === 'ORDER' && item.paidAmount > 0">{{ formatMoney(item.paidAmount) }}</span>
+                    <span
+                      v-if="(item.businessType === 'ORDER' || item.businessType === 'PAYMENT') && item.paidAmount > 0"
+                    >
+                      {{ formatMoney(item.paidAmount) }}
+                    </span>
                     <span v-else-if="item.businessType === 'BALANCE'">{{ formatMoney(item.balanceAmount) }}</span>
                     <span v-else class="empty-text">-</span>
                   </td>
@@ -279,10 +288,18 @@
                   </td>
                   <td class="money-cell current-debt-cell">
                     <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
-                      <strong>{{ formatMoney(calculateProductCurrentDebt(item, getDisplayProductIndex(item, 0))) }}</strong>
+                      <strong
+                        :class="{
+                          'negative-amount': calculateProductCurrentDebt(item, getDisplayProductIndex(item, 0)) < 0
+                        }"
+                      >
+                        {{ formatMoney(calculateProductCurrentDebt(item, getDisplayProductIndex(item, 0))) }}
+                      </strong>
                     </template>
                     <template v-else>
-                      <strong>{{ formatMoney(item.currentDebt) }}</strong>
+                      <strong :class="{ 'negative-amount': Number(item.currentDebt) < 0 }">
+                        {{ formatMoney(item.currentDebt) }}
+                      </strong>
                     </template>
                   </td>
                 </tr>
@@ -317,7 +334,13 @@
                       {{ formatMoney(calculateProductDebt(item, productIndex)) }}
                     </td>
                     <td class="money-cell current-debt-cell">
-                      <strong>{{ formatMoney(calculateProductCurrentDebt(item, productIndex)) }}</strong>
+                      <strong
+                        :class="{
+                          'negative-amount': calculateProductCurrentDebt(item, productIndex) < 0
+                        }"
+                      >
+                        {{ formatMoney(calculateProductCurrentDebt(item, productIndex)) }}
+                      </strong>
                     </td>
                   </tr>
                 </template>
@@ -629,7 +652,7 @@ const loadData = async () => {
       debtRecovered: 0,
       discountAmount: 0,
       storedBalance: response?.storedBalance || 0,
-      receivable: response?.totalReceivable || 0
+      receivable: response?.totalReceivable ?? 0
     }
     records.value = Array.isArray(response?.records) ? response.records : []
     currentPage.value = 1
@@ -1133,18 +1156,23 @@ select {
 }
 
 .increase-amount {
-  color: #0f9f78;
+  color: #dc3545;
   font-weight: 500;
 }
 
 .decrease-amount {
-  color: #ef4444;
+  color: #07805f;
   font-weight: 500;
 }
 
 .current-debt-cell strong {
   font-weight: 600;
   color: var(--text);
+}
+
+.negative-amount,
+.current-debt-cell strong.negative-amount {
+  color: #07805f !important;
 }
 
 .skeleton-row td {
