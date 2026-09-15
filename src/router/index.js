@@ -49,7 +49,7 @@ const routes = [
       {
         path: 'suppliers',
         name: 'admin-suppliers',
-        component: () => import('@/views/admin/products/SupplierList.vue'),
+        redirect: '/admin/purchase/suppliers',
         meta: { requiresAuth: true }
       },
       {
@@ -180,6 +180,24 @@ const routes = [
         name: 'admin-orders-edit',
         component: () => import('@/views/admin/sales/OrderForm.vue'),
         props: route => ({ orderId: Number(route.params.id) }),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'purchase/orders',
+        name: 'admin-purchase-orders',
+        component: () => import('@/views/purchase/PurchaseOrders.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'purchase/suppliers',
+        name: 'admin-purchase-suppliers',
+        component: () => import('@/views/purchase/Suppliers.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'purchase/inbound',
+        name: 'admin-purchase-inbound',
+        component: () => import('@/views/purchase/PurchaseInbound.vue'),
         meta: { requiresAuth: true }
       },
       {

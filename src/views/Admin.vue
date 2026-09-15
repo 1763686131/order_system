@@ -311,6 +311,15 @@ const menuItems = ref([
     ]
   },
   {
+    label: '采购',
+    icon: icons.truck,
+    children: [
+      { label: '采购订单', path: '/admin/purchase/orders' },
+      { label: '供应商管理', path: '/admin/purchase/suppliers' },
+      { label: '采购入库', path: '/admin/purchase/inbound' }
+    ]
+  },
+  {
     label: '库存',
     icon: icons.chart,
     children: [
@@ -318,7 +327,6 @@ const menuItems = ref([
       { label: '原材料库存', path: '/admin/inventory/materials' },
       { label: '入库记录', path: '/admin/stock/in' },
       { label: '出库记录', path: '/admin/stock/out' },
-      { label: '供应商管理', path: '/admin/suppliers' },
       { label: '仓库管理', path: '/admin/inventory/warehouse' }
     ]
   },
