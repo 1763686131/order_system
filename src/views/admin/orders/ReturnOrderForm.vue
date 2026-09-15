@@ -202,7 +202,7 @@
             <input v-model.trim="form.packaging" type="text" placeholder="无" />
           </div>
           <div class="finance-item">
-            <label>实退金额</label>
+            <label>应退金额</label>
             <input v-model.number="form.returnAmount" type="number" min="0" step="0.01" />
           </div>
           <div class="finance-item">
@@ -240,10 +240,10 @@
             <span class="finance-value highlight">{{ money(Number(form.returnAmount || 0) - Number(form.refundAmount || 0)) }}</span>
           </div>
           <div class="finance-item">
-            <span class="finance-label red">实际退款:</span>
+            <span class="finance-label red">本次退款:</span>
             <span class="finance-value red">{{ money(form.refundAmount) }}</span>
           </div>
-          <div class="account-tip">实退金额用于核销客户应收；本次退款为 0 时，不产生现金退款。</div>
+          <div class="account-tip">应退金额扣除本次退款后，差额用于核销客户应收；本次退款会从结算账户实际付出。</div>
           <div class="action-row">
             <button class="btn-save-and-print" type="button" :disabled="saving" @click="save(true)">保存后打印</button>
             <button class="btn-save-final" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存 (Ctrl+Q)' }}</button>
@@ -644,7 +644,7 @@ const save = async printAfterSave => {
     return
   }
   if (Number(form.value.refundAmount) > Number(form.value.returnAmount)) {
-    window.alert('本次退款不能超过实退金额')
+    window.alert('本次退款不能超过应退金额')
     return
   }
 

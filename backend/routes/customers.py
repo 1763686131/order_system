@@ -265,6 +265,13 @@ def _debt_record_from_transaction(cursor, transaction):
                 'paidAmount': _debt_float(return_row['refund_amount']),
                 'remark': return_row['remark'] or '',
             })
+            # 退货单的应收影响不是整笔应退金额，而是：
+            # 应退金额 - 本次退款 = 核销客户应收金额。
+            # 这里优先使用退货单自身保存的核销金额，兼容历史流水中
+            # receivable_change 曾按整笔退货金额写入的旧数据。
+            record['debtAmount'] = _debt_float(
+                -_debt_money(return_row['writeoff_amount'])
+            )
             item_rows = cursor.execute(
                 '''
                 SELECT *

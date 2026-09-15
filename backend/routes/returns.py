@@ -416,17 +416,19 @@ def _create_return_transaction(conn, return_row, customer, return_amount,
         _money(customer['receivable'], '客户欠款'),
         Decimal('0.00'),
     )
-    if return_amount > debt_before:
-        raise ValueError(
-            f'实退金额不能超过客户当前欠款（{debt_before:.2f}元）'
-        )
     if refund_amount > return_amount:
-        raise ValueError('本次退款不能超过实退金额')
-
-    debt_after = (debt_before - return_amount).quantize(
+        raise ValueError('本次退款不能超过应退金额')
+    writeoff_amount = (return_amount - refund_amount).quantize(
         _MONEY_QUANT, rounding=ROUND_HALF_UP
     )
-    writeoff_amount = return_amount - refund_amount
+    if writeoff_amount > debt_before:
+        raise ValueError(
+            f'核销金额不能超过客户当前欠款（{debt_before:.2f}元）'
+        )
+
+    debt_after = (debt_before - writeoff_amount).quantize(
+        _MONEY_QUANT, rounding=ROUND_HALF_UP
+    )
     transaction_cursor = conn.execute(
         '''
         INSERT INTO customer_account_transactions (
@@ -439,7 +441,7 @@ def _create_return_transaction(conn, return_row, customer, return_amount,
         ''',
         (
             customer['id'], return_row['return_number'], float(return_amount),
-            float(writeoff_amount), float(-return_amount),
+            float(writeoff_amount), float(-writeoff_amount),
             float(customer['balance'] or 0), float(debt_after),
             _operator(), now,
         ),
@@ -556,29 +558,31 @@ def create_return():
                 items = _normalize_items(conn, data, product_type)
                 return_amount = _money(
                     data.get('returnAmount', data.get('totalAmount')),
-                    '实退金额',
+                    '应退金额',
                 )
                 if return_amount <= 0:
                     return_amount = sum(
                         (item['amount'] for item in items), Decimal('0.00')
                     ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
                 if return_amount <= 0:
-                    raise ValueError('实退金额必须大于0')
+                    raise ValueError('应退金额必须大于0')
                 debt_before = max(
                     _money(customer['receivable'], '客户欠款'),
                     Decimal('0.00'),
                 )
-                if return_amount > debt_before:
-                    raise ValueError(
-                        f'实退金额不能超过客户当前欠款（{debt_before:.2f}元）'
-                    )
                 if refund_amount > return_amount:
-                    raise ValueError('本次退款不能超过实退金额')
+                    raise ValueError('本次退款不能超过应退金额')
 
-                debt_after = (debt_before - return_amount).quantize(
+                writeoff_amount = (return_amount - refund_amount).quantize(
                     _MONEY_QUANT, rounding=ROUND_HALF_UP
                 )
-                writeoff_amount = return_amount - refund_amount
+                if writeoff_amount > debt_before:
+                    raise ValueError(
+                        f'核销金额不能超过客户当前欠款（{debt_before:.2f}元）'
+                    )
+                debt_after = (debt_before - writeoff_amount).quantize(
+                    _MONEY_QUANT, rounding=ROUND_HALF_UP
+                )
                 now = _now()
                 return_number = _text(data.get('returnNumber'), 60)
                 if not return_number:
@@ -684,7 +688,7 @@ def create_return():
                     ''',
                     (
                         customer_id, return_number, float(return_amount),
-                        float(writeoff_amount), float(-return_amount),
+                        float(writeoff_amount), float(-writeoff_amount),
                         float(customer['balance'] or 0), float(debt_after),
                         _operator(), now,
                     ),
@@ -713,8 +717,9 @@ def create_return():
         return jsonify({
             'success': True,
             'message': (
-                f'退货单保存成功，客户应收已核销{return_amount:.2f}元；'
-                f'实际退款{refund_amount:.2f}元；库存已返还'
+                f'退货单保存成功，应退金额{return_amount:.2f}元，'
+                f'核销客户应收{writeoff_amount:.2f}元，'
+                f'本次退款{refund_amount:.2f}元；库存已返还'
             ),
             'returnNumber': result['returnNumber'],
             'returnId': result['id'],
@@ -748,13 +753,13 @@ def create_return_draft():
                 store, _customer = _validate_store_customer(conn, store_id, customer_id)
                 items = _normalize_items(conn, data, product_type)
                 totals = _return_totals(items)
-                return_amount = _money(data.get('returnAmount', data.get('totalAmount')), '实退金额')
+                return_amount = _money(data.get('returnAmount', data.get('totalAmount')), '应退金额')
                 if return_amount <= 0:
                     return_amount = totals['item_amount'].quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
                 if return_amount <= 0:
-                    raise ValueError('实退金额必须大于0')
+                    raise ValueError('应退金额必须大于0')
                 if refund_amount > return_amount:
-                    raise ValueError('本次退款不能超过实退金额')
+                    raise ValueError('本次退款不能超过应退金额')
                 now = _now()
                 return_number = _text(data.get('returnNumber'), 60) or _next_return_number(conn, return_date)
                 if conn.execute('SELECT 1 FROM return_orders WHERE return_number = ?', (return_number,)).fetchone():
@@ -819,14 +824,14 @@ def update_return_draft(return_id):
                 store, _customer = _validate_store_customer(conn, store_id, customer_id)
                 items = _normalize_items(conn, data, product_type)
                 totals = _return_totals(items)
-                return_amount = _money(data.get('returnAmount', data.get('totalAmount')), '实退金额')
+                return_amount = _money(data.get('returnAmount', data.get('totalAmount')), '应退金额')
                 if return_amount <= 0:
                     return_amount = totals['item_amount'].quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
                 refund_amount = _money(data.get('refundAmount'), '本次退款')
                 if return_amount <= 0:
-                    raise ValueError('实退金额必须大于0')
+                    raise ValueError('应退金额必须大于0')
                 if refund_amount < 0 or refund_amount > return_amount:
-                    raise ValueError('本次退款不能超过实退金额')
+                    raise ValueError('本次退款不能超过应退金额')
                 now = _now()
                 writeoff_amount = return_amount - refund_amount
                 conn.execute(
@@ -873,10 +878,10 @@ def audit_return(return_id):
                 if row['status'] in ('audited', 'completed') or row['account_transaction_id']:
                     return jsonify({'success': False, 'message': '退货单已审核'}), 409
                 store, customer = _validate_store_customer(conn, row['store_id'], row['customer_id'])
-                return_amount = _money(row['total_amount'], '实退金额')
+                return_amount = _money(row['total_amount'], '应退金额')
                 refund_amount = _money(row['refund_amount'], '本次退款')
                 if return_amount <= 0:
-                    raise ValueError('实退金额必须大于0')
+                    raise ValueError('应退金额必须大于0')
                 items = conn.execute('SELECT * FROM return_order_items WHERE return_id = ? ORDER BY line_no, id', (return_id,)).fetchall()
                 if not items:
                     raise ValueError('退货单没有商品明细')
@@ -897,7 +902,7 @@ def audit_return(return_id):
                     -refund_amount,
                 )
                 result = _serialize_return(conn, return_id)
-        return jsonify({'success': True, 'message': f'退货单已审核，核销客户应收 {return_amount:.2f} 元并返还库存',
+        return jsonify({'success': True, 'message': f'退货单已审核，应退金额 {return_amount:.2f} 元，核销客户应收 {_writeoff:.2f} 元，本次退款 {refund_amount:.2f} 元并返还库存',
                         'debtBefore': float(debt_before), 'debtAfter': float(debt_after), 'returnOrder': result})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 409
@@ -921,7 +926,10 @@ def reverse_audit_return(return_id):
                 if not tx or not customer:
                     return jsonify({'success': False, 'message': '审核流水不存在，无法反审核'}), 409
                 _reverse_return_inventory(conn, return_id, row['return_number'])
-                debt_after = (_money(customer['receivable']) + _money(row['total_amount'])).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+                receivable_reversal = -_money(tx['receivable_change'])
+                debt_after = (_money(customer['receivable']) + receivable_reversal).quantize(
+                    _MONEY_QUANT, rounding=ROUND_HALF_UP
+                )
                 now = _now()
                 adjust_bank_account_balance(
                     conn,
@@ -985,10 +993,10 @@ def delete_return(return_id):
                 if not transaction or not customer:
                     return jsonify({'success': False, 'message': '退货单账户流水不存在'}), 409
                 current_debt = _money(customer['receivable'])
-                return_amount = _money(item['total_amount'])
-                if current_debt + return_amount < 0:
+                receivable_reversal = -_money(transaction['receivable_change'])
+                if current_debt + receivable_reversal < 0:
                     return jsonify({'success': False, 'message': '客户应收状态异常，无法撤销'}), 409
-                debt_after = current_debt + return_amount
+                debt_after = current_debt + receivable_reversal
                 _reverse_return_inventory(conn, return_id, item['return_number'])
                 conn.execute(
                     'UPDATE customers SET receivable = ?, updated_at = ? WHERE id = ?',

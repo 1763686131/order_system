@@ -174,7 +174,9 @@
               <th class="material-column">退货商品</th>
               <th class="number-column">退货数量</th>
               <th class="number-column">单位</th>
-              <th class="number-column">实退货金额</th>
+              <th class="number-column">应退金额</th>
+              <th class="number-column">本次退款</th>
+              <th class="number-column">核销金额</th>
               <th>处理状态</th>
               <th class="remark-column">备注</th>
               <th class="operation-column">操作</th>
@@ -183,11 +185,11 @@
           <tbody>
             <template v-if="loading">
               <tr v-for="index in 5" :key="`loading-${index}`" class="skeleton-row">
-                <td v-for="cell in 12" :key="cell"><span></span></td>
+                <td v-for="cell in 14" :key="cell"><span></span></td>
               </tr>
             </template>
             <tr v-else-if="filteredReturns.length === 0">
-              <td colspan="12" class="empty-cell">
+              <td colspan="14" class="empty-cell">
                 <div class="empty-mark" aria-hidden="true">
                   <svg viewBox="0 0 24 24">
                     <path d="M4 6h16v14H4z"></path>
@@ -233,7 +235,9 @@
               </td>
               <td class="number-column numeric">{{ item.quantity }}</td>
               <td class="number-column">{{ item.unit }}</td>
-              <td class="number-column numeric money-value">¥{{ Number(item.actual_return_amount || 0).toFixed(2) }}</td>
+              <td class="number-column numeric money-value">¥{{ Number(item.return_amount || 0).toFixed(2) }}</td>
+              <td class="number-column numeric money-value refund-value">¥{{ Number(item.refund_amount || 0).toFixed(2) }}</td>
+              <td class="number-column numeric money-value writeoff-value">¥{{ Number(item.writeoff_amount || 0).toFixed(2) }}</td>
               <td>
                 <span :class="['status-tag', getStatusClass(item.status)]">
                   <i aria-hidden="true"></i>
@@ -391,8 +395,16 @@
                     <dd>{{ selectedReturn.return_date }}</dd>
                   </div>
                   <div>
-                    <dt>实退货金额</dt>
-                    <dd class="amount-text">¥{{ Number(selectedReturn.actual_return_amount || 0).toFixed(2) }}</dd>
+                    <dt>应退金额</dt>
+                    <dd class="amount-text">¥{{ Number(selectedReturn.return_amount || 0).toFixed(2) }}</dd>
+                  </div>
+                  <div>
+                    <dt>本次退款</dt>
+                    <dd class="amount-text refund-value">¥{{ Number(selectedReturn.refund_amount || 0).toFixed(2) }}</dd>
+                  </div>
+                  <div>
+                    <dt>核销金额</dt>
+                    <dd class="amount-text writeoff-value">¥{{ Number(selectedReturn.writeoff_amount || 0).toFixed(2) }}</dd>
                   </div>
                 </dl>
               </section>
@@ -651,7 +663,11 @@ const fetchData = () => {
           quantity: Number(item.totalQuantity || 0),
           amount: Number(item.totalAmount || 0),
            unit: item.units || item.unit || '-',
-           actual_return_amount: Number(item.totalAmount || 0),
+           return_amount: Number(item.totalAmount || 0),
+           refund_amount: Number(item.refundAmount || 0),
+           writeoff_amount: Number(
+             item.writeoffAmount ?? (Number(item.totalAmount || 0) - Number(item.refundAmount || 0))
+           ),
            status: item.status === 'draft' ? 'pending' : (item.status || 'completed'),
            remark: item.remark || ''
         }))
@@ -776,7 +792,12 @@ const runReturnAction = async (item, action, message) => {
 }
 
 const handleAudit = item => {
-  if (item.status !== 'pending' || !window.confirm(`确认审核退货单 ${item.return_number}？审核后将核销客户应收并返还库存。`)) return
+  if (
+    item.status !== 'pending'
+    || !window.confirm(
+      `确认审核退货单 ${item.return_number}？审核后将按“应退金额 - 本次退款”核销客户应收，并返还库存。`
+    )
+  ) return
   runReturnAction(item, 'audit', '退货单审核成功')
 }
 
