@@ -214,7 +214,7 @@
                   <td class="product-cell">
                     <div class="product-content">
                       <span class="product-text" v-if="item.products && item.products.length > 0">
-                        {{ item.products[0].name }}
+                        {{ getDisplayProduct(item, 0).name }}
                         <span v-if="item.products.length > 1" class="more-badge">+{{ item.products.length - 1 }}</span>
                       </span>
                       <span v-else class="empty-text">-</span>
@@ -233,19 +233,19 @@
                   </td>
                   <td class="quantity-cell">
                     <span v-if="item.products && item.products.length > 0">
-                      {{ item.products[0].quantity || 1 }}
+                      {{ getDisplayProduct(item, 0).quantity || 1 }}
                     </span>
                     <span v-else class="empty-text">-</span>
                   </td>
                   <td class="unit-cell">
                     <span v-if="item.products && item.products.length > 0">
-                      {{ item.products[0].unit || '个' }}
+                      {{ getDisplayProduct(item, 0).unit || '个' }}
                     </span>
                     <span v-else class="empty-text">-</span>
                   </td>
                   <td class="price-cell">
                     <span v-if="item.products && item.products.length > 0">
-                      {{ formatMoney(item.products[0].price) }}
+                      {{ formatMoney(getDisplayProduct(item, 0).price) }}
                     </span>
                     <span v-else class="empty-text">-</span>
                   </td>
@@ -262,7 +262,7 @@
                   </td>
                   <td class="money-cell" :class="item.debtAmount > 0 ? 'increase-amount' : 'decrease-amount'">
                     <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
-                      {{ formatMoney(calculateProductDebt(item, 0)) }}
+                      {{ formatMoney(calculateProductDebt(item, getDisplayProductIndex(item, 0))) }}
                     </template>
                     <template v-else>
                       <span v-if="item.businessType !== 'BALANCE'">{{ formatMoney(item.debtAmount) }}</span>
@@ -271,7 +271,7 @@
                   </td>
                   <td class="money-cell current-debt-cell">
                     <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
-                      <strong>{{ formatMoney(calculateProductCurrentDebt(item, 0)) }}</strong>
+                      <strong>{{ formatMoney(calculateProductCurrentDebt(item, getDisplayProductIndex(item, 0))) }}</strong>
                     </template>
                     <template v-else>
                       <strong>{{ formatMoney(item.currentDebt) }}</strong>
@@ -282,8 +282,8 @@
                 <!-- 展开的商品行 -->
                 <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
                   <tr
-                    v-for="(product, pIndex) in item.products.slice(1)"
-                    :key="`${item.id}-product-${pIndex + 1}`"
+                    v-for="productIndex in getDisplayProductIndexes(item).slice(1)"
+                    :key="`${item.id}-product-${productIndex}`"
                     class="expanded-product-row"
                   >
                     <td class="index-cell"></td>
@@ -294,17 +294,17 @@
                       {{ item.docNumber || '-' }}
                     </td>
                     <td class="type-cell"></td>
-                    <td class="product-cell">{{ product.name }}</td>
-                    <td class="quantity-cell">{{ product.quantity || 1 }}</td>
-                    <td class="unit-cell">{{ product.unit || '个' }}</td>
-                    <td class="price-cell">{{ formatMoney(product.price) }}</td>
+                    <td class="product-cell">{{ item.products[productIndex].name }}</td>
+                    <td class="quantity-cell">{{ item.products[productIndex].quantity || 1 }}</td>
+                    <td class="unit-cell">{{ item.products[productIndex].unit || '个' }}</td>
+                    <td class="price-cell">{{ formatMoney(item.products[productIndex].price) }}</td>
                     <td class="money-cell"></td>
                     <td class="money-cell"></td>
-                    <td class="money-cell" :class="calculateProductDebt(item, pIndex + 1) > 0 ? 'increase-amount' : 'decrease-amount'">
-                      {{ formatMoney(calculateProductDebt(item, pIndex + 1)) }}
+                    <td class="money-cell" :class="calculateProductDebt(item, productIndex) > 0 ? 'increase-amount' : 'decrease-amount'">
+                      {{ formatMoney(calculateProductDebt(item, productIndex)) }}
                     </td>
                     <td class="money-cell current-debt-cell">
-                      <strong>{{ formatMoney(calculateProductCurrentDebt(item, pIndex + 1)) }}</strong>
+                      <strong>{{ formatMoney(calculateProductCurrentDebt(item, productIndex)) }}</strong>
                     </td>
                   </tr>
                 </template>
@@ -491,6 +491,24 @@ const formatBusinessType = (type) => {
   return typeMap[type] || type
 }
 
+const getDisplayProductIndexes = (item) => {
+  const productCount = item?.products?.length || 0
+  const indexes = Array.from({ length: productCount }, (_, index) => index)
+
+  // 单据排序方向同时作用于商品分摊行：
+  // 远到近保持录入顺序，近到远反向展示，保证展开后的行也参与排序。
+  return sortOrder.value === 'desc' ? indexes.reverse() : indexes
+}
+
+const getDisplayProductIndex = (item, displayIndex) => {
+  return getDisplayProductIndexes(item)[displayIndex] ?? 0
+}
+
+const getDisplayProduct = (item, displayIndex) => {
+  const productIndex = getDisplayProductIndex(item, displayIndex)
+  return item?.products?.[productIndex] || {}
+}
+
 const calculateProductDebt = (item, productIndex) => {
   const product = item.products?.[productIndex]
   if (!product) return 0
@@ -544,7 +562,7 @@ const toggleRow = (itemId) => {
 const exportTable = () => {
   const header = ['业务日期', '单据编号', '业务类型', '商品信息', '数量', '单位', '单价', '本单欠款', '当前欠款']
   const rows = filteredRecords.value.map((record) => {
-    const firstProduct = record.products?.[0] || {}
+    const firstProduct = getDisplayProduct(record, 0)
     return [
       formatDate(record.businessDate),
       record.docNumber || '',
