@@ -393,6 +393,17 @@
                     </svg>
                   </button>
                   <button
+                    type="button"
+                    title="打印订单"
+                    @click="handlePrintOrder(order)"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="M6 9V2h12v7"></path>
+                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                      <path d="M6 14h12v8H6z"></path>
+                    </svg>
+                  </button>
+                  <button
                     v-if="mode === 'finance' && isSalesOrder(order) && !isOrderAudited(order)"
                     type="button"
                     title="编辑订单"
@@ -545,6 +556,14 @@
                     <dt>收货地址</dt>
                     <dd>{{ getContactAddress(selectedOrder) }}</dd>
                   </div>
+                  <div v-if="isOrderAudited(selectedOrder)">
+                    <dt>审核人</dt>
+                    <dd>{{ selectedOrder.audit_by || '-' }}</dd>
+                  </div>
+                  <div v-if="isOrderAudited(selectedOrder) && selectedOrder.audit_date">
+                    <dt>审核时间</dt>
+                    <dd>{{ formatDateTime(selectedOrder.audit_date) }}</dd>
+                  </div>
                 </dl>
 
               </section>
@@ -637,6 +656,10 @@
                     <dd>{{ getShippingMethodText(selectedOrder) }}</dd>
                   </div>
                   <div>
+                    <dt>发货日期</dt>
+                    <dd>{{ selectedOrder.shipped_date || selectedOrder.completed_date || '-' }}</dd>
+                  </div>
+                  <div>
                     <dt>物流单号</dt>
                     <dd>{{ selectedOrder.logistics_no || '-' }}</dd>
                   </div>
@@ -711,6 +734,15 @@
                   @click="handleUncompleteOrder(selectedOrder)"
                 >
                   {{ orderActionLoading === 'uncomplete' ? '撤销中...' : '撤销已完成' }}
+                </button>
+                <button
+                  v-if="mode === 'finance' && selectedOrder.status === 'pending'"
+                  class="button button-force-complete"
+                  type="button"
+                  :disabled="orderActionLoading !== ''"
+                  @click="handleForceComplete(selectedOrder)"
+                >
+                  {{ orderActionLoading === 'force-complete' ? '处理中...' : '强制完成' }}
                 </button>
                 <button
                   v-if="mode === 'logistics' && !hasLogistics(selectedOrder)"
@@ -1148,9 +1180,28 @@ const fetchOrdersData = async () => {
 // 格式化日期
 const formatDate = (order) => {
   const date = props.mode === 'logistics'
-    ? (order.shipped_date || order.completed_date || order.date || '')
+    ? (order.order_date || order.date || '')
     : (order.date || '')
   return date ? date.substring(0, 10) : '-'
+}
+
+// 格式化日期时间
+const formatDateTime = (datetime) => {
+  if (!datetime) return '-'
+  try {
+    const date = new Date(datetime)
+    return date.toLocaleString('zh-CN', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    })
+  } catch (e) {
+    return datetime.substring(0, 19).replace('T', ' ')
+  }
 }
 
 // 获取分类文本
@@ -1651,6 +1702,19 @@ const handleEditOrder = (order) => {
   openOrderTask({ name: 'admin-orders-edit', params: { id: order.id } })
 }
 
+// 打印订单
+const handlePrintOrder = (order) => {
+  if (isNewOrder(order)) {
+    // 新订单：调用打印模板功能
+    window.alert('打开打印预览功能（待实现打印模板）')
+    // TODO: 实现打印模板调用
+    // openPrintTemplate(order)
+  } else {
+    // 旧订单：显示提示信息
+    window.alert('该订单为旧格式订单，不支持打印功能')
+  }
+}
+
 // 复制新格式销售订单：进入新增页并由表单重新生成订单编号
 const handleCopySalesOrder = (order) => {
   openOrderTask(
@@ -1974,6 +2038,43 @@ const handleUncompleteOrder = async (order) => {
   } catch (error) {
     console.error('撤销已完成失败:', error)
     window.alert(error?.response?.data?.message || '撤销失败，请稍后重试')
+  } finally {
+    orderActionLoading.value = ''
+  }
+}
+
+const handleForceComplete = async (order) => {
+  if (!order) return
+  if (order.status === 'completed') {
+    window.alert('订单已完成，无需重复操作')
+    return
+  }
+
+  const confirmMsg = `确定要强制完成订单 ${order.order_number || order.id} 吗？\n\n强制完成后订单状态将更新为已完成。`
+  if (!window.confirm(confirmMsg)) return
+
+  orderActionLoading.value = 'force-complete'
+  try {
+    // Get current user info (you may need to adjust this based on your auth system)
+    const currentUser = localStorage.getItem('username') || 'system'
+    const currentDate = new Date().toISOString()
+
+    await request({
+      url: `/orders/${order.id}`,
+      method: 'PUT',
+      data: {
+        status: 'completed',
+        completed_by: currentUser,
+        completed_date: currentDate
+      }
+    })
+
+    closeDetailModal()
+    await fetchOrdersData()
+    window.alert('订单已强制完成')
+  } catch (error) {
+    console.error('强制完成订单失败:', error)
+    window.alert(error?.response?.data?.message || '操作失败，请稍后重试')
   } finally {
     orderActionLoading.value = ''
   }
@@ -3464,6 +3565,18 @@ svg {
   color: #92400e;
   background: #fef3c7;
   border-color: #e7b95a;
+}
+
+.button-force-complete {
+  color: #fff;
+  background: #f59e0b;
+  border-color: #f59e0b;
+  box-shadow: 0 2px 5px rgba(245, 158, 11, 0.2);
+}
+
+.button-force-complete:hover:not(:disabled) {
+  background: #d97706;
+  border-color: #d97706;
 }
 
 .button-danger-light {

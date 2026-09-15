@@ -972,12 +972,18 @@ const loadOrderData = async (orderId) => {
       formData.value.customerId = response.customer_id || ''
       formData.value.warehouseId = response.warehouse_id || ''
 
-      // 处理日期格式：从 "2026-09-05 02:23" 提取 "2026-09-05"
-      const rawDate = response.order_date || response.date || ''
-      if (rawDate) {
-        formData.value.orderDate = rawDate.split(' ')[0] // 只取日期部分
+      // 处理日期格式：复制模式始终使用当前日期
+      if (copySourceId.value) {
+        // 复制订单时，使用当前日期
+        formData.value.orderDate = new Date().toISOString().split('T')[0]
       } else {
-        formData.value.orderDate = ''
+        // 编辑模式时，使用源订单日期
+        const rawDate = response.order_date || response.date || ''
+        if (rawDate) {
+          formData.value.orderDate = rawDate.split(' ')[0] // 只取日期部分
+        } else {
+          formData.value.orderDate = ''
+        }
       }
 
       formData.value.orderNumber = response.order_number || ''
