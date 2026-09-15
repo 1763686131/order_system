@@ -248,12 +248,20 @@
                       {{ formatMoney(getDisplayProduct(item, 0).price) }}
                     </span>
                     <span v-else class="empty-text">-</span>
-                  </td>
-                  <td class="money-cell">
-                    <span v-if="item.businessType === 'ORDER' || item.businessType === 'INITIAL'">
-                      {{ formatMoney(item.orderAmount) }}
-                    </span>
-                    <span v-else class="empty-text">-</span>
+                   </td>
+                   <td class="money-cell">
+                     <template v-if="expandedRows[item.id] && item.products && item.products.length > 1">
+                       <span v-if="item.businessType === 'ORDER' || item.businessType === 'INITIAL'">
+                         {{ formatMoney(calculateProductOriginalAmount(item, getDisplayProductIndex(item, 0))) }}
+                       </span>
+                       <span v-else class="empty-text">-</span>
+                     </template>
+                     <template v-else>
+                       <span v-if="item.businessType === 'ORDER' || item.businessType === 'INITIAL'">
+                         {{ formatMoney(item.orderAmount) }}
+                       </span>
+                       <span v-else class="empty-text">-</span>
+                     </template>
                   </td>
                   <td class="money-cell">
                     <span v-if="item.businessType === 'ORDER' && item.paidAmount > 0">{{ formatMoney(item.paidAmount) }}</span>
@@ -298,7 +306,12 @@
                     <td class="quantity-cell">{{ item.products[productIndex].quantity || 1 }}</td>
                     <td class="unit-cell">{{ item.products[productIndex].unit || '个' }}</td>
                     <td class="price-cell">{{ formatMoney(item.products[productIndex].price) }}</td>
-                    <td class="money-cell"></td>
+                    <td class="money-cell">
+                      <span v-if="item.businessType === 'ORDER' || item.businessType === 'INITIAL'">
+                        {{ formatMoney(calculateProductOriginalAmount(item, productIndex)) }}
+                      </span>
+                      <span v-else class="empty-text">-</span>
+                    </td>
                     <td class="money-cell"></td>
                     <td class="money-cell" :class="calculateProductDebt(item, productIndex) > 0 ? 'increase-amount' : 'decrease-amount'">
                       {{ formatMoney(calculateProductDebt(item, productIndex)) }}
@@ -507,6 +520,14 @@ const getDisplayProductIndex = (item, displayIndex) => {
 const getDisplayProduct = (item, displayIndex) => {
   const productIndex = getDisplayProductIndex(item, displayIndex)
   return item?.products?.[productIndex] || {}
+}
+
+const calculateProductOriginalAmount = (item, productIndex) => {
+  const product = item?.products?.[productIndex]
+  if (!product) return 0
+
+  const quantity = product.quantity == null ? 1 : Number(product.quantity)
+  return Number(product.price || 0) * quantity
 }
 
 const calculateProductDebt = (item, productIndex) => {
