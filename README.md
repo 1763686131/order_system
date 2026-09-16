@@ -240,14 +240,13 @@ order_system/
 │  │     │  ├─ MaterialInventory.vue # 原材料库存及库存金额
 │  │     │  ├─ SupplierList.vue      # 供应商管理
 │  │     │  └─ StockRecordList.vue   # 入库/出库记录通用组件
-│  │     ├─ orders/                  # 后台销售订单
+│  │     ├─ sales/                   # 销售管理
 │  │     │  ├─ UnifiedOrderList.vue  # 销售订单和物流订单列表
 │  │     │  ├─ OrderForm.vue         # 订单录入和编辑表单
 │  │     │  ├─ ReturnOrderList.vue   # 退货订单列表
-│  │     │  └─ ReturnOrderForm.vue   # 退货单录入和编辑表单
-│  │     ├─ inventory/               # 仓库管理
-│  │     ├─ customers/               # 客户管理
+│  │     │  ├─ ReturnOrderForm.vue   # 退货单录入和编辑表单
 │  │     │  └─ CustomerList.vue      # 客户列表、编辑弹窗（支持期初欠款和储值管理）
+│  │     ├─ inventory/               # 仓库管理
 │  │     ├─ finance/
 │  │     │  ├─ Receivables.vue        # 客户应收欠款汇总
 │  │     │  ├─ PaymentHistory.vue     # 收款历史、收款单录入与审核

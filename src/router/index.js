@@ -49,7 +49,7 @@ const routes = [
       {
         path: 'suppliers',
         name: 'admin-suppliers',
-        component: () => import('@/views/admin/products/SupplierList.vue'),
+        redirect: '/admin/purchase/suppliers',
         meta: { requiresAuth: true }
       },
       {
@@ -79,16 +79,16 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
-        path: 'orders',
+        path: 'sales',
         name: 'admin-orders',
-        component: () => import('@/views/admin/orders/UnifiedOrderList.vue'),
+        component: () => import('@/views/admin/sales/UnifiedOrderList.vue'),
         props: { mode: 'finance' },
         meta: { requiresAuth: true }
       },
       {
-        path: 'orders/logistics',
+        path: 'sales/logistics',
         name: 'admin-orders-logistics',
-        component: () => import('@/views/admin/orders/UnifiedOrderList.vue'),
+        component: () => import('@/views/admin/sales/UnifiedOrderList.vue'),
         props: { mode: 'logistics' },
         meta: { requiresAuth: true }
       },
@@ -164,43 +164,61 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
-        path: 'customers',
+        path: 'sales/customers',
         name: 'admin-customers',
-        component: () => import('@/views/admin/customers/CustomerList.vue'),
+        component: () => import('@/views/admin/sales/CustomerList.vue'),
         meta: { requiresAuth: true }
       },
       {
-        path: 'orders/create',
+        path: 'sales/create',
         name: 'admin-orders-create',
-        component: () => import('@/views/admin/orders/OrderForm.vue'),
+        component: () => import('@/views/admin/sales/OrderForm.vue'),
         meta: { requiresAuth: true }
       },
       {
-        path: 'orders/edit/:id',
+        path: 'sales/edit/:id',
         name: 'admin-orders-edit',
-        component: () => import('@/views/admin/orders/OrderForm.vue'),
+        component: () => import('@/views/admin/sales/OrderForm.vue'),
         props: route => ({ orderId: Number(route.params.id) }),
         meta: { requiresAuth: true }
       },
       {
-        path: 'orders/returns',
-        name: 'admin-orders-returns',
-        component: () => import('@/views/admin/orders/ReturnOrderList.vue'),
+        path: 'purchase/orders',
+        name: 'admin-purchase-orders',
+        component: () => import('@/views/purchase/PurchaseOrders.vue'),
         meta: { requiresAuth: true }
       },
       {
-        path: 'orders/returns/create',
+        path: 'purchase/suppliers',
+        name: 'admin-purchase-suppliers',
+        component: () => import('@/views/purchase/Suppliers.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'purchase/inbound',
+        name: 'admin-purchase-inbound',
+        component: () => import('@/views/purchase/PurchaseInbound.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'sales/returns',
+        name: 'admin-orders-returns',
+        component: () => import('@/views/admin/sales/ReturnOrderList.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'sales/returns/create',
         name: 'admin-orders-return-create',
-        component: () => import('@/views/admin/orders/ReturnOrderForm.vue'),
+        component: () => import('@/views/admin/sales/ReturnOrderForm.vue'),
         props: route => ({
           productType: route.query.productType || 'finished-product'
         }),
         meta: { requiresAuth: true }
       },
       {
-        path: 'orders/returns/edit/:id',
+        path: 'sales/returns/edit/:id',
         name: 'admin-orders-return-edit',
-        component: () => import('@/views/admin/orders/ReturnOrderForm.vue'),
+        component: () => import('@/views/admin/sales/ReturnOrderForm.vue'),
         props: route => ({
           returnId: Number(route.params.id),
           productType: route.query.productType || 'finished-product'
