@@ -778,15 +778,55 @@
                 </button>
               </div>
               <div class="detail-modal-actions">
-                <button
-                  v-if="mode === 'finance' && canAuditOrder(selectedOrder)"
-                  class="button button-audit"
-                  type="button"
-                  :disabled="orderActionLoading !== ''"
-                  @click="handleAuditOrder(selectedOrder)"
-                >
-                  {{ orderActionLoading === 'audit' ? '审核中...' : '审核' }}
-                </button>
+                <template v-if="mode === 'finance' && canAuditOrder(selectedOrder)">
+                  <button
+                    v-if="!auditSlideVisible"
+                    class="button button-audit"
+                    type="button"
+                    :disabled="orderActionLoading !== ''"
+                    @click="handleAuditOrder"
+                  >
+                    审核
+                  </button>
+                  <div v-else class="audit-slide-row">
+                    <div
+                      class="audit-slide-track"
+                      :class="{ loading: orderActionLoading === 'audit' }"
+                      :style="{ '--audit-slide-progress': auditSlideValue }"
+                    >
+                      <div class="audit-slide-progress" aria-hidden="true"></div>
+                      <span class="audit-slide-label">
+                        {{ orderActionLoading === 'audit' ? '审核中...' : '滑动以审核' }}
+                      </span>
+                      <input
+                        ref="auditSlideInput"
+                        v-model.number="auditSlideValue"
+                        class="audit-slide-input"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        aria-label="向右滑动确认审核"
+                        :aria-valuetext="`${auditSlideValue}%`"
+                        :disabled="orderActionLoading === 'audit'"
+                        @change="handleAuditSlideRelease"
+                        @keydown.esc.prevent="closeAuditSlider"
+                      />
+                    </div>
+                    <button
+                      class="audit-slide-cancel"
+                      type="button"
+                      title="取消审核"
+                      aria-label="取消审核"
+                      :disabled="orderActionLoading === 'audit'"
+                      @click="closeAuditSlider"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path d="m6 6 12 12M18 6 6 18"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </template>
                 <button
                   v-if="mode === 'finance' && canReverseAuditOrder(selectedOrder)"
                   class="button button-reverse-audit"
@@ -1041,6 +1081,9 @@ const products = ref([]) // 商品列表，用于反查商品名称
 const detailModalOpen = ref(false)
 const selectedOrder = ref(null)
 const orderActionLoading = ref('')
+const auditSlideVisible = ref(false)
+const auditSlideValue = ref(0)
+const auditSlideInput = ref(null)
 
 // 顶部通知
 const notice = ref({
@@ -1749,6 +1792,8 @@ const closeDetailModal = () => {
   detailModalOpen.value = false
   selectedOrder.value = null
   orderActionLoading.value = ''
+  auditSlideVisible.value = false
+  auditSlideValue.value = 0
 }
 
 // 显示商品明细弹窗
@@ -2027,14 +2072,16 @@ const updateOrderAuditState = async (order, audited) => {
 
   const actionLabel = audited ? '审核' : '反审核'
   const nextStatusLabel = audited ? '已过帐' : getStatusText({ ...order, audit_state: 0 })
-  const confirmed = await requestConfirmation({
-    title: `确认${actionLabel}`,
-    message: `确定要${actionLabel}订单 ${order.order_number || order.id} 吗？`,
-    confirmText: `确认${actionLabel}`,
-    danger: !audited
-  })
-  if (!confirmed) {
-    return
+  if (!audited) {
+    const confirmed = await requestConfirmation({
+      title: `确认${actionLabel}`,
+      message: `确定要${actionLabel}订单 ${order.order_number || order.id} 吗？`,
+      confirmText: `确认${actionLabel}`,
+      danger: true
+    })
+    if (!confirmed) {
+      return
+    }
   }
 
   orderActionLoading.value = audited ? 'audit' : 'reverse-audit'
@@ -2064,10 +2111,41 @@ const updateOrderAuditState = async (order, audited) => {
     )
   } finally {
     orderActionLoading.value = ''
+    if (audited) {
+      closeAuditSlider()
+    }
   }
 }
 
-const handleAuditOrder = (order) => updateOrderAuditState(order, true)
+const handleAuditOrder = () => {
+  auditSlideValue.value = 0
+  auditSlideVisible.value = true
+  nextTick(() => {
+    auditSlideInput.value?.focus()
+  })
+}
+
+const closeAuditSlider = () => {
+  if (orderActionLoading.value === 'audit') return
+  auditSlideValue.value = 0
+  auditSlideVisible.value = false
+}
+
+const handleAuditSlideRelease = async () => {
+  if (auditSlideValue.value < 95) {
+    auditSlideValue.value = 0
+    return
+  }
+
+  auditSlideValue.value = 100
+  const order = selectedOrder.value
+  if (!order) {
+    closeAuditSlider()
+    return
+  }
+  await updateOrderAuditState(order, true)
+}
+
 const handleReverseAuditOrder = (order) => updateOrderAuditState(order, false)
 
 // 点击发货方式标签 - 回单随时可上传或管理
@@ -2407,7 +2485,7 @@ const changePageSize = (size) => {
   position: fixed;
   top: 24px;
   left: 50%;
-  z-index: 3000;
+  z-index: 2147483000;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -2465,7 +2543,7 @@ const changePageSize = (size) => {
 .confirm-dialog-overlay {
   position: fixed;
   inset: 0;
-  z-index: 99999;
+  z-index: 2147483500;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -3932,6 +4010,149 @@ svg {
 .button-audit:hover:not(:disabled) {
   background: var(--accent-dark, #08745a);
   border-color: var(--accent-dark, #08745a);
+}
+
+.audit-slide-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-slide-track {
+  --audit-slide-progress: 0;
+  position: relative;
+  width: 250px;
+  max-width: calc(100vw - 150px);
+  height: 42px;
+  overflow: hidden;
+  background: #eef2f3;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.audit-slide-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--audit-slide-progress) * 1%);
+  background: linear-gradient(90deg, #a9e5d2, #0f9f78);
+  transition: width 0.08s linear;
+}
+
+.audit-slide-label {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 28px;
+  color: #596579;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0;
+  pointer-events: none;
+  transition: color 0.18s ease;
+}
+
+.audit-slide-track.loading .audit-slide-label {
+  color: #fff;
+}
+
+.audit-slide-input {
+  position: absolute;
+  inset: 3px;
+  z-index: 2;
+  width: calc(100% - 6px);
+  height: 36px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+
+.audit-slide-input:active {
+  cursor: grabbing;
+}
+
+.audit-slide-input:disabled {
+  cursor: wait;
+}
+
+.audit-slide-input::-webkit-slider-runnable-track {
+  height: 36px;
+  background: transparent;
+}
+
+.audit-slide-input::-webkit-slider-thumb {
+  width: 36px;
+  height: 36px;
+  margin-top: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff;
+  border: 1px solid #c7d0da;
+  border-radius: 6px;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.24);
+}
+
+.audit-slide-input::-moz-range-track {
+  height: 36px;
+  background: transparent;
+  border: 0;
+}
+
+.audit-slide-input::-moz-range-progress {
+  height: 36px;
+  background: transparent;
+}
+
+.audit-slide-input::-moz-range-thumb {
+  width: 34px;
+  height: 34px;
+  background: #fff;
+  border: 1px solid #c7d0da;
+  border-radius: 6px;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.24);
+}
+
+.audit-slide-input:focus-visible {
+  outline: 2px solid var(--accent, #0f9f78);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.audit-slide-cancel {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.audit-slide-cancel:hover:not(:disabled) {
+  color: #dc3545;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.audit-slide-cancel:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.audit-slide-cancel svg {
+  width: 16px;
+  height: 16px;
 }
 
 .button-reverse-audit {
