@@ -1672,15 +1672,20 @@ onMounted(loadMaterialProducts)
 }
 
 .movement-out {
-  color: #a4510b !important;
+  color: #dc2626 !important;
 }
 
 .movement-type.movement-out {
-  background: #fff3df;
+  background: #fef2f2;
 }
 
 .movement-note {
   color: var(--text-secondary) !important;
+  overflow: visible !important;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+  text-overflow: clip !important;
+  white-space: normal !important;
 }
 
 .empty-state {
