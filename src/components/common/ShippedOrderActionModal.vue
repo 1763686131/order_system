@@ -1,281 +1,466 @@
 <template>
   <teleport to="body">
-    <div
-      v-if="visible"
-      id="shippedOrderActionModal"
-      class="modal-overlay"
-      style="display: flex;"
-    >
+    <Transition name="modal-fade">
       <div
-        class="modal-content"
-        :class="{ 'is-dragging': isDragging }"
-        :style="{
-          width: '520px',
-          borderRadius: '12px',
-          padding: '24px',
-          transform: `translate(${modalX}px, ${modalY}px)`,
-          cursor: isDragging ? 'grabbing' : 'default'
-        }"
-        @mousedown="handleMouseDown"
+        v-if="visible"
+        id="shippedOrderActionModal"
+        class="modal-overlay"
+        @click.self="closeShippedActionModal"
       >
-        <div
-          class="modal-header"
-          style="margin-bottom: 20px; cursor: grab; padding: 0;"
+        <section
+          class="action-modal"
+          :class="{ 'is-dragging': isDragging }"
+          :style="{ transform: `translate(${modalX}px, ${modalY}px)` }"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="actionModalTitle"
+          aria-describedby="actionModalSubtitle"
+          @mousedown="handleMouseDown"
         >
-          <div id="actionModalTitle" style="font-size: 18px; font-weight: bold; color: #333;">
-            {{ modalTitle }}
-          </div>
-          <div id="actionModalSubtitle" style="font-size: 13px; color: #777; margin-top: 4px;">
-            {{ modalSubtitle }}
-          </div>
-        </div>
-
-        <input id="actionTargetOrderId" type="hidden" :value="targetOrderId" />
-
-        <!-- 审核填写物流单号窗口 -->
-        <div id="auditContent" style="display: block;">
-          <!-- 显示客户并选择发货方式 -->
-          <div style="margin-bottom: 16px; padding: 10px 14px; background: #f5f5f5; border-radius: 6px; font-size: 13px; display: flex; align-items: center; gap: 24px;">
-            <div v-if="currentOrderInfo.customer" style="flex: 1;">
-              <span style="color: #666; font-weight: 500;">客户名称：</span>
-              <span style="color: #333; font-weight: bold;">{{ currentOrderInfo.customer }}</span>
+          <header class="modal-header">
+            <div class="modal-heading">
+              <div class="modal-heading-icon" aria-hidden="true">
+                <svg v-if="isReceiptMode" viewBox="0 0 24 24">
+                  <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5z"></path>
+                  <path d="m7.5 16 3.2-3.5 2.4 2.4 1.8-2 2.1 3.1"></path>
+                  <circle cx="15.5" cy="8" r="1.5"></circle>
+                </svg>
+                <svg v-else viewBox="0 0 24 24">
+                  <path d="M3 6h11v11H3zM14 10h3.5l3.5 4v3h-7z"></path>
+                  <circle cx="7" cy="18" r="2"></circle>
+                  <circle cx="18" cy="18" r="2"></circle>
+                </svg>
+              </div>
+              <div class="modal-heading-copy">
+                <span class="modal-eyebrow">{{ isReceiptMode ? '回单管理' : '物流管理' }}</span>
+                <h2 id="actionModalTitle">{{ modalTitle }}</h2>
+                <p id="actionModalSubtitle">{{ modalSubtitle }}</p>
+              </div>
             </div>
-            <div style="flex: 1; display: flex; align-items: center; gap: 8px;">
-              <label for="shippingMethodSelect" style="color: #666; font-weight: 500; white-space: nowrap;">发货方式：</label>
-              <select
-                id="shippingMethodSelect"
-                v-model="shippingMethod"
-                class="modern-input"
-                style="height: 34px; padding: 0 10px;"
-              >
-                <option
-                  v-for="option in shippingMethodOptions"
-                  :key="option.value"
-                  :value="option.value"
-                >
-                  {{ option.label }}
-                </option>
-              </select>
-            </div>
-          </div>
-
-          <div v-if="shippingMethod === '4'" class="form-item" style="margin: -4px 0 16px;">
-            <label for="shippingCustom" style="font-weight: 600; color: #4a4a4a; margin-bottom: 8px; display: block; font-size: 13px;">
-              自定义发货方式
-            </label>
-            <input
-              id="shippingCustom"
-              v-model="shippingCustom"
-              class="modern-input"
-              placeholder="请输入发货方式名称"
-            />
-          </div>
-
-          <!-- 商品信息展示区（新订单） -->
-          <div v-if="currentOrderInfo.goodsInfo" style="margin-bottom: 16px; padding: 12px; background: #fafafa; border-radius: 8px; border: 1px solid #e8e8e8;">
-            <div style="font-weight: bold; color: #333; margin-bottom: 8px; font-size: 13px;">订单商品信息</div>
-            <pre style="white-space: pre-wrap; font-size: 12px; color: #555; margin: 0; font-family: inherit; line-height: 1.6;">{{ currentOrderInfo.goodsInfo }}</pre>
-          </div>
-
-          <!-- 快捷点击标签 -->
-          <div id="auditCarrierTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; min-height: 24px; align-items: center;">
-            <span
-              v-for="tag in carrierTags"
-              :key="tag"
-              @click="carrierName = tag"
-              style="cursor: pointer; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; transition: all 0.2s; user-select: none;"
-              @mouseover="$event.target.style.background='#bae0ff'"
-              @mouseout="$event.target.style.background='#e6f4ff'"
+            <button
+              type="button"
+              class="modal-close-button"
+              title="关闭"
+              aria-label="关闭弹窗"
+              @mousedown.stop
+              @click="closeShippedActionModal"
             >
-              {{ tag }}
-            </span>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18"></path>
+              </svg>
+            </button>
+          </header>
+
+          <div class="action-modal-body">
+            <input id="actionTargetOrderId" type="hidden" :value="targetOrderId" />
+
+            <section
+              v-if="isLogisticsMode"
+              id="auditContent"
+              class="content-card logistics-card"
+              aria-label="物流与费用信息"
+            >
+              <div class="card-header">
+                <div>
+                  <h3>基础信息</h3>
+                  <p>确认客户与发货方式后填写承运信息</p>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div class="summary-grid">
+                  <div class="summary-item">
+                    <span>客户名称</span>
+                    <strong :title="currentOrderInfo.customer || '-'">
+                      {{ currentOrderInfo.customer || '-' }}
+                    </strong>
+                  </div>
+                  <div class="form-item">
+                    <label for="shippingMethodSelect">发货方式</label>
+                    <select
+                      id="shippingMethodSelect"
+                      v-model="shippingMethod"
+                      class="modern-input"
+                    >
+                      <option
+                        v-for="option in shippingMethodOptions"
+                        :key="option.value"
+                        :value="option.value"
+                      >
+                        {{ option.label }}
+                      </option>
+                    </select>
+                  </div>
+                </div>
+
+                <div v-if="shippingMethod === '4'" class="form-item custom-method-field">
+                  <label for="shippingCustom">自定义发货方式</label>
+                  <input
+                    id="shippingCustom"
+                    v-model="shippingCustom"
+                    class="modern-input"
+                    placeholder="请输入发货方式名称"
+                  />
+                </div>
+              </div>
+            </section>
+
+            <section
+              v-if="isLogisticsMode && currentOrderInfo.goodsInfo"
+              class="content-card"
+              aria-label="订单商品信息"
+            >
+              <div class="card-header compact">
+                <div>
+                  <h3>订单商品信息</h3>
+                  <p>当前订单的商品与件数摘要</p>
+                </div>
+              </div>
+              <pre class="goods-summary">{{ currentOrderInfo.goodsInfo }}</pre>
+            </section>
+
+            <section
+              v-if="isLogisticsMode"
+              class="content-card"
+              aria-label="物流与费用录入"
+            >
+              <div class="card-header">
+                <div>
+                  <h3>物流与费用</h3>
+                  <p>物流单号可选填，费用将计入本次物流记录</p>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div v-if="carrierTags.length" id="auditCarrierTags" class="carrier-tags">
+                  <span class="carrier-tags-label">常用承运商</span>
+                  <button
+                    v-for="tag in carrierTags"
+                    :key="tag"
+                    type="button"
+                    class="carrier-tag"
+                    :class="{ active: carrierName === tag }"
+                    @click="carrierName = tag"
+                  >
+                    {{ tag }}
+                  </button>
+                </div>
+
+                <div class="form-grid">
+                  <div class="form-item">
+                    <label for="auditCarrierName">物流公司 / 承运车队</label>
+                    <input
+                      id="auditCarrierName"
+                      v-model="carrierName"
+                      class="modern-input"
+                      placeholder="如：三志物流、顺丰快递"
+                    />
+                  </div>
+
+                  <div class="form-item">
+                    <label for="auditLogisticsNo">
+                      物流单号 / 运输凭证
+                      <span class="optional-text">选填</span>
+                    </label>
+                    <input
+                      id="auditLogisticsNo"
+                      v-model="logisticsNo"
+                      class="modern-input"
+                      placeholder="请输入运单号、司机电话等"
+                    />
+                  </div>
+                </div>
+
+                <div class="cost-section">
+                  <div class="form-item freight-field">
+                    <label for="freightCost">运费</label>
+                    <div class="money-input">
+                      <span aria-hidden="true">¥</span>
+                      <input
+                        id="freightCost"
+                        v-model.number="freightCost"
+                        type="number"
+                        class="modern-input"
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  <div class="other-costs">
+                    <div class="field-heading">
+                      <div>
+                        <strong>其它费用</strong>
+                        <span>装卸、送货等附加费用</span>
+                      </div>
+                      <button type="button" class="text-action" @click="addOtherCost">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="M12 5v14M5 12h14"></path>
+                        </svg>
+                        添加费用
+                      </button>
+                    </div>
+
+                    <div v-if="otherCosts.length" class="cost-list">
+                      <div
+                        v-for="(item, index) in otherCosts"
+                        :key="index"
+                        class="cost-row"
+                      >
+                        <input
+                          v-model="item.note"
+                          type="text"
+                          class="modern-input"
+                          placeholder="费用说明"
+                          :aria-label="`第 ${index + 1} 项其它费用说明`"
+                        />
+                        <div class="money-input">
+                          <span aria-hidden="true">¥</span>
+                          <input
+                            v-model.number="item.amount"
+                            type="number"
+                            class="modern-input"
+                            placeholder="0.00"
+                            step="0.01"
+                            min="0"
+                            :aria-label="`第 ${index + 1} 项其它费用金额`"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          class="remove-cost-button"
+                          title="删除该费用"
+                          :aria-label="`删除第 ${index + 1} 项其它费用`"
+                          @click="removeOtherCost(index)"
+                        >
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"></path>
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    <div v-else class="empty-costs">暂无其它费用，可按需添加。</div>
+                  </div>
+                </div>
+
+                <div class="total-strip">
+                  <div>
+                    <span>费用合计</span>
+                    <small>运费与其它费用总和</small>
+                  </div>
+                  <strong>¥ {{ totalCost.toFixed(2) }}</strong>
+                </div>
+              </div>
+            </section>
+
+            <section
+              v-if="isReceiptMode"
+              class="content-card receipt-card"
+              aria-label="回单凭证"
+            >
+              <div class="card-header">
+                <div>
+                  <h3>{{ currentMode === 'view_receipt' ? '回单图片' : '上传回单' }}</h3>
+                  <p>
+                    {{ currentMode === 'view_receipt'
+                      ? '点击图片可放大查看'
+                      : '支持点击选择或将图片拖入下方区域' }}
+                  </p>
+                </div>
+                <span class="file-type-label">JPG / PNG</span>
+              </div>
+
+              <div class="receipt-card-body">
+                <div
+                  id="receiptContent"
+                  class="receipt-uploader"
+                  @dragenter.prevent="handleDragEnter"
+                  @dragover.prevent="handleDragOver"
+                  @dragleave.prevent="handleDragLeave"
+                  @drop.prevent="handleDrop"
+                >
+                  <input
+                    id="receiptImageInput"
+                    type="file"
+                    accept="image/*"
+                    class="visually-hidden"
+                    @change="previewReceiptImage"
+                  />
+
+                  <button
+                    id="receiptUploadPrompt"
+                    type="button"
+                    class="receipt-upload-prompt"
+                    @click="triggerFileInput"
+                  >
+                    <span class="upload-icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24">
+                        <path d="M12 16V4M7 9l5-5 5 5"></path>
+                        <path d="M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"></path>
+                      </svg>
+                    </span>
+                    <strong>选择或拖入回单图片</strong>
+                    <span>建议上传清晰、完整的回单凭证</span>
+                  </button>
+
+                  <img
+                    id="receiptImagePreview"
+                    src=""
+                    class="receipt-image-preview"
+                    alt="回单图片预览"
+                    @click="openLargeImagePreview"
+                  />
+
+                  <button
+                    id="receiptRotateBtn"
+                    type="button"
+                    class="receipt-rotate-button"
+                    title="顺时针旋转图片"
+                    aria-label="顺时针旋转图片"
+                    @click.stop="rotateReceiptImage"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M21 2v6h-6"></path>
+                      <path d="M21 13a9 9 0 1 1-3-7.7L21 8"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </section>
           </div>
 
-          <!-- 第一行：物流公司和物流单号 -->
-          <div style="display: flex; gap: 12px; margin-bottom: 20px;">
-            <div class="form-item" style="flex: 1;">
-              <label for="auditCarrierName" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
-                物流公司 / 承运车队名称
-              </label>
-              <input
-                id="auditCarrierName"
-                v-model="carrierName"
-                class="modern-input"
-                placeholder="如：三志物流、顺丰快递、安能快运..."
-              />
-            </div>
-
-            <div class="form-item" style="flex: 1;">
-              <label for="auditLogisticsNo" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
-                物流单号 / 运输凭证信息 <span style="color:#999; font-weight:normal; font-size: 12px;">(选填)</span>
-              </label>
-              <input
-                id="auditLogisticsNo"
-                v-model="logisticsNo"
-                class="modern-input"
-                placeholder="请输入运单号、司机电话等凭证"
-              />
-            </div>
-          </div>
-
-          <!-- 运费输入 -->
-          <div class="form-item" style="margin-bottom: 20px;">
-            <label for="freightCost" style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
-              运费
-            </label>
-            <input
-              id="freightCost"
-              v-model.number="freightCost"
-              type="number"
-              class="modern-input"
-              placeholder="请输入运费金额"
-              step="0.01"
-              min="0"
-            />
-          </div>
-
-          <!-- 其它费用列表 -->
-          <div class="form-item" style="margin-bottom: 20px;">
-            <label style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
-              其它费用
-            </label>
-
-            <!-- 已添加的其它费用项 -->
-            <div v-for="(item, index) in otherCosts" :key="index" style="display: flex; gap: 8px; margin-bottom: 8px; align-items: center;">
-              <input
-                v-model="item.note"
-                type="text"
-                class="modern-input"
-                placeholder="如：货拉拉、车牌号等"
-                style="flex: 1.5;"
-              />
-              <input
-                v-model.number="item.amount"
-                type="number"
-                class="modern-input"
-                placeholder="金额"
-                step="0.01"
-                min="0"
-                style="flex: 1;"
-              />
+          <footer class="action-modal-footer">
+            <button
+              type="button"
+              class="button button-secondary"
+              @click="closeShippedActionModal"
+            >
+              关闭
+            </button>
+            <div class="footer-actions">
               <button
-                @click="removeOtherCost(index)"
-                style="padding: 8px 12px; background: #ff4d4f; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 14px; transition: all 0.2s;"
-                @mouseover="$event.target.style.background='#ff7875'"
-                @mouseout="$event.target.style.background='#ff4d4f'"
+                v-if="currentMode === 'audit'"
+                id="btnAuditRevoke"
+                type="button"
+                class="button button-danger"
+                @click="submitRevokeShipOrder"
               >
-                删除
+                撤销出库
+              </button>
+              <button
+                v-if="currentMode === 'audit'"
+                id="btnAuditConfirm"
+                type="button"
+                class="button button-primary"
+                @click="submitAuditShipOrder"
+              >
+                确认审核
+              </button>
+              <button
+                v-if="currentMode === 'entry' || currentMode === 'edit'"
+                id="btnEditConfirm"
+                type="button"
+                class="button button-primary"
+                @click="submitEditShipOrder"
+              >
+                {{ logisticsSubmitText }}
+              </button>
+              <button
+                v-if="currentMode === 'receipt'"
+                id="btnReceiptDelete"
+                type="button"
+                class="button button-secondary"
+                @click="clearReceiptImage"
+              >
+                清除图片
+              </button>
+              <button
+                v-if="currentMode === 'receipt'"
+                id="btnReceiptUpload"
+                type="button"
+                class="button button-primary"
+                @click="submitReceiptImage"
+              >
+                确认上传
+              </button>
+              <button
+                v-if="canDeleteReceipt"
+                id="btnRealDeleteReceipt"
+                type="button"
+                class="button button-danger"
+                @click="deleteRealReceiptImage"
+              >
+                删除凭证
+              </button>
+              <button
+                v-if="currentMode === 'view_receipt'"
+                id="btnDownloadReceipt"
+                type="button"
+                class="button button-primary"
+                @click="downloadReceiptImage"
+              >
+                下载凭证
               </button>
             </div>
-
-            <!-- 添加其它费用按钮 -->
-            <button
-              @click="addOtherCost"
-              style="width: 100%; padding: 10px; background: #e6f4ff; color: #1677ff; border: 1px dashed #91caff; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold; transition: all 0.2s;"
-              @mouseover="$event.target.style.background='#bae0ff'"
-              @mouseout="$event.target.style.background='#e6f4ff'"
-            >
-              + 添加其它费用
-            </button>
-          </div>
-
-          <!-- 总金额显示 -->
-          <div class="form-item" style="margin-bottom: 24px;">
-            <label style="font-weight: bold; color: #4a4a4a; margin-bottom: 10px; display: block; font-size: 14px;">
-              总金额
-            </label>
-            <div style="padding: 12px 16px; background: #f5f5f5; border-radius: 8px; font-size: 18px; font-weight: bold; color: #1890ff;">
-              ¥ {{ totalCost.toFixed(2) }}
-            </div>
-          </div>
-        </div>
-
-        <!-- 回单内容区 -->
-        <div
-          id="receiptContent"
-          style="display: none; position: relative; width: 100%; height: 160px; background: #fafafa; border: 1px dashed #d9d9d9; border-radius: 8px; margin-bottom: 8px; overflow: hidden;"
-          @dragenter.prevent="handleDragEnter"
-          @dragover.prevent="handleDragOver"
-          @dragleave.prevent="handleDragLeave"
-          @drop.prevent="handleDrop"
-        >
-          <input
-            id="receiptImageInput"
-            type="file"
-            accept="image/*"
-            style="display: none;"
-            @change="previewReceiptImage"
-          />
-
-          <div
-            id="receiptUploadPrompt"
-            style="position: absolute; top: 0; left: 0; display: flex; flex-direction: column; align-items: center; width: 100%; height: 100%; justify-content: center; cursor: pointer;"
-            @click="triggerFileInput"
-          >
-            <div style="font-size: 48px; color: #ccc; line-height: 1; font-weight: 300;">+</div>
-            <div style="color: #999; font-size: 13px; margin-top: 8px;">点击此处上传回单图片</div>
-          </div>
-
-          <img
-            id="receiptImagePreview"
-            src=""
-            style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; background: #eee; cursor: zoom-in;"
-            @click="openLargeImagePreview"
-          />
-
-          <div
-            id="receiptRotateBtn"
-            style="display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 56px; height: 56px; background: rgba(255, 255, 255, 0.25); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 50%; cursor: pointer; z-index: 10; align-items: center; justify-content: center; box-shadow: 0 8px 32px rgba(0,0,0,0.15); border: 1px solid rgba(255,255,255,0.4); transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);"
-            @click.stop="rotateReceiptImage"
-            @mouseover="handleRotateBtnHover($event, true)"
-            @mouseout="handleRotateBtnHover($event, false)"
-          >
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#1890ff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M21 2v6h-6"></path>
-              <path d="M21 13a9 9 0 1 1-3-7.7L21 8"></path>
-            </svg>
-          </div>
-        </div>
-
-        <!-- 按钮组 -->
-        <div class="modal-btn-group" style="display: flex; gap: 12px; justify-content: center; margin-top: 24px; width: 100%;">
-          <button id="btnAuditRevoke" @click="submitRevokeShipOrder">撤销出库</button>
-          <button id="btnAuditConfirm" @click="submitAuditShipOrder">确认审核</button>
-          <button id="btnEditConfirm" @click="submitEditShipOrder" style="display: none;">{{ logisticsSubmitText }}</button>
-          <button id="btnReceiptDelete" @click="clearReceiptImage">清除图片</button>
-          <button id="btnReceiptUpload" @click="submitReceiptImage">确认上传</button>
-          <button id="btnRealDeleteReceipt" @click="deleteRealReceiptImage">删除凭证</button>
-          <button id="btnDownloadReceipt" @click="downloadReceiptImage">下载凭证</button>
-          <button id="btnModalReturn" @click="closeShippedActionModal">返回</button>
-        </div>
+          </footer>
+        </section>
       </div>
-    </div>
+    </Transition>
 
     <!-- 大图预览模态框 -->
     <div
       v-if="showLargePreview"
-      style="position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.9); display: flex; align-items: center; justify-content: center; z-index: 100001; cursor: zoom-out;"
+      class="large-preview"
       @click="closeLargePreview"
     >
+      <button
+        type="button"
+        class="large-preview-close"
+        title="关闭预览"
+        aria-label="关闭图片预览"
+        @click="closeLargePreview"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m6 6 12 12M18 6 6 18"></path>
+        </svg>
+      </button>
       <img
         :src="largePreviewSrc"
-        style="max-width: 90%; max-height: 90%; object-fit: contain;"
+        alt="回单图片大图预览"
         @click.stop
       />
     </div>
 
     <!-- 顶部消息提示 -->
-    <transition name="message-slide">
+    <Transition name="notice">
       <div
         v-if="messageVisible"
-        class="message-toast"
-        :class="`message-${messageType}`"
+        class="page-notice"
+        :class="`notice-${messageType}`"
+        role="status"
+        aria-live="polite"
       >
-        <span class="message-icon">{{ messageType === 'success' ? '✓' : '✕' }}</span>
-        <span class="message-text">{{ messageText }}</span>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path v-if="messageType === 'success'" d="m8 12 2.7 2.7L16.5 9"></path>
+          <path v-else d="M12 8v5M12 17h.01"></path>
+        </svg>
+        {{ messageText }}
       </div>
-    </transition>
+    </Transition>
   </teleport>
+
+  <CustomModal
+    v-model:visible="deleteConfirmVisible"
+    type="warning"
+    title="删除回单凭证"
+    message="确定要彻底删除这张回单图片吗？此操作会同时删除数据库记录和图片文件，且无法恢复。"
+    confirm-text="确定删除"
+    cancel-text="取消"
+    danger
+    @confirm="confirmDeleteReceiptImage"
+  />
 </template>
 
 <script setup>
@@ -283,6 +468,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { useOrderStore } from '@/stores/order'
 import request from '@/api/request'
+import CustomModal from '@/components/CustomModal.vue'
 
 const userStore = useUserStore()
 const orderStore = useOrderStore()
@@ -295,6 +481,17 @@ const modalTitle = ref('已出库订单管理')
 const modalSubtitle = ref('请选择对当前出库订单的操作指令')
 const logisticsSubmitText = ref('修改完成')
 const currentMode = ref('entry')
+const deleteConfirmVisible = ref(false)
+
+const isLogisticsMode = computed(() =>
+  ['audit', 'entry', 'edit'].includes(currentMode.value)
+)
+const isReceiptMode = computed(() =>
+  ['receipt', 'view_receipt'].includes(currentMode.value)
+)
+const canDeleteReceipt = computed(() =>
+  currentMode.value === 'view_receipt' && userStore.hasPerm('shipped.delete_receipt')
+)
 
 // 当前订单信息
 const currentOrderInfo = ref({
@@ -493,13 +690,63 @@ const clearReceiptImage = () => {
   currentReceiptRotation = 0
 }
 
-// 打开弹窗 - 完全照搬原生逻辑
+const loadOrderLogistics = (order) => {
+  if (!order) return
+
+  let fullNo = order.logistics_no || ''
+  if (['暂未录入单号', '无单号记录', '暂无记录'].includes(fullNo)) {
+    fullNo = ''
+  }
+
+  if (fullNo.includes('-')) {
+    const parts = fullNo.split('-')
+    carrierName.value = parts[0] || ''
+    logisticsNo.value = parts.slice(1).join('-') || ''
+  } else {
+    carrierName.value = ''
+    logisticsNo.value = fullNo
+  }
+
+  if (!Array.isArray(order.freight_costs)) return
+
+  order.freight_costs.forEach(item => {
+    if (item.type === 'freight') {
+      freightCost.value = item.amount || 0
+    } else if (item.type === 'other') {
+      otherCosts.value.push({
+        note: item.note || '',
+        amount: item.amount || 0
+      })
+    }
+  })
+}
+
+const renderReceiptImage = (order) => {
+  const preview = document.getElementById('receiptImagePreview')
+  const prompt = document.getElementById('receiptUploadPrompt')
+  const rotateBtn = document.getElementById('receiptRotateBtn')
+
+  if (!order?.receipt_img_url) {
+    clearReceiptImage()
+    return
+  }
+
+  if (preview) {
+    preview.src = order.receipt_img_url
+    preview.style.display = 'block'
+  }
+  if (prompt) prompt.style.display = 'none'
+  if (rotateBtn) rotateBtn.style.display = 'none'
+}
+
+// 打开弹窗
 const open = (orderId, mode) => {
   targetOrderId.value = orderId
   currentMode.value = mode
+  deleteConfirmVisible.value = false
 
-  // 同步本地订单数据
   allOrdersLocal = orderStore.allOrders
+  const order = allOrdersLocal.find(o => String(o.id) === String(orderId))
 
   carrierName.value = ''
   logisticsNo.value = ''
@@ -507,251 +754,54 @@ const open = (orderId, mode) => {
   otherCosts.value = []
   shippingMethod.value = '0'
   shippingCustom.value = ''
+  currentOrderInfo.value = {
+    customer: order?.order_client || '',
+    goodsInfo: getGoodsDisplayText(order)
+  }
 
-  // 获取订单信息，填充客户名称和发货方式
-  const order = allOrdersLocal.find(o => o.id === orderId)
   if (order) {
-    currentOrderInfo.value.customer = order.order_client || ''
     const existingMethod = String(order.shipping_method ?? '')
     shippingMethod.value = shippingMethodOptions.some(option => option.value === existingMethod)
       ? existingMethod
       : '0'
     shippingCustom.value = order.shipping_custom || ''
-
-    // 🎯 新增：获取商品信息文本
-    currentOrderInfo.value.goodsInfo = getGoodsDisplayText(order)
   }
 
-  // 加载保存的位置
-  loadModalPosition()
+  if (mode === 'audit') {
+    modalTitle.value = '已出库订单管理'
+    modalSubtitle.value = '核对物流与费用信息，并选择审核或撤销出库'
+  } else if (mode === 'entry' || mode === 'edit') {
+    const isEntryMode = mode === 'entry'
+    modalTitle.value = isEntryMode ? '录入物流与运费信息' : '修改物流与运费信息'
+    modalSubtitle.value = isEntryMode
+      ? '补充承运、单号与费用信息'
+      : '更新该订单已有的物流与费用信息'
+    logisticsSubmitText.value = isEntryMode ? '录入完成' : '修改完成'
+  } else if (mode === 'receipt') {
+    modalTitle.value = '回单凭证管理'
+    modalSubtitle.value = '上传或替换该订单的发货回单图片'
+  } else if (mode === 'view_receipt') {
+    modalTitle.value = '回单凭证详情'
+    modalSubtitle.value = '查看、下载或删除该订单的回单凭证'
+  }
 
-  // 位置准备好后再显示弹窗，避免先居中渲染再跳到上次位置
+  if (['audit', 'entry', 'edit'].includes(mode)) {
+    loadOrderLogistics(order)
+    fetchCarrierTags()
+  }
+
+  loadModalPosition()
   visible.value = true
 
-  // 等待DOM渲染
-  nextTick(() => {
-    // 重新获取DOM元素
-    const auditContentEl = document.getElementById('auditContent')
-    const receiptContentEl = document.getElementById('receiptContent')
-    const btnAuditRevokeEl = document.getElementById('btnAuditRevoke')
-    const btnAuditConfirmEl = document.getElementById('btnAuditConfirm')
-    const btnReceiptDeleteEl = document.getElementById('btnReceiptDelete')
-    const btnReceiptUploadEl = document.getElementById('btnReceiptUpload')
-    const btnRealDeleteEl = document.getElementById('btnRealDeleteReceipt')
-    const btnDownloadEl = document.getElementById('btnDownloadReceipt')
-
-    if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'none'
-    if (btnDownloadEl) btnDownloadEl.style.display = 'none'
-
-    // 获取修改完成按钮
-    const btnEditConfirm = document.getElementById('btnEditConfirm')
-
-    // 状态 A：进入【审核模式】
-    if (mode === 'audit') {
-      modalTitle.value = '已出库订单管理'
-      modalSubtitle.value = '请选择对当前出库订单的操作指令'
-
-      auditContentEl.style.display = 'block'
-      receiptContentEl.style.display = 'none'
-
-      btnAuditRevokeEl.style.display = 'block'
-      btnAuditConfirmEl.style.display = 'block'
-      btnReceiptDeleteEl.style.display = 'none'
-      btnReceiptUploadEl.style.display = 'none'
-      if (btnEditConfirm) btnEditConfirm.style.display = 'none'
-
-      // 加载历史快捷标签
-      fetchCarrierTags()
-
-      // 解析回显已有的单号数据
-      const order = allOrdersLocal.find(o => o.id === orderId)
-      if (order) {
-        let fullNo = order.logistics_no || ''
-        if (fullNo === '暂未录入单号' || fullNo === '无单号记录' || fullNo === '暂无记录') {
-          fullNo = ''
-        }
-
-        if (fullNo.includes('-')) {
-          const parts = fullNo.split('-')
-          carrierName.value = parts[0] || ''
-          logisticsNo.value = parts.slice(1).join('-') || ''
-        } else {
-          carrierName.value = ''
-          logisticsNo.value = fullNo
-        }
-
-        // 加载运费数据
-        if (order.freight_costs && Array.isArray(order.freight_costs)) {
-          // 重置运费数据
-          freightCost.value = 0
-          otherCosts.value = []
-
-          // 解析运费数据
-          order.freight_costs.forEach(item => {
-            if (item.type === 'freight') {
-              freightCost.value = item.amount || 0
-            } else if (item.type === 'other') {
-              otherCosts.value.push({
-                note: item.note || '',
-                amount: item.amount || 0
-              })
-            }
-          })
-        } else {
-          // 没有运费数据时重置
-          freightCost.value = 0
-          otherCosts.value = []
-        }
-      }
-    }
-    // 状态 B：进入【物流录入 / 编辑模式】
-    else if (mode === 'entry' || mode === 'edit') {
-      const isEntryMode = mode === 'entry'
-      modalTitle.value = isEntryMode ? '录入物流与运费信息' : '修改物流与运费信息'
-      modalSubtitle.value = isEntryMode ? '录入物流单号和运费信息' : '修改物流单号和运费信息'
-      logisticsSubmitText.value = isEntryMode ? '录入完成' : '修改完成'
-
-      auditContentEl.style.display = 'block'
-      receiptContentEl.style.display = 'none'
-
-      btnAuditRevokeEl.style.display = 'none'
-      btnAuditConfirmEl.style.display = 'none'
-      btnReceiptDeleteEl.style.display = 'none'
-      btnReceiptUploadEl.style.display = 'none'
-
-      // 显示修改完成按钮
-      const btnEditConfirm = document.getElementById('btnEditConfirm')
-      if (btnEditConfirm) btnEditConfirm.style.display = 'inline-block'
-
-      // 加载历史快捷标签
-      fetchCarrierTags()
-
-      // 加载订单数据
-      const order = allOrdersLocal.find(o => o.id === orderId)
-
-      if (order) {
-        let fullNo = order.logistics_no || ''
-
-        if (fullNo === '暂未录入单号' || fullNo === '无单号记录' || fullNo === '暂无记录') {
-          fullNo = ''
-        }
-
-        if (fullNo.includes('-')) {
-          const parts = fullNo.split('-')
-          carrierName.value = parts[0] || ''
-          logisticsNo.value = parts.slice(1).join('-') || ''
-        } else {
-          carrierName.value = ''
-          logisticsNo.value = fullNo
-        }
-
-        // 加载运费数据
-        if (order.freight_costs && Array.isArray(order.freight_costs)) {
-          freightCost.value = 0
-          otherCosts.value = []
-
-          order.freight_costs.forEach(item => {
-            if (item.type === 'freight') {
-              freightCost.value = item.amount || 0
-            } else if (item.type === 'other') {
-              otherCosts.value.push({
-                note: item.note || '',
-                amount: item.amount || 0
-              })
-            }
-          })
-        } else {
-          freightCost.value = 0
-          otherCosts.value = []
-        }
-      }
-    }
-    // 状态 C：进入【回单模式】
-    else if (mode === 'receipt') {
-      modalTitle.value = '回单凭证管理'
-      modalSubtitle.value = '请上传或管理该订单的发货回单图片'
-
-      auditContentEl.style.display = 'none'
-      receiptContentEl.style.display = 'flex'
-
-      btnAuditRevokeEl.style.display = 'none'
-      btnAuditConfirmEl.style.display = 'none'
-      btnReceiptDeleteEl.style.display = 'block'
-      btnReceiptUploadEl.style.display = 'block'
-      if (btnEditConfirm) btnEditConfirm.style.display = 'none'
-
-      // 回单选择与上传不再依赖审核状态或角色权限
-      btnReceiptDeleteEl.style.display = 'inline-block'
-      btnReceiptUploadEl.style.display = 'inline-block'
-
-      // 清除图片按钮点击事件
-      if (btnReceiptDeleteEl) {
-        btnReceiptDeleteEl.onclick = function() {
-          clearReceiptImage()
-        }
-      }
-
-      // 智能加载状态
-      const order = allOrdersLocal.find(o => o.id === orderId)
-      const preview = document.getElementById('receiptImagePreview')
-      const prompt = document.getElementById('receiptUploadPrompt')
-
-      if (order && order.receipt_img_url) {
-        if (preview) {
-          preview.src = order.receipt_img_url
-          preview.style.display = 'block'
-        }
-        if (prompt) prompt.style.display = 'none'
-      } else {
-        clearReceiptImage()
-      }
-    }
-    // 状态 C：进入【已存回单查看与真删除模式】
-    else if (mode === 'view_receipt') {
-      modalTitle.value = '回单凭证详情'
-      modalSubtitle.value = '您可以查看大图、下载图片或从系统中彻底删除该回单'
-
-      auditContentEl.style.display = 'none'
-      receiptContentEl.style.display = 'flex'
-
-      btnAuditRevokeEl.style.display = 'none'
-      btnAuditConfirmEl.style.display = 'none'
-      btnReceiptUploadEl.style.display = 'none'
-      btnReceiptDeleteEl.style.display = 'none'
-
-      if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'block'
-      if (btnDownloadEl) btnDownloadEl.style.display = 'block'
-
-      // 渲染已存在的图片回显
-      const order = allOrdersLocal.find(o => o.id === orderId)
-      const preview = document.getElementById('receiptImagePreview')
-      const prompt = document.getElementById('receiptUploadPrompt')
-
-      if (btnDownloadEl) btnDownloadEl.style.display = 'inline-block'
-
-      if (userStore.hasPerm('shipped.delete_receipt')) {
-        if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'inline-block'
-      } else {
-        if (btnRealDeleteEl) btnRealDeleteEl.style.display = 'none'
-      }
-
-      if (order && order.receipt_img_url) {
-        if (preview) {
-          preview.src = order.receipt_img_url
-          preview.style.display = 'block'
-        }
-        if (prompt) prompt.style.display = 'none'
-      }
-    }
-
-    // 统一唤起弹窗
-    document.getElementById('shippedOrderActionModal').style.display = 'flex'
-  })
+  if (['receipt', 'view_receipt'].includes(mode)) {
+    nextTick(() => renderReceiptImage(order))
+  }
 }
 
 // 关闭弹窗
 const closeShippedActionModal = () => {
   visible.value = false
+  deleteConfirmVisible.value = false
   clearReceiptImage()
 }
 
@@ -963,32 +1013,32 @@ const triggerFileInput = () => {
 const handleDragEnter = (event) => {
   const receiptContent = document.getElementById('receiptContent')
   if (receiptContent) {
-    receiptContent.style.background = '#fff0f6'
-    receiptContent.style.border = '2px dashed #eb2f96'
+    receiptContent.style.background = '#e9f8f3'
+    receiptContent.style.border = '2px dashed #0f9f78'
   }
 }
 
 const handleDragOver = (event) => {
   const receiptContent = document.getElementById('receiptContent')
   if (receiptContent) {
-    receiptContent.style.background = '#fff0f6'
-    receiptContent.style.border = '2px dashed #eb2f96'
+    receiptContent.style.background = '#e9f8f3'
+    receiptContent.style.border = '2px dashed #0f9f78'
   }
 }
 
 const handleDragLeave = (event) => {
   const receiptContent = document.getElementById('receiptContent')
   if (receiptContent) {
-    receiptContent.style.background = '#fafafa'
-    receiptContent.style.border = '1px dashed #d9d9d9'
+    receiptContent.style.background = '#ffffff'
+    receiptContent.style.border = '1px dashed #a9e5d2'
   }
 }
 
 const handleDrop = (event) => {
   const receiptContent = document.getElementById('receiptContent')
   if (receiptContent) {
-    receiptContent.style.background = '#fafafa'
-    receiptContent.style.border = '1px dashed #d9d9d9'
+    receiptContent.style.background = '#ffffff'
+    receiptContent.style.border = '1px dashed #a9e5d2'
   }
 
   const file = event.dataTransfer.files[0]
@@ -1011,7 +1061,7 @@ const handleDrop = (event) => {
     }
     reader.readAsDataURL(file)
   } else if (file) {
-    alert('安全拦截：请拖入有效的图片文件（如 jpg, png 等）！')
+    showMessage('请选择有效的图片文件（如 JPG、PNG）', 'error')
   }
 }
 
@@ -1045,7 +1095,8 @@ const submitReceiptImage = async () => {
   const preview = document.getElementById('receiptImagePreview')
 
   if (!preview || !preview.src || preview.style.display === 'none') {
-    return alert('请先点击虚线框选择一张图片！')
+    showMessage('请先选择一张回单图片', 'error')
+    return
   }
 
   function dataURItoFile(dataURI, filename) {
@@ -1064,7 +1115,8 @@ const submitReceiptImage = async () => {
   try {
     fileToUpload = dataURItoFile(preview.src, `receipt_${Date.now()}.jpg`)
   } catch (error) {
-    return alert('图片数据解析异常，请重新选择图片！')
+    showMessage('图片解析失败，请重新选择图片', 'error')
+    return
   }
 
   const formData = new FormData()
@@ -1090,13 +1142,12 @@ const submitReceiptImage = async () => {
 }
 
 // 删除按钮
-const deleteRealReceiptImage = async () => {
-  const id = targetOrderId.value
+const deleteRealReceiptImage = () => {
+  deleteConfirmVisible.value = true
+}
 
-  // 使用自定义确认对话框（如果有）或简单提示
-  if (!window.confirm('确定要从数据库和硬盘中【彻底删除】这张回单图片吗？此操作不可恢复！')) {
-    return
-  }
+const confirmDeleteReceiptImage = async () => {
+  const id = targetOrderId.value
 
   try {
     const res = await request({
@@ -1120,7 +1171,8 @@ const deleteRealReceiptImage = async () => {
 const downloadReceiptImage = () => {
   const preview = document.getElementById('receiptImagePreview')
   if (!preview || !preview.src) {
-    return alert('没有可下载的图片')
+    showMessage('当前没有可下载的回单图片', 'error')
+    return
   }
   const a = document.createElement('a')
   a.href = preview.src
@@ -1175,73 +1227,85 @@ const closeLargePreview = () => {
   showLargePreview.value = false
 }
 
-// 旋转按钮悬停效果
-const handleRotateBtnHover = (event, isHover) => {
-  const btn = event.currentTarget
-  if (isHover) {
-    btn.style.transform = 'translate(-50%, -50%) scale(1.1)'
-    btn.style.background = 'rgba(255, 255, 255, 0.4)'
-  } else {
-    btn.style.transform = 'translate(-50%, -50%) scale(1)'
-    btn.style.background = 'rgba(255, 255, 255, 0.25)'
-  }
-}
-
 // 暴露方法
 defineExpose({
   open
 })
 
 // 监听来自UnifiedOrderList的编辑事件
-onMounted(() => {
-  const handleEditEvent = (event) => {
-    const { orderId, mode } = event.detail
-    open(orderId, mode)
-  }
-  window.addEventListener('open-shipped-action-modal', handleEditEvent)
+const handleEditEvent = (event) => {
+  const { orderId, mode } = event.detail
+  open(orderId, mode)
+}
 
-  // 清理事件监听
-  onUnmounted(() => {
-    window.removeEventListener('open-shipped-action-modal', handleEditEvent)
-  })
+onMounted(() => {
+  window.addEventListener('open-shipped-action-modal', handleEditEvent)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('open-shipped-action-modal', handleEditEvent)
+  document.removeEventListener('mousemove', handleMouseMove)
+  document.removeEventListener('mouseup', handleMouseUp)
 })
 </script>
 
 <style scoped>
 .modal-overlay {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --page-bg: #f4f7f8;
+  --panel-bg: #ffffff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.5);
-  display: none;
+  inset: 0;
+  z-index: 10000;
+  display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 10000;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
   padding: 24px;
-  max-width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-  user-select: none;
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1px);
+  box-sizing: border-box;
 }
 
-/* 全局 .modal-content 的 scaleUp 动画会覆盖内联 transform，导致弹窗先居中再跳到已保存位置 */
-#shippedOrderActionModal .modal-content {
+.action-modal {
+  display: flex;
+  width: min(680px, calc(100vw - 48px));
+  max-height: min(880px, calc(100vh - 48px));
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--page-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
+  box-sizing: border-box;
+  font-size: 14px;
   animation: none !important;
 }
 
-.modal-content.is-dragging {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  cursor: grabbing !important;
+.action-modal.is-dragging {
+  box-shadow: 0 24px 58px rgba(15, 23, 42, 0.28);
 }
 
 .modal-header {
+  display: flex;
+  min-height: 78px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px 14px 18px;
+  background: var(--panel-bg);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
   cursor: grab;
   user-select: none;
 }
@@ -1250,83 +1314,862 @@ onMounted(() => {
   cursor: grabbing;
 }
 
+.modal-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-heading-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-radius: 7px;
+}
+
+.modal-heading-icon svg,
+.modal-close-button svg,
+.text-action svg,
+.remove-cost-button svg,
+.upload-icon svg,
+.receipt-rotate-button svg,
+.large-preview-close svg,
+.page-notice svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.modal-heading-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.modal-heading-copy {
+  min-width: 0;
+}
+
+.modal-eyebrow {
+  display: block;
+  margin-bottom: 2px;
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.modal-heading-copy h2 {
+  margin: 0;
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.modal-heading-copy p {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-close-button {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.modal-close-button:hover {
+  color: var(--text);
+  background: #f8fafc;
+  border-color: var(--border);
+}
+
+.modal-close-button svg {
+  width: 19px;
+  height: 19px;
+}
+
+.action-modal-body {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  gap: 14px;
+  padding: 16px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.content-card {
+  overflow: hidden;
+  background: var(--panel-bg);
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+}
+
+.card-header {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 15px;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.card-header.compact {
+  min-height: 54px;
+}
+
+.card-header h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.card-header p {
+  margin: 2px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.card-body {
+  padding: 15px;
+}
+
+.summary-grid,
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.summary-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 11px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.summary-item span,
+.form-item label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.summary-item strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.form-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.form-item label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  line-height: 1.4;
+}
+
+.custom-method-field {
+  margin-top: 14px;
+}
+
 .modern-input {
   width: 100%;
-  padding: 10px 14px;
-  font-size: 14px;
-  border: 1px solid #d9d9d9;
-  border-radius: 8px;
+  height: 38px;
+  padding: 0 11px;
+  color: var(--text);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
   outline: none;
   box-sizing: border-box;
-  transition: all 0.2s;
+  font: inherit;
+  font-size: 13px;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .modern-input:focus {
-  border-color: #1890ff;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
 }
 
-.modal-btn-group button {
-  padding: 8px 16px;
-  border-radius: 6px;
-  border: none;
+.modern-input::placeholder {
+  color: var(--text-muted);
+}
+
+.goods-summary {
+  margin: 0;
+  padding: 14px 15px;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.carrier-tags {
+  display: flex;
+  min-height: 25px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.carrier-tags-label {
+  margin-right: 2px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.carrier-tag {
+  min-height: 25px;
+  padding: 3px 9px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border: 1px solid transparent;
+  border-radius: 999px;
   cursor: pointer;
-  font-size: 14px;
-  transition: all 0.2s;
-  background: #1890ff;
-  color: white;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.3;
+  transition: background 0.18s ease, border-color 0.18s ease;
 }
 
-.modal-btn-group button:hover {
-  opacity: 0.8;
+.carrier-tag:hover,
+.carrier-tag.active {
+  background: #d8f2ea;
+  border-color: var(--accent-border);
 }
 
-/* 顶部消息提示样式 */
-.message-toast {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 12px 24px;
-  border-radius: 8px;
+.optional-text {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  padding: 1px 7px;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cost-section {
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.freight-field {
+  max-width: calc(50% - 7px);
+}
+
+.money-input {
+  position: relative;
+  min-width: 0;
+}
+
+.money-input > span {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 11px;
+  color: var(--text-muted);
+  font-size: 13px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.money-input .modern-input {
+  padding-left: 28px;
+  font-variant-numeric: tabular-nums;
+}
+
+.other-costs {
+  display: grid;
+  gap: 10px;
+}
+
+.field-heading {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.field-heading > div {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
   gap: 8px;
+}
+
+.field-heading strong {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.field-heading span,
+.empty-costs {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.text-action {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 5px;
+  padding: 0 9px;
+  color: var(--accent-dark);
+  background: var(--panel-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background 0.18s ease;
+}
+
+.text-action:hover {
+  background: var(--accent-soft);
+}
+
+.text-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+.cost-list {
+  display: grid;
+  gap: 8px;
+}
+
+.cost-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(130px, 0.8fr) 38px;
+  gap: 8px;
+}
+
+.remove-cost-button {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #b4232f;
+  background: #fff;
+  border: 1px solid #fecdd3;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+
+.remove-cost-button:hover {
+  color: #fff;
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.remove-cost-button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.empty-costs {
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px dashed var(--border-strong);
+  border-radius: 5px;
+  text-align: center;
+}
+
+.total-strip {
+  display: flex;
+  min-height: 60px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.total-strip > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.total-strip span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.total-strip small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.total-strip strong {
+  color: var(--accent-dark);
+  font-size: 20px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.file-type-label {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  padding: 3px 9px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.receipt-card-body {
+  padding: 15px;
+}
+
+.receipt-uploader {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px dashed var(--accent-border);
+  border-radius: 7px;
+  box-sizing: border-box;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.receipt-upload-prompt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 20px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.receipt-upload-prompt:hover {
+  background: var(--accent-soft);
+}
+
+.receipt-upload-prompt strong {
+  color: var(--text);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: 650;
+}
+
+.receipt-upload-prompt > span:last-child {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.upload-icon {
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 3px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-radius: 50%;
+}
+
+.upload-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.receipt-image-preview {
+  position: absolute;
+  inset: 0;
+  display: none;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #f8fafc;
+  cursor: zoom-in;
+}
+
+.receipt-rotate-button {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 2;
+  display: none;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--accent-dark);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.96);
+  border-radius: 50%;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.18);
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  transition: background 0.18s ease, transform 0.18s ease;
+}
+
+.receipt-rotate-button:hover {
+  background: #fff;
+  transform: translate(-50%, -50%) scale(1.06);
+}
+
+.receipt-rotate-button svg {
+  width: 25px;
+  height: 25px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.action-modal-footer {
+  display: flex;
+  min-height: 68px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  background: var(--panel-bg);
+  border-top: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.button {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 96px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.button-primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.button-primary:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.22);
+  transform: translateY(-1px);
+}
+
+.button-secondary {
+  color: var(--text-secondary);
+  background: var(--panel-bg);
+  border-color: var(--border-strong);
+}
+
+.button-secondary:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.button-danger {
+  color: #fff;
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.button-danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.22);
+  transform: translateY(-1px);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.large-preview {
+  position: fixed;
+  inset: 0;
+  z-index: 100001;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.92);
+  box-sizing: border-box;
+  cursor: zoom-out;
+}
+
+.large-preview img {
+  max-width: 92%;
+  max-height: 92%;
+  object-fit: contain;
+  cursor: default;
+}
+
+.large-preview-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.large-preview-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.large-preview-close svg {
+  width: 20px;
+  height: 20px;
+}
+
+.page-notice {
+  position: fixed;
+  top: 24px;
+  left: 50%;
   z-index: 100002;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  min-width: 0;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
-.message-success {
-  background: #f0f9ff;
-  color: #0369a1;
-  border: 1px solid #bae6fd;
+.page-notice svg {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 19px;
 }
 
-.message-error {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+.notice-success svg {
+  color: #0f9f78;
 }
 
-.message-icon {
-  font-size: 16px;
-  font-weight: bold;
+.notice-error svg {
+  color: #dc3545;
 }
 
-.message-slide-enter-active,
-.message-slide-leave-active {
-  transition: all 0.3s ease;
+.modal-fade-enter-active,
+.modal-fade-leave-active {
+  transition: opacity 0.2s ease;
 }
 
-.message-slide-enter-from {
+.modal-fade-enter-from,
+.modal-fade-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(-20px);
 }
 
-.message-slide-leave-to {
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.notice-enter-from,
+.notice-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(-20px);
+  transform: translate(-50%, -8px);
+}
+
+@media (max-width: 780px) {
+  .modal-overlay {
+    padding: 16px;
+  }
+
+  .action-modal {
+    width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px);
+  }
+
+  .modal-header {
+    padding-right: 12px;
+    padding-left: 14px;
+  }
+
+  .modal-heading-copy p {
+    white-space: normal;
+  }
+
+  .action-modal-body {
+    padding: 12px;
+  }
+
+  .summary-grid,
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .summary-item {
+    min-height: 60px;
+  }
+
+  .freight-field {
+    max-width: none;
+  }
+
+  .cost-row {
+    grid-template-columns: minmax(0, 1fr) 38px;
+  }
+
+  .cost-row > .money-input {
+    grid-column: 1;
+  }
+
+  .cost-row > .remove-cost-button {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    align-self: center;
+  }
+
+  .receipt-uploader {
+    height: 230px;
+  }
+
+  .action-modal-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+
+  .footer-actions,
+  .action-modal-footer > .button {
+    width: 100%;
+  }
+
+  .footer-actions .button {
+    min-width: 0;
+    flex: 1 1 120px;
+  }
+
+  .page-notice {
+    top: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-fade-enter-active,
+  .modal-fade-leave-active,
+  .notice-enter-active,
+  .notice-leave-active {
+    transition: none;
+  }
 }
 </style>
