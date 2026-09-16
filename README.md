@@ -238,7 +238,6 @@ order_system/
 │  │     │  ├─ MaterialProductList.vue
 │  │     │  ├─ InventoryList.vue     # 成品库存
 │  │     │  ├─ MaterialInventory.vue # 原材料库存及库存金额
-│  │     │  ├─ SupplierList.vue      # 供应商管理
 │  │     │  └─ StockRecordList.vue   # 入库/出库记录通用组件
 │  │     ├─ sales/                   # 销售管理
 │  │     │  ├─ UnifiedOrderList.vue  # 销售订单和物流订单列表
@@ -248,7 +247,8 @@ order_system/
 │  │     │  └─ CustomerList.vue      # 客户列表、编辑弹窗（支持期初欠款和储值管理）
 │  │     ├─ purchase/                # 采购管理
 │  │     │  ├─ PurchaseOrders.vue    # 采购订单
-│  │     │  └─ PurchaseInbound.vue   # 采购入库
+│  │     │  ├─ PurchaseInbound.vue   # 采购入库
+│  │     │  └─ SupplierList.vue      # 供应商管理
 │  │     ├─ inventory/               # 仓库管理
 │  │     ├─ finance/
 │  │     │  ├─ Receivables.vue        # 客户应收欠款汇总

@@ -191,7 +191,7 @@ const routes = [
       {
         path: 'purchase/suppliers',
         name: 'admin-purchase-suppliers',
-        component: () => import('@/views/admin/products/SupplierList.vue'),
+        component: () => import('@/views/admin/purchase/SupplierList.vue'),
         meta: { requiresAuth: true }
       },
       {
