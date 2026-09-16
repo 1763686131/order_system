@@ -192,7 +192,6 @@ order_system/
 │  │  ├─ raw_material_products.py    # 原材料商品档案接口
 │  │  ├─ stock_inbounds.py           # 供应商、入库单、审核、库存余额和流水
 │  │  ├─ material_outbounds.py        # 触屏原材料出库草稿、配置、审核和库存扣减
-│  │  ├─ materials.py                # 原材料使用/生产流水
 │  │  ├─ stores.py                   # 门店接口
 │  │  ├─ warehouses.py               # 仓库接口
 │  │  ├─ customers.py                # 客户、应收欠款与账户汇总接口
@@ -390,7 +389,7 @@ order_system/
 - 管理员在“库存 / 原材料出库”中审核草稿；审核会按先进先出扣减 `stock_balances` 并写入 `stock_movements`。
 - 反审核会按原库存流水回补对应批次和库位。
 - 默认门店、默认仓库、可操作原材料和默认原材料由原材料出库页面统一配置。
-- 历史 `/api/materials` 数据不迁移到新出库单，仅保留兼容接口。
+- 旧 `/api/materials` 使用/生产流水接口已经下线；库存统一由入库、出库审核和 `stock_movements` 维护。
 
 ## 主要页面
 
@@ -402,7 +401,7 @@ order_system/
 | `/admin/purchase/suppliers` | 供应商管理 | `/api/suppliers` |
 | `/admin/purchase/inbound` | 采购入库 | 入库接口 |
 | `/admin/inventory` | 成品库存 | `/api/products/inventory` |
-| `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances` |
+| `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances`、`/api/stock-movements` |
 | `/admin/inventory/material-outbounds` | 原材料出库审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbound-settings` |
 | `/admin/stock/in` | 入库记录 | `/api/stock-inbounds` |
 | `/admin/stock/out` | 出库记录 | `/api/orders` |

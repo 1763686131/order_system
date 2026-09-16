@@ -1,7 +1,7 @@
 """
 原材料商品档案 API。
 
-该接口与原材料使用记录 /api/materials 分开，避免两类数据互相影响。
+原材料库存变动由入库单、原材料出库单和库存流水统一管理。
 """
 import json
 from datetime import datetime

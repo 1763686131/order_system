@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v3.3** (2026-09-16) - 下线旧 `/api/materials` 使用/生产流水接口并删除 `material_records`、旧 `remark_tags` 表
 - **v3.2** (2026-09-16) - 新增库存流水查询接口，支持按物料、门店和仓库查询已审核入库与出库明细
 - **v3.1** (2026-09-16) - 补充销售订单审核/反审核接口、审核人姓名解析及审核字段说明
 - **v3.0** (2026-09-14) - 客户期初欠款与储值字段优化，新增 `initial_receivable_at` 和 `balance_at` 时间戳字段
@@ -50,7 +51,7 @@
 5. [订单管理](#5-订单管理)
 6. [运营商标签管理](#6-运营商标签管理)
 7. [客户管理](#7-客户管理)
-8. [原材料使用与生产流水](#8-原材料使用与生产流水)
+8. [原材料触屏出库](#8-原材料触屏出库)
 9. [运费记录管理](#9-运费记录管理)
 10. [人事检测报告文件管理](#10-人事检测报告文件管理)
 11. [供应商与入库管理](#11-供应商与入库管理)
@@ -946,7 +947,7 @@
 `raw_material_products` 表中。
 
 > `/api/raw-material-products` 管理原材料的名称、编号、规格、单位等档案。
-> `/api/materials` 管理原材料使用量和生产量流水，两者不是同一类数据。
+> 原材料数量由入库、出库审核和库存流水统一管理，不允许直接修改历史汇总值。
 
 #### 4.5.1 获取原材料商品列表
 - **URL**: `/api/raw-material-products`
@@ -2041,120 +2042,12 @@ receipt_image: File (图片文件)
 
 ---
 
-## 8. 原材料使用与生产流水
+## 8. 原材料触屏出库
 
-> 本章节管理原材料的使用量、生产量和备注标签。
 > 原材料商品档案请参阅 [4.5 原材料商品档案](#45-原材料商品档案)。
->
-> 自 2026-09-16 起，员工触屏端改用下方的“原材料出库草稿”接口。
-> `/api/materials` 仅保留历史数据兼容，不再作为实际库存扣减依据。
+> 原材料库存以 `stock_balances` 为余额来源，只有审核后的入库单和出库单能够改变库存。
 
-### 8.1 获取原材料流水与汇总
-- **URL**: `/api/materials`
-- **Method**: `GET`
-- **说明**: 获取原材料使用/生产流水、备注标签和计算后的库存汇总
-
-**响应示例**:
-```json
-{
-  "records": [
-    {
-      "id": 59,
-      "used": 36.0,
-      "produced": 88.0,
-      "remark": "灌缝胶",
-      "date": "2026-08-30 05:10",
-      "created_at": "2026-09-06 02:27:56"
-    },
-    {
-      "id": 58,
-      "used": 111.0,
-      "produced": 888.0,
-      "remark": "环氧脂子",
-      "date": "2026-08-30 05:09",
-      "created_at": "2026-09-06 02:27:56"
-    }
-  ],
-  "remark_tags": [
-    "粘钢胶",
-    "碳纤维胶",
-    "环氧脂子",
-    "灌注胶",
-    "灌缝胶"
-  ],
-  "total_stock": 36648.0
-}
-```
-
-**响应字段说明**:
-- `records`: 原材料使用/生产记录数组
-- `remark_tags`: 常用备注标签列表（快捷输入）
-- `total_stock`: 总库存量（生产总和 - 使用总和）
-
-### 8.2 添加原材料记录
-- **URL**: `/api/materials`
-- **Method**: `POST`
-- **说明**: 添加原材料使用或生产记录
-
-**请求参数**:
-```json
-{
-  "used": 50.0,
-  "produced": 100.0,
-  "remark": "粘钢胶"
-}
-```
-
-服务端会使用当前时间生成 `date` 字段，数量单位统一为公斤。
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "id": 60
-}
-```
-
-### 8.3 更新原材料记录
-- **URL**: `/api/materials/<int:record_id>`
-- **Method**: `PUT`
-- **说明**: 修改已有的原材料记录
-
-**请求参数**:
-```json
-{
-  "used": 60.0,
-  "produced": 120.0,
-  "remark": "粘钢胶（更新）"
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true
-}
-```
-
-### 8.4 删除原材料记录
-- **URL**: `/api/materials/<int:record_id>`
-- **Method**: `DELETE`
-- **说明**: 删除指定的原材料记录
-
-**响应示例**:
-```json
-{
-  "success": true
-}
-```
-
-**注意事项**:
-- 删除记录后，总库存会自动重新计算
-- 所有数量单位统一为**公斤**
-- `remark` 字段会自动添加到标签列表
-- 总库存 = Σ(produced) - Σ(used)
-
-### 8.5 获取原材料出库触屏设置
+### 8.1 获取原材料出库触屏设置
 - **URL**: `/api/material-outbound-settings`
 - **Method**: `GET`
 - **说明**: 获取默认门店、默认仓库、可操作原材料、默认原材料、库存提示和备注标签
@@ -2171,7 +2064,7 @@ receipt_image: File (图片文件)
 - `deductionStrategy`: 库存扣减策略，当前固定为 `fifo`
 - `remarkTags`: 常用备注标签
 
-### 8.6 保存原材料出库触屏设置
+### 8.2 保存原材料出库触屏设置
 - **URL**: `/api/material-outbound-settings`
 - **Method**: `PUT`
 
@@ -2189,7 +2082,7 @@ receipt_image: File (图片文件)
 
 默认原材料必须包含在 `allowedProductIds` 中，仓库必须属于所选门店。
 
-### 8.7 查询原材料出库单
+### 8.3 查询原材料出库单
 - **URL**: `/api/material-outbounds`
 - **Method**: `GET`
 - **查询参数**:
@@ -2200,7 +2093,7 @@ receipt_image: File (图片文件)
 
 每张单据包含门店、仓库、原材料快照、出库数量、成品数量、备注、录入人、审核人与审核时间。
 
-### 8.8 员工提交原材料出库草稿
+### 8.4 员工提交原材料出库草稿
 - **URL**: `/api/material-outbounds`
 - **Method**: `POST`
 - **说明**: 创建 `draft` 状态的出库单，不立即扣减库存
@@ -2216,19 +2109,19 @@ receipt_image: File (图片文件)
 
 门店和仓库以提交时的触屏设置为准，并保存名称快照。新备注会自动进入出库备注标签表。
 
-### 8.9 审核原材料出库单
+### 8.5 审核原材料出库单
 - **URL**: `/api/material-outbounds/<int:outbound_id>/audit`
 - **Method**: `POST`
 - **说明**: 在同一事务内校验实时库存、按 FIFO 扣减 `stock_balances`、写入 `stock_movements`，并将状态更新为 `reviewed`
 
 库存不足时返回 `409`，单据继续保持草稿状态。
 
-### 8.10 反审核原材料出库单
+### 8.6 反审核原材料出库单
 - **URL**: `/api/material-outbounds/<int:outbound_id>/audit`
 - **Method**: `DELETE`
 - **说明**: 按原出库流水回补对应批次和库位，并将状态恢复为 `draft`
 
-### 8.11 作废、删除与重新启用
+### 8.7 作废、删除与重新启用
 
 - `DELETE /api/material-outbounds/<int:outbound_id>`：首次调用将草稿置为 `cancelled`；对已作废单据再次调用会物理删除
 - `POST /api/material-outbounds/<int:outbound_id>/restart`：将已作废单据恢复为 `draft`
@@ -3897,7 +3790,6 @@ services:
 - `raw_material_products` - 原材料商品档案表
 - `inventory` - 库存表（6条记录）
 - `customers` - 客户表（4条记录）
-- `material_records` - 原材料使用/生产流水表（55条记录）
 - `stores` - 门店表（3条记录）
 - `warehouses` - 仓库表（4条记录）
 - `users` - 用户表（9条记录）
@@ -3920,7 +3812,6 @@ services:
 - `attribute_options` - 属性选项表
 - `warehouse_categories` - 仓库分类表
 - `carrier_tags` - 物流公司标签表
-- `remark_tags` - 原材料备注标签表
 - `hr_reports` - 人事检测报告文件表
 
 ### 数据库索引优化
@@ -3975,13 +3866,15 @@ ON stock_movements(product_type, product_id, warehouse_id, created_at DESC);
 | orders_db.json | orders | 209 |
 | products_db.json | products, inventory | 15 + 6 |
 | customers_db.json | customers | 4 |
-| materials_db.json | material_records | 55 |
 | stores_db.json | stores | 3 |
 | warehouses_db.json | warehouses, warehouse_categories | 4 + N |
 | users_db.json | users | 9 |
 
 原材料商品档案 `raw_material_products` 是新增的独立表，没有对应的历史 JSON 迁移来源；新建或编辑后直接通过
 `/api/raw-material-products` 持久化到 SQLite。
+
+旧版 `materials_db.json`、`material_records`、`remark_tags` 和 `/api/materials` 已于 2026-09-16 下线；
+当前原材料业务只使用商品档案、入库单、原材料出库单、库存余额、库存流水和 `material_remark_tags`。
 
 供应商、入库单、明细、库存余额和库存流水表由 `backend/utils/db.py` 在首次数据库连接时自动创建，
 没有对应的历史 JSON 迁移来源。

@@ -27,7 +27,6 @@ from routes.users import users_bp
 from routes.orders import orders_bp
 from routes.stores import stores_bp
 from routes.warehouses import warehouses_bp
-from routes.materials import materials_bp
 from routes.freight import freight_bp
 from routes.products import products_bp
 from routes.raw_material_products import raw_material_products_bp
@@ -45,7 +44,6 @@ app.register_blueprint(users_bp)
 app.register_blueprint(orders_bp)
 app.register_blueprint(stores_bp)
 app.register_blueprint(warehouses_bp)
-app.register_blueprint(materials_bp)
 app.register_blueprint(freight_bp)
 app.register_blueprint(products_bp)
 app.register_blueprint(raw_material_products_bp)

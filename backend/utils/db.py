@@ -543,23 +543,6 @@ def _ensure_material_outbound_schema(conn):
             ON material_remark_tags(use_count DESC, updated_at DESC)
             """
         )
-        legacy_tags_exist = cursor.execute(
-            """
-            SELECT 1 FROM sqlite_master
-            WHERE type = 'table' AND name = 'remark_tags'
-            """
-        ).fetchone()
-        if legacy_tags_exist:
-            cursor.execute(
-                """
-                INSERT OR IGNORE INTO material_remark_tags (
-                    tag, use_count, created_at, updated_at
-                )
-                SELECT trim(tag), 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-                FROM remark_tags
-                WHERE tag IS NOT NULL AND trim(tag) <> ''
-                """
-            )
         conn.commit()
         _material_outbound_schema_ready = True
 
