@@ -1,16 +1,18 @@
 <template>
   <teleport to="body">
-    <Transition name="modal-fade">
-      <div
-        v-if="visible"
-        id="shippedOrderActionModal"
-        class="modal-overlay"
-        @click.self="closeShippedActionModal"
-      >
+    <div
+      v-if="visible"
+      id="shippedOrderActionModal"
+      class="modal-overlay"
+      @click.self="closeShippedActionModal"
+    >
         <section
           class="action-modal"
-          :class="{ 'is-dragging': isDragging }"
-          :style="{ transform: `translate(${modalX}px, ${modalY}px)` }"
+          :class="{
+            'is-dragging': isDragging,
+            'is-logistics-modal': isLogisticsMode
+          }"
+          :style="modalStyle"
           role="dialog"
           aria-modal="true"
           aria-labelledby="actionModalTitle"
@@ -51,19 +53,26 @@
             </button>
           </header>
 
-          <div class="action-modal-body">
+          <div
+            :class="[
+              'action-modal-body',
+              { 'logistics-modal-body': isLogisticsMode }
+            ]"
+          >
             <input id="actionTargetOrderId" type="hidden" :value="targetOrderId" />
 
-            <section
+            <div
               v-if="isLogisticsMode"
               id="auditContent"
-              class="content-card logistics-card"
+              class="logistics-layout"
               aria-label="物流与费用信息"
             >
+              <div class="logistics-display-column">
+                <section class="content-card logistics-card" aria-label="客户与收货信息">
               <div class="card-header">
                 <div>
-                  <h3>基础信息</h3>
-                  <p>确认客户与发货方式后填写承运信息</p>
+                  <h3>客户与收货信息</h3>
+                  <p>当前订单的客户和收货信息</p>
                 </div>
               </div>
 
@@ -75,7 +84,71 @@
                       {{ currentOrderInfo.customer || '-' }}
                     </strong>
                   </div>
-                  <div class="form-item">
+                  <div class="summary-item">
+                    <span>收货人信息</span>
+                    <strong :title="currentOrderInfo.receiverDisplay || '-'">
+                      {{ currentOrderInfo.receiverDisplay || '-' }}
+                    </strong>
+                  </div>
+                  <div
+                    v-if="currentOrderInfo.receiverAddress"
+                    class="summary-item summary-item-address"
+                  >
+                    <span>收货地址</span>
+                    <strong :title="currentOrderInfo.receiverAddress">
+                      {{ currentOrderInfo.receiverAddress }}
+                    </strong>
+                  </div>
+                </div>
+
+              </div>
+                </section>
+
+                <section
+                  v-if="currentOrderInfo.goodsInfo"
+                  class="content-card goods-card"
+                  aria-label="订单商品信息"
+                >
+              <div class="card-header compact">
+                <div>
+                  <h3>订单商品信息</h3>
+                  <p>当前订单的商品与件数摘要</p>
+                </div>
+                <button
+                  v-if="shouldShowGoodsToggle"
+                  type="button"
+                  class="goods-toggle-button"
+                  :aria-expanded="goodsExpanded"
+                  @click="goodsExpanded = !goodsExpanded"
+                >
+                  {{ goodsExpanded ? '收起' : `展开全部（${currentOrderInfo.goodsItemCount}种）` }}
+                  <svg
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                    :class="{ expanded: goodsExpanded }"
+                  >
+                    <path d="m7 10 5 5 5-5"></path>
+                  </svg>
+                </button>
+              </div>
+              <pre class="goods-summary">{{ displayedGoodsInfo }}</pre>
+                </section>
+              </div>
+
+              <section
+                class="content-card logistics-input-card"
+              aria-label="物流与费用录入"
+              >
+              <div class="card-header">
+                <div>
+                  <h3>物流与费用录入</h3>
+                  <p>填写发货方式、承运信息及费用</p>
+                </div>
+              </div>
+
+              <div class="card-body">
+                <div class="form-grid logistics-input-grid">
+                  <div class="form-item shipping-method-field">
                     <label for="shippingMethodSelect">发货方式</label>
                     <select
                       id="shippingMethodSelect"
@@ -91,47 +164,18 @@
                       </option>
                     </select>
                   </div>
+
+                  <div v-if="shippingMethod === '4'" class="form-item custom-method-field">
+                    <label for="shippingCustom">自定义发货方式</label>
+                    <input
+                      id="shippingCustom"
+                      v-model="shippingCustom"
+                      class="modern-input"
+                      placeholder="请输入发货方式名称"
+                    />
+                  </div>
                 </div>
 
-                <div v-if="shippingMethod === '4'" class="form-item custom-method-field">
-                  <label for="shippingCustom">自定义发货方式</label>
-                  <input
-                    id="shippingCustom"
-                    v-model="shippingCustom"
-                    class="modern-input"
-                    placeholder="请输入发货方式名称"
-                  />
-                </div>
-              </div>
-            </section>
-
-            <section
-              v-if="isLogisticsMode && currentOrderInfo.goodsInfo"
-              class="content-card"
-              aria-label="订单商品信息"
-            >
-              <div class="card-header compact">
-                <div>
-                  <h3>订单商品信息</h3>
-                  <p>当前订单的商品与件数摘要</p>
-                </div>
-              </div>
-              <pre class="goods-summary">{{ currentOrderInfo.goodsInfo }}</pre>
-            </section>
-
-            <section
-              v-if="isLogisticsMode"
-              class="content-card"
-              aria-label="物流与费用录入"
-            >
-              <div class="card-header">
-                <div>
-                  <h3>物流与费用</h3>
-                  <p>物流单号可选填，费用将计入本次物流记录</p>
-                </div>
-              </div>
-
-              <div class="card-body">
                 <div v-if="carrierTags.length" id="auditCarrierTags" class="carrier-tags">
                   <span class="carrier-tags-label">常用承运商</span>
                   <button
@@ -252,7 +296,8 @@
                   <strong>¥ {{ totalCost.toFixed(2) }}</strong>
                 </div>
               </div>
-            </section>
+              </section>
+            </div>
 
             <section
               v-if="isReceiptMode"
@@ -405,8 +450,7 @@
             </div>
           </footer>
         </section>
-      </div>
-    </Transition>
+    </div>
 
     <!-- 大图预览模态框 -->
     <div
@@ -482,6 +526,7 @@ const modalSubtitle = ref('请选择对当前出库订单的操作指令')
 const logisticsSubmitText = ref('修改完成')
 const currentMode = ref('entry')
 const deleteConfirmVisible = ref(false)
+const goodsExpanded = ref(false)
 
 const isLogisticsMode = computed(() =>
   ['audit', 'entry', 'edit'].includes(currentMode.value)
@@ -492,11 +537,24 @@ const isReceiptMode = computed(() =>
 const canDeleteReceipt = computed(() =>
   currentMode.value === 'view_receipt' && userStore.hasPerm('shipped.delete_receipt')
 )
+const shouldShowGoodsToggle = computed(() =>
+  currentOrderInfo.value.goodsItemCount > 2
+)
+const displayedGoodsInfo = computed(() => {
+  if (goodsExpanded.value || !shouldShowGoodsToggle.value) {
+    return currentOrderInfo.value.goodsInfo
+  }
+  return currentOrderInfo.value.goodsPreview
+})
 
 // 当前订单信息
 const currentOrderInfo = ref({
   customer: '',
-  goodsInfo: '' // 新增：商品信息文本
+  receiverDisplay: '',
+  receiverAddress: '',
+  goodsInfo: '',
+  goodsPreview: '',
+  goodsItemCount: 0
 })
 
 // 消息提示状态
@@ -510,6 +568,17 @@ const dragStartX = ref(0)
 const dragStartY = ref(0)
 const modalX = ref(0)
 const modalY = ref(0)
+const modalViewportHeight = ref(0)
+
+const modalStyle = computed(() => ({
+  transform: `translate(${modalX.value}px, ${modalY.value}px)`,
+  height: modalViewportHeight.value ? `${modalViewportHeight.value}px` : undefined
+}))
+
+const updateModalViewportHeight = () => {
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight
+  modalViewportHeight.value = Math.min(880, Math.max(320, viewportHeight - 48))
+}
 
 // 显示顶部消息提示
 const showMessage = (text, type = 'success') => {
@@ -639,11 +708,16 @@ let currentReceiptRotation = 0
 // 全局变量，用于存储当前所有订单（照搬原生）
 let allOrdersLocal = []
 
-// 获取商品信息文本（新旧订单兼容）
-const getGoodsDisplayText = (order) => {
-  if (!order) return ''
+// 获取商品摘要（兼容新旧订单）
+const getGoodsDisplayData = (order) => {
+  if (!order) {
+    return {
+      fullText: '',
+      previewText: '',
+      itemCount: 0
+    }
+  }
 
-  // 新订单：显示商品明细列表
   if (order.order_goods && order.order_goods.length > 0) {
     const lines = order.order_goods.map((item, index) =>
       `${index + 1}. ${item.goods_name} ${item.spec} x${item.quantity}${item.unit || ''} (${item.packages}件)`
@@ -651,11 +725,20 @@ const getGoodsDisplayText = (order) => {
     const totalQty = order.order_goods.reduce((sum, item) => sum + (item.quantity || 0), 0)
     const totalPkg = order.order_goods.reduce((sum, item) => sum + (item.packages || 0), 0)
     const unit = order.order_goods[0]?.unit || ''
-    return lines.join('\n') + `\n总计：${totalQty}${unit}，${totalPkg}件`
+    const totalLine = `总计：${totalQty}${unit}，${totalPkg}件`
+    return {
+      fullText: [...lines, totalLine].join('\n'),
+      previewText: [...lines.slice(0, 2), totalLine].join('\n'),
+      itemCount: lines.length
+    }
   }
 
-  // 旧订单：显示原始文本
-  return `商品：${order.goods_name || '-'}\n重量：${order.goods_weight || '-'}\n件数：${order.goods_quantity || '-'}`
+  const legacyText = `商品：${order.goods_name || '-'}\n重量：${order.goods_weight || '-'}\n件数：${order.goods_quantity || '-'}`
+  return {
+    fullText: legacyText,
+    previewText: legacyText,
+    itemCount: 1
+  }
 }
 
 // 加载物流公司标签
@@ -754,9 +837,18 @@ const open = (orderId, mode) => {
   otherCosts.value = []
   shippingMethod.value = '0'
   shippingCustom.value = ''
+  goodsExpanded.value = false
+  const goodsDisplayData = getGoodsDisplayData(order)
   currentOrderInfo.value = {
     customer: order?.order_client || '',
-    goodsInfo: getGoodsDisplayText(order)
+    receiverDisplay: [
+      order?.contact_person || order?.receiver_name || '',
+      order?.contact_phone || order?.receiver_phone || ''
+    ].filter(Boolean).join(' · '),
+    receiverAddress: order?.contact_address || order?.receiver_address || '',
+    goodsInfo: goodsDisplayData.fullText,
+    goodsPreview: goodsDisplayData.previewText,
+    goodsItemCount: goodsDisplayData.itemCount
   }
 
   if (order) {
@@ -791,6 +883,7 @@ const open = (orderId, mode) => {
   }
 
   loadModalPosition()
+  updateModalViewportHeight()
   visible.value = true
 
   if (['receipt', 'view_receipt'].includes(mode)) {
@@ -1240,10 +1333,12 @@ const handleEditEvent = (event) => {
 
 onMounted(() => {
   window.addEventListener('open-shipped-action-modal', handleEditEvent)
+  window.addEventListener('resize', updateModalViewportHeight)
 })
 
 onUnmounted(() => {
   window.removeEventListener('open-shipped-action-modal', handleEditEvent)
+  window.removeEventListener('resize', updateModalViewportHeight)
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
 })
@@ -1266,9 +1361,8 @@ onUnmounted(() => {
   position: fixed;
   inset: 0;
   z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  display: grid;
+  place-items: center;
   padding: 24px;
   color: var(--text);
   background: rgba(15, 23, 42, 0.42);
@@ -1277,10 +1371,12 @@ onUnmounted(() => {
 }
 
 .action-modal {
-  display: flex;
+  display: grid;
   width: min(680px, calc(100vw - 48px));
-  max-height: min(880px, calc(100vh - 48px));
-  flex-direction: column;
+  height: 100%;
+  max-height: 880px;
+  min-height: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   background: var(--page-bg);
   border: 1px solid var(--border);
@@ -1289,6 +1385,10 @@ onUnmounted(() => {
   box-sizing: border-box;
   font-size: 14px;
   animation: none !important;
+}
+
+.action-modal.is-logistics-modal {
+  width: min(1320px, calc(100vw - 48px));
 }
 
 .action-modal.is-dragging {
@@ -1412,16 +1512,103 @@ onUnmounted(() => {
 }
 
 .action-modal-body {
-  display: grid;
+  display: flex;
+  height: 100%;
   min-height: 0;
-  flex: 1 1 auto;
+  flex-direction: column;
   gap: 14px;
   padding: 16px;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scrollbar-color: #cbd5e1 transparent;
+  box-sizing: border-box;
+}
+
+.action-modal-body.logistics-modal-body {
+  overflow-y: auto;
+}
+
+.logistics-layout {
+  display: grid;
+  grid-template-columns: minmax(360px, 0.86fr) minmax(560px, 1.14fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.logistics-display-column {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-self: start;
+  overflow: hidden;
+  background: var(--panel-bg);
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+}
+
+.logistics-display-column .content-card {
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+}
+
+.logistics-display-column .content-card + .content-card {
+  border-top: 1px solid var(--border);
+}
+
+.logistics-display-column .card-header h3 {
+  font-size: 16px;
+}
+
+.logistics-display-column .card-header p {
+  font-size: 13px;
+}
+
+.logistics-display-column .summary-item {
+  min-height: 70px;
+}
+
+.logistics-display-column .summary-item span {
+  font-size: 13px;
+}
+
+.logistics-display-column .summary-item strong {
+  font-size: 15px;
+}
+
+.logistics-display-column .goods-summary {
+  padding: 16px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.summary-item-address {
+  grid-column: 1 / -1;
+}
+
+.summary-item-address strong {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.action-modal-body::-webkit-scrollbar {
+  width: 10px;
+}
+
+.action-modal-body::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+
+.action-modal-body::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
 }
 
 .content-card {
+  flex: 0 0 auto;
   overflow: hidden;
   background: var(--panel-bg);
   border: 1px solid #dfe5ec;
@@ -1497,6 +1684,15 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 
+.summary-item small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .form-item {
   display: flex;
   min-width: 0;
@@ -1513,6 +1709,20 @@ onUnmounted(() => {
 
 .custom-method-field {
   margin-top: 14px;
+}
+
+.shipping-method-field {
+  margin-top: 14px;
+}
+
+.logistics-input-grid {
+  margin-bottom: 14px;
+}
+
+.logistics-input-grid .shipping-method-field,
+.logistics-input-grid .custom-method-field {
+  grid-column: 1 / -1;
+  margin-top: 0;
 }
 
 .modern-input {
@@ -1547,6 +1757,43 @@ onUnmounted(() => {
   font-size: 12px;
   line-height: 1.7;
   white-space: pre-wrap;
+}
+
+.goods-toggle-button {
+  display: inline-flex;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px 0 10px;
+  color: var(--accent-dark);
+  background: var(--panel-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.goods-toggle-button:hover {
+  background: var(--accent-soft);
+}
+
+.goods-toggle-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: transform 0.18s ease;
+}
+
+.goods-toggle-button svg.expanded {
+  transform: rotate(180deg);
 }
 
 .carrier-tags {
@@ -1606,7 +1853,8 @@ onUnmounted(() => {
 }
 
 .freight-field {
-  max-width: calc(50% - 7px);
+  width: min(100%, 300px);
+  max-width: none;
 }
 
 .money-input {
@@ -2069,16 +2317,6 @@ select:focus-visible {
   color: #dc3545;
 }
 
-.modal-fade-enter-active,
-.modal-fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.modal-fade-enter-from,
-.modal-fade-leave-to {
-  opacity: 0;
-}
-
 .notice-enter-active,
 .notice-leave-active {
   transition: opacity 0.18s ease, transform 0.18s ease;
@@ -2097,7 +2335,12 @@ select:focus-visible {
 
   .action-modal {
     width: calc(100vw - 32px);
-    max-height: calc(100vh - 32px);
+    height: 100%;
+    max-height: none;
+  }
+
+  .action-modal.is-logistics-modal {
+    width: calc(100vw - 32px);
   }
 
   .modal-header {
@@ -2123,6 +2366,7 @@ select:focus-visible {
   }
 
   .freight-field {
+    width: 100%;
     max-width: none;
   }
 
@@ -2164,9 +2408,24 @@ select:focus-visible {
   }
 }
 
+@media (max-width: 1080px) {
+  .action-modal.is-logistics-modal {
+    width: min(860px, calc(100vw - 48px));
+  }
+
+  .logistics-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 780px) {
+  .action-modal.is-logistics-modal {
+    width: calc(100vw - 32px);
+  }
+}
+
+
 @media (prefers-reduced-motion: reduce) {
-  .modal-fade-enter-active,
-  .modal-fade-leave-active,
   .notice-enter-active,
   .notice-leave-active {
     transition: none;
