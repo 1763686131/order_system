@@ -868,6 +868,7 @@ def list_stock_movements():
                 MAX(store.name) AS store_name,
                 MAX(warehouse.name) AS warehouse_name,
                 COALESCE(MAX(outbound.remark), MAX(inbound.remark), '') AS remark,
+                MAX(outbound.produced_quantity) AS produced_quantity,
                 GROUP_CONCAT(
                     DISTINCT CASE
                         WHEN trim(COALESCE(movement.batch_no, '')) <> ''
@@ -933,6 +934,10 @@ def list_stock_movements():
                 'storeName': row['store_name'] or '',
                 'warehouseName': row['warehouse_name'] or '',
                 'remark': row['remark'] or '',
+                'producedQuantity': (
+                    float(row['produced_quantity'])
+                    if row['produced_quantity'] is not None else None
+                ),
                 'batchNos': row['batch_nos'] or '',
             }
             for row in rows

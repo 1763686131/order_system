@@ -304,31 +304,31 @@
               <table class="movement-table">
                 <thead>
                   <tr>
+                    <th>单据编号</th>
                     <th>日期</th>
                     <th>类型</th>
-                    <th>单据编号</th>
                     <th>仓库</th>
                     <th class="movement-number">数量</th>
-                    <th>批次 / 备注</th>
+                    <th>备注</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="movement in movementRecords" :key="movementKey(movement)">
+                    <td class="movement-document">{{ movement.documentNo || '-' }}</td>
                     <td>{{ formatMovementDate(movement.documentDate || movement.createdAt) }}</td>
                     <td>
                       <span :class="['movement-type', `movement-${movement.movementType}`]">
                         {{ movement.movementType === 'in' ? '入库' : '出库' }}
                       </span>
                     </td>
-                    <td class="movement-document">{{ movement.documentNo || '-' }}</td>
                     <td>{{ movement.warehouseName || '-' }}</td>
                     <td :class="['movement-number', `movement-${movement.movementType}`]">
                       {{ movement.movementType === 'in' ? '+' : '-' }}
                       {{ formatNumber(movement.quantity) }}
                       <small>{{ movementDetailMaterial.unit }}</small>
                     </td>
-                    <td class="movement-note" :title="movement.batchNos || movement.remark">
-                      {{ movement.batchNos || movement.remark || '-' }}
+                    <td class="movement-note" :title="formatMovementRemark(movement)">
+                      {{ formatMovementRemark(movement) }}
                     </td>
                   </tr>
                 </tbody>
@@ -849,6 +849,20 @@ const movementKey = movement => [
 const formatMovementDate = value => {
   const text = String(value || '')
   return text.length >= 16 ? text.slice(0, 16) : text || '-'
+}
+
+const formatMovementRemark = movement => {
+  const parts = []
+  const remark = String(movement?.remark || '').trim()
+  if (remark) parts.push(remark)
+  if (
+    movement?.movementType === 'out'
+    && movement?.producedQuantity !== null
+    && movement?.producedQuantity !== undefined
+  ) {
+    parts.push(`${formatNumber(movement.producedQuantity)}公斤`)
+  }
+  return parts.join(' · ') || '-'
 }
 
 const closeMovementDetail = () => {
@@ -1617,9 +1631,9 @@ onMounted(loadMaterialProducts)
   border-bottom: 0;
 }
 
-.movement-table th:nth-child(1) { width: 138px; }
-.movement-table th:nth-child(2) { width: 82px; }
-.movement-table th:nth-child(3) { width: 160px; }
+.movement-table th:nth-child(1) { width: 165px; }
+.movement-table th:nth-child(2) { width: 138px; }
+.movement-table th:nth-child(3) { width: 82px; }
 .movement-table th:nth-child(4) { width: 125px; }
 .movement-table th:nth-child(5) { width: 120px; }
 

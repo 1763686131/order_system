@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v3.2** (2026-09-16) - 新增库存流水查询接口，支持按物料、门店和仓库查询已审核入库与出库明细
 - **v3.1** (2026-09-16) - 补充销售订单审核/反审核接口、审核人姓名解析及审核字段说明
 - **v3.0** (2026-09-14) - 客户期初欠款与储值字段优化，新增 `initial_receivable_at` 和 `balance_at` 时间戳字段
 - **v2.8** (2026-09-14) - 新增客户应收对账单详情接口，复用审核流水并支持商品级欠款分摊
@@ -3170,7 +3171,93 @@ totalAmount = receivedQty × unitPrice + taxAmount
 `averageUnitCost` 按同一物料、仓库、门店、货位和批次的有效入库流水进行加权计算，
 `inventoryAmount` 为当前库存余额乘以对应加权入库单价后的汇总金额（不含税）。没有单价的历史余额按 `0` 计价。
 
-### 11.11 审核规则与数据写入
+### 11.11 获取库存流水
+
+- **URL**: `/api/stock-movements`
+- **Method**: `GET`
+- **说明**: 查询已经实际影响库存的入库与出库流水。结果按来源单据、物料、门店和仓库聚合，并按流水时间倒序返回。草稿和已反审核单据不会出现在结果中。
+
+**Query 参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `productId` | integer | 是 | 商品或原材料 ID |
+| `type` | string | 否 | `raw-material` 或 `finished-product`，默认 `raw-material` |
+| `storeId` | integer | 否 | 按门店 ID 筛选 |
+| `warehouseId` | integer | 否 | 按仓库 ID 筛选 |
+| `limit` | integer | 否 | 最大返回数量，默认 `200`，范围 `1-500` |
+
+**请求示例**:
+
+```http
+GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&limit=200
+```
+
+**响应示例**:
+
+```json
+[
+  {
+    "movementType": "out",
+    "receiptType": "raw-material",
+    "sourceDocumentId": 5,
+    "documentNo": "YLCK202609160005",
+    "productType": "raw-material",
+    "productId": 3,
+    "warehouseId": 1,
+    "storeId": 2,
+    "quantity": 800.0,
+    "unitPrice": null,
+    "totalAmount": null,
+    "createdAt": "2026-09-16 08:21:30",
+    "documentDate": "2026-09-16",
+    "storeName": "中固",
+    "warehouseName": "中固车间",
+    "remark": "灌缝胶",
+    "producedQuantity": 800.0,
+    "batchNos": "2026-09-09"
+  },
+  {
+    "movementType": "in",
+    "receiptType": "raw-material",
+    "sourceDocumentId": 11,
+    "documentNo": "RK20260909349",
+    "productType": "raw-material",
+    "productId": 3,
+    "warehouseId": 1,
+    "storeId": 2,
+    "quantity": 200.0,
+    "unitPrice": 15.0,
+    "totalAmount": 3390.0,
+    "createdAt": "2026-09-16 08:06:58",
+    "documentDate": "2026-09-09",
+    "storeName": "中固",
+    "warehouseName": "中固车间",
+    "remark": "",
+    "producedQuantity": null,
+    "batchNos": "2026-09-09"
+  }
+]
+```
+
+**字段说明**:
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `movementType` | string | `in` 入库，`out` 出库 |
+| `documentNo` | string | 来源入库单或原材料出库单编号 |
+| `quantity` | number | 本单实际入库或出库数量，始终返回正数，由 `movementType` 表示方向 |
+| `remark` | string | 来源单据备注；出库取 `material_outbounds.remark`，入库取 `stock_inbounds.remark` |
+| `producedQuantity` | number/null | 原材料出库单的成品数量；入库流水返回 `null` |
+| `unitPrice` | number/null | 入库加权单价；出库流水返回 `null` |
+| `totalAmount` | number/null | 入库金额合计；出库流水返回 `null` |
+| `batchNos` | string | 本单涉及的库存批次，多个批次使用逗号连接 |
+
+原材料库存明细页面将出库备注显示为 `remark · producedQuantity公斤`。由于 FIFO 出库可能从多个批次扣减，本接口会把同一出库单产生的多条批次流水聚合为一条，避免页面重复显示同一单据。
+
+`productId` 缺失时返回 HTTP `400`；`type` 无效时同样返回 HTTP `400`。
+
+### 11.12 审核规则与数据写入
 
 调用 `POST /api/stock-inbounds/{id}/audit` 审核入库单后，后端在同一个 SQLite 事务中执行：
 
