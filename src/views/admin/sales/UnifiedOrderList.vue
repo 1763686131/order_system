@@ -720,7 +720,7 @@
                     <h3>物流信息</h3>
                   </div>
                 </div>
-                <dl class="meta-grid">
+                <dl class="meta-grid logistics-meta-grid">
                   <div>
                     <dt>发货方式</dt>
                     <dd>{{ getShippingMethodText(selectedOrder) }}</dd>
@@ -3732,6 +3732,11 @@ svg {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 22px;
   margin: 17px 0;
+}
+
+.logistics-meta-grid {
+  margin: 0;
+  padding: 17px 15px;
 }
 
 .meta-grid > div {
