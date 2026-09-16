@@ -35,6 +35,7 @@ from routes.customers import customers_bp
 from routes.hr_reports import hr_reports_bp
 from routes.settings import settings_bp
 from routes.stock_inbounds import stock_inbounds_bp
+from routes.material_outbounds import material_outbounds_bp
 from routes.payment_receipts import payment_receipts_bp
 from routes.returns import returns_bp
 from routes.bank_accounts import bank_accounts_bp, upload_bp as bank_account_upload_bp
@@ -52,6 +53,7 @@ app.register_blueprint(customers_bp)
 app.register_blueprint(hr_reports_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(stock_inbounds_bp)
+app.register_blueprint(material_outbounds_bp)
 app.register_blueprint(payment_receipts_bp)
 app.register_blueprint(returns_bp)
 app.register_blueprint(bank_accounts_bp)

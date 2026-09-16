@@ -191,6 +191,7 @@ order_system/
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
 │  │  ├─ raw_material_products.py    # 原材料商品档案接口
 │  │  ├─ stock_inbounds.py           # 供应商、入库单、审核、库存余额和流水
+│  │  ├─ material_outbounds.py        # 触屏原材料出库草稿、配置、审核和库存扣减
 │  │  ├─ materials.py                # 原材料使用/生产流水
 │  │  ├─ stores.py                   # 门店接口
 │  │  ├─ warehouses.py               # 仓库接口
@@ -238,6 +239,7 @@ order_system/
 │  │     │  ├─ MaterialProductList.vue
 │  │     │  ├─ InventoryList.vue     # 成品库存
 │  │     │  ├─ MaterialInventory.vue # 原材料库存及库存金额
+│  │     │  ├─ MaterialOutboundList.vue # 原材料出库审核与触屏端配置
 │  │     │  └─ StockRecordList.vue   # 入库/出库记录通用组件
 │  │     ├─ sales/                   # 销售管理
 │  │     │  ├─ UnifiedOrderList.vue  # 销售订单和物流订单列表
@@ -382,6 +384,14 @@ order_system/
 - `inventoryAmount` 为库存金额。
 - 历史入库流水缺少单价时按零成本参与数量口径，避免虚增库存金额。
 
+### 原材料触屏出库
+
+- 员工在前台触屏弹窗录入出库数量、成品数量和备注标签，提交后生成草稿，不立即扣减库存。
+- 管理员在“库存 / 原材料出库”中审核草稿；审核会按先进先出扣减 `stock_balances` 并写入 `stock_movements`。
+- 反审核会按原库存流水回补对应批次和库位。
+- 默认门店、默认仓库、可操作原材料和默认原材料由原材料出库页面统一配置。
+- 历史 `/api/materials` 数据不迁移到新出库单，仅保留兼容接口。
+
 ## 主要页面
 
 | 路由 | 页面 | 主要数据来源 |
@@ -393,6 +403,7 @@ order_system/
 | `/admin/purchase/inbound` | 采购入库 | 入库接口 |
 | `/admin/inventory` | 成品库存 | `/api/products/inventory` |
 | `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances` |
+| `/admin/inventory/material-outbounds` | 原材料出库审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbound-settings` |
 | `/admin/stock/in` | 入库记录 | `/api/stock-inbounds` |
 | `/admin/stock/out` | 出库记录 | `/api/orders` |
 | `/admin/inventory/warehouse` | 仓库管理 | `/api/warehouses` |

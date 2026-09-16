@@ -23,6 +23,8 @@ _raw_material_schema_lock = Lock()
 _raw_material_schema_ready = False
 _stock_inbound_schema_lock = Lock()
 _stock_inbound_schema_ready = False
+_material_outbound_schema_lock = Lock()
+_material_outbound_schema_ready = False
 _return_schema_lock = Lock()
 _return_schema_ready = False
 _system_settings_schema_lock = Lock()
@@ -434,6 +436,132 @@ def _ensure_stock_inbound_schema(conn):
         )
         conn.commit()
         _stock_inbound_schema_ready = True
+
+
+def _ensure_material_outbound_schema(conn):
+    """Create touch-entry material outbound documents and their settings."""
+    global _material_outbound_schema_ready
+    if _material_outbound_schema_ready:
+        return
+
+    with _material_outbound_schema_lock:
+        if _material_outbound_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS material_outbound_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                default_store_id INTEGER,
+                default_warehouse_id INTEGER,
+                default_product_id INTEGER,
+                allowed_product_ids TEXT NOT NULL DEFAULT '[]',
+                deduction_strategy TEXT NOT NULL DEFAULT 'fifo',
+                allow_insufficient_draft INTEGER NOT NULL DEFAULT 1,
+                show_current_stock INTEGER NOT NULL DEFAULT 1,
+                updated_by TEXT,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO material_outbound_settings (
+                id, allowed_product_ids, deduction_strategy,
+                allow_insufficient_draft, show_current_stock
+            ) VALUES (1, '[]', 'fifo', 1, 1)
+            """
+        )
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS material_outbounds (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                document_no TEXT NOT NULL UNIQUE,
+                document_date TEXT NOT NULL,
+                store_id INTEGER NOT NULL,
+                store_name TEXT NOT NULL DEFAULT '',
+                warehouse_id INTEGER NOT NULL,
+                warehouse_name TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'draft',
+                total_quantity REAL NOT NULL DEFAULT 0,
+                produced_quantity REAL NOT NULL DEFAULT 0,
+                remark TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT 'touch',
+                created_by TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                audited_by TEXT,
+                audited_at TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_material_outbounds_filter
+            ON material_outbounds(status, document_date DESC, id DESC)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS material_outbound_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                outbound_id INTEGER NOT NULL,
+                line_no INTEGER NOT NULL DEFAULT 1,
+                product_id INTEGER NOT NULL,
+                product_code TEXT,
+                product_name TEXT NOT NULL,
+                specification TEXT,
+                unit TEXT,
+                quantity REAL NOT NULL,
+                remark TEXT,
+                FOREIGN KEY(outbound_id) REFERENCES material_outbounds(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_material_outbound_items_document
+            ON material_outbound_items(outbound_id, line_no)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS material_remark_tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                tag TEXT NOT NULL UNIQUE,
+                use_count INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_material_remark_tags_usage
+            ON material_remark_tags(use_count DESC, updated_at DESC)
+            """
+        )
+        legacy_tags_exist = cursor.execute(
+            """
+            SELECT 1 FROM sqlite_master
+            WHERE type = 'table' AND name = 'remark_tags'
+            """
+        ).fetchone()
+        if legacy_tags_exist:
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO material_remark_tags (
+                    tag, use_count, created_at, updated_at
+                )
+                SELECT trim(tag), 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                FROM remark_tags
+                WHERE tag IS NOT NULL AND trim(tag) <> ''
+                """
+            )
+        conn.commit()
+        _material_outbound_schema_ready = True
 
 
 def _ensure_print_templates_schema(conn):
@@ -979,6 +1107,7 @@ def get_db():
         _ensure_bank_accounts_schema(conn)
         _ensure_raw_material_products_schema(conn)
         _ensure_stock_inbound_schema(conn)
+        _ensure_material_outbound_schema(conn)
         _ensure_return_schema(conn)
         _ensure_print_templates_schema(conn)
         yield conn

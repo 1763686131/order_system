@@ -27,7 +27,7 @@
         class="fab-item"
         @click="handleCreateMaterial"
       >
-        录入原材料数据
+        录入原材料出库
       </div>
 
       <div

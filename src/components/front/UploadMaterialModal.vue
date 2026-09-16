@@ -1,115 +1,155 @@
 <template>
   <teleport to="body">
-    <div
-      v-if="visible"
-      id="uploadMaterialModal"
-      class="old-modal-mask"
-    >
-      <div class="old-modal-box" style="max-width: 760px;">
-        <div class="old-modal-header">
-          <span style="color:#1890ff; font-weight:bold;">原材料数据录入</span>
-          <span class="old-close-x" @click="handleClose">&times;</span>
+    <div v-if="visible" id="uploadMaterialModal" class="material-modal-mask">
+      <section class="material-modal" role="dialog" aria-modal="true" aria-labelledby="materialModalTitle">
+        <header class="material-modal-header">
+          <div>
+            <span>原材料出库</span>
+            <h2 id="materialModalTitle">录入生产领料数据</h2>
+            <p>提交后生成待审核草稿，管理员审核后才扣减库存</p>
+          </div>
+          <button type="button" aria-label="关闭" @click="handleClose">×</button>
+        </header>
+
+        <div v-if="configLoading" class="modal-state">正在加载出库配置...</div>
+        <div v-else-if="configError" class="modal-state error-state">
+          <strong>暂时无法录入</strong>
+          <span>{{ configError }}</span>
+          <button type="button" @click="fetchConfig">重新加载</button>
         </div>
 
-        <div class="old-modal-body upload-modal-body" style="padding: 24px; display: flex; gap: 32px;">
-          <!-- 左侧输入区 -->
-          <div class="upload-inputs-area" style="flex: 1.2; display: flex; flex-direction: column; justify-content: space-between;">
-            <div>
-              <div class="form-item" style="margin-bottom: 20px;">
-                <label for="materialInputUse" style="font-weight:bold; color:#ff4d4f; margin-bottom: 8px; display: block;">今日消耗原材料 (kg):</label>
-                <input
-                  v-model="usedValue"
-                  id="materialInputUse"
-                  readonly
-                  placeholder="点击右侧键盘输入..."
-                  class="keyboard-target"
-                  :class="{ 'active-target': activeTarget === 'used' }"
-                  @click="setActiveTarget('used')"
-                  style="background:#f9fafc; font-size:18px; font-weight:bold; padding: 12px 16px; border: 1px solid #e4e7ed; border-radius: 8px; width: 100%; box-sizing: border-box; outline: none;"
-                />
+        <div v-else class="material-modal-body">
+          <div class="upload-inputs-area">
+            <section class="material-summary">
+              <div class="summary-heading">
+                <span>本次领用原材料</span>
+                <strong>{{ currentProduct?.name || '尚未配置' }}</strong>
               </div>
+              <div class="summary-grid">
+                <div>
+                  <span>规格</span>
+                  <strong>{{ currentProduct?.specification || '-' }}</strong>
+                </div>
+                <div>
+                  <span>计量单位</span>
+                  <strong>{{ currentProduct?.unit || '-' }}</strong>
+                </div>
+                <div>
+                  <span>门店</span>
+                  <strong>{{ currentStore?.name || '-' }}</strong>
+                </div>
+                <div>
+                  <span>出库仓库</span>
+                  <strong>{{ currentWarehouse?.name || '-' }}</strong>
+                </div>
+              </div>
+              <div v-if="settings.showCurrentStock" class="stock-line">
+                当前可用库存
+                <strong>{{ formatNumber(currentProduct?.currentStock) }} {{ currentProduct?.unit }}</strong>
+              </div>
+            </section>
 
-              <div class="form-item" style="margin-bottom: 20px;">
-                <label for="materialInputProduct" style="font-weight:bold; color:#52c41a; margin-bottom: 8px; display: block;">出货成品总数量 (kg):</label>
+            <div class="number-fields">
+              <label class="touch-field">
+                <span>原材料出库数量（{{ currentProduct?.unit || '单位' }}）</span>
                 <input
-                  v-model="producedValue"
-                  id="materialInputProduct"
+                  id="materialInputUse"
+                  v-model="usedValue"
                   readonly
-                  placeholder="点击右侧键盘输入..."
-                  class="keyboard-target"
-                  :class="{ 'active-target': activeTarget === 'produced' }"
-                  @click="setActiveTarget('produced')"
-                  style="background:#f9fafc; font-size:18px; font-weight:bold; padding: 12px 16px; border: 1px solid #e4e7ed; border-radius: 8px; width: 100%; box-sizing: border-box; outline: none;"
+                  inputmode="none"
+                  placeholder="点击右侧数字键盘输入"
+                  :class="{ active: activeTarget === 'used' }"
+                  @click="setActiveTarget('used')"
                 />
-              </div>
+              </label>
+
+              <label class="touch-field produced-field">
+                <span>成品数量（kg）</span>
+                <input
+                  id="materialInputProduct"
+                  v-model="producedValue"
+                  readonly
+                  inputmode="none"
+                  placeholder="点击右侧数字键盘输入"
+                  :class="{ active: activeTarget === 'produced' }"
+                  @click="setActiveTarget('produced')"
+                />
+              </label>
             </div>
 
-            <div class="form-item" style="margin-top: auto; padding-top: 10px; border-top: 1px dashed #eee;">
-              <label for="materialInputRemark" style="font-weight:bold; color:#1890ff; display: block; margin-bottom: 8px;">附加备注信息 (选填):</label>
+            <div class="remark-area">
+              <label for="materialInputRemark">备注名称</label>
               <input
-                v-model="remarkValue"
                 id="materialInputRemark"
-                placeholder="可手动打字，或直接点击下方快捷标签"
-                style="background:#fff; font-size:14px; border: 1px solid #d9d9d9; border-radius: 6px; padding: 10px 12px; width: 100%; box-sizing: border-box; outline: none; color: #333;"
+                v-model="remarkValue"
+                placeholder="可以点击下方标签，也可以手动输入"
               />
-              <div id="materialRemarkTags" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; min-height: 24px; align-items: center;">
-                <span
+              <div class="remark-tags">
+                <button
                   v-for="tag in remarkTags"
                   :key="tag"
+                  type="button"
+                  :class="{ selected: remarkValue === tag }"
                   @click="remarkValue = tag"
-                  style="cursor: pointer; background: #e6f4ff; color: #1677ff; border: 1px solid #91caff; padding: 4px 10px; border-radius: 4px; font-size: 12px; transition: all 0.2s; user-select: none;"
-                  @mouseover="$event.target.style.background='#bae0ff'"
-                  @mouseout="$event.target.style.background='#e6f4ff'"
                 >
                   {{ tag }}
-                </span>
+                </button>
+                <span v-if="remarkTags.length === 0">暂无常用标签</span>
               </div>
             </div>
           </div>
 
-          <!-- 右侧键盘区 -->
-          <div class="upload-keyboard-area" style="flex: 1; display: flex; flex-direction: column; justify-content: space-between;">
-            <div class="touch-keyboard-panel" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px;">
-              <button class="key-btn" v-for="n in 9" :key="n" @click="pressKey(n.toString())">{{ n }}</button>
-              <button class="key-btn" @click="pressKey('.')">.</button>
-              <button class="key-btn" @click="pressKey('0')">0</button>
-              <button class="key-btn key-backspace" @click="pressKey('backspace')">←</button>
-              <button class="key-btn key-clear" @click="pressKey('clear')" style="grid-column: span 3; font-size:15px; height: 42px; background:#f0f2f5; color:#555; font-weight: bold;">清空重输</button>
+          <div class="upload-keyboard-area">
+            <div class="active-hint">
+              正在输入：
+              <strong>{{ activeTarget === 'used' ? '原材料出库数量' : '成品数量' }}</strong>
+            </div>
+            <div class="touch-keyboard-panel">
+              <button v-for="n in 9" :key="n" type="button" @click="pressKey(String(n))">{{ n }}</button>
+              <button type="button" @click="pressKey('.')">.</button>
+              <button type="button" @click="pressKey('0')">0</button>
+              <button type="button" class="key-backspace" @click="pressKey('backspace')">⌫</button>
+              <button type="button" class="key-clear" @click="pressKey('clear')">清空重输</button>
             </div>
 
-            <div class="old-modal-footer" style="padding: 0; border: none; display: flex; gap: 12px; justify-content: center; background: transparent;">
-              <button class="btn-default" @click="handleClose" style="flex: 1; border-radius: 8px; height: 46px; border: none; background: #f0f2f5; font-weight: bold; color: #666;">取消</button>
-              <button class="btn-primary" @click="handleSubmit" :disabled="loading" style="flex: 1.5; border-radius: 8px; height: 46px; font-weight: bold; font-size: 16px; box-shadow: 0 4px 12px rgba(24,144,255,0.3);">{{ loading ? '提交中...' : '确认上传' }}</button>
-            </div>
+            <div v-if="submitError" class="submit-error">{{ submitError }}</div>
+
+            <footer class="material-modal-footer">
+              <button type="button" class="button-secondary" @click="handleClose">取消</button>
+              <button
+                type="button"
+                class="button-primary"
+                :disabled="loading || !settings.configured"
+                @click="handleSubmit"
+              >
+                {{ loading ? '正在提交...' : '提交待审核草稿' }}
+              </button>
+            </footer>
           </div>
         </div>
-      </div>
+      </section>
     </div>
 
-    <!-- 成功提示弹窗 -->
-    <div
-      v-if="showSuccess"
-      id="uploadSuccessNotifyModal"
-      class="old-modal-mask"
-      style="z-index: 100001;"
-    >
-      <div class="old-modal-box" style="max-width: 320px; text-align: center; background: #ffffff;">
-        <div class="old-modal-body" style="padding: 30px;">
-          <h3 style="color: #1890ff; font-size: 18px; margin-bottom: 8px;">物料数据上传成功</h3>
-          <p style="color: #666; font-size: 13px; line-height: 1.6; white-space: pre-line;">{{ successMessage }}</p>
-          <button class="btn-primary" style="margin-top: 20px; padding: 8px 30px; border-radius: 4px;" @click="showSuccess = false">我已知晓</button>
-        </div>
-      </div>
+    <div v-if="showSuccess" class="material-modal-mask success-layer">
+      <section class="success-modal" role="dialog" aria-modal="true">
+        <div class="success-icon">✓</div>
+        <h3>原材料出库草稿已提交</h3>
+        <p>{{ successMessage }}</p>
+        <button type="button" @click="showSuccess = false">我知道了</button>
+      </section>
     </div>
   </teleport>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import request from '@/api/request'
 
 const visible = ref(false)
 const loading = ref(false)
+const configLoading = ref(false)
+const configError = ref('')
+const submitError = ref('')
 const showSuccess = ref(false)
 const successMessage = ref('')
 
@@ -117,113 +157,566 @@ const usedValue = ref('')
 const producedValue = ref('')
 const remarkValue = ref('')
 const activeTarget = ref('used')
-const remarkTags = ref([])
+const settings = ref({
+  configured: false,
+  defaultStoreId: null,
+  defaultWarehouseId: null,
+  defaultProductId: null,
+  showCurrentStock: true,
+  stores: [],
+  warehouses: [],
+  products: [],
+  allowedProducts: [],
+  remarkTags: []
+})
 
-// 设置活动输入框
-const setActiveTarget = (target) => {
+const currentProduct = computed(() => (
+  settings.value.defaultProduct
+  || settings.value.products.find(item => String(item.id) === String(settings.value.defaultProductId))
+  || null
+))
+const currentStore = computed(() => (
+  settings.value.stores.find(item => String(item.id) === String(settings.value.defaultStoreId)) || null
+))
+const currentWarehouse = computed(() => (
+  settings.value.warehouses.find(item => String(item.id) === String(settings.value.defaultWarehouseId)) || null
+))
+const remarkTags = computed(() => settings.value.remarkTags || [])
+
+const formatNumber = value => Number(value || 0).toLocaleString('zh-CN', {
+  maximumFractionDigits: 3
+})
+
+const setActiveTarget = target => {
   activeTarget.value = target
 }
 
-// 按键输入
-const pressKey = (key) => {
-  const targetMap = {
-    used: usedValue,
-    produced: producedValue
-  }
-
-  const targetRef = targetMap[activeTarget.value]
-  if (!targetRef) return
-
-  let currentVal = targetRef.value
+const pressKey = key => {
+  const targetRef = activeTarget.value === 'used' ? usedValue : producedValue
+  const currentValue = targetRef.value
 
   if (key === 'clear') {
     targetRef.value = ''
   } else if (key === 'backspace') {
-    targetRef.value = currentVal.substring(0, currentVal.length - 1)
+    targetRef.value = currentValue.slice(0, -1)
   } else if (key === '.') {
-    if (!currentVal.includes('.')) {
-      targetRef.value = currentVal + '.'
-    }
-  } else {
-    targetRef.value = currentVal + key
+    if (!currentValue.includes('.')) targetRef.value = `${currentValue || '0'}.`
+  } else if (currentValue !== '0' || key !== '0') {
+    targetRef.value = `${currentValue}${key}`
   }
 }
 
-// 加载备注标签
-const fetchRemarkTags = async () => {
+const fetchConfig = async () => {
+  configLoading.value = true
+  configError.value = ''
   try {
-    const response = await request({ url: '/materials', method: 'GET' })
-    remarkTags.value = response.remark_tags || []
+    const response = await request({
+      url: '/material-outbound-settings',
+      method: 'GET'
+    })
+    settings.value = response || settings.value
+    if (!settings.value.configured) {
+      configError.value = '管理员尚未配置默认门店、仓库和原材料，请先在后台“原材料出库”页面完成设置。'
+    }
   } catch (error) {
-    remarkTags.value = []
+    configError.value = error?.response?.data?.message || '原材料出库配置加载失败，请检查网络连接。'
+  } finally {
+    configLoading.value = false
   }
 }
 
-// 打开弹窗
 const open = () => {
   usedValue.value = ''
   producedValue.value = ''
   remarkValue.value = ''
   activeTarget.value = 'used'
+  submitError.value = ''
   visible.value = true
-  fetchRemarkTags()
+  fetchConfig()
 }
 
-// 关闭弹窗
 const handleClose = () => {
+  if (loading.value) return
   visible.value = false
 }
 
-// 提交报表
 const handleSubmit = async () => {
-  const usedVal = parseFloat(usedValue.value)
-  const productVal = parseFloat(producedValue.value)
-  const remarkVal = remarkValue.value.trim()
+  const used = Number(usedValue.value)
+  const produced = Number(producedValue.value)
+  submitError.value = ''
 
-  if (isNaN(usedVal) || isNaN(productVal)) {
-    return alert('录入失败：请完整输入耗材与产出量！')
+  if (!settings.value.configured) {
+    submitError.value = '管理员尚未完成触屏端出库配置。'
+    return
+  }
+  if (!Number.isFinite(used) || used <= 0) {
+    submitError.value = '请输入大于 0 的原材料出库数量。'
+    setActiveTarget('used')
+    return
+  }
+  if (producedValue.value === '' || !Number.isFinite(produced) || produced < 0) {
+    submitError.value = '请输入有效的成品数量。'
+    setActiveTarget('produced')
+    return
   }
 
   loading.value = true
-
   try {
-    await request({
-      url: '/materials',
+    const response = await request({
+      url: '/material-outbounds',
       method: 'POST',
       data: {
-        used: usedVal,
-        produced: productVal,
-        remark: remarkVal
+        productId: settings.value.defaultProductId,
+        quantity: used,
+        producedQuantity: produced,
+        remark: remarkValue.value.trim()
       }
     })
-
-    successMessage.value = `物料报表已存入：\n消耗: ${usedVal} kg\n产出: ${productVal} kg${remarkVal ? '\n备注: ' + remarkVal : ''}`
+    const documentNo = response?.materialOutbound?.documentNo || ''
+    successMessage.value = [
+      documentNo ? `单号：${documentNo}` : '',
+      `原材料：${currentProduct.value?.name || '-'}`,
+      `出库数量：${formatNumber(used)} ${currentProduct.value?.unit || ''}`,
+      `成品数量：${formatNumber(produced)} kg`,
+      '当前状态：待审核（尚未扣减库存）'
+    ].filter(Boolean).join('\n')
     showSuccess.value = true
-    handleClose()
+    visible.value = false
+    window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
     window.dispatchEvent(new CustomEvent('refresh-materials'))
   } catch (error) {
-    alert('网络通信异常，提交失败')
+    submitError.value = error?.response?.data?.message || '网络通信异常，草稿提交失败。'
   } finally {
     loading.value = false
   }
 }
 
-// 暴露方法
-defineExpose({
-  open
+const handleOpenEvent = () => open()
+
+onMounted(() => {
+  window.addEventListener('open-upload-material-modal', handleOpenEvent)
 })
 
-// 监听全局事件
-onMounted(() => {
-  window.addEventListener('open-upload-material-modal', () => {
-    open()
-  })
+onBeforeUnmount(() => {
+  window.removeEventListener('open-upload-material-modal', handleOpenEvent)
 })
+
+defineExpose({ open })
 </script>
 
 <style scoped>
-.active-target {
-  border-color: #1890ff !important;
-  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+.material-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.material-modal {
+  width: min(980px, calc(100vw - 48px));
+  overflow: hidden;
+  color: #172033;
+  background: #f4f7f8;
+  border: 1px solid #dbe3ea;
+  border-radius: 10px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+}
+
+.material-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 82px;
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid #dfe5ec;
+}
+
+.material-modal-header span {
+  color: #0f9f78;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.material-modal-header h2 {
+  margin: 3px 0 2px;
+  font-size: 20px;
+}
+
+.material-modal-header p {
+  margin: 0;
+  color: #7b8799;
+  font-size: 13px;
+}
+
+.material-modal-header > button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: #64748b;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 27px;
+  line-height: 1;
+}
+
+.material-modal-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(330px, 0.8fr);
+  gap: 18px;
+  padding: 18px;
+}
+
+.upload-inputs-area,
+.upload-keyboard-area {
+  min-width: 0;
+  padding: 18px;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 8px;
+}
+
+.material-summary {
+  overflow: hidden;
+  border: 1px solid #dce7e3;
+  border-radius: 7px;
+}
+
+.summary-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px;
+  background: #f0faf6;
+  border-bottom: 1px solid #dce7e3;
+}
+
+.summary-heading span,
+.summary-grid span {
+  color: #7a8698;
+  font-size: 12px;
+}
+
+.summary-heading strong {
+  color: #08745a;
+  font-size: 18px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.summary-grid > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+  padding: 12px 15px;
+  border-right: 1px solid #edf1f3;
+  border-bottom: 1px solid #edf1f3;
+}
+
+.summary-grid > div:nth-child(2n) {
+  border-right: 0;
+}
+
+.summary-grid strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.stock-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 15px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.stock-line strong {
+  color: #0f766e;
+}
+
+.number-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+  margin-top: 16px;
+}
+
+.touch-field,
+.remark-area {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.touch-field > span,
+.remark-area > label {
+  color: #475569;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.touch-field input,
+.remark-area > input {
+  width: 100%;
+  height: 48px;
+  padding: 0 13px;
+  color: #172033;
+  background: #f8fafc;
+  border: 2px solid #d7e0e8;
+  border-radius: 7px;
+  box-sizing: border-box;
+  outline: none;
+  font-size: 20px;
+  font-weight: 750;
+}
+
+.touch-field input.active {
+  border-color: #0f9f78;
+  box-shadow: 0 0 0 3px rgba(15, 159, 120, 0.12);
+}
+
+.produced-field input.active {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+.remark-area {
+  margin-top: 16px;
+  padding-top: 15px;
+  border-top: 1px dashed #dfe5ec;
+}
+
+.remark-area > input {
+  height: 40px;
+  background: #fff;
+  border-width: 1px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.remark-tags {
+  display: flex;
+  min-height: 28px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.remark-tags button {
+  min-height: 32px;
+  padding: 0 12px;
+  color: #08745a;
+  background: #e9f8f3;
+  border: 1px solid #bce8d9;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.remark-tags button.selected {
+  color: #fff;
+  background: #0f9f78;
+  border-color: #0f9f78;
+}
+
+.remark-tags > span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.upload-keyboard-area {
+  display: flex;
+  flex-direction: column;
+}
+
+.active-hint {
+  margin-bottom: 12px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.active-hint strong {
+  color: #172033;
+}
+
+.touch-keyboard-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.touch-keyboard-panel button {
+  height: 54px;
+  color: #263348;
+  background: #f8fafc;
+  border: 1px solid #d7e0e8;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.touch-keyboard-panel button:active {
+  color: #08745a;
+  background: #e9f8f3;
+  border-color: #0f9f78;
+  transform: scale(0.97);
+}
+
+.touch-keyboard-panel .key-backspace {
+  color: #dc2626;
+}
+
+.touch-keyboard-panel .key-clear {
+  grid-column: 1 / -1;
+  height: 44px;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.material-modal-footer {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 10px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.material-modal-footer button,
+.success-modal button,
+.modal-state button {
+  height: 44px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.button-secondary {
+  color: #475569;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+}
+
+.button-primary,
+.success-modal button {
+  color: #fff;
+  background: #0f9f78;
+  border: 1px solid #0f9f78;
+}
+
+.button-primary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.submit-error {
+  margin-top: 12px;
+  padding: 9px 11px;
+  color: #b42318;
+  background: #fff1f0;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.modal-state {
+  display: flex;
+  min-height: 320px;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+}
+
+.error-state {
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.error-state strong {
+  color: #b42318;
+  font-size: 18px;
+}
+
+.error-state button {
+  margin-top: 6px;
+  padding: 0 18px;
+  color: #fff;
+  background: #0f9f78;
+  border: 0;
+}
+
+.success-layer {
+  z-index: 2147483100;
+}
+
+.success-modal {
+  width: min(380px, calc(100vw - 40px));
+  padding: 30px;
+  text-align: center;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+}
+
+.success-icon {
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #0f9f78;
+  border-radius: 50%;
+  font-size: 28px;
+  font-weight: 800;
+}
+
+.success-modal h3 {
+  margin: 16px 0 8px;
+  color: #172033;
+}
+
+.success-modal p {
+  margin: 0;
+  color: #64748b;
+  line-height: 1.8;
+  white-space: pre-line;
+}
+
+.success-modal button {
+  width: 100%;
+  margin-top: 20px;
+}
+
+@media (max-width: 780px) {
+  .material-modal-mask {
+    padding: 10px;
+  }
+
+  .material-modal {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    overflow-y: auto;
+  }
+
+  .material-modal-body {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

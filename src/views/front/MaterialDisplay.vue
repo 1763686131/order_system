@@ -1,512 +1,371 @@
 <template>
-  <div class="timeline-container">
-    <div v-if="loading" style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">
-      加载中...
+  <div class="material-outbound-display">
+    <div v-if="loading" class="display-state">正在加载原材料出库记录...</div>
+    <div v-else-if="loadError" class="display-state error">
+      <span>{{ loadError }}</span>
+      <button type="button" @click="fetchRecords">重新加载</button>
     </div>
-
-    <div v-else-if="materialGroups.length === 0" style="color: #999; width:100%; text-align:center; padding:60px 20px; font-size:16px;">
+    <div v-else-if="materialGroups.length === 0" class="display-state">
       {{ emptyMessage }}
     </div>
 
-    <div v-else v-for="group in materialGroups" :key="group.date" class="timeline-group">
+    <section v-for="group in materialGroups" v-else :key="group.date" class="timeline-group">
       <div class="timeline-date">{{ group.date }}</div>
       <div class="timeline-items">
-        <div
-          v-for="record in group.records"
-          :key="record.id"
-          class="material-card"
-          :id="`mat-card-${record.id}`"
-        >
-          <!-- 查看模式 -->
-          <div
-            :id="`mat-view-${record.id}`"
-            v-show="editingId !== record.id"
-            style="display: flex; align-items: center; width: 100%; box-sizing: border-box;"
-          >
-            <div class="m-data-group">
-              <div class="m-item">
-                <span class="m-label-black">使用树脂：</span>
-                <span class="m-val-pink">{{ record.used }}kg</span>
-              </div>
-              <div class="m-item">
-                <span class="m-label-black">成品：</span>
-                <span class="m-val-green">{{ record.produced }}kg</span>
-              </div>
-              <div class="m-item">
-                <span class="m-label-blue">剩余树脂：</span>
-                <span class="m-val-blue">{{ record.remaining.toFixed(1) }}kg</span>
-              </div>
-            </div>
-            <div class="m-divider"></div>
-            <div class="m-note">
-              <span class="m-note-label">备注：</span>
-              <span class="m-note-val">{{ record.remark || '无' }}</span>
+        <article v-for="record in group.records" :key="record.id" class="material-card">
+          <div class="card-main">
+            <div class="material-name">
+              <span>{{ record.primaryItem?.productCode || '原材料' }}</span>
+              <strong>{{ record.primaryItem?.productName || '-' }}</strong>
+              <small>{{ record.primaryItem?.specification || record.warehouseName || '-' }}</small>
             </div>
 
-            <div v-if="userStore.hasPerm('material.edit')" style="margin-left: auto; padding-left: 10px;">
-              <button
-                class="btn-default"
-                style="padding: 6px 16px; font-size: 13px; border-radius: 20px; border: 1px solid #d9d9d9; height: 34px; font-weight: bold; cursor: pointer;"
-                @click="startEdit(record)"
-              >
-                修改
-              </button>
+            <div class="quantity-block used">
+              <span>出库数量</span>
+              <strong>
+                {{ formatNumber(record.totalQuantity) }}
+                <small>{{ record.primaryItem?.unit || '' }}</small>
+              </strong>
+            </div>
+
+            <div class="quantity-block produced">
+              <span>成品数量</span>
+              <strong>{{ formatNumber(record.producedQuantity) }} <small>kg</small></strong>
+            </div>
+
+            <div class="record-note">
+              <span>备注</span>
+              <strong>{{ record.remark || '无' }}</strong>
             </div>
           </div>
 
-          <!-- 编辑模式 -->
-          <div
-            :id="`mat-edit-${record.id}`"
-            v-show="editingId === record.id"
-            style="display: flex; align-items: center; width: 100%; flex-wrap: wrap; gap: 12px; box-sizing: border-box;"
-          >
-            <div class="m-data-group" style="flex-wrap: wrap; gap: 8px;">
-              <div class="m-item" style="display: flex; align-items: center;">
-                <span class="m-label-black" style="font-size: 13px;">使用树脂：</span>
-                <input
-                  v-model.number="editForm.used"
-                  type="number"
-                  style="width: 70px; height: 28px; padding: 0 4px; border: 1px solid #eb2f96; border-radius: 8px; outline: none; font-weight: bold; color: #eb2f96; text-align: center; background: #fff0f6;"
-                />
-                <span class="m-val-pink" style="margin-left: 2px; font-size: 13px;">kg</span>
-              </div>
-              <div class="m-item" style="display: flex; align-items: center;">
-                <span class="m-label-black" style="font-size: 13px;">成品：</span>
-                <input
-                  v-model.number="editForm.produced"
-                  type="number"
-                  style="width: 70px; height: 28px; padding: 0 4px; border: 1px solid #52c41a; border-radius: 8px; outline: none; font-weight: bold; color: #52c41a; text-align: center; background: #f6ffed;"
-                />
-                <span class="m-val-green" style="margin-left: 2px; font-size: 13px;">kg</span>
-              </div>
-              <div class="m-item" style="font-size: 13px;">
-                <span class="m-label-blue">剩余：</span>
-                <span class="m-val-blue">{{ record.remaining.toFixed(1) }} kg</span>
-              </div>
+          <footer>
+            <div>
+              <span>{{ record.documentNo }}</span>
+              <small>{{ formatTime(record.createdAt) }} · {{ record.createdBy || '员工' }}</small>
             </div>
-            <div style="flex-grow: 1; min-width: 10px;"></div>
-            <div class="m-note" style="display: flex; align-items: center; flex: 1; min-width: 140px; max-width: 260px;">
-              <span class="m-note-label" style="white-space: nowrap; font-size: 13px;">备注：</span>
-              <input
-                v-model="editForm.remark"
-                type="text"
-                placeholder="备注..."
-                style="width: 100%; height: 28px; padding: 0 6px; border: 1px solid #b3d8ff; border-radius: 8px; outline: none; color: #111; font-size: 13px; background: #f0f7ff;"
-              />
-            </div>
-
-            <div style="margin-left: auto; display: flex; align-items: center; gap: 6px; padding-left: 10px;">
-              <button
-                v-if="userStore.hasPerm('material.delete')"
-                class="btn-danger"
-                style="padding: 4px 14px; font-size: 12px; border-radius: 20px; border: none; height: 32px; font-weight: bold; color: white; cursor: pointer;"
-                @click="deleteRecord(record.id)"
-              >
-                删除
-              </button>
-              <button
-                class="btn-default"
-                style="padding: 4px 14px; font-size: 12px; border-radius: 20px; border: 1px solid #d9d9d9; height: 32px; font-weight: bold; cursor: pointer;"
-                @click="cancelEdit"
-              >
-                取消
-              </button>
-              <button
-                class="btn-primary"
-                style="padding: 4px 16px; font-size: 12px; border-radius: 20px; border: none; height: 32px; font-weight: bold; background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%); color: white; cursor: pointer;"
-                @click="submitEdit"
-              >
-                完成
-              </button>
-            </div>
-          </div>
-        </div>
+            <span :class="['status-badge', `status-${record.status}`]">
+              {{ statusLabel(record.status) }}
+            </span>
+          </footer>
+        </article>
       </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useUserStore } from '@/stores/user'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import request from '@/api/request'
 
-const userStore = useUserStore()
-
 const loading = ref(false)
-const allRecords = ref([])
-const editingId = ref(null)
-const editForm = ref({
-  used: 0,
-  produced: 0,
-  remark: ''
-})
+const loadError = ref('')
+const records = ref([])
+const filterStartDate = ref('')
+const filterEndDate = ref('')
 
-// 日期过滤范围
-const filterStartDate = ref(null)
-const filterEndDate = ref(null)
+const emptyMessage = computed(() => (
+  filterStartDate.value && filterEndDate.value
+    ? `${filterStartDate.value} 至 ${filterEndDate.value} 暂无原材料出库记录`
+    : '最近 30 天暂无原材料出库记录'
+))
 
-// 空状态提示信息
-const emptyMessage = computed(() => {
-  if (filterStartDate.value && filterEndDate.value) {
-    return `没有找到 ${filterStartDate.value} 到 ${filterEndDate.value} 的原材料记录`
-  }
-  return '最近 30 天内暂无原材料（树脂）使用记录'
-})
-
-// 按日期分组的数据
 const materialGroups = computed(() => {
-  if (allRecords.value.length === 0) return []
-
-  const groups = {}
-  allRecords.value.forEach(record => {
-    const day = record.date.substring(0, 10)
-    if (!groups[day]) {
-      groups[day] = []
-    }
-    groups[day].push(record)
+  const groups = new Map()
+  records.value.forEach(record => {
+    const date = String(record.documentDate || record.createdAt || '').slice(0, 10) || '未记录日期'
+    if (!groups.has(date)) groups.set(date, [])
+    groups.get(date).push(record)
   })
-
-  // 转换为数组并按日期倒序排列
-  const result = Object.keys(groups)
-    .sort((a, b) => b.localeCompare(a))
-    .map(date => ({
+  return [...groups.entries()]
+    .sort(([left], [right]) => right.localeCompare(left))
+    .map(([date, items]) => ({
       date,
-      records: groups[date].sort((a, b) => b.date.localeCompare(a.date))
+      records: items.sort((left, right) => String(right.createdAt).localeCompare(String(left.createdAt)))
     }))
-
-  return result
 })
 
-// 加载原材料数据
-const fetchMaterials = async () => {
+const formatNumber = value => Number(value || 0).toLocaleString('zh-CN', {
+  maximumFractionDigits: 3
+})
+
+const formatTime = value => {
+  const text = String(value || '')
+  return text.length >= 16 ? text.slice(11, 16) : text || '-'
+}
+
+const statusLabel = status => ({
+  draft: '待管理员审核',
+  reviewed: '已审核扣库',
+  cancelled: '已作废'
+}[status] || status)
+
+const defaultDateRange = () => {
+  const end = new Date()
+  const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29)
+  const format = date => {
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  }
+  return { start: format(start), end: format(end) }
+}
+
+const fetchRecords = async () => {
   loading.value = true
+  loadError.value = ''
   try {
-    console.log('开始加载原材料数据...')
-    const response = await request({ url: '/materials', method: 'GET' })
-    console.log('原材料数据响应:', response)
-
-    const matData = response || {}
-    let records = matData.records || []
-    let currentStock = parseFloat(matData.total_stock) || 0
-
-    console.log('原始记录数:', records.length, '总库存:', currentStock)
-
-    // 按时间正序排列计算剩余库存
-    records.sort((a, b) => a.date.localeCompare(b.date))
-    records.forEach(r => {
-      currentStock -= parseFloat(r.used) || 0
-      r.remaining = currentStock
+    const range = filterStartDate.value && filterEndDate.value
+      ? { start: filterStartDate.value, end: filterEndDate.value }
+      : defaultDateRange()
+    const response = await request({
+      url: '/material-outbounds',
+      method: 'GET',
+      params: {
+        startDate: range.start,
+        endDate: range.end,
+        limit: 300
+      }
     })
-
-    // 应用日期过滤
-    let filteredRecords = []
-    if (filterStartDate.value && filterEndDate.value) {
-      const startT = new Date(filterStartDate.value.replace(/-/g, '/')).getTime()
-      const endT = new Date(filterEndDate.value.replace(/-/g, '/')).getTime() + 86400000 - 1
-      filteredRecords = records.filter(r => {
-        const dateStr = r.date || ''
-        if (!dateStr) return false
-        const t = new Date(dateStr.substring(0, 10).replace(/-/g, '/')).getTime()
-        return t >= startT && t <= endT
-      })
-      console.log('日期过滤后记录数:', filteredRecords.length)
-    } else {
-      // 默认显示最近30天
-      const now = new Date()
-      const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 29).getTime()
-      filteredRecords = records.filter(r => {
-        const dateStr = r.date || ''
-        if (!dateStr) return false
-        const t = new Date(dateStr.substring(0, 10).replace(/-/g, '/')).getTime()
-        return t >= thirtyDaysAgo
-      })
-      console.log('默认过滤(最近30天)后记录数:', filteredRecords.length)
-    }
-
-    allRecords.value = filteredRecords
-    console.log('最终展示记录数:', allRecords.value.length)
+    records.value = Array.isArray(response) ? response : []
   } catch (error) {
-    console.error('拉取原材料数据异常:', error)
-    alert('加载原材料数据失败，请检查网络连接')
+    loadError.value = error?.response?.data?.message || '原材料出库记录加载失败。'
+    records.value = []
   } finally {
     loading.value = false
   }
 }
 
-// 开始编辑
-const startEdit = (record) => {
-  editingId.value = record.id
-  editForm.value = {
-    used: record.used,
-    produced: record.produced,
-    remark: record.remark || ''
-  }
+const handleDateFilter = event => {
+  filterStartDate.value = event.detail?.startDate || ''
+  filterEndDate.value = event.detail?.endDate || ''
+  fetchRecords()
 }
 
-// 取消编辑
-const cancelEdit = () => {
-  editingId.value = null
-  editForm.value = {
-    used: 0,
-    produced: 0,
-    remark: ''
-  }
-}
-
-// 提交编辑
-const submitEdit = async () => {
-  if (isNaN(editForm.value.used) || isNaN(editForm.value.produced)) {
-    return alert('保存失败：消耗量与产出量必须输入有效的数字！')
-  }
-
-  try {
-    await request({
-      url: `/materials/${editingId.value}`,
-      method: 'PUT',
-      data: {
-        used: editForm.value.used,
-        produced: editForm.value.produced,
-        remark: editForm.value.remark
-      }
-    })
-    editingId.value = null
-    await fetchMaterials()
-  } catch (error) {
-    alert('修改失败：底层鉴权拦截或服务器异常')
-  }
-}
-
-// 删除记录
-const deleteRecord = async (id) => {
-  if (!confirm('安全警告：您确定要彻底物理删除这条原材料使用流水记录吗？\n删除后所有剩余树脂库存将自动动态重算，此操作不可撤销！')) {
-    return
-  }
-
-  try {
-    await request({
-      url: `/materials/${id}`,
-      method: 'DELETE'
-    })
-    await fetchMaterials()
-  } catch (error) {
-    alert('删除失败：底层权限不足')
-  }
-}
-
-// 监听日期过滤事件
-const handleDateFilter = (event) => {
-  filterStartDate.value = event.detail.startDate
-  filterEndDate.value = event.detail.endDate
-  fetchMaterials()
-}
-
-// 监听刷新事件
-const handleRefresh = () => {
-  fetchMaterials()
-}
+const handleRefresh = () => fetchRecords()
 
 onMounted(() => {
-  // 立即加载数据
-  fetchMaterials()
-
-  // 监听日期过滤事件
+  fetchRecords()
   window.addEventListener('filter-material-date', handleDateFilter)
   window.addEventListener('refresh-materials', handleRefresh)
-
-  // 监听 Tab 切换事件，当切换到原材料 Tab 时刷新数据
-  const handleTabSwitch = (e) => {
-    if (e.detail && e.detail.index === 3) {
-      fetchMaterials()
-    }
-  }
-  window.addEventListener('switch-tab', handleTabSwitch)
+  window.addEventListener('refresh-material-outbounds', handleRefresh)
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   window.removeEventListener('filter-material-date', handleDateFilter)
   window.removeEventListener('refresh-materials', handleRefresh)
+  window.removeEventListener('refresh-material-outbounds', handleRefresh)
 })
 
-// 暴露刷新方法
-defineExpose({
-  refresh: fetchMaterials
-})
+defineExpose({ refresh: fetchRecords })
 </script>
 
 <style scoped>
-/* 时间轴容器 */
-.timeline-container {
-  display: flex;
-  flex-direction: column;
-  gap: 40px;
+.material-outbound-display {
   width: 100%;
 }
 
-/* 时间轴分组 */
-.timeline-group {
+.display-state {
   display: flex;
-  flex-direction: column;
+  min-height: 260px;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  color: #64748b;
+  font-size: 17px;
 }
 
-/* 时间轴日期 */
+.display-state.error {
+  flex-direction: column;
+  color: #b42318;
+}
+
+.display-state button {
+  height: 38px;
+  padding: 0 16px;
+  color: #fff;
+  background: #2563eb;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.timeline-group + .timeline-group {
+  margin-top: 36px;
+}
+
 .timeline-date {
-  font-size: 26px;
-  font-weight: 900;
-  color: #111;
-  margin-bottom: 24px;
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
+  margin-bottom: 18px;
+  color: #172033;
+  font-size: 23px;
+  font-weight: 850;
 }
 
 .timeline-date::before {
+  width: 7px;
+  height: 25px;
   content: '';
-  display: block;
-  width: 8px;
-  height: 28px;
-  background-color: #1890ff;
-  border-radius: 4px;
+  background: #2563eb;
+  border-radius: 999px;
 }
 
-/* 时间轴项目网格 */
 .timeline-items {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 24px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
 }
 
-/* 原材料卡片 */
 .material-card {
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dfe7ef;
+  border-radius: 18px;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, 0.04);
+}
+
+.card-main {
+  display: grid;
+  grid-template-columns: minmax(150px, 1.2fr) repeat(2, minmax(115px, 0.75fr)) minmax(120px, 0.8fr);
+  gap: 0;
+  padding: 22px 24px;
+}
+
+.card-main > div {
   display: flex;
-  align-items: center;
-  background: #ffffff;
-  border-radius: 50px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03);
-  padding: 24px 40px;
-  width: 100%;
-  border: 1px solid #f0f0f0;
+  min-width: 0;
+  flex-direction: column;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 18px;
+  border-right: 1px solid #edf1f5;
 }
 
-/* 数据分组 */
-.m-data-group {
+.card-main > div:first-child {
+  padding-left: 0;
+}
+
+.card-main > div:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.material-name span,
+.quantity-block span,
+.record-note span {
+  color: #8290a4;
+  font-size: 12px;
+}
+
+.material-name strong {
+  overflow: hidden;
+  color: #172033;
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-name small {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quantity-block strong {
+  color: #e5487b;
+  font-size: 22px;
+}
+
+.quantity-block.produced strong {
+  color: #16a36a;
+}
+
+.quantity-block strong small {
+  font-size: 12px;
+}
+
+.record-note strong {
+  overflow: hidden;
+  color: #344054;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.material-card footer {
   display: flex;
+  min-height: 54px;
   align-items: center;
-  gap: 40px;
-  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 24px;
+  background: #f8fafc;
+  border-top: 1px solid #edf1f5;
 }
 
-/* 数据项 */
-.m-item {
-  font-size: 18px;
-  letter-spacing: 0.5px;
+.material-card footer > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
 }
 
-/* 标签样式 */
-.m-label-black {
-  color: #111;
-  font-weight: bold;
+.material-card footer > div span {
+  color: #475569;
+  font-size: 12px;
+  font-weight: 700;
 }
 
-.m-label-blue {
-  color: #1A4B84;
-  font-weight: bold;
+.material-card footer small {
+  color: #94a3b8;
+  font-size: 11px;
 }
 
-/* 值样式 */
-.m-val-pink {
-  color: #F47B8B;
-  font-weight: bold;
+.status-badge {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
 }
 
-.m-val-green {
-  color: #61D081;
-  font-weight: bold;
+.status-draft {
+  color: #a4510b;
+  background: #fff3df;
 }
 
-.m-val-blue {
-  color: #5C91C5;
-  font-weight: bold;
+.status-reviewed {
+  color: #08745a;
+  background: #e9f8f3;
 }
 
-/* 分隔符 */
-.m-divider {
-  width: 1px;
-  height: 40px;
-  background-color: #e8e8e8;
-  margin: 0 24px;
-  flex-shrink: 0;
+.status-cancelled {
+  color: #b4232f;
+  background: #f1f2f4;
 }
 
-/* 备注 */
-.m-note {
-  font-size: 18px;
-}
-
-.m-note-label {
-  color: #111;
-}
-
-.m-note-val {
-  color: #111;
-  font-weight: bold;
-}
-
-/* 按钮样式 */
-.btn-default {
-  background: #f5f5f5;
-  color: #555;
-  border: 1px solid #d9d9d9;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-default:hover {
-  background: #e8e8e8;
-}
-
-.btn-primary {
-  background: #1890ff;
-  color: white;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary:hover {
-  background: #40a9ff;
-}
-
-.btn-danger {
-  background: #ff4d4f;
-  color: white;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-danger:hover {
-  background: #ff7875;
-}
-
-/* 响应式 */
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
   .timeline-items {
-    grid-template-columns: 1fr !important;
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .card-main {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 0;
   }
 
-  .material-card {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    border-radius: 20px !important;
-    padding: 24px !important;
-    width: 100% !important;
-  }
-
-  .m-data-group {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 16px !important;
+  .card-main > div:nth-child(2) {
+    border-right: 0;
   }
 }
 </style>

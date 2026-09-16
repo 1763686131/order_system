@@ -65,6 +65,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'inventory/material-outbounds',
+        name: 'admin-inventory-material-outbounds',
+        component: () => import('@/views/admin/products/MaterialOutboundList.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'stock/in',
         name: 'admin-stock-in',
         component: () => import('@/views/admin/products/StockRecordList.vue'),

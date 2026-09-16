@@ -2044,6 +2044,9 @@ receipt_image: File (图片文件)
 
 > 本章节管理原材料的使用量、生产量和备注标签。
 > 原材料商品档案请参阅 [4.5 原材料商品档案](#45-原材料商品档案)。
+>
+> 自 2026-09-16 起，员工触屏端改用下方的“原材料出库草稿”接口。
+> `/api/materials` 仅保留历史数据兼容，不再作为实际库存扣减依据。
 
 ### 8.1 获取原材料流水与汇总
 - **URL**: `/api/materials`
@@ -2149,6 +2152,86 @@ receipt_image: File (图片文件)
 - 所有数量单位统一为**公斤**
 - `remark` 字段会自动添加到标签列表
 - 总库存 = Σ(produced) - Σ(used)
+
+### 8.5 获取原材料出库触屏设置
+- **URL**: `/api/material-outbound-settings`
+- **Method**: `GET`
+- **说明**: 获取默认门店、默认仓库、可操作原材料、默认原材料、库存提示和备注标签
+
+主要响应字段：
+
+- `configured`: 是否已经完成触屏端配置
+- `defaultStoreId`: 默认门店 ID
+- `defaultWarehouseId`: 默认仓库 ID
+- `allowedProductIds`: 触屏端可操作原材料 ID
+- `defaultProductId`: 当前默认原材料 ID
+- `showCurrentStock`: 是否在触屏端显示当前库存
+- `allowInsufficientDraft`: 库存不足时是否仍允许提交草稿
+- `deductionStrategy`: 库存扣减策略，当前固定为 `fifo`
+- `remarkTags`: 常用备注标签
+
+### 8.6 保存原材料出库触屏设置
+- **URL**: `/api/material-outbound-settings`
+- **Method**: `PUT`
+
+```json
+{
+  "defaultStoreId": 2,
+  "defaultWarehouseId": 1,
+  "allowedProductIds": [3],
+  "defaultProductId": 3,
+  "showCurrentStock": true,
+  "allowInsufficientDraft": true,
+  "deductionStrategy": "fifo"
+}
+```
+
+默认原材料必须包含在 `allowedProductIds` 中，仓库必须属于所选门店。
+
+### 8.7 查询原材料出库单
+- **URL**: `/api/material-outbounds`
+- **Method**: `GET`
+- **查询参数**:
+  - `status`: `draft`、`reviewed` 或 `cancelled`
+  - `startDate`: 开始日期
+  - `endDate`: 结束日期
+  - `limit`: 返回数量，最大 1000
+
+每张单据包含门店、仓库、原材料快照、出库数量、成品数量、备注、录入人、审核人与审核时间。
+
+### 8.8 员工提交原材料出库草稿
+- **URL**: `/api/material-outbounds`
+- **Method**: `POST`
+- **说明**: 创建 `draft` 状态的出库单，不立即扣减库存
+
+```json
+{
+  "productId": 3,
+  "quantity": 50,
+  "producedQuantity": 120,
+  "remark": "粘钢胶"
+}
+```
+
+门店和仓库以提交时的触屏设置为准，并保存名称快照。新备注会自动进入出库备注标签表。
+
+### 8.9 审核原材料出库单
+- **URL**: `/api/material-outbounds/<int:outbound_id>/audit`
+- **Method**: `POST`
+- **说明**: 在同一事务内校验实时库存、按 FIFO 扣减 `stock_balances`、写入 `stock_movements`，并将状态更新为 `reviewed`
+
+库存不足时返回 `409`，单据继续保持草稿状态。
+
+### 8.10 反审核原材料出库单
+- **URL**: `/api/material-outbounds/<int:outbound_id>/audit`
+- **Method**: `DELETE`
+- **说明**: 按原出库流水回补对应批次和库位，并将状态恢复为 `draft`
+
+### 8.11 作废、删除与重新启用
+
+- `DELETE /api/material-outbounds/<int:outbound_id>`：首次调用将草稿置为 `cancelled`；对已作废单据再次调用会物理删除
+- `POST /api/material-outbounds/<int:outbound_id>/restart`：将已作废单据恢复为 `draft`
+- 已审核单据必须先反审核，不能直接作废或删除
 
 ---
 
@@ -3734,8 +3817,12 @@ services:
 - `suppliers` - 供应商基础资料表
 - `stock_inbounds` - 入库单头与状态、汇总信息表
 - `stock_inbound_items` - 入库单明细表
+- `material_outbound_settings` - 员工触屏端默认门店、仓库和原材料配置
+- `material_outbounds` - 原材料出库单头、状态、录入和审核快照
+- `material_outbound_items` - 原材料出库明细
+- `material_remark_tags` - 新原材料出库流程的常用备注标签
 - `stock_balances` - 按物料、仓库、门店、货位和批次保存的库存余额表
-- `stock_movements` - 入库过账库存流水表
+- `stock_movements` - 入库与出库过账库存流水表
 - `payment_receipts` - 收款单草稿、审核状态、核销和预收快照表
 - `customer_account_transactions` - 订单审核、收款、反审核的客户账户流水表
 - `system_settings` - 系统键值配置表，包括检测报告根目录 `reports.path`
