@@ -178,9 +178,8 @@
             <td class="right">
               <input
                 type="number"
-                :value="manualTotalPackages !== null ? manualTotalPackages : totalPackagesCalculated"
-                @focus="onTotalPackagesFocus"
-                @input="onManualTotalPackagesInput"
+                v-model.number="totalPackages"
+                @input="onTotalPackagesManualInput"
                 class="editable-total"
                 min="0"
               />
@@ -430,9 +429,6 @@ const setHeaderActions = inject('setHeaderActions', null)
 const showTaxColumns = ref(false)
 const DEFAULT_TAX_RATE = 13
 
-// 手动修改的合计件数
-const manualTotalPackages = ref(null)
-
 // 关闭确认弹窗
 const showCloseConfirmModal = ref(false)
 
@@ -598,7 +594,7 @@ const persistDraft = () => {
     orderId: props.orderId,
     formData: getDraftFormData(),
     showTaxColumns: showTaxColumns.value,
-    manualTotalPackages: manualTotalPackages.value,
+    totalPackages: totalPackages.value,
     path: orderFormRoute.path,
     route: {
       name: orderFormRoute.name,
@@ -630,7 +626,17 @@ const restoreDraft = async (draft) => {
   }))
   showTaxColumns.value = Boolean(draft.showTaxColumns)
   normalizeTaxRows(showTaxColumns.value, true)
-  manualTotalPackages.value = draft.manualTotalPackages ?? null
+
+  // 恢复总件数：兼容旧草稿字段 manualTotalPackages
+  const restoredTotalPackages = draft.totalPackages ?? draft.manualTotalPackages
+  if (restoredTotalPackages !== undefined && restoredTotalPackages !== null) {
+    totalPackages.value = restoredTotalPackages
+    totalPackagesManuallyEdited.value = true // 草稿中有值说明用户已操作过
+  } else {
+    // 草稿中没有总件数，自动计算
+    totalPackages.value = totalPackagesCalculated.value
+    totalPackagesManuallyEdited.value = false
+  }
 
   // 金额联动的 watcher 会在恢复商品行后执行，下一帧再还原用户手工输入值。
   await nextTick()
@@ -878,6 +884,9 @@ function initEmptyRows() {
     unitConversions: [],
     conversionRate: null
   }))
+  // 新建订单首次显示按明细计算的合计，此时未手动修改
+  totalPackages.value = totalPackagesCalculated.value
+  totalPackagesManuallyEdited.value = false
 }
 
 // 加载门店
@@ -1075,6 +1084,16 @@ const loadOrderData = async (orderId) => {
         }
 
         normalizeTaxRows(taxEnabled, true)
+      }
+
+      // 从后端加载总件数（用户手动修改后的值）
+      // 旧数据没有 total_packages 时才回退到明细计算值
+      if (response.total_packages !== undefined && response.total_packages !== null) {
+        totalPackages.value = Number(response.total_packages)
+        totalPackagesManuallyEdited.value = true // 数据库中有值说明用户已操作过
+      } else {
+        totalPackages.value = totalPackagesCalculated.value
+        totalPackagesManuallyEdited.value = false
       }
 
       // 加载客户欠款
@@ -1495,14 +1514,12 @@ const totalPackagesCalculated = computed(() => {
   return formData.value.items.reduce((sum, item) => sum + (item.packages || 0), 0)
 })
 
-const totalPackages = computed(() => {
-  // 如果有手动修改的值，使用手动值
-  if (manualTotalPackages.value !== null) {
-    return manualTotalPackages.value
-  }
-  // 否则返回计算值
-  return totalPackagesCalculated.value
-})
+// 总件数：稳定的数据源
+// - 首次根据明细自动初始化
+// - 用户手动编辑后，标记为已手动修改，明细变化不再覆盖
+// - 从数据库/草稿加载时，使用保存的值
+const totalPackages = ref(0)
+const totalPackagesManuallyEdited = ref(false) // 标记用户是否手动修改过
 
 const totalQuantity = computed(() => {
   return formData.value.items.reduce((sum, item) => sum + (item.quantity || 0), 0)
@@ -1517,34 +1534,20 @@ const totalTaxAmount = computed(() => {
   return formData.value.items.reduce((sum, item) => sum + (item.totalAmount || 0), 0)
 })
 
-// 合计件数获得焦点
-const onTotalPackagesFocus = () => {
-  // 聚焦时如果没有手动值，设置当前计算值
-  if (manualTotalPackages.value === null) {
-    manualTotalPackages.value = totalPackagesCalculated.value
-  }
-}
-
-// 手动输入合计件数
-const onManualTotalPackagesInput = (event) => {
-  const value = event.target.value
-  manualTotalPackages.value = value === '' ? null : Number(value)
-}
-
-// 监听商品明细变化，如果没有手动修改过，自动更新
-watch(() => formData.value.items.map(item => item.packages), () => {
-  // 如果没有手动修改过（或手动值为null），则自动跟随计算
-  if (manualTotalPackages.value === null) {
-    // 不需要做任何事，计算属性会自动更新
-  } else {
-    // 如果有手动修改，当表格数据变化时重新计算
-    manualTotalPackages.value = totalPackagesCalculated.value
-  }
-}, { deep: true })
-
 watch(showTaxColumns, (taxEnabled) => {
   normalizeTaxRows(taxEnabled)
 })
+
+// 监听明细件数变化，只在未手动修改时自动更新总件数
+watch(
+  totalPackagesCalculated,
+  (newCalculated) => {
+    if (!totalPackagesManuallyEdited.value) {
+      totalPackages.value = newCalculated
+    }
+  },
+  { immediate: false }
+)
 
 // 监听含税金额变化，自动更新折扣金额
 watch(
@@ -1576,6 +1579,12 @@ const currentDebt = computed(() => {
 const calculateFinal = () => {
   // 触发计算
 }
+
+// 用户手动修改总件数时的处理
+const onTotalPackagesManualInput = () => {
+  totalPackagesManuallyEdited.value = true
+}
+
 // 监听客户选择变化
 watch(() => formData.value.customerId, (newCustomerId) => {
   if (newCustomerId) {
@@ -1702,11 +1711,11 @@ const handleSave = async (printAfterSave = false) => {
       }))
     }
 
-    // 添加手动修改的合计件数
-    const finalTotalPackages = manualTotalPackages.value !== null
-      ? manualTotalPackages.value
-      : validItems.reduce((sum, item) => sum + (Number(item.packages) || 0), 0)
-    requestData.totalPackages = finalTotalPackages
+    // 直接使用用户最终看到的总件数（不管是自动计算的还是手动修改的）
+    const normalizedTotalPackages = Number(totalPackages.value)
+    requestData.totalPackages = Number.isFinite(normalizedTotalPackages)
+      ? normalizedTotalPackages
+      : 0
 
     // 5. 调用接口
     let response
@@ -1821,13 +1830,10 @@ const confirmClear = () => {
   // 清空商品列表
   initEmptyRows()
   showTaxColumns.value = false
-
-  // 重置手动合计
-  manualTotalPackages.value = null
 }
 
 watch(
-  [formData, showTaxColumns, manualTotalPackages],
+  [formData, showTaxColumns, totalPackages],
   () => {
     scheduleDraftSave()
   },
@@ -1885,6 +1891,8 @@ onMounted(async () => {
       if (copySourceId.value) {
         console.log('复制订单数据，源订单ID:', copySourceId.value)
         await loadOrderData(copySourceId.value)
+        // 复制后清空日期，使用当前日期
+        formData.value.date = new Date().toISOString().split('T')[0]
       }
 
       // 从订单列表中获取最大ID+1，生成正式订单编号

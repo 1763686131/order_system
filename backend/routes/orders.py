@@ -235,7 +235,6 @@ def create_new_format_order(req_data):
     order_goods = []
     goods_name_parts = []
     total_quantity = 0
-    total_packages = 0
 
     # 库存检查和扣减
     for item in items:
@@ -252,7 +251,7 @@ def create_new_format_order(req_data):
         if not product:
             return jsonify({"success": False, "message": f"商品ID {product_id} 不存在"}), 400
 
-        # 不检查库存，允许负库存
+        # 不检查库存,允许负库存
 
         # 构建商品明细
         order_goods.append({
@@ -274,7 +273,11 @@ def create_new_format_order(req_data):
         # 累加统计
         goods_name_parts.append(f"{item.get('goodsName', '')} {item.get('spec', '')} x{quantity}")
         total_quantity += quantity
-        total_packages += item.get('packages', 0)
+
+    # 使用前端传递的总件数（用户手动修改后的值），如果没有则累加计算
+    total_packages = req_data.get('totalPackages')
+    if total_packages is None:
+        total_packages = sum(item.get('packages', 0) for item in items)
 
     # 如果没有有效商品，返回错误
     if not order_goods:
@@ -314,6 +317,7 @@ def create_new_format_order(req_data):
         "type": 1,  # 新订单标识
         "date": f"{order_date} {ct.split(' ')[1]}",
         "completed_date": "",
+        "completed_by": "",
         "shipped_date": "",
         "shipping_method": 0,
         "shipping_custom": "",
@@ -349,6 +353,7 @@ def create_new_format_order(req_data):
         "sales_person": req_data.get('salesPerson', ''),
         "creator": req_data.get('creator', ''),
         "settlement_account": settlement_account,
+        "total_packages": total_packages,  # 🎯 核心修复：保存用户手动修改的总件数
 
         # 商品明细
         "order_goods": order_goods,
@@ -595,12 +600,16 @@ def update_order_audit_state(order_id, audited):
                     '''
                     UPDATE orders
                     SET audit_state = 1,
+                        audit_by = ?,
+                        audit_date = ?,
                         balance_applied = ?,
                         current_debt = ?,
                         customer_receivable = ?
                     WHERE id = ?
                     ''',
                     (
+                        operator,
+                        now,
                         float(stored_balance_applied),
                         float(receivable_change),
                         float(receivable_after),
@@ -726,6 +735,8 @@ def update_order_audit_state(order_id, audited):
                         '''
                         UPDATE orders
                         SET audit_state = 0,
+                            audit_by = NULL,
+                            audit_date = NULL,
                             balance_applied = 0,
                             current_debt = ?,
                             customer_receivable = ?
@@ -751,7 +762,10 @@ def update_order_audit_state(order_id, audited):
                     conn.execute(
                         '''
                         UPDATE orders
-                        SET audit_state = 0, balance_applied = 0
+                        SET audit_state = 0,
+                            audit_by = NULL,
+                            audit_date = NULL,
+                            balance_applied = 0
                         WHERE id = ?
                         ''',
                         (order_id,)
@@ -830,7 +844,8 @@ def update_order_status_only(order_id, req_data):
             x['status'] = ns
 
             if ns == 'completed':
-                x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                x['completed_date'] = req_data.get('completed_date') or datetime.now().strftime('%Y-%m-%d %H:%M')
+                x['completed_by'] = req_data.get('completed_by', '')
                 x['shipped_date'] = ""
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""
@@ -930,7 +945,6 @@ def update_full_order(order_id, req_data):
         order_goods = []
         goods_name_parts = []
         total_quantity = 0
-        total_packages = 0
 
         for item in items:
             # 只校验商品ID，数量和件数允许为空
@@ -955,7 +969,11 @@ def update_full_order(order_id, req_data):
 
             goods_name_parts.append(f"{item.get('goodsName', '')} {item.get('spec', '')} x{item.get('quantity', 0)}")
             total_quantity += item.get('quantity', 0)
-            total_packages += item.get('packages', 0)
+
+        # 使用前端传递的总件数（用户手动修改后的值），如果没有则累加计算
+        total_packages = req_data.get('totalPackages')
+        if total_packages is None:
+            total_packages = sum(item.get('packages', 0) for item in items)
 
         if not order_goods:
             return jsonify({"success": False, "message": "至少需要添加一条商品明细"}), 400
@@ -991,6 +1009,7 @@ def update_full_order(order_id, req_data):
             "type": 1,
             "date": f"{order_date} {order_time}",
             "completed_date": old_order.get('completed_date', ''),
+            "completed_by": old_order.get('completed_by', ''),
             "shipped_date": old_order.get('shipped_date', ''),
             "shipping_method": old_order.get('shipping_method', 0),
             "shipping_custom": old_order.get('shipping_custom', ''),
@@ -1027,6 +1046,7 @@ def update_full_order(order_id, req_data):
             "sales_person": req_data.get('salesPerson', ''),
             "creator": old_order.get('creator', ''),
             "settlement_account": settlement_account,
+            "total_packages": total_packages,  # 🎯 核心修复：保存用户手动修改的总件数
 
             # 更新商品明细
             "order_goods": order_goods,

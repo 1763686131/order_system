@@ -1263,6 +1263,7 @@
   "otherFees": 0,
   "settlementAccount": "武汉门店",
   "currentPayment": 2542.50,
+  "totalPackages": 3,
   
   "items": [
     {
@@ -1320,6 +1321,7 @@
 - 自动生成冗余字段 `goods_name`、`goods_weight`、`goods_quantity`
 - **库存不足时允许保存，不阻止录入**
 - 保存成功后自动扣减库存
+- **总件数字段 `totalPackages`**：前端录入时默认自动累加各商品的 `packages`，用户可手动修改此值，以用户最终修改的值为准保存到数据库的 `total_packages` 字段
 
 ### 5.4 更新订单（编辑销售单）
 - **URL**: `/api/orders/<int:order_id>`
@@ -1345,6 +1347,7 @@
   "discountAmount": 2500.00,
   "otherFees": 100,
   "currentPayment": 2600.00,
+  "totalPackages": 5,
   
   "items": [
     {

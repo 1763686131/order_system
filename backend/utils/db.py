@@ -859,6 +859,13 @@ def _ensure_customer_schema(conn):
                     ADD COLUMN balance_applied REAL NOT NULL DEFAULT 0
                     """
                 )
+            if "total_packages" not in order_columns:
+                cursor.execute(
+                    """
+                    ALTER TABLE orders
+                    ADD COLUMN total_packages REAL
+                    """
+                )
             cursor.execute(
                 """
                 UPDATE orders

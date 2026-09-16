@@ -573,6 +573,7 @@ def read_orders():
                 'sales_person': order['sales_person'],
                 'creator': order['creator'],
                 'settlement_account': order['settlement_account'],
+                'total_packages': order.get('total_packages', 0),
                 'order_goods': order['order_goods'],
                 'subtotal_amount': order['subtotal_amount'],
                 'tax_amount': order['tax_amount'],
@@ -744,6 +745,12 @@ def write_orders(orders_data):
                         order.get('receipt_img_url', ''),
                         json.dumps(order.get('freight_costs', []))
                     ))
+
+                # total_packages 是订单头上的可编辑合计，不能从明细重新计算覆盖。
+                cursor.execute(
+                    'UPDATE orders SET total_packages = ? WHERE id = ?',
+                    (order.get('total_packages', 0), order['id'])
+                )
 
             # The order list is a full snapshot. Remove rows omitted by a
             # delete operation after all remaining rows have been upserted.

@@ -564,6 +564,14 @@
                     <dt>审核时间</dt>
                     <dd>{{ formatDateTime(selectedOrder.audit_date) }}</dd>
                   </div>
+                  <div v-if="selectedOrder.status === 'completed' && selectedOrder.completed_by">
+                    <dt>完成人</dt>
+                    <dd>{{ selectedOrder.completed_by }}</dd>
+                  </div>
+                  <div v-if="selectedOrder.status === 'completed' && selectedOrder.completed_date">
+                    <dt>完成时间</dt>
+                    <dd>{{ formatDateTime(selectedOrder.completed_date) }}</dd>
+                  </div>
                 </dl>
 
               </section>
@@ -1179,9 +1187,8 @@ const fetchOrdersData = async () => {
 
 // 格式化日期
 const formatDate = (order) => {
-  const date = props.mode === 'logistics'
-    ? (order.order_date || order.date || '')
-    : (order.date || '')
+  // 物流列表和财务列表都显示销售日期（date字段）
+  const date = order.date || ''
   return date ? date.substring(0, 10) : '-'
 }
 
@@ -1313,12 +1320,9 @@ const filteredOrders = computed(() => {
 
   // 日期排序
   result.sort((a, b) => {
-    const dateA = props.mode === 'logistics'
-      ? (a.shipped_date || a.completed_date || a.date || '')
-      : (a.date || '')
-    const dateB = props.mode === 'logistics'
-      ? (b.shipped_date || b.completed_date || b.date || '')
-      : (b.date || '')
+    // 物流列表和财务列表都按销售日期（date字段）排序
+    const dateA = a.date || ''
+    const dateB = b.date || ''
 
     if (sortOrder.value === 'desc') {
       return dateB.localeCompare(dateA) // 最近到远
@@ -1435,6 +1439,15 @@ const getTotalWeight = (order) => {
 
 // 获取件数
 const getPackageCount = (order) => {
+  const storedTotal = Number(order?.total_packages)
+  if (
+    order?.total_packages !== undefined &&
+    order?.total_packages !== null &&
+    Number.isFinite(storedTotal)
+  ) {
+    return `${storedTotal}件`
+  }
+
   // 1. 如果有 order_goods 数组
   if (order.order_goods && order.order_goods.length > 0) {
     const total = order.order_goods.reduce((sum, item) => sum + (item.packages || 0), 0)
@@ -1517,11 +1530,23 @@ const getGoodsItemName = (item) => {
 
 // 计算合计件数
 const calculateTotalPackages = (order) => {
+  const storedTotal = Number(order?.total_packages)
+  if (
+    order?.total_packages !== undefined &&
+    order?.total_packages !== null &&
+    Number.isFinite(storedTotal)
+  ) {
+    return storedTotal
+  }
+
   if (!order || !Array.isArray(order.order_goods)) return 0
   return order.order_goods.reduce((total, item) => {
     return total + (Number(item.packages) || 0)
   }, 0)
 }
+
+// 详情弹窗沿用订单头上的可编辑合计
+const getDetailTotalPackages = (order) => calculateTotalPackages(order)
 
 // 计算合计数量
 const calculateTotalQuantity = (order) => {

@@ -370,9 +370,18 @@ const processedOrders = computed(() => {
         const firstUnit = order.order_goods[0]?.unit || 'kg'
         goodsWeight = totalQuantity > 0 ? `${totalQuantity}${firstUnit}` : ''
 
-        // 件数：汇总所有商品的件数
-        const totalPackages = order.order_goods.reduce((sum, item) => sum + (item.packages || 0), 0)
-        goodsQuantity = totalPackages > 0 ? `${totalPackages}件` : ''
+        // 件数优先使用订单头上的手动合计，历史订单没有该字段时再汇总明细
+        const storedTotalPackages = Number(order.total_packages)
+        const hasStoredTotalPackages =
+          order.total_packages !== undefined &&
+          order.total_packages !== null &&
+          Number.isFinite(storedTotalPackages)
+        const totalPackages = hasStoredTotalPackages
+          ? storedTotalPackages
+          : order.order_goods.reduce((sum, item) => sum + (item.packages || 0), 0)
+        goodsQuantity = (hasStoredTotalPackages || totalPackages > 0)
+          ? `${totalPackages}件`
+          : ''
       }
 
       // 处理物流服务字段
