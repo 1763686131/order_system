@@ -256,8 +256,16 @@ defineExpose({ refresh: fetchRecords })
 .material-name span,
 .quantity-block span,
 .record-note span {
-  color: #8290a4;
-  font-size: 12px;
+  color: #526074;
+  font-size: 16px;
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+.quantity-block span {
+  color: #344054;
+  font-size: 17px;
+  font-weight: 800;
 }
 
 .material-name strong {

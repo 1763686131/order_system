@@ -169,7 +169,15 @@
             </tr>
           </thead>
           <tbody>
-            <tr v-for="material in paginatedMaterials" :key="material.id">
+            <tr
+              v-for="material in paginatedMaterials"
+              :key="material.id"
+              class="inventory-row"
+              tabindex="0"
+              @click="openMovementDetail(material)"
+              @keydown.enter="openMovementDetail(material)"
+              @keydown.space.prevent="openMovementDetail(material)"
+            >
               <td class="code-cell">{{ material.code }}</td>
               <td>
                 <div class="material-name">
@@ -203,7 +211,12 @@
               </td>
               <td class="muted-cell">{{ material.updatedAt }}</td>
               <td class="actions-column">
-                <button class="table-action" type="button" @click="openStockInModal(material)">
+                <button
+                  class="table-action"
+                  type="button"
+                  @click.stop="openStockInModal(material)"
+                  @keydown.stop
+                >
                   入库
                 </button>
               </td>
@@ -236,6 +249,95 @@
     </section>
 
     <StockInOrderModal ref="stockInModalRef" @saved="handleStockInSaved" />
+
+    <teleport to="body">
+      <div
+        v-if="movementDetailMaterial"
+        class="inventory-detail-layer"
+        @click.self="closeMovementDetail"
+      >
+        <section
+          class="inventory-detail-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="inventoryMovementTitle"
+        >
+          <header class="inventory-detail-header">
+            <div class="inventory-detail-title">
+              <span class="inventory-detail-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5z"></path>
+                  <path d="m4 7.5 8 4.5 8-4.5M12 12v9"></path>
+                </svg>
+              </span>
+              <div>
+                <span>库存流水</span>
+                <h2 id="inventoryMovementTitle">{{ movementDetailMaterial.name }}库存明细</h2>
+                <p>
+                  {{ movementDetailMaterial.storeName || '全部门店' }}
+                  · {{ movementDetailMaterial.warehouse || '全部仓库' }}
+                </p>
+              </div>
+            </div>
+            <button class="inventory-detail-close" type="button" title="关闭" @click="closeMovementDetail">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18"></path>
+              </svg>
+            </button>
+          </header>
+
+          <div class="inventory-detail-body">
+            <div class="movement-summary">
+              <span>当前库存</span>
+              <strong>{{ formatNumber(movementDetailMaterial.stock) }}</strong>
+              <small>{{ movementDetailMaterial.unit }}</small>
+            </div>
+
+            <div v-if="movementDetailLoading" class="movement-state">正在加载入库与出库记录...</div>
+            <div v-else-if="movementDetailError" class="movement-state error">
+              {{ movementDetailError }}
+            </div>
+            <div v-else-if="movementRecords.length === 0" class="movement-state">
+              暂无已审核的入库或出库记录
+            </div>
+            <div v-else class="movement-table-wrap">
+              <table class="movement-table">
+                <thead>
+                  <tr>
+                    <th>日期</th>
+                    <th>类型</th>
+                    <th>单据编号</th>
+                    <th>仓库</th>
+                    <th class="movement-number">数量</th>
+                    <th>批次 / 备注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="movement in movementRecords" :key="movementKey(movement)">
+                    <td>{{ formatMovementDate(movement.documentDate || movement.createdAt) }}</td>
+                    <td>
+                      <span :class="['movement-type', `movement-${movement.movementType}`]">
+                        {{ movement.movementType === 'in' ? '入库' : '出库' }}
+                      </span>
+                    </td>
+                    <td class="movement-document">{{ movement.documentNo || '-' }}</td>
+                    <td>{{ movement.warehouseName || '-' }}</td>
+                    <td :class="['movement-number', `movement-${movement.movementType}`]">
+                      {{ movement.movementType === 'in' ? '+' : '-' }}
+                      {{ formatNumber(movement.quantity) }}
+                      <small>{{ movementDetailMaterial.unit }}</small>
+                    </td>
+                    <td class="movement-note" :title="movement.batchNos || movement.remark">
+                      {{ movement.batchNos || movement.remark || '-' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </div>
+    </teleport>
   </div>
 </template>
 
@@ -400,6 +502,10 @@ const fallbackInventoryByCode = new Map(
 )
 const materials = ref([])
 const stockBalances = ref([])
+const movementDetailMaterial = ref(null)
+const movementRecords = ref([])
+const movementDetailLoading = ref(false)
+const movementDetailError = ref('')
 
 const findById = (items, id) => (
   items.find(item => String(item.id) === String(id))
@@ -731,6 +837,56 @@ const exportInventory = () => {
 }
 
 const stockInModalRef = ref(null)
+
+const movementKey = movement => [
+  movement.movementType,
+  movement.sourceDocumentId,
+  movement.documentNo,
+  movement.warehouseId,
+  movement.storeId
+].join('-')
+
+const formatMovementDate = value => {
+  const text = String(value || '')
+  return text.length >= 16 ? text.slice(0, 16) : text || '-'
+}
+
+const closeMovementDetail = () => {
+  movementDetailMaterial.value = null
+  movementRecords.value = []
+  movementDetailError.value = ''
+}
+
+const openMovementDetail = async (material) => {
+  movementDetailMaterial.value = material
+  movementRecords.value = []
+  movementDetailError.value = ''
+  movementDetailLoading.value = true
+
+  try {
+    const params = {
+      type: 'raw-material',
+      productId: material.id,
+      limit: 200
+    }
+    if (filters.value.storeId !== null) {
+      params.storeId = filters.value.storeId
+    }
+    if (selectedWarehouseId.value !== null) {
+      params.warehouseId = selectedWarehouseId.value
+    }
+    const response = await request({
+      url: '/stock-movements',
+      method: 'GET',
+      params
+    })
+    movementRecords.value = Array.isArray(response) ? response : []
+  } catch (error) {
+    movementDetailError.value = error?.response?.data?.message || '库存流水加载失败。'
+  } finally {
+    movementDetailLoading.value = false
+  }
+}
 
 // 原材料库存页固定使用采购入库模式；行操作会预填所选原材料。
 const openStockInModal = (material = null) => {
@@ -1102,6 +1258,17 @@ onMounted(loadMaterialProducts)
   background: #f9fafb;
 }
 
+.inventory-row {
+  cursor: pointer;
+}
+
+.inventory-row:focus-visible {
+  position: relative;
+  z-index: 1;
+  outline: 2px solid #0f9f78;
+  outline-offset: -2px;
+}
+
 .sortable {
   cursor: pointer;
   user-select: none;
@@ -1228,6 +1395,280 @@ onMounted(loadMaterialProducts)
   background: #3b82f6;
 }
 
+.inventory-detail-layer {
+  --accent: #0f9f78;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --border: #dfe5ec;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text);
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1px);
+}
+
+.inventory-detail-modal {
+  display: flex;
+  width: min(820px, calc(100vw - 48px));
+  max-height: min(680px, calc(100vh - 48px));
+  flex-direction: column;
+  overflow: hidden;
+  background: #f4f7f9;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.22);
+}
+
+.inventory-detail-header {
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px 20px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+
+.inventory-detail-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.inventory-detail-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-radius: 7px;
+}
+
+.inventory-detail-icon svg,
+.inventory-detail-close svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.inventory-detail-title > div {
+  min-width: 0;
+}
+
+.inventory-detail-title span:not(.inventory-detail-icon) {
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.inventory-detail-title h2 {
+  margin: 3px 0 2px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-detail-title p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inventory-detail-close {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #68758a;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.inventory-detail-close:hover {
+  color: #273245;
+  background: #f0f3f6;
+}
+
+.inventory-detail-close:focus-visible,
+.inventory-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.inventory-detail-body {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.movement-summary {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 13px 15px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.movement-summary span {
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.movement-summary strong {
+  margin-left: 4px;
+  color: var(--accent-dark);
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+
+.movement-summary small {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.movement-state {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 13px;
+  color: var(--text-muted);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  font-size: 13px;
+}
+
+.movement-state.error {
+  color: #b42318;
+}
+
+.movement-table-wrap {
+  margin-top: 13px;
+  overflow-x: auto;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+}
+
+.movement-table {
+  width: 100%;
+  min-width: 690px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+
+.movement-table th {
+  height: 42px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.movement-table td {
+  height: 50px;
+  padding: 8px 12px;
+  overflow: hidden;
+  color: #344054;
+  border-bottom: 1px solid #edf1f5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.movement-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.movement-table th:nth-child(1) { width: 138px; }
+.movement-table th:nth-child(2) { width: 82px; }
+.movement-table th:nth-child(3) { width: 160px; }
+.movement-table th:nth-child(4) { width: 125px; }
+.movement-table th:nth-child(5) { width: 120px; }
+
+.movement-document {
+  color: var(--accent-dark) !important;
+  font-weight: 700;
+}
+
+.movement-number {
+  font-variant-numeric: tabular-nums;
+  text-align: right !important;
+}
+
+.movement-number small {
+  margin-left: 3px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.movement-type {
+  display: inline-flex;
+  min-height: 25px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.movement-in {
+  color: #13734f !important;
+}
+
+.movement-type.movement-in {
+  background: #eaf8f1;
+}
+
+.movement-out {
+  color: #a4510b !important;
+}
+
+.movement-type.movement-out {
+  background: #fff3df;
+}
+
+.movement-note {
+  color: var(--text-secondary) !important;
+}
+
 .empty-state {
   padding: 60px 20px !important;
   color: #9ca3af !important;
@@ -1351,6 +1792,17 @@ onMounted(loadMaterialProducts)
   .table-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .inventory-detail-layer {
+    padding: 0;
+  }
+
+  .inventory-detail-modal {
+    width: 100vw;
+    max-height: 100vh;
+    height: 100vh;
+    border-radius: 0;
   }
 
 }

@@ -816,3 +816,124 @@ def list_stock_balances():
             }
             for row in rows
         ])
+
+
+@stock_inbounds_bp.route('/stock-movements', methods=['GET'])
+def list_stock_movements():
+    """Return posted inventory movements for a material/location detail view."""
+    try:
+        product_type = _type(request.args.get('type') or 'raw-material')
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+
+    product_id = request.args.get('productId', type=int)
+    warehouse_id = request.args.get('warehouseId', type=int)
+    store_id = request.args.get('storeId', type=int)
+    limit = request.args.get('limit', default=200, type=int)
+    limit = min(max(limit or 200, 1), 500)
+
+    if product_id is None:
+        return jsonify({'success': False, 'message': '请提供原材料ID'}), 400
+
+    with get_db() as conn:
+        sql = '''
+            SELECT
+                movement.movement_type,
+                movement.receipt_type,
+                movement.source_document_id,
+                movement.source_document_no,
+                movement.product_type,
+                movement.product_id,
+                movement.warehouse_id,
+                movement.store_id,
+                SUM(movement.quantity) AS quantity,
+                CASE
+                    WHEN movement.movement_type = 'in'
+                    THEN SUM(
+                        movement.quantity * COALESCE(movement.unit_price, 0)
+                    ) / NULLIF(SUM(movement.quantity), 0)
+                    ELSE NULL
+                END AS unit_price,
+                CASE
+                    WHEN movement.movement_type = 'in'
+                    THEN SUM(COALESCE(movement.total_amount, 0))
+                    ELSE NULL
+                END AS total_amount,
+                MAX(movement.created_at) AS created_at,
+                COALESCE(
+                    MAX(inbound.document_date),
+                    MAX(outbound.document_date),
+                    MAX(movement.created_at)
+                ) AS document_date,
+                MAX(store.name) AS store_name,
+                MAX(warehouse.name) AS warehouse_name,
+                COALESCE(MAX(outbound.remark), MAX(inbound.remark), '') AS remark,
+                GROUP_CONCAT(
+                    DISTINCT CASE
+                        WHEN trim(COALESCE(movement.batch_no, '')) <> ''
+                        THEN movement.batch_no
+                    END
+                ) AS batch_nos
+            FROM stock_movements AS movement
+            LEFT JOIN stores AS store ON store.id = movement.store_id
+            LEFT JOIN warehouses AS warehouse ON warehouse.id = movement.warehouse_id
+            LEFT JOIN stock_inbounds AS inbound
+              ON movement.movement_type = 'in'
+             AND inbound.id = movement.source_document_id
+            LEFT JOIN material_outbounds AS outbound
+              ON movement.movement_type = 'out'
+             AND outbound.id = movement.source_document_id
+            WHERE movement.product_type = ?
+              AND movement.product_id = ?
+              AND movement.movement_type IN ('in', 'out')
+        '''
+        params = [product_type, product_id]
+        if warehouse_id is not None:
+            sql += ' AND movement.warehouse_id = ?'
+            params.append(warehouse_id)
+        if store_id is not None:
+            sql += ' AND movement.store_id = ?'
+            params.append(store_id)
+        sql += '''
+            GROUP BY
+                movement.movement_type,
+                movement.receipt_type,
+                movement.source_document_id,
+                movement.source_document_no,
+                movement.product_type,
+                movement.product_id,
+                movement.warehouse_id,
+                movement.store_id
+            ORDER BY MAX(movement.created_at) DESC, MAX(movement.id) DESC
+            LIMIT ?
+        '''
+        params.append(limit)
+        rows = conn.execute(sql, params).fetchall()
+        return jsonify([
+            {
+                'movementType': row['movement_type'],
+                'receiptType': row['receipt_type'],
+                'sourceDocumentId': row['source_document_id'],
+                'documentNo': row['source_document_no'],
+                'productType': row['product_type'],
+                'productId': row['product_id'],
+                'warehouseId': row['warehouse_id'],
+                'storeId': row['store_id'],
+                'quantity': float(row['quantity'] or 0),
+                'unitPrice': (
+                    round(float(row['unit_price']), 6)
+                    if row['unit_price'] is not None else None
+                ),
+                'totalAmount': (
+                    round(float(row['total_amount']), 2)
+                    if row['total_amount'] is not None else None
+                ),
+                'createdAt': row['created_at'] or '',
+                'documentDate': row['document_date'] or '',
+                'storeName': row['store_name'] or '',
+                'warehouseName': row['warehouse_name'] or '',
+                'remark': row['remark'] or '',
+                'batchNos': row['batch_nos'] or '',
+            }
+            for row in rows
+        ])
