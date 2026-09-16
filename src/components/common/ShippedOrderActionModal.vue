@@ -149,20 +149,28 @@
               <div class="card-body">
                 <div class="form-grid logistics-input-grid">
                   <div class="form-item shipping-method-field">
-                    <label for="shippingMethodSelect">发货方式</label>
-                    <select
-                      id="shippingMethodSelect"
-                      v-model="shippingMethod"
-                      class="modern-input"
+                    <span class="form-label">发货方式</span>
+                    <div
+                      class="shipping-method-options"
+                      role="radiogroup"
+                      aria-label="发货方式"
                     >
-                      <option
+                      <label
                         v-for="option in shippingMethodOptions"
                         :key="option.value"
-                        :value="option.value"
+                        class="shipping-method-option"
+                        :class="{ selected: shippingMethod === option.value }"
                       >
-                        {{ option.label }}
-                      </option>
-                    </select>
+                        <input
+                          v-model="shippingMethod"
+                          type="radio"
+                          name="shippingMethod"
+                          :value="option.value"
+                        />
+                        <span class="shipping-method-radio" aria-hidden="true"></span>
+                        <span>{{ option.label }}</span>
+                      </label>
+                    </div>
                   </div>
 
                   <div v-if="shippingMethod === '4'" class="form-item custom-method-field">
@@ -572,7 +580,9 @@ const modalViewportHeight = ref(0)
 
 const modalStyle = computed(() => ({
   transform: `translate(${modalX.value}px, ${modalY.value}px)`,
-  height: modalViewportHeight.value ? `${modalViewportHeight.value}px` : undefined
+  height: isLogisticsMode.value && modalViewportHeight.value
+    ? `${modalViewportHeight.value}px`
+    : undefined
 }))
 
 const updateModalViewportHeight = () => {
@@ -1373,7 +1383,7 @@ onUnmounted(() => {
 .action-modal {
   display: grid;
   width: min(680px, calc(100vw - 48px));
-  height: 100%;
+  height: auto;
   max-height: 880px;
   min-height: 0;
   grid-template-rows: auto minmax(0, 1fr) auto;
@@ -1713,6 +1723,75 @@ onUnmounted(() => {
 
 .shipping-method-field {
   margin-top: 14px;
+}
+
+.form-label {
+  display: flex;
+  align-items: center;
+  line-height: 1.4;
+}
+
+.shipping-method-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.shipping-method-option {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  gap: 7px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  transition: color 0.18s ease, background-color 0.18s ease, border-color 0.18s ease;
+  user-select: none;
+}
+
+.shipping-method-option:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.shipping-method-option.selected {
+  color: var(--accent);
+  background: rgba(var(--accent-rgb), 0.07);
+  border-color: var(--accent);
+}
+
+.shipping-method-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+.shipping-method-radio {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 50%;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.shipping-method-option.selected .shipping-method-radio {
+  border: 4px solid var(--accent);
+}
+
+.shipping-method-option:has(input:focus-visible) {
+  outline: 2px solid rgba(var(--accent-rgb), 0.35);
+  outline-offset: 2px;
 }
 
 .logistics-input-grid {
@@ -2335,8 +2414,8 @@ select:focus-visible {
 
   .action-modal {
     width: calc(100vw - 32px);
-    height: 100%;
-    max-height: none;
+    height: auto;
+    max-height: calc(100vh - 32px);
   }
 
   .action-modal.is-logistics-modal {
