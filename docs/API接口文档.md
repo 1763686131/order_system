@@ -8,8 +8,24 @@
 - **数据库**: SQLite 3
 - **后端框架**: Flask + Python 3
 
+### 通用请求约定
+
+| Header | 必填 | 说明 |
+|---|---|---|
+| `Content-Type: application/json` | 是（JSON 请求） | 请求体编码 |
+| `Username` | 是（登录后请求） | 当前登录账号，例如 `1`；后端在审核、入账等操作中根据用户表转换为姓名 |
+| `Role` | 是（权限接口） | 当前用户角色，例如 `super_admin`、`admin`、`employee` |
+
+`Username` 传递登录账号，不直接传显示姓名。业务单据中的 `audit_by`、
+`auditedBy` 和账户流水 `operator` 保存用户姓名；账号不存在时才保留原始
+`Username` 值作为兼容回退。
+
+除文件上传接口外，请求和响应均使用 JSON。常见错误响应包含 `message` 或
+`error` 字段，前端应优先显示服务端返回的信息。
+
 ## 版本历史
 
+- **v3.1** (2026-09-16) - 补充销售订单审核/反审核接口、审核人姓名解析及审核字段说明
 - **v3.0** (2026-09-14) - 客户期初欠款与储值字段优化，新增 `initial_receivable_at` 和 `balance_at` 时间戳字段
 - **v2.8** (2026-09-14) - 新增客户应收对账单详情接口，复用审核流水并支持商品级欠款分摊
 - **v2.7** (2026-09-14) - 新增银行账户、银行卡图片上传及结算账户动态关联接口
@@ -1133,7 +1149,10 @@
   {
     "id": 123,
     "type": 1,
-    "status": "completed",
+    "status": "shipped",
+    "audit_state": 1,
+    "audit_by": "系统超管",
+    "audit_date": "2026-09-16T10:30:00",
     "store_id": 1,
     "customer_id": 5,
     "warehouse_id": 2,
@@ -1382,7 +1401,6 @@
 ```json
 {
   "logistics_no": "三志物流-SF123456",
-  "audit_state": 1,
   "freight_costs": [
     {
       "type": "freight",
@@ -1415,7 +1433,83 @@
 }
 ```
 
-### 5.5 删除订单
+### 5.5 审核与反审核销售订单
+
+- **URL**: `/api/orders/<int:order_id>`
+- **Method**: `PUT`
+- **Header**: `Username: <当前登录账号>`
+- **适用范围**: 有订单编号和商品明细、且 `status` 为 `shipped` 的销售订单
+
+**审核请求**:
+
+```json
+{
+  "audit_state": 1
+}
+```
+
+**反审核请求**:
+
+```json
+{
+  "audit_state": 0
+}
+```
+
+审核在同一个 SQLite 事务中完成：
+
+1. 根据 `Username` 登录账号查询 `users.name`，将姓名写入 `orders.audit_by`。
+2. 写入 `audit_date`，并将 `audit_state` 更新为 `1`。
+3. 根据应收金额、本次收款和客户储值更新客户欠款与储值。
+4. 写入一条有效的 `order_audit` 客户账户流水。
+5. 本次有收款且结算账户有效时，同步增加银行账户余额。
+
+反审核会撤销原审核流水，恢复客户储值与应收数据，并清空订单的
+`audit_by`、`audit_date`。如果本单欠款已被后续收款核销，则返回 `409`，
+避免账务数据被破坏。
+
+**审核成功响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "审核成功，客户应收已更新",
+  "data": {
+    "id": 244,
+    "status": "shipped",
+    "audit_state": 1,
+    "audit_by": "系统超管",
+    "audit_date": "2026-09-16T10:30:00"
+  },
+  "account": {
+    "customerId": 4,
+    "storedBalanceApplied": 0,
+    "receivableChange": 0,
+    "balanceAfter": 22750,
+    "receivableAfter": 0
+  }
+}
+```
+
+**审核字段**:
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `audit_state` | integer | `0` 未审核，`1` 已审核/已过账 |
+| `audit_by` | string | 审核人姓名；由请求头中的登录账号解析 |
+| `audit_date` | string | 审核时间，ISO 8601 格式 |
+| `balance_applied` | number | 本单使用的客户储值 |
+| `current_debt` | number | 审核后本单实际增加的应收欠款 |
+
+**常见状态码**:
+
+| 状态码 | 场景 |
+|---|---|
+| `404` | 订单不存在 |
+| `409` | 订单状态不允许审核、客户不存在、重复审核或无法反审核 |
+| `500` | 数据库或服务端异常；不会提交部分账务变更 |
+
+### 5.6 删除订单
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `DELETE`
 - **说明**: 删除订单，新订单删除时会自动恢复库存
@@ -1433,7 +1527,7 @@
 - 删除旧订单不影响库存
 - 已发货订单建议先撤销出库再删除
 
-### 5.6 上传回单图片
+### 5.7 上传回单图片
 - **URL**: `/api/orders/<int:order_id>/upload_receipt`
 - **Method**: `POST`
 - **Content-Type**: `multipart/form-data`
@@ -1453,7 +1547,7 @@ receipt_image: File (图片文件)
 }
 ```
 
-### 5.7 删除回单图片
+### 5.8 删除回单图片
 - **URL**: `/api/orders/<int:order_id>/receipt`
 - **Method**: `DELETE`
 - **说明**: 删除订单的回单图片（从数据库和硬盘中彻底删除）
@@ -1466,11 +1560,11 @@ receipt_image: File (图片文件)
 }
 ```
 
-### 5.8 批量删除订单
+### 5.9 批量删除订单
 - **说明**: 前端通过并发调用 DELETE 接口实现批量删除
 - **逻辑**: 使用 `Promise.allSettled()` 确保所有请求完成，统计成功和失败数量
 
-### 5.9 更新订单已支付金额
+### 5.10 更新订单已支付金额
 - **URL**: `/api/orders/<int:order_id>/paid-amount`
 - **Method**: `PUT`
 - **Header**: `Username: admin`
@@ -3107,7 +3201,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 - **URL**: `/api/payment-receipts/<id>/audit`
 - **Method**: `POST`
-- **Header**: `Username` 用作审核人和账户流水操作人
+- **Header**: `Username` 传登录账号；后端解析用户姓名作为审核人和账户流水操作人
 
 审核时按客户实时账户计算：
 
@@ -3123,7 +3217,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 - **URL**: `/api/payment-receipts/<id>/audit`
 - **Method**: `DELETE`
-- **Header**: `Username` 用作反审核操作人
+- **Header**: `Username` 传登录账号；后端解析用户姓名作为反审核操作人
 
 反审核会恢复本单核销的客户欠款，撤回本单产生的预收储值，将原入账流水标记为 `reversed`，并写入 `customer_payment_reverse` 反向流水。
 
@@ -3243,7 +3337,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 - **URL**: `/api/returns/<id>/audit`
 - **Method**: `POST`
-- **Header**: `Username` 可选，用作客户流水操作人
+- **Header**: `Username` 可选；传登录账号时，后端解析用户姓名作为客户流水操作人
 
 审核在一个数据库事务中完成：
 
@@ -3746,6 +3840,10 @@ ON stock_movements(product_type, product_id, warehouse_id, created_at DESC);
 - `completed` - 已完成
 - `shipped` - 已出库/已发货
 
+订单业务状态 `status` 与审核状态 `audit_state` 相互独立。销售订单完成后可进入
+物流流程，发货后状态为 `shipped`；财务审核成功后 `audit_state=1`，页面显示
+“已过账”，但 `status` 仍保持 `shipped`。
+
 ### 门店状态说明
 - `active` - 启用
 - `inactive` - 停用
@@ -3832,6 +3930,12 @@ SQLite 支持**多读一写**模式：
 ---
 
 ## 更新日志
+
+### v3.1.0 (2026-09-16)
+- 补充销售订单审核与反审核请求、响应、账务联动和错误状态码
+- 审核人由 `Username` 登录账号解析为用户姓名后保存
+- 新增 `audit_state`、`audit_by`、`audit_date` 等字段说明
+- 旧数据库启动时自动补齐审核字段，并兼容转换历史账号值
 
 ### v2.4.0 (2026-09-10)
 - ✅ 新增收款历史列表、门店滑块、Excel 导出和收款单打印

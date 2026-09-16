@@ -552,6 +552,8 @@ def read_orders():
                 'shipping_custom': order['shipping_custom'],
                 'logistics_no': order['logistics_no'],
                 'audit_state': order['audit_state'],
+                'audit_by': order.get('audit_by') or '',
+                'audit_date': order.get('audit_date') or '',
                 'store_id': order['store_id'],
                 'order_client': order['order_client'],
                 'receiver_name': order['receiver_name'],

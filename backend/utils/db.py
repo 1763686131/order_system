@@ -844,6 +844,33 @@ def _ensure_customer_schema(conn):
             ON payment_receipts(status, document_date DESC, id DESC)
             """
         )
+        for table_name, column_name in (
+            ("payment_receipts", "audited_by"),
+            ("customer_account_transactions", "operator"),
+        ):
+            cursor.execute(
+                f"""
+                UPDATE {table_name}
+                SET {column_name} = (
+                    SELECT COALESCE(
+                        NULLIF(trim(users.name), ''),
+                        CAST(users.username AS TEXT)
+                    )
+                    FROM users
+                    WHERE CAST(users.username AS TEXT) =
+                          trim({table_name}.{column_name})
+                    LIMIT 1
+                )
+                WHERE {column_name} IS NOT NULL
+                  AND trim({column_name}) <> ''
+                  AND EXISTS (
+                      SELECT 1
+                      FROM users
+                      WHERE CAST(users.username AS TEXT) =
+                            trim({table_name}.{column_name})
+                  )
+                """
+            )
 
         orders_exists = cursor.execute(
             "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'orders'"
@@ -866,6 +893,41 @@ def _ensure_customer_schema(conn):
                     ADD COLUMN total_packages REAL
                     """
                 )
+            if "audit_by" not in order_columns:
+                cursor.execute(
+                    """
+                    ALTER TABLE orders
+                    ADD COLUMN audit_by TEXT
+                    """
+                )
+            if "audit_date" not in order_columns:
+                cursor.execute(
+                    """
+                    ALTER TABLE orders
+                    ADD COLUMN audit_date TEXT
+                    """
+                )
+            cursor.execute(
+                """
+                UPDATE orders
+                SET audit_by = (
+                    SELECT COALESCE(
+                        NULLIF(trim(users.name), ''),
+                        CAST(users.username AS TEXT)
+                    )
+                    FROM users
+                    WHERE CAST(users.username AS TEXT) = trim(orders.audit_by)
+                    LIMIT 1
+                )
+                WHERE audit_by IS NOT NULL
+                  AND trim(audit_by) <> ''
+                  AND EXISTS (
+                      SELECT 1
+                      FROM users
+                      WHERE CAST(users.username AS TEXT) = trim(orders.audit_by)
+                  )
+                """
+            )
             cursor.execute(
                 """
                 UPDATE orders

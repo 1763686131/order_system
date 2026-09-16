@@ -8,6 +8,7 @@ from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
 )
+from utils.user_helpers import resolve_user_display_name
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
@@ -439,13 +440,17 @@ def update_order_status(order_id):
 
 def update_order_audit_state(order_id, audited):
     """审核销售订单时同步客户储值、应收欠款和客户账户流水。"""
-    operator = str(request.headers.get('Username') or '').strip()
+    operator_account = str(request.headers.get('Username') or '').strip()
     now = datetime.now().isoformat(timespec='seconds')
     account_result = None
 
     with orders_lock:
         with get_db() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            operator = resolve_user_display_name(
+                conn,
+                operator_account,
+            )
             order = conn.execute(
                 '''
                 SELECT id, status, audit_state, order_number, order_goods,

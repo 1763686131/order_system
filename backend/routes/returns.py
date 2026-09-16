@@ -12,6 +12,7 @@ from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
 )
+from utils.user_helpers import resolve_user_display_name
 
 
 returns_bp = Blueprint('returns', __name__, url_prefix='/api/returns')
@@ -64,8 +65,11 @@ def _text(value, max_length=None):
     return text[:max_length] if max_length else text
 
 
-def _operator():
-    return _text(request.headers.get('Username') or '系统用户', 80) or '系统用户'
+def _operator(conn):
+    return resolve_user_display_name(
+        conn,
+        request.headers.get('Username'),
+    )[:80]
 
 
 def _next_return_number(conn, return_date):
@@ -443,7 +447,7 @@ def _create_return_transaction(conn, return_row, customer, return_amount,
             customer['id'], return_row['return_number'], float(return_amount),
             float(writeoff_amount), float(-writeoff_amount),
             float(customer['balance'] or 0), float(debt_after),
-            _operator(), now,
+            _operator(conn), now,
         ),
     )
     conn.execute(
@@ -690,7 +694,7 @@ def create_return():
                         customer_id, return_number, float(return_amount),
                         float(writeoff_amount), float(-writeoff_amount),
                         float(customer['balance'] or 0), float(debt_after),
-                        _operator(), now,
+                        _operator(conn), now,
                     ),
                 )
                 conn.execute(

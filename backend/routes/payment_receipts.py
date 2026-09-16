@@ -12,6 +12,7 @@ from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
 )
+from utils.user_helpers import resolve_user_display_name
 
 
 payment_receipts_bp = Blueprint(
@@ -52,8 +53,12 @@ def _date(value):
     return date_text
 
 
-def _operator(default='王醒'):
-    return str(request.headers.get('Username') or default).strip() or default
+def _operator(conn, default='系统用户'):
+    return resolve_user_display_name(
+        conn,
+        request.headers.get('Username'),
+        default,
+    )
 
 
 def _next_document_no(conn, document_date):
@@ -490,11 +495,11 @@ def delete_payment_receipt(receipt_id):
 @payment_receipts_bp.route('/<int:receipt_id>/audit', methods=['POST'])
 def audit_payment_receipt(receipt_id):
     now = datetime.now().isoformat(timespec='seconds')
-    operator = _operator()
     try:
         with _write_lock:
             with get_db() as conn:
                 conn.execute('BEGIN IMMEDIATE')
+                operator = _operator(conn)
                 receipt = conn.execute(
                     'SELECT * FROM payment_receipts WHERE id = ?',
                     (receipt_id,)
@@ -633,11 +638,11 @@ def audit_payment_receipt(receipt_id):
 @payment_receipts_bp.route('/<int:receipt_id>/audit', methods=['DELETE'])
 def reverse_payment_receipt(receipt_id):
     now = datetime.now().isoformat(timespec='seconds')
-    operator = _operator()
     try:
         with _write_lock:
             with get_db() as conn:
                 conn.execute('BEGIN IMMEDIATE')
+                operator = _operator(conn)
                 receipt = conn.execute(
                     'SELECT * FROM payment_receipts WHERE id = ?',
                     (receipt_id,)
