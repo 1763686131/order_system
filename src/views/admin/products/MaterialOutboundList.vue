@@ -173,15 +173,27 @@
     </section>
 
     <teleport to="body">
-      <div v-if="settingsVisible" class="modal-layer">
+      <div v-if="settingsVisible" class="modal-layer" @click.self="settingsVisible = false">
         <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="outboundSettingsTitle">
           <header class="modal-header">
-            <div>
-              <span>原材料出库</span>
-              <h2 id="outboundSettingsTitle">触屏端录入设置</h2>
-              <p>配置员工触屏机默认使用的门店、仓库与原材料</p>
+            <div class="modal-title-wrap">
+              <span class="modal-title-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <rect x="5" y="2.5" width="14" height="19" rx="2"></rect>
+                  <path d="M9 6h6M9 10h6M9 14h3M10 18h4"></path>
+                </svg>
+              </span>
+              <div class="modal-title-copy">
+                <span class="modal-eyebrow">原材料出库</span>
+                <h2 id="outboundSettingsTitle">触屏端录入设置</h2>
+                <p>配置员工触屏机默认使用的门店、仓库与原材料</p>
+              </div>
             </div>
-            <button type="button" aria-label="关闭" @click="settingsVisible = false">×</button>
+            <button class="modal-close-button" type="button" aria-label="关闭" @click="settingsVisible = false">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18"></path>
+              </svg>
+            </button>
           </header>
 
           <div class="settings-body">
@@ -286,29 +298,44 @@
             <div v-if="settingsError" class="form-error">{{ settingsError }}</div>
           </div>
 
-          <footer class="modal-footer">
-            <button type="button" class="button secondary" @click="settingsVisible = false">取消</button>
-            <button
-              type="button"
-              class="button primary"
-              :disabled="settingsSaving"
-              @click="saveSettings"
-            >
-              {{ settingsSaving ? '正在保存...' : '保存触屏设置' }}
-            </button>
+          <footer class="modal-footer settings-footer">
+            <p class="footer-hint">保存后，员工触屏端将立即使用这套默认配置</p>
+            <div class="modal-footer-actions">
+              <button type="button" class="button secondary" @click="settingsVisible = false">取消</button>
+              <button
+                type="button"
+                class="button primary"
+                :disabled="settingsSaving"
+                @click="saveSettings"
+              >
+                {{ settingsSaving ? '正在保存...' : '保存触屏设置' }}
+              </button>
+            </div>
           </footer>
         </section>
       </div>
 
-      <div v-if="detailRecord" class="modal-layer">
-        <section class="detail-modal" role="dialog" aria-modal="true">
+      <div v-if="detailRecord" class="modal-layer" @click.self="detailRecord = null">
+        <section class="detail-modal" role="dialog" aria-modal="true" aria-labelledby="outboundDetailTitle">
           <header class="modal-header">
-            <div>
-              <span>原材料出库详情</span>
-              <h2>{{ detailRecord.documentNo }}</h2>
-              <p>{{ detailRecord.createdAt }} · {{ detailRecord.createdBy || '未记录录入人' }}</p>
+            <div class="modal-title-wrap">
+              <span class="modal-title-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path d="M5 3h11l3 3v15H5z"></path>
+                  <path d="M16 3v4h4M8 12h8M8 16h6"></path>
+                </svg>
+              </span>
+              <div class="modal-title-copy">
+                <span class="modal-eyebrow">原材料出库详情</span>
+                <h2 id="outboundDetailTitle">{{ detailRecord.documentNo }}</h2>
+                <p>{{ detailRecord.createdAt }} · {{ detailRecord.createdBy || '未记录录入人' }}</p>
+              </div>
             </div>
-            <button type="button" aria-label="关闭" @click="detailRecord = null">×</button>
+            <button class="modal-close-button" type="button" aria-label="关闭" @click="detailRecord = null">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12M18 6 6 18"></path>
+              </svg>
+            </button>
           </header>
           <div class="detail-body">
             <div class="detail-status-line">
@@ -347,7 +374,7 @@
             >
               作废草稿
             </button>
-            <div>
+            <div class="modal-footer-actions">
               <button type="button" class="button secondary" @click="detailRecord = null">关闭</button>
               <button
                 v-if="detailRecord.status === 'draft'"
@@ -663,10 +690,16 @@ defineExpose({ reload: loadData })
 <style scoped>
 .outbound-page {
   --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
   --accent-dark: #08745a;
   --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --panel-bg: #fff;
   --border: #dfe5ec;
+  --border-strong: #cbd5e1;
   --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
   --muted: #7a8698;
   color: var(--text);
 }
@@ -773,6 +806,8 @@ svg {
   font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
+  transition: background 0.18s ease, border-color 0.18s ease,
+    color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .button:disabled {
@@ -782,8 +817,16 @@ svg {
 
 .button.primary {
   color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent, #0f9f78);
+  border-color: var(--accent, #0f9f78);
+  box-shadow: 0 2px 5px rgba(var(--accent-rgb, 15, 159, 120), 0.18);
+}
+
+.button.primary:hover:not(:disabled) {
+  background: var(--accent-dark, #08745a);
+  border-color: var(--accent-dark, #08745a);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb, 15, 159, 120), 0.24);
+  transform: translateY(-1px);
 }
 
 .button.secondary {
@@ -792,10 +835,29 @@ svg {
   border-color: #cbd5e1;
 }
 
+.button.secondary:hover:not(:disabled) {
+  color: var(--accent-dark, #08745a);
+  background: var(--accent-soft, #e9f8f3);
+  border-color: var(--accent-border, #a9e5d2);
+}
+
 .button.danger {
-  color: #b42318;
-  background: #fff;
-  border-color: #f2aaa5;
+  color: #fff;
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.button.danger:hover:not(:disabled) {
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.24);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent, #0f9f78);
+  outline-offset: 2px;
 }
 
 .stats-grid {
@@ -1073,6 +1135,17 @@ th:nth-child(11) { width: 166px; }
 }
 
 .modal-layer {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --panel-bg: #fff;
+  --border: #dfe5ec;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
   position: fixed;
   inset: 0;
   z-index: 2147482500;
@@ -1080,7 +1153,10 @@ th:nth-child(11) { width: 166px; }
   align-items: center;
   justify-content: center;
   padding: 24px;
+  color: var(--text);
   background: rgba(15, 23, 42, 0.46);
+  backdrop-filter: blur(1px);
+  animation: outbound-modal-fade 0.18s ease;
 }
 
 .settings-modal,
@@ -1090,10 +1166,12 @@ th:nth-child(11) { width: 166px; }
   max-height: calc(100vh - 48px);
   flex-direction: column;
   overflow: hidden;
+  color: var(--text);
   background: #f4f7f8;
   border: 1px solid #dbe3ea;
-  border-radius: 9px;
+  border-radius: 8px;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  animation: outbound-modal-enter 0.2s ease;
 }
 
 .detail-modal {
@@ -1102,45 +1180,97 @@ th:nth-child(11) { width: 166px; }
 
 .modal-header {
   display: flex;
-  min-height: 82px;
+  min-height: 78px;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
-  padding: 14px 19px;
+  gap: 20px;
+  padding: 14px 20px;
   background: #fff;
   border-bottom: 1px solid #dfe5ec;
 }
 
-.modal-header span {
-  color: var(--accent);
+.modal-title-wrap {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.modal-title-icon {
+  display: inline-flex;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-radius: 7px;
+}
+
+.modal-title-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.modal-title-copy {
+  min-width: 0;
+}
+
+.modal-eyebrow {
+  color: var(--accent-dark);
   font-size: 11px;
   font-weight: 750;
 }
 
 .modal-header h2 {
   margin: 3px 0 2px;
-  font-size: 19px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 18px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .modal-header p {
   margin: 0;
-  color: #7a8698;
+  overflow: hidden;
+  color: var(--text-secondary);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.modal-header > button {
-  width: 36px;
-  height: 36px;
+.modal-close-button {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
   padding: 0;
-  color: #64748b;
+  color: #68758a;
   background: transparent;
   border: 0;
+  border-radius: 5px;
   cursor: pointer;
-  font-size: 26px;
+  transition: color 0.18s ease, background 0.18s ease;
+}
+
+.modal-close-button:hover {
+  color: #273245;
+  background: #f0f3f6;
+}
+
+.modal-close-button svg {
+  width: 20px;
+  height: 20px;
 }
 
 .settings-body,
 .detail-body {
+  min-height: 0;
+  flex: 1;
   overflow-y: auto;
   padding: 16px;
 }
@@ -1236,9 +1366,15 @@ th:nth-child(11) { width: 166px; }
 }
 
 .product-options input:checked + .checkbox-mark {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent, #0f9f78);
+  border-color: var(--accent, #0f9f78);
   box-shadow: inset 0 0 0 3px #fff;
+}
+
+.product-options input:focus-visible + .checkbox-mark,
+.switch-line input:focus-visible + .switch-control {
+  outline: 2px solid var(--accent, #0f9f78);
+  outline-offset: 2px;
 }
 
 .product-options label > span:last-child {
@@ -1319,7 +1455,7 @@ th:nth-child(11) { width: 166px; }
 }
 
 .switch-line input:checked + .switch-control {
-  background: var(--accent);
+  background: var(--accent, #0f9f78);
 }
 
 .switch-line input:checked + .switch-control::after {
@@ -1355,10 +1491,33 @@ th:nth-child(11) { width: 166px; }
 
 .modal-footer {
   justify-content: flex-end;
-  min-height: 65px;
-  padding: 12px 16px;
+  min-height: 68px;
+  padding: 13px 18px;
   background: #fff;
   border-top: 1px solid #dfe5ec;
+}
+
+.settings-footer {
+  justify-content: space-between;
+}
+
+.footer-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.modal-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-left: auto;
+}
+
+.modal-footer-actions .button,
+.confirm-actions .button {
+  min-width: 106px;
 }
 
 .detail-status-line {
@@ -1426,10 +1585,13 @@ th:nth-child(11) { width: 166px; }
 .confirm-modal {
   width: min(400px, calc(100vw - 40px));
   padding: 26px;
+  color: var(--text);
   text-align: center;
   background: #fff;
-  border-radius: 9px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+  animation: outbound-modal-enter 0.2s ease;
 }
 
 .confirm-icon {
@@ -1465,6 +1627,22 @@ th:nth-child(11) { width: 166px; }
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   margin-top: 20px;
+}
+
+@keyframes outbound-modal-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes outbound-modal-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 @media (max-width: 1100px) {
@@ -1509,6 +1687,33 @@ th:nth-child(11) { width: 166px; }
   .detail-modal {
     width: calc(100vw - 20px);
     max-height: calc(100vh - 20px);
+  }
+
+  .settings-footer {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .footer-hint {
+    text-align: center;
+  }
+
+  .modal-footer-actions {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .modal-footer-actions .button {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-layer,
+  .settings-modal,
+  .detail-modal,
+  .confirm-modal {
+    animation: none;
   }
 }
 </style>
