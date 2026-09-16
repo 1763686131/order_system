@@ -1,5 +1,67 @@
 <template>
   <div class="unified-order-list-page">
+    <Teleport to="body">
+      <Transition name="notice">
+        <div
+          v-if="notice.visible"
+          :class="['page-notice', `notice-${notice.type}`]"
+          :role="notice.type === 'error' ? 'alert' : 'status'"
+          :aria-live="notice.type === 'error' ? 'assertive' : 'polite'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path v-if="notice.type === 'success'" d="m8 12 2.7 2.7L16.5 9"></path>
+            <path v-else d="M12 8v5M12 17h.01"></path>
+          </svg>
+          <span>{{ notice.message }}</span>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <Teleport to="body">
+      <Transition name="confirm-modal">
+        <div
+          v-if="confirmation.visible"
+          class="confirm-dialog-overlay"
+          @click.self="resolveConfirmation(false)"
+          @keydown.esc.prevent="resolveConfirmation(false)"
+        >
+          <section
+            class="confirm-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-dialog-title"
+          >
+            <header class="confirm-dialog-header">
+              <div class="confirm-dialog-icon" aria-hidden="true">!</div>
+              <h3 id="confirm-dialog-title">{{ confirmation.title }}</h3>
+            </header>
+            <div class="confirm-dialog-body">
+              <p>{{ confirmation.message }}</p>
+            </div>
+            <footer class="confirm-dialog-footer">
+              <button
+                class="confirm-dialog-cancel"
+                type="button"
+                @click="resolveConfirmation(false)"
+              >
+                取消
+              </button>
+              <button
+                ref="confirmButton"
+                class="confirm-dialog-submit"
+                :class="{ danger: confirmation.danger }"
+                type="button"
+                @click="resolveConfirmation(true)"
+              >
+                {{ confirmation.confirmText }}
+              </button>
+            </footer>
+          </section>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- 筛选工具栏 - 参考 StockRecordList 风格 -->
     <section class="search-panel" aria-label="订单筛选">
       <form class="search-grid" @submit.prevent="handleFilter">
@@ -945,7 +1007,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, inject, h, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
@@ -979,6 +1041,73 @@ const products = ref([]) // 商品列表，用于反查商品名称
 const detailModalOpen = ref(false)
 const selectedOrder = ref(null)
 const orderActionLoading = ref('')
+
+// 顶部通知
+const notice = ref({
+  visible: false,
+  type: 'success',
+  message: ''
+})
+let noticeTimer = null
+
+const showNotice = (message, type = 'success') => {
+  if (noticeTimer) {
+    clearTimeout(noticeTimer)
+  }
+
+  notice.value = {
+    visible: true,
+    type,
+    message: String(message || '')
+  }
+
+  noticeTimer = window.setTimeout(() => {
+    notice.value.visible = false
+    noticeTimer = null
+  }, type === 'error' ? 5000 : 3000)
+}
+
+// 自定义确认弹窗
+const confirmation = ref({
+  visible: false,
+  title: '确认操作',
+  message: '',
+  confirmText: '确定',
+  danger: false
+})
+const confirmButton = ref(null)
+let confirmationResolver = null
+
+const requestConfirmation = (options = {}) => {
+  if (confirmationResolver) {
+    confirmationResolver(false)
+  }
+
+  confirmation.value = {
+    visible: true,
+    title: options.title || '确认操作',
+    message: String(options.message || ''),
+    confirmText: options.confirmText || '确定',
+    danger: Boolean(options.danger)
+  }
+
+  nextTick(() => {
+    confirmButton.value?.focus()
+  })
+
+  return new Promise(resolve => {
+    confirmationResolver = resolve
+  })
+}
+
+const resolveConfirmation = (confirmed) => {
+  if (!confirmation.value.visible) return
+
+  const resolver = confirmationResolver
+  confirmationResolver = null
+  confirmation.value.visible = false
+  resolver?.(confirmed)
+}
 
 // 发货方式输入
 // 排序状态
@@ -1026,6 +1155,13 @@ onMounted(() => {
 onUnmounted(() => {
   // 清理事件监听
   document.removeEventListener('click', handleClickOutside)
+  if (noticeTimer) {
+    clearTimeout(noticeTimer)
+  }
+  if (confirmationResolver) {
+    confirmationResolver(false)
+    confirmationResolver = null
+  }
   if (setHeaderActions) {
     setHeaderActions(null)
   }
@@ -1637,7 +1773,7 @@ const closeOrderDetail = () => {
 const toggleSelect = (orderId) => {
   const order = orders.value.find(item => item.id === orderId)
   if (props.mode !== 'logistics' && isSalesOrderLocked(order)) {
-    window.alert('已过账单据不可删除，请先反审核')
+    showNotice('已过账单据不可删除，请先反审核', 'error')
     return
   }
 
@@ -1731,12 +1867,12 @@ const handleEditOrder = (order) => {
 const handlePrintOrder = (order) => {
   if (isNewOrder(order)) {
     // 新订单：调用打印模板功能
-    window.alert('打开打印预览功能（待实现打印模板）')
+    showNotice('打开打印预览功能（待实现打印模板）', 'info')
     // TODO: 实现打印模板调用
     // openPrintTemplate(order)
   } else {
     // 旧订单：显示提示信息
-    window.alert('该订单为旧格式订单，不支持打印功能')
+    showNotice('该订单为旧格式订单，不支持打印功能', 'error')
   }
 }
 
@@ -1829,14 +1965,14 @@ const handleCopyOrderInfo = async (order) => {
         }
       } catch (err) {
         console.error('复制失败:', err)
-        alert('复制失败，请手动复制')
+        showNotice('复制失败，请手动复制', 'error')
       } finally {
         document.body.removeChild(textarea)
       }
     }
   } catch (error) {
     console.error('复制失败:', error)
-    alert('复制失败，请手动复制')
+    showNotice('复制失败，请手动复制', 'error')
   }
 }
 
@@ -1891,7 +2027,13 @@ const updateOrderAuditState = async (order, audited) => {
 
   const actionLabel = audited ? '审核' : '反审核'
   const nextStatusLabel = audited ? '已过帐' : getStatusText({ ...order, audit_state: 0 })
-  if (!window.confirm(`确定要${actionLabel}订单 ${order.order_number || order.id} 吗？`)) {
+  const confirmed = await requestConfirmation({
+    title: `确认${actionLabel}`,
+    message: `确定要${actionLabel}订单 ${order.order_number || order.id} 吗？`,
+    confirmText: `确认${actionLabel}`,
+    danger: !audited
+  })
+  if (!confirmed) {
     return
   }
 
@@ -1913,10 +2055,13 @@ const updateOrderAuditState = async (order, audited) => {
     if (audited) {
       selectedOrders.value = selectedOrders.value.filter(id => id !== order.id)
     }
-    window.alert(`${actionLabel}成功，订单状态已更新为${nextStatusLabel}`)
+    showNotice(`${actionLabel}成功，订单状态已更新为${nextStatusLabel}`)
   } catch (error) {
     console.error(`${actionLabel}订单失败:`, error)
-    window.alert(error?.response?.data?.message || `${actionLabel}失败，请稍后重试`)
+    showNotice(
+      error?.response?.data?.message || `${actionLabel}失败，请稍后重试`,
+      'error'
+    )
   } finally {
     orderActionLoading.value = ''
   }
@@ -1969,42 +2114,7 @@ const copyLogisticsNo = async (order) => {
 
 // 显示复制消息
 const showCopyMessage = (text, type = 'success') => {
-  const message = document.createElement('div')
-  message.className = `copy-message copy-message-${type}`
-  message.innerHTML = `
-    <span class="copy-message-icon">${type === 'success' ? '✓' : '✕'}</span>
-    <span>${text}</span>
-  `
-  message.style.cssText = `
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 12px 24px;
-    border-radius: 8px;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 14px;
-    font-weight: 500;
-    z-index: 100002;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    background: ${type === 'success' ? '#f0f9ff' : '#fef2f2'};
-    color: ${type === 'success' ? '#0369a1' : '#dc2626'};
-    border: 1px solid ${type === 'success' ? '#bae6fd' : '#fecaca'};
-    animation: slideDown 0.3s ease;
-  `
-
-  document.body.appendChild(message)
-
-  setTimeout(() => {
-    message.style.opacity = '0'
-    message.style.transform = 'translateX(-50%) translateY(-20px)'
-    message.style.transition = 'all 0.3s ease'
-    setTimeout(() => {
-      document.body.removeChild(message)
-    }, 300)
-  }, 2000)
+  showNotice(text, type)
 }
 
 // 切换排序
@@ -2048,7 +2158,13 @@ const handleClickOutside = (event) => {
 
 const handleUncompleteOrder = async (order) => {
   if (!order || order.status !== 'completed') return
-  if (!window.confirm(`确定撤销订单 ${order.order_number || order.id} 的已完成状态吗？`)) return
+  const confirmed = await requestConfirmation({
+    title: '确认撤销完成',
+    message: `确定撤销订单 ${order.order_number || order.id} 的已完成状态吗？`,
+    confirmText: '确认撤销',
+    danger: true
+  })
+  if (!confirmed) return
 
   orderActionLoading.value = 'uncomplete'
   try {
@@ -2059,10 +2175,13 @@ const handleUncompleteOrder = async (order) => {
     })
     closeDetailModal()
     await fetchOrdersData()
-    window.alert('已撤销完成，订单已恢复为未完成状态')
+    showNotice('已撤销完成，订单已恢复为未完成状态')
   } catch (error) {
     console.error('撤销已完成失败:', error)
-    window.alert(error?.response?.data?.message || '撤销失败，请稍后重试')
+    showNotice(
+      error?.response?.data?.message || '撤销失败，请稍后重试',
+      'error'
+    )
   } finally {
     orderActionLoading.value = ''
   }
@@ -2071,12 +2190,17 @@ const handleUncompleteOrder = async (order) => {
 const handleForceComplete = async (order) => {
   if (!order) return
   if (order.status === 'completed') {
-    window.alert('订单已完成，无需重复操作')
+    showNotice('订单已完成，无需重复操作', 'info')
     return
   }
 
   const confirmMsg = `确定要强制完成订单 ${order.order_number || order.id} 吗？\n\n强制完成后订单状态将更新为已完成。`
-  if (!window.confirm(confirmMsg)) return
+  const confirmed = await requestConfirmation({
+    title: '确认强制完成',
+    message: confirmMsg,
+    confirmText: '确认完成'
+  })
+  if (!confirmed) return
 
   orderActionLoading.value = 'force-complete'
   try {
@@ -2096,10 +2220,13 @@ const handleForceComplete = async (order) => {
 
     closeDetailModal()
     await fetchOrdersData()
-    window.alert('订单已强制完成')
+    showNotice('订单已强制完成')
   } catch (error) {
     console.error('强制完成订单失败:', error)
-    window.alert(error?.response?.data?.message || '操作失败，请稍后重试')
+    showNotice(
+      error?.response?.data?.message || '操作失败，请稍后重试',
+      'error'
+    )
   } finally {
     orderActionLoading.value = ''
   }
@@ -2113,7 +2240,7 @@ const handleViewReceipt = (order) => {
 
 const handleDelete = async (order) => {
   if (isSalesOrderLocked(order)) {
-    window.alert('已过账单据不可删除，请先反审核')
+    showNotice('已过账单据不可删除，请先反审核', 'error')
     return
   }
 
@@ -2126,26 +2253,35 @@ const handleDelete = async (order) => {
     confirmMsg = `确定要删除订单 ${order.order_number || order.id} 吗？\n\n此订单包含 ${order.order_goods.length} 种商品，删除后将恢复库存。`
   }
 
-  if (confirm(confirmMsg)) {
-    try {
-      await request({
-        url: `/orders/${order.id}`,
-        method: 'DELETE'
-      })
-      alert('删除成功' + (isNew ? '，库存已恢复' : ''))
-      closeDetailModal()
-      selectedOrders.value = selectedOrders.value.filter(id => id !== order.id)
-      await fetchOrdersData()
-    } catch (error) {
-      console.error('删除失败:', error)
-      alert('删除失败：' + (error?.response?.data?.message || error.message || '未知错误'))
-    }
+  const confirmed = await requestConfirmation({
+    title: '确认删除订单',
+    message: confirmMsg,
+    confirmText: '确定删除',
+    danger: true
+  })
+  if (!confirmed) return
+
+  try {
+    await request({
+      url: `/orders/${order.id}`,
+      method: 'DELETE'
+    })
+    showNotice('删除成功' + (isNew ? '，库存已恢复' : ''))
+    closeDetailModal()
+    selectedOrders.value = selectedOrders.value.filter(id => id !== order.id)
+    await fetchOrdersData()
+  } catch (error) {
+    console.error('删除失败:', error)
+    showNotice(
+      '删除失败：' + (error?.response?.data?.message || error.message || '未知错误'),
+      'error'
+    )
   }
 }
 
 const handleBatchDelete = async () => {
   if (selectedOrders.value.length === 0) {
-    alert('请先选择要删除的订单')
+    showNotice('请先选择要删除的订单', 'error')
     return
   }
 
@@ -2153,7 +2289,10 @@ const handleBatchDelete = async () => {
   const selectedOrdersData = orders.value.filter(o => selectedOrders.value.includes(o.id))
   const lockedOrders = selectedOrdersData.filter(isSalesOrderLocked)
   if (lockedOrders.length > 0) {
-    alert(`选中的订单中有 ${lockedOrders.length} 个已过账单据，请先反审核`)
+    showNotice(
+      `选中的订单中有 ${lockedOrders.length} 个已过账单据，请先反审核`,
+      'error'
+    )
     return
   }
 
@@ -2169,31 +2308,37 @@ const handleBatchDelete = async () => {
     confirmMsg += `其中包含 ${oldOrdersCount} 个普通订单`
   }
 
-  if (confirm(confirmMsg)) {
-    try {
-      console.log('开始批量删除订单:', selectedOrders.value)
+  const confirmed = await requestConfirmation({
+    title: '确认批量删除',
+    message: confirmMsg,
+    confirmText: '确定删除',
+    danger: true
+  })
+  if (!confirmed) return
 
-      const results = await Promise.allSettled(
-        selectedOrders.value.map(id =>
-          request({ url: `/orders/${id}`, method: 'DELETE' })
-        )
+  try {
+    console.log('开始批量删除订单:', selectedOrders.value)
+
+    const results = await Promise.allSettled(
+      selectedOrders.value.map(id =>
+        request({ url: `/orders/${id}`, method: 'DELETE' })
       )
+    )
 
-      const failed = results.filter(r => r.status === 'rejected')
+    const failed = results.filter(r => r.status === 'rejected')
 
-      if (failed.length > 0) {
-        console.error('部分删除失败:', failed)
-        alert(`删除完成，但有 ${failed.length} 个订单删除失败`)
-      } else {
-        alert('删除成功' + (newOrdersCount > 0 ? '，库存已恢复' : ''))
-      }
-
-      selectedOrders.value = []
-      await fetchOrdersData()
-    } catch (error) {
-      console.error('批量删除失败:', error)
-      alert('批量删除失败: ' + (error.message || '未知错误'))
+    if (failed.length > 0) {
+      console.error('部分删除失败:', failed)
+      showNotice(`删除完成，但有 ${failed.length} 个订单删除失败`, 'error')
+    } else {
+      showNotice('删除成功' + (newOrdersCount > 0 ? '，库存已恢复' : ''))
     }
+
+    selectedOrders.value = []
+    await fetchOrdersData()
+  } catch (error) {
+    console.error('批量删除失败:', error)
+    showNotice('批量删除失败: ' + (error.message || '未知错误'), 'error')
   }
 }
 
@@ -2256,6 +2401,215 @@ const changePageSize = (size) => {
   color: var(--text);
   background: var(--page-bg);
   font-size: 14px;
+}
+
+.page-notice {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 44px;
+  padding: 10px 16px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.page-notice svg {
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.notice-success svg {
+  color: #0f9f78;
+}
+
+.notice-error svg {
+  color: #dc3545;
+}
+
+.notice-info svg {
+  color: #2563eb;
+}
+
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+}
+
+.confirm-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1px);
+}
+
+.confirm-dialog {
+  width: min(400px, calc(100vw - 48px));
+  overflow: hidden;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.15);
+}
+
+.confirm-dialog-header {
+  padding: 24px 24px 16px;
+  text-align: center;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.confirm-dialog-icon {
+  display: flex;
+  width: 56px;
+  height: 56px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 12px;
+  color: #fff;
+  background: #f59e0b;
+  border-radius: 50%;
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.confirm-dialog-header h3 {
+  margin: 0;
+  color: #172033;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.confirm-dialog-body {
+  padding: 24px;
+  text-align: center;
+}
+
+.confirm-dialog-body p {
+  margin: 0;
+  color: #596579;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-line;
+}
+
+.confirm-dialog-footer {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 16px 24px 24px;
+}
+
+.confirm-dialog-cancel,
+.confirm-dialog-submit {
+  min-width: 120px;
+  height: 38px;
+  padding: 0 32px;
+  border-radius: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease,
+    color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.confirm-dialog-cancel {
+  color: #596579;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+}
+
+.confirm-dialog-cancel:hover {
+  color: #08745a;
+  background: #e9f8f3;
+  border-color: #a9e5d2;
+}
+
+.confirm-dialog-submit {
+  color: #fff;
+  background: #0f9f78;
+  border: 1px solid #0f9f78;
+}
+
+.confirm-dialog-submit:hover {
+  background: #08745a;
+  border-color: #08745a;
+  box-shadow: 0 4px 12px rgba(15, 159, 120, 0.25);
+  transform: translateY(-1px);
+}
+
+.confirm-dialog-submit.danger {
+  background: #ef4444;
+  border-color: #ef4444;
+}
+
+.confirm-dialog-submit.danger:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.25);
+}
+
+.confirm-dialog-cancel:focus-visible,
+.confirm-dialog-submit:focus-visible {
+  outline: 2px solid #0f9f78;
+  outline-offset: 2px;
+}
+
+.confirm-dialog-submit:active {
+  transform: translateY(0);
+}
+
+.confirm-modal-enter-active,
+.confirm-modal-leave-active {
+  transition: opacity 0.2s ease;
+}
+
+.confirm-modal-enter-active .confirm-dialog,
+.confirm-modal-leave-active .confirm-dialog {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.confirm-modal-enter-from,
+.confirm-modal-leave-to {
+  opacity: 0;
+}
+
+.confirm-modal-enter-from .confirm-dialog,
+.confirm-modal-leave-to .confirm-dialog {
+  opacity: 0;
+  transform: translateY(16px);
 }
 
 * {
@@ -3783,6 +4137,30 @@ svg {
 }
 
 @media (max-width: 780px) {
+  .page-notice {
+    top: 12px;
+    min-width: 0;
+    max-width: calc(100vw - 32px);
+  }
+
+  .confirm-dialog-overlay {
+    padding: 16px;
+  }
+
+  .confirm-dialog {
+    width: calc(100vw - 32px);
+    max-width: calc(100vw - 32px);
+  }
+
+  .confirm-dialog-footer {
+    flex-direction: column-reverse;
+  }
+
+  .confirm-dialog-cancel,
+  .confirm-dialog-submit {
+    width: 100%;
+  }
+
   .search-grid {
     grid-template-columns: 1fr;
   }
@@ -3806,6 +4184,17 @@ svg {
   .detail-modal-left-actions,
   .detail-modal-actions {
     width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-enter-active,
+  .notice-leave-active,
+  .confirm-modal-enter-active,
+  .confirm-modal-leave-active,
+  .confirm-modal-enter-active .confirm-dialog,
+  .confirm-modal-leave-active .confirm-dialog {
+    transition: none;
   }
 }
 </style>
