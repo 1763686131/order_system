@@ -655,7 +655,6 @@ body {
 
 .material-tab-content {
   width: 100%;
-  margin-top: -24px;
 }
 
 .material-stock-line {
@@ -664,7 +663,7 @@ body {
   align-items: baseline;
   gap: 34px;
   overflow-x: auto;
-  padding: 0 20px 18px;
+  padding: 10px 20px 22px;
   color: #344054;
   scrollbar-width: none;
 }
@@ -677,6 +676,7 @@ body {
   flex-shrink: 0;
   font-size: 23px;
   font-weight: 750;
+  line-height: 1.5;
   white-space: nowrap;
 }
 
@@ -700,13 +700,9 @@ body {
 
 /* 移动端响应 */
 @media (max-width: 768px) {
-  .material-tab-content {
-    margin-top: -12px;
-  }
-
   .material-stock-line {
     gap: 22px;
-    padding: 0 0 16px;
+    padding: 8px 0 18px;
   }
 
   .material-stock-item {
