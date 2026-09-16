@@ -67,8 +67,22 @@
       class="tab-pane"
       :class="{ active: nomiStore.currentTab === 3 }"
     >
-      <div style="padding: 40px 20px;">
-        <MaterialDisplay />
+      <div class="material-tab-content">
+        <div v-if="materialStockProducts.length" class="material-stock-line">
+          <span
+            v-for="product in materialStockProducts"
+            :key="product.id"
+            class="material-stock-item"
+          >
+            {{ product.name }}剩余库存：
+            <strong>{{ formatMaterialStock(product.currentStock) }}</strong>
+            <small>{{ product.unit || '' }}</small>
+          </span>
+        </div>
+
+        <div class="material-record-list">
+          <MaterialDisplay />
+        </div>
       </div>
     </div>
 
@@ -92,6 +106,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useOrderStore } from '@/stores/order'
 import { useUserStore } from '@/stores/user'
 import { useNomiStore } from '@/stores/nomi'
+import request from '@/api/request'
 import OrderList from '@/views/front/OrderList.vue'
 import ShippedOrderList from '@/views/front/ShippedOrderList.vue'
 import MaterialDisplay from '@/views/front/MaterialDisplay.vue'
@@ -105,6 +120,7 @@ const userStore = useUserStore()
 const nomiStore = useNomiStore()
 
 const navBarHidden = ref(false)
+const materialStockProducts = ref([])
 
 // 弹窗引用
 const confirmModal = ref(null)
@@ -117,6 +133,24 @@ const tabs = [
   { label: '物流订单' },
   { label: '原材料出库' }
 ]
+
+const formatMaterialStock = value => Number(value || 0).toLocaleString('zh-CN', {
+  maximumFractionDigits: 3
+})
+
+const fetchMaterialStocks = async () => {
+  try {
+    const response = await request({
+      url: '/material-outbound-settings',
+      method: 'GET'
+    })
+    materialStockProducts.value = Array.isArray(response?.allowedProducts)
+      ? response.allowedProducts
+      : []
+  } catch (error) {
+    console.error('原材料剩余库存加载失败:', error)
+  }
+}
 
 // 计算属性：根据状态筛选订单
 const pendingOrders = computed(() => {
@@ -170,6 +204,8 @@ const switchTab = (index) => {
 
   if (index === 0 || index === 1 || index === 2) {
     fetchOrders()
+  } else if (index === 3) {
+    fetchMaterialStocks()
   }
 
   // 自动触发日期筛选气泡
@@ -358,6 +394,7 @@ onMounted(() => {
   // 先建立实时连接，再加载初始数据
   connectOrderEvents()
   fetchOrders()
+  fetchMaterialStocks()
 
   // 监听滚动事件
   window.addEventListener('scroll', handleScroll, { passive: true })
@@ -375,6 +412,8 @@ onMounted(() => {
 
   // 监听刷新事件
   window.addEventListener('refresh-orders', fetchOrders)
+  window.addEventListener('refresh-materials', fetchMaterialStocks)
+  window.addEventListener('refresh-material-outbounds', fetchMaterialStocks)
 
   // 监听切换 tab 事件
   switchTabHandler = (e) => {
@@ -490,6 +529,8 @@ onUnmounted(() => {
 
   window.removeEventListener('scroll', handleScroll)
   window.removeEventListener('refresh-orders', fetchOrders)
+  window.removeEventListener('refresh-materials', fetchMaterialStocks)
+  window.removeEventListener('refresh-material-outbounds', fetchMaterialStocks)
   if (switchTabHandler) {
     window.removeEventListener('switch-tab', switchTabHandler)
   }
@@ -612,8 +653,74 @@ body {
   gap: 32px;
 }
 
+.material-tab-content {
+  width: 100%;
+  margin-top: -24px;
+}
+
+.material-stock-line {
+  display: flex;
+  width: 100%;
+  align-items: baseline;
+  gap: 34px;
+  overflow-x: auto;
+  padding: 0 20px 18px;
+  color: #344054;
+  scrollbar-width: none;
+}
+
+.material-stock-line::-webkit-scrollbar {
+  display: none;
+}
+
+.material-stock-item {
+  flex-shrink: 0;
+  font-size: 23px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+
+.material-stock-item strong {
+  color: #08745a;
+  font-size: 30px;
+  font-weight: 900;
+}
+
+.material-stock-item small {
+  margin-left: 5px;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.material-record-list {
+  width: 100%;
+  padding: 0 20px 40px;
+}
+
 /* 移动端响应 */
 @media (max-width: 768px) {
+  .material-tab-content {
+    margin-top: -12px;
+  }
+
+  .material-stock-line {
+    gap: 22px;
+    padding: 0 0 16px;
+  }
+
+  .material-stock-item {
+    font-size: 18px;
+  }
+
+  .material-stock-item strong {
+    font-size: 24px;
+  }
+
+  .material-record-list {
+    padding: 0 0 24px;
+  }
+
   #tab-0, #tab-1 {
     height: auto !important;
     flex-wrap: wrap !important;
