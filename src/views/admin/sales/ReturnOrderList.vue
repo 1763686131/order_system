@@ -754,7 +754,7 @@ const toggleSelectAll = () => {
 
 const openCreateModal = () => {
   router.push({
-    name: 'admin-orders-return-create',
+    name: 'admin-sales-return-create',
     query: { productType: 'finished-product' }
   })
 }
@@ -773,7 +773,7 @@ const handleEdit = item => {
   if (['audited', 'completed'].includes(item.status)) return
   closeDetailModal()
   router.push({
-    name: 'admin-orders-return-edit',
+    name: 'admin-sales-return-edit',
     params: { id: item.id },
     query: { productType: item.productType || 'finished-product' }
   })

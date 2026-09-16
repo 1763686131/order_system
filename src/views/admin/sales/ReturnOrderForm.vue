@@ -541,7 +541,7 @@ const clearForm = () => {
   resetItems()
 }
 
-const close = () => router.push({ name: 'admin-orders-returns' })
+const close = () => router.push({ name: 'admin-sales-returns' })
 
 watch(() => form.value.taxEnabled, enabled => {
   form.value.items.forEach(item => {
@@ -687,7 +687,7 @@ const save = async printAfterSave => {
     if (!response?.success) throw new Error(response?.message || '保存失败')
     if (printAfterSave) window.print()
     window.alert(response?.message || `退货单保存成功：${response?.returnNumber || ''}`)
-    await router.push({ name: 'admin-orders-returns' })
+    await router.push({ name: 'admin-sales-returns' })
   } catch (error) {
     console.error('保存退货单失败:', error)
     window.alert(error?.response?.data?.message || error.message || '保存退货单失败')

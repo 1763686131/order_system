@@ -384,8 +384,8 @@ const isChildActive = (children) => {
 
 const currentPath = computed(() => route.path)
 const showOrderDraftShortcut = computed(() => {
-  const isOrderFormRoute = route.name === 'admin-orders-create' || route.name === 'admin-orders-edit'
-  return orderDraftStore.hasDraft && !isOrderFormRoute
+  const isSalesFormRoute = route.name === 'admin-sales-create' || route.name === 'admin-sales-edit'
+  return orderDraftStore.hasDraft && !isSalesFormRoute
 })
 
 const currentMenuLabel = computed(() => {

@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.1.0` |
-| 文档更新 | `2026-09-14` |
+| 文档更新 | `2026-09-16` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -66,8 +66,8 @@
 
 ### 退货订单管理
 
-- 退货订单列表页面 (`/admin/orders/returns`) 使用 `/api/returns` 加载真实数据，支持关键词、日期、状态筛选、分页和导出入口。
-- 录入退货单为独立页面 (`/admin/orders/returns/create`)，原材料退货通过 `?productType=raw-material` 复用同一表单；编辑地址为 `/admin/orders/returns/edit/:id`。
+- 退货订单列表页面 (`/admin/sales/returns`) 使用 `/api/returns` 加载真实数据，支持关键词、日期、状态筛选、分页和导出入口。
+- 录入退货单为独立页面 (`/admin/sales/returns/create`)，原材料退货通过 `?productType=raw-material` 复用同一表单；编辑地址为 `/admin/sales/returns/edit/:id`。
 - 门店联动客户、仓库和商品；选择商品后自动带出规格、单位、多单位、库存和价格，含税字段按含税开关显示。
 - 退货单保存为 `draft` 待审核草稿，不会立即改变客户应收或库存；草稿可修改、删除和审核。
 - 审核后状态为 `audited`，按实退货金额核销客户应收并返还库存；已审核单据不能修改或删除，只能反审核。
@@ -246,6 +246,9 @@ order_system/
 │  │     │  ├─ ReturnOrderList.vue   # 退货订单列表
 │  │     │  ├─ ReturnOrderForm.vue   # 退货单录入和编辑表单
 │  │     │  └─ CustomerList.vue      # 客户列表、编辑弹窗（支持期初欠款和储值管理）
+│  │     ├─ purchase/                # 采购管理
+│  │     │  ├─ PurchaseOrders.vue    # 采购订单
+│  │     │  └─ PurchaseInbound.vue   # 采购入库
 │  │     ├─ inventory/               # 仓库管理
 │  │     ├─ finance/
 │  │     │  ├─ Receivables.vue        # 客户应收欠款汇总
@@ -385,16 +388,18 @@ order_system/
 | --- | --- | --- |
 | `/admin/products` | 成品档案 | `/api/products` |
 | `/admin/materials` | 原材料档案 | `/api/raw-material-products`、`/api/stock-balances` |
-| `/admin/suppliers` | 供应商管理 | `/api/suppliers` |
+| `/admin/purchase/orders` | 采购订单 | 采购订单接口 |
+| `/admin/purchase/suppliers` | 供应商管理 | `/api/suppliers` |
+| `/admin/purchase/inbound` | 采购入库 | 入库接口 |
 | `/admin/inventory` | 成品库存 | `/api/products/inventory` |
 | `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances` |
 | `/admin/stock/in` | 入库记录 | `/api/stock-inbounds` |
 | `/admin/stock/out` | 出库记录 | `/api/orders` |
 | `/admin/inventory/warehouse` | 仓库管理 | `/api/warehouses` |
-| `/admin/orders` | 销售订单 | `/api/orders` |
-| `/admin/orders/returns` | 退货订单 | `/api/returns` |
-| `/admin/orders/returns/create` | 新增退货单 | `/api/stores`、`/api/customers`、`/api/warehouses`、`/api/returns` |
-| `/admin/orders/returns/edit/:id` | 修改退货单草稿 | `/api/returns/:id` |
+| `/admin/sales` | 销售订单 | `/api/orders` |
+| `/admin/sales/returns` | 退货订单 | `/api/returns` |
+| `/admin/sales/returns/create` | 新增退货单 | `/api/stores`、`/api/customers`、`/api/warehouses`、`/api/returns` |
+| `/admin/sales/returns/edit/:id` | 修改退货单草稿 | `/api/returns/:id` |
 | `/admin/customers` | 客户管理 | `/api/customers` |
 | `/admin/finance/receivables` | 应收欠款 | `/api/customers/receivables` |
 | `/admin/finance/payment-history` | 收款历史 | `/api/payment-receipts` |

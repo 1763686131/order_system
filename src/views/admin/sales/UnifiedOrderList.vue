@@ -1709,7 +1709,7 @@ const getStatusCount = (status) => {
 }
 
 const handleAdd = () => {
-  openOrderTask({ name: 'admin-orders-create' })
+  openOrderTask({ name: 'admin-sales-create' })
 }
 
 const handleEdit = (order) => {
@@ -1724,7 +1724,7 @@ const handleEdit = (order) => {
 // 编辑订单（跳转到编辑页面）
 const handleEditOrder = (order) => {
   closeDetailModal()
-  openOrderTask({ name: 'admin-orders-edit', params: { id: order.id } })
+  openOrderTask({ name: 'admin-sales-edit', params: { id: order.id } })
 }
 
 // 打印订单
@@ -1744,7 +1744,7 @@ const handlePrintOrder = (order) => {
 const handleCopySalesOrder = (order) => {
   openOrderTask(
     {
-      name: 'admin-orders-create',
+      name: 'admin-sales-create',
       query: { copyFrom: String(order.id) }
     }
   )
