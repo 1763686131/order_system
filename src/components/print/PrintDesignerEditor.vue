@@ -88,6 +88,14 @@
     <div class="print-designer-canvas">
       <print-designer ref="designerRef" @ready="configureDesigner"></print-designer>
     </div>
+
+    <OrderPrintPreview
+      :visible="previewVisible"
+      :template="previewTemplate"
+      :variables="defaultVariables"
+      preview-label="模板测试数据预览"
+      @close="closePreview"
+    />
   </div>
 </template>
 
@@ -96,6 +104,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 import { toChineseMoney } from '@/utils/chineseMoney'
+import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -112,6 +121,8 @@ const businessType = ref('sale')
 const paperType = ref('三联单')
 const pageWidth = ref(210)
 const pageHeight = ref(140)
+const previewVisible = ref(false)
+const previewTemplate = ref(null)
 const configured = ref(false)
 const NEW_TEMPLATE_ID = '__order_system_new_template__'
 const businessTypeOptions = [
@@ -740,6 +751,8 @@ const openDesigner = async () => {
   activeDesignerTemplateId = ''
   activeCanvasSizeKey = ''
   saveMenuOpen.value = false
+  previewVisible.value = false
+  previewTemplate.value = null
   templateName.value = props.template?.name || '销售三联单'
   businessType.value = props.template?.businessType || 'sale'
   paperType.value = props.template?.paperType || '三联单'
@@ -759,6 +772,8 @@ watch(
       openDesigner()
     } else {
       saveMenuOpen.value = false
+      previewVisible.value = false
+      previewTemplate.value = null
       stopFooterFixTimer()
       stopDesignerChromeObserver()
     }
@@ -768,9 +783,24 @@ watch(
 const handlePreview = async () => {
   const designer = designerRef.value
   if (!designer) return
+  await nextTick()
   ensureLiveTableFooters()
-  await designer.setVariables(defaultVariables, { merge: false })
-  await designer.preview()
+  const currentTemplate = getCurrentDatabaseTemplate()
+  previewTemplate.value = {
+    ...currentTemplate,
+    name: templateName.value || currentTemplate?.name || '销售三联单',
+    businessType: businessType.value || 'sale',
+    paperType: paperType.value || '自定义',
+    pageWidth: pageWidth.value || 210,
+    pageHeight: pageHeight.value || 140,
+    content: normalizeTableFooters(designer.getTemplateData())
+  }
+  previewVisible.value = true
+}
+
+const closePreview = () => {
+  previewVisible.value = false
+  previewTemplate.value = null
 }
 
 const handleSave = async () => {

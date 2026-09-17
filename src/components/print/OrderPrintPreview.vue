@@ -5,7 +5,7 @@
         <div>
           <h3>{{ template?.name || '打印预览' }}</h3>
           <span>
-            当前订单数据预览 · {{ template?.pageWidth || 210 }}mm × {{ template?.pageHeight || 140 }}mm
+            {{ previewLabel }} · {{ template?.pageWidth || 210 }}mm × {{ template?.pageHeight || 140 }}mm
             · {{ resolvedPrinterName }}
           </span>
         </div>
@@ -69,6 +69,7 @@ const props = defineProps({
   template: { type: Object, default: null },
   variables: { type: Object, default: () => ({}) },
   printer: { type: Object, default: null },
+  previewLabel: { type: String, default: '当前订单数据预览' },
   autoPrint: { type: Boolean, default: false },
   trailingBlankRows: {
     type: Number,
