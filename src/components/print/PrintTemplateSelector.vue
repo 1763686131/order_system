@@ -5,7 +5,7 @@
         v-if="visible"
         class="print-template-dialog-overlay"
         @click.self="handleClose"
-        @keydown.esc.prevent="handleClose"
+        @keydown.esc.prevent="handleEscape"
       >
         <section
           ref="dialogRef"
@@ -44,78 +44,193 @@
           <div class="print-template-dialog-body">
             <p class="print-template-dialog-hint">{{ resolvedDescription }}</p>
 
-            <div class="print-selector-section-heading">
-              <span>打印模板</span>
-            </div>
-            <div class="print-selector-template-area">
-              <div v-if="loading" class="print-template-dialog-state compact">
-                <span class="print-template-loading-mark" aria-hidden="true"></span>
-                正在加载打印模板...
-              </div>
-              <div v-else-if="errorMessage" class="print-template-dialog-state compact error">
-                {{ errorMessage }}
-                <button type="button" @click="loadTemplates">重新加载</button>
-              </div>
-              <div v-else-if="!templates.length" class="print-template-dialog-state compact">
-                {{ resolvedEmptyText }}
-              </div>
-              <div v-else class="print-template-options" role="radiogroup" aria-label="打印模板">
+            <div class="print-selector-layout">
+              <section class="print-selector-column print-client-column">
+                <div class="print-selector-section-heading">
+                  <span>打印机设置</span>
+                  <small>本机配置</small>
+                </div>
                 <button
-                  v-for="template in templates"
-                  :key="template.id"
                   type="button"
-                  :class="[
-                    'print-template-option',
-                    { selected: String(selectedTemplateId) === String(template.id) }
-                  ]"
-                  role="radio"
-                  :aria-checked="String(selectedTemplateId) === String(template.id)"
-                  @click="selectedTemplateId = template.id"
-                  @dblclick="handlePreview"
+                  class="print-client-summary"
+                  @click="settingsVisible = true"
                 >
-                  <span class="print-template-radio" aria-hidden="true"></span>
-                  <span class="print-template-option-copy">
-                    <strong>{{ template.name }}</strong>
-                    <span>{{ getPaperLabel(template) }}</span>
+                  <span class="print-client-summary-icon" aria-hidden="true">
+                    <svg v-if="printConfig.mode === 'browser'" viewBox="0 0 24 24">
+                      <rect x="3" y="4" width="18" height="13" rx="1"></rect>
+                      <path d="M8 21h8M12 17v4"></path>
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24">
+                      <path d="M6 9V2h12v7"></path>
+                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                      <path d="M6 14h12v8H6z"></path>
+                    </svg>
                   </span>
-                  <span v-if="template.isDefault" class="print-template-default-tag">默认</span>
+                  <span class="print-client-summary-copy">
+                    <strong>{{ printModeLabel }}</strong>
+                    <span>{{ printModeDescription }}</span>
+                  </span>
+                  <span class="print-client-settings-action">
+                    设置
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m9 6 6 6-6 6"></path>
+                    </svg>
+                  </span>
                 </button>
-              </div>
-            </div>
 
-            <div class="print-selector-section-heading printer-heading">
-              <span>打印方式</span>
+                <dl class="print-client-facts">
+                  <div>
+                    <dt>输出方式</dt>
+                    <dd>{{ printConfig.mode === 'browser' ? '浏览器' : 'C-Lodop' }}</dd>
+                  </div>
+                  <div>
+                    <dt>目标设备</dt>
+                    <dd>{{ printTargetLabel }}</dd>
+                  </div>
+                  <div>
+                    <dt>服务地址</dt>
+                    <dd>{{ printServiceLabel }}</dd>
+                  </div>
+                </dl>
+
+                <p v-if="printConfigError" class="print-client-config-error">
+                  {{ printConfigError }}
+                </p>
+              </section>
+
+              <section class="print-selector-column print-template-column">
+                <div class="print-selector-section-heading">
+                  <span>打印模板</span>
+                  <small v-if="templates.length">{{ templates.length }} 个可用</small>
+                </div>
+
+                <div class="print-selector-template-area">
+                  <div v-if="loading" class="print-template-dialog-state compact">
+                    <span class="print-template-loading-mark" aria-hidden="true"></span>
+                    正在加载打印模板...
+                  </div>
+                  <div v-else-if="errorMessage" class="print-template-dialog-state compact error">
+                    {{ errorMessage }}
+                    <button type="button" @click="loadTemplates">重新加载</button>
+                  </div>
+                  <div v-else-if="!templates.length" class="print-template-dialog-state compact">
+                    {{ resolvedEmptyText }}
+                  </div>
+                  <div
+                    v-else
+                    ref="templateSelectRef"
+                    class="print-template-combobox"
+                  >
+                    <button
+                      type="button"
+                      class="print-template-trigger"
+                      role="combobox"
+                      aria-haspopup="listbox"
+                      aria-controls="print-template-listbox"
+                      :aria-expanded="templateDropdownOpen"
+                      @click="toggleTemplateDropdown"
+                    >
+                      <span class="print-template-trigger-icon" aria-hidden="true">
+                        <svg viewBox="0 0 24 24">
+                          <path d="M5 3h11l3 3v15H5z"></path>
+                          <path d="M16 3v4h4"></path>
+                          <path d="M8 12h8M8 16h6"></path>
+                        </svg>
+                      </span>
+                      <span class="print-template-trigger-copy">
+                        <strong>{{ selectedTemplate?.name || '请选择打印模板' }}</strong>
+                        <span>
+                          {{ selectedTemplate ? getPaperLabel(selectedTemplate) : '未选择模板' }}
+                        </span>
+                      </span>
+                      <span
+                        v-if="selectedTemplate?.isDefault"
+                        class="print-template-default-tag"
+                      >
+                        默认
+                      </span>
+                      <svg
+                        class="print-template-chevron"
+                        :class="{ open: templateDropdownOpen }"
+                        viewBox="0 0 24 24"
+                        aria-hidden="true"
+                      >
+                        <path d="m7 9 5 5 5-5"></path>
+                      </svg>
+                    </button>
+
+                    <Transition name="print-template-dropdown">
+                      <div
+                        v-if="templateDropdownOpen"
+                        class="print-template-dropdown"
+                      >
+                        <label class="print-template-search">
+                          <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7"></circle>
+                            <path d="m20 20-4-4"></path>
+                          </svg>
+                          <input
+                            ref="templateSearchRef"
+                            v-model.trim="templateSearch"
+                            type="search"
+                            placeholder="搜索模板名称或纸张"
+                            aria-label="搜索打印模板"
+                          />
+                        </label>
+
+                        <div
+                          id="print-template-listbox"
+                          class="print-template-dropdown-list"
+                          role="listbox"
+                          aria-label="打印模板"
+                        >
+                          <button
+                            v-for="template in filteredTemplates"
+                            :key="template.id"
+                            type="button"
+                            :class="[
+                              'print-template-dropdown-option',
+                              {
+                                selected:
+                                  String(selectedTemplateId) === String(template.id)
+                              }
+                            ]"
+                            role="option"
+                            :aria-selected="
+                              String(selectedTemplateId) === String(template.id)
+                            "
+                            @click="selectTemplate(template)"
+                          >
+                            <span class="print-template-option-check" aria-hidden="true">
+                              <svg viewBox="0 0 24 24">
+                                <path d="m6 12 4 4 8-9"></path>
+                              </svg>
+                            </span>
+                            <span class="print-template-option-copy">
+                              <strong>{{ template.name }}</strong>
+                              <span>{{ getPaperLabel(template) }}</span>
+                            </span>
+                            <span
+                              v-if="template.isDefault"
+                              class="print-template-default-tag"
+                            >
+                              默认
+                            </span>
+                          </button>
+
+                          <div
+                            v-if="!filteredTemplates.length"
+                            class="print-template-no-results"
+                          >
+                            没有匹配的打印模板
+                          </div>
+                        </div>
+                      </div>
+                    </Transition>
+                  </div>
+                </div>
+              </section>
             </div>
-            <button
-              type="button"
-              class="print-client-summary"
-              @click="settingsVisible = true"
-            >
-              <span class="print-client-summary-icon" aria-hidden="true">
-                <svg v-if="printConfig.mode === 'browser'" viewBox="0 0 24 24">
-                  <rect x="3" y="4" width="18" height="13" rx="1"></rect>
-                  <path d="M8 21h8M12 17v4"></path>
-                </svg>
-                <svg v-else viewBox="0 0 24 24">
-                  <path d="M6 9V2h12v7"></path>
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                  <path d="M6 14h12v8H6z"></path>
-                </svg>
-              </span>
-              <span class="print-client-summary-copy">
-                <strong>{{ printModeLabel }}</strong>
-                <span>{{ printModeDescription }}</span>
-              </span>
-              <span class="print-client-settings-action">
-                设置
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m9 6 6 6-6 6"></path>
-                </svg>
-              </span>
-            </button>
-            <p v-if="printConfigError" class="print-client-config-error">
-              {{ printConfigError }}
-            </p>
           </div>
 
           <footer class="print-template-dialog-footer">
@@ -206,10 +321,14 @@ const props = defineProps({
 const emit = defineEmits(['close', 'preview', 'print'])
 
 const dialogRef = ref(null)
+const templateSelectRef = ref(null)
+const templateSearchRef = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
 const templates = ref([])
 const selectedTemplateId = ref(null)
+const templateDropdownOpen = ref(false)
+const templateSearch = ref('')
 const settingsVisible = ref(false)
 const printConfig = ref(getPrintClientConfig())
 
@@ -247,6 +366,25 @@ const selectedTemplate = computed(() => (
   )) || null
 ))
 
+const filteredTemplates = computed(() => {
+  const keyword = String(templateSearch.value || '').trim().toLocaleLowerCase()
+  if (!keyword) return templates.value
+
+  return templates.value.filter((template) => (
+    [
+      template.name,
+      template.paperType,
+      template.pageWidth,
+      template.pageHeight,
+      getPaperLabel(template)
+    ]
+      .filter(value => value !== undefined && value !== null)
+      .join(' ')
+      .toLocaleLowerCase()
+      .includes(keyword)
+  ))
+})
+
 const selectedPrinter = computed(() => (
   printConfig.value.mode === 'clodop' && printConfig.value.printerName
     ? { name: printConfig.value.printerName }
@@ -278,6 +416,18 @@ const printModeDescription = computed(() => (
     : `${getPrintServiceBaseUrl(printConfig.value)} · 本地配置`
 ))
 
+const printTargetLabel = computed(() => (
+  printConfig.value.mode === 'browser'
+    ? '浏览器打印窗口'
+    : printConfig.value.printerName || '未选择打印机'
+))
+
+const printServiceLabel = computed(() => (
+  printConfig.value.mode === 'browser'
+    ? '浏览器自动处理'
+    : getPrintServiceBaseUrl(printConfig.value)
+))
+
 const printConfigError = computed(() => (
   printConfig.value.mode === 'clodop' && !printConfig.value.printerName
     ? '请先进入设置，检测并选择一台 C-Lodop 打印机。'
@@ -300,6 +450,8 @@ const getPaperLabel = (template) => {
 const loadTemplates = async () => {
   loading.value = true
   errorMessage.value = ''
+  templateDropdownOpen.value = false
+  templateSearch.value = ''
 
   try {
     const response = await getTemplates({
@@ -334,9 +486,49 @@ const loadTemplates = async () => {
   }
 }
 
+const toggleTemplateDropdown = async () => {
+  templateDropdownOpen.value = !templateDropdownOpen.value
+  if (!templateDropdownOpen.value) {
+    templateSearch.value = ''
+    return
+  }
+
+  templateSearch.value = ''
+  await nextTick()
+  templateSearchRef.value?.focus()
+}
+
+const closeTemplateDropdown = () => {
+  templateDropdownOpen.value = false
+  templateSearch.value = ''
+}
+
+const selectTemplate = (template) => {
+  selectedTemplateId.value = template.id
+  closeTemplateDropdown()
+}
+
 const handleClose = () => {
+  closeTemplateDropdown()
   settingsVisible.value = false
   emit('close')
+}
+
+const handleEscape = () => {
+  if (templateDropdownOpen.value) {
+    closeTemplateDropdown()
+    return
+  }
+  handleClose()
+}
+
+const handleDocumentPointerDown = (event) => {
+  if (
+    templateDropdownOpen.value &&
+    !templateSelectRef.value?.contains(event.target)
+  ) {
+    closeTemplateDropdown()
+  }
 }
 
 const handlePreview = () => {
@@ -362,7 +554,10 @@ const handleTemplatesUpdated = () => {
 watch(
   () => props.visible,
   async (visible) => {
-    if (!visible) return
+    if (!visible) {
+      closeTemplateDropdown()
+      return
+    }
     selectedTemplateId.value = null
     printConfig.value = getPrintClientConfig()
     settingsVisible.value = false
@@ -384,10 +579,12 @@ watch(
 
 onMounted(() => {
   window.addEventListener('order-system-print-templates-updated', handleTemplatesUpdated)
+  window.addEventListener('pointerdown', handleDocumentPointerDown)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('order-system-print-templates-updated', handleTemplatesUpdated)
+  window.removeEventListener('pointerdown', handleDocumentPointerDown)
 })
 </script>
 
@@ -406,7 +603,7 @@ onBeforeUnmount(() => {
 
 .print-template-dialog {
   display: flex;
-  width: min(620px, calc(100vw - 48px));
+  width: min(880px, calc(100vw - 48px));
   max-height: min(720px, calc(100vh - 48px));
   flex-direction: column;
   overflow: hidden;
@@ -498,10 +695,30 @@ onBeforeUnmount(() => {
 }
 
 .print-template-dialog-body {
-  min-height: 220px;
+  min-height: 410px;
+  flex: 1 1 auto;
   overflow-y: auto;
   padding: 18px;
   background: #f8fafb;
+}
+
+.print-selector-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  align-items: start;
+}
+
+.print-selector-column {
+  min-width: 0;
+}
+
+.print-client-column {
+  padding-right: 18px;
+  border-right: 1px solid #e2e8f0;
+}
+
+.print-template-column {
+  padding-left: 18px;
 }
 
 .print-selector-section-heading {
@@ -514,12 +731,14 @@ onBeforeUnmount(() => {
   font-weight: 650;
 }
 
-.print-selector-template-area {
-  min-height: 72px;
+.print-selector-section-heading small {
+  color: #8a96a8;
+  font-size: 11px;
+  font-weight: 500;
 }
 
-.printer-heading {
-  margin-top: 18px;
+.print-selector-template-area {
+  min-height: 72px;
 }
 
 .print-client-summary {
@@ -617,97 +836,38 @@ onBeforeUnmount(() => {
   line-height: 1.5;
 }
 
-.printer-refresh-button {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
+.print-client-facts {
+  margin: 16px 0 0;
+  border-top: 1px solid #edf1f5;
+}
+
+.print-client-facts > div {
+  display: grid;
+  min-height: 38px;
+  grid-template-columns: 72px minmax(0, 1fr);
   align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: #64748b;
-  background: transparent;
-  border: 0;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.printer-refresh-button:hover:not(:disabled) {
-  color: #08745a;
-  background: #e9f8f3;
-}
-
-.printer-refresh-button:disabled {
-  cursor: wait;
-  opacity: 0.5;
-}
-
-.printer-refresh-button svg {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
-}
-
-.printer-selector-area {
-  min-height: 70px;
-}
-
-.printer-select {
-  width: 100%;
-  height: 40px;
-  padding: 0 36px 0 12px;
-  color: #273245;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 5px;
-  font-size: 13px;
-}
-
-.printer-select:focus {
-  border-color: #0f9f78;
-  outline: 2px solid rgba(15, 159, 120, 0.12);
-}
-
-.printer-meta {
-  display: flex;
-  min-width: 0;
-  justify-content: space-between;
   gap: 12px;
-  margin-top: 7px;
-  color: #8490a1;
+  border-bottom: 1px solid #edf1f5;
+}
+
+.print-client-facts dt,
+.print-client-facts dd {
+  margin: 0;
+}
+
+.print-client-facts dt {
+  color: #8a96a8;
   font-size: 11px;
 }
 
-.printer-meta span {
+.print-client-facts dd {
   overflow: hidden;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.printer-selector-state {
-  min-height: 40px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #7a8698;
-  font-size: 12px;
-}
-
-.printer-selector-state.error {
-  color: #b4232f;
-}
-
-.printer-selector-state button {
-  flex: 0 0 auto;
-  padding: 4px 8px;
-  color: #08745a;
-  background: #fff;
-  border: 1px solid #a9e5d2;
-  border-radius: 4px;
-  cursor: pointer;
 }
 
 .print-template-dialog-hint {
@@ -716,58 +876,66 @@ onBeforeUnmount(() => {
   font-size: 12px;
 }
 
-.print-template-options {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.print-template-combobox {
+  position: relative;
 }
 
-.print-template-option {
+.print-template-trigger {
   display: grid;
-  grid-template-columns: 18px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 11px;
   width: 100%;
-  min-height: 64px;
-  padding: 11px 13px;
+  min-height: 70px;
+  grid-template-columns: 36px minmax(0, 1fr) auto 18px;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
   color: #283548;
   background: #fff;
-  border: 1px solid #dfe5ec;
+  border: 1px solid #cbd5e1;
   border-radius: 6px;
   cursor: pointer;
   text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
-.print-template-option:hover {
+.print-template-trigger:hover {
   border-color: #a9e5d2;
-  background: #f7fcfa;
 }
 
-.print-template-option.selected {
+.print-template-trigger:focus-visible,
+.print-template-combobox:focus-within .print-template-trigger {
   border-color: #0f9f78;
   box-shadow: 0 0 0 2px rgba(15, 159, 120, 0.12);
+  outline: none;
 }
 
-.print-template-radio {
-  position: relative;
-  width: 16px;
-  height: 16px;
-  border: 1px solid #aab4c3;
-  border-radius: 50%;
+.print-template-trigger-icon {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  color: #08745a;
+  background: #e9f8f3;
+  border-radius: 5px;
 }
 
-.print-template-option.selected .print-template-radio {
-  border-color: #0f9f78;
+.print-template-trigger-icon svg,
+.print-template-chevron,
+.print-template-search svg,
+.print-template-option-check svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.print-template-option.selected .print-template-radio::after {
-  position: absolute;
-  inset: 3px;
-  content: '';
-  background: #0f9f78;
-  border-radius: 50%;
+.print-template-trigger-icon svg {
+  width: 18px;
+  height: 18px;
 }
 
+.print-template-trigger-copy,
 .print-template-option-copy {
   display: flex;
   min-width: 0;
@@ -775,6 +943,8 @@ onBeforeUnmount(() => {
   gap: 5px;
 }
 
+.print-template-trigger-copy strong,
+.print-template-trigger-copy span,
 .print-template-option-copy strong,
 .print-template-option-copy span {
   overflow: hidden;
@@ -782,10 +952,12 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.print-template-trigger-copy strong,
 .print-template-option-copy strong {
   font-size: 13px;
 }
 
+.print-template-trigger-copy span,
 .print-template-option-copy span {
   color: #8490a1;
   font-size: 11px;
@@ -798,6 +970,138 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   font-size: 11px;
   font-weight: 650;
+}
+
+.print-template-chevron {
+  width: 17px;
+  height: 17px;
+  color: #64748b;
+  transition: transform 0.18s ease;
+}
+
+.print-template-chevron.open {
+  transform: rotate(180deg);
+}
+
+.print-template-dropdown {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.16);
+}
+
+.print-template-search {
+  position: relative;
+  display: block;
+  padding: 10px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.print-template-search svg {
+  position: absolute;
+  top: 50%;
+  left: 21px;
+  width: 16px;
+  height: 16px;
+  color: #8a96a8;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.print-template-search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 11px 0 34px;
+  color: #273245;
+  background: #f8fafc;
+  border: 1px solid #d8e0e8;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.print-template-search input:focus {
+  background: #fff;
+  border-color: #0f9f78;
+  box-shadow: 0 0 0 2px rgba(15, 159, 120, 0.1);
+  outline: none;
+}
+
+.print-template-dropdown-list {
+  max-height: 250px;
+  overflow-y: auto;
+  padding: 5px;
+}
+
+.print-template-dropdown-option {
+  display: grid;
+  width: 100%;
+  min-height: 54px;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 9px;
+  color: #283548;
+  background: transparent;
+  border: 0;
+  border-radius: 5px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.print-template-dropdown-option:hover,
+.print-template-dropdown-option.selected {
+  background: #edf9f5;
+}
+
+.print-template-dropdown-option:focus-visible {
+  outline: 2px solid #0f9f78;
+  outline-offset: -2px;
+}
+
+.print-template-option-check {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  color: transparent;
+}
+
+.print-template-option-check svg {
+  width: 16px;
+  height: 16px;
+}
+
+.print-template-dropdown-option.selected .print-template-option-check {
+  color: #0f9f78;
+}
+
+.print-template-no-results {
+  display: flex;
+  min-height: 82px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  color: #8a96a8;
+  font-size: 12px;
+}
+
+.print-template-dropdown-enter-active,
+.print-template-dropdown-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  transform-origin: top;
+}
+
+.print-template-dropdown-enter-from,
+.print-template-dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .print-template-dialog-state {
@@ -959,6 +1263,31 @@ onBeforeUnmount(() => {
     border-radius: 0;
   }
 
+  .print-template-dialog-body {
+    min-height: 0;
+  }
+
+  .print-selector-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .print-client-column {
+    padding-right: 0;
+    padding-bottom: 18px;
+    border-right: 0;
+    border-bottom: 1px solid #e2e8f0;
+  }
+
+  .print-template-column {
+    padding-top: 18px;
+    padding-left: 0;
+  }
+
+  .print-template-dropdown {
+    position: static;
+    margin-top: 7px;
+  }
+
   .print-template-dialog-footer {
     align-items: stretch;
     flex-direction: column;
@@ -974,11 +1303,24 @@ onBeforeUnmount(() => {
   }
 }
 
+@media (max-height: 650px) and (min-width: 781px) {
+  .print-template-dialog-body {
+    min-height: 0;
+  }
+
+  .print-template-dropdown {
+    position: static;
+    margin-top: 7px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .print-template-modal-enter-active,
   .print-template-modal-leave-active,
   .print-template-modal-enter-active .print-template-dialog,
-  .print-template-modal-leave-active .print-template-dialog {
+  .print-template-modal-leave-active .print-template-dialog,
+  .print-template-dropdown-enter-active,
+  .print-template-dropdown-leave-active {
     transition: none;
   }
 }
