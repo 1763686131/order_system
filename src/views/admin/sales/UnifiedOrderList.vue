@@ -1074,6 +1074,7 @@ import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { formatOrderForCopy } from '@/utils/tools'
 import { getStores } from '@/utils/storeHelper'
+import { toChineseMoney } from '@/utils/chineseMoney'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 
@@ -1891,6 +1892,7 @@ const getOrderPrintVariables = (order) => {
     settlementAccount: order.settlement_account || '',
     customerReceivable: Number(order.customer_receivable) || 0,
     shouldReceive,
+    amountInWords: toChineseMoney(shouldReceive),
     currentPayment: currentPayment + balanceApplied,
     currentDebt,
     items

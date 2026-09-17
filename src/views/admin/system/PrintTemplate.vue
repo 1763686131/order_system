@@ -86,7 +86,7 @@
               <th style="width: 110px">纸张高mm</th>
               <th style="width: 80px">默认</th>
               <th style="width: 80px">启用</th>
-              <th style="width: 380px; text-align: center">相关操作</th>
+              <th style="width: 450px; text-align: center">相关操作</th>
             </tr>
           </thead>
           <tbody>
@@ -153,6 +153,18 @@
                       @click="handlePreview(template)"
                     >
                       查看设计
+                    </button>
+                    <button
+                      type="button"
+                      class="btn-action btn-secondary-action"
+                      :disabled="copyingTemplateId !== null"
+                      @click="handleCopy(template)"
+                    >
+                      {{
+                        String(copyingTemplateId) === String(template.id)
+                          ? '复制中'
+                          : '复制'
+                      }}
                     </button>
                     <button
                       v-if="!template.isDefault"
@@ -315,6 +327,7 @@ import PrintDesignerEditor from '@/components/print/PrintDesignerEditor.vue'
 // ==================== 数据 ====================
 const loading = ref(false)
 const templates = ref([])
+const copyingTemplateId = ref(null)
 const templateStorageKey = 'order-system-print-templates'
 
 const searchForm = ref({
@@ -483,6 +496,46 @@ const handleDesignerSave = async (template) => {
 const handlePreview = (template) => {
   designerTemplate.value = template
   showDesigner.value = true
+}
+
+const handleCopy = async (template) => {
+  if (!template || copyingTemplateId.value !== null) return
+
+  copyingTemplateId.value = template.id
+
+  try {
+    const copiedTemplate = {
+      name: `${template.name}复制版`,
+      businessType: template.businessType,
+      paperType: template.paperType || '',
+      pageWidth: template.pageWidth,
+      pageHeight: template.pageHeight,
+      enabled: template.enabled !== false,
+      isDefault: false,
+      content: template.content
+        ? JSON.parse(JSON.stringify(template.content))
+        : null
+    }
+
+    const response = await createTemplate(copiedTemplate)
+    if (!response?.success) {
+      throw new Error(response?.message || '复制模板失败')
+    }
+
+    await loadTemplates()
+    window.dispatchEvent(new CustomEvent('order-system-print-templates-updated', {
+      detail: {
+        id: response.data?.id,
+        copiedFromId: template.id,
+        updatedAt: new Date().toISOString()
+      }
+    }))
+  } catch (error) {
+    console.error('复制模板失败:', error)
+    alert(error?.message || '复制模板失败，请稍后重试')
+  } finally {
+    copyingTemplateId.value = null
+  }
 }
 
 const handleSetDefault = async (template) => {
@@ -955,6 +1008,11 @@ onMounted(() => {
   cursor: pointer;
   transition: all 0.18s ease;
   border: 1px solid transparent;
+}
+
+.btn-action:disabled {
+  cursor: wait;
+  opacity: 0.55;
 }
 
 .btn-primary-action {

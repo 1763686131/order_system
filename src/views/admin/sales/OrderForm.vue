@@ -418,6 +418,7 @@ import { ref, computed, inject, nextTick, onBeforeUnmount, onMounted, watch } fr
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useOrderDraftStore } from '@/stores/orderDraft'
+import { toChineseMoney } from '@/utils/chineseMoney'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 
 const router = useRouter()
@@ -756,6 +757,7 @@ const orderPrintVariables = computed(() => {
     settlementAccount: formData.value.settlementAccount || selectedStoreName.value,
     customerReceivable: Number(customerReceivable.value) || 0,
     shouldReceive: Number(shouldReceive.value) || 0,
+    amountInWords: toChineseMoney(shouldReceive.value),
     currentPayment,
     currentDebt: discountAmount + otherFees - currentPayment,
     items: validItems

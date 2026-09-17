@@ -28,6 +28,7 @@
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
+import { toChineseMoney } from '@/utils/chineseMoney'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -70,6 +71,7 @@ const defaultVariables = {
   settlementAccount: '默认结算账户',
   customerReceivable: '0.00',
   shouldReceive: '1250.00',
+  amountInWords: toChineseMoney('1250.00'),
   currentPayment: '1250.00',
   currentDebt: '0.00',
   items: [
@@ -172,6 +174,7 @@ const availableVariables = [
       { id: 'settlementAccount', label: '结算账户' },
       { id: 'customerReceivable', label: '客户欠款' },
       { id: 'shouldReceive', label: '本单应收' },
+      { id: 'amountInWords', label: '金额中文大写' },
       { id: 'currentPayment', label: '本次收款' },
       { id: 'currentDebt', label: '本单欠款' }
     ]
