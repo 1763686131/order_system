@@ -24,20 +24,23 @@
       </div>
 
       <div class="order-print-preview-footer">
-        <span>此处仅用于验证模板和订单数据绑定，不会提交打印任务。</span>
+        <span :class="{ 'preview-footer-error': printErrorMessage }">
+          {{ printErrorMessage || '点击打印后将在 C-Lodop 中确认打印机和纸张效果。' }}
+        </span>
         <div class="preview-footer-actions">
           <button
             type="button"
             class="preview-footer-button preview-print-button"
-            title="本地打印功能待接入"
-            disabled
+            :title="printButtonTitle"
+            :disabled="loading || printing || !renderedHtml"
+            @click="handlePrint"
           >
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M6 9V2h12v7"></path>
               <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
               <path d="M6 14h12v8H6z"></path>
             </svg>
-            打印
+            {{ printing ? '正在连接...' : '打印' }}
           </button>
           <button type="button" class="preview-footer-button" @click="handleClose">关闭</button>
         </div>
@@ -53,9 +56,10 @@
 </template>
 
 <script setup>
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
+import { openLodopPrintPreview } from '@/utils/lodopPrint'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -74,7 +78,16 @@ const designerRef = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
 const previewHtml = ref('')
+const renderedHtml = ref('')
 const designerReady = ref(false)
+const printing = ref(false)
+const printErrorMessage = ref('')
+
+const printButtonTitle = computed(() => {
+  if (loading) return '正在生成打印内容'
+  if (!renderedHtml.value) return '暂无可打印内容'
+  return '使用 C-Lodop 打印'
+})
 
 const wrapPreviewHtml = (html) => `<!doctype html>
 <html lang="zh-CN">
@@ -418,6 +431,8 @@ const loadPreview = async () => {
   loading.value = true
   errorMessage.value = ''
   previewHtml.value = ''
+  renderedHtml.value = ''
+  printErrorMessage.value = ''
 
   try {
     const design = props.template.content || props.template.design || props.template.data
@@ -437,6 +452,7 @@ const loadPreview = async () => {
     await designer.setTemplateVariables(previewRuntime.variables, { merge: false })
     await designer.setVariables(previewRuntime.variables, { merge: false })
     const html = await designer.getPreviewHtml()
+    renderedHtml.value = html
     previewHtml.value = wrapPreviewHtml(html)
   } catch (error) {
     errorMessage.value = error?.message || '模板预览生成失败'
@@ -455,6 +471,8 @@ const openPreview = async () => {
   loading.value = true
   errorMessage.value = ''
   previewHtml.value = ''
+  renderedHtml.value = ''
+  printErrorMessage.value = ''
   await nextTick()
   if (designerRef.value?.getTemplateData?.()) {
     designerReady.value = true
@@ -498,6 +516,32 @@ watch(
     if (props.visible && designerReady.value) loadPreview()
   }
 )
+
+const handlePrint = async () => {
+  if (!renderedHtml.value || printing.value) return
+
+  printing.value = true
+  printErrorMessage.value = ''
+
+  try {
+    const orderNumber = props.variables?.orderNumber || props.variables?.orderNo || ''
+    const taskName = [props.template?.name || '单据打印', orderNumber]
+      .filter(Boolean)
+      .join(' - ')
+
+    await openLodopPrintPreview({
+      html: renderedHtml.value,
+      taskName,
+      pageWidth: props.template?.pageWidth,
+      pageHeight: props.template?.pageHeight
+    })
+    emit('close')
+  } catch (error) {
+    printErrorMessage.value = error?.message || '调用 C-Lodop 打印失败'
+  } finally {
+    printing.value = false
+  }
+}
 
 const handleClose = () => emit('close')
 </script>
@@ -585,6 +629,11 @@ const handleClose = () => emit('close')
 
 .preview-error {
   color: #b4232f;
+}
+
+.preview-footer-error {
+  color: #b4232f !important;
+  white-space: pre-line;
 }
 
 .order-print-preview-footer {
