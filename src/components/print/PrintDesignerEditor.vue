@@ -1,6 +1,9 @@
 <template>
   <div v-if="visible" class="print-designer-shell">
-    <div class="print-designer-toolbar">
+    <div
+      class="print-designer-toolbar"
+      :class="{ 'save-menu-open': saveMenuOpen }"
+    >
       <div class="designer-title">
         <input
           v-model="templateName"
@@ -8,7 +11,21 @@
           aria-label="模板名称"
           placeholder="模板名称"
         />
-        <small>210mm × 140mm · 三联单打印 1 份</small>
+        <select
+          v-model="businessType"
+          class="designer-business-select"
+          aria-label="业务类型"
+          title="业务类型"
+        >
+          <option
+            v-for="option in businessTypeOptions"
+            :key="option.value"
+            :value="option.value"
+          >
+            {{ option.label }}
+          </option>
+        </select>
+        <small>{{ pageSizeLabel }} · {{ paperTypeLabel }}打印 1 份</small>
       </div>
       <div class="designer-actions">
         <button type="button" class="designer-btn" @click="handlePreview">预览</button>
@@ -75,7 +92,7 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 import { toChineseMoney } from '@/utils/chineseMoney'
@@ -91,10 +108,105 @@ const designerRef = ref(null)
 const saveMenuRef = ref(null)
 const saveMenuOpen = ref(false)
 const templateName = ref('')
+const businessType = ref('sale')
+const paperType = ref('三联单')
+const pageWidth = ref(210)
+const pageHeight = ref(140)
 const configured = ref(false)
 const NEW_TEMPLATE_ID = '__order_system_new_template__'
+const businessTypeOptions = [
+  { value: 'sale', label: '销售' },
+  { value: 'purchase', label: '采购' },
+  { value: 'return', label: '退货' },
+  { value: 'transfer', label: '调拨' },
+  { value: 'inventory', label: '盘点' },
+  { value: 'receipt', label: '收款' },
+  { value: 'payment', label: '付款' }
+]
+const paperSizePresets = [
+  { width: 210, height: 140, label: '三联单' },
+  { width: 241, height: 140, label: '二等分' },
+  { width: 210, height: 297, label: 'A4', rotate: true },
+  { width: 297, height: 420, label: 'A3', rotate: true },
+  { width: 148, height: 210, label: 'A5', rotate: true }
+]
 let activeDesignerTemplateId = ''
+let activeCanvasSizeKey = ''
 let designerDomObserver = null
+
+const formatMillimeter = value => (
+  Number.isInteger(Number(value))
+    ? String(Number(value))
+    : Number(value).toFixed(2).replace(/\.?0+$/, '')
+)
+
+const pageSizeLabel = computed(() => (
+  `${formatMillimeter(pageWidth.value)}mm × ${formatMillimeter(pageHeight.value)}mm`
+))
+
+const paperTypeLabel = computed(() => paperType.value || '自定义纸张')
+
+const canvasPixelToMillimeter = (value) => {
+  const millimeter = Number(value) * 25.4 / 96
+  if (!Number.isFinite(millimeter) || millimeter <= 0) return 0
+  return Number(millimeter.toFixed(2))
+}
+
+const matchesPaperSize = (width, height, preset) => {
+  const direct = Math.abs(width - preset.width) < 0.2 &&
+    Math.abs(height - preset.height) < 0.2
+  const rotated = preset.rotate &&
+    Math.abs(width - preset.height) < 0.2 &&
+    Math.abs(height - preset.width) < 0.2
+  return direct || rotated
+}
+
+const detectPaperType = (width, height) => (
+  paperSizePresets.find(preset => matchesPaperSize(width, height, preset))?.label || ''
+)
+
+const normalizeKnownPaperSize = (width, height) => {
+  for (const preset of paperSizePresets) {
+    const direct = Math.abs(width - preset.width) < 0.2 &&
+      Math.abs(height - preset.height) < 0.2
+    if (direct) {
+      return { width: preset.width, height: preset.height }
+    }
+
+    const rotated = preset.rotate &&
+      Math.abs(width - preset.height) < 0.2 &&
+      Math.abs(height - preset.width) < 0.2
+    if (rotated) {
+      return { width: preset.height, height: preset.width }
+    }
+  }
+  return { width, height }
+}
+
+const syncDesignerPageSize = () => {
+  const designer = designerRef.value
+  const canvasSize = designer?.designerStore?.canvasSize ||
+    designer?.getTemplateData?.()?.canvasSize
+  const convertedWidth = canvasPixelToMillimeter(canvasSize?.width)
+  const convertedHeight = canvasPixelToMillimeter(canvasSize?.height)
+  const {
+    width: nextWidth,
+    height: nextHeight
+  } = normalizeKnownPaperSize(convertedWidth, convertedHeight)
+  if (!nextWidth || !nextHeight) return
+
+  const nextCanvasSizeKey = `${nextWidth}x${nextHeight}`
+  const canvasSizeChanged = Boolean(
+    activeCanvasSizeKey && activeCanvasSizeKey !== nextCanvasSizeKey
+  )
+  activeCanvasSizeKey = nextCanvasSizeKey
+  pageWidth.value = nextWidth
+  pageHeight.value = nextHeight
+
+  if (canvasSizeChanged) {
+    paperType.value = detectPaperType(nextWidth, nextHeight) || '自定义'
+  }
+}
 
 const defaultVariables = {
   storeId: 'store-001',
@@ -508,16 +620,21 @@ const syncActiveTemplateName = () => {
   const databaseTemplate = props.templates.find(template => (
     getDesignerTemplateId(template) === currentId
   ))
+  const selectedTemplate = databaseTemplate || props.template || null
   const internalTemplate = designer.getTemplate?.(currentId)
   templateName.value = databaseTemplate?.name ||
     internalTemplate?.name ||
     props.template?.name ||
     '销售三联单'
+  businessType.value = selectedTemplate?.businessType || 'sale'
+  paperType.value = selectedTemplate?.paperType || '三联单'
+  activeCanvasSizeKey = ''
 }
 
 const ensureLiveTableFooters = () => {
   const designer = designerRef.value
   syncActiveTemplateName()
+  syncDesignerPageSize()
   const pages = designer?.designerStore?.pages
   if (!Array.isArray(pages)) return
 
@@ -621,8 +738,13 @@ const configureDesigner = async () => {
 const openDesigner = async () => {
   configured.value = false
   activeDesignerTemplateId = ''
+  activeCanvasSizeKey = ''
   saveMenuOpen.value = false
   templateName.value = props.template?.name || '销售三联单'
+  businessType.value = props.template?.businessType || 'sale'
+  paperType.value = props.template?.paperType || '三联单'
+  pageWidth.value = Number(props.template?.pageWidth) || 210
+  pageHeight.value = Number(props.template?.pageHeight) || 140
   await nextTick()
   const designer = designerRef.value
   if (designer?.getTemplateData?.()) {
@@ -665,10 +787,10 @@ const handleSave = async () => {
       ? currentTemplate?.id ?? currentId
       : null,
     name: templateName.value || currentTemplate?.name || '销售三联单',
-    businessType: currentTemplate?.businessType || 'sale',
-    paperType: currentTemplate?.paperType || '三联单',
-    pageWidth: currentTemplate?.pageWidth || 210,
-    pageHeight: currentTemplate?.pageHeight || 140,
+    businessType: businessType.value || 'sale',
+    paperType: paperType.value || '自定义',
+    pageWidth: pageWidth.value || 210,
+    pageHeight: pageHeight.value || 140,
     enabled: currentTemplate?.enabled !== false,
     content: design,
     updatedAt: Date.now()
@@ -729,7 +851,7 @@ onBeforeUnmount(() => {
 
 .print-designer-toolbar {
   position: relative;
-  z-index: 30;
+  z-index: 2;
   height: 58px;
   flex: 0 0 58px;
   display: flex;
@@ -740,10 +862,15 @@ onBeforeUnmount(() => {
   border-bottom: 1px solid #d9e0e8;
 }
 
+.print-designer-toolbar.save-menu-open {
+  z-index: 4;
+}
+
 .designer-title {
   display: flex;
-  align-items: baseline;
-  gap: 14px;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
   color: #172033;
   font-size: 16px;
   font-weight: 650;
@@ -751,6 +878,7 @@ onBeforeUnmount(() => {
 
 .designer-name-input {
   width: 220px;
+  min-width: 160px;
   height: 32px;
   padding: 0 9px;
   border: 1px solid #cbd5e1;
@@ -765,14 +893,33 @@ onBeforeUnmount(() => {
   border-color: #0f9f78;
 }
 
+.designer-business-select {
+  width: 108px;
+  height: 32px;
+  padding: 0 28px 0 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  color: #334155;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.designer-business-select:focus {
+  outline: 2px solid rgba(15, 159, 120, 0.2);
+  border-color: #0f9f78;
+}
+
 .designer-title small {
   color: #7b8798;
   font-size: 12px;
   font-weight: 400;
+  white-space: nowrap;
 }
 
 .designer-actions {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
 }
@@ -875,6 +1022,8 @@ onBeforeUnmount(() => {
 }
 
 .print-designer-canvas {
+  position: relative;
+  z-index: 3;
   min-height: 0;
   flex: 1;
 }
