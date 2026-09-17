@@ -1,14 +1,17 @@
 <template>
   <div class="outbound-page">
     <section class="page-toolbar">
-      <div class="search-group">
+      <form class="search-group" @submit.prevent="applyFilters">
         <label class="search-field">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="7"></circle>
-            <path d="m20 20-3.7-3.7"></path>
-          </svg>
-          <input v-model.trim="filters.keyword" type="search" placeholder="搜索单号、原材料、备注或录入人" />
+          <input
+            v-model="keywordInput"
+            type="text"
+            inputmode="search"
+            autocomplete="off"
+            placeholder="搜索单号、原材料、备注或录入人"
+          />
         </label>
+        <button type="submit" class="button primary">搜索</button>
         <label>
           <span>开始日期</span>
           <input v-model="filters.startDate" type="date" />
@@ -17,8 +20,35 @@
           <span>结束日期</span>
           <input v-model="filters.endDate" type="date" />
         </label>
+        <div class="store-filter-control">
+          <span class="store-filter-label">门店</span>
+          <div class="store-filter-slider" role="tablist" aria-label="按门店筛选原材料出库单">
+            <button
+              type="button"
+              :class="{ active: filters.storeId === null }"
+              role="tab"
+              :aria-selected="filters.storeId === null"
+              @click="filters.storeId = null"
+            >
+              全部门店
+              <small>{{ records.length }}</small>
+            </button>
+            <button
+              v-for="store in storeFilterTabs"
+              :key="store.id"
+              type="button"
+              :class="{ active: String(filters.storeId) === String(store.id) }"
+              role="tab"
+              :aria-selected="String(filters.storeId) === String(store.id)"
+              @click="filters.storeId = store.id"
+            >
+              {{ store.name }}
+              <small>{{ store.count }}</small>
+            </button>
+          </div>
+        </div>
         <button type="button" class="button secondary" @click="resetFilters">重置</button>
-      </div>
+      </form>
       <div class="toolbar-actions">
         <button type="button" class="button secondary" :disabled="loading" @click="loadData">
           刷新
@@ -439,8 +469,10 @@ const filters = reactive({
   keyword: '',
   startDate: '',
   endDate: '',
-  status: 'all'
+  status: 'all',
+  storeId: null
 })
+const keywordInput = ref('')
 
 const settingsVisible = ref(false)
 const settingsSaving = ref(false)
@@ -457,10 +489,15 @@ const detailRecord = ref(null)
 const pendingAction = ref(null)
 const actionLoading = ref(false)
 
+const recordsForSelectedStore = computed(() => records.value.filter(record => (
+  filters.storeId === null
+  || String(record.storeId) === String(filters.storeId)
+)))
+
 const statusCount = computed(() => ({
-  draft: records.value.filter(item => item.status === 'draft').length,
-  reviewed: records.value.filter(item => item.status === 'reviewed').length,
-  cancelled: records.value.filter(item => item.status === 'cancelled').length
+  draft: recordsForSelectedStore.value.filter(item => item.status === 'draft').length,
+  reviewed: recordsForSelectedStore.value.filter(item => item.status === 'reviewed').length,
+  cancelled: recordsForSelectedStore.value.filter(item => item.status === 'cancelled').length
 }))
 
 const reviewedProducedQuantity = computed(() => records.value
@@ -468,15 +505,43 @@ const reviewedProducedQuantity = computed(() => records.value
   .reduce((sum, item) => sum + Number(item.producedQuantity || 0), 0))
 
 const statusTabs = computed(() => [
-  { value: 'all', label: '全部', count: records.value.length },
+  { value: 'all', label: '全部', count: recordsForSelectedStore.value.length },
   { value: 'draft', label: '待审核', count: statusCount.value.draft },
   { value: 'reviewed', label: '已审核', count: statusCount.value.reviewed },
   { value: 'cancelled', label: '已作废', count: statusCount.value.cancelled }
 ])
 
+const storeFilterTabs = computed(() => {
+  const stores = new Map()
+
+  settings.value.stores.forEach(store => {
+    if (store?.id === null || store?.id === undefined) return
+    stores.set(String(store.id), {
+      id: store.id,
+      name: store.name || store.storeName || `门店 ${store.id}`
+    })
+  })
+
+  records.value.forEach(record => {
+    if (record?.storeId === null || record?.storeId === undefined) return
+    const key = String(record.storeId)
+    if (!stores.has(key)) {
+      stores.set(key, {
+        id: record.storeId,
+        name: record.storeName || `门店 ${record.storeId}`
+      })
+    }
+  })
+
+  return Array.from(stores.values()).map(store => ({
+    ...store,
+    count: records.value.filter(record => String(record.storeId) === String(store.id)).length
+  }))
+})
+
 const filteredRecords = computed(() => {
   const keyword = filters.keyword.toLowerCase()
-  return records.value.filter(record => {
+  return recordsForSelectedStore.value.filter(record => {
     const matchesStatus = filters.status === 'all' || record.status === filters.status
     const matchesStart = !filters.startDate || record.documentDate >= filters.startDate
     const matchesEnd = !filters.endDate || record.documentDate <= filters.endDate
@@ -551,10 +616,16 @@ const statusLabel = status => ({
 }[status] || status)
 
 const resetFilters = () => {
+  keywordInput.value = ''
   filters.keyword = ''
   filters.startDate = ''
   filters.endDate = ''
   filters.status = 'all'
+  filters.storeId = null
+}
+
+const applyFilters = () => {
+  filters.keyword = keywordInput.value.trim()
 }
 
 const loadData = async () => {
@@ -749,6 +820,19 @@ svg {
   gap: 9px;
 }
 
+.search-group {
+  min-width: 0;
+  flex: 1 1 720px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.toolbar-actions {
+  flex: 0 0 auto;
+  align-self: flex-end;
+  margin-left: auto;
+}
+
 .search-group > label:not(.search-field) {
   display: flex;
   flex-direction: column;
@@ -761,23 +845,90 @@ svg {
   font-weight: 600;
 }
 
+.store-filter-control {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.store-filter-label {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.store-filter-slider {
+  display: flex;
+  max-width: 360px;
+  min-height: 38px;
+  align-items: center;
+  gap: 3px;
+  overflow-x: auto;
+  padding: 3px;
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  scrollbar-width: thin;
+}
+
+.store-filter-slider button {
+  display: inline-flex;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #526076;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+}
+
+.store-filter-slider button:hover {
+  color: var(--accent-dark);
+  background: #e4f6ef;
+}
+
+.store-filter-slider button.active {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: 0 2px 5px rgba(var(--accent-rgb), 0.22);
+}
+
+.store-filter-slider small {
+  display: inline-flex;
+  min-width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  color: inherit;
+  background: rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.store-filter-slider button.active small {
+  background: rgba(255, 255, 255, 0.2);
+}
+
 .search-field {
   position: relative;
   display: block;
   width: 280px;
 }
 
-.search-field svg {
-  position: absolute;
-  top: 11px;
-  left: 11px;
-  width: 16px;
-  height: 16px;
-  color: #94a3b8;
-}
-
 .search-field input {
-  padding-left: 35px;
+  width: 100%;
+  padding: 0 10px;
 }
 
 .page-toolbar input,
@@ -1651,6 +1802,14 @@ th:nth-child(11) { width: 166px; }
     flex-direction: column;
   }
 
+  .search-group {
+    width: 100%;
+  }
+
+  .toolbar-actions {
+    margin-left: 0;
+  }
+
   .stats-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1664,6 +1823,20 @@ th:nth-child(11) { width: 166px; }
 
   .search-field {
     width: 100%;
+  }
+
+  .store-filter-control,
+  .store-filter-slider {
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+  }
+
+  .toolbar-actions .button {
+    flex: 1;
   }
 
   .stats-grid,
