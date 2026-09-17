@@ -97,7 +97,7 @@ const printButtonTitle = computed(() => {
   return `使用 ${resolvedPrinterName.value} 打印`
 })
 
-const normalizeTableCellAlignment = (html) => {
+const normalizePrintHtml = (html, design) => {
   if (typeof DOMParser === 'undefined') return html
 
   const document = new DOMParser().parseFromString(
@@ -108,6 +108,52 @@ const normalizeTableCellAlignment = (html) => {
   document.body.querySelectorAll('table th, table td').forEach((cell) => {
     cell.style.setProperty('vertical-align', 'middle', 'important')
     cell.style.setProperty('line-height', 'normal', 'important')
+  })
+
+  const textElements = (design?.pages || [])
+    .flatMap(page => page?.elements || [])
+    .filter(element => (
+      String(element?.type || '').toLowerCase() === 'text' &&
+      String(element?.style?.writingMode || '').startsWith('vertical')
+    ))
+  const wrappers = Array.from(document.body.querySelectorAll('[data-element-id]'))
+
+  textElements.forEach((element) => {
+    const writingMode = element.style.writingMode || 'vertical-rl'
+    const textOrientation = element.style.textOrientation || 'mixed'
+    const matchingWrappers = wrappers.filter(wrapper => (
+      wrapper.getAttribute('data-element-id') === String(element.id)
+    ))
+
+    matchingWrappers.forEach((wrapper) => {
+      wrapper.dataset.lodopVerticalWrapper = 'true'
+
+      const contentNodes = Array.from(
+        wrapper.querySelectorAll('[data-text-content="true"]')
+      )
+      const fallbackContent = contentNodes.length === 0
+        ? Array.from(wrapper.querySelectorAll('div')).find(node => (
+            node.children.length === 0 && node.textContent?.trim()
+          ))
+        : null
+      const targets = [wrapper, ...contentNodes]
+      const printableContentNodes = contentNodes.length > 0
+        ? contentNodes
+        : [fallbackContent || wrapper]
+
+      if (fallbackContent) targets.push(fallbackContent)
+
+      targets.forEach((target) => {
+        target.style.setProperty('writing-mode', writingMode, 'important')
+        target.style.setProperty('-webkit-writing-mode', writingMode, 'important')
+        target.style.setProperty('text-orientation', textOrientation, 'important')
+      })
+
+      printableContentNodes.forEach((target) => {
+        target.dataset.lodopVerticalText = 'true'
+        target.dataset.lodopVerticalAlign = element.style.verticalAlign || 'top'
+      })
+    })
   })
 
   return document.body.innerHTML
@@ -475,7 +521,10 @@ const loadPreview = async () => {
     await designer.setTestData(previewRuntime.variables, { merge: false })
     await designer.setTemplateVariables(previewRuntime.variables, { merge: false })
     await designer.setVariables(previewRuntime.variables, { merge: false })
-    const html = normalizeTableCellAlignment(await designer.getPreviewHtml())
+    const html = normalizePrintHtml(
+      await designer.getPreviewHtml(),
+      previewRuntime.design
+    )
     renderedHtml.value = html
     previewHtml.value = wrapPreviewHtml(html)
   } catch (error) {

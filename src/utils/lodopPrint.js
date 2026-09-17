@@ -151,8 +151,120 @@ const escapeAttribute = (value) => String(value || '')
   .replace(/</g, '&lt;')
   .replace(/>/g, '&gt;')
 
+const LODOP_VERTICAL_PUNCTUATION = {
+  '(': '︵',
+  ')': '︶',
+  '（': '︵',
+  '）': '︶',
+  '[': '﹇',
+  ']': '﹈',
+  '［': '﹇',
+  '］': '﹈',
+  '〔': '︹',
+  '〕': '︺',
+  '【': '︻',
+  '】': '︼',
+  '{': '︷',
+  '}': '︸',
+  '｛': '︷',
+  '｝': '︸',
+  '〈': '︿',
+  '〉': '﹀',
+  '《': '︽',
+  '》': '︾',
+  '，': '︐',
+  '、': '︑',
+  '。': '︒',
+  '：': '︓',
+  '；': '︔',
+  '！': '︕',
+  '？': '︖',
+  '…': '︙'
+}
+
+const getLodopVerticalCharacter = (character) => (
+  LODOP_VERTICAL_PUNCTUATION[character] || character
+)
+
+const normalizeLodopVerticalText = (html) => {
+  if (typeof DOMParser === 'undefined') return html
+
+  const printDocument = new DOMParser().parseFromString(
+    `<body>${String(html || '')}</body>`,
+    'text/html'
+  )
+
+  printDocument.body
+    .querySelectorAll('[data-lodop-vertical-wrapper="true"]')
+    .forEach((wrapper) => {
+      wrapper.style.setProperty('writing-mode', 'horizontal-tb', 'important')
+      wrapper.style.setProperty('-webkit-writing-mode', 'horizontal-tb', 'important')
+      wrapper.style.removeProperty('text-orientation')
+      wrapper.removeAttribute('data-lodop-vertical-wrapper')
+    })
+
+  printDocument.body
+    .querySelectorAll('[data-lodop-vertical-text="true"]')
+    .forEach((content) => {
+      const text = content.textContent || ''
+      const verticalAlign = content.dataset.lodopVerticalAlign === 'middle'
+        ? 'middle'
+        : content.dataset.lodopVerticalAlign === 'bottom'
+          ? 'bottom'
+          : 'top'
+      const table = printDocument.createElement('table')
+      const row = printDocument.createElement('tr')
+      const cell = printDocument.createElement('td')
+
+      table.setAttribute('width', '100%')
+      table.setAttribute('height', '100%')
+      table.setAttribute('cellpadding', '0')
+      table.setAttribute('cellspacing', '0')
+      table.setAttribute('border', '0')
+      table.style.setProperty('width', '100%', 'important')
+      table.style.setProperty('height', '100%', 'important')
+      table.style.setProperty('border-collapse', 'collapse', 'important')
+      table.style.setProperty('table-layout', 'fixed', 'important')
+      cell.setAttribute('align', 'center')
+      cell.setAttribute('valign', verticalAlign)
+      cell.style.setProperty('text-align', 'center', 'important')
+      cell.style.setProperty('vertical-align', verticalAlign, 'important')
+      cell.style.setProperty('padding', '0', 'important')
+
+      Array.from(text).forEach((character) => {
+        if (character === '\r') return
+
+        const line = printDocument.createElement('span')
+        line.style.setProperty('display', 'block', 'important')
+        line.style.setProperty('width', '100%', 'important')
+        line.style.setProperty('line-height', '1.05', 'important')
+        line.textContent = character === '\n' || /\s/.test(character)
+          ? '\u00a0'
+          : getLodopVerticalCharacter(character)
+        cell.appendChild(line)
+      })
+
+      row.appendChild(cell)
+      table.appendChild(row)
+      content.replaceChildren(table)
+      content.style.setProperty('display', 'block', 'important')
+      content.style.setProperty('width', '100%', 'important')
+      content.style.setProperty('height', '100%', 'important')
+      content.style.setProperty('writing-mode', 'horizontal-tb', 'important')
+      content.style.setProperty('-webkit-writing-mode', 'horizontal-tb', 'important')
+      content.style.setProperty('white-space', 'normal', 'important')
+      content.style.setProperty('overflow', 'hidden', 'important')
+      content.style.removeProperty('text-orientation')
+      content.removeAttribute('data-lodop-vertical-text')
+      content.removeAttribute('data-lodop-vertical-align')
+    })
+
+  return printDocument.body.innerHTML
+}
+
 const createPrintDocument = (html, pageWidth, pageHeight) => {
   const baseUrl = typeof document === 'undefined' ? '' : document.baseURI
+  const printableHtml = normalizeLodopVerticalText(html)
 
   return `<!doctype html>
 <html lang="zh-CN">
@@ -171,7 +283,7 @@ const createPrintDocument = (html, pageWidth, pageHeight) => {
       * { box-sizing: border-box; }
     </style>
   </head>
-  <body>${html}</body>
+  <body>${printableHtml}</body>
 </html>`
 }
 
