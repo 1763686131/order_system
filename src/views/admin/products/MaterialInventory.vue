@@ -307,8 +307,8 @@
                     <th>单据编号</th>
                     <th>日期</th>
                     <th>类型</th>
-                    <th>仓库</th>
                     <th class="movement-number">数量</th>
+                    <th>仓库</th>
                     <th>备注</th>
                   </tr>
                 </thead>
@@ -321,14 +321,20 @@
                         {{ movement.movementType === 'in' ? '入库' : '出库' }}
                       </span>
                     </td>
-                    <td>{{ movement.warehouseName || '-' }}</td>
                     <td :class="['movement-number', `movement-${movement.movementType}`]">
                       {{ movement.movementType === 'in' ? '+' : '-' }}
                       {{ formatNumber(movement.quantity) }}
                       <small>{{ movementDetailMaterial.unit }}</small>
                     </td>
+                    <td>{{ movement.warehouseName || '-' }}</td>
                     <td class="movement-note" :title="formatMovementRemark(movement)">
-                      {{ formatMovementRemark(movement) }}
+                      <span class="movement-note-text">{{ getMovementRemarkText(movement) }}</span>
+                      <span
+                        v-if="getMovementProducedQuantity(movement)"
+                        class="movement-produced-quantity"
+                      >
+                        {{ getMovementProducedQuantity(movement) }}
+                      </span>
                     </td>
                   </tr>
                 </tbody>
@@ -863,6 +869,20 @@ const formatMovementRemark = movement => {
     parts.push(`${formatNumber(movement.producedQuantity)}公斤`)
   }
   return parts.join(' · ') || '-'
+}
+
+const getMovementRemarkText = movement => String(movement?.remark || '').trim() || '-'
+
+const getMovementProducedQuantity = movement => {
+  if (
+    movement?.movementType !== 'out'
+    || movement?.producedQuantity === null
+    || movement?.producedQuantity === undefined
+  ) {
+    return ''
+  }
+
+  return `${formatNumber(movement.producedQuantity)}公斤`
 }
 
 const closeMovementDetail = () => {
@@ -1488,15 +1508,16 @@ onMounted(loadMaterialProducts)
 
 .inventory-detail-title span:not(.inventory-detail-icon) {
   color: var(--accent-dark);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 750;
 }
 
 .inventory-detail-title h2 {
   margin: 3px 0 2px;
   overflow: hidden;
   color: var(--text);
-  font-size: 18px;
+  font-size: 20px;
+  font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1504,8 +1525,9 @@ onMounted(loadMaterialProducts)
 .inventory-detail-title p {
   margin: 0;
   overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 12px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1554,22 +1576,23 @@ onMounted(loadMaterialProducts)
 }
 
 .movement-summary span {
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 650;
+  color: #334155;
+  font-size: 15px;
+  font-weight: 700;
 }
 
 .movement-summary strong {
   margin-left: 4px;
   color: var(--accent-dark);
-  font-size: 22px;
+  font-size: 25px;
+  font-weight: 850;
   font-variant-numeric: tabular-nums;
 }
 
 .movement-summary small {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .movement-state {
@@ -1578,11 +1601,12 @@ onMounted(loadMaterialProducts)
   align-items: center;
   justify-content: center;
   margin-top: 13px;
-  color: var(--text-muted);
+  color: #475569;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 7px;
-  font-size: 13px;
+  font-size: 15px;
+  font-weight: 650;
 }
 
 .movement-state.error {
@@ -1599,30 +1623,31 @@ onMounted(loadMaterialProducts)
 
 .movement-table {
   width: 100%;
-  min-width: 690px;
+  min-width: 760px;
   border-collapse: collapse;
   table-layout: fixed;
-  font-size: 13px;
+  font-size: 15px;
 }
 
 .movement-table th {
-  height: 42px;
+  height: 46px;
   padding: 0 12px;
-  color: var(--text-secondary);
+  color: #334155;
   background: #f8fafc;
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 750;
   text-align: left;
   white-space: nowrap;
 }
 
 .movement-table td {
-  height: 50px;
+  height: 56px;
   padding: 8px 12px;
   overflow: hidden;
-  color: #344054;
+  color: #1f2937;
   border-bottom: 1px solid #edf1f5;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1631,15 +1656,16 @@ onMounted(loadMaterialProducts)
   border-bottom: 0;
 }
 
-.movement-table th:nth-child(1) { width: 165px; }
-.movement-table th:nth-child(2) { width: 138px; }
-.movement-table th:nth-child(3) { width: 82px; }
-.movement-table th:nth-child(4) { width: 125px; }
-.movement-table th:nth-child(5) { width: 120px; }
+.movement-table th:nth-child(1) { width: 170px; }
+.movement-table th:nth-child(2) { width: 140px; }
+.movement-table th:nth-child(3) { width: 88px; }
+.movement-table th:nth-child(4) { width: 135px; }
+.movement-table th:nth-child(5) { width: 135px; }
 
 .movement-document {
   color: var(--accent-dark) !important;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
 }
 
 .movement-number {
@@ -1647,20 +1673,25 @@ onMounted(loadMaterialProducts)
   text-align: right !important;
 }
 
+.movement-table td.movement-number {
+  font-size: 16px;
+  font-weight: 800;
+}
+
 .movement-number small {
   margin-left: 3px;
-  font-size: 11px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 750;
 }
 
 .movement-type {
   display: inline-flex;
-  min-height: 25px;
+  min-height: 29px;
   align-items: center;
-  padding: 0 9px;
+  padding: 0 10px;
   border-radius: 999px;
-  font-size: 12px;
-  font-weight: 650;
+  font-size: 14px;
+  font-weight: 750;
 }
 
 .movement-in {
@@ -1680,12 +1711,25 @@ onMounted(loadMaterialProducts)
 }
 
 .movement-note {
-  color: var(--text-secondary) !important;
+  color: #334155 !important;
   overflow: visible !important;
   line-height: 1.55;
   overflow-wrap: anywhere;
   text-overflow: clip !important;
   white-space: normal !important;
+}
+
+.movement-note-text,
+.movement-produced-quantity {
+  display: block;
+}
+
+.movement-produced-quantity {
+  margin-top: 3px;
+  color: #475569;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1.35;
 }
 
 .empty-state {
