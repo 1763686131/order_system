@@ -885,6 +885,23 @@
       </Transition>
     </Teleport>
 
+    <PrintTemplateSelector
+      :visible="printTemplateDialogOpen"
+      business-type="sale"
+      title="打印订单"
+      :document-number="printTargetOrder?.order_number || printTargetOrder?.id || ''"
+      description="选择一个销售模板预览当前订单数据。"
+      @close="closePrintTemplateDialog"
+      @preview="previewSelectedPrintTemplate"
+    />
+
+    <OrderPrintPreview
+      :visible="printPreviewVisible"
+      :template="selectedPrintTemplate"
+      :variables="printOrderVariables"
+      @close="closePrintPreview"
+    />
+
     <!-- 展开信息弹窗 -->
     <div v-if="expandModal.visible" class="expand-modal-overlay" @click="closeExpandModal">
       <div class="expand-modal" @click.stop>
@@ -1054,6 +1071,8 @@ import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { formatOrderForCopy } from '@/utils/tools'
 import { getStores } from '@/utils/storeHelper'
+import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
+import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 
 const router = useRouter()
 
@@ -1076,6 +1095,13 @@ const orders = ref([])
 const loading = ref(false)
 const stores = ref([])
 const products = ref([]) // 商品列表，用于反查商品名称
+const warehouses = ref([])
+
+// 打印模板预览
+const printTemplateDialogOpen = ref(false)
+const selectedPrintTemplate = ref(null)
+const printTargetOrder = ref(null)
+const printPreviewVisible = ref(false)
 
 // 详情弹窗状态
 const detailModalOpen = ref(false)
@@ -1320,8 +1346,8 @@ const columnCount = computed(() => {
 const fetchOrdersData = async () => {
   loading.value = true
   try {
-    // 并行加载订单、门店和商品数据
-    const [ordersResponse, storesData, productsData] = await Promise.all([
+    // 并行加载订单、门店、商品和仓库数据
+    const [ordersResponse, storesData, productsData, warehousesData] = await Promise.all([
       request({
         url: '/orders',
         method: 'GET'
@@ -1329,6 +1355,10 @@ const fetchOrdersData = async () => {
       getStores(),
       request({
         url: '/products/inventory',
+        method: 'GET'
+      }),
+      request({
+        url: '/warehouses',
         method: 'GET'
       })
     ])
@@ -1340,6 +1370,7 @@ const fetchOrdersData = async () => {
     if (productsData && Array.isArray(productsData)) {
       products.value = productsData
     }
+    warehouses.value = Array.isArray(warehousesData) ? warehousesData : []
 
     if (ordersResponse && Array.isArray(ordersResponse)) {
       // 更新 orderStore 的所有订单数据
@@ -1777,6 +1808,112 @@ const calculateTaxAmount = (order) => {
   return tax.toFixed(2)
 }
 
+const getWarehouseName = (warehouseId) => {
+  if (!warehouseId) return ''
+  return warehouses.value.find(warehouse => (
+    String(warehouse.id) === String(warehouseId)
+  ))?.name || ''
+}
+
+const normalizePrintLogisticsService = (value) => {
+  if (Array.isArray(value)) {
+    return value.filter(Boolean).join('、')
+  }
+  return String(value || '')
+}
+
+const getOrderPrintVariables = (order) => {
+  if (!order) return {}
+
+  const orderWarehouseName = order.warehouse_name || getWarehouseName(order.warehouse_id)
+  const items = (Array.isArray(order.order_goods) ? order.order_goods : []).map((item, index) => ({
+    index: index + 1,
+    productId: item.product_id || item.productId || '',
+    goodsName: getGoodsItemName(item),
+    spec: item.spec || '',
+    unit: item.unit || '',
+    warehouseId: item.warehouse_id || item.warehouseId || order.warehouse_id || '',
+    warehouseName: item.warehouse_name ||
+      item.warehouseName ||
+      getWarehouseName(item.warehouse_id || item.warehouseId) ||
+      orderWarehouseName,
+    packages: Number(item.packages) || 0,
+    quantity: Number(item.quantity) || 0,
+    price: Number(item.price) || 0,
+    taxRate: Number(item.tax_rate ?? item.taxRate) || 0,
+    taxIncludedPrice: Number(item.tax_included_price ?? item.taxIncludedPrice) || 0,
+    amount: Number(item.amount) || 0,
+    totalAmount: Number(item.total_amount ?? item.totalAmount) || 0,
+    remark: item.remark || ''
+  }))
+  const firstItem = items[0] || {}
+  const currentPayment = Number(order.current_payment) || 0
+  const balanceApplied = Number(order.balance_applied) || 0
+  const shouldReceive = Number(order.should_receive ?? order.total_amount) || 0
+  const currentDebt = order.current_debt !== undefined && order.current_debt !== null
+    ? Number(order.current_debt) || 0
+    : shouldReceive - currentPayment - balanceApplied
+
+  return {
+    ...firstItem,
+    storeId: order.store_id || '',
+    storeName: getStoreName(order),
+    customerId: order.customer_id || '',
+    customerName: order.order_client || '',
+    warehouseId: order.warehouse_id || '',
+    warehouseName: orderWarehouseName || firstItem.warehouseName || '',
+    orderDate: formatDate(order) === '-' ? '' : formatDate(order),
+    orderNumber: order.order_number || String(order.id || ''),
+    orderNo: order.order_number || String(order.id || ''),
+    contactPerson: getContactPerson(order) === '-' ? '' : getContactPerson(order),
+    contactPhone: getContactPhone(order) === '-' ? '' : getContactPhone(order),
+    contactAddress: getContactAddress(order) === '-' ? '' : getContactAddress(order),
+    projectName: order.project_name || '',
+    logisticsService: normalizePrintLogisticsService(order.logistics_service),
+    goodsPackaging: order.goods_packaging || '',
+    packaging: order.goods_packaging || '',
+    salesPerson: order.sales_person || '',
+    creator: order.creator || '',
+    orderRemark: order.remark || '',
+    taxEnabled: items.some(item => item.taxRate > 0),
+    taxRate: Number(firstItem.taxRate) || 0,
+    totalPackages: calculateTotalPackages(order),
+    totalQuantity: Number(calculateTotalQuantity(order)) || 0,
+    totalAmount: Number(order.subtotal_amount) || Number(calculateSubtotal(order)) || 0,
+    totalTaxAmount: Number(order.total_amount) || Number(calculateTotalAmount(order)) || 0,
+    discountAmount: Number(order.discount_amount) || 0,
+    otherFees: Number(order.other_fees) || 0,
+    settlementAccount: order.settlement_account || '',
+    customerReceivable: Number(order.customer_receivable) || 0,
+    shouldReceive,
+    currentPayment: currentPayment + balanceApplied,
+    currentDebt,
+    items
+  }
+}
+
+const printOrderVariables = computed(() => getOrderPrintVariables(printTargetOrder.value))
+
+const closePrintTemplateDialog = () => {
+  printTemplateDialogOpen.value = false
+  if (!printPreviewVisible.value) {
+    selectedPrintTemplate.value = null
+    printTargetOrder.value = null
+  }
+}
+
+const previewSelectedPrintTemplate = (template) => {
+  selectedPrintTemplate.value = template
+  printTemplateDialogOpen.value = false
+  printPreviewVisible.value = true
+}
+
+const closePrintPreview = () => {
+  printPreviewVisible.value = false
+  selectedPrintTemplate.value = null
+  printTargetOrder.value = null
+}
+
 // 商品明细弹窗状态
 const orderDetailVisible = ref(false)
 const currentDetailOrder = ref(null)
@@ -1911,10 +2048,9 @@ const handleEditOrder = (order) => {
 // 打印订单
 const handlePrintOrder = (order) => {
   if (isNewOrder(order)) {
-    // 新订单：调用打印模板功能
-    showNotice('打开打印预览功能（待实现打印模板）', 'info')
-    // TODO: 实现打印模板调用
-    // openPrintTemplate(order)
+    printTargetOrder.value = order
+    selectedPrintTemplate.value = null
+    printTemplateDialogOpen.value = true
   } else {
     // 旧订单：显示提示信息
     showNotice('该订单为旧格式订单，不支持打印功能', 'error')
@@ -4411,6 +4547,7 @@ svg {
   .detail-modal-actions {
     width: auto;
   }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

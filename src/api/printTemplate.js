@@ -3,29 +3,54 @@
  */
 import request from './request'
 
+export function normalizePrintTemplate(template = {}) {
+  return {
+    ...template,
+    businessType: template.businessType ?? template.business_type ?? '',
+    paperType: template.paperType ?? template.paper_type ?? '',
+    pageWidth: template.pageWidth ?? template.page_width ?? 210,
+    pageHeight: template.pageHeight ?? template.page_height ?? 140,
+    isDefault: Boolean(template.isDefault ?? template.is_default),
+    enabled: Boolean(template.enabled ?? true),
+    content: template.content ?? template.design ?? template.data ?? null,
+    createdAt: template.createdAt ?? template.created_at ?? '',
+    updatedAt: template.updatedAt ?? template.updated_at ?? ''
+  }
+}
+
 /**
  * 获取所有模板
  * @param {Object} params - 查询参数
  * @param {string} params.businessType - 业务类型
- * @param {boolean} params.enabled - 是否启用
+ * @param {boolean} params.enabledOnly - 是否只返回启用模板
  */
-export function getTemplates(params = {}) {
-  return request({
+export async function getTemplates(params = {}) {
+  const response = await request({
     url: '/print-templates',
     method: 'GET',
     params
   })
+
+  if (response?.success && Array.isArray(response.data)) {
+    response.data = response.data.map(normalizePrintTemplate)
+  }
+  return response
 }
 
 /**
  * 获取单个模板
  * @param {number} id - 模板ID
  */
-export function getTemplate(id) {
-  return request({
+export async function getTemplate(id) {
+  const response = await request({
     url: `/print-templates/${id}`,
     method: 'GET'
   })
+
+  if (response?.success && response.data) {
+    response.data = normalizePrintTemplate(response.data)
+  }
+  return response
 }
 
 /**
@@ -79,11 +104,16 @@ export function setDefaultTemplate(id) {
  * 获取默认模板
  * @param {string} businessType - 业务类型
  */
-export function getDefaultTemplate(businessType) {
-  return request({
-    url: `/print-templates/default/${businessType}`,
-    method: 'GET'
+export async function getDefaultTemplate(businessType) {
+  const response = await getTemplates({
+    businessType,
+    enabledOnly: true
   })
+  const templates = Array.isArray(response?.data) ? response.data : []
+  return {
+    ...response,
+    data: templates.find(template => template.isDefault) || templates[0] || null
+  }
 }
 
 /**

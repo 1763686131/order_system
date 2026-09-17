@@ -25,7 +25,22 @@
 
       <div class="order-print-preview-footer">
         <span>此处仅用于验证模板和订单数据绑定，不会提交打印任务。</span>
-        <button type="button" class="preview-footer-button" @click="handleClose">关闭</button>
+        <div class="preview-footer-actions">
+          <button
+            type="button"
+            class="preview-footer-button preview-print-button"
+            title="本地打印功能待接入"
+            disabled
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M6 9V2h12v7"></path>
+              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+              <path d="M6 14h12v8H6z"></path>
+            </svg>
+            打印
+          </button>
+          <button type="button" class="preview-footer-button" @click="handleClose">关闭</button>
+        </div>
       </div>
     </div>
 
@@ -304,7 +319,7 @@ const loadPreview = async () => {
   previewHtml.value = ''
 
   try {
-    const design = props.template.design || props.template.data
+    const design = props.template.content || props.template.design || props.template.data
     if (!design) {
       throw new Error('该模板还没有保存设计内容，请先在模板管理中完成设计并保存。')
     }
@@ -356,6 +371,14 @@ watch(
   { deep: true }
 )
 
+watch(
+  () => props.template,
+  () => {
+    if (props.visible && designerReady.value) loadPreview()
+  },
+  { deep: true }
+)
+
 const handleClose = () => emit('close')
 </script>
 
@@ -363,7 +386,7 @@ const handleClose = () => emit('close')
 .order-print-preview-overlay {
   position: fixed;
   inset: 0;
-  z-index: 100000;
+  z-index: 2147483000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -455,14 +478,47 @@ const handleClose = () => emit('close')
   border-top: 1px solid #d9e0e8;
 }
 
+.preview-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .preview-footer-button {
   height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 0 16px;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #fff;
   color: #475569;
   cursor: pointer;
+}
+
+.preview-footer-button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.preview-print-button {
+  color: #fff;
+  background: #0f9f78;
+  border-color: #0f9f78;
+}
+
+.preview-print-button:disabled {
+  color: #94a3b8;
+  background: #f1f5f9;
+  border-color: #d8e0e8;
+  cursor: not-allowed;
 }
 
 .preview-driver {
@@ -490,6 +546,11 @@ const handleClose = () => emit('close')
   .order-print-preview-footer {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .preview-footer-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
 </style>
