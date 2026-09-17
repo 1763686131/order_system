@@ -306,6 +306,7 @@
     <PrintDesignerEditor
       :visible="showDesigner"
       :template="designerTemplate"
+      :templates="templates"
       @save="handleDesignerSave"
       @close="closeDesigner"
     />
@@ -448,39 +449,34 @@ const closeDesigner = () => {
 
 const handleDesignerSave = async (template) => {
   try {
-    const nextId = template?.id ?? Date.now()
     const savedTemplate = {
       ...template,
-      id: nextId,
       updatedAt: new Date().toISOString()
     }
 
     let response
     const existingIndex = templates.value.findIndex((item) => (
-      String(item.id) === String(nextId)
+      template?.id !== undefined &&
+      template?.id !== null &&
+      String(item.id) === String(template.id)
     ))
 
     if (existingIndex >= 0) {
       // 更新现有模板
-      response = await updateTemplate(nextId, savedTemplate)
-      if (response.success) {
-        templates.value.splice(existingIndex, 1, {
-          ...templates.value[existingIndex],
-          ...savedTemplate
-        })
-      }
+      response = await updateTemplate(template.id, savedTemplate)
     } else {
       // 新增模板
-      response = await createTemplate(savedTemplate)
-      if (response.success) {
-        templates.value.push(savedTemplate)
-      }
+      const { id, ...createPayload } = savedTemplate
+      response = await createTemplate(createPayload)
     }
 
     if (response.success) {
-      templates.value = [...templates.value]
+      const savedId = existingIndex >= 0
+        ? template.id
+        : response.data?.id
+      await loadTemplates()
       window.dispatchEvent(new CustomEvent('order-system-print-templates-updated', {
-        detail: { id: nextId, updatedAt: savedTemplate.updatedAt }
+        detail: { id: savedId, updatedAt: savedTemplate.updatedAt }
       }))
       closeDesigner()
       console.log('模板保存成功')

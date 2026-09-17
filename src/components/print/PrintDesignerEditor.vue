@@ -12,9 +12,59 @@
       </div>
       <div class="designer-actions">
         <button type="button" class="designer-btn" @click="handlePreview">预览</button>
-        <button type="button" class="designer-btn designer-btn-primary" @click="handleSave">
-          保存模板
-        </button>
+        <div ref="saveMenuRef" class="designer-save-menu">
+          <div class="designer-save-split">
+            <button
+              type="button"
+              class="designer-save-main"
+              title="保存模板"
+              @click="handleSave"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M5 3h12l2 2v16H5z"></path>
+                <path d="M8 3v6h8V3"></path>
+                <path d="M8 14h8v7H8z"></path>
+              </svg>
+              <span>保存模板</span>
+            </button>
+            <button
+              type="button"
+              class="designer-save-toggle"
+              title="更多保存选项"
+              aria-label="更多保存选项"
+              :aria-expanded="saveMenuOpen"
+              @click="saveMenuOpen = !saveMenuOpen"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="m7 9 5 5 5-5"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div v-if="saveMenuOpen" class="designer-save-dropdown">
+            <button type="button" @click="handleToolbarReorder">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M8 6h.01M8 12h.01M8 18h.01M16 6h.01M16 12h.01M16 18h.01"></path>
+              </svg>
+              <span>操作栏排序</span>
+            </button>
+            <button type="button" @click="handleOpenHelp">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9"></circle>
+                <path d="M9.8 9a2.3 2.3 0 1 1 3.7 1.8c-.9.6-1.5 1-1.5 2.2"></path>
+                <path d="M12 17h.01"></path>
+              </svg>
+              <span>帮助</span>
+            </button>
+            <button type="button" @click="handleOpenSettings">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="3"></circle>
+                <path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-2.8 2.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.2h-4V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1L4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9A1.7 1.7 0 0 0 3 14H2.8v-4H3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9L4.2 7 7 4.2l.1.1a1.7 1.7 0 0 0 1.9.3A1.7 1.7 0 0 0 10 3V2.8h4V3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1L19.8 7l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.2v4H21a1.7 1.7 0 0 0-1.6 1Z"></path>
+              </svg>
+              <span>设置</span>
+            </button>
+          </div>
+        </div>
         <button type="button" class="designer-btn" @click="handleClose">退出</button>
       </div>
     </div>
@@ -25,20 +75,26 @@
 </template>
 
 <script setup>
-import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 import { toChineseMoney } from '@/utils/chineseMoney'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
-  template: { type: Object, default: null }
+  template: { type: Object, default: null },
+  templates: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['save', 'close'])
 const designerRef = ref(null)
+const saveMenuRef = ref(null)
+const saveMenuOpen = ref(false)
 const templateName = ref('')
 const configured = ref(false)
+const NEW_TEMPLATE_ID = '__order_system_new_template__'
+let activeDesignerTemplateId = ''
+let designerDomObserver = null
 
 const defaultVariables = {
   storeId: 'store-001',
@@ -345,6 +401,10 @@ const createDefaultTableFooter = (columns) => {
 
 const normalizeTableFooters = (design) => {
   const cloned = JSON.parse(JSON.stringify(design || {}))
+  cloned.testData = {
+    ...defaultVariables,
+    ...(cloned.testData || {})
+  }
   cloned.ext = {
     ...(cloned.ext || {}),
     availableVariables
@@ -367,8 +427,97 @@ const normalizeTableFooters = (design) => {
 
 let footerFixTimer = null
 
+const getDesignerTemplateId = (template) => (
+  template?.id === undefined || template?.id === null
+    ? ''
+    : String(template.id)
+)
+
+const getTemplateUpdatedAt = (template) => {
+  const timestamp = new Date(template?.updatedAt || template?.updated_at || '').getTime()
+  return Number.isFinite(timestamp) ? timestamp : Date.now()
+}
+
+const getDesignerTemplateList = () => {
+  const mappedTemplates = props.templates.map((template) => ({
+    id: getDesignerTemplateId(template),
+    name: template.name || '未命名模板',
+    data: normalizeTableFooters(
+      template.content ||
+      template.design ||
+      template.data ||
+      defaultTemplateData
+    ),
+    updatedAt: getTemplateUpdatedAt(template),
+    permissions: {
+      editable: true,
+      deletable: false,
+      copyable: false
+    },
+    ext: {
+      availableVariables
+    }
+  })).filter(template => template.id)
+
+  if (getDesignerTemplateId(props.template)) {
+    return mappedTemplates
+  }
+
+  return [
+    {
+      id: NEW_TEMPLATE_ID,
+      name: props.template?.name || '销售三联单',
+      data: normalizeTableFooters(
+        props.template?.content ||
+        props.template?.design ||
+        props.template?.data ||
+        defaultTemplateData
+      ),
+      updatedAt: Date.now(),
+      permissions: {
+        editable: true,
+        deletable: false,
+        copyable: false
+      },
+      ext: {
+        availableVariables
+      }
+    },
+    ...mappedTemplates
+  ]
+}
+
+const getCurrentDatabaseTemplate = () => {
+  const currentId = String(
+    designerRef.value?.templateStore?.currentTemplateId || ''
+  )
+  if (!currentId || currentId === NEW_TEMPLATE_ID) {
+    return props.template || null
+  }
+  return props.templates.find(template => (
+    getDesignerTemplateId(template) === currentId
+  )) || props.template || null
+}
+
+const syncActiveTemplateName = () => {
+  const designer = designerRef.value
+  const currentId = String(designer?.templateStore?.currentTemplateId || '')
+  if (!currentId || currentId === activeDesignerTemplateId) return
+
+  activeDesignerTemplateId = currentId
+  const databaseTemplate = props.templates.find(template => (
+    getDesignerTemplateId(template) === currentId
+  ))
+  const internalTemplate = designer.getTemplate?.(currentId)
+  templateName.value = databaseTemplate?.name ||
+    internalTemplate?.name ||
+    props.template?.name ||
+    '销售三联单'
+}
+
 const ensureLiveTableFooters = () => {
   const designer = designerRef.value
+  syncActiveTemplateName()
   const pages = designer?.designerStore?.pages
   if (!Array.isArray(pages)) return
 
@@ -397,6 +546,49 @@ const stopFooterFixTimer = () => {
   footerFixTimer = null
 }
 
+const getDesignerDomRoot = () => (
+  designerRef.value?.shadowRoot || designerRef.value || null
+)
+
+const customizeDesignerChrome = () => {
+  const root = getDesignerDomRoot()
+  if (!root?.querySelectorAll) return
+
+  const nativeSaveButton = Array.from(root.querySelectorAll('header button')).find(
+    button => button.textContent?.replace(/\s+/g, '') === '保存'
+  )
+  const header = nativeSaveButton?.closest('header')
+  const nativeActionSection = header
+    ? Array.from(header.children).find(child => child.contains(nativeSaveButton))
+    : null
+
+  nativeActionSection?.style.setProperty('display', 'none', 'important')
+
+  Array.from(root.querySelectorAll('button')).forEach((button) => {
+    const label = button.textContent?.replace(/\s+/g, '') || ''
+    if (label === '新建模板' || label === '新建模版') {
+      button.style.setProperty('display', 'none', 'important')
+    }
+  })
+}
+
+const installDesignerChromeObserver = () => {
+  designerDomObserver?.disconnect()
+  designerDomObserver = null
+
+  const root = getDesignerDomRoot()
+  if (!root) return
+
+  customizeDesignerChrome()
+  designerDomObserver = new MutationObserver(customizeDesignerChrome)
+  designerDomObserver.observe(root, { childList: true, subtree: true })
+}
+
+const stopDesignerChromeObserver = () => {
+  designerDomObserver?.disconnect()
+  designerDomObserver = null
+}
+
 const configureDesigner = async () => {
   const designer = designerRef.value
   if (!designer || configured.value || !designer.getTemplateData?.()) return
@@ -410,17 +602,26 @@ const configureDesigner = async () => {
   designer.setLanguage('zh')
   await designer.setTestData(defaultVariables, { merge: false })
   await designer.setTemplateVariables(defaultVariables, { merge: false })
-  designer.loadTemplateData(normalizeTableFooters(
-    props.template?.content ||
-    props.template?.design ||
-    props.template?.data ||
-    defaultTemplateData
-  ))
+  designer.setTemplateContextMenu({
+    mode: 'replace',
+    items: [
+      { key: 'viewJson', actionKey: 'viewJson', label: '查看 JSON' },
+      { key: 'testData', actionKey: 'testData', label: '测试数据' }
+    ]
+  })
+  designer.setTemplates(getDesignerTemplateList(), {
+    currentTemplateId: getDesignerTemplateId(props.template) || NEW_TEMPLATE_ID
+  })
+  await nextTick()
+  syncActiveTemplateName()
+  installDesignerChromeObserver()
   startFooterFixTimer()
 }
 
 const openDesigner = async () => {
   configured.value = false
+  activeDesignerTemplateId = ''
+  saveMenuOpen.value = false
   templateName.value = props.template?.name || '销售三联单'
   await nextTick()
   const designer = designerRef.value
@@ -435,7 +636,9 @@ watch(
     if (visible) {
       openDesigner()
     } else {
+      saveMenuOpen.value = false
       stopFooterFixTimer()
+      stopDesignerChromeObserver()
     }
   }
 )
@@ -454,22 +657,64 @@ const handleSave = async () => {
   await nextTick()
   ensureLiveTableFooters()
   const design = normalizeTableFooters(designer.getTemplateData())
+  const currentTemplate = getCurrentDatabaseTemplate()
+  const currentId = String(designer.templateStore?.currentTemplateId || '')
   emit('save', {
-    ...props.template,
-    name: templateName.value || props.template?.name || '销售三联单',
-    businessType: props.template?.businessType || 'sale',
-    paperType: props.template?.paperType || '三联单',
-    pageWidth: 210,
-    pageHeight: 140,
-    enabled: props.template?.enabled !== false,
-    content: design,  // 后端期望的是 content 字段
+    ...currentTemplate,
+    id: currentId && currentId !== NEW_TEMPLATE_ID
+      ? currentTemplate?.id ?? currentId
+      : null,
+    name: templateName.value || currentTemplate?.name || '销售三联单',
+    businessType: currentTemplate?.businessType || 'sale',
+    paperType: currentTemplate?.paperType || '三联单',
+    pageWidth: currentTemplate?.pageWidth || 210,
+    pageHeight: currentTemplate?.pageHeight || 140,
+    enabled: currentTemplate?.enabled !== false,
+    content: design,
     updatedAt: Date.now()
   })
 }
 
+const handleToolbarReorder = () => {
+  saveMenuOpen.value = false
+  window.dispatchEvent(new CustomEvent('designer:toolbar-reorder'))
+}
+
+const handleOpenHelp = () => {
+  saveMenuOpen.value = false
+  designerRef.value?.designerStore?.setShowHelp(true)
+}
+
+const handleOpenSettings = () => {
+  saveMenuOpen.value = false
+  designerRef.value?.designerStore?.setShowSettings(true)
+}
+
+const handleOutsidePointerDown = (event) => {
+  if (!saveMenuRef.value?.contains(event.target)) {
+    saveMenuOpen.value = false
+  }
+}
+
+const handleNativeSaveEvent = (event) => {
+  if (!props.visible) return
+  event.stopImmediatePropagation()
+  handleSave()
+}
+
 const handleClose = () => emit('close')
 
-onBeforeUnmount(stopFooterFixTimer)
+onMounted(() => {
+  window.addEventListener('pointerdown', handleOutsidePointerDown)
+  window.addEventListener('designer:save', handleNativeSaveEvent, true)
+})
+
+onBeforeUnmount(() => {
+  stopFooterFixTimer()
+  stopDesignerChromeObserver()
+  window.removeEventListener('pointerdown', handleOutsidePointerDown)
+  window.removeEventListener('designer:save', handleNativeSaveEvent, true)
+})
 </script>
 
 <style scoped>
@@ -483,6 +728,8 @@ onBeforeUnmount(stopFooterFixTimer)
 }
 
 .print-designer-toolbar {
+  position: relative;
+  z-index: 30;
   height: 58px;
   flex: 0 0 58px;
   display: flex;
@@ -526,6 +773,7 @@ onBeforeUnmount(stopFooterFixTimer)
 
 .designer-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
 }
 
@@ -539,10 +787,91 @@ onBeforeUnmount(stopFooterFixTimer)
   cursor: pointer;
 }
 
-.designer-btn-primary {
-  border-color: #0f9f78;
+.designer-save-menu {
+  position: relative;
+}
+
+.designer-save-split {
+  display: flex;
+  height: 34px;
+  filter: drop-shadow(0 1px 1px rgba(15, 23, 42, 0.08));
+}
+
+.designer-save-main,
+.designer-save-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
   background: #0f9f78;
   color: #fff;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.designer-save-main:hover,
+.designer-save-toggle:hover {
+  background: #087f62;
+}
+
+.designer-save-main {
+  gap: 7px;
+  padding: 0 13px;
+  border-right: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 5px 0 0 5px;
+  font-size: 14px;
+}
+
+.designer-save-toggle {
+  width: 34px;
+  padding: 0;
+  border-radius: 0 5px 5px 0;
+}
+
+.designer-save-main svg,
+.designer-save-toggle svg,
+.designer-save-dropdown svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.designer-save-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: 170px;
+  padding: 5px;
+  border: 1px solid #dbe2ea;
+  border-radius: 6px;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.18);
+}
+
+.designer-save-dropdown button {
+  width: 100%;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #334155;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.designer-save-dropdown button:hover {
+  background: #f1f5f9;
+  color: #0f766e;
 }
 
 .print-designer-canvas {
