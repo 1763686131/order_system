@@ -94,10 +94,24 @@ const normalizeVariableKey = (value) => {
 }
 
 const getCellVariableKey = (cell) => {
+  const candidates = cell && typeof cell === 'object'
+    ? [cell.value, cell.field]
+    : [cell]
+
+  for (const value of candidates) {
+    if (typeof value !== 'string') continue
+    const match = value.match(/@[A-Za-z0-9_.-]+/)
+    if (match) return normalizeVariableKey(match[0])
+  }
+  return ''
+}
+
+const getCellLiteralValue = (cell) => {
   const value = cell && typeof cell === 'object' ? cell.value : cell
-  if (typeof value !== 'string') return ''
-  const match = value.match(/@[A-Za-z0-9_.-]+/)
-  return match ? normalizeVariableKey(match[0]) : ''
+  if (value === undefined || value === null || getCellVariableKey(cell)) {
+    return ''
+  }
+  return value
 }
 
 const getTableFooterVariable = (column) => {
@@ -132,43 +146,22 @@ const fillTableFooterDefaults = (element) => {
 
   if (!Array.isArray(element.footerData) || element.footerData.length === 0) {
     element.footerData = [createDefaultTableFooter(columns)]
-    return
   }
-
-  element.footerData = element.footerData.map((row, rowIndex) => {
-    const nextRow = { ...(row || {}) }
-
-    columns.forEach((column, columnIndex) => {
-      const field = String(column?.field || `col${columnIndex + 1}`).trim()
-      const variable = getTableFooterVariable(column)
-      if (!variable && !(rowIndex === 0 && columnIndex === 0)) return
-
-      const current = nextRow[field]
-      const currentValue = current && typeof current === 'object' ? current.value : current
-      if (currentValue !== undefined && currentValue !== null && String(currentValue) !== '') return
-
-      nextRow[field] = {
-        ...(current && typeof current === 'object' ? current : {}),
-        value: rowIndex === 0 && columnIndex === 0 ? '合计' : variable
-      }
-    })
-
-    return nextRow
-  })
 }
 
 const clonePreviewDesign = (design, variables) => {
   const cloned = JSON.parse(JSON.stringify(design))
-  const runtimeVariables = variables && typeof variables === 'object' ? variables : {}
+  const runtimeVariables = variables && typeof variables === 'object'
+    ? JSON.parse(JSON.stringify(variables))
+    : {}
   const items = Array.isArray(runtimeVariables.items) ? runtimeVariables.items : []
 
-  cloned.testData = {
-    ...(cloned.testData || {}),
-    ...runtimeVariables
-  }
-
   if (!Array.isArray(cloned.pages)) {
-    return cloned
+    cloned.testData = {
+      ...(cloned.testData || {}),
+      ...runtimeVariables
+    }
+    return { design: cloned, variables: runtimeVariables }
   }
 
   // 设计器中有些表格只把 @goodsName、@quantity 等字段放进了单元格，
@@ -190,8 +183,8 @@ const clonePreviewDesign = (design, variables) => {
     'remark'
   ]
 
-  cloned.pages.forEach((page) => {
-    ;(page.elements || []).forEach((element) => {
+  cloned.pages.forEach((page, pageIndex) => {
+    ;(page.elements || []).forEach((element, elementIndex) => {
       if (!element || !['table', 'TABLE'].includes(element.type)) {
         return
       }
@@ -200,6 +193,7 @@ const clonePreviewDesign = (design, variables) => {
       const layoutRows = Array.isArray(element.data) ? element.data : []
       const sampleItem = items[0] || {}
       const fieldMap = new Map()
+      const explicitBindings = new Map()
       const dataVariableKey = normalizeVariableKey(element.variable)
       const columnsVariableKey = normalizeVariableKey(element.columnsVariable)
       const footerDataVariableKey = normalizeVariableKey(element.footerDataVariable)
@@ -226,17 +220,34 @@ const clonePreviewDesign = (design, variables) => {
         const currentField = String(column?.field || '').trim()
         if (!currentField) return
 
-        if (Object.prototype.hasOwnProperty.call(sampleItem, currentField)) {
-          fieldMap.set(currentField, currentField)
-          return
-        }
-
         const sampleCell = layoutRows
           .map(row => row?.[currentField])
           .find(cell => getCellVariableKey(cell))
         const variableKey = getCellVariableKey(sampleCell)
         if (variableKey && Object.prototype.hasOwnProperty.call(sampleItem, variableKey)) {
-          fieldMap.set(currentField, variableKey)
+          explicitBindings.set(currentField, variableKey)
+        }
+      })
+
+      // 只要表格中有任意显式单元格变量，就尊重设计者的列级绑定。
+      // 未写 @变量 的列保持设计值（通常为空），不再按字段名自动取商品数据。
+      const usesExplicitBindings = explicitBindings.size > 0
+
+      columns.forEach((column) => {
+        const currentField = String(column?.field || '').trim()
+        if (!currentField) return
+
+        if (explicitBindings.has(currentField)) {
+          fieldMap.set(currentField, explicitBindings.get(currentField))
+          return
+        }
+
+        if (usesExplicitBindings) {
+          return
+        }
+
+        if (Object.prototype.hasOwnProperty.call(sampleItem, currentField)) {
+          fieldMap.set(currentField, currentField)
           return
         }
 
@@ -302,12 +313,44 @@ const clonePreviewDesign = (design, variables) => {
       ))
 
       if (hasDetailBinding || dataVariableKey === 'items' || columnsVariableKey === 'items') {
-        element.variable = '@items'
+        if (usesExplicitBindings) {
+          const tableVariableKey = `__previewItems_${pageIndex}_${elementIndex}`
+          runtimeVariables[tableVariableKey] = items.map((item) => {
+            const row = {}
+
+            columns.forEach((column) => {
+              const sourceField = String(column?.field || '').trim()
+              if (!sourceField) return
+
+              const renderedField = fieldMap.get(sourceField) || sourceField
+              const variableKey = explicitBindings.get(sourceField)
+              if (variableKey) {
+                row[renderedField] = item?.[variableKey] ?? ''
+                return
+              }
+
+              const layoutRow = layoutRows.find(layout => (
+                layout && Object.prototype.hasOwnProperty.call(layout, sourceField)
+              ))
+              row[renderedField] = getCellLiteralValue(layoutRow?.[sourceField])
+            })
+
+            return row
+          })
+          element.variable = `@${tableVariableKey}`
+        } else {
+          element.variable = '@items'
+        }
       }
     })
   })
 
-  return cloned
+  cloned.testData = {
+    ...(cloned.testData || {}),
+    ...runtimeVariables
+  }
+
+  return { design: cloned, variables: runtimeVariables }
 }
 
 const loadPreview = async () => {
@@ -324,12 +367,12 @@ const loadPreview = async () => {
       throw new Error('该模板还没有保存设计内容，请先在模板管理中完成设计并保存。')
     }
 
-    const previewDesign = clonePreviewDesign(design, props.variables)
+    const previewRuntime = clonePreviewDesign(design, props.variables)
     designer.setLanguage('zh')
-    designer.loadTemplateData(previewDesign)
-    await designer.setTestData(props.variables || {}, { merge: false })
-    await designer.setTemplateVariables(props.variables || {}, { merge: false })
-    await designer.setVariables(props.variables || {}, { merge: false })
+    designer.loadTemplateData(previewRuntime.design)
+    await designer.setTestData(previewRuntime.variables, { merge: false })
+    await designer.setTemplateVariables(previewRuntime.variables, { merge: false })
+    await designer.setVariables(previewRuntime.variables, { merge: false })
     const html = await designer.getPreviewHtml()
     previewHtml.value = wrapPreviewHtml(html)
   } catch (error) {
