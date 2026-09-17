@@ -84,54 +84,38 @@
             </div>
 
             <div class="print-selector-section-heading printer-heading">
-              <span>本地打印机</span>
-              <button
-                type="button"
-                class="printer-refresh-button"
-                title="重新检测本地打印机"
-                :disabled="printerLoading"
-                @click="loadPrinters"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M20 11a8 8 0 1 0 2 5"></path>
-                  <path d="M20 4v7h-7"></path>
+              <span>打印方式</span>
+            </div>
+            <button
+              type="button"
+              class="print-client-summary"
+              @click="settingsVisible = true"
+            >
+              <span class="print-client-summary-icon" aria-hidden="true">
+                <svg v-if="printConfig.mode === 'browser'" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="13" rx="1"></rect>
+                  <path d="M8 21h8M12 17v4"></path>
                 </svg>
-              </button>
-            </div>
-            <div class="printer-selector-area">
-              <div v-if="printerLoading" class="printer-selector-state">
-                <span class="print-template-loading-mark small" aria-hidden="true"></span>
-                正在读取本地打印机...
-              </div>
-              <div v-else-if="printerErrorMessage" class="printer-selector-state error">
-                <span>{{ printerErrorMessage }}</span>
-                <button type="button" @click="loadPrinters">重新检测</button>
-              </div>
-              <template v-else>
-                <select
-                  v-model="selectedPrinterName"
-                  class="printer-select"
-                  aria-label="本地打印机"
-                  :disabled="!printers.length"
-                >
-                  <option value="" disabled>请选择本地打印机</option>
-                  <option
-                    v-for="printer in printers"
-                    :key="`${printer.index}-${printer.name}`"
-                    :value="printer.name"
-                  >
-                    {{ printer.name }}{{ printer.isDefault ? '（默认）' : '' }}
-                  </option>
-                </select>
-                <div v-if="selectedPrinter" class="printer-meta">
-                  <span>{{ selectedPrinter.driverName || '系统打印驱动' }}</span>
-                  <span v-if="selectedPrinter.portName">{{ selectedPrinter.portName }}</span>
-                </div>
-                <div v-else class="printer-selector-state">
-                  未检测到可用的本地打印机
-                </div>
-              </template>
-            </div>
+                <svg v-else viewBox="0 0 24 24">
+                  <path d="M6 9V2h12v7"></path>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <path d="M6 14h12v8H6z"></path>
+                </svg>
+              </span>
+              <span class="print-client-summary-copy">
+                <strong>{{ printModeLabel }}</strong>
+                <span>{{ printModeDescription }}</span>
+              </span>
+              <span class="print-client-settings-action">
+                设置
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m9 6 6 6-6 6"></path>
+                </svg>
+              </span>
+            </button>
+            <p v-if="printConfigError" class="print-client-config-error">
+              {{ printConfigError }}
+            </p>
           </div>
 
           <footer class="print-template-dialog-footer">
@@ -167,14 +151,22 @@
       </div>
     </Transition>
   </Teleport>
+
+  <PrintClientSettingsDialog
+    :visible="settingsVisible"
+    @close="settingsVisible = false"
+    @saved="handlePrintConfigSaved"
+  />
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getTemplates } from '@/api/printTemplate'
-import { getLocalPrinters } from '@/utils/lodopPrint'
-
-const printerStorageKey = 'order-system-selected-printer'
+import PrintClientSettingsDialog from '@/components/print/PrintClientSettingsDialog.vue'
+import {
+  getPrintClientConfig,
+  getPrintServiceBaseUrl
+} from '@/utils/printClientConfig'
 
 const props = defineProps({
   visible: {
@@ -218,10 +210,8 @@ const loading = ref(false)
 const errorMessage = ref('')
 const templates = ref([])
 const selectedTemplateId = ref(null)
-const printerLoading = ref(false)
-const printerErrorMessage = ref('')
-const printers = ref([])
-const selectedPrinterName = ref('')
+const settingsVisible = ref(false)
+const printConfig = ref(getPrintClientConfig())
 
 const businessTypeLabels = {
   sale: '销售',
@@ -239,7 +229,7 @@ const businessTypeLabel = computed(() => (
 
 const resolvedDescription = computed(() => (
   props.description ||
-  `选择一个${businessTypeLabel.value}模板和本地打印机。`
+  `选择一个${businessTypeLabel.value}模板和打印方式。`
 ))
 
 const resolvedEmptyText = computed(() => (
@@ -248,12 +238,7 @@ const resolvedEmptyText = computed(() => (
 ))
 
 const resolvedFooterHint = computed(() => (
-  props.footerHint ||
-  (
-    selectedPrinter.value
-      ? `将使用：${selectedPrinter.value.name}`
-      : '请选择模板和本地打印机。'
-  )
+  props.footerHint || `将使用：${printModeLabel.value}`
 ))
 
 const selectedTemplate = computed(() => (
@@ -263,24 +248,47 @@ const selectedTemplate = computed(() => (
 ))
 
 const selectedPrinter = computed(() => (
-  printers.value.find(printer => printer.name === selectedPrinterName.value) || null
+  printConfig.value.mode === 'clodop' && printConfig.value.printerName
+    ? { name: printConfig.value.printerName }
+    : null
 ))
 
 const selectionReady = computed(() => (
-  Boolean(selectedTemplate.value && selectedPrinter.value) &&
-  !loading.value &&
-  !printerLoading.value
+  Boolean(
+    selectedTemplate.value &&
+    (
+      printConfig.value.mode === 'browser' ||
+      printConfig.value.printerName
+    )
+  ) &&
+  !loading.value
 ))
 
 const printReady = computed(() => props.printEnabled && selectionReady.value)
 
+const printModeLabel = computed(() => (
+  printConfig.value.mode === 'browser'
+    ? '浏览器打印'
+    : `C-Lodop · ${printConfig.value.printerName || '未选择打印机'}`
+))
+
+const printModeDescription = computed(() => (
+  printConfig.value.mode === 'browser'
+    ? '预览和打印将交给浏览器打印窗口'
+    : `${getPrintServiceBaseUrl(printConfig.value)} · 本地配置`
+))
+
+const printConfigError = computed(() => (
+  printConfig.value.mode === 'clodop' && !printConfig.value.printerName
+    ? '请先进入设置，检测并选择一台 C-Lodop 打印机。'
+    : ''
+))
+
 const printButtonTitle = computed(() => {
   if (!props.printEnabled) return '打印功能已关闭'
-  if (printerLoading.value) return '正在读取本地打印机'
-  if (printerErrorMessage.value) return printerErrorMessage.value
   if (!selectedTemplate.value) return '请选择打印模板'
-  if (!selectedPrinter.value) return '请选择本地打印机'
-  return `使用 ${selectedPrinter.value.name} 打印`
+  if (printConfigError.value) return printConfigError.value
+  return `使用 ${printModeLabel.value} 打印`
 })
 
 const getPaperLabel = (template) => {
@@ -326,42 +334,10 @@ const loadTemplates = async () => {
   }
 }
 
-const loadPrinters = async () => {
-  printerLoading.value = true
-  printerErrorMessage.value = ''
-
-  try {
-    let storedPrinterName = ''
-    try {
-      storedPrinterName = localStorage.getItem(printerStorageKey) || ''
-    } catch {
-      storedPrinterName = ''
-    }
-
-    const previousSelection = selectedPrinterName.value || storedPrinterName
-    printers.value = await getLocalPrinters()
-
-    selectedPrinterName.value = (
-      printers.value.find(printer => printer.name === previousSelection) ||
-      printers.value.find(printer => printer.isDefault) ||
-      printers.value[0] ||
-      {}
-    ).name || ''
-
-    if (!printers.value.length) {
-      printerErrorMessage.value = 'C-Lodop 未检测到本地打印机。'
-    }
-  } catch (error) {
-    console.error('读取本地打印机失败:', error)
-    printers.value = []
-    selectedPrinterName.value = ''
-    printerErrorMessage.value = error?.message || '本地打印机读取失败'
-  } finally {
-    printerLoading.value = false
-  }
+const handleClose = () => {
+  settingsVisible.value = false
+  emit('close')
 }
-
-const handleClose = () => emit('close')
 
 const handlePreview = () => {
   if (!selectionReady.value) return
@@ -371,6 +347,10 @@ const handlePreview = () => {
 const handlePrint = () => {
   if (!printReady.value) return
   emit('print', selectedTemplate.value, selectedPrinter.value)
+}
+
+const handlePrintConfigSaved = (config) => {
+  printConfig.value = config || getPrintClientConfig()
 }
 
 const handleTemplatesUpdated = () => {
@@ -384,21 +364,14 @@ watch(
   async (visible) => {
     if (!visible) return
     selectedTemplateId.value = null
+    printConfig.value = getPrintClientConfig()
+    settingsVisible.value = false
     await nextTick()
     dialogRef.value?.focus()
-    await Promise.all([loadTemplates(), loadPrinters()])
+    await loadTemplates()
   },
   { immediate: true }
 )
-
-watch(selectedPrinterName, (name) => {
-  if (!name) return
-  try {
-    localStorage.setItem(printerStorageKey, name)
-  } catch {
-    // Local storage may be disabled; the current selection still remains usable.
-  }
-})
 
 watch(
   () => props.businessType,
@@ -547,6 +520,101 @@ onBeforeUnmount(() => {
 
 .printer-heading {
   margin-top: 18px;
+}
+
+.print-client-summary {
+  display: grid;
+  width: 100%;
+  min-height: 68px;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 13px;
+  color: #283548;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.print-client-summary:hover {
+  background: #f7fcfa;
+  border-color: #a9e5d2;
+  box-shadow: 0 0 0 2px rgba(15, 159, 120, 0.08);
+}
+
+.print-client-summary:focus-visible {
+  outline: 2px solid #0f9f78;
+  outline-offset: 2px;
+}
+
+.print-client-summary-icon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  color: #08745a;
+  background: #e9f8f3;
+  border-radius: 5px;
+}
+
+.print-client-summary-icon svg,
+.print-client-settings-action svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.print-client-summary-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.print-client-summary-copy strong,
+.print-client-summary-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.print-client-summary-copy strong {
+  font-size: 13px;
+}
+
+.print-client-summary-copy span {
+  color: #8490a1;
+  font-size: 11px;
+}
+
+.print-client-settings-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #08745a;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.print-client-settings-action svg {
+  width: 15px;
+  height: 15px;
+}
+
+.print-client-config-error {
+  margin: 7px 0 0;
+  color: #b4232f;
+  font-size: 11px;
+  line-height: 1.5;
 }
 
 .printer-refresh-button {

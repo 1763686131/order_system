@@ -28,7 +28,7 @@
 
       <div class="order-print-preview-footer">
         <span :class="{ 'preview-footer-error': printErrorMessage }">
-          {{ printErrorMessage || `点击打印后将在 C-Lodop 中使用 ${resolvedPrinterName}。` }}
+          {{ printErrorMessage || printDestinationHint }}
         </span>
         <div class="preview-footer-actions">
           <button
@@ -62,7 +62,8 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
-import { openLodopPrintPreview } from '@/utils/lodopPrint'
+import { openConfiguredPrintPreview } from '@/utils/lodopPrint'
+import { getPrintClientConfig } from '@/utils/printClientConfig'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -89,13 +90,26 @@ const designerReady = ref(false)
 const printing = ref(false)
 const printErrorMessage = ref('')
 const autoPrintConsumed = ref(false)
+const activePrintConfig = ref(getPrintClientConfig())
 
-const resolvedPrinterName = computed(() => props.printer?.name || '系统默认打印机')
+const resolvedPrinterName = computed(() => (
+  activePrintConfig.value.mode === 'browser'
+    ? '浏览器打印'
+    : activePrintConfig.value.printerName || props.printer?.name || 'C-Lodop 默认打印机'
+))
+
+const printDestinationHint = computed(() => (
+  activePrintConfig.value.mode === 'browser'
+    ? '点击打印后将打开浏览器打印窗口。'
+    : `点击打印后将在 C-Lodop 中使用 ${resolvedPrinterName.value}。`
+))
 
 const printButtonTitle = computed(() => {
   if (loading.value) return '正在生成打印内容'
   if (!renderedHtml.value) return '暂无可打印内容'
-  return `使用 ${resolvedPrinterName.value} 打印`
+  return activePrintConfig.value.mode === 'browser'
+    ? '使用浏览器打印'
+    : `使用 ${resolvedPrinterName.value} 打印`
 })
 
 const normalizePrintHtml = (html, design) => {
@@ -541,6 +555,7 @@ const handleDesignerReady = async () => {
 }
 
 const openPreview = async () => {
+  activePrintConfig.value = getPrintClientConfig()
   designerReady.value = false
   loading.value = true
   errorMessage.value = ''
@@ -603,7 +618,8 @@ const handlePrint = async () => {
       .filter(Boolean)
       .join(' - ')
 
-    await openLodopPrintPreview({
+    activePrintConfig.value = getPrintClientConfig()
+    await openConfiguredPrintPreview({
       html: renderedHtml.value,
       taskName,
       pageWidth: props.template?.pageWidth,
@@ -612,7 +628,7 @@ const handlePrint = async () => {
     })
     emit('close')
   } catch (error) {
-    printErrorMessage.value = error?.message || '调用 C-Lodop 打印失败'
+    printErrorMessage.value = error?.message || '调用打印服务失败'
   } finally {
     printing.value = false
   }
