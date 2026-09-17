@@ -35,7 +35,7 @@
               type="button"
               class="designer-save-main"
               title="保存模板"
-              @click="handleSave"
+              @click="requestSaveConfirmation"
             >
               <svg aria-hidden="true" viewBox="0 0 24 24">
                 <path d="M5 3h12l2 2v16H5z"></path>
@@ -82,7 +82,7 @@
             </button>
           </div>
         </div>
-        <button type="button" class="designer-btn" @click="handleClose">退出</button>
+        <button type="button" class="designer-btn" @click="requestCloseConfirmation">退出</button>
       </div>
     </div>
     <div class="print-designer-canvas">
@@ -96,6 +96,17 @@
       preview-label="模板测试数据预览"
       @close="closePreview"
     />
+
+    <CustomModal
+      v-model:visible="confirmation.visible"
+      type="warning"
+      :title="confirmation.title"
+      :message="confirmation.message"
+      :confirm-text="confirmation.confirmText"
+      :danger="confirmation.danger"
+      @confirm="confirmPendingAction"
+      @cancel="clearPendingAction"
+    />
   </div>
 </template>
 
@@ -105,6 +116,7 @@ import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 import { toChineseMoney } from '@/utils/chineseMoney'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
+import CustomModal from '@/components/CustomModal.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -123,6 +135,14 @@ const pageWidth = ref(210)
 const pageHeight = ref(140)
 const previewVisible = ref(false)
 const previewTemplate = ref(null)
+const confirmation = ref({
+  visible: false,
+  action: '',
+  title: '',
+  message: '',
+  confirmText: '确定',
+  danger: false
+})
 const configured = ref(false)
 const NEW_TEMPLATE_ID = '__order_system_new_template__'
 const businessTypeOptions = [
@@ -751,6 +771,8 @@ const openDesigner = async () => {
   activeDesignerTemplateId = ''
   activeCanvasSizeKey = ''
   saveMenuOpen.value = false
+  confirmation.value.visible = false
+  confirmation.value.action = ''
   previewVisible.value = false
   previewTemplate.value = null
   templateName.value = props.template?.name || '销售三联单'
@@ -772,6 +794,8 @@ watch(
       openDesigner()
     } else {
       saveMenuOpen.value = false
+      confirmation.value.visible = false
+      confirmation.value.action = ''
       previewVisible.value = false
       previewTemplate.value = null
       stopFooterFixTimer()
@@ -803,7 +827,48 @@ const closePreview = () => {
   previewTemplate.value = null
 }
 
-const handleSave = async () => {
+const requestSaveConfirmation = () => {
+  saveMenuOpen.value = false
+  confirmation.value = {
+    visible: true,
+    action: 'save',
+    title: '确认保存模板？',
+    message: '确定保存当前模板吗？保存后将同步更新服务器中的模板内容。',
+    confirmText: '确认保存',
+    danger: false
+  }
+}
+
+const requestCloseConfirmation = () => {
+  saveMenuOpen.value = false
+  confirmation.value = {
+    visible: true,
+    action: 'close',
+    title: '确认退出设计器？',
+    message: '确定退出模板设计器吗？未保存的修改将会丢失。',
+    confirmText: '确认退出',
+    danger: true
+  }
+}
+
+const clearPendingAction = () => {
+  confirmation.value.action = ''
+}
+
+const confirmPendingAction = () => {
+  const action = confirmation.value.action
+  confirmation.value.action = ''
+
+  if (action === 'save') {
+    saveTemplate()
+    return
+  }
+  if (action === 'close') {
+    emit('close')
+  }
+}
+
+const saveTemplate = async () => {
   const designer = designerRef.value
   if (!designer) return
   await nextTick()
@@ -851,10 +916,8 @@ const handleOutsidePointerDown = (event) => {
 const handleNativeSaveEvent = (event) => {
   if (!props.visible) return
   event.stopImmediatePropagation()
-  handleSave()
+  requestSaveConfirmation()
 }
-
-const handleClose = () => emit('close')
 
 onMounted(() => {
   window.addEventListener('pointerdown', handleOutsidePointerDown)

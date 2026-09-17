@@ -1,5 +1,23 @@
 <template>
   <div class="print-template-page">
+    <Teleport to="body">
+      <Transition name="notice">
+        <div
+          v-if="notice.visible"
+          :class="['page-notice', `notice-${notice.type}`]"
+          :role="notice.type === 'error' ? 'alert' : 'status'"
+          :aria-live="notice.type === 'error' ? 'assertive' : 'polite'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path v-if="notice.type === 'success'" d="m8 12 2.7 2.7L16.5 9"></path>
+            <path v-else d="M12 8v5M12 17h.01"></path>
+          </svg>
+          <span>{{ notice.message }}</span>
+        </div>
+      </Transition>
+    </Teleport>
+
     <!-- 搜索面板 -->
     <section class="search-panel">
       <div class="search-grid">
@@ -314,7 +332,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onBeforeUnmount, onMounted } from 'vue'
 import {
   getTemplates,
   createTemplate,
@@ -330,6 +348,28 @@ const loading = ref(false)
 const templates = ref([])
 const copyingTemplateId = ref(null)
 const templateStorageKey = 'order-system-print-templates'
+const notice = ref({
+  visible: false,
+  type: 'success',
+  message: ''
+})
+let noticeTimer = null
+
+const showNotice = (message, type = 'success') => {
+  if (noticeTimer !== null) {
+    window.clearTimeout(noticeTimer)
+  }
+
+  notice.value = {
+    visible: true,
+    type,
+    message: String(message || '')
+  }
+  noticeTimer = window.setTimeout(() => {
+    notice.value.visible = false
+    noticeTimer = null
+  }, type === 'error' ? 5000 : 3000)
+}
 
 const searchForm = ref({
   templateName: '',
@@ -479,13 +519,13 @@ const handleDesignerSave = async (template) => {
         detail: { id: savedId, updatedAt: savedTemplate.updatedAt }
       }))
       closeDesigner()
-      console.log('模板保存成功')
+      showNotice(`模板“${savedTemplate.name || '未命名模板'}”保存成功`)
     } else {
-      alert(response.message || '保存模板失败')
+      showNotice(response.message || '保存模板失败', 'error')
     }
   } catch (error) {
     console.error('保存模板失败:', error)
-    alert('保存模板失败，请稍后重试')
+    showNotice(error?.message || '保存模板失败，请稍后重试', 'error')
   }
 }
 
@@ -673,6 +713,12 @@ const migrateFromLocalStorage = async () => {
 onMounted(() => {
   loadTemplates()
 })
+
+onBeforeUnmount(() => {
+  if (noticeTimer !== null) {
+    window.clearTimeout(noticeTimer)
+  }
+})
 </script>
 
 <style scoped>
@@ -696,6 +742,61 @@ onMounted(() => {
   color: var(--text);
   font-size: 14px;
   padding: 18px 20px;
+}
+
+.page-notice {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 30000;
+  display: flex;
+  min-width: 0;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  overflow-wrap: anywhere;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transform: translateX(-50%);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  box-sizing: border-box;
+}
+
+.page-notice svg {
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.notice-success svg {
+  color: #0f9f78;
+}
+
+.notice-error svg {
+  color: #dc3545;
+}
+
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
 }
 
 /* ==================== 搜索面板 ==================== */
@@ -1311,6 +1412,11 @@ onMounted(() => {
 }
 
 @media (max-width: 780px) {
+  .page-notice {
+    top: 12px;
+    max-width: calc(100vw - 32px);
+  }
+
   .print-template-page {
     padding: 12px;
   }
