@@ -4,7 +4,10 @@
       <div class="order-print-preview-header">
         <div>
           <h3>{{ template?.name || '打印预览' }}</h3>
-          <span>当前订单数据预览 · {{ template?.pageWidth || 210 }}mm × {{ template?.pageHeight || 140 }}mm</span>
+          <span>
+            当前订单数据预览 · {{ template?.pageWidth || 210 }}mm × {{ template?.pageHeight || 140 }}mm
+            · {{ resolvedPrinterName }}
+          </span>
         </div>
         <button type="button" class="preview-close" title="关闭" @click="handleClose">×</button>
       </div>
@@ -25,7 +28,7 @@
 
       <div class="order-print-preview-footer">
         <span :class="{ 'preview-footer-error': printErrorMessage }">
-          {{ printErrorMessage || '点击打印后将在 C-Lodop 中确认打印机和纸张效果。' }}
+          {{ printErrorMessage || `点击打印后将在 C-Lodop 中使用 ${resolvedPrinterName}。` }}
         </span>
         <div class="preview-footer-actions">
           <button
@@ -65,6 +68,8 @@ const props = defineProps({
   visible: { type: Boolean, default: false },
   template: { type: Object, default: null },
   variables: { type: Object, default: () => ({}) },
+  printer: { type: Object, default: null },
+  autoPrint: { type: Boolean, default: false },
   trailingBlankRows: {
     type: Number,
     default: 1,
@@ -82,11 +87,14 @@ const renderedHtml = ref('')
 const designerReady = ref(false)
 const printing = ref(false)
 const printErrorMessage = ref('')
+const autoPrintConsumed = ref(false)
+
+const resolvedPrinterName = computed(() => props.printer?.name || '系统默认打印机')
 
 const printButtonTitle = computed(() => {
-  if (loading) return '正在生成打印内容'
+  if (loading.value) return '正在生成打印内容'
   if (!renderedHtml.value) return '暂无可打印内容'
-  return '使用 C-Lodop 打印'
+  return `使用 ${resolvedPrinterName.value} 打印`
 })
 
 const normalizeTableCellAlignment = (html) => {
@@ -549,7 +557,8 @@ const handlePrint = async () => {
       html: renderedHtml.value,
       taskName,
       pageWidth: props.template?.pageWidth,
-      pageHeight: props.template?.pageHeight
+      pageHeight: props.template?.pageHeight,
+      printer: props.printer
     })
     emit('close')
   } catch (error) {
@@ -558,6 +567,21 @@ const handlePrint = async () => {
     printing.value = false
   }
 }
+
+watch(
+  [() => props.visible, () => props.autoPrint, renderedHtml],
+  async ([visible, autoPrint, html]) => {
+    if (!visible) {
+      autoPrintConsumed.value = false
+      return
+    }
+    if (!autoPrint || !html || autoPrintConsumed.value || printing.value) return
+
+    autoPrintConsumed.value = true
+    await nextTick()
+    await handlePrint()
+  }
+)
 
 const handleClose = () => emit('close')
 </script>

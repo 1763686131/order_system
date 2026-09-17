@@ -102,6 +102,44 @@ export const getLodop = async () => {
   return lodopLoader
 }
 
+const getPrinterProperty = (lodop, index, property) => {
+  try {
+    return String(lodop.GET_PRINTER_NAME(`${index}:${property}`) || '')
+  } catch {
+    return ''
+  }
+}
+
+export const getLocalPrinters = async () => {
+  const lodop = await getLodop()
+  if (
+    typeof lodop.GET_PRINTER_COUNT !== 'function' ||
+    typeof lodop.GET_PRINTER_NAME !== 'function'
+  ) {
+    throw new Error('当前 C-Lodop 版本不支持读取本地打印机列表。')
+  }
+
+  const count = Math.max(0, Number(lodop.GET_PRINTER_COUNT()) || 0)
+  const defaultName = String(lodop.GET_PRINTER_NAME(-1) || '')
+  const printers = []
+
+  for (let index = 0; index < count; index += 1) {
+    const name = String(lodop.GET_PRINTER_NAME(index) || '').trim()
+    if (!name) continue
+
+    printers.push({
+      index,
+      name,
+      driverName: getPrinterProperty(lodop, index, 'DriverName'),
+      portName: getPrinterProperty(lodop, index, 'PortName'),
+      paperName: getPrinterProperty(lodop, index, 'FormName'),
+      isDefault: name === defaultName
+    })
+  }
+
+  return printers
+}
+
 const normalizePageSize = (value, fallback) => {
   const size = Number(value)
   return Number.isFinite(size) && size > 0 ? size : fallback
@@ -141,7 +179,8 @@ export const openLodopPrintPreview = async ({
   html,
   taskName = '单据打印',
   pageWidth = 210,
-  pageHeight = 140
+  pageHeight = 140,
+  printer = null
 }) => {
   if (!String(html || '').trim()) {
     throw new Error('没有可打印的模板内容。')
@@ -151,8 +190,17 @@ export const openLodopPrintPreview = async ({
   const height = normalizePageSize(pageHeight, 140)
   const lodop = await getLodop()
   const printDocument = createPrintDocument(html, width, height)
+  const printerName = String(printer?.name || '').trim()
 
   lodop.PRINT_INIT(String(taskName || '单据打印'))
+  if (printerName) {
+    if (typeof lodop.SET_PRINTER_INDEX !== 'function') {
+      throw new Error('当前 C-Lodop 版本不支持指定打印机。')
+    }
+    if (lodop.SET_PRINTER_INDEX(printerName) === false) {
+      throw new Error(`未找到打印机“${printerName}”，请重新选择。`)
+    }
+  }
   lodop.SET_PRINT_PAGESIZE(0, Math.round(width * 10), Math.round(height * 10), '')
   lodop.ADD_PRINT_HTM(0, 0, '100%', '100%', printDocument)
   lodop.PREVIEW()
@@ -160,6 +208,7 @@ export const openLodopPrintPreview = async ({
   return {
     version: lodop.VERSION || '',
     pageWidth: width,
-    pageHeight: height
+    pageHeight: height,
+    printerName: printerName || String(lodop.GET_PRINTER_NAME?.(-1) || '')
   }
 }

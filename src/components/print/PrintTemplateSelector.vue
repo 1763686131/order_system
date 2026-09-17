@@ -44,38 +44,93 @@
           <div class="print-template-dialog-body">
             <p class="print-template-dialog-hint">{{ resolvedDescription }}</p>
 
-            <div v-if="loading" class="print-template-dialog-state">
-              <span class="print-template-loading-mark" aria-hidden="true"></span>
-              正在加载打印模板...
+            <div class="print-selector-section-heading">
+              <span>打印模板</span>
             </div>
-            <div v-else-if="errorMessage" class="print-template-dialog-state error">
-              {{ errorMessage }}
-              <button type="button" @click="loadTemplates">重新加载</button>
+            <div class="print-selector-template-area">
+              <div v-if="loading" class="print-template-dialog-state compact">
+                <span class="print-template-loading-mark" aria-hidden="true"></span>
+                正在加载打印模板...
+              </div>
+              <div v-else-if="errorMessage" class="print-template-dialog-state compact error">
+                {{ errorMessage }}
+                <button type="button" @click="loadTemplates">重新加载</button>
+              </div>
+              <div v-else-if="!templates.length" class="print-template-dialog-state compact">
+                {{ resolvedEmptyText }}
+              </div>
+              <div v-else class="print-template-options" role="radiogroup" aria-label="打印模板">
+                <button
+                  v-for="template in templates"
+                  :key="template.id"
+                  type="button"
+                  :class="[
+                    'print-template-option',
+                    { selected: String(selectedTemplateId) === String(template.id) }
+                  ]"
+                  role="radio"
+                  :aria-checked="String(selectedTemplateId) === String(template.id)"
+                  @click="selectedTemplateId = template.id"
+                  @dblclick="handlePreview"
+                >
+                  <span class="print-template-radio" aria-hidden="true"></span>
+                  <span class="print-template-option-copy">
+                    <strong>{{ template.name }}</strong>
+                    <span>{{ getPaperLabel(template) }}</span>
+                  </span>
+                  <span v-if="template.isDefault" class="print-template-default-tag">默认</span>
+                </button>
+              </div>
             </div>
-            <div v-else-if="!templates.length" class="print-template-dialog-state">
-              {{ resolvedEmptyText }}
-            </div>
-            <div v-else class="print-template-options" role="radiogroup" aria-label="打印模板">
+
+            <div class="print-selector-section-heading printer-heading">
+              <span>本地打印机</span>
               <button
-                v-for="template in templates"
-                :key="template.id"
                 type="button"
-                :class="[
-                  'print-template-option',
-                  { selected: String(selectedTemplateId) === String(template.id) }
-                ]"
-                role="radio"
-                :aria-checked="String(selectedTemplateId) === String(template.id)"
-                @click="selectedTemplateId = template.id"
-                @dblclick="handlePreview"
+                class="printer-refresh-button"
+                title="重新检测本地打印机"
+                :disabled="printerLoading"
+                @click="loadPrinters"
               >
-                <span class="print-template-radio" aria-hidden="true"></span>
-                <span class="print-template-option-copy">
-                  <strong>{{ template.name }}</strong>
-                  <span>{{ getPaperLabel(template) }}</span>
-                </span>
-                <span v-if="template.isDefault" class="print-template-default-tag">默认</span>
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M20 11a8 8 0 1 0 2 5"></path>
+                  <path d="M20 4v7h-7"></path>
+                </svg>
               </button>
+            </div>
+            <div class="printer-selector-area">
+              <div v-if="printerLoading" class="printer-selector-state">
+                <span class="print-template-loading-mark small" aria-hidden="true"></span>
+                正在读取本地打印机...
+              </div>
+              <div v-else-if="printerErrorMessage" class="printer-selector-state error">
+                <span>{{ printerErrorMessage }}</span>
+                <button type="button" @click="loadPrinters">重新检测</button>
+              </div>
+              <template v-else>
+                <select
+                  v-model="selectedPrinterName"
+                  class="printer-select"
+                  aria-label="本地打印机"
+                  :disabled="!printers.length"
+                >
+                  <option value="" disabled>请选择本地打印机</option>
+                  <option
+                    v-for="printer in printers"
+                    :key="`${printer.index}-${printer.name}`"
+                    :value="printer.name"
+                  >
+                    {{ printer.name }}{{ printer.isDefault ? '（默认）' : '' }}
+                  </option>
+                </select>
+                <div v-if="selectedPrinter" class="printer-meta">
+                  <span>{{ selectedPrinter.driverName || '系统打印驱动' }}</span>
+                  <span v-if="selectedPrinter.portName">{{ selectedPrinter.portName }}</span>
+                </div>
+                <div v-else class="printer-selector-state">
+                  未检测到可用的本地打印机
+                </div>
+              </template>
             </div>
           </div>
 
@@ -92,7 +147,7 @@
               <button
                 type="button"
                 class="selector-button selector-button-primary"
-                :disabled="!selectedTemplate || loading"
+                :disabled="!selectionReady"
                 @click="handlePreview"
               >
                 预览
@@ -100,8 +155,8 @@
               <button
                 type="button"
                 class="selector-button selector-print-button"
-                :title="printEnabled ? '打印' : '本地打印功能待接入'"
-                :disabled="!printEnabled || !selectedTemplate || loading"
+                :title="printButtonTitle"
+                :disabled="!printReady"
                 @click="handlePrint"
               >
                 打印
@@ -117,6 +172,9 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getTemplates } from '@/api/printTemplate'
+import { getLocalPrinters } from '@/utils/lodopPrint'
+
+const printerStorageKey = 'order-system-selected-printer'
 
 const props = defineProps({
   visible: {
@@ -149,7 +207,7 @@ const props = defineProps({
   },
   printEnabled: {
     type: Boolean,
-    default: false
+    default: true
   }
 })
 
@@ -160,6 +218,10 @@ const loading = ref(false)
 const errorMessage = ref('')
 const templates = ref([])
 const selectedTemplateId = ref(null)
+const printerLoading = ref(false)
+const printerErrorMessage = ref('')
+const printers = ref([])
+const selectedPrinterName = ref('')
 
 const businessTypeLabels = {
   sale: '销售',
@@ -177,7 +239,7 @@ const businessTypeLabel = computed(() => (
 
 const resolvedDescription = computed(() => (
   props.description ||
-  `选择一个${businessTypeLabel.value}模板预览当前单据数据。`
+  `选择一个${businessTypeLabel.value}模板和本地打印机。`
 ))
 
 const resolvedEmptyText = computed(() => (
@@ -187,7 +249,11 @@ const resolvedEmptyText = computed(() => (
 
 const resolvedFooterHint = computed(() => (
   props.footerHint ||
-  (props.printEnabled ? '请选择模板后继续打印。' : '打印功能将在接入本地打印服务后开放。')
+  (
+    selectedPrinter.value
+      ? `将使用：${selectedPrinter.value.name}`
+      : '请选择模板和本地打印机。'
+  )
 ))
 
 const selectedTemplate = computed(() => (
@@ -195,6 +261,27 @@ const selectedTemplate = computed(() => (
     String(template.id) === String(selectedTemplateId.value)
   )) || null
 ))
+
+const selectedPrinter = computed(() => (
+  printers.value.find(printer => printer.name === selectedPrinterName.value) || null
+))
+
+const selectionReady = computed(() => (
+  Boolean(selectedTemplate.value && selectedPrinter.value) &&
+  !loading.value &&
+  !printerLoading.value
+))
+
+const printReady = computed(() => props.printEnabled && selectionReady.value)
+
+const printButtonTitle = computed(() => {
+  if (!props.printEnabled) return '打印功能已关闭'
+  if (printerLoading.value) return '正在读取本地打印机'
+  if (printerErrorMessage.value) return printerErrorMessage.value
+  if (!selectedTemplate.value) return '请选择打印模板'
+  if (!selectedPrinter.value) return '请选择本地打印机'
+  return `使用 ${selectedPrinter.value.name} 打印`
+})
 
 const getPaperLabel = (template) => {
   const width = template?.pageWidth || 210
@@ -239,16 +326,51 @@ const loadTemplates = async () => {
   }
 }
 
+const loadPrinters = async () => {
+  printerLoading.value = true
+  printerErrorMessage.value = ''
+
+  try {
+    let storedPrinterName = ''
+    try {
+      storedPrinterName = localStorage.getItem(printerStorageKey) || ''
+    } catch {
+      storedPrinterName = ''
+    }
+
+    const previousSelection = selectedPrinterName.value || storedPrinterName
+    printers.value = await getLocalPrinters()
+
+    selectedPrinterName.value = (
+      printers.value.find(printer => printer.name === previousSelection) ||
+      printers.value.find(printer => printer.isDefault) ||
+      printers.value[0] ||
+      {}
+    ).name || ''
+
+    if (!printers.value.length) {
+      printerErrorMessage.value = 'C-Lodop 未检测到本地打印机。'
+    }
+  } catch (error) {
+    console.error('读取本地打印机失败:', error)
+    printers.value = []
+    selectedPrinterName.value = ''
+    printerErrorMessage.value = error?.message || '本地打印机读取失败'
+  } finally {
+    printerLoading.value = false
+  }
+}
+
 const handleClose = () => emit('close')
 
 const handlePreview = () => {
-  if (!selectedTemplate.value) return
-  emit('preview', selectedTemplate.value)
+  if (!selectionReady.value) return
+  emit('preview', selectedTemplate.value, selectedPrinter.value)
 }
 
 const handlePrint = () => {
-  if (!props.printEnabled || !selectedTemplate.value) return
-  emit('print', selectedTemplate.value)
+  if (!printReady.value) return
+  emit('print', selectedTemplate.value, selectedPrinter.value)
 }
 
 const handleTemplatesUpdated = () => {
@@ -264,10 +386,19 @@ watch(
     selectedTemplateId.value = null
     await nextTick()
     dialogRef.value?.focus()
-    await loadTemplates()
+    await Promise.all([loadTemplates(), loadPrinters()])
   },
   { immediate: true }
 )
+
+watch(selectedPrinterName, (name) => {
+  if (!name) return
+  try {
+    localStorage.setItem(printerStorageKey, name)
+  } catch {
+    // Local storage may be disabled; the current selection still remains usable.
+  }
+})
 
 watch(
   () => props.businessType,
@@ -400,6 +531,117 @@ onBeforeUnmount(() => {
   background: #f8fafb;
 }
 
+.print-selector-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 8px;
+  color: #334155;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.print-selector-template-area {
+  min-height: 72px;
+}
+
+.printer-heading {
+  margin-top: 18px;
+}
+
+.printer-refresh-button {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #64748b;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.printer-refresh-button:hover:not(:disabled) {
+  color: #08745a;
+  background: #e9f8f3;
+}
+
+.printer-refresh-button:disabled {
+  cursor: wait;
+  opacity: 0.5;
+}
+
+.printer-refresh-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.printer-selector-area {
+  min-height: 70px;
+}
+
+.printer-select {
+  width: 100%;
+  height: 40px;
+  padding: 0 36px 0 12px;
+  color: #273245;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  font-size: 13px;
+}
+
+.printer-select:focus {
+  border-color: #0f9f78;
+  outline: 2px solid rgba(15, 159, 120, 0.12);
+}
+
+.printer-meta {
+  display: flex;
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 7px;
+  color: #8490a1;
+  font-size: 11px;
+}
+
+.printer-meta span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.printer-selector-state {
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #7a8698;
+  font-size: 12px;
+}
+
+.printer-selector-state.error {
+  color: #b4232f;
+}
+
+.printer-selector-state button {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  color: #08745a;
+  background: #fff;
+  border: 1px solid #a9e5d2;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
 .print-template-dialog-hint {
   margin: 0 0 13px;
   color: #647086;
@@ -503,6 +745,11 @@ onBeforeUnmount(() => {
   text-align: center;
 }
 
+.print-template-dialog-state.compact {
+  min-height: 72px;
+  padding: 12px;
+}
+
 .print-template-dialog-state.error {
   color: #b4232f;
 }
@@ -524,6 +771,11 @@ onBeforeUnmount(() => {
   border-top-color: #0f9f78;
   border-radius: 50%;
   animation: print-template-spin 0.8s linear infinite;
+}
+
+.print-template-loading-mark.small {
+  width: 18px;
+  height: 18px;
 }
 
 .print-template-dialog-footer {
@@ -570,12 +822,24 @@ onBeforeUnmount(() => {
 }
 
 .selector-button-primary {
+  color: #08745a;
+  background: #e9f8f3;
+  border-color: #a9e5d2;
+}
+
+.selector-button-primary:hover:not(:disabled) {
+  color: #065f49;
+  background: #d8f3ea;
+  border-color: #68cdb0;
+}
+
+.selector-print-button {
   color: #fff;
   background: #0f9f78;
   border-color: #0f9f78;
 }
 
-.selector-button-primary:hover:not(:disabled) {
+.selector-print-button:hover:not(:disabled) {
   background: #08745a;
   border-color: #08745a;
 }

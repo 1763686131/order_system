@@ -893,12 +893,15 @@
       description="选择一个销售模板预览当前订单数据。"
       @close="closePrintTemplateDialog"
       @preview="previewSelectedPrintTemplate"
+      @print="printSelectedPrintTemplate"
     />
 
     <OrderPrintPreview
       :visible="printPreviewVisible"
       :template="selectedPrintTemplate"
       :variables="printOrderVariables"
+      :printer="selectedPrintPrinter"
+      :auto-print="printPreviewAutoPrint"
       @close="closePrintPreview"
     />
 
@@ -1100,6 +1103,8 @@ const warehouses = ref([])
 // 打印模板预览
 const printTemplateDialogOpen = ref(false)
 const selectedPrintTemplate = ref(null)
+const selectedPrintPrinter = ref(null)
+const printPreviewAutoPrint = ref(false)
 const printTargetOrder = ref(null)
 const printPreviewVisible = ref(false)
 
@@ -1898,19 +1903,33 @@ const closePrintTemplateDialog = () => {
   printTemplateDialogOpen.value = false
   if (!printPreviewVisible.value) {
     selectedPrintTemplate.value = null
+    selectedPrintPrinter.value = null
+    printPreviewAutoPrint.value = false
     printTargetOrder.value = null
   }
 }
 
-const previewSelectedPrintTemplate = (template) => {
+const openSelectedPrintTemplate = (template, printer, autoPrint) => {
   selectedPrintTemplate.value = template
+  selectedPrintPrinter.value = printer
+  printPreviewAutoPrint.value = autoPrint
   printTemplateDialogOpen.value = false
   printPreviewVisible.value = true
+}
+
+const previewSelectedPrintTemplate = (template, printer) => {
+  openSelectedPrintTemplate(template, printer, false)
+}
+
+const printSelectedPrintTemplate = (template, printer) => {
+  openSelectedPrintTemplate(template, printer, true)
 }
 
 const closePrintPreview = () => {
   printPreviewVisible.value = false
   selectedPrintTemplate.value = null
+  selectedPrintPrinter.value = null
+  printPreviewAutoPrint.value = false
   printTargetOrder.value = null
 }
 
@@ -2050,6 +2069,8 @@ const handlePrintOrder = (order) => {
   if (isNewOrder(order)) {
     printTargetOrder.value = order
     selectedPrintTemplate.value = null
+    selectedPrintPrinter.value = null
+    printPreviewAutoPrint.value = false
     printTemplateDialogOpen.value = true
   } else {
     // 旧订单：显示提示信息
