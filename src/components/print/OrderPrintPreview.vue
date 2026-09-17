@@ -89,6 +89,22 @@ const printButtonTitle = computed(() => {
   return '使用 C-Lodop 打印'
 })
 
+const normalizeTableCellAlignment = (html) => {
+  if (typeof DOMParser === 'undefined') return html
+
+  const document = new DOMParser().parseFromString(
+    `<body>${String(html || '')}</body>`,
+    'text/html'
+  )
+
+  document.body.querySelectorAll('table th, table td').forEach((cell) => {
+    cell.style.setProperty('vertical-align', 'middle', 'important')
+    cell.style.setProperty('line-height', 'normal', 'important')
+  })
+
+  return document.body.innerHTML
+}
+
 const wrapPreviewHtml = (html) => `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -451,7 +467,7 @@ const loadPreview = async () => {
     await designer.setTestData(previewRuntime.variables, { merge: false })
     await designer.setTemplateVariables(previewRuntime.variables, { merge: false })
     await designer.setVariables(previewRuntime.variables, { merge: false })
-    const html = await designer.getPreviewHtml()
+    const html = normalizeTableCellAlignment(await designer.getPreviewHtml())
     renderedHtml.value = html
     previewHtml.value = wrapPreviewHtml(html)
   } catch (error) {
