@@ -1,209 +1,220 @@
 <template>
   <div class="page-root role-group-page">
-    <header class="page-header">
-      <div>
-        <div class="breadcrumb">系统设置 / 权限管理</div>
-        <div class="title-row">
-          <h1>角色组管理</h1>
-          <span class="demo-tag">本地演示数据</span>
-        </div>
-        <p>按岗位维护权限模板，员工只需加入角色组即可获得对应权限。</p>
-      </div>
-      <div class="header-actions">
-        <button class="button button-secondary" type="button" title="刷新角色组" @click="refreshGroups">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M20 11a8.1 8.1 0 0 0-14.8-3.8L3 10"></path>
-            <path d="M3 4v6h6"></path>
-            <path d="M4 13a8.1 8.1 0 0 0 14.8 3.8L21 14"></path>
-            <path d="M21 20v-6h-6"></path>
-          </svg>
-          刷新
-        </button>
-        <button class="button button-primary" type="button" @click="openCreate">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="M12 5v14"></path>
-            <path d="M5 12h14"></path>
-          </svg>
-          新建角色组
+    <nav class="role-tabs" aria-label="角色组导航">
+      <div class="role-tab-scroll">
+        <button
+          v-for="group in roleGroups"
+          :key="group.id"
+          class="role-tab"
+          :class="{ active: group.id === selectedGroupId }"
+          type="button"
+          @click="selectGroup(group.id)"
+        >
+          <span :class="['role-tab-icon', group.tone]">{{ group.name.slice(0, 1) }}</span>
+          <span>{{ group.name }}</span>
+          <i :class="['role-tab-status', group.status === 'enabled' ? 'enabled' : 'disabled']"></i>
         </button>
       </div>
-    </header>
+      <button class="button button-primary add-role-button" type="button" @click="openCreate">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 5v14"></path>
+          <path d="M5 12h14"></path>
+        </svg>
+        新增角色组
+      </button>
+    </nav>
 
-    <section class="metric-grid" aria-label="角色组概况">
-      <article class="metric-card">
-        <span class="metric-label">角色组总数</span>
-        <strong>{{ roleGroups.length }}</strong>
-        <span class="metric-note">按岗位职责拆分</span>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">已启用</span>
-        <strong>{{ enabledGroupCount }}</strong>
-        <span class="metric-note success-text">可绑定员工账号</span>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">角色成员关系</span>
-        <strong>{{ memberLinkCount }}</strong>
-        <span class="metric-note">员工可加入多个角色组</span>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">权限目录</span>
-        <strong>{{ permissionTotal }}</strong>
-        <span class="metric-note">按业务模块统一编码</span>
-      </article>
-    </section>
-
-    <section class="role-workspace">
-      <div class="group-panel">
-        <div class="panel-header">
-          <div>
-            <h2>角色组列表</h2>
-            <span>{{ roleGroups.length }} 个角色组</span>
+    <div v-if="selectedGroup" class="role-context">
+      <div class="role-context-main">
+        <span :class="['role-context-icon', selectedGroup.tone]">{{ selectedGroup.name.slice(0, 1) }}</span>
+        <div>
+          <div class="role-context-title">
+            <strong>{{ selectedGroup.name }}</strong>
+            <span :class="['status-badge', selectedGroup.status === 'enabled' ? 'status-success' : 'status-disabled']">
+              <i></i>{{ selectedGroup.status === 'enabled' ? '已启用' : '已停用' }}
+            </span>
           </div>
-          <button class="icon-button" type="button" title="新建角色组" @click="openCreate">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 5v14"></path>
-              <path d="M5 12h14"></path>
-            </svg>
-          </button>
-        </div>
-
-        <div class="group-list">
-          <button
-            v-for="group in roleGroups"
-            :key="group.id"
-            type="button"
-            class="group-item"
-            :class="{ selected: group.id === selectedGroupId }"
-            @click="selectedGroupId = group.id"
-          >
-            <span :class="['group-icon', group.tone]">{{ group.name.slice(0, 1) }}</span>
-            <span class="group-copy">
-              <strong>{{ group.name }}</strong>
-              <small>{{ group.description }}</small>
-              <span class="group-meta">
-                {{ group.memberIds.length }} 名成员
-                <i></i>
-                {{ group.permissions.length }} 项权限
-              </span>
-            </span>
-            <span :class="['mini-status', group.status === 'enabled' ? 'enabled' : 'disabled']">
-              {{ group.status === 'enabled' ? '启用' : '停用' }}
-            </span>
-          </button>
+          <span class="role-context-meta">{{ selectedGroup.code }} · {{ selectedGroup.description }}</span>
         </div>
       </div>
+      <div class="role-context-actions">
+        <button class="button button-secondary" type="button" @click="toggleSelectedGroup">
+          {{ selectedGroup.status === 'enabled' ? '停用' : '启用' }}
+        </button>
+        <button class="button button-ghost" type="button" @click="openEdit(selectedGroup)">编辑信息</button>
+      </div>
+    </div>
 
-      <div v-if="selectedGroup" class="detail-panel">
-        <div class="detail-header">
-          <div class="detail-title">
-            <span :class="['group-icon large', selectedGroup.tone]">{{ selectedGroup.name.slice(0, 1) }}</span>
-            <div>
-              <div class="title-row">
-                <h2>{{ selectedGroup.name }}</h2>
-                <span :class="['status-badge', selectedGroup.status === 'enabled' ? 'status-success' : 'status-disabled']">
-                  <i></i>{{ selectedGroup.status === 'enabled' ? '已启用' : '已停用' }}
-                </span>
-              </div>
-              <p>{{ selectedGroup.description }}</p>
-              <span class="code-label">{{ selectedGroup.code }}</span>
-            </div>
+    <section v-if="selectedGroup" class="permission-member-layout">
+      <section class="permission-panel">
+        <div class="box-header">
+          <div class="box-title">
+            <h2>权限组</h2>
+            <span>{{ selectedGroup.permissions.length }} / {{ permissionTotal }} 项</span>
           </div>
-          <div class="detail-actions">
-            <button class="button button-secondary" type="button" @click="toggleSelectedGroup">
-              {{ selectedGroup.status === 'enabled' ? '停用角色组' : '启用角色组' }}
-            </button>
-            <button class="button button-primary" type="button" @click="openEdit(selectedGroup)">
+          <div class="box-actions">
+            <button class="button button-secondary compact-button" type="button" @click="openPermissionPicker">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m4 16-.8 4.8L8 20l10.8-10.8a2.1 2.1 0 0 0-3-3L4 16Z"></path>
-                <path d="m14.5 7.5 2 2"></path>
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
               </svg>
-              编辑角色组
+              添加权限
+            </button>
+            <button
+              class="button button-danger compact-button"
+              type="button"
+              :disabled="selectedPermissionIds.length === 0"
+              @click="deleteSelectedPermissions"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 7h14"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="m9 7 .8-2h4.4l.8 2"></path>
+                <path d="m7 7 .7 13h8.6L17 7"></path>
+              </svg>
+              删除权限
             </button>
           </div>
         </div>
 
-        <div class="detail-summary">
-          <div>
-            <span>成员数量</span>
-            <strong>{{ selectedGroup.memberIds.length }}</strong>
+        <div v-if="permissionPickerVisible" class="inline-picker">
+          <div class="inline-picker-header">
+            <strong>添加权限</strong>
+            <span>从权限目录选择未绑定项</span>
           </div>
-          <div>
-            <span>权限数量</span>
-            <strong>{{ selectedGroup.permissions.length }}</strong>
+          <div v-if="availablePermissions.length" class="picker-grid">
+            <label v-for="permission in availablePermissions" :key="permission.id" class="picker-option">
+              <input v-model="permissionPickerIds" type="checkbox" :value="permission.id" />
+              <span>
+                <strong>{{ permission.name }}</strong>
+                <small>{{ permission.moduleName }}</small>
+              </span>
+            </label>
           </div>
-          <div>
-            <span>创建时间</span>
-            <strong>{{ selectedGroup.createdAt }}</strong>
-          </div>
-          <div>
-            <span>最近调整</span>
-            <strong>{{ selectedGroup.updatedAt }}</strong>
+          <div v-else class="picker-empty">当前角色组已拥有全部权限</div>
+          <div class="inline-picker-actions">
+            <button class="button button-ghost compact-button" type="button" @click="closePermissionPicker">取消</button>
+            <button class="button button-primary compact-button" type="button" @click="addSelectedPermissions">
+              添加选中权限
+            </button>
           </div>
         </div>
 
-        <section class="detail-section">
-          <div class="section-heading">
-            <div>
-              <h3>权限目录</h3>
-              <span>权限编码后续由前后端共用</span>
+        <div class="permission-module-list">
+          <article v-for="module in permissionModules" :key="module.id" class="permission-module-box">
+            <div class="module-heading">
+              <span :class="['module-dot', module.tone]"></span>
+              <div>
+                <strong>{{ module.name }}</strong>
+                <small>{{ module.description }}</small>
+              </div>
             </div>
-            <span class="section-count">{{ selectedGroup.permissions.length }} / {{ permissionTotal }}</span>
-          </div>
-          <div class="permission-grid">
-            <article v-for="module in permissionModules" :key="module.id" class="permission-module">
-              <div class="module-heading">
-                <span :class="['module-dot', module.tone]"></span>
-                <div>
-                  <strong>{{ module.name }}</strong>
-                  <small>{{ module.description }}</small>
-                </div>
-              </div>
-              <div class="permission-list">
-                <button
-                  v-for="permission in module.permissions"
-                  :key="permission.id"
-                  type="button"
-                  class="permission-chip"
-                  :class="{ active: selectedGroup.permissions.includes(permission.id) }"
-                  @click="togglePermission(selectedGroup, permission.id)"
-                >
-                  <span class="permission-check">{{ selectedGroup.permissions.includes(permission.id) ? '✓' : '' }}</span>
-                  <span>{{ permission.name }}</span>
-                </button>
-              </div>
-            </article>
-          </div>
-        </section>
+            <div class="permission-row-list">
+              <label
+                v-for="permission in module.permissions"
+                :key="permission.id"
+                class="permission-row"
+                :class="{ active: selectedGroup.permissions.includes(permission.id) }"
+              >
+                <input
+                  v-model="selectedPermissionIds"
+                  type="checkbox"
+                  :value="permission.id"
+                  :disabled="!selectedGroup.permissions.includes(permission.id)"
+                />
+                <span class="permission-row-state">
+                  {{ selectedGroup.permissions.includes(permission.id) ? '✓' : '' }}
+                </span>
+                <span class="permission-row-copy">
+                  <strong>{{ permission.name }}</strong>
+                  <small>{{ permission.id }}</small>
+                </span>
+              </label>
+            </div>
+          </article>
+        </div>
+      </section>
 
-        <section class="detail-section members-section">
-          <div class="section-heading">
-            <div>
-              <h3>角色组成员</h3>
-              <span>姓名、头像、工号从员工花名册关联读取</span>
-            </div>
-            <button class="text-button" type="button" @click="openEdit(selectedGroup)">管理成员</button>
+      <aside class="members-panel">
+        <div class="box-header">
+          <div class="box-title">
+            <h2>组内成员</h2>
+            <span>{{ selectedGroup.memberIds.length }} 人</span>
           </div>
-          <div class="member-table">
-            <div v-for="member in selectedMembers" :key="member.id" class="member-row">
-              <div class="member-info">
-                <span class="avatar" :style="avatarStyle(member)">{{ member.name.slice(0, 1) }}</span>
-                <div>
-                  <strong>{{ member.name }}</strong>
-                  <span>{{ member.employeeNo }} · {{ member.department }}</span>
-                </div>
-              </div>
-              <span :class="['member-account-status', member.accountStatus === 'active' ? 'active' : 'pending']">
-                {{ member.accountStatus === 'active' ? '账号正常' : '待完善账号' }}
+          <div class="box-actions">
+            <button class="button button-secondary compact-button" type="button" @click="openMemberPicker">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+              添加成员
+            </button>
+            <button
+              class="button button-danger compact-button"
+              type="button"
+              :disabled="selectedMemberIds.length === 0"
+              @click="deleteSelectedMembers"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M5 7h14"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="m9 7 .8-2h4.4l.8 2"></path>
+                <path d="m7 7 .7 13h8.6L17 7"></path>
+              </svg>
+              删除成员
+            </button>
+          </div>
+        </div>
+
+        <div v-if="memberPickerVisible" class="inline-picker member-picker">
+          <div class="inline-picker-header">
+            <strong>添加成员</strong>
+            <span>从员工花名册选择员工</span>
+          </div>
+          <div v-if="availableMembers.length" class="member-picker-list">
+            <label v-for="member in availableMembers" :key="member.id" class="picker-member-option">
+              <input v-model="memberPickerIds" type="checkbox" :value="member.id" />
+              <span class="avatar small" :style="avatarStyle(member)">{{ member.name.slice(0, 1) }}</span>
+              <span>
+                <strong>{{ member.name }}</strong>
+                <small>{{ member.employeeNo }} · {{ member.department }}</small>
               </span>
-              <button class="text-button danger-text" type="button" @click="removeMember(member.id)">移出</button>
-            </div>
-            <div v-if="selectedMembers.length === 0" class="member-empty">
-              <strong>暂无成员</strong>
-              <span>编辑角色组后即可添加员工</span>
-            </div>
+            </label>
           </div>
-        </section>
-      </div>
+          <div v-else class="picker-empty">所有员工都已加入当前角色组</div>
+          <div class="inline-picker-actions">
+            <button class="button button-ghost compact-button" type="button" @click="closeMemberPicker">取消</button>
+            <button class="button button-primary compact-button" type="button" @click="addSelectedMembers">
+              添加选中成员
+            </button>
+          </div>
+        </div>
+
+        <div class="member-list">
+          <label
+            v-for="member in selectedMembers"
+            :key="member.id"
+            class="member-row"
+            :class="{ selected: selectedMemberIds.includes(member.id) }"
+          >
+            <input v-model="selectedMemberIds" type="checkbox" :value="member.id" />
+            <span class="avatar" :style="avatarStyle(member)">{{ member.name.slice(0, 1) }}</span>
+            <span class="member-copy">
+              <strong>{{ member.name }}</strong>
+              <small>{{ member.employeeNo }} · {{ member.department }}</small>
+            </span>
+            <span :class="['member-account-status', member.accountStatus === 'active' ? 'active' : 'pending']">
+              {{ member.accountStatus === 'active' ? '正常' : '待完善' }}
+            </span>
+          </label>
+          <div v-if="selectedMembers.length === 0" class="member-empty">
+            <strong>暂无成员</strong>
+            <span>使用上方“添加成员”加入员工</span>
+          </div>
+        </div>
+      </aside>
     </section>
 
     <transition name="notice">
@@ -467,6 +478,12 @@ const roleGroups = ref([
 ])
 
 const selectedGroupId = ref('system_admin')
+const selectedPermissionIds = ref([])
+const permissionPickerIds = ref([])
+const permissionPickerVisible = ref(false)
+const selectedMemberIds = ref([])
+const memberPickerIds = ref([])
+const memberPickerVisible = ref(false)
 const drawerVisible = ref(false)
 const editingGroup = ref(false)
 const draft = ref(createEmptyGroup())
@@ -477,6 +494,21 @@ const selectedGroup = computed(() => roleGroups.value.find(group => group.id ===
 const selectedMembers = computed(() => {
   if (!selectedGroup.value) return []
   return memberCatalog.filter(member => selectedGroup.value.memberIds.includes(member.id))
+})
+const availablePermissions = computed(() => {
+  if (!selectedGroup.value) return []
+  return permissionModules
+    .flatMap(module =>
+      module.permissions.map(permission => ({
+        ...permission,
+        moduleName: module.name
+      }))
+    )
+    .filter(permission => !selectedGroup.value.permissions.includes(permission.id))
+})
+const availableMembers = computed(() => {
+  if (!selectedGroup.value) return []
+  return memberCatalog.filter(member => !selectedGroup.value.memberIds.includes(member.id))
 })
 const enabledGroupCount = computed(() => roleGroups.value.filter(group => group.status === 'enabled').length)
 const memberLinkCount = computed(() => roleGroups.value.reduce((total, group) => total + group.memberIds.length, 0))
@@ -501,6 +533,16 @@ function openCreate() {
   editingGroup.value = false
   draft.value = createEmptyGroup()
   drawerVisible.value = true
+}
+
+function selectGroup(groupId) {
+  selectedGroupId.value = groupId
+  selectedPermissionIds.value = []
+  permissionPickerIds.value = []
+  selectedMemberIds.value = []
+  memberPickerIds.value = []
+  permissionPickerVisible.value = false
+  memberPickerVisible.value = false
 }
 
 function openEdit(group) {
@@ -544,15 +586,64 @@ function saveGroup() {
   closeDrawer()
 }
 
-function togglePermission(group, permissionId) {
-  const index = group.permissions.indexOf(permissionId)
-  if (index === -1) {
-    group.permissions.push(permissionId)
-  } else {
-    group.permissions.splice(index, 1)
-  }
-  group.updatedAt = '2026-09-17'
-  showNotice('权限配置已更新')
+function openPermissionPicker() {
+  permissionPickerIds.value = []
+  permissionPickerVisible.value = true
+  memberPickerVisible.value = false
+}
+
+function closePermissionPicker() {
+  permissionPickerVisible.value = false
+  permissionPickerIds.value = []
+}
+
+function addSelectedPermissions() {
+  if (!selectedGroup.value) return
+  const selectedCount = permissionPickerIds.value.length
+  selectedGroup.value.permissions.push(...permissionPickerIds.value)
+  selectedGroup.value.updatedAt = '2026-09-17'
+  closePermissionPicker()
+  showNotice(selectedCount ? '权限已添加' : '未选择权限')
+}
+
+function deleteSelectedPermissions() {
+  if (!selectedGroup.value || selectedPermissionIds.value.length === 0) return
+  selectedGroup.value.permissions = selectedGroup.value.permissions.filter(
+    permissionId => !selectedPermissionIds.value.includes(permissionId)
+  )
+  selectedGroup.value.updatedAt = '2026-09-17'
+  selectedPermissionIds.value = []
+  showNotice('已删除选中的权限')
+}
+
+function openMemberPicker() {
+  memberPickerIds.value = []
+  memberPickerVisible.value = true
+  permissionPickerVisible.value = false
+}
+
+function closeMemberPicker() {
+  memberPickerVisible.value = false
+  memberPickerIds.value = []
+}
+
+function addSelectedMembers() {
+  if (!selectedGroup.value) return
+  const selectedCount = memberPickerIds.value.length
+  selectedGroup.value.memberIds.push(...memberPickerIds.value)
+  selectedGroup.value.updatedAt = '2026-09-17'
+  closeMemberPicker()
+  showNotice(selectedCount ? '成员已添加' : '未选择成员')
+}
+
+function deleteSelectedMembers() {
+  if (!selectedGroup.value || selectedMemberIds.value.length === 0) return
+  selectedGroup.value.memberIds = selectedGroup.value.memberIds.filter(
+    memberId => !selectedMemberIds.value.includes(memberId)
+  )
+  selectedGroup.value.updatedAt = '2026-09-17'
+  selectedMemberIds.value = []
+  showNotice('已删除选中的成员')
 }
 
 function toggleSelectedGroup() {
@@ -1560,6 +1651,517 @@ textarea:focus {
   border-top: 1px solid var(--border);
 }
 
+.role-tabs {
+  display: flex;
+  min-height: 52px;
+  align-items: stretch;
+  gap: 10px;
+  padding-right: 8px;
+  background: #e8eef1;
+  border: 1px solid var(--border);
+  border-radius: 7px 7px 0 0;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  box-sizing: border-box;
+}
+
+.role-tab-scroll {
+  display: flex;
+  min-width: 0;
+  align-items: flex-end;
+  gap: 3px;
+  padding-left: 8px;
+  overflow-x: auto;
+}
+
+.role-tab {
+  display: inline-flex;
+  min-width: 136px;
+  height: 41px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 6px 6px 0 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.role-tab:hover {
+  color: var(--accent-dark);
+  background: rgba(255, 255, 255, 0.62);
+}
+
+.role-tab.active {
+  color: var(--accent-dark);
+  background: #fff;
+  border-color: var(--border);
+  box-shadow: 0 -1px 0 #fff;
+}
+
+.role-tab-icon,
+.role-context-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #13734f;
+  background: #eaf8f1;
+  border-radius: 6px;
+  font-weight: 750;
+}
+
+.role-tab-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  font-size: 11px;
+}
+
+.role-tab-icon.green,
+.role-context-icon.green {
+  color: #13734f;
+  background: #eaf8f1;
+}
+
+.role-tab-icon.blue,
+.role-context-icon.blue {
+  color: #16647a;
+  background: #e7f5f8;
+}
+
+.role-tab-icon.orange,
+.role-context-icon.orange {
+  color: #a4510b;
+  background: #fff3df;
+}
+
+.role-tab-icon.red,
+.role-context-icon.red {
+  color: #b4232f;
+  background: #fcebed;
+}
+
+.role-tab-icon.purple,
+.role-context-icon.purple {
+  color: #6651a8;
+  background: #f1edff;
+}
+
+.role-tab-status {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  margin-left: 1px;
+  border-radius: 50%;
+}
+
+.role-tab-status.enabled {
+  background: var(--accent);
+}
+
+.role-tab-status.disabled {
+  background: #aab4c1;
+}
+
+.add-role-button {
+  align-self: center;
+  flex: 0 0 auto;
+}
+
+.role-context {
+  display: flex;
+  min-height: 67px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 11px 15px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  box-sizing: border-box;
+}
+
+.role-context-main,
+.role-context-title {
+  display: flex;
+  align-items: center;
+}
+
+.role-context-main {
+  min-width: 0;
+  gap: 10px;
+}
+
+.role-context-icon {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  font-size: 14px;
+}
+
+.role-context-title {
+  gap: 8px;
+}
+
+.role-context-title strong {
+  font-size: 14px;
+}
+
+.role-context-meta {
+  display: block;
+  max-width: 680px;
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-context-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.permission-member-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.85fr);
+  gap: 14px;
+  margin-top: 14px;
+  align-items: start;
+}
+
+.permission-panel,
+.members-panel {
+  min-width: 0;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  box-sizing: border-box;
+}
+
+.box-header {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.box-title {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.box-title h2 {
+  font-size: 15px;
+}
+
+.box-title span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.box-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 7px;
+}
+
+.compact-button {
+  height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.compact-button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.button-danger {
+  color: #b4232f;
+  background: #fff;
+  border-color: #e7b3b9;
+}
+
+.button-danger:hover:not(:disabled) {
+  color: #fff;
+  background: #c73543;
+  border-color: #c73543;
+}
+
+.button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.inline-picker {
+  margin: 12px 14px 0;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--accent-border);
+  border-radius: 6px;
+}
+
+.inline-picker-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.inline-picker-header strong {
+  font-size: 12px;
+}
+
+.inline-picker-header span {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.picker-grid,
+.member-picker-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.picker-option,
+.picker-member-option {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.picker-option:has(input:checked),
+.picker-member-option:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.picker-option input,
+.picker-member-option input,
+.permission-row input,
+.member-row input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.picker-option strong,
+.picker-option small,
+.picker-member-option strong,
+.picker-member-option small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker-option strong,
+.picker-member-option strong {
+  font-size: 11px;
+}
+
+.picker-option small,
+.picker-member-option small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.inline-picker-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 11px;
+}
+
+.picker-empty {
+  padding: 10px;
+  color: var(--text-muted);
+  background: #fff;
+  border: 1px dashed var(--border-strong);
+  border-radius: 5px;
+  font-size: 11px;
+  text-align: center;
+}
+
+.permission-module-list {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.permission-module-box {
+  min-width: 0;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.permission-module-box .module-heading {
+  margin-bottom: 10px;
+}
+
+.permission-row-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.permission-row {
+  display: flex;
+  min-width: 0;
+  min-height: 48px;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 8px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.permission-row:hover {
+  border-color: var(--accent-border);
+}
+
+.permission-row.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.permission-row-state {
+  display: inline-flex;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: #f1f5f9;
+  border-radius: 3px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.permission-row.active .permission-row-state {
+  color: #fff;
+  background: var(--accent);
+}
+
+.permission-row-copy {
+  display: block;
+  min-width: 0;
+}
+
+.permission-row-copy strong,
+.permission-row-copy small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-row-copy strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.permission-row-copy small {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 9px;
+}
+
+.member-list {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+}
+
+.member-row {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  gap: 9px;
+  padding: 9px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.member-row:hover,
+.member-row.selected {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.member-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.member-copy strong,
+.member-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-copy strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.member-copy small {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.member-row .member-account-status {
+  min-width: 42px;
+  text-align: right;
+}
+
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
@@ -1573,6 +2175,10 @@ textarea:focus-visible {
     grid-template-columns: 1fr;
   }
 
+  .permission-member-layout {
+    grid-template-columns: 1fr;
+  }
+
   .group-list {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1582,6 +2188,58 @@ textarea:focus-visible {
 @media (max-width: 780px) {
   .page-root {
     padding: 14px;
+  }
+
+  .role-tabs {
+    min-height: 48px;
+    padding-right: 6px;
+  }
+
+  .role-tab-scroll {
+    padding-left: 5px;
+  }
+
+  .role-tab {
+    min-width: 122px;
+    height: 38px;
+    padding: 0 9px;
+  }
+
+  .add-role-button {
+    padding: 0 9px;
+    font-size: 12px;
+  }
+
+  .role-context {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .role-context-actions {
+    width: 100%;
+  }
+
+  .role-context-actions .button {
+    flex: 1;
+  }
+
+  .box-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .box-actions {
+    width: 100%;
+  }
+
+  .box-actions .button {
+    flex: 1;
+  }
+
+  .permission-row-list,
+  .picker-grid,
+  .member-picker-list {
+    grid-template-columns: 1fr;
   }
 
   .page-header {
