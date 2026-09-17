@@ -60,7 +60,13 @@ import 'vue-print-designer/style.css'
 const props = defineProps({
   visible: { type: Boolean, default: false },
   template: { type: Object, default: null },
-  variables: { type: Object, default: () => ({}) }
+  variables: { type: Object, default: () => ({}) },
+  trailingBlankRows: {
+    type: Number,
+    default: 1,
+    validator: value => Number.isInteger(value) && value >= 0
+  },
+  hideZeroValues: { type: Boolean, default: true }
 })
 
 const emit = defineEmits(['close'])
@@ -149,7 +155,43 @@ const fillTableFooterDefaults = (element) => {
   }
 }
 
-const clonePreviewDesign = (design, variables) => {
+const appendTrailingBlankRows = (rows, columns, count) => {
+  const blankRowCount = Math.max(0, Math.floor(Number(count) || 0))
+  if (blankRowCount === 0) return rows
+
+  const blankRows = Array.from({ length: blankRowCount }, () => (
+    (columns || []).reduce((row, column) => {
+      const field = String(column?.field || '').trim()
+      if (field) row[field] = ''
+      return row
+    }, {})
+  ))
+
+  return [...rows, ...blankRows]
+}
+
+const formatTableDataValue = (value, hideZeroValues) => {
+  if (!hideZeroValues) return value
+  if (typeof value === 'number') return value === 0 ? '' : value
+  if (typeof value !== 'string') return value
+
+  const normalized = value.trim()
+  return normalized && /^[+-]?0(?:\.0+)?$/.test(normalized) ? '' : value
+}
+
+const formatTableDataRow = (row, hideZeroValues) => (
+  Object.entries(row || {}).reduce((formattedRow, [field, value]) => {
+    formattedRow[field] = formatTableDataValue(value, hideZeroValues)
+    return formattedRow
+  }, {})
+)
+
+const clonePreviewDesign = (
+  design,
+  variables,
+  trailingBlankRows = 0,
+  hideZeroValues = true
+) => {
   const cloned = JSON.parse(JSON.stringify(design))
   const runtimeVariables = variables && typeof variables === 'object'
     ? JSON.parse(JSON.stringify(variables))
@@ -313,9 +355,10 @@ const clonePreviewDesign = (design, variables) => {
       ))
 
       if (hasDetailBinding || dataVariableKey === 'items' || columnsVariableKey === 'items') {
+        const tableVariableKey = `__previewItems_${pageIndex}_${elementIndex}`
+
         if (usesExplicitBindings) {
-          const tableVariableKey = `__previewItems_${pageIndex}_${elementIndex}`
-          runtimeVariables[tableVariableKey] = items.map((item) => {
+          const tableRows = items.map((item) => {
             const row = {}
 
             columns.forEach((column) => {
@@ -325,7 +368,10 @@ const clonePreviewDesign = (design, variables) => {
               const renderedField = fieldMap.get(sourceField) || sourceField
               const variableKey = explicitBindings.get(sourceField)
               if (variableKey) {
-                row[renderedField] = item?.[variableKey] ?? ''
+                row[renderedField] = formatTableDataValue(
+                  item?.[variableKey] ?? '',
+                  hideZeroValues
+                )
                 return
               }
 
@@ -337,6 +383,18 @@ const clonePreviewDesign = (design, variables) => {
 
             return row
           })
+          runtimeVariables[tableVariableKey] = appendTrailingBlankRows(
+            tableRows,
+            element.columns,
+            trailingBlankRows
+          )
+          element.variable = `@${tableVariableKey}`
+        } else if (trailingBlankRows > 0 || hideZeroValues) {
+          runtimeVariables[tableVariableKey] = appendTrailingBlankRows(
+            items.map(item => formatTableDataRow(item, hideZeroValues)),
+            element.columns,
+            trailingBlankRows
+          )
           element.variable = `@${tableVariableKey}`
         } else {
           element.variable = '@items'
@@ -367,7 +425,12 @@ const loadPreview = async () => {
       throw new Error('该模板还没有保存设计内容，请先在模板管理中完成设计并保存。')
     }
 
-    const previewRuntime = clonePreviewDesign(design, props.variables)
+    const previewRuntime = clonePreviewDesign(
+      design,
+      props.variables,
+      props.trailingBlankRows,
+      props.hideZeroValues
+    )
     designer.setLanguage('zh')
     designer.loadTemplateData(previewRuntime.design)
     await designer.setTestData(previewRuntime.variables, { merge: false })
@@ -420,6 +483,20 @@ watch(
     if (props.visible && designerReady.value) loadPreview()
   },
   { deep: true }
+)
+
+watch(
+  () => props.trailingBlankRows,
+  () => {
+    if (props.visible && designerReady.value) loadPreview()
+  }
+)
+
+watch(
+  () => props.hideZeroValues,
+  () => {
+    if (props.visible && designerReady.value) loadPreview()
+  }
 )
 
 const handleClose = () => emit('close')
