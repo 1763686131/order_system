@@ -1,0 +1,1613 @@
+<template>
+  <div class="page-root employee-account-page">
+    <header class="page-header">
+      <div>
+        <div class="breadcrumb">人事行政 / 员工管理</div>
+        <div class="title-row">
+          <h1>员工与账号管理</h1>
+          <span class="demo-tag">本地演示数据</span>
+        </div>
+        <p>统一维护员工档案、登录账号、角色组和门店仓库数据范围。</p>
+      </div>
+      <div class="header-actions">
+        <button class="button button-secondary" type="button" title="刷新列表" @click="refreshList">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11a8.1 8.1 0 0 0-14.8-3.8L3 10"></path>
+            <path d="M3 4v6h6"></path>
+            <path d="M4 13a8.1 8.1 0 0 0 14.8 3.8L21 14"></path>
+            <path d="M21 20v-6h-6"></path>
+          </svg>
+          刷新
+        </button>
+        <button class="button button-primary" type="button" @click="openCreate">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14"></path>
+            <path d="M5 12h14"></path>
+          </svg>
+          新增员工
+        </button>
+      </div>
+    </header>
+
+    <section class="metric-grid" aria-label="员工概况">
+      <article class="metric-card">
+        <span class="metric-label">员工总数</span>
+        <strong>{{ employees.length }}</strong>
+        <span class="metric-note">已建立员工档案</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">在职员工</span>
+        <strong>{{ activeEmployeeCount }}</strong>
+        <span class="metric-note success-text">可参与业务排班</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">已开通账号</span>
+        <strong>{{ enabledAccountCount }}</strong>
+        <span class="metric-note">可登录系统</span>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">待完善账号</span>
+        <strong>{{ pendingAccountCount }}</strong>
+        <span class="metric-note warning-text">需要补充登录信息</span>
+      </article>
+    </section>
+
+    <section class="search-panel">
+      <div class="search-grid">
+        <label class="field">
+          <span>关键词</span>
+          <div class="input-with-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5"></circle>
+              <path d="m16 16 4.5 4.5"></path>
+            </svg>
+            <input v-model.trim="filters.keyword" type="search" placeholder="姓名、工号、账号、手机号" />
+          </div>
+        </label>
+        <label class="field">
+          <span>部门</span>
+          <select v-model="filters.department">
+            <option value="">全部部门</option>
+            <option v-for="department in departments" :key="department" :value="department">
+              {{ department }}
+            </option>
+          </select>
+        </label>
+        <label class="field">
+          <span>在职状态</span>
+          <select v-model="filters.employmentStatus">
+            <option value="">全部状态</option>
+            <option value="active">在职</option>
+            <option value="probation">试用期</option>
+            <option value="leave">休假</option>
+            <option value="resigned">离职</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>账号状态</span>
+          <select v-model="filters.accountStatus">
+            <option value="">全部账号</option>
+            <option value="active">正常</option>
+            <option value="pending">待开通</option>
+            <option value="disabled">已停用</option>
+          </select>
+        </label>
+        <button class="button button-ghost reset-button" type="button" @click="resetFilters">
+          重置筛选
+        </button>
+      </div>
+    </section>
+
+    <section class="records-panel">
+      <div class="records-toolbar">
+        <div>
+          <h2>员工档案</h2>
+          <span class="record-count">共 {{ filteredEmployees.length }} 条记录</span>
+        </div>
+        <div class="toolbar-actions">
+          <button class="button button-secondary" type="button" @click="exportPreview">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 3v12"></path>
+              <path d="m7 10 5 5 5-5"></path>
+              <path d="M5 21h14"></path>
+            </svg>
+            导出预览
+          </button>
+        </div>
+      </div>
+
+      <div class="table-scroll">
+        <table class="employee-table">
+          <thead>
+            <tr>
+              <th class="col-employee">员工信息</th>
+              <th class="col-account">登录账号</th>
+              <th class="col-job">部门 / 职位</th>
+              <th class="col-phone">联系电话</th>
+              <th class="col-employment">在职状态</th>
+              <th class="col-role">角色组</th>
+              <th class="col-date">入职日期</th>
+              <th class="col-actions">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr
+              v-for="employee in filteredEmployees"
+              :key="employee.id"
+              class="record-row"
+              :class="{ 'row-resigned': employee.employmentStatus === 'resigned' }"
+              tabindex="0"
+              @click="openEdit(employee)"
+              @keydown.enter="openEdit(employee)"
+            >
+              <td>
+                <div class="employee-cell">
+                  <span class="avatar" :style="avatarStyle(employee)">{{ employee.displayName.slice(0, 1) }}</span>
+                  <div class="employee-copy">
+                    <strong>{{ employee.displayName }}</strong>
+                    <span>{{ employee.employeeNo }} · {{ employee.employmentType }}</span>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="account-cell">
+                  <strong>{{ employee.username || '未开通' }}</strong>
+                  <span :class="['status-badge', accountStatusClass(employee.accountStatus)]">
+                    <i></i>{{ accountStatusLabel(employee.accountStatus) }}
+                  </span>
+                </div>
+              </td>
+              <td>
+                <div class="job-cell">
+                  <strong>{{ employee.department }}</strong>
+                  <span>{{ employee.position }}</span>
+                </div>
+              </td>
+              <td class="tabular">{{ employee.phone }}</td>
+              <td>
+                <span :class="['status-badge', employmentStatusClass(employee.employmentStatus)]">
+                  <i></i>{{ employmentStatusLabel(employee.employmentStatus) }}
+                </span>
+              </td>
+              <td>
+                <div class="role-list">
+                  <span
+                    v-for="role in employee.roleIds.slice(0, 2)"
+                    :key="role"
+                    :class="['role-tag', roleTone(role)]"
+                  >
+                    {{ roleName(role) }}
+                  </span>
+                  <span v-if="employee.roleIds.length > 2" class="role-more">
+                    +{{ employee.roleIds.length - 2 }}
+                  </span>
+                  <span v-if="employee.roleIds.length === 0" class="empty-inline">未绑定</span>
+                </div>
+              </td>
+              <td class="tabular">{{ employee.hireDate || '-' }}</td>
+              <td>
+                <div class="row-actions" @click.stop>
+                  <button class="text-button" type="button" @click="openEdit(employee)">编辑</button>
+                  <button class="text-button" type="button" @click="toggleAccount(employee)">
+                    {{ employee.accountStatus === 'disabled' ? '启用账号' : '停用账号' }}
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr v-if="filteredEmployees.length === 0">
+              <td colspan="8">
+                <div class="empty-state">
+                  <span class="empty-icon">—</span>
+                  <strong>没有匹配的员工</strong>
+                  <span>调整筛选条件后再试</span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-footer">
+        <span>当前为前端占位数据，后续接入员工档案与账号接口。</span>
+        <span class="footer-summary">显示 {{ filteredEmployees.length }} / {{ employees.length }}</span>
+      </div>
+    </section>
+
+    <transition name="notice">
+      <div v-if="notice" class="page-notice notice-success" role="status">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="m8 12 2.5 2.5L16 9"></path>
+        </svg>
+        <span>{{ notice }}</span>
+      </div>
+    </transition>
+
+    <Teleport to="body">
+      <div v-if="drawerVisible" class="drawer-layer" @click.self="closeDrawer">
+        <aside class="edit-drawer" role="dialog" aria-modal="true" aria-labelledby="employee-drawer-title">
+          <div class="drawer-header">
+            <div>
+              <span class="drawer-eyebrow">{{ editingEmployee ? '编辑档案' : '新建档案' }}</span>
+              <h2 id="employee-drawer-title">{{ editingEmployee ? draft.displayName : '新增员工' }}</h2>
+            </div>
+            <button class="icon-button" type="button" title="关闭" @click="closeDrawer">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12"></path>
+                <path d="m18 6-12 12"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="drawer-body">
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>基本信息</h3>
+                <span>花名册主档</span>
+              </div>
+              <div class="form-grid">
+                <label class="field">
+                  <span>姓名 <em>*</em></span>
+                  <input v-model.trim="draft.displayName" type="text" placeholder="请输入员工姓名" />
+                </label>
+                <label class="field">
+                  <span>工号</span>
+                  <input v-model.trim="draft.employeeNo" type="text" placeholder="例如 E-0008" />
+                </label>
+                <label class="field">
+                  <span>身份证号</span>
+                  <input v-model.trim="draft.idCard" type="text" placeholder="建议后端加密存储" />
+                </label>
+                <label class="field">
+                  <span>用工类型</span>
+                  <select v-model="draft.employmentType">
+                    <option value="正式">正式</option>
+                    <option value="试用">试用</option>
+                    <option value="兼职">兼职</option>
+                    <option value="外包">外包</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>在职状态</span>
+                  <select v-model="draft.employmentStatus">
+                    <option value="active">在职</option>
+                    <option value="probation">试用期</option>
+                    <option value="leave">休假</option>
+                    <option value="resigned">离职</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>入职日期</span>
+                  <input v-model="draft.hireDate" type="date" />
+                </label>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>工作信息</h3>
+                <span>用于组织和后续人事接口</span>
+              </div>
+              <div class="form-grid">
+                <label class="field">
+                  <span>部门</span>
+                  <select v-model="draft.department">
+                    <option v-for="department in departments" :key="department" :value="department">
+                      {{ department }}
+                    </option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>职位</span>
+                  <input v-model.trim="draft.position" type="text" placeholder="请输入职位" />
+                </label>
+                <label class="field field-wide">
+                  <span>家庭住址</span>
+                  <input v-model.trim="draft.currentAddress" type="text" placeholder="请输入现居住地址" />
+                </label>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>账号绑定</h3>
+                <span>账号和员工档案分开存储</span>
+              </div>
+              <div class="form-grid">
+                <label class="field">
+                  <span>登录账号</span>
+                  <input v-model.trim="draft.username" type="text" placeholder="未填写则暂不开通" />
+                </label>
+                <label class="field">
+                  <span>账号状态</span>
+                  <select v-model="draft.accountStatus">
+                    <option value="active">正常</option>
+                    <option value="pending">待开通</option>
+                    <option value="disabled">已停用</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>紧急联系人</span>
+                  <input v-model.trim="draft.emergencyContact" type="text" placeholder="姓名 / 称谓" />
+                </label>
+                <label class="field">
+                  <span>紧急联系电话</span>
+                  <input v-model.trim="draft.emergencyPhone" type="text" placeholder="联系电话" />
+                </label>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>角色组绑定</h3>
+                <span>员工加入角色组后获得对应权限</span>
+              </div>
+              <div class="check-grid">
+                <label v-for="role in roleGroups" :key="role.id" class="check-item">
+                  <input v-model="draft.roleIds" type="checkbox" :value="role.id" />
+                  <span class="check-mark"></span>
+                  <span>
+                    <strong>{{ role.name }}</strong>
+                    <small>{{ role.description }}</small>
+                  </span>
+                </label>
+              </div>
+            </section>
+
+            <section class="form-section">
+              <div class="section-heading">
+                <h3>数据范围</h3>
+                <span>先用门店 / 仓库占位，后端接入后按 ID 保存</span>
+              </div>
+              <div class="scope-block">
+                <span class="scope-label">可访问门店</span>
+                <div class="scope-list">
+                  <label v-for="store in stores" :key="store.id" class="scope-item">
+                    <input v-model="draft.storeIds" type="checkbox" :value="store.id" />
+                    <span>{{ store.name }}</span>
+                  </label>
+                </div>
+              </div>
+              <div class="scope-block">
+                <span class="scope-label">可操作仓库</span>
+                <div class="scope-list">
+                  <label v-for="warehouse in warehouses" :key="warehouse.id" class="scope-item">
+                    <input v-model="draft.warehouseIds" type="checkbox" :value="warehouse.id" />
+                    <span>{{ warehouse.name }}</span>
+                  </label>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="drawer-footer">
+            <button class="button button-secondary" type="button" @click="closeDrawer">取消</button>
+            <button class="button button-primary" type="button" @click="saveEmployee">
+              {{ editingEmployee ? '保存修改' : '创建员工' }}
+            </button>
+          </div>
+        </aside>
+      </div>
+    </Teleport>
+  </div>
+</template>
+
+<script setup>
+import { computed, ref } from 'vue'
+
+const departments = ['仓储部', '财务部', '销售部', '人事行政', '运营部']
+
+const roleGroups = [
+  { id: 'system_admin', name: '系统管理员', tone: 'red', description: '系统基础资料和账号权限' },
+  { id: 'finance', name: '财务人员', tone: 'blue', description: '应收、收款和财务对账' },
+  { id: 'warehouse', name: '仓库操作员', tone: 'orange', description: '入库、出库和库存日常操作' },
+  { id: 'touch_staff', name: '触屏员工', tone: 'green', description: '前端触屏端和授权仓库草稿' },
+  { id: 'sales', name: '销售人员', tone: 'purple', description: '客户和销售订单日常录入' }
+]
+
+const stores = [
+  { id: 1, name: '一号门店' },
+  { id: 2, name: '二号门店' },
+  { id: 3, name: '直营网点' }
+]
+
+const warehouses = [
+  { id: 1, name: '成品仓' },
+  { id: 2, name: '原材料仓' },
+  { id: 3, name: '周转仓' }
+]
+
+const employees = ref([
+  {
+    id: 1001,
+    employeeNo: 'E-0001',
+    displayName: '张三',
+    avatarColor: '#d8f4ea',
+    username: 'zhangsan',
+    accountStatus: 'active',
+    department: '仓储部',
+    position: '仓库操作员',
+    phone: '138****1024',
+    idCard: '110101********1234',
+    currentAddress: '北京市朝阳区示例街道 18 号',
+    emergencyContact: '李女士',
+    emergencyPhone: '139****2088',
+    employmentStatus: 'active',
+    employmentType: '正式',
+    hireDate: '2024-03-01',
+    roleIds: ['warehouse', 'touch_staff'],
+    storeIds: [1],
+    warehouseIds: [1, 2]
+  },
+  {
+    id: 1002,
+    employeeNo: 'E-0002',
+    displayName: '李四',
+    avatarColor: '#e2edff',
+    username: 'lisi',
+    accountStatus: 'active',
+    department: '财务部',
+    position: '财务专员',
+    phone: '139****3412',
+    idCard: '110102********5678',
+    currentAddress: '北京市海淀区示例路 6 号',
+    emergencyContact: '王先生',
+    emergencyPhone: '137****9088',
+    employmentStatus: 'active',
+    employmentType: '正式',
+    hireDate: '2023-08-15',
+    roleIds: ['finance'],
+    storeIds: [1, 2, 3],
+    warehouseIds: []
+  },
+  {
+    id: 1003,
+    employeeNo: 'E-0003',
+    displayName: '王五',
+    avatarColor: '#fff0d7',
+    username: 'wangwu',
+    accountStatus: 'pending',
+    department: '销售部',
+    position: '销售顾问',
+    phone: '137****7765',
+    idCard: '110105********9012',
+    currentAddress: '北京市东城区示例胡同 9 号',
+    emergencyContact: '赵女士',
+    emergencyPhone: '136****3310',
+    employmentStatus: 'probation',
+    employmentType: '试用',
+    hireDate: '2026-08-20',
+    roleIds: ['sales'],
+    storeIds: [2],
+    warehouseIds: []
+  },
+  {
+    id: 1004,
+    employeeNo: 'E-0004',
+    displayName: '赵六',
+    avatarColor: '#eee4ff',
+    username: '',
+    accountStatus: 'disabled',
+    department: '人事行政',
+    position: '行政专员',
+    phone: '136****5521',
+    idCard: '110106********3456',
+    currentAddress: '北京市西城区示例小区 2 号',
+    emergencyContact: '陈先生',
+    emergencyPhone: '135****6622',
+    employmentStatus: 'leave',
+    employmentType: '正式',
+    hireDate: '2022-11-03',
+    roleIds: [],
+    storeIds: [],
+    warehouseIds: []
+  }
+])
+
+const filters = ref({
+  keyword: '',
+  department: '',
+  employmentStatus: '',
+  accountStatus: ''
+})
+
+const drawerVisible = ref(false)
+const editingEmployee = ref(false)
+const draft = ref(createEmptyEmployee())
+const notice = ref('')
+let noticeTimer
+
+const filteredEmployees = computed(() => {
+  const keyword = filters.value.keyword.toLowerCase()
+  return employees.value.filter(employee => {
+    const matchesKeyword =
+      !keyword ||
+      [employee.displayName, employee.employeeNo, employee.username, employee.phone, employee.department]
+        .join(' ')
+        .toLowerCase()
+        .includes(keyword)
+    const matchesDepartment = !filters.value.department || employee.department === filters.value.department
+    const matchesEmployment =
+      !filters.value.employmentStatus || employee.employmentStatus === filters.value.employmentStatus
+    const matchesAccount = !filters.value.accountStatus || employee.accountStatus === filters.value.accountStatus
+    return matchesKeyword && matchesDepartment && matchesEmployment && matchesAccount
+  })
+})
+
+const activeEmployeeCount = computed(() => employees.value.filter(item => item.employmentStatus === 'active').length)
+const enabledAccountCount = computed(() => employees.value.filter(item => item.accountStatus === 'active').length)
+const pendingAccountCount = computed(() => employees.value.filter(item => item.accountStatus === 'pending').length)
+
+function createEmptyEmployee() {
+  return {
+    id: null,
+    employeeNo: '',
+    displayName: '',
+    avatarColor: '#e5e7eb',
+    username: '',
+    accountStatus: 'pending',
+    department: departments[0],
+    position: '',
+    phone: '',
+    idCard: '',
+    currentAddress: '',
+    emergencyContact: '',
+    emergencyPhone: '',
+    employmentStatus: 'active',
+    employmentType: '正式',
+    hireDate: '',
+    roleIds: [],
+    storeIds: [],
+    warehouseIds: []
+  }
+}
+
+function openCreate() {
+  editingEmployee.value = false
+  draft.value = createEmptyEmployee()
+  drawerVisible.value = true
+}
+
+function openEdit(employee) {
+  editingEmployee.value = true
+  draft.value = {
+    ...employee,
+    roleIds: [...employee.roleIds],
+    storeIds: [...employee.storeIds],
+    warehouseIds: [...employee.warehouseIds]
+  }
+  drawerVisible.value = true
+}
+
+function closeDrawer() {
+  drawerVisible.value = false
+}
+
+function saveEmployee() {
+  if (!draft.value.displayName) {
+    showNotice('请先填写员工姓名')
+    return
+  }
+
+  const payload = {
+    ...draft.value,
+    employeeNo: draft.value.employeeNo || `E-${String(employees.value.length + 1).padStart(4, '0')}`,
+    roleIds: [...draft.value.roleIds],
+    storeIds: [...draft.value.storeIds],
+    warehouseIds: [...draft.value.warehouseIds]
+  }
+
+  if (editingEmployee.value) {
+    const index = employees.value.findIndex(item => item.id === payload.id)
+    if (index !== -1) employees.value[index] = payload
+    showNotice('员工档案已更新')
+  } else {
+    payload.id = Math.max(...employees.value.map(item => item.id), 1000) + 1
+    employees.value.unshift(payload)
+    showNotice('员工档案已创建')
+  }
+  closeDrawer()
+}
+
+function toggleAccount(employee) {
+  employee.accountStatus = employee.accountStatus === 'disabled' ? 'active' : 'disabled'
+  showNotice(employee.accountStatus === 'active' ? '账号已启用' : '账号已停用')
+}
+
+function resetFilters() {
+  filters.value = {
+    keyword: '',
+    department: '',
+    employmentStatus: '',
+    accountStatus: ''
+  }
+}
+
+function refreshList() {
+  showNotice('演示数据已刷新')
+}
+
+function exportPreview() {
+  showNotice('导出功能将在后端接口接入后启用')
+}
+
+function showNotice(message) {
+  notice.value = message
+  window.clearTimeout(noticeTimer)
+  noticeTimer = window.setTimeout(() => {
+    notice.value = ''
+  }, 3000)
+}
+
+function roleName(roleId) {
+  return roleGroups.find(role => role.id === roleId)?.name || roleId
+}
+
+function roleTone(roleId) {
+  return roleGroups.find(role => role.id === roleId)?.tone || 'neutral'
+}
+
+function accountStatusLabel(status) {
+  return {
+    active: '正常',
+    pending: '待开通',
+    disabled: '已停用'
+  }[status] || status
+}
+
+function accountStatusClass(status) {
+  return {
+    active: 'status-success',
+    pending: 'status-warning',
+    disabled: 'status-disabled'
+  }[status] || 'status-disabled'
+}
+
+function employmentStatusLabel(status) {
+  return {
+    active: '在职',
+    probation: '试用期',
+    leave: '休假',
+    resigned: '离职'
+  }[status] || status
+}
+
+function employmentStatusClass(status) {
+  return {
+    active: 'status-success',
+    probation: 'status-warning',
+    leave: 'status-info',
+    resigned: 'status-disabled'
+  }[status] || 'status-disabled'
+}
+
+function avatarStyle(employee) {
+  return {
+    backgroundColor: employee.avatarColor || '#e5e7eb',
+    color: '#275a4d'
+  }
+}
+</script>
+
+<style scoped>
+.page-root {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --page-bg: #f4f7f8;
+  --panel-bg: #fff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  min-height: 100%;
+  padding: 20px;
+  color: var(--text);
+  background: var(--page-bg);
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.page-header,
+.records-toolbar,
+.title-row,
+.header-actions,
+.toolbar-actions,
+.employee-cell,
+.account-cell,
+.row-actions,
+.drawer-header,
+.drawer-footer {
+  display: flex;
+  align-items: center;
+}
+
+.page-header {
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+}
+
+.breadcrumb,
+.drawer-eyebrow {
+  margin-bottom: 7px;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.title-row {
+  gap: 10px;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.page-header p {
+  margin-top: 6px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.demo-tag,
+.record-count,
+.role-tag,
+.role-more,
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.demo-tag {
+  height: 24px;
+  padding: 0 9px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.header-actions,
+.toolbar-actions {
+  gap: 8px;
+}
+
+.button {
+  display: inline-flex;
+  height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.button svg,
+.page-notice svg,
+.icon-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.button-primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.button-primary:hover {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.18);
+}
+
+.button-secondary,
+.button-ghost {
+  color: var(--text-secondary);
+  background: #fff;
+  border-color: var(--border-strong);
+}
+
+.button-secondary:hover,
+.button-ghost:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.metric-card,
+.search-panel,
+.records-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+}
+
+.metric-card {
+  min-height: 94px;
+  padding: 15px 16px;
+  box-sizing: border-box;
+}
+
+.metric-label,
+.metric-note {
+  display: block;
+}
+
+.metric-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.metric-card strong {
+  display: block;
+  margin: 7px 0 3px;
+  font-size: 25px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-note {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.success-text {
+  color: #13734f;
+}
+
+.warning-text {
+  color: #a4510b;
+}
+
+.search-panel {
+  padding: 18px 20px;
+}
+
+.search-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(3, minmax(150px, 1fr)) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field > span {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.field em {
+  color: #dc3545;
+  font-style: normal;
+}
+
+input,
+select {
+  width: 100%;
+  height: 38px;
+  padding: 0 11px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  outline: none;
+  font: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+input::placeholder {
+  color: #a3adbb;
+}
+
+input:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.input-with-icon svg {
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: var(--text-muted);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  pointer-events: none;
+}
+
+.input-with-icon input {
+  padding-left: 35px;
+}
+
+.reset-button {
+  align-self: end;
+}
+
+.records-panel {
+  margin-top: 14px;
+  overflow: hidden;
+}
+
+.records-toolbar {
+  justify-content: space-between;
+  min-height: 62px;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.records-toolbar h2 {
+  font-size: 15px;
+}
+
+.record-count {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.employee-table {
+  width: 100%;
+  min-width: 1260px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.employee-table th {
+  height: 45px;
+  padding: 0 12px;
+  color: var(--text-secondary);
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 650;
+  text-align: left;
+}
+
+.employee-table td {
+  height: 69px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #edf1f5;
+  font-size: 13px;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+.employee-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.employee-table tbody tr.record-row {
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.employee-table tbody tr.record-row:hover,
+.employee-table tbody tr.record-row:focus-visible {
+  background: rgba(var(--accent-rgb), 0.06);
+  outline: none;
+}
+
+.row-resigned {
+  opacity: 0.72;
+}
+
+.col-employee {
+  width: 215px;
+}
+
+.col-account {
+  width: 155px;
+}
+
+.col-job {
+  width: 155px;
+}
+
+.col-phone {
+  width: 125px;
+}
+
+.col-employment {
+  width: 110px;
+}
+
+.col-role {
+  width: 215px;
+}
+
+.col-date {
+  width: 110px;
+}
+
+.col-actions {
+  width: 170px;
+  text-align: center !important;
+}
+
+.employee-cell {
+  gap: 10px;
+  min-width: 0;
+}
+
+.avatar {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.employee-copy,
+.account-cell,
+.job-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.employee-copy strong,
+.account-cell strong,
+.job-cell strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-copy span,
+.job-cell span {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-cell .status-badge {
+  width: fit-content;
+}
+
+.status-badge {
+  min-height: 25px;
+  gap: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 650;
+  box-sizing: border-box;
+}
+
+.status-badge i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.status-success {
+  color: #13734f;
+  background: #eaf8f1;
+}
+
+.status-warning {
+  color: #a4510b;
+  background: #fff3df;
+}
+
+.status-info {
+  color: #16647a;
+  background: #e7f5f8;
+}
+
+.status-disabled {
+  color: #7b8492;
+  background: #f1f2f4;
+}
+
+.role-list {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow: hidden;
+}
+
+.role-tag,
+.role-more {
+  min-height: 24px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  box-sizing: border-box;
+}
+
+.role-tag {
+  max-width: 108px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.role-tag.green {
+  color: #13734f;
+  background: #eaf8f1;
+}
+
+.role-tag.blue {
+  color: #16647a;
+  background: #e7f5f8;
+}
+
+.role-tag.orange {
+  color: #a4510b;
+  background: #fff3df;
+}
+
+.role-tag.red {
+  color: #b4232f;
+  background: #fcebed;
+}
+
+.role-tag.purple {
+  color: #6651a8;
+  background: #f1edff;
+}
+
+.role-tag.neutral,
+.role-more {
+  color: var(--text-secondary);
+  background: #f1f5f9;
+}
+
+.empty-inline {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.row-actions {
+  justify-content: center;
+  gap: 10px;
+}
+
+.text-button {
+  padding: 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.text-button:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.empty-state {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--text-muted);
+}
+
+.empty-state strong {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.empty-icon {
+  color: var(--border-strong);
+  font-size: 28px;
+  line-height: 1;
+}
+
+.table-footer {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 16px;
+  color: var(--text-muted);
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.footer-summary {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.page-notice {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 3000;
+  display: flex;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 44px;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 16px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.page-notice svg {
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  color: var(--accent);
+}
+
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+}
+
+.drawer-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.edit-drawer {
+  display: flex;
+  width: min(640px, 100vw);
+  height: 100%;
+  flex-direction: column;
+  background: #fff;
+  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.16);
+}
+
+.drawer-header {
+  min-height: 78px;
+  justify-content: space-between;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.drawer-header h2 {
+  font-size: 18px;
+}
+
+.icon-button {
+  display: inline-flex;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.icon-button:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.drawer-body {
+  flex: 1;
+  padding: 20px 22px;
+  overflow-y: auto;
+}
+
+.form-section + .form-section {
+  margin-top: 24px;
+  padding-top: 22px;
+  border-top: 1px solid var(--border);
+}
+
+.section-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.section-heading h3 {
+  font-size: 14px;
+}
+
+.section-heading span {
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: right;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.field-wide {
+  grid-column: 1 / -1;
+}
+
+.check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.check-item {
+  display: flex;
+  min-height: 58px;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 11px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.check-item:has(input:checked) {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.check-item input,
+.scope-item input {
+  margin: 2px 0 0;
+}
+
+.check-item strong,
+.check-item small {
+  display: block;
+}
+
+.check-item strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.check-item small {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.scope-block + .scope-block {
+  margin-top: 14px;
+}
+
+.scope-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.scope-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.scope-item {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.scope-item:has(input:checked) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.drawer-footer {
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 13px 22px;
+  border-top: 1px solid var(--border);
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+.record-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (max-width: 1280px) {
+  .search-grid {
+    grid-template-columns: repeat(4, minmax(150px, 1fr));
+  }
+
+  .search-grid .field:first-child {
+    grid-column: span 2;
+  }
+
+  .reset-button {
+    grid-column: span 2;
+    justify-self: start;
+  }
+}
+
+@media (max-width: 780px) {
+  .page-root {
+    padding: 14px;
+  }
+
+  .page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .header-actions {
+    width: 100%;
+  }
+
+  .header-actions .button {
+    flex: 1;
+  }
+
+  .metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .search-panel {
+    padding: 14px;
+  }
+
+  .search-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .search-grid .field:first-child,
+  .reset-button {
+    grid-column: auto;
+  }
+
+  .reset-button {
+    justify-self: stretch;
+  }
+
+  .records-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .table-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    padding: 10px 14px;
+  }
+
+  .form-grid,
+  .check-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .field-wide {
+    grid-column: auto;
+  }
+
+  .drawer-header,
+  .drawer-body,
+  .drawer-footer {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+}
+</style>

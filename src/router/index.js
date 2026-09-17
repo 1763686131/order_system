@@ -107,6 +107,12 @@ const routes = [
       {
         path: 'roles',
         name: 'admin-roles',
+        component: () => import('@/views/admin/system/RoleGroupManage.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'roles-legacy',
+        name: 'admin-roles-legacy',
         component: () => import('@/views/admin/system/RoleManage.vue'),
         meta: { requiresAuth: true }
       },
@@ -235,6 +241,12 @@ const routes = [
         path: 'hr/reports',
         name: 'admin-hr-reports',
         component: () => import('@/views/admin/hr/Reports.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'hr/employees',
+        name: 'admin-hr-employees',
+        component: () => import('@/views/admin/hr/AccountManage.vue'),
         meta: { requiresAuth: true }
       },
       {
