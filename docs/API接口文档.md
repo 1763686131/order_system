@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v3.4** (2026-09-17) - 新增打印模板数据库、模板 CRUD、默认模板和旧 localStorage 模板迁移接口
 - **v3.3** (2026-09-16) - 下线旧 `/api/materials` 使用/生产流水接口并删除 `material_records`、旧 `remark_tags` 表
 - **v3.2** (2026-09-16) - 新增库存流水查询接口，支持按物料、门店和仓库查询已审核入库与出库明细
 - **v3.1** (2026-09-16) - 补充销售订单审核/反审核接口、审核人姓名解析及审核字段说明
@@ -59,6 +60,7 @@
 13. [退货单与客户应收、库存联动](#13-退货单与客户应收库存联动)
 14. [银行账户与结算账户](#14-银行账户与结算账户)
 15. [系统设置与服务器路径](#15-系统设置与服务器路径)
+16. [打印模板管理](#16-打印模板管理)
 
 ---
 
@@ -87,6 +89,7 @@
 - `stock_balances.product_type/product_id/warehouse_id` - 库存余额查询优化
 - `stock_movements.product_type/product_id/warehouse_id/created_at` - 库存流水查询优化
 - `bank_accounts.store_id/account_number` - 按门店查询并保证门店内账号唯一
+- `print_templates.business_type/is_default` - 按业务类型加载默认打印模板
 
 ---
 
@@ -3757,6 +3760,518 @@ services:
 
 ---
 
+## 16. 打印模板管理
+
+模块前缀：`/api/print-templates`
+
+打印模板的名称、业务类型、纸张尺寸、默认状态、启用状态和设计器 JSON 保存在 SQLite 的 `print_templates` 表中。浏览器打印或 C-Lodop 的协议、主机、端口和本地打印机名称不通过本模块上传，它们只保存在每台客户端浏览器的 `localStorage`。
+
+前端调用文件：
+
+```text
+src/api/printTemplate.js
+```
+
+后端路由文件：
+
+```text
+backend/routes/print_templates.py
+```
+
+完整的设计器、变量渲染和打印流程见：
+
+```text
+docs/打印机项目实现.md
+```
+
+### 16.1 模板字段
+
+数据库和 GET 接口响应使用下划线字段：
+
+| 字段 | 类型 | 说明 |
+| --- | --- | --- |
+| `id` | integer | 模板主键 |
+| `name` | string | 模板名称 |
+| `business_type` | string | 业务类型，例如 `sale`、`purchase` |
+| `paper_type` | string/null | 纸张名称，例如三联单、A4、自定义 |
+| `page_width` | number | 纸张宽度，单位 mm |
+| `page_height` | number | 纸张高度，单位 mm |
+| `is_default` | integer | `1` 为默认模板，`0` 为非默认模板 |
+| `enabled` | integer | `1` 为启用，`0` 为停用 |
+| `content` | object/null | `vue-print-designer` 设计 JSON |
+| `created_at` | string | 创建时间 |
+| `updated_at` | string/null | 最后更新时间 |
+
+创建和更新请求使用驼峰字段：
+
+| 请求字段 | 响应/数据库字段 |
+| --- | --- |
+| `businessType` | `business_type` |
+| `paperType` | `paper_type` |
+| `pageWidth` | `page_width` |
+| `pageHeight` | `page_height` |
+| `isDefault` | `is_default` |
+| `createdAt` | `created_at` |
+| `updatedAt` | `updated_at` |
+
+前端 `normalizePrintTemplate()` 会把 GET 响应转换为驼峰字段，并把 `is_default`、`enabled` 转换为 boolean。直接调用 HTTP 接口的客户端必须自行处理这种字段差异。
+
+当前设计器支持以下业务类型：
+
+| 值 | 名称 |
+| --- | --- |
+| `sale` | 销售 |
+| `purchase` | 采购 |
+| `return` | 退货 |
+| `transfer` | 调拨 |
+| `inventory` | 盘点 |
+| `receipt` | 收款 |
+| `payment` | 付款 |
+
+后端当前没有对 `businessType` 做固定枚举校验，只要求创建时该字段非空。
+
+`content` 典型结构：
+
+```json
+{
+  "canvasSize": {
+    "width": 794,
+    "height": 529
+  },
+  "pages": [
+    {
+      "id": "sale-page",
+      "elements": []
+    }
+  ],
+  "unit": "mm",
+  "testData": {},
+  "ext": {
+    "availableVariables": []
+  }
+}
+```
+
+`content` 在 SQLite 中以 JSON 字符串保存，读取接口会在返回前解析成对象。解析失败时接口将该字段返回为 `null`。
+
+### 16.2 获取模板列表
+
+- **URL**: `/api/print-templates`
+- **Method**: `GET`
+- **说明**: 获取全部模板，可按业务类型和启用状态筛选
+
+**查询参数**:
+
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `businessType` | string | 否 | 空 | 按业务类型过滤 |
+| `enabledOnly` | string/boolean | 否 | `false` | 值转成小写后等于 `true` 时只返回启用模板 |
+
+**请求示例**:
+
+```text
+GET /api/print-templates?businessType=sale&enabledOnly=true
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 1,
+      "name": "销售出库单",
+      "business_type": "sale",
+      "paper_type": "三联单",
+      "page_width": 210,
+      "page_height": 140,
+      "is_default": 1,
+      "enabled": 1,
+      "content": {
+        "canvasSize": {
+          "width": 794,
+          "height": 529
+        },
+        "pages": [],
+        "unit": "mm"
+      },
+      "created_at": "2026-09-17 09:00:00",
+      "updated_at": "2026-09-17 10:00:00"
+    }
+  ]
+}
+```
+
+排序规则：
+
+1. `is_default DESC`，默认模板在前。
+2. `created_at DESC`，同级模板按创建时间倒序。
+
+接口当前不分页。
+
+### 16.3 获取单个模板
+
+- **URL**: `/api/print-templates/{id}`
+- **Method**: `GET`
+- **说明**: 按模板 ID 获取完整记录和设计 JSON
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 1,
+    "name": "销售出库单",
+    "business_type": "sale",
+    "paper_type": "三联单",
+    "page_width": 210,
+    "page_height": 140,
+    "is_default": 1,
+    "enabled": 1,
+    "content": {
+      "canvasSize": {
+        "width": 794,
+        "height": 529
+      },
+      "pages": [],
+      "unit": "mm"
+    },
+    "created_at": "2026-09-17 09:00:00",
+    "updated_at": "2026-09-17 10:00:00"
+  }
+}
+```
+
+模板不存在时返回 HTTP `404`：
+
+```json
+{
+  "success": false,
+  "message": "模板不存在"
+}
+```
+
+### 16.4 创建模板
+
+- **URL**: `/api/print-templates`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+- **说明**: 创建模板记录并保存设计器 JSON
+
+**请求参数**:
+
+| 字段 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `name` | string | 是 | - | 模板名称 |
+| `businessType` | string | 是 | - | 业务类型 |
+| `paperType` | string | 否 | 空字符串 | 纸张名称 |
+| `pageWidth` | number | 是 | - | 纸张宽度，单位 mm |
+| `pageHeight` | number | 是 | - | 纸张高度，单位 mm |
+| `isDefault` | boolean | 否 | `false` | 是否设为当前业务类型默认模板 |
+| `enabled` | boolean | 否 | `true` | 是否启用 |
+| `content` | object/null | 否 | `null` | 设计器 JSON |
+
+**请求示例**:
+
+```json
+{
+  "name": "销售出库单",
+  "businessType": "sale",
+  "paperType": "三联单",
+  "pageWidth": 210,
+  "pageHeight": 140,
+  "isDefault": true,
+  "enabled": true,
+  "content": {
+    "canvasSize": {
+      "width": 794,
+      "height": 529
+    },
+    "pages": [],
+    "unit": "mm",
+    "testData": {},
+    "ext": {
+      "availableVariables": []
+    }
+  }
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "创建成功",
+  "data": {
+    "id": 1
+  }
+}
+```
+
+当 `isDefault=true` 时，后端会先把同一 `business_type` 下的其他模板更新为非默认，再插入新模板。
+
+缺少必填字段时返回 HTTP `400`：
+
+```json
+{
+  "success": false,
+  "message": "缺少必填字段: pageWidth"
+}
+```
+
+### 16.5 更新模板
+
+- **URL**: `/api/print-templates/{id}`
+- **Method**: `PUT`
+- **Content-Type**: `application/json`
+- **说明**: 部分更新模板元数据或设计内容
+
+支持更新：
+
+```text
+name
+businessType
+paperType
+pageWidth
+pageHeight
+isDefault
+enabled
+content
+```
+
+**请求示例**:
+
+```json
+{
+  "name": "销售出库单 A4",
+  "businessType": "sale",
+  "paperType": "A4",
+  "pageWidth": 210,
+  "pageHeight": 297,
+  "enabled": true,
+  "content": {
+    "canvasSize": {
+      "width": 794,
+      "height": 1123
+    },
+    "pages": [],
+    "unit": "mm"
+  }
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "更新成功"
+}
+```
+
+更新时后端会自动写入 `updated_at`。
+
+提交 `isDefault=true` 时：
+
+1. 优先使用请求中的 `businessType`。
+2. 请求未传 `businessType` 时读取模板当前业务类型。
+3. 取消同业务类型其他模板的默认状态。
+4. 将当前模板设置为默认。
+
+提交 `"content": null` 会清空当前设计内容。
+
+### 16.6 删除模板
+
+- **URL**: `/api/print-templates/{id}`
+- **Method**: `DELETE`
+- **说明**: 删除非默认模板
+
+**成功响应**:
+
+```json
+{
+  "success": true,
+  "message": "删除成功"
+}
+```
+
+默认模板不允许直接删除，返回 HTTP `400`：
+
+```json
+{
+  "success": false,
+  "message": "不能删除默认模板，请先设置其他模板为默认"
+}
+```
+
+模板不存在时返回 HTTP `404`。
+
+### 16.7 设置默认模板
+
+- **URL**: `/api/print-templates/{id}/set-default`
+- **Method**: `POST`
+- **说明**: 将模板设为所属业务类型的默认模板
+
+无需请求体。
+
+后端在同一数据库连接中执行：
+
+1. 查询当前模板的 `business_type`。
+2. 取消该业务类型下所有模板的默认状态。
+3. 将当前模板的 `is_default` 更新为 `1`。
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "设置成功"
+}
+```
+
+同一业务类型“只保留一个默认模板”由接口事务逻辑保证，数据库当前没有建立部分唯一索引。
+
+### 16.8 迁移旧 localStorage 模板
+
+- **URL**: `/api/print-templates/migrate`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+- **说明**: 将旧版浏览器 localStorage 模板批量迁移到 SQLite
+
+**请求示例**:
+
+```json
+{
+  "templates": [
+    {
+      "name": "旧销售模板",
+      "businessType": "sale",
+      "paperType": "三联单",
+      "pageWidth": 210,
+      "pageHeight": 140,
+      "isDefault": false,
+      "enabled": true,
+      "content": {
+        "pages": []
+      }
+    }
+  ]
+}
+```
+
+**响应示例**:
+
+```json
+{
+  "success": true,
+  "message": "成功迁移 1 个模板",
+  "data": {
+    "migratedCount": 1
+  }
+}
+```
+
+迁移规则：
+
+- `templates` 必须是非空数组。
+- 以 `name + businessType` 判断是否已经存在。
+- 已存在的模板直接跳过。
+- 单条模板迁移失败时记录后继续处理后续模板。
+- `isDefault=true` 时会取消同业务类型原默认模板。
+
+模板管理页仅在服务器模板列表为空时尝试调用迁移接口。该接口用于历史数据迁移，不用于保存 C-Lodop 打印机配置。
+
+### 16.9 数据库表结构
+
+```sql
+CREATE TABLE print_templates (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    business_type TEXT NOT NULL,
+    paper_type TEXT,
+    page_width INTEGER NOT NULL,
+    page_height INTEGER NOT NULL,
+    is_default INTEGER DEFAULT 0,
+    enabled INTEGER DEFAULT 1,
+    content TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT
+);
+```
+
+索引：
+
+```sql
+CREATE INDEX idx_print_templates_business_type
+ON print_templates(business_type);
+
+CREATE INDEX idx_print_templates_is_default
+ON print_templates(is_default);
+```
+
+`backend/utils/db.py` 在首次数据库连接时检查并创建该表。仅在表不存在时插入三条基础记录：
+
+```text
+销售出库单-标准模板 / sale
+采购入库单-标准模板 / purchase
+退货单-标准模板 / return
+```
+
+当前初始化数据的 `paper_type` 为“二等分”，宽高为 `210 × 140mm`；设计器中的二等分预设为 `241 × 140mm`。历史项目以模板最终保存的宽高为准，新项目应统一初始化名称和尺寸。
+
+### 16.10 本地打印配置不属于后端接口
+
+以下设置不会写入 `print_templates`：
+
+```text
+打印方式 browser/clodop
+C-Lodop 协议
+C-Lodop 主机
+C-Lodop 端口
+本地打印机名称
+```
+
+前端存储键：
+
+```text
+order-system-print-client-config
+```
+
+默认配置：
+
+```json
+{
+  "version": 1,
+  "mode": "clodop",
+  "protocol": "http",
+  "host": "localhost",
+  "port": 8000,
+  "printerName": ""
+}
+```
+
+HTTPS 页面默认使用端口 `8443`。环境变量 `VITE_CLODOP_URL` 可以覆盖默认协议、主机和端口。
+
+这种拆分保证模板可以在系统用户之间共享，同时每台电脑可以选择自己的 C-Lodop 服务和物理打印机。
+
+### 16.11 接口约束与状态码
+
+| 场景 | HTTP 状态码 |
+| --- | --- |
+| 查询、创建、更新、删除或设置成功 | `200` |
+| 缺少创建必填字段 | `400` |
+| 迁移数据不是非空数组 | `400` |
+| 删除默认模板 | `400` |
+| 模板不存在 | `404` |
+| 数据库或 JSON 处理异常 | `500` |
+
+当前打印模板路由自身没有根据 `Username`、`Role` 再做角色判断，主要依赖后台菜单和前端权限控制。对外部署或多人环境中，应在后端增加管理员权限校验。
+
+---
+
 ## 错误响应格式
 
 多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
@@ -3805,6 +4320,7 @@ services:
 - `payment_receipts` - 收款单草稿、审核状态、核销和预收快照表
 - `customer_account_transactions` - 订单审核、收款、反审核的客户账户流水表
 - `system_settings` - 系统键值配置表，包括检测报告根目录 `reports.path`
+- `print_templates` - 打印模板元数据、纸张尺寸和设计器 JSON
 
 **辅助表**:
 - `units` - 计量单位和包装表，通过 `unit_type` 分组
@@ -3848,6 +4364,12 @@ CREATE INDEX idx_stock_balances_lookup
 ON stock_balances(product_type, product_id, warehouse_id);
 CREATE INDEX idx_stock_movements_product
 ON stock_movements(product_type, product_id, warehouse_id, created_at DESC);
+
+-- 打印模板按业务类型和默认状态查询
+CREATE INDEX idx_print_templates_business_type
+ON print_templates(business_type);
+CREATE INDEX idx_print_templates_is_default
+ON print_templates(is_default);
 ```
 
 ### 性能优化建议
@@ -3878,6 +4400,9 @@ ON stock_movements(product_type, product_id, warehouse_id, created_at DESC);
 
 供应商、入库单、明细、库存余额和库存流水表由 `backend/utils/db.py` 在首次数据库连接时自动创建，
 没有对应的历史 JSON 迁移来源。
+
+打印模板原本保存在浏览器 localStorage。当前模板以 `print_templates` 表为准，旧模板可以通过
+`POST /api/print-templates/migrate` 一次性迁移；C-Lodop 地址和打印机名称仍只保存在客户端。
 
 ---
 
@@ -3997,6 +4522,12 @@ SQLite 支持**多读一写**模式：
 ---
 
 ## 更新日志
+
+### v3.4.0 (2026-09-17)
+- 新增 `print_templates` SQLite 数据表及业务类型、默认状态索引
+- 新增打印模板列表、详情、创建、更新、删除和设为默认接口
+- 新增旧 localStorage 模板批量迁移接口
+- 补充模板字段、设计器 JSON 和客户端 C-Lodop 配置边界
 
 ### v3.1.0 (2026-09-16)
 - 补充销售订单审核与反审核请求、响应、账务联动和错误状态码

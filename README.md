@@ -1,6 +1,6 @@
 # 订单与进销存管理系统
 
-基于 Vue 3、Vite、Pinia、Flask 和 SQLite 的内网业务管理系统，覆盖销售订单、物流出库、客户应收、收款历史、商品与原材料档案、供应商、仓库库存、入库审核、回单和运费对账等流程。
+基于 Vue 3、Vite、Pinia、Flask 和 SQLite 的内网业务管理系统，覆盖销售订单、物流出库、客户应收、收款历史、商品与原材料档案、供应商、仓库库存、入库审核、打印模板、回单和运费对账等流程。
 
 系统采用前后端分离开发、同源部署的方式运行。所有前端资源均由本地项目构建，不依赖在线 CDN、Google Fonts 或在线图标库，适合纯内网和本地环境。
 
@@ -9,8 +9,8 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.1.0` |
-| 文档更新 | `2026-09-16` |
-| 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX |
+| 文档更新 | `2026-09-17` |
+| 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
 | API 前缀 | `/api` |
@@ -31,8 +31,26 @@
 - 入库记录与出库记录统一流水组件
 - 回单上传、查看、旋转和删除
 - 物流、快递运费对账及 Excel 导出
+- 数据库打印模板、可视化设计、业务变量预览、浏览器打印和 C-Lodop 本地打印
 - 用户、角色和细粒度权限管理
 - 原材料使用/生产流水记录
+
+## 2026-09-17 更新
+
+### 打印模板与本地打印
+
+- 打印模板由浏览器临时数据迁移到 SQLite 的 `print_templates` 表，通过 `/api/print-templates` 统一管理。
+- 模板管理支持新增、可视化设计、复制、设为默认、删除以及启用状态展示和筛选。
+- 模板设计器使用 `vue-print-designer`，数据库模板会加载到设计器左侧模板列表。
+- 设计器顶部同步维护模板名称、业务类型、纸张类型和毫米尺寸，保存时一并上传服务器。
+- 设计器预览和销售订单预览共用 `OrderPrintPreview.vue`，避免出现两套渲染结果。
+- 明细表格使用 `@items` 驱动，支持动态行、末尾空白行、零值留空、合计行和明确列变量绑定。
+- 销售订单打印变量包含金额中文大写、客户、联系人、商品明细、合计、收款和欠款等数据。
+- `PrintTemplateSelector.vue` 统一选择模板、打印方式和本地打印机。
+- 浏览器打印和 C-Lodop 使用同一份渲染 HTML；C-Lodop 支持服务检测、打印机枚举、纸张尺寸和竖排文字兼容。
+- C-Lodop 地址、端口和打印机名称只保存在当前浏览器，不上传数据库。
+
+详细架构、变量契约和接入流程见 [打印机项目实现](docs/打印机项目实现.md)。
 
 ## 2026-09-14 更新
 
@@ -197,6 +215,7 @@ order_system/
 │  │  ├─ customers.py                # 客户、应收欠款与账户汇总接口
 │  │  ├─ payment_receipts.py         # 收款单、附件、审核和反审核接口
 │  │  ├─ settings.py                 # 系统配置、路径管理和目录浏览接口
+│  │  ├─ print_templates.py          # 打印模板 CRUD、默认模板和历史模板迁移
 │  │  ├─ freight.py                  # 运费与对账接口
 │  │  ├─ users.py                    # 用户、角色与权限接口
 │  │  └─ hr_reports.py               # 人事报告接口
@@ -209,7 +228,8 @@ order_system/
 │  └─ start.bat
 ├─ src/
 │  ├─ api/
-│  │  └─ request.js                  # Axios 实例、认证头和统一响应处理
+│  │  ├─ request.js                  # Axios 实例、认证头和统一响应处理
+│  │  └─ printTemplate.js            # 打印模板接口与字段标准化
 │  ├─ stores/
 │  │  ├─ user.js                     # 登录、用户和权限状态
 │  │  ├─ order.js                    # 销售订单状态
@@ -227,6 +247,11 @@ order_system/
 │  │  ├─ admin/
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  └─ StoreFormModal.vue       # 门店维护弹窗
+│  │  ├─ print/
+│  │  │  ├─ PrintDesignerEditor.vue  # 可视化模板设计器封装
+│  │  │  ├─ PrintTemplateSelector.vue # 模板、打印方式和打印机选择
+│  │  │  ├─ PrintClientSettingsDialog.vue # C-Lodop 服务与打印机设置
+│  │  │  └─ OrderPrintPreview.vue    # 业务变量渲染、预览和打印
 │  │  └─ front/                      # 前台订单、发货和原材料弹窗
 │  ├─ views/
 │  │  ├─ Admin.vue                   # 后台布局、菜单和入库弹窗注册
@@ -258,16 +283,22 @@ order_system/
 │  │     │  ├─ DebtDetails.vue        # 欠款详情页面（应收/应付通用，显示期初欠款和储值记录）
 │  │     │  └─ ...                   # 物流、快递运费对账
 │  │     ├─ system/                  # 用户、角色、门店和系统配置
-│  │     │  └─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
+│  │     │  ├─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
+│  │     │  └─ PrintTemplate.vue     # 打印模板管理
 │  │     └─ hr/                      # 人事报告
 │  ├─ router/index.js                # 前端路由和登录守卫
-│  ├─ utils/                         # Excel、日期、单位和通用工具
+│  ├─ utils/
+│  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
+│  │  ├─ printClientConfig.js        # 本地打印配置和默认端口
+│  │  ├─ chineseMoney.js             # 金额中文大写
+│  │  └─ ...                         # Excel、日期、单位和通用工具
 │  └─ assets/styles/                 # 本地全局样式
 ├─ data/
 │  ├─ order_system.db                # 当前 SQLite 业务数据库
 │  └─ backup_before_cleanup/         # 历史 JSON 备份
 ├─ docs/
 │  ├─ API接口文档.md                 # 完整 API 参数、响应和业务规则
+│  ├─ 打印机项目实现.md              # 打印模板、预览、浏览器打印和 C-Lodop 实现
 │  ├─ 组件样式规范.md                 # 后台页面视觉和组件复用规范
 │  ├─ 数据库表单说明.md              # 数据表说明
 │  ├─ 银行账户管理-后端开发提示词.md  # 银行账户模块后端开发指引
@@ -415,6 +446,7 @@ order_system/
 | `/admin/finance/payment-history` | 收款历史 | `/api/payment-receipts` |
 | `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
 | `/admin/finance/debt-details/:type/:targetId` | 欠款详情 | 前端模拟数据（待接入后端 API） |
+| `/admin/system/print-template` | 打印模板管理和设计器 | `/api/print-templates` |
 
 ## 库存关键接口
 
@@ -477,6 +509,68 @@ order_system/
 
 销售订单审核请求体为 `{ "audit_state": 1 }`，反审核为 `{ "audit_state": 0 }`。收款附件仅支持 `jpg`、`jpeg`、`png`、`webp` 和 `gif`，整个 multipart 请求体不能超过 `10 MiB`。完整参数和响应示例见 [API 接口文档](docs/API接口文档.md#12-收款单与应收核销)。
 
+## 打印模板与打印客户端
+
+打印功能分成服务器模板和客户端打印配置两部分。
+
+### 服务器模板
+
+模板数据保存在 SQLite 的 `print_templates` 表，所有用户共享：
+
+```text
+模板名称
+业务类型
+纸张类型和毫米尺寸
+是否默认
+是否启用
+vue-print-designer 设计 JSON
+```
+
+关键接口：
+
+| 方法 | 地址 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/print-templates` | 查询模板，可按业务类型和启用状态过滤 |
+| `GET` | `/api/print-templates/:id` | 获取完整模板 |
+| `POST` | `/api/print-templates` | 新建模板 |
+| `PUT` | `/api/print-templates/:id` | 更新模板元数据和设计 JSON |
+| `DELETE` | `/api/print-templates/:id` | 删除非默认模板 |
+| `POST` | `/api/print-templates/:id/set-default` | 设置同业务类型默认模板 |
+| `POST` | `/api/print-templates/migrate` | 迁移旧 localStorage 模板 |
+
+GET 响应使用数据库下划线字段，`src/api/printTemplate.js` 会标准化为前端驼峰字段。完整请求和响应见 [API 接口文档](docs/API接口文档.md#16-打印模板管理)。
+
+### 前端组件结构
+
+| 组件 | 职责 |
+| --- | --- |
+| `PrintDesignerEditor.vue` | 编辑模板、变量、表格和纸张尺寸 |
+| `PrintTemplateSelector.vue` | 按业务类型选择模板和打印方式 |
+| `PrintClientSettingsDialog.vue` | 设置浏览器/C-Lodop、端口和打印机 |
+| `OrderPrintPreview.vue` | 将模板和业务变量生成统一预览 HTML |
+| `lodopPrint.js` | 将预览 HTML 交给浏览器或 C-Lodop |
+| `printClientConfig.js` | 读取、校验和保存当前电脑的打印配置 |
+
+业务页面只负责把原始单据转换为统一打印变量。不要在每个页面重复实现模板读取、C-Lodop 检测或打印 HTML 生成。
+
+### 客户端本地配置
+
+以下配置只属于当前电脑和浏览器：
+
+```text
+browser/clodop 打印方式
+C-Lodop 协议、主机和端口
+本地打印机名称
+```
+
+localStorage 键：
+
+```text
+order-system-print-client-config
+```
+
+首次使用默认采用 C-Lodop，主机为 `localhost`。HTTP 页面默认端口 `8000`，HTTPS 页面默认端口 `8443`，打印机名称需要检测后选择。
+
 ## 数据存储
 
 系统当前以 SQLite 为业务数据源，本地和 Docker 默认都使用 `data/order_system.db`。
@@ -499,12 +593,15 @@ order_system/
 - `return_orders`：退货单头、实退金额、退款金额、审核状态和客户流水关联
 - `return_order_items`：退货商品、仓库、数量、单价、税额和备注明细
 - `customer_account_transactions`：订单审核、收款审核和反审核产生的客户账户流水
+- `print_templates`：打印模板元数据、纸张尺寸和设计器 JSON
 
 退货单审核会在 `stock_balances`、`stock_movements` 中留下可追溯的库存返还记录；反审核按退货单号删除对应库存流水并恢复审核前库存。
 
 收款附件保存到 `uploads/payment-receipts/YYYY-MM/`，数据库仅保存附件访问地址。删除待审核收款单或替换附件时，后端会同步清理不再使用的文件。
 
 `data/backup_before_cleanup/` 中的 JSON 文件仅用于历史迁移和备份参考，当前业务接口以 SQLite 为准。
+
+打印模板本身保存在 SQLite；C-Lodop 地址、端口和打印机名称保存在每台客户端浏览器的 `localStorage`，不会随数据库备份迁移到其他电脑。
 
 修改或替换数据库前，应先停止后端服务并备份 `data/order_system.db`，避免正在运行的进程继续写入。
 
@@ -514,6 +611,10 @@ order_system/
 - 页面级组件放在 `src/views/`，可复用弹窗放在 `src/components/`。
 - 组件样式优先使用 `<style scoped>`，公共样式放在 `src/assets/styles/`。
 - API 请求统一使用 `src/api/request.js`，接口地址保持 `/api` 相对路径。
+- 打印模板请求统一使用 `src/api/printTemplate.js`，页面不要直接处理后端下划线字段。
+- 打印弹窗、预览和 C-Lodop 设置统一复用 `src/components/print/`，不要在业务页面复制实现。
+- 业务单据必须先转换为统一打印变量，再交给 `OrderPrintPreview.vue` 渲染。
+- 打印模板保存到服务器；只与本机相关的打印服务和打印机配置才允许保存到 `localStorage`。
 - 临时表单状态使用 Pinia；需要跨刷新保存的数据必须明确设计持久化方案。
 - 不引入在线 CDN、远程字体或在线矢量图标。
 - 金额和数量显示使用千分位、固定精度和 `tabular-nums`。
@@ -599,9 +700,22 @@ docker restart my_order_app
 
 后端容器读取 `frontend/`，而 `npm run build` 默认输出 `dist/`。需要更新 `frontend/` 中的部署文件，并重启容器。
 
+### 打印模板为什么换一台电脑后仍然存在
+
+模板已经保存到 SQLite，通过 `/api/print-templates` 读取，因此登录同一个系统的其他电脑也能看到模板。
+
+### 为什么换一台电脑后需要重新选择打印机
+
+C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localStorage`。每台电脑安装的打印机和驱动不同，所以这些配置不会上传服务器。
+
+### 第一次部署是否有 C-Lodop 端口
+
+有。HTTP 页面默认使用 `localhost:8000`，HTTPS 页面默认使用 `localhost:8443`。默认地址不代表服务一定已经启动，首次打印仍需检测 C-Lodop 并选择本地打印机。
+
 ## 相关文档
 
 - [API 接口文档](docs/API接口文档.md)
+- [打印机项目实现](docs/打印机项目实现.md)
 - [后台列表页视觉与组件样式规范](docs/组件样式规范.md)
 - [数据库表单说明](docs/数据库表单说明.md)
 - [SQLite 迁移说明](MIGRATION_SQLITE.md)
@@ -609,6 +723,15 @@ docker restart my_order_app
 - [BUG 及优化记录](docs/BUG及优化文档.md)
 
 ## 更新日志
+
+### 2026-09-17 - 打印模板与本地打印
+
+- 打印模板接入 SQLite 和 `/api/print-templates`
+- 增加模板可视化设计、复制、默认模板和业务类型
+- 增加销售订单公共模板选择和预览组件
+- 增加浏览器打印与 C-Lodop 打印分流
+- 增加本地 C-Lodop 地址、端口和打印机检测
+- 增加动态明细、空白行、零值隐藏、金额大写和竖排文字兼容
 
 ### 2026-09-13 - 财务欠款详情模块
 
