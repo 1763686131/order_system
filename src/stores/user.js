@@ -3,138 +3,94 @@ import request from '@/api/request'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
+    id: null,
     username: '',
     name: '',
+    avatarUrl: '',
     role: '',
-    permissions: []
+    roles: [],
+    permissions: [],
+    isSuperAdmin: false,
+    canAccessAdmin: false,
+    mustChangePassword: false,
+    authChecked: false
   }),
 
   getters: {
-    isLoggedIn: (state) => !!state.username,
-
+    isLoggedIn: (state) => Boolean(state.id && state.username),
     getRoleName: (state) => {
-      const roleMap = {
-        'super_admin': '超级管理员',
-        'admin': '管理员',
-        'employee': '员工',
-        'operator': '员工'
-      }
-      return roleMap[state.role] || state.role
+      if (state.isSuperAdmin) return '超级管理员'
+      return state.roles.map(role => role.name).join('、') || '普通账号'
     },
-
     hasPerm: (state) => {
-      return (permKey) => {
-        if (state.role === 'super_admin') return true
-        return state.permissions && state.permissions.includes(permKey)
-      }
+      return (permissionCode) => (
+        state.isSuperAdmin || state.permissions.includes(permissionCode)
+      )
     }
   },
 
   actions: {
-    setUser(userData) {
+    setUser(userData = {}) {
+      this.id = userData.id || null
       this.username = userData.username || ''
-      this.name = userData.name || ''
+      this.name = userData.displayName || userData.name || ''
+      this.avatarUrl = userData.avatarUrl || ''
       this.role = userData.role || ''
-      this.permissions = userData.permissions || []
-
-      // 持久化到 localStorage
-      localStorage.setItem('local_user', JSON.stringify({
-        username: this.username,
-        name: this.name,
-        role: this.role,
-        permissions: this.permissions
-      }))
+      this.roles = Array.isArray(userData.roles) ? userData.roles : []
+      this.permissions = Array.isArray(userData.permissions)
+        ? userData.permissions
+        : []
+      this.isSuperAdmin = Boolean(userData.isSuperAdmin)
+      this.canAccessAdmin = Boolean(userData.canAccessAdmin)
+      this.mustChangePassword = Boolean(userData.mustChangePassword)
+      this.authChecked = true
     },
 
-    logout() {
+    clearUser() {
+      this.id = null
       this.username = ''
       this.name = ''
+      this.avatarUrl = ''
       this.role = ''
+      this.roles = []
       this.permissions = []
+      this.isSuperAdmin = false
+      this.canAccessAdmin = false
+      this.mustChangePassword = false
       localStorage.removeItem('local_user')
     },
 
-    // API 请求方法
-    async login(username, password) {
+    async restoreSession(force = false) {
+      if (this.authChecked && !force) return this.isLoggedIn
       try {
-        const response = await request({
-          url: '/login',
-          method: 'POST',
-          data: { username, password }
-        })
-
-        if (response.success) {
+        const response = await request.get('/auth/me')
+        if (response.success && response.user) {
           this.setUser(response.user)
+          return true
         }
-        return response
       } catch (error) {
-        console.error('Login failed:', error)
-        throw error
+        if (error?.response?.status !== 401) {
+          console.error('Failed to restore session:', error)
+        }
       }
+      this.clearUser()
+      this.authChecked = true
+      return false
     },
 
-    async fetchUsers() {
-      try {
-        const response = await request({ url: '/users', method: 'GET' })
-        return Array.isArray(response) ? response : []
-      } catch (error) {
-        console.error('Failed to fetch users:', error)
-        return []
-      }
+    async login(username, password) {
+      const response = await request.post('/auth/login', { username, password })
+      if (response.success && response.user) this.setUser(response.user)
+      return response
     },
 
-    async createUser(userData) {
+    async logout() {
+      this.clearUser()
+      this.authChecked = true
       try {
-        const response = await request({
-          url: '/users',
-          method: 'POST',
-          data: userData
-        })
-        return response
+        await request.post('/auth/logout')
       } catch (error) {
-        console.error('Failed to create user:', error)
-        throw error
-      }
-    },
-
-    async updateUser(username, updates) {
-      try {
-        const response = await request({
-          url: `/users/${username}`,
-          method: 'PUT',
-          data: updates
-        })
-        return response
-      } catch (error) {
-        console.error('Failed to update user:', error)
-        throw error
-      }
-    },
-
-    async deleteUser(username) {
-      try {
-        const response = await request({
-          url: `/users/${username}`,
-          method: 'DELETE'
-        })
-        return response
-      } catch (error) {
-        console.error('Failed to delete user:', error)
-        throw error
-      }
-    },
-
-    async updatePassword(username, password) {
-      try {
-        const response = await request({
-          url: `/users/${username}/password`,
-          method: 'PUT',
-          data: { password }
-        })
-        return response
-      } catch (error) {
-        console.error('Failed to update password:', error)
-        throw error
+        console.error('Logout request failed:', error)
       }
     }
   }

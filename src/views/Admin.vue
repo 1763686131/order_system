@@ -357,7 +357,7 @@ const menuItems = ref([
     children: [
       { label: '门店管理', path: '/admin/stores' },
       { label: '系统设置', path: '/admin/settings' },
-      { label: '角色组管理', path: '/admin/roles' },
+      { label: '权限管理', path: '/admin/roles' },
       { label: '打印模板', path: '/admin/system/print-template' }
     ]
   }
@@ -430,10 +430,10 @@ const restoreOrderDraft = () => {
   }
 }
 
-const logout = () => {
+const logout = async () => {
   if (confirm('确定要退出系统吗？')) {
-    userStore.logout()
-    router.push('/login')
+    await userStore.logout()
+    await router.push('/login')
   }
 }
 </script>

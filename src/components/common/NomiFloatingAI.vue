@@ -130,7 +130,7 @@ const showAddOrder = computed(() => {
   if (nomiStore.currentTab === 3) return false
 
   // 其他页面根据权限显示
-  return userStore.hasPerm('pending.add')
+  return userStore.hasPerm('touch.order.create')
 })
 
 const showAddMaterial = computed(() => {
@@ -139,7 +139,7 @@ const showAddMaterial = computed(() => {
   if (nomiStore.currentTab === 0 || nomiStore.currentTab === 1 || nomiStore.currentTab === 2) return false
 
   // 其他页面根据权限显示
-  return userStore.hasPerm('material.add')
+  return userStore.hasPerm('touch.material.create')
 })
 
 // 拖拽相关状态
@@ -254,10 +254,10 @@ const handleSearch = () => {
 }
 
 // 退出登录
-const handleLogout = () => {
+const handleLogout = async () => {
   nomiStore.closeMenu()
   if (confirm('确定要退出登录吗？')) {
-    userStore.logout()
+    await userStore.logout()
     window.location.reload()
   }
 }

@@ -19,43 +19,27 @@ customers_lock = Lock()
 # ==========================================
 
 def read_users():
-    """读取所有用户"""
+    """Return compatibility user summaries without password material."""
     with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM users')
-        rows = cursor.fetchall()
-
+        rows = conn.execute(
+            """
+            SELECT id, username, display_name, avatar_url, status, created_at
+            FROM users
+            ORDER BY id
+            """
+        ).fetchall()
         users = []
         for row in rows:
             user = dict(row)
-            # 解析 permissions JSON
-            if user.get('permissions'):
-                user['permissions'] = json.loads(user['permissions'])
-            else:
-                user['permissions'] = []
+            user["name"] = user.pop("display_name", user["username"])
+            user["permissions"] = []
             users.append(user)
         return users
 
 
 def write_users(users_list):
-    """批量写入用户（用于兼容旧代码）"""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        # 清空表
-        cursor.execute('DELETE FROM users')
-
-        for user in users_list:
-            permissions_json = json.dumps(user.get('permissions', []))
-            cursor.execute('''
-            INSERT INTO users (username, password, role, name, permissions)
-            VALUES (?, ?, ?, ?, ?)
-            ''', (
-                user.get('username'),
-                user.get('password'),
-                user.get('role', 'employee'),
-                user.get('name', user.get('username')),
-                permissions_json
-            ))
+    """The legacy bulk writer is intentionally disabled."""
+    raise RuntimeError("Legacy user writes are disabled; use the account APIs.")
 
 
 # ==========================================

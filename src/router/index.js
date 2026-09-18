@@ -25,7 +25,7 @@ const routes = [
     path: '/admin',
     name: 'admin',
     component: Admin,
-    meta: { requiresAuth: true },
+    meta: { requiresAuth: true, requiresAdmin: true },
     redirect: '/admin/dashboard',
     children: [
       {
@@ -107,13 +107,13 @@ const routes = [
       {
         path: 'roles',
         name: 'admin-roles',
-        component: () => import('@/views/admin/system/RoleGroupManage.vue'),
+        component: () => import('@/views/admin/system/RoleManage.vue'),
         meta: { requiresAuth: true }
       },
       {
         path: 'roles-legacy',
         name: 'admin-roles-legacy',
-        component: () => import('@/views/admin/system/RoleManage.vue'),
+        redirect: '/admin/roles',
         meta: { requiresAuth: true }
       },
       {
@@ -264,17 +264,24 @@ const router = createRouter({
   routes
 })
 
-// 路由守卫
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to) => {
   const userStore = useUserStore()
+  const loggedIn = await userStore.restoreSession()
 
-  if (to.meta.requiresAuth && !userStore.isLoggedIn) {
-    next('/login')
-  } else if (to.path === '/login' && userStore.isLoggedIn) {
-    next('/main')
-  } else {
-    next()
+  if (to.meta.requiresAuth && !loggedIn) {
+    return {
+      path: '/login',
+      query: to.fullPath ? { redirect: to.fullPath } : {}
+    }
   }
+
+  if (to.meta.requiresAdmin && !userStore.canAccessAdmin) return '/main'
+
+  if (to.path === '/login' && loggedIn) {
+    return userStore.canAccessAdmin ? '/admin/dashboard' : '/main'
+  }
+
+  return true
 })
 
 export default router

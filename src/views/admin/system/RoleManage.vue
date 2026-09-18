@@ -1,1292 +1,829 @@
 <template>
-  <div class="role-manage-page">
-    <section class="page-intro" aria-labelledby="role-page-title">
-      <div>
-        <span class="eyebrow">系统权限</span>
-        <h1 id="role-page-title">角色管理</h1>
-        <p>统一维护账号角色、权限范围与可执行操作。</p>
-      </div>
-      <button class="button button-primary" type="button" @click="openCreateModal">
-        <span aria-hidden="true">+</span>
-        新增角色
-      </button>
-    </section>
-
-    <section class="records-panel" aria-labelledby="role-list-title">
-      <header class="records-toolbar">
-        <div class="toolbar-title">
-          <div>
-            <span class="section-kicker">权限目录</span>
-            <h2 id="role-list-title">角色列表</h2>
-          </div>
-          <span class="count-badge">{{ totalRoles }}</span>
-        </div>
-        <span class="toolbar-hint">点击修改可调整角色信息和授权范围</span>
-      </header>
-
-      <div class="table-scroll">
-        <table class="records-table">
-          <thead>
-            <tr>
-              <th>角色</th>
-              <th>角色 ID</th>
-              <th>权限级别</th>
-              <th>授权数量</th>
-              <th>创建时间</th>
-              <th class="operation-column">操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="loading" class="state-row">
-              <td colspan="6">
-                <span class="loading-dot" aria-hidden="true"></span>
-                正在加载角色列表…
-              </td>
-            </tr>
-            <tr v-else-if="paginatedRoles.length === 0" class="state-row">
-              <td colspan="6">
-                <span class="empty-mark" aria-hidden="true">⌁</span>
-                <strong>暂无角色数据</strong>
-                <span>可以点击右上角“新增角色”创建第一个角色。</span>
-              </td>
-            </tr>
-            <tr v-for="role in paginatedRoles" v-else :key="role.username">
-              <td>
-                <strong class="role-name">{{ role.name || role.username }}</strong>
-                <span class="role-secondary">{{ role.description || '未填写备注' }}</span>
-              </td>
-              <td class="mono-value">{{ role.username }}</td>
-              <td>
-                <span class="status-badge" :class="getRoleClass(role.role)">
-                  <span class="status-dot" aria-hidden="true"></span>
-                  {{ getRoleName(role.role) }}
-                </span>
-              </td>
-              <td class="number-value">{{ getPermissionCount(role) }}</td>
-              <td class="date-value">{{ formatDate(role.createdAt || role.created_at) }}</td>
-              <td class="operation-column">
-                <div class="row-actions">
-                  <button class="action-button action-edit" type="button" @click="openEditModal(role)">
-                    修改
-                  </button>
-                  <button
-                    class="action-button action-delete"
-                    type="button"
-                    :disabled="!canDelete(role)"
-                    :title="canDelete(role) ? '删除角色' : getDeleteDisabledReason(role)"
-                    @click="deleteRole(role)"
-                  >
-                    删除
-                  </button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <footer class="table-footer">
-        <span class="table-summary">共 <strong>{{ totalRoles }}</strong> 条角色记录</span>
-        <div class="pagination">
-          <label class="page-size-control">
-            <span>每页</span>
-            <select v-model.number="pageSize" aria-label="每页条数">
-              <option :value="10">10</option>
-              <option :value="20">20</option>
-              <option :value="50">50</option>
-            </select>
-            <span>条</span>
-          </label>
-          <button class="page-button" type="button" :disabled="currentPage === 1" @click="goToPage(1)">首页</button>
-          <button class="page-button" type="button" :disabled="currentPage === 1" @click="goToPage(currentPage - 1)">上一页</button>
-          <button
-            v-for="page in visiblePages"
-            :key="page"
-            class="page-button page-number"
-            :class="{ active: currentPage === page }"
-            type="button"
-            @click="goToPage(page)"
-          >
-            {{ page }}
-          </button>
-          <button class="page-button" type="button" :disabled="currentPage === totalPages" @click="goToPage(currentPage + 1)">下一页</button>
-          <button class="page-button" type="button" :disabled="currentPage === totalPages" @click="goToPage(totalPages)">末页</button>
-        </div>
-      </footer>
-    </section>
-
+  <div class="access-page">
     <Transition name="notice">
       <div
         v-if="notice.visible"
-        class="page-notice"
-        :class="notice.type"
-        :role="notice.type === 'error' || notice.type === 'warning' ? 'alert' : 'status'"
-        :aria-live="notice.type === 'error' || notice.type === 'warning' ? 'assertive' : 'polite'"
+        :class="['page-notice', `notice-${notice.type}`]"
+        role="status"
       >
-        <span class="page-notice-icon" aria-hidden="true">{{ noticeIcon }}</span>
-        <span class="page-notice-text">{{ notice.message }}</span>
-        <button class="page-notice-close" type="button" aria-label="关闭通知" @click="hideNotice">×</button>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9" />
+          <path v-if="notice.type === 'success'" d="m8 12 2.7 2.7L16.5 9" />
+          <path v-else d="M12 8v5M12 17h.01" />
+        </svg>
+        {{ notice.message }}
       </div>
     </Transition>
 
-    <div v-if="showPermissionDrawer" class="drawer-overlay" @click.self="closePermissionDrawer">
-      <aside class="drawer-container" role="dialog" aria-modal="true" aria-labelledby="role-drawer-title">
-        <header class="drawer-header">
-          <div>
-            <span class="section-kicker">{{ isEditMode ? '编辑角色' : '新建角色' }}</span>
-            <h2 id="role-drawer-title">{{ isEditMode ? '角色权限配置' : '创建角色' }}</h2>
+    <section class="records-panel">
+      <header class="records-toolbar">
+        <div class="view-tabs" role="tablist" aria-label="权限管理视图">
+          <button
+            v-for="tab in tabs"
+            :key="tab.value"
+            type="button"
+            :class="['view-tab', { active: activeTab === tab.value }]"
+            @click="activeTab = tab.value"
+          >
+            {{ tab.label }}
+            <span class="count-badge">{{ tab.count }}</span>
+          </button>
+        </div>
+        <div class="toolbar-actions">
+          <button class="button button-secondary icon-button" title="刷新" @click="loadAll">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5" />
+              <path d="M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5" />
+            </svg>
+          </button>
+          <button
+            class="button button-primary"
+            type="button"
+            @click="activeTab === 'accounts' ? openAccountModal() : openRoleModal()"
+          >
+            <span aria-hidden="true">+</span>
+            {{ activeTab === 'accounts' ? '新增账号' : '新增权限组' }}
+          </button>
+        </div>
+      </header>
+
+      <template v-if="activeTab === 'accounts'">
+        <div class="sub-toolbar">
+          <div class="search-input">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="7" />
+              <path d="m20 20-3.6-3.6" />
+            </svg>
+            <input v-model.trim="accountKeyword" placeholder="搜索账号或姓名" />
           </div>
-          <button class="icon-button" type="button" aria-label="关闭角色配置" @click="closePermissionDrawer">×</button>
-        </header>
+          <span class="toolbar-note">账号不直接保存权限，只通过权限组获得权限。</span>
+        </div>
 
-        <div class="drawer-body">
-          <section class="form-card">
-            <div class="form-card-header">
-              <div>
-                <h3>基本信息</h3>
-                <p>角色名称和登录凭据用于识别账号。</p>
-              </div>
-            </div>
-            <div class="form-grid">
-              <label class="form-field">
-                <span>角色名称 <b>*</b></span>
-                <input v-model="currentRole.name" type="text" placeholder="例如：仓库主管" />
-              </label>
-              <label class="form-field">
-                <span>角色 ID <b>*</b></span>
-                <input v-model="currentRole.username" type="text" placeholder="用于登录和接口识别" :disabled="isEditMode" />
-              </label>
-              <label class="form-field">
-                <span>权限级别 <b>*</b></span>
-                <select v-model="currentRole.role" :disabled="isEditMode && currentRole.role === 'super_admin'">
-                  <option value="employee">普通员工</option>
-                  <option value="operator">操作员</option>
-                  <option value="admin">管理员</option>
-                  <option v-if="userStore.user?.role === 'super_admin'" value="super_admin">超级管理员</option>
-                </select>
-              </label>
-              <label class="form-field">
-                <span>密码 <b v-if="!isEditMode">*</b></span>
-                <input v-model="currentRole.password" type="password" :placeholder="isEditMode ? '留空表示不修改' : '请输入登录密码'" />
-              </label>
-              <label class="form-field">
-                <span>创建时间</span>
-                <input v-model="currentRole.createdAt" type="text" :disabled="!isEditMode" :placeholder="isEditMode ? '创建时间' : '保存后自动生成'" />
-              </label>
-              <label class="form-field form-field-wide">
-                <span>备注</span>
-                <input v-model="currentRole.description" type="text" placeholder="补充角色职责或适用范围" />
-              </label>
-            </div>
-          </section>
-
-          <section class="form-card permission-card">
-            <div class="form-card-header">
-              <div>
-                <h3>授权范围</h3>
-                <p>按模块选择页面访问、业务操作和回单权限。</p>
-              </div>
-              <span class="permission-total">{{ currentRole.permissions.length }} 项</span>
-            </div>
-            <div class="permission-tree">
-              <article
-                v-for="module in permissionModules"
-                :key="module.id"
-                class="permission-module"
-              >
-                <label class="module-header" :class="{ 'is-partial': isModulePartiallyChecked(module) }">
-                  <input
-                    type="checkbox"
-                    :checked="isModuleChecked(module)"
-                    :indeterminate="isModulePartiallyChecked(module)"
-                    @change="toggleModule(module, $event)"
-                  />
-                  <span class="module-icon" v-html="module.icon"></span>
-                  <span>{{ module.label }}</span>
-                </label>
-                <div class="module-children">
-                  <div v-for="item in module.children" :key="item.id" class="permission-group">
-                    <label class="permission-item">
-                      <input type="checkbox" :value="item.id" v-model="currentRole.permissions" />
-                      <span>{{ item.label }}</span>
-                    </label>
-                    <div v-if="item.children" class="permission-actions">
-                      <label v-for="action in item.children" :key="action.id" class="permission-item">
-                        <input type="checkbox" :value="action.id" v-model="currentRole.permissions" />
-                        <span>{{ action.label }}</span>
-                      </label>
+        <div class="table-scroll">
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>账号信息</th>
+                <th>权限组</th>
+                <th>账号状态</th>
+                <th>最近登录</th>
+                <th>创建时间</th>
+                <th class="operation-column">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-if="loading">
+                <td colspan="6" class="state-cell">正在加载账号...</td>
+              </tr>
+              <tr v-else-if="filteredAccounts.length === 0">
+                <td colspan="6" class="state-cell">没有符合条件的账号。</td>
+              </tr>
+              <tr v-for="account in filteredAccounts" v-else :key="account.id">
+                <td>
+                  <div class="account-cell">
+                    <span class="avatar">{{ accountInitial(account) }}</span>
+                    <div class="cell-stack">
+                      <strong>{{ account.displayName }}</strong>
+                      <span>{{ account.username }}</span>
                     </div>
                   </div>
-                </div>
-              </article>
-            </div>
-          </section>
+                </td>
+                <td>
+                  <div class="tag-row">
+                    <span
+                      v-for="role in account.roles"
+                      :key="role.id"
+                      class="role-tag"
+                    >
+                      {{ role.name }}
+                    </span>
+                    <span v-if="account.roles.length === 0" class="muted-text">未分组</span>
+                  </div>
+                </td>
+                <td>
+                  <span :class="['status-tag', account.status === 'active' ? 'success' : 'disabled']">
+                    {{ account.status === 'active' ? '启用' : '停用' }}
+                  </span>
+                </td>
+                <td class="date-cell">{{ formatDate(account.lastLoginAt) }}</td>
+                <td class="date-cell">{{ formatDate(account.createdAt) }}</td>
+                <td class="operation-column">
+                  <button class="text-button" type="button" @click="openAccountModal(account)">
+                    编辑
+                  </button>
+                  <button class="text-button" type="button" @click="openPasswordModal(account)">
+                    重置密码
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
         </div>
+      </template>
 
-        <footer class="drawer-footer">
-          <button class="button button-secondary" type="button" @click="closePermissionDrawer">取消</button>
-          <button class="button button-primary" type="button" :disabled="saving" @click="saveRole">
-            {{ saving ? '保存中…' : '保存角色' }}
+      <div v-else class="role-workspace">
+        <aside class="role-list" aria-label="权限组列表">
+          <button
+            v-for="role in roles"
+            :key="role.id"
+            type="button"
+            :class="['role-list-item', { active: selectedRoleId === role.id }]"
+            @click="selectRole(role.id)"
+          >
+            <span class="role-list-mark">{{ role.name.slice(0, 1) }}</span>
+            <span class="role-list-copy">
+              <strong>{{ role.name }}</strong>
+              <small>{{ role.memberCount }} 个账号</small>
+            </span>
+            <span :class="['status-dot', { disabled: role.status !== 'active' }]"></span>
           </button>
-        </footer>
-      </aside>
-    </div>
+        </aside>
 
-    <div v-if="confirmDialog.visible" class="custom-modal-overlay" @click.self="closeConfirmDialog">
-      <section class="custom-modal" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title">
-        <div class="confirm-icon" aria-hidden="true">!</div>
-        <h2 id="confirm-title">{{ confirmDialog.title }}</h2>
-        <p>{{ confirmDialog.message }}</p>
-        <div class="confirm-actions">
-          <button class="button button-secondary" type="button" @click="closeConfirmDialog">取消</button>
-          <button class="button button-danger" type="button" @click="confirmAction">{{ confirmDialog.confirmText }}</button>
-        </div>
-      </section>
-    </div>
+        <section v-if="selectedRole" class="role-detail">
+          <header class="role-header">
+            <div>
+              <div class="role-title-row">
+                <h2>{{ selectedRole.name }}</h2>
+                <span v-if="selectedRole.isSystem" class="system-tag">系统内置</span>
+                <span :class="['status-tag', selectedRole.status === 'active' ? 'success' : 'disabled']">
+                  {{ selectedRole.status === 'active' ? '启用' : '停用' }}
+                </span>
+              </div>
+              <p>{{ selectedRole.description || '暂无说明' }}</p>
+              <div class="role-meta">
+                <span>编码：{{ selectedRole.code }}</span>
+                <span>数据范围：{{ dataScopeName(selectedRole.dataScope) }}</span>
+                <span>成员：{{ selectedRole.memberCount }}</span>
+              </div>
+            </div>
+            <div class="toolbar-actions">
+              <button
+                class="button button-secondary"
+                type="button"
+                :disabled="selectedRole.isSystem"
+                @click="openRoleModal(selectedRole)"
+              >
+                编辑信息
+              </button>
+              <button
+                v-if="!selectedRole.fullAccess && !permissionEditing"
+                class="button button-primary"
+                type="button"
+                @click="startPermissionEditing"
+              >
+                配置权限
+              </button>
+              <template v-else-if="permissionEditing">
+                <button class="button button-secondary" type="button" @click="cancelPermissionEditing">
+                  取消
+                </button>
+                <button class="button button-primary" type="button" :disabled="saving" @click="savePermissions">
+                  {{ saving ? '保存中...' : '保存权限' }}
+                </button>
+              </template>
+            </div>
+          </header>
+
+          <div v-if="selectedRole.fullAccess" class="full-access-state">
+            <span class="full-access-icon">全</span>
+            <div>
+              <strong>拥有系统全部权限</strong>
+              <p>超级管理员组自动覆盖后台与触屏端全部操作。</p>
+            </div>
+          </div>
+
+          <div v-else class="permission-area">
+            <section
+              v-for="module in visiblePermissionModules"
+              :key="module.code"
+              class="permission-module"
+            >
+              <header>
+                <div>
+                  <h3>{{ module.name }}</h3>
+                  <p>{{ module.description }}</p>
+                </div>
+                <span>{{ selectedCount(module) }} / {{ module.permissions.length }}</span>
+              </header>
+              <div class="permission-grid">
+                <button
+                  v-for="permission in visiblePermissions(module)"
+                  :key="permission.code"
+                  type="button"
+                  :class="[
+                    'permission-chip',
+                    { selected: permissionDraft.includes(permission.code), editable: permissionEditing }
+                  ]"
+                  :disabled="!permissionEditing"
+                  @click="togglePermission(permission.code)"
+                >
+                  <span class="permission-name">{{ permission.name }}</span>
+                  <span class="permission-code">{{ permission.code }}</span>
+                </button>
+              </div>
+            </section>
+            <div v-if="visiblePermissionModules.length === 0" class="empty-permissions">
+              当前权限组还没有权限，点击“配置权限”开始添加。
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <Teleport to="body">
+      <div v-if="accountModal.visible" class="modal-layer" @click.self="closeAccountModal">
+        <section class="form-modal" role="dialog" aria-modal="true" aria-labelledby="account-modal-title">
+          <header class="modal-header">
+            <div>
+              <span class="modal-kicker">账号信息</span>
+              <h2 id="account-modal-title">
+                {{ accountModal.mode === 'create' ? '新增账号' : '编辑账号' }}
+              </h2>
+            </div>
+            <button class="modal-close" type="button" title="关闭" @click="closeAccountModal">×</button>
+          </header>
+          <form class="modal-body form-grid" @submit.prevent="saveAccount">
+            <label class="field">
+              <span>登录账号</span>
+              <input
+                v-model.trim="accountForm.username"
+                :disabled="accountModal.mode === 'edit'"
+                autocomplete="off"
+                placeholder="不含空格"
+              />
+            </label>
+            <label class="field">
+              <span>显示姓名</span>
+              <input v-model.trim="accountForm.displayName" placeholder="用于系统显示" />
+            </label>
+            <label v-if="accountModal.mode === 'create'" class="field">
+              <span>初始密码</span>
+              <input
+                v-model="accountForm.password"
+                type="password"
+                autocomplete="new-password"
+                placeholder="至少 8 位"
+              />
+            </label>
+            <label class="field">
+              <span>账号状态</span>
+              <select v-model="accountForm.status">
+                <option value="active">启用</option>
+                <option value="disabled">停用</option>
+              </select>
+            </label>
+            <label class="field field-span">
+              <span>头像地址</span>
+              <input v-model.trim="accountForm.avatarUrl" placeholder="可填写本地或上传后的图片地址" />
+            </label>
+            <fieldset class="role-options field-span">
+              <legend>所属权限组</legend>
+              <label v-for="role in activeRoles" :key="role.id" class="role-option">
+                <input v-model="accountForm.roleIds" type="checkbox" :value="role.id" />
+                <span>
+                  <strong>{{ role.name }}</strong>
+                  <small>{{ role.description || role.code }}</small>
+                </span>
+              </label>
+            </fieldset>
+          </form>
+          <footer class="modal-footer">
+            <button class="button button-secondary" type="button" @click="closeAccountModal">取消</button>
+            <button class="button button-primary" type="button" :disabled="saving" @click="saveAccount">
+              {{ saving ? '保存中...' : '保存账号' }}
+            </button>
+          </footer>
+        </section>
+      </div>
+
+      <div v-if="roleModal.visible" class="modal-layer" @click.self="closeRoleModal">
+        <section class="form-modal compact-modal" role="dialog" aria-modal="true" aria-labelledby="role-modal-title">
+          <header class="modal-header">
+            <div>
+              <span class="modal-kicker">权限组信息</span>
+              <h2 id="role-modal-title">
+                {{ roleModal.mode === 'create' ? '新增权限组' : '编辑权限组' }}
+              </h2>
+            </div>
+            <button class="modal-close" type="button" title="关闭" @click="closeRoleModal">×</button>
+          </header>
+          <div class="modal-body form-grid">
+            <label class="field">
+              <span>权限组名称</span>
+              <input v-model.trim="roleForm.name" placeholder="例如：触屏录入员" />
+            </label>
+            <label class="field">
+              <span>权限组编码</span>
+              <input
+                v-model.trim="roleForm.code"
+                :disabled="roleModal.mode === 'edit'"
+                placeholder="例如：touch_operator"
+              />
+            </label>
+            <label class="field">
+              <span>状态</span>
+              <select v-model="roleForm.status">
+                <option value="active">启用</option>
+                <option value="disabled">停用</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>数据可见范围</span>
+              <select v-model="roleForm.dataScope">
+                <option value="all">全部数据</option>
+                <option value="store">所属门店</option>
+                <option value="self">本人数据</option>
+              </select>
+            </label>
+            <label class="field field-span">
+              <span>权限组说明</span>
+              <textarea v-model.trim="roleForm.description" rows="4" placeholder="说明该组适用的岗位或工作范围"></textarea>
+            </label>
+          </div>
+          <footer class="modal-footer">
+            <button class="button button-secondary" type="button" @click="closeRoleModal">取消</button>
+            <button class="button button-primary" type="button" :disabled="saving" @click="saveRole">
+              {{ saving ? '保存中...' : '保存信息' }}
+            </button>
+          </footer>
+        </section>
+      </div>
+
+      <div v-if="passwordModal.visible" class="modal-layer" @click.self="closePasswordModal">
+        <section class="form-modal password-modal" role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
+          <header class="modal-header">
+            <div>
+              <span class="modal-kicker">账号安全</span>
+              <h2 id="password-modal-title">重置 {{ passwordModal.account?.displayName }} 的密码</h2>
+            </div>
+            <button class="modal-close" type="button" title="关闭" @click="closePasswordModal">×</button>
+          </header>
+          <div class="modal-body">
+            <label class="field">
+              <span>新密码</span>
+              <input v-model="newPassword" type="password" autocomplete="new-password" placeholder="至少 8 位" />
+            </label>
+            <p class="password-note">保存后该账号的现有登录状态会失效，下次登录需使用新密码。</p>
+          </div>
+          <footer class="modal-footer">
+            <button class="button button-secondary" type="button" @click="closePasswordModal">取消</button>
+            <button class="button button-primary" type="button" :disabled="saving" @click="resetPassword">
+              确认重置
+            </button>
+          </footer>
+        </section>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch, inject } from 'vue'
-import { useUserStore } from '@/stores/user'
+import { computed, onMounted, reactive, ref } from 'vue'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
-
-// 注入 Admin 组件提供的方法
-const setHeaderActions = inject('setHeaderActions', null)
-
-// 角色列表数据
-const roles = ref([])
+const activeTab = ref('accounts')
 const loading = ref(false)
 const saving = ref(false)
-
-const notice = ref({
-  visible: false,
-  type: 'success',
-  message: ''
-})
+const accounts = ref([])
+const roles = ref([])
+const permissionModules = ref([])
+const accountKeyword = ref('')
+const selectedRoleId = ref(null)
+const permissionEditing = ref(false)
+const permissionDraft = ref([])
 let noticeTimer = null
 
-const noticeIcon = computed(() => {
-  const icons = {
-    success: '✓',
-    info: 'i',
-    warning: '!',
-    error: '×'
-  }
-  return icons[notice.value.type] || icons.info
+const notice = reactive({ visible: false, type: 'success', message: '' })
+const accountModal = reactive({ visible: false, mode: 'create', accountId: null })
+const roleModal = reactive({ visible: false, mode: 'create', roleId: null })
+const passwordModal = reactive({ visible: false, account: null })
+const newPassword = ref('')
+
+const accountForm = reactive({
+  username: '',
+  displayName: '',
+  password: '',
+  avatarUrl: '',
+  status: 'active',
+  roleIds: []
 })
 
-const showNotice = (message, type = 'success', duration) => {
-  if (noticeTimer) {
-    clearTimeout(noticeTimer)
-  }
+const roleForm = reactive({
+  code: '',
+  name: '',
+  description: '',
+  status: 'active',
+  dataScope: 'all'
+})
 
-  notice.value = {
-    visible: true,
-    type,
-    message
-  }
+const tabs = computed(() => [
+  { value: 'accounts', label: '账号管理', count: accounts.value.length },
+  { value: 'roles', label: '权限组', count: roles.value.length }
+])
 
-  const timeout = duration ?? (type === 'error' || type === 'warning' ? 5000 : 3000)
-  if (timeout > 0) {
-    noticeTimer = setTimeout(() => {
-      notice.value.visible = false
-      noticeTimer = null
-    }, timeout)
-  }
+const filteredAccounts = computed(() => {
+  const keyword = accountKeyword.value.toLowerCase()
+  if (!keyword) return accounts.value
+  return accounts.value.filter(account => (
+    account.username.toLowerCase().includes(keyword)
+    || account.displayName.toLowerCase().includes(keyword)
+  ))
+})
+
+const activeRoles = computed(() => roles.value.filter(role => role.status === 'active'))
+const selectedRole = computed(() => (
+  roles.value.find(role => role.id === selectedRoleId.value) || null
+))
+
+const visiblePermissionModules = computed(() => {
+  if (permissionEditing.value) return permissionModules.value
+  return permissionModules.value.filter(module => (
+    module.permissions.some(permission => (
+      permissionDraft.value.includes(permission.code)
+    ))
+  ))
+})
+
+const showNotice = (message, type = 'success') => {
+  clearTimeout(noticeTimer)
+  notice.message = message
+  notice.type = type
+  notice.visible = true
+  noticeTimer = setTimeout(() => {
+    notice.visible = false
+  }, type === 'error' ? 5000 : 3000)
 }
 
-const hideNotice = () => {
-  if (noticeTimer) {
-    clearTimeout(noticeTimer)
-    noticeTimer = null
-  }
-  notice.value.visible = false
-}
-
-// 加载角色列表
-const loadRoles = async () => {
+const loadAll = async () => {
   loading.value = true
   try {
-    const response = await request({ url: '/users', method: 'GET' })
-    roles.value = Array.isArray(response) ? response : (response?.data || [])
+    const [userResponse, roleResponse, permissionResponse] = await Promise.all([
+      request.get('/admin/users'),
+      request.get('/admin/roles'),
+      request.get('/admin/permissions')
+    ])
+    accounts.value = userResponse.users || []
+    roles.value = roleResponse.roles || []
+    permissionModules.value = permissionResponse.modules || []
+    if (!roles.value.some(role => role.id === selectedRoleId.value)) {
+      selectedRoleId.value = roles.value[0]?.id || null
+    }
+    syncPermissionDraft()
   } catch (error) {
-    console.error('获取角色列表失败:', error)
-    showNotice('角色列表加载失败，请稍后重试', 'error')
+    showNotice(error?.response?.data?.message || '权限数据加载失败', 'error')
   } finally {
     loading.value = false
   }
 }
 
-// 分页
-const currentPage = ref(1)
-const pageSize = ref(20)
-const totalRoles = computed(() => roles.value.length)
+const syncPermissionDraft = () => {
+  permissionDraft.value = [...(selectedRole.value?.permissionCodes || [])]
+}
 
-const totalPages = computed(() => Math.max(1, Math.ceil(totalRoles.value / pageSize.value)))
+const selectRole = (roleId) => {
+  selectedRoleId.value = roleId
+  permissionEditing.value = false
+  syncPermissionDraft()
+}
 
-const paginatedRoles = computed(() => {
-  const start = (currentPage.value - 1) * pageSize.value
-  return roles.value.slice(start, start + pageSize.value)
-})
+const visiblePermissions = (module) => {
+  if (permissionEditing.value) return module.permissions
+  return module.permissions.filter(permission => (
+    permissionDraft.value.includes(permission.code)
+  ))
+}
 
-const visiblePages = computed(() => {
-  const pages = []
-  const start = Math.max(1, currentPage.value - 2)
-  const end = Math.min(totalPages.value, currentPage.value + 2)
+const selectedCount = (module) => (
+  module.permissions.filter(permission => (
+    permissionDraft.value.includes(permission.code)
+  )).length
+)
 
-  for (let i = start; i <= end; i++) {
-    pages.push(i)
-  }
-  return pages
-})
+const startPermissionEditing = () => {
+  syncPermissionDraft()
+  permissionEditing.value = true
+}
 
-const goToPage = (page) => {
-  if (page >= 1 && page <= totalPages.value) {
-    currentPage.value = page
+const cancelPermissionEditing = () => {
+  permissionEditing.value = false
+  syncPermissionDraft()
+}
+
+const togglePermission = (permissionCode) => {
+  if (!permissionEditing.value) return
+  const index = permissionDraft.value.indexOf(permissionCode)
+  if (index >= 0) permissionDraft.value.splice(index, 1)
+  else permissionDraft.value.push(permissionCode)
+}
+
+const savePermissions = async () => {
+  if (!selectedRole.value) return
+  saving.value = true
+  try {
+    await request.put(`/admin/roles/${selectedRole.value.id}`, {
+      name: selectedRole.value.name,
+      description: selectedRole.value.description,
+      status: selectedRole.value.status,
+      dataScope: selectedRole.value.dataScope,
+      permissionCodes: permissionDraft.value
+    })
+    await loadAll()
+    permissionEditing.value = false
+    showNotice('权限配置已保存')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '权限保存失败', 'error')
+  } finally {
+    saving.value = false
   }
 }
 
-watch([totalPages, pageSize], () => {
-  if (currentPage.value > totalPages.value) {
-    currentPage.value = totalPages.value
-  }
-})
-
-// 角色管理页面使用页面自身的工具栏
-onMounted(async () => {
-  if (setHeaderActions) {
-    setHeaderActions(null)
-  }
-  await loadRoles()
-})
-
-onUnmounted(() => {
-  if (noticeTimer) {
-    clearTimeout(noticeTimer)
-  }
-})
-
-// 权限配置
-const showPermissionDrawer = ref(false)
-const currentRole = ref({
-  username: '',
-  name: '',
-  role: 'employee',
-  password: '',
-  description: '',
-  createdAt: '',
-  permissions: []
-})
-const isEditMode = ref(false)
-const confirmDialog = ref({
-  visible: false,
-  title: '',
-  message: '',
-  confirmText: '确认',
-  onConfirm: null
-})
-
-// 权限模块配置（映射自用户管理的权限配置）
-const permissionModules = ref([
-  {
-    id: 'pending_order',
-    label: '未完成订单 (车间看板)',
-    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="15" x2="15" y2="15"/></svg>',
-    children: [
-      { id: 'pending.add', label: '显示：发布新订单 (悬浮球)' },
-      { id: 'pending.view_detail', label: '显示：卡片翻转与详情页面' },
-      { id: 'pending.complete', label: '操作：确定完成业务' },
-      { id: 'pending.edit', label: '操作：修改订单信息' },
-      { id: 'pending.copy', label: '显示：复制物流信息' },
-      { id: 'pending.delete', label: '操作：物理删除订单' }
-    ]
-  },
-  {
-    id: 'completed_order',
-    label: '已完成订单 (核对发货)',
-    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
-    children: [
-      { id: 'completed.uncomplete', label: '操作：撤销回未完成' },
-      { id: 'completed.copy', label: '显示：复制物流信息' },
-      { id: 'completed.delete', label: '操作：物理删除订单' }
-    ]
-  },
-  {
-    id: 'shipped',
-    label: '已出库订单栏目',
-    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>',
-    children: [
-      { id: 'shipped.audit', label: '发货方式标签（出库审核与撤销）' },
-      { id: 'shipped.view_receipt', label: '回单标签（查看与下载凭证）' },
-      { id: 'shipped.delete_receipt', label: '弹窗操作：允许删除回单图片' }
-    ]
-  },
-  {
-    id: 'material',
-    label: '原材料数据模块',
-    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
-    children: [
-      { id: 'material.add', label: '录入原材料数据' },
-      { id: 'material.edit', label: '行内就地修改数据' },
-      { id: 'material.delete', label: '物理删除流水记录' }
-    ]
-  },
-  {
-    id: 'system',
-    label: '系统管理模块',
-    icon: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>',
-    children: [
-      { id: 'system.user_manage', label: '账户与权限控制台' }
-    ]
-  }
-])
-
-// 打开创建模态框
-const openCreateModal = () => {
-  isEditMode.value = false
-  currentRole.value = {
+const resetAccountForm = () => {
+  Object.assign(accountForm, {
     username: '',
-    name: '',
-    role: 'employee',
+    displayName: '',
     password: '',
-    description: '',
-    createdAt: '',
-    permissions: []
-  }
-  showPermissionDrawer.value = true
-}
-
-// 打开编辑模态框
-const openEditModal = (role) => {
-  isEditMode.value = true
-  currentRole.value = {
-    ...role,
-    password: '', // 编辑时密码为空，表示不修改
-    permissions: Array.isArray(role.permissions) ? [...role.permissions] : []
-  }
-  showPermissionDrawer.value = true
-}
-
-// 打开权限抽屉
-const openPermissionDrawer = (role) => {
-  isEditMode.value = true
-  currentRole.value = {
-    ...role,
-    permissions: Array.isArray(role.permissions) ? [...role.permissions] : []
-  }
-  showPermissionDrawer.value = true
-}
-
-// 关闭抽屉
-const closePermissionDrawer = () => {
-  showPermissionDrawer.value = false
-}
-
-const closeConfirmDialog = () => {
-  confirmDialog.value.visible = false
-  confirmDialog.value.onConfirm = null
-}
-
-const confirmAction = async () => {
-  const action = confirmDialog.value.onConfirm
-  closeConfirmDialog()
-  if (action) {
-    await action()
-  }
-}
-
-const getModulePermissionIds = (module) => {
-  const ids = []
-  if (!module.children || module.children.length === 0) {
-    ids.push(module.id)
-    return ids
-  }
-
-  module.children.forEach(item => {
-    ids.push(item.id)
-    if (Array.isArray(item.children)) {
-      ids.push(...item.children.map(action => action.id))
-    }
+    avatarUrl: '',
+    status: 'active',
+    roleIds: []
   })
-
-  return ids
 }
 
-// 检查模块是否全选
-const isModuleChecked = (module) => {
-  const allIds = getModulePermissionIds(module)
-  return allIds.length > 0 && allIds.every(id => currentRole.value.permissions.includes(id))
-}
-
-const isModulePartiallyChecked = (module) => {
-  const allIds = getModulePermissionIds(module)
-  const selectedCount = allIds.filter(id => currentRole.value.permissions.includes(id)).length
-  return selectedCount > 0 && selectedCount < allIds.length
-}
-
-// 切换模块
-const toggleModule = (module, event) => {
-  const checked = event.target.checked
-  const allIds = getModulePermissionIds(module)
-
-  if (checked) {
-    allIds.forEach(id => {
-      if (!currentRole.value.permissions.includes(id)) {
-        currentRole.value.permissions.push(id)
-      }
+const openAccountModal = (account = null) => {
+  resetAccountForm()
+  accountModal.mode = account ? 'edit' : 'create'
+  accountModal.accountId = account?.id || null
+  if (account) {
+    Object.assign(accountForm, {
+      username: account.username,
+      displayName: account.displayName,
+      avatarUrl: account.avatarUrl || '',
+      status: account.status,
+      roleIds: account.roleIds || []
     })
-  } else {
-    allIds.forEach(id => {
-      const index = currentRole.value.permissions.indexOf(id)
-      if (index > -1) {
-        currentRole.value.permissions.splice(index, 1)
-      }
-    })
+  }
+  accountModal.visible = true
+}
+
+const closeAccountModal = () => {
+  accountModal.visible = false
+}
+
+const saveAccount = async () => {
+  if (!accountForm.username || !accountForm.displayName) {
+    showNotice('请填写登录账号和显示姓名', 'error')
+    return
+  }
+  if (accountModal.mode === 'create' && accountForm.password.length < 8) {
+    showNotice('初始密码至少需要 8 位', 'error')
+    return
+  }
+
+  saving.value = true
+  try {
+    const payload = {
+      username: accountForm.username,
+      displayName: accountForm.displayName,
+      password: accountForm.password,
+      avatarUrl: accountForm.avatarUrl,
+      status: accountForm.status,
+      roleIds: accountForm.roleIds
+    }
+    const response = accountModal.mode === 'create'
+      ? await request.post('/admin/users', payload)
+      : await request.put(`/admin/users/${accountModal.accountId}`, payload)
+    closeAccountModal()
+    await loadAll()
+    if (accountModal.accountId === userStore.id && response.user) {
+      userStore.setUser(response.user)
+    }
+    showNotice(response.message || '账号已保存')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '账号保存失败', 'error')
+  } finally {
+    saving.value = false
   }
 }
 
-const getPermissionCount = (role) => {
-  return Array.isArray(role.permissions) ? role.permissions.length : 0
+const openPasswordModal = (account) => {
+  passwordModal.account = account
+  newPassword.value = ''
+  passwordModal.visible = true
 }
 
-// 保存角色
+const closePasswordModal = () => {
+  passwordModal.visible = false
+  passwordModal.account = null
+}
+
+const resetPassword = async () => {
+  if (newPassword.value.length < 8) {
+    showNotice('新密码至少需要 8 位', 'error')
+    return
+  }
+  saving.value = true
+  try {
+    const response = await request.put(
+      `/admin/users/${passwordModal.account.id}/password`,
+      { password: newPassword.value }
+    )
+    closePasswordModal()
+    showNotice(response.message || '密码已重置')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '密码重置失败', 'error')
+  } finally {
+    saving.value = false
+  }
+}
+
+const resetRoleForm = () => {
+  Object.assign(roleForm, {
+    code: '',
+    name: '',
+    description: '',
+    status: 'active',
+    dataScope: 'all'
+  })
+}
+
+const openRoleModal = (role = null) => {
+  resetRoleForm()
+  roleModal.mode = role ? 'edit' : 'create'
+  roleModal.roleId = role?.id || null
+  if (role) {
+    Object.assign(roleForm, {
+      code: role.code,
+      name: role.name,
+      description: role.description,
+      status: role.status,
+      dataScope: role.dataScope
+    })
+  }
+  roleModal.visible = true
+}
+
+const closeRoleModal = () => {
+  roleModal.visible = false
+}
+
 const saveRole = async () => {
-  const username = currentRole.value.username.trim()
-  const name = currentRole.value.name.trim()
-  const password = currentRole.value.password.trim()
-
-  if (!username || !name) {
-    showNotice('角色 ID 和角色名称不能为空', 'warning')
+  if (!roleForm.name || !roleForm.code) {
+    showNotice('请填写权限组名称和编码', 'error')
     return
   }
-
-  if (!isEditMode.value) {
-    if (!password) {
-      showNotice('新建角色时必须设置登录密码', 'warning')
-      return
-    }
-
+  saving.value = true
+  try {
+    const currentRole = roles.value.find(role => role.id === roleModal.roleId)
     const payload = {
-      username: username,
-      name: name,
-      password: password,
-      role: currentRole.value.role || 'employee',
-      permissions: currentRole.value.permissions
+      ...roleForm,
+      permissionCodes: currentRole?.permissionCodes || []
     }
-
-    saving.value = true
-    try {
-      const res = await request({ url: '/users', method: 'POST', data: payload })
-      if (res) {
-        await loadRoles()
-        closePermissionDrawer()
-        showNotice('角色创建成功', 'success')
-      }
-    } catch (error) {
-      showNotice('角色创建失败，可能已存在或当前账号无权限', 'error')
-    } finally {
-      saving.value = false
-    }
-  } else {
-    const payload = {
-      name,
-      permissions: currentRole.value.permissions,
-      role: currentRole.value.role || 'employee',
-      createdAt: currentRole.value.createdAt
-    }
-
-    saving.value = true
-    try {
-      const res = await request({
-        url: `/users/${username}/permissions`,
-        method: 'PUT',
-        data: payload
-      })
-
-      if (password) {
-        await request({
-          url: `/users/${username}/password`,
-          method: 'PUT',
-          data: { password }
-        })
-      }
-
-      if (res) {
-        await loadRoles()
-        closePermissionDrawer()
-        showNotice('角色更新成功', 'success')
-      }
-    } catch (error) {
-      showNotice('角色更新失败，请检查权限或稍后重试', 'error')
-    } finally {
-      saving.value = false
-    }
+    const response = roleModal.mode === 'create'
+      ? await request.post('/admin/roles', payload)
+      : await request.put(`/admin/roles/${roleModal.roleId}`, payload)
+    closeRoleModal()
+    await loadAll()
+    if (response.role?.id) selectedRoleId.value = response.role.id
+    syncPermissionDraft()
+    showNotice(response.message || '权限组已保存')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '权限组保存失败', 'error')
+  } finally {
+    saving.value = false
   }
 }
 
-// 判断是否可以删除
-const canDelete = (role) => {
-  // 不能删除自己
-  if (role.username === userStore.username) {
-    return false
-  }
+const accountInitial = (account) => (
+  (account.displayName || account.username || '?').slice(0, 1)
+)
 
-  // 超管可以删除除了自己以外的所有人
-  if (userStore.role === 'super_admin') {
-    return true
-  }
-
-  // 管理员不能删除同级管理员和超管
-  if (userStore.role === 'admin') {
-    return role.role !== 'admin' && role.role !== 'super_admin'
-  }
-
-  // 其他角色不能删除
-  return false
+const formatDate = (value) => {
+  if (!value) return '从未登录'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  }).format(date)
 }
 
-const getDeleteDisabledReason = (role) => {
-  if (role.username === userStore.username) {
-    return '不能删除当前登录账号'
-  }
-  if (userStore.role === 'admin') {
-    return '管理员只能删除普通员工和操作员'
-  }
-  return '当前账号没有删除权限'
-}
+const dataScopeName = (value) => ({
+  all: '全部数据',
+  store: '所属门店',
+  self: '本人数据'
+}[value] || '全部数据')
 
-// 删除角色
-const deleteRole = async (role) => {
-  if (!canDelete(role)) {
-    showNotice(getDeleteDisabledReason(role), 'warning')
-    return
-  }
-
-  confirmDialog.value = {
-    visible: true,
-    title: '确认删除角色？',
-    message: `删除“${role.name || role.username}”后，该账号将无法继续登录，且此操作不可恢复。`,
-    confirmText: '确认删除',
-    onConfirm: async () => {
-      try {
-        await request({ url: `/users/${role.username}`, method: 'DELETE' })
-        await loadRoles()
-        showNotice('角色已删除', 'success')
-      } catch (error) {
-        showNotice('删除失败，请稍后重试', 'error')
-      }
-    }
-  }
-}
-
-// 格式化日期
-const formatDate = (dateStr) => {
-  return dateStr || '-'
-}
-
-// 获取角色名称
-const getRoleName = (role) => {
-  const roleMap = {
-    super_admin: '超管',
-    admin: '管理',
-    operator: '操作',
-    employee: '员工'
-  }
-  return roleMap[role] || '未知'
-}
-
-// 获取角色样式类名
-const getRoleClass = (role) => {
-  const classMap = {
-    super_admin: 'role-super-admin',
-    admin: 'role-admin',
-    operator: 'role-operator',
-    employee: 'role-employee'
-  }
-  return classMap[role] || 'role-default'
-}
+onMounted(loadAll)
 </script>
 
 <style scoped>
-.role-manage-page {
-  width: 100%;
-  height: 100%;
-  background: #1a1d24;
-  color: #fff;
-  padding: 20px;
-}
-
-/* 顶部操作栏 */
-.page-header {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 20px;
-}
-
-.btn-add {
-  background: #1890ff;
-  color: #fff;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background 0.3s;
-}
-
-.btn-add:hover {
-  background: #40a9ff;
-}
-
-/* 表格容器 */
-.table-container {
-  background: #23262e;
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-/* 表格样式 */
-.role-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.role-table thead {
-  background: #2a2d35;
-}
-
-.role-table th {
-  padding: 16px;
-  text-align: left;
-  font-size: 14px;
-  font-weight: 500;
-  color: #a0a4aa;
-  border-bottom: 1px solid #3a3d45;
-}
-
-.role-table td {
-  padding: 16px;
-  font-size: 14px;
-  color: #d0d3d9;
-  border-bottom: 1px solid #3a3d45;
-}
-
-.role-table tbody tr:hover {
-  background: #2a2d35;
-}
-
-/* 状态标签 */
-.status-badge {
-  display: inline-block;
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.role-super-admin {
-  background: rgba(255, 77, 79, 0.2);
-  color: #ff4d4f;
-}
-
-.role-admin {
-  background: rgba(250, 173, 20, 0.2);
-  color: #faad14;
-}
-
-.role-operator {
-  background: rgba(24, 144, 255, 0.2);
-  color: #1890ff;
-}
-
-.role-employee {
-  background: rgba(82, 196, 26, 0.2);
-  color: #52c41a;
-}
-
-.role-default {
-  background: rgba(160, 164, 170, 0.2);
-  color: #a0a4aa;
-}
-
-/* 操作按钮 */
-.action-buttons {
-  display: flex;
-  gap: 12px;
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  padding: 4px 8px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: color 0.3s;
-}
-
-.btn-modify {
-  color: #1890ff;
-}
-
-.btn-modify:hover {
-  color: #40a9ff;
-}
-
-.btn-detail {
-  color: #52c41a;
-}
-
-.btn-detail:hover {
-  color: #73d13d;
-}
-
-.btn-delete {
-  color: #ff4d4f;
-}
-
-.btn-delete:hover {
-  color: #ff7875;
-}
-
-/* 分页 */
-.pagination {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border-top: 1px solid #3a3d45;
-}
-
-.total-info {
-  font-size: 14px;
-  color: #a0a4aa;
-}
-
-.page-controls {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.page-size {
-  font-size: 14px;
-  color: #a0a4aa;
-}
-
-.page-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.page-buttons button {
-  background: #2a2d35;
-  color: #d0d3d9;
-  border: 1px solid #3a3d45;
-  padding: 6px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s;
-}
-
-.page-buttons button:hover:not(:disabled) {
-  background: #3a3d45;
-  border-color: #1890ff;
-  color: #1890ff;
-}
-
-.page-buttons button.active {
-  background: #1890ff;
-  border-color: #1890ff;
-  color: #fff;
-}
-
-.page-buttons button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-/* 抽屉遮罩 */
-.drawer-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  display: flex;
-  justify-content: flex-end;
-}
-
-/* 抽屉容器 */
-.drawer-container {
-  width: 600px;
-  height: 100%;
-  background: #23262e;
-  display: flex;
-  flex-direction: column;
-  box-shadow: -2px 0 8px rgba(0, 0, 0, 0.3);
-}
-
-/* 抽屉头部 */
-.drawer-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid #3a3d45;
-}
-
-.drawer-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.btn-close {
-  background: none;
-  border: none;
-  color: #a0a4aa;
-  font-size: 28px;
-  cursor: pointer;
-  line-height: 1;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.3s;
-}
-
-.btn-close:hover {
-  color: #fff;
-}
-
-/* 抽屉主体 */
-.drawer-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-}
-
-/* 表单区域 */
-.form-section {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-
-.form-item-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-item-full {
-  grid-column: 1 / -1;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-section label {
-  font-size: 14px;
-  color: #a0a4aa;
-  font-weight: 500;
-}
-
-.required {
-  color: #ff4d4f;
-  margin-right: 4px;
-}
-
-.form-section input {
-  background: #1a1d24;
-  border: 1px solid #3a3d45;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-size: 14px;
-  outline: none;
-  transition: border-color 0.3s;
-}
-
-.form-section input:focus {
-  border-color: #1890ff;
-}
-
-.form-section input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* 状态切换 */
-.status-toggle {
-  display: flex;
-  gap: 8px;
-}
-
-.toggle-btn {
-  flex: 1;
-  background: #1a1d24;
-  border: 1px solid #3a3d45;
-  color: #a0a4aa;
-  padding: 8px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s;
-}
-
-.toggle-btn.active {
-  background: rgba(24, 144, 255, 0.2);
-  border-color: #1890ff;
-  color: #1890ff;
-}
-
-/* 日期范围 */
-.date-range {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  grid-column: 1 / -1;
-}
-
-.date-range input {
-  flex: 1;
-}
-
-.date-range span {
-  color: #a0a4aa;
-}
-
-/* 权限配置区域 */
-.permission-section {
-  margin-top: 24px;
-}
-
-.permission-section h4 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-}
-
-/* 权限树 */
-.permission-tree {
-  background: #1a1d24;
-  border: 1px solid #3a3d45;
-  border-radius: 4px;
-  padding: 16px;
-  max-height: 400px;
-  overflow-y: auto;
-}
-
-.permission-module {
-  margin-bottom: 20px;
-}
-
-.permission-module:last-child {
-  margin-bottom: 0;
-}
-
-.module-header label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  color: #fff;
-  cursor: pointer;
-}
-
-.module-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.module-children {
-  margin-left: 24px;
-  margin-top: 12px;
-}
-
-.permission-item {
-  margin-bottom: 16px;
-}
-
-.permission-item > label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  color: #d0d3d9;
-  cursor: pointer;
-  margin-bottom: 8px;
-}
-
-.item-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.permission-actions {
-  margin-left: 32px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.permission-actions label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 13px;
-  color: #a0a4aa;
-  cursor: pointer;
-}
-
-/* 自定义复选框 */
-input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-}
-
-/* 抽屉底部 */
-.drawer-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 24px;
-  border-top: 1px solid #3a3d45;
-}
-
-.btn-cancel {
-  background: #2a2d35;
-  color: #d0d3d9;
-  border: 1px solid #3a3d45;
-  padding: 8px 24px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: all 0.3s;
-}
-
-.btn-cancel:hover {
-  background: #3a3d45;
-}
-
-.btn-confirm {
-  background: #1890ff;
-  color: #fff;
-  border: none;
-  padding: 8px 24px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  transition: background 0.3s;
-}
-
-.btn-confirm:hover {
-  background: #40a9ff;
-}
-
-/* 滚动条样式 */
-.drawer-body::-webkit-scrollbar,
-.permission-tree::-webkit-scrollbar {
-  width: 6px;
-}
-
-.drawer-body::-webkit-scrollbar-track,
-.permission-tree::-webkit-scrollbar-track {
-  background: #1a1d24;
-}
-
-.drawer-body::-webkit-scrollbar-thumb,
-.permission-tree::-webkit-scrollbar-thumb {
-  background: #3a3d45;
-  border-radius: 3px;
-}
-
-.drawer-body::-webkit-scrollbar-thumb:hover,
-.permission-tree::-webkit-scrollbar-thumb:hover {
-  background: #4a4d55;
-}
-</style>
-
-<style scoped>
-.role-manage-page {
+.access-page,
+.modal-layer {
   --accent: #0f9f78;
   --accent-rgb: 15, 159, 120;
   --accent-dark: #08745a;
   --accent-soft: #e9f8f3;
   --accent-border: #a9e5d2;
   --page-bg: #f4f7f8;
-  --panel-bg: #ffffff;
+  --panel-bg: #fff;
   --border: #e2e8f0;
   --border-strong: #cbd5e1;
   --text: #172033;
   --text-secondary: #596579;
   --text-muted: #8a96a8;
-  box-sizing: border-box;
-  width: 100%;
+}
+
+.access-page {
   min-height: 100%;
-  padding: 24px;
   color: var(--text);
   background: var(--page-bg);
+  font-size: 14px;
 }
 
-.role-manage-page *,
-.role-manage-page *::before,
-.role-manage-page *::after {
-  box-sizing: border-box;
+.records-panel {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
 }
 
-.page-intro {
+.records-toolbar,
+.sub-toolbar,
+.role-header,
+.modal-header,
+.modal-footer {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
+}
+
+.records-toolbar {
+  min-height: 62px;
   gap: 20px;
-  margin-bottom: 18px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
 }
 
-.eyebrow,
-.section-kicker {
-  display: block;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.view-tabs {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #f1f5f9;
 }
 
-.page-intro h1 {
-  margin: 4px 0 5px;
-  color: var(--text);
-  font-size: 22px;
-  font-weight: 750;
-  line-height: 1.25;
-}
-
-.page-intro p {
-  margin: 0;
+.view-tab {
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 6px;
   color: var(--text-secondary);
-  font-size: 13px;
+  background: transparent;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.view-tab.active {
+  color: #fff;
+  background: var(--accent);
+}
+
+.count-badge {
+  display: inline-grid;
+  min-width: 20px;
+  height: 20px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  font-size: 11px;
+}
+
+.view-tab.active .count-badge {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.toolbar-actions,
+.tag-row,
+.role-title-row,
+.role-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .button {
   display: inline-flex;
-  min-height: 38px;
+  height: 38px;
   align-items: center;
   justify-content: center;
   gap: 7px;
@@ -1297,8 +834,6 @@ input[type="checkbox"] {
   font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease,
-    color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .button:disabled {
@@ -1308,88 +843,82 @@ input[type="checkbox"] {
 
 .button-primary {
   color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  border-color: var(--accent, #0f9f78);
+  background: var(--accent, #0f9f78);
 }
 
 .button-primary:hover:not(:disabled) {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.22);
+  border-color: var(--accent-dark, #08745a);
+  background: var(--accent-dark, #08745a);
 }
 
 .button-secondary {
-  color: var(--text-secondary);
-  background: var(--panel-bg);
-  border-color: var(--border-strong);
+  color: var(--text-secondary, #596579);
+  border-color: var(--border-strong, #cbd5e1);
+  background: var(--panel-bg, #fff);
 }
 
 .button-secondary:hover:not(:disabled) {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+  color: var(--accent-dark, #08745a);
+  border-color: var(--accent-border, #a9e5d2);
+  background: var(--accent-soft, #e9f8f3);
 }
 
-.button-danger {
-  color: #fff;
-  background: #d14352;
-  border-color: #d14352;
+.icon-button {
+  width: 38px;
+  padding: 0;
 }
 
-.button-danger:hover:not(:disabled) {
-  background: #b4232f;
-  border-color: #b4232f;
-  box-shadow: 0 4px 12px rgba(209, 67, 82, 0.22);
+.icon-button svg,
+.search-input svg,
+.page-notice svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
-.records-panel {
-  overflow: hidden;
-  background: var(--panel-bg);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05);
-}
-
-.records-toolbar {
-  display: flex;
-  min-height: 72px;
-  align-items: center;
-  justify-content: space-between;
+.sub-toolbar {
   gap: 16px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--border);
 }
 
-.toolbar-title {
-  display: flex;
-  align-items: center;
-  gap: 11px;
+.search-input {
+  position: relative;
+  width: min(320px, 100%);
 }
 
-.toolbar-title h2 {
-  margin: 3px 0 0;
-  color: var(--text);
-  font-size: 16px;
-  font-weight: 700;
+.search-input svg {
+  position: absolute;
+  top: 10px;
+  left: 11px;
+  color: var(--text-muted);
 }
 
-.count-badge,
-.permission-total {
-  display: inline-flex;
-  min-width: 24px;
-  height: 24px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 7px;
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 750;
+.search-input input {
+  width: 100%;
+  height: 38px;
+  padding: 0 11px 0 36px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  box-sizing: border-box;
+  outline: none;
 }
 
-.toolbar-hint {
+.search-input input:focus,
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.11);
+}
+
+.toolbar-note,
+.muted-text {
   color: var(--text-muted);
   font-size: 12px;
 }
@@ -1400,692 +929,534 @@ input[type="checkbox"] {
 
 .records-table {
   width: 100%;
-  min-width: 880px;
-  table-layout: fixed;
+  min-width: 980px;
   border-collapse: collapse;
-}
-
-.records-table th,
-.records-table td {
-  border-bottom: 1px solid #edf1f5;
+  table-layout: fixed;
 }
 
 .records-table th {
-  height: 45px;
-  padding: 0 12px;
+  height: 44px;
+  padding: 0 14px;
   color: var(--text-secondary);
   background: #f8fafc;
+  border-bottom: 1px solid var(--border);
   font-size: 12px;
-  font-weight: 700;
   text-align: left;
 }
 
-.records-table th:nth-child(1) {
-  width: 21%;
-}
-
-.records-table th:nth-child(2) {
-  width: 18%;
-}
-
-.records-table th:nth-child(3) {
-  width: 16%;
-}
-
-.records-table th:nth-child(4) {
-  width: 14%;
-}
-
-.records-table th:nth-child(5) {
-  width: 16%;
-}
-
-.records-table th:nth-child(6) {
-  width: 15%;
-}
-
 .records-table td {
-  height: 64px;
-  padding: 9px 12px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  vertical-align: middle;
+  height: 58px;
+  padding: 9px 14px;
+  border-bottom: 1px solid #edf1f5;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.records-table tbody tr:not(.state-row):hover {
-  background: rgba(var(--accent-rgb), 0.045);
+.records-table th:nth-child(1) { width: 220px; }
+.records-table th:nth-child(2) { width: 260px; }
+.records-table th:nth-child(3) { width: 110px; }
+.records-table th:nth-child(4),
+.records-table th:nth-child(5) { width: 150px; }
+.records-table th:nth-child(6) { width: 150px; }
+
+.account-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
-.role-name,
-.role-secondary {
-  display: block;
+.avatar,
+.role-list-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  font-weight: 750;
+}
+
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+
+.cell-stack {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.cell-stack strong,
+.cell-stack span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.role-name {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.role-secondary {
-  max-width: 220px;
-  margin-top: 4px;
+.cell-stack span,
+.date-cell {
   color: var(--text-muted);
-  font-size: 11px;
-}
-
-.mono-value,
-.number-value {
-  font-variant-numeric: tabular-nums;
-}
-
-.mono-value {
-  color: var(--text-secondary);
-  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 12px;
 }
 
-.number-value {
-  color: var(--text);
-  font-weight: 700;
-}
-
-.date-value {
-  color: var(--text-secondary);
+.date-cell {
   font-variant-numeric: tabular-nums;
 }
 
-.status-badge {
+.role-tag,
+.status-tag,
+.system-tag {
   display: inline-flex;
-  min-height: 25px;
+  min-height: 24px;
   align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 650;
 }
 
-.status-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 6px;
-  background: currentColor;
-  border-radius: 50%;
-}
-
-.role-super-admin {
-  color: #b4232f;
-  background: #fff1f2;
-}
-
-.role-admin {
-  color: #8a4b0b;
-  background: #fff3df;
-}
-
-.role-operator {
+.role-tag,
+.system-tag {
   color: #16647a;
   background: #e7f5f8;
 }
 
-.role-employee,
-.role-default {
+.status-tag.success {
   color: #13734f;
   background: #eaf8f1;
 }
 
+.status-tag.disabled {
+  color: #6b7280;
+  background: #f1f2f4;
+}
+
 .operation-column {
-  text-align: center !important;
+  text-align: center;
 }
 
-.row-actions {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.action-button {
-  min-height: 30px;
-  padding: 0 10px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  font-size: 12px;
+.text-button {
+  padding: 5px 7px;
+  border: 0;
+  color: var(--accent-dark);
+  background: transparent;
   font-weight: 650;
   cursor: pointer;
-  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
 }
 
-.action-edit {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+.text-button:hover {
+  text-decoration: underline;
 }
 
-.action-edit:hover {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.action-delete {
-  color: #b4232f;
-  background: #fff;
-  border-color: #f0a5ad;
-}
-
-.action-delete:hover:not(:disabled) {
-  color: #fff;
-  background: #d14352;
-  border-color: #d14352;
-}
-
-.action-delete:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.state-row td {
-  height: 220px;
+.state-cell {
+  height: 220px !important;
   color: var(--text-muted);
   text-align: center;
 }
 
-.state-row strong,
-.state-row span {
-  display: block;
+.role-workspace {
+  display: grid;
+  min-height: 620px;
+  grid-template-columns: 240px minmax(0, 1fr);
 }
 
-.state-row strong {
-  margin-top: 10px;
+.role-list {
+  padding: 10px;
+  border-right: 1px solid var(--border);
+  background: #f8fafc;
+}
+
+.role-list-item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 34px minmax(0, 1fr) 8px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid transparent;
+  border-radius: 6px;
   color: var(--text);
-  font-size: 14px;
-}
-
-.state-row span:last-child {
-  margin-top: 5px;
-  font-size: 12px;
-}
-
-.empty-mark {
-  display: inline-flex !important;
-  width: 48px;
-  height: 48px;
-  align-items: center;
-  justify-content: center;
-  margin: 0 auto;
-  color: var(--text-muted);
-  background: #f1f4f7;
-  border-radius: 50%;
-  font-size: 24px;
-}
-
-.loading-dot {
-  display: inline-block !important;
-  width: 10px;
-  height: 10px;
-  margin: 0 auto 9px;
-  background: var(--accent);
-  border-radius: 50%;
-  animation: role-pulse 1s ease-in-out infinite;
-}
-
-.table-footer {
-  display: flex;
-  min-height: 58px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 16px;
-}
-
-.table-summary {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.table-summary strong {
-  color: var(--text);
-  font-weight: 750;
-}
-
-.pagination {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.page-size-control {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.page-size-control select {
-  width: 58px;
-  height: 32px;
-  padding: 0 7px;
-  color: var(--text);
-  background: #fff;
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-}
-
-.page-button {
-  display: inline-flex;
-  min-width: 31px;
-  height: 31px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 8px;
-  color: var(--text-secondary);
-  background: #fff;
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-  font-size: 12px;
+  background: transparent;
+  text-align: left;
   cursor: pointer;
 }
 
-.page-button:hover:not(:disabled),
-.page-button.active {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
+.role-list-item:hover {
+  background: #fff;
+}
+
+.role-list-item.active {
   border-color: var(--accent-border);
+  background: #fff;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.06);
 }
 
-.page-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
+.role-list-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 6px;
 }
 
-.drawer-overlay,
-.custom-modal-overlay {
+.role-list-copy {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.role-list-copy strong,
+.role-list-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-list-copy small {
+  color: var(--text-muted);
+}
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.status-dot.disabled {
+  background: #a8b0bd;
+}
+
+.role-detail {
+  min-width: 0;
+}
+
+.role-header {
+  gap: 20px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.role-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.role-header p,
+.permission-module p,
+.full-access-state p {
+  margin: 5px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.role-meta {
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.permission-area {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+}
+
+.permission-module {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.permission-module > header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.permission-module h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.permission-module > header > span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.permission-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 7px;
+}
+
+.permission-chip {
+  display: grid;
+  min-width: 0;
+  min-height: 48px;
+  align-content: center;
+  gap: 3px;
+  padding: 7px 9px;
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+  color: var(--text);
+  background: var(--accent-soft);
+  text-align: left;
+}
+
+.permission-chip.editable:not(.selected) {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: #fff;
+  cursor: pointer;
+}
+
+.permission-chip.editable.selected {
+  cursor: pointer;
+}
+
+.permission-name {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.permission-code {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: Consolas, monospace;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.empty-permissions,
+.full-access-state {
+  margin: 16px;
+  padding: 28px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 7px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.full-access-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  text-align: left;
+}
+
+.full-access-icon {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 6px;
+  color: #fff;
+  background: var(--accent);
+  font-weight: 800;
+}
+
+.modal-layer {
   position: fixed;
   inset: 0;
-  z-index: 99999;
+  z-index: 9999;
   display: flex;
-  align-items: stretch;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  color: var(--text);
   background: rgba(15, 23, 42, 0.42);
   backdrop-filter: blur(1px);
 }
 
-.drawer-container {
-  display: flex;
-  width: min(680px, 100vw);
-  height: 100%;
-  flex-direction: column;
+.form-modal {
+  width: min(720px, calc(100vw - 48px));
+  max-height: calc(100vh - 48px);
   overflow: hidden;
-  background: var(--page-bg);
-  box-shadow: -20px 0 50px rgba(15, 23, 42, 0.18);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--panel-bg);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.2);
 }
 
-.drawer-header {
-  display: flex;
-  min-height: 78px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 14px 20px;
-  background: #fff;
+.compact-modal {
+  width: min(640px, calc(100vw - 48px));
+}
+
+.password-modal {
+  width: min(440px, calc(100vw - 48px));
+}
+
+.modal-header {
+  min-height: 72px;
+  padding: 0 20px;
   border-bottom: 1px solid var(--border);
 }
 
-.drawer-header h2 {
+.modal-kicker {
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.modal-header h2 {
   margin: 3px 0 0;
-  color: var(--text);
   font-size: 18px;
 }
 
-.icon-button,
-.page-notice-close {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
+.modal-close {
+  width: 34px;
+  height: 34px;
+  border: 1px solid var(--border);
   border-radius: 5px;
+  color: var(--text-secondary);
+  background: #fff;
+  font-size: 22px;
   cursor: pointer;
 }
 
-.icon-button {
-  width: 34px;
-  height: 34px;
-  color: var(--text-secondary);
-  background: transparent;
-  font-size: 22px;
-}
-
-.icon-button:hover {
-  color: var(--text);
-  background: #f1f5f9;
-}
-
-.drawer-body {
-  flex: 1;
+.modal-body {
+  max-height: calc(100vh - 190px);
   overflow-y: auto;
-  padding: 14px;
-}
-
-.form-card {
-  margin-bottom: 12px;
-  padding: 16px;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-}
-
-.form-card-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 15px;
-  padding-bottom: 11px;
-  border-bottom: 1px solid #edf1f5;
-}
-
-.form-card-header h3 {
-  margin: 0;
-  color: var(--text);
-  font-size: 14px;
-}
-
-.form-card-header p {
-  margin: 3px 0 0;
-  color: var(--text-muted);
-  font-size: 11px;
+  padding: 20px;
 }
 
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 16px;
 }
 
-.form-field {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
+.field {
+  display: grid;
   gap: 7px;
+}
+
+.field > span,
+.role-options legend {
   color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 700;
 }
 
-.form-field-wide {
+.field input,
+.field select,
+.field textarea {
+  width: 100%;
+  min-height: 38px;
+  padding: 0 11px;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  color: var(--text);
+  background: #fff;
+  box-sizing: border-box;
+  font: inherit;
+  outline: none;
+}
+
+.field textarea {
+  padding-top: 9px;
+  resize: vertical;
+}
+
+.field input:disabled {
+  color: var(--text-muted);
+  background: #f3f5f7;
+}
+
+.field-span {
   grid-column: 1 / -1;
 }
 
-.form-field b {
-  color: #d14352;
-}
-
-.form-field input,
-.form-field select {
-  width: 100%;
-  height: 38px;
-  padding: 0 11px;
-  color: var(--text);
-  background: #fff;
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-  outline: none;
-  font: inherit;
-  font-weight: 400;
-}
-
-.form-field input:focus,
-.form-field select:focus,
-.page-size-control select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
-}
-
-.form-field input:disabled,
-.form-field select:disabled {
-  color: var(--text-muted);
-  background: #f8fafc;
-  cursor: not-allowed;
-}
-
-.permission-card {
-  margin-bottom: 0;
-}
-
-.permission-tree {
+.role-options {
   display: grid;
+  grid-column: 1 / -1;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.permission-module {
-  min-width: 0;
+  gap: 8px;
+  margin: 0;
   padding: 12px;
-  background: #fafcfd;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
 
-.module-header,
-.permission-item {
+.role-options legend {
+  padding: 0 5px;
+}
+
+.role-option {
   display: flex;
-  align-items: flex-start;
+  min-width: 0;
   gap: 8px;
-  color: var(--text);
+  align-items: start;
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
   cursor: pointer;
-  line-height: 1.45;
 }
 
-.module-header {
-  align-items: center;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.module-header.is-partial {
-  color: var(--accent-dark);
-}
-
-.module-icon {
-  display: inline-flex;
-  width: 18px;
-  height: 18px;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent-dark);
-}
-
-.module-icon :deep(svg) {
-  width: 16px;
-  height: 16px;
-}
-
-.module-children {
-  display: grid;
-  gap: 8px;
-  margin: 11px 0 0 26px;
-  padding-top: 10px;
-  border-top: 1px solid #edf1f5;
-}
-
-.permission-group {
-  display: grid;
-  gap: 7px;
-}
-
-.permission-actions {
-  display: grid;
-  gap: 7px;
-  margin-left: 24px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border);
-}
-
-.permission-item {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 400;
-}
-
-.permission-item:hover {
-  color: var(--accent-dark);
-}
-
-.module-header input,
-.permission-item input {
-  width: 16px;
-  height: 16px;
-  flex: 0 0 16px;
-  margin: 1px 0 0;
+.role-option input {
+  margin-top: 2px;
   accent-color: var(--accent);
 }
 
-.drawer-footer {
-  display: flex;
-  justify-content: flex-end;
+.role-option span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.role-option strong,
+.role-option small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-option small {
+  color: var(--text-muted);
+}
+
+.modal-footer {
+  min-height: 64px;
   gap: 10px;
-  padding: 12px 20px;
-  background: #fff;
+  padding: 0 20px;
   border-top: 1px solid var(--border);
 }
 
-.custom-modal-overlay {
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.custom-modal {
-  width: min(400px, 100%);
-  padding: 24px;
-  text-align: center;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.2);
-}
-
-.confirm-icon {
-  display: inline-flex;
-  width: 48px;
-  height: 48px;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: #c98216;
-  border-radius: 50%;
-  font-size: 24px;
-  font-weight: 800;
-}
-
-.custom-modal h2 {
-  margin: 14px 0 7px;
-  color: var(--text);
-  font-size: 18px;
-}
-
-.custom-modal p {
-  margin: 0;
-  color: var(--text-secondary);
-  font-size: 13px;
+.password-note {
+  margin: 10px 0 0;
+  color: var(--text-muted);
+  font-size: 12px;
   line-height: 1.6;
-}
-
-.confirm-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 20px;
 }
 
 .page-notice {
   position: fixed;
-  top: 20px;
+  top: 24px;
   left: 50%;
-  z-index: 100001;
+  z-index: 12000;
   display: flex;
-  width: max-content;
-  min-width: 280px;
-  max-width: min(520px, calc(100vw - 32px));
-  min-height: 44px;
   align-items: center;
   gap: 9px;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 44px;
   padding: 10px 16px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  color: #172033;
+  background: #fff;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
   transform: translateX(-50%);
-}
-
-.page-notice-icon {
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 800;
-}
-
-.page-notice-text {
-  min-width: 0;
-  flex: 1;
-  overflow-wrap: anywhere;
   font-size: 13px;
-  line-height: 1.5;
+  font-weight: 600;
 }
 
-.page-notice-close {
-  width: 28px;
-  height: 28px;
-  color: currentColor;
-  background: transparent;
-  font-size: 18px;
-}
-
-.page-notice-close:hover {
-  background: rgba(15, 23, 42, 0.07);
-}
-
-.page-notice.success {
-  color: #166b50;
-  background: #eaf8f1;
-  border-color: var(--accent-border);
-}
-
-.page-notice.success .page-notice-icon {
-  color: #fff;
-  background: var(--accent);
-}
-
-.page-notice.warning {
-  color: #8a4b0b;
-  background: #fff3df;
-  border-color: #f3c887;
-}
-
-.page-notice.warning .page-notice-icon {
-  color: #fff;
-  background: #c98216;
-}
-
-.page-notice.error {
-  color: #a12635;
-  background: #fff1f2;
-  border-color: #f0a5ad;
-}
-
-.page-notice.error .page-notice-icon {
-  color: #fff;
-  background: #d14352;
-}
+.notice-success svg { color: #0f9f78; }
+.notice-error svg { color: #dc3545; }
 
 .notice-enter-active,
 .notice-leave-active {
@@ -2098,91 +1469,75 @@ input[type="checkbox"] {
   transform: translate(-50%, -8px);
 }
 
-.role-manage-page button:focus-visible,
-.role-manage-page input:focus-visible,
-.role-manage-page select:focus-visible {
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-@keyframes role-pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.85);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (max-width: 1280px) {
-  .role-manage-page {
-    padding: 18px;
+@media (max-width: 1000px) {
+  .role-workspace {
+    grid-template-columns: 200px minmax(0, 1fr);
   }
 
-  .toolbar-hint {
-    display: none;
+  .permission-grid {
+    grid-template-columns: repeat(auto-fill, minmax(135px, 1fr));
   }
 }
 
 @media (max-width: 780px) {
-  .role-manage-page {
-    padding: 12px;
-  }
-
-  .page-intro {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .page-intro .button {
-    width: 100%;
-  }
-
   .records-toolbar,
-  .table-footer {
-    align-items: flex-start;
+  .sub-toolbar,
+  .role-header {
+    align-items: stretch;
     flex-direction: column;
   }
 
-  .pagination {
-    width: 100%;
-    flex-wrap: wrap;
+  .toolbar-actions {
+    justify-content: flex-end;
   }
 
-  .permission-tree,
-  .form-grid {
+  .view-tabs,
+  .search-input {
+    width: 100%;
+  }
+
+  .view-tab {
+    flex: 1;
+  }
+
+  .role-workspace {
     grid-template-columns: 1fr;
   }
 
-  .form-field-wide {
-    grid-column: auto;
+  .role-list {
+    display: flex;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
   }
 
-  .drawer-header,
-  .drawer-footer {
-    padding-right: 14px;
-    padding-left: 14px;
+  .role-list-item {
+    min-width: 190px;
   }
 
-  .drawer-body {
-    padding: 10px;
+  .form-grid,
+  .role-options {
+    grid-template-columns: 1fr;
   }
 
-  .page-notice {
-    top: 12px;
-    min-width: 0;
+  .modal-layer {
+    padding: 0;
   }
-}
 
-@media (prefers-reduced-motion: reduce) {
-  .notice-enter-active,
-  .notice-leave-active,
-  .loading-dot {
-    animation: none;
-    transition: none;
+  .form-modal,
+  .compact-modal,
+  .password-modal {
+    width: 100vw;
+    max-height: 100vh;
+    border-radius: 0;
   }
 }
 </style>

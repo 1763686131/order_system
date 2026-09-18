@@ -8,6 +8,7 @@ import os
 import hashlib
 import uuid
 from datetime import datetime, timedelta
+from utils.auth import current_identity
 from utils.db import get_db
 from utils.system_settings import get_report_path, inspect_directory, normalize_server_path
 import mimetypes
@@ -345,7 +346,7 @@ def upload_file():
                     file_type, uploader, created_at, updated_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (file_id, filename, relative_path, file_hash, file_size,
-                  file_type, request.headers.get('Username', 'unknown'),
+                  file_type, current_identity('unknown'),
                   datetime.now(), datetime.now()))
 
             conn.commit()

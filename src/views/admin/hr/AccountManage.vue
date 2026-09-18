@@ -101,7 +101,7 @@
               <th class="col-job">部门 / 职位</th>
               <th class="col-phone">联系电话</th>
               <th class="col-employment">在职状态</th>
-              <th class="col-role">角色组</th>
+              <th class="col-role">权限组</th>
               <th class="col-date">入职日期</th>
               <th class="col-actions">操作</th>
             </tr>
@@ -185,7 +185,7 @@
       </div>
 
       <div class="table-footer">
-        <span>当前为前端占位数据，后续接入员工档案与账号接口。</span>
+        <span>员工档案与登录账号分开存储，权限请在权限管理中统一分配。</span>
         <span class="footer-summary">显示 {{ filteredEmployees.length }} / {{ employees.length }}</span>
       </div>
       </section>
@@ -340,7 +340,7 @@
             <div class="detail-card-heading">
               <div>
                 <h3>登录账号</h3>
-                <span>账号状态和角色组概览</span>
+                <span>账号状态和权限组概览</span>
               </div>
               <span class="card-index">04</span>
             </div>
@@ -354,7 +354,7 @@
               </span>
             </div>
             <div class="assigned-role-list">
-              <span class="summary-label">已绑定角色组</span>
+              <span class="summary-label">已绑定权限组</span>
               <div class="role-list">
                 <span
                   v-for="roleId in selectedEmployee.roleIds"
@@ -363,7 +363,7 @@
                 >
                   {{ roleName(roleId) }}
                 </span>
-                <span v-if="selectedEmployee.roleIds.length === 0" class="empty-inline">暂未绑定角色组</span>
+                <span v-if="selectedEmployee.roleIds.length === 0" class="empty-inline">暂未绑定权限组</span>
               </div>
             </div>
           </article>
@@ -374,10 +374,10 @@
         <article class="permission-summary-card">
           <div>
             <span class="summary-label">当前权限来源</span>
-            <strong>{{ selectedEmployee.roleIds.length }} 个角色组</strong>
-            <p>权限和数据范围由角色组统一维护，员工档案只保存绑定关系。</p>
+            <strong>{{ selectedEmployee.roleIds.length }} 个权限组</strong>
+            <p>权限和数据范围由权限组统一维护，员工档案只保存绑定关系。</p>
           </div>
-          <span class="summary-hint">请前往角色组管理维护绑定关系</span>
+          <span class="summary-hint">请前往权限管理维护绑定关系</span>
         </article>
 
         <div class="permission-layout">
@@ -416,7 +416,7 @@
             <article class="detail-card">
               <div class="detail-card-heading">
                 <div>
-                  <h3>角色组来源</h3>
+                  <h3>权限组来源</h3>
                   <span>员工绑定关系</span>
                 </div>
               </div>
@@ -428,7 +428,7 @@
                     <span>{{ roleDescription(roleId) }}</span>
                   </div>
                 </div>
-                <div v-if="selectedEmployee.roleIds.length === 0" class="side-empty">暂未绑定角色组</div>
+                <div v-if="selectedEmployee.roleIds.length === 0" class="side-empty">暂未绑定权限组</div>
               </div>
             </article>
 
@@ -585,7 +585,12 @@
               <div class="form-grid">
                 <label class="field">
                   <span>登录账号</span>
-                  <input v-model.trim="draft.username" type="text" placeholder="未填写则暂不开通" />
+                  <input
+                    v-model.trim="draft.username"
+                    type="text"
+                    :disabled="editingEmployee && draft.passwordSet"
+                    placeholder="未填写则暂不开通"
+                  />
                 </label>
                 <label class="field">
                   <span>登录密码 <em v-if="!editingEmployee && draft.username">*</em></span>
@@ -638,127 +643,16 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import request from '@/api/request'
 
 const departments = ['仓储部', '财务部', '销售部', '人事行政', '运营部']
 
-const roleGroups = [
-  {
-    id: 'system_admin',
-    name: '系统管理员',
-    tone: 'red',
-    description: '系统基础资料和账号权限',
-    storeIds: [1, 2, 3],
-    warehouseIds: [1, 2, 3]
-  },
-  {
-    id: 'finance',
-    name: '财务人员',
-    tone: 'blue',
-    description: '应收、收款和财务对账',
-    storeIds: [1, 2, 3],
-    warehouseIds: []
-  },
-  {
-    id: 'warehouse',
-    name: '仓库操作员',
-    tone: 'orange',
-    description: '入库、出库和库存日常操作',
-    storeIds: [1],
-    warehouseIds: [1, 2]
-  },
-  {
-    id: 'touch_staff',
-    name: '触屏员工',
-    tone: 'green',
-    description: '前端触屏端和授权仓库草稿',
-    storeIds: [1],
-    warehouseIds: [1, 2]
-  },
-  {
-    id: 'sales',
-    name: '销售人员',
-    tone: 'purple',
-    description: '客户和销售订单日常录入',
-    storeIds: [2],
-    warehouseIds: []
-  }
-]
-
-const permissionModules = [
-  {
-    id: 'front',
-    name: '前端触屏端',
-    description: '触屏端入口和作业操作',
-    tone: 'green',
-    permissions: [
-      { id: 'front.access', name: '访问触屏端' },
-      { id: 'front.material_outbound.create', name: '录入原材料出库' },
-      { id: 'front.material_outbound.view', name: '查看本人出库记录' }
-    ]
-  },
-  {
-    id: 'sales',
-    name: '销售业务',
-    description: '客户、订单和物流信息',
-    tone: 'blue',
-    permissions: [
-      { id: 'sales.customer.view', name: '查看客户' },
-      { id: 'sales.order.create', name: '新增销售订单' },
-      { id: 'sales.order.edit', name: '修改销售订单' },
-      { id: 'sales.order.audit', name: '审核销售订单' }
-    ]
-  },
-  {
-    id: 'inventory',
-    name: '库存管理',
-    description: '入库、出库和库存流水',
-    tone: 'orange',
-    permissions: [
-      { id: 'inventory.view', name: '查看库存' },
-      { id: 'inventory.inbound.create', name: '录入入库单' },
-      { id: 'inventory.outbound.create', name: '录入出库单' },
-      { id: 'inventory.audit', name: '审核库存单据' }
-    ]
-  },
-  {
-    id: 'finance',
-    name: '财务管理',
-    description: '应收、收款和对账',
-    tone: 'purple',
-    permissions: [
-      { id: 'finance.receivable.view', name: '查看应收欠款' },
-      { id: 'finance.payment.create', name: '录入收款单' },
-      { id: 'finance.payment.audit', name: '审核收款单' },
-      { id: 'finance.reconciliation.view', name: '查看对账记录' }
-    ]
-  },
-  {
-    id: 'system',
-    name: '系统管理',
-    description: '账号、角色和基础配置',
-    tone: 'red',
-    permissions: [
-      { id: 'system.account.manage', name: '管理员工账号' },
-      { id: 'system.role.manage', name: '管理角色组' },
-      { id: 'system.store.manage', name: '管理门店' },
-      { id: 'system.settings.manage', name: '管理系统设置' }
-    ]
-  }
-]
-
-const rolePermissionMap = {
-  system_admin: permissionModules.flatMap(module => module.permissions.map(permission => permission.id)),
-  finance: [
-    'finance.receivable.view',
-    'finance.payment.create',
-    'finance.reconciliation.view',
-    'sales.customer.view'
-  ],
-  warehouse: ['inventory.view', 'inventory.inbound.create', 'inventory.outbound.create'],
-  touch_staff: ['front.access', 'front.material_outbound.create', 'front.material_outbound.view'],
-  sales: ['sales.customer.view', 'sales.order.create', 'sales.order.edit']
-}
+const roleGroups = ref([])
+const permissionModules = ref([])
+const rolePermissionMap = computed(() => Object.fromEntries(
+  roleGroups.value.map(role => [role.id, role.permissionCodes || []])
+))
 
 const stores = [
   { id: 1, name: '一号门店' },
@@ -772,84 +666,7 @@ const warehouses = [
   { id: 3, name: '周转仓' }
 ]
 
-const employees = ref([
-  {
-    id: 1001,
-    employeeNo: 'E-0001',
-    displayName: '张三',
-    avatarColor: '#d8f4ea',
-    username: 'zhangsan',
-    accountStatus: 'active',
-    department: '仓储部',
-    position: '仓库操作员',
-    phone: '138****1024',
-    idCard: '110101********1234',
-    currentAddress: '北京市朝阳区示例街道 18 号',
-    emergencyContact: '李女士',
-    emergencyPhone: '139****2088',
-    employmentStatus: 'active',
-    employmentType: '正式',
-    hireDate: '2024-03-01',
-    roleIds: ['warehouse', 'touch_staff']
-  },
-  {
-    id: 1002,
-    employeeNo: 'E-0002',
-    displayName: '李四',
-    avatarColor: '#e2edff',
-    username: 'lisi',
-    accountStatus: 'active',
-    department: '财务部',
-    position: '财务专员',
-    phone: '139****3412',
-    idCard: '110102********5678',
-    currentAddress: '北京市海淀区示例路 6 号',
-    emergencyContact: '王先生',
-    emergencyPhone: '137****9088',
-    employmentStatus: 'active',
-    employmentType: '正式',
-    hireDate: '2023-08-15',
-    roleIds: ['finance']
-  },
-  {
-    id: 1003,
-    employeeNo: 'E-0003',
-    displayName: '王五',
-    avatarColor: '#fff0d7',
-    username: 'wangwu',
-    accountStatus: 'pending',
-    department: '销售部',
-    position: '销售顾问',
-    phone: '137****7765',
-    idCard: '110105********9012',
-    currentAddress: '北京市东城区示例胡同 9 号',
-    emergencyContact: '赵女士',
-    emergencyPhone: '136****3310',
-    employmentStatus: 'probation',
-    employmentType: '试用',
-    hireDate: '2026-08-20',
-    roleIds: ['sales']
-  },
-  {
-    id: 1004,
-    employeeNo: 'E-0004',
-    displayName: '赵六',
-    avatarColor: '#eee4ff',
-    username: '',
-    accountStatus: 'disabled',
-    department: '人事行政',
-    position: '行政专员',
-    phone: '136****5521',
-    idCard: '110106********3456',
-    currentAddress: '北京市西城区示例小区 2 号',
-    emergencyContact: '陈先生',
-    emergencyPhone: '135****6622',
-    employmentStatus: 'leave',
-    employmentType: '正式',
-    hireDate: '2022-11-03',
-    roleIds: []
-  }
-])
+const employees = ref([])
 
 const filters = ref({
   keyword: '',
@@ -867,6 +684,34 @@ const avatarInput = ref(null)
 const notice = ref('')
 let noticeTimer
 
+async function loadEmployeeData() {
+  try {
+    const [employeeResponse, roleResponse, permissionResponse] = await Promise.all([
+      request.get('/admin/employees'),
+      request.get('/admin/roles'),
+      request.get('/admin/permissions')
+    ])
+    employees.value = employeeResponse.employees || []
+    roleGroups.value = (roleResponse.roles || []).map((role, index) => ({
+      ...role,
+      tone: ['green', 'blue', 'orange', 'purple', 'red'][index % 5],
+      storeIds: [],
+      warehouseIds: []
+    }))
+    permissionModules.value = (permissionResponse.modules || []).map((module, index) => ({
+      ...module,
+      id: module.code,
+      tone: ['green', 'blue', 'orange', 'purple', 'red'][index % 5],
+      permissions: module.permissions.map(permission => ({
+        ...permission,
+        id: permission.code
+      }))
+    }))
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '员工数据加载失败')
+  }
+}
+
 const selectedEmployee = computed(() => {
   return employees.value.find(employee => employee.id === selectedEmployeeId.value) || null
 })
@@ -874,9 +719,9 @@ const selectedEmployee = computed(() => {
 const selectedEmployeeScope = computed(() => {
   const roleIds = selectedEmployee.value?.roleIds || []
   return {
-    storeIds: [...new Set(roleIds.flatMap(roleId => roleGroups.find(role => role.id === roleId)?.storeIds || []))],
+    storeIds: [...new Set(roleIds.flatMap(roleId => roleGroups.value.find(role => role.id === roleId)?.storeIds || []))],
     warehouseIds: [
-      ...new Set(roleIds.flatMap(roleId => roleGroups.find(role => role.id === roleId)?.warehouseIds || []))
+      ...new Set(roleIds.flatMap(roleId => roleGroups.value.find(role => role.id === roleId)?.warehouseIds || []))
     ]
   }
 })
@@ -884,9 +729,9 @@ const selectedEmployeeScope = computed(() => {
 const selectedPermissionModules = computed(() => {
   if (!selectedEmployee.value) return []
   const enabledPermissions = new Set(
-    selectedEmployee.value.roleIds.flatMap(roleId => rolePermissionMap[roleId] || [])
+    selectedEmployee.value.roleIds.flatMap(roleId => rolePermissionMap.value[roleId] || [])
   )
-  return permissionModules.map(module => ({
+  return permissionModules.value.map(module => ({
     ...module,
     permissions: module.permissions.map(permission => ({
       ...permission,
@@ -981,7 +826,7 @@ function closeDrawer() {
   drawerVisible.value = false
 }
 
-function saveEmployee() {
+async function saveEmployee() {
   if (!draft.value.displayName) {
     showNotice('请先填写员工姓名')
     return
@@ -997,25 +842,26 @@ function saveEmployee() {
     return
   }
 
-  const payload = {
-    ...draft.value,
-    employeeNo: draft.value.employeeNo || `E-${String(employees.value.length + 1).padStart(4, '0')}`,
-    roleIds: [...draft.value.roleIds],
-    passwordSet: Boolean(draft.value.password || draft.value.passwordSet)
+  try {
+    const payload = {
+      ...draft.value,
+      roleIds: [...draft.value.roleIds]
+    }
+    const response = editingEmployee.value
+      ? await request.put(`/admin/employees/${draft.value.id}`, payload)
+      : await request.post('/admin/employees', payload)
+    const savedEmployee = response.employee
+    if (editingEmployee.value) {
+      const index = employees.value.findIndex(item => item.id === savedEmployee.id)
+      if (index !== -1) employees.value[index] = savedEmployee
+    } else {
+      employees.value.unshift(savedEmployee)
+    }
+    showNotice(response.message || '员工档案已保存')
+    closeDrawer()
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '员工档案保存失败')
   }
-  delete payload.password
-  delete payload.passwordConfirm
-
-  if (editingEmployee.value) {
-    const index = employees.value.findIndex(item => item.id === payload.id)
-    if (index !== -1) employees.value[index] = payload
-    showNotice('员工档案已更新')
-  } else {
-    payload.id = Math.max(...employees.value.map(item => item.id), 1000) + 1
-    employees.value.unshift(payload)
-    showNotice('员工档案已创建')
-  }
-  closeDrawer()
 }
 
 function handleAvatarUpload(event) {
@@ -1038,9 +884,24 @@ function removeAvatar() {
   draft.value.avatarUrl = ''
 }
 
-function toggleAccount(employee) {
-  employee.accountStatus = employee.accountStatus === 'disabled' ? 'active' : 'disabled'
-  showNotice(employee.accountStatus === 'active' ? '账号已启用' : '账号已停用')
+async function toggleAccount(employee) {
+  if (!employee.username) {
+    showNotice('该员工尚未开通登录账号')
+    return
+  }
+  const nextStatus = employee.accountStatus === 'disabled' ? 'active' : 'disabled'
+  try {
+    const response = await request.put(`/admin/employees/${employee.id}`, {
+      ...employee,
+      accountStatus: nextStatus,
+      password: ''
+    })
+    const index = employees.value.findIndex(item => item.id === employee.id)
+    if (index !== -1) employees.value[index] = response.employee
+    showNotice(nextStatus === 'active' ? '账号已启用' : '账号已停用')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '账号状态更新失败')
+  }
 }
 
 function resetFilters() {
@@ -1052,8 +913,9 @@ function resetFilters() {
   }
 }
 
-function refreshList() {
-  showNotice('演示数据已刷新')
+async function refreshList() {
+  await loadEmployeeData()
+  showNotice('员工数据已刷新')
 }
 
 function exportPreview() {
@@ -1069,15 +931,15 @@ function showNotice(message) {
 }
 
 function roleName(roleId) {
-  return roleGroups.find(role => role.id === roleId)?.name || roleId
+  return roleGroups.value.find(role => role.id === roleId)?.name || roleId
 }
 
 function roleTone(roleId) {
-  return roleGroups.find(role => role.id === roleId)?.tone || 'neutral'
+  return roleGroups.value.find(role => role.id === roleId)?.tone || 'neutral'
 }
 
 function roleDescription(roleId) {
-  return roleGroups.find(role => role.id === roleId)?.description || '未配置角色说明'
+  return roleGroups.value.find(role => role.id === roleId)?.description || '未配置角色说明'
 }
 
 function scopeNames(ids, options) {
@@ -1135,6 +997,8 @@ function avatarStyle(employee) {
   }
   return style
 }
+
+onMounted(loadEmployeeData)
 </script>
 
 <style scoped>

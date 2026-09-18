@@ -33,8 +33,252 @@ _bank_accounts_schema_lock = Lock()
 _bank_accounts_schema_ready = False
 _print_templates_schema_lock = Lock()
 _print_templates_schema_ready = False
+_auth_schema_lock = Lock()
+_auth_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
+
+
+def _ensure_auth_schema(conn):
+    """Create the new account/role schema and remove the legacy user model."""
+    global _auth_schema_ready
+    if _auth_schema_ready:
+        return
+
+    with _auth_schema_lock:
+        if _auth_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS system_meta (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+
+        users_exists = cursor.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'users'"
+        ).fetchone()
+        legacy_users_removed = False
+        if users_exists:
+            user_columns = {
+                row["name"] for row in cursor.execute("PRAGMA table_info(users)")
+            }
+            required_columns = {
+                "id",
+                "username",
+                "password_hash",
+                "display_name",
+                "status",
+                "permission_version",
+            }
+            if not required_columns.issubset(user_columns):
+                cursor.execute("DROP TABLE users")
+                legacy_users_removed = True
+
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                password_hash TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                name TEXT NOT NULL DEFAULT '',
+                avatar_url TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                must_change_password INTEGER NOT NULL DEFAULT 0,
+                last_login_at TEXT,
+                permission_version INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (status IN ('active', 'disabled'))
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS roles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'active',
+                is_system INTEGER NOT NULL DEFAULT 0,
+                full_access INTEGER NOT NULL DEFAULT 0,
+                data_scope TEXT NOT NULL DEFAULT 'all',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (status IN ('active', 'disabled'))
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS permissions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                name TEXT NOT NULL,
+                module_code TEXT NOT NULL,
+                module_name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS role_permissions (
+                role_id INTEGER NOT NULL,
+                permission_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (role_id, permission_id),
+                FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
+                FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_roles (
+                user_id INTEGER NOT NULL,
+                role_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (user_id, role_id),
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS employees (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE,
+                employee_no TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                display_name TEXT NOT NULL,
+                avatar_url TEXT NOT NULL DEFAULT '',
+                department TEXT NOT NULL DEFAULT '',
+                position TEXT NOT NULL DEFAULT '',
+                phone TEXT NOT NULL DEFAULT '',
+                id_card TEXT NOT NULL DEFAULT '',
+                current_address TEXT NOT NULL DEFAULT '',
+                emergency_contact TEXT NOT NULL DEFAULT '',
+                emergency_phone TEXT NOT NULL DEFAULT '',
+                employment_status TEXT NOT NULL DEFAULT 'active',
+                employment_type TEXT NOT NULL DEFAULT '正式',
+                hire_date TEXT,
+                account_status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+                CHECK (employment_status IN ('active', 'probation', 'leave', 'resigned')),
+                CHECK (account_status IN ('active', 'pending', 'disabled'))
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_user_roles_role ON user_roles(role_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_employees_user ON employees(user_id)"
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_role_permissions_permission
+            ON role_permissions(permission_id)
+            """
+        )
+
+        from utils.permission_catalog import PERMISSION_MODULES
+
+        sort_order = 0
+        for module in PERMISSION_MODULES:
+            for permission in module["permissions"]:
+                sort_order += 1
+                cursor.execute(
+                    """
+                    INSERT INTO permissions (
+                        code, name, module_code, module_name,
+                        description, sort_order, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    ON CONFLICT(code) DO UPDATE SET
+                        name = excluded.name,
+                        module_code = excluded.module_code,
+                        module_name = excluded.module_name,
+                        description = excluded.description,
+                        sort_order = excluded.sort_order,
+                        updated_at = CURRENT_TIMESTAMP
+                    """,
+                    (
+                        permission["code"],
+                        permission["name"],
+                        module["code"],
+                        module["name"],
+                        permission.get("description", ""),
+                        sort_order,
+                    ),
+                )
+
+        cursor.execute(
+            """
+            INSERT INTO roles (
+                code, name, description, status, is_system,
+                full_access, data_scope, updated_at
+            ) VALUES (
+                'super_admin', '超级管理员', '系统内置最高权限组',
+                'active', 1, 1, 'all', CURRENT_TIMESTAMP
+            )
+            ON CONFLICT(code) DO UPDATE SET
+                name = excluded.name,
+                description = excluded.description,
+                status = 'active',
+                is_system = 1,
+                full_access = 1,
+                data_scope = 'all',
+                updated_at = CURRENT_TIMESTAMP
+            """
+        )
+
+        bootstrap_row = cursor.execute(
+            """
+            SELECT setting_value
+            FROM system_meta
+            WHERE setting_key = 'auth_bootstrap_completed'
+            """
+        ).fetchone()
+        if not bootstrap_row:
+            user_count = cursor.execute(
+                "SELECT COUNT(*) AS total FROM users"
+            ).fetchone()["total"]
+            bootstrap_value = "0" if legacy_users_removed or user_count == 0 else "1"
+            cursor.execute(
+                """
+                INSERT INTO system_meta (setting_key, setting_value, updated_at)
+                VALUES ('auth_bootstrap_completed', ?, CURRENT_TIMESTAMP)
+                """,
+                (bootstrap_value,),
+            )
+
+        cursor.execute(
+            """
+            INSERT INTO system_meta (setting_key, setting_value, updated_at)
+            VALUES ('auth_schema_version', '2', CURRENT_TIMESTAMP)
+            ON CONFLICT(setting_key) DO UPDATE SET
+                setting_value = excluded.setting_value,
+                updated_at = CURRENT_TIMESTAMP
+            """
+        )
+        conn.commit()
+        _auth_schema_ready = True
 
 
 def _ensure_units_schema(conn):
@@ -1082,7 +1326,9 @@ def get_db():
     """数据库连接上下文管理器"""
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
+        _ensure_auth_schema(conn)
         _ensure_units_schema(conn)
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)

@@ -13,18 +13,19 @@
 | Header | 必填 | 说明 |
 |---|---|---|
 | `Content-Type: application/json` | 是（JSON 请求） | 请求体编码 |
-| `Username` | 是（登录后请求） | 当前登录账号，例如 `1`；后端在审核、入账等操作中根据用户表转换为姓名 |
-| `Role` | 是（权限接口） | 当前用户角色，例如 `super_admin`、`admin`、`employee` |
+| `Cookie` | 浏览器自动携带 | 登录成功后由服务端 session 设置，前端不得自行构造身份 |
 
-`Username` 传递登录账号，不直接传显示姓名。业务单据中的 `audit_by`、
-`auditedBy` 和账户流水 `operator` 保存用户姓名；账号不存在时才保留原始
-`Username` 值作为兼容回退。
+`Username`、`Role` 请求头已停用，不能再作为身份或权限依据。业务单据中的
+审核人、操作人和上传人统一从服务端 session 解析。前端请求需开启
+`withCredentials`，同源部署无需额外配置；开发跨域来源通过 `CORS_ORIGINS`
+环境变量声明。
 
 除文件上传接口外，请求和响应均使用 JSON。常见错误响应包含 `message` 或
 `error` 字段，前端应优先显示服务端返回的信息。
 
 ## 版本历史
 
+- **v4.0** (2026-09-18) - 重构 session 登录、首次超级管理员初始化、账号、员工档案、权限组和触屏端后端鉴权
 - **v3.4** (2026-09-17) - 新增打印模板数据库、模板 CRUD、默认模板和旧 localStorage 模板迁移接口
 - **v3.3** (2026-09-16) - 下线旧 `/api/materials` 使用/生产流水接口并删除 `material_records`、旧 `remark_tags` 表
 - **v3.2** (2026-09-16) - 新增库存流水查询接口，支持按物料、门店和仓库查询已审核入库与出库明细
@@ -45,7 +46,7 @@
 
 ## 目录
 
-1. [用户管理](#1-用户管理)
+1. [认证、账号、权限组与员工管理](#1-认证账号权限组与员工管理)
 2. [门店管理](#2-门店管理)
 3. [仓库管理](#3-仓库管理)
 4. [商品管理](#4-商品管理)
@@ -93,133 +94,94 @@
 
 ---
 
-## 1. 用户管理
+## 1. 认证、账号、权限组与员工管理
 
-### 1.1 用户登录
-- **URL**: `/api/users/login`
-- **Method**: `POST`
-- **说明**: 用户登录验证
-
-**请求参数**:
-```json
-{
-  "username": "admin",
-  "password": "123456"
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "user": {
-    "username": "admin",
-    "name": "管理员",
-    "role": "super_admin",
-    "permissions": []
-  }
-}
-```
-
-### 1.2 获取所有用户
-- **URL**: `/api/users`
+### 1.1 初始化状态
+- **URL**: `/api/auth/bootstrap-status`
 - **Method**: `GET`
-- **说明**: 获取所有用户列表
+- **权限**: 公开
 
-**响应示例**:
+系统判断是否存在“启用账号 + 启用权限组 + `full_access = 1`”的有效超级管理员。
+只要不存在有效超级管理员，`setupRequired` 就返回 `true`，即使数据库中仍有普通
+用户也允许重新创建超级管理员。
+
 ```json
-[
-  {
-    "username": "admin",
-    "name": "管理员",
-    "password": "123456",
-    "role": "super_admin",
-    "permissions": []
-  }
-]
+{
+  "success": true,
+  "setupRequired": true,
+  "reason": "missing_super_admin"
+}
 ```
 
-### 1.3 新增用户
-- **URL**: `/api/users`
+### 1.2 创建超级管理员
+- **URL**: `/api/auth/bootstrap`
 - **Method**: `POST`
-- **权限**: 需要 `super_admin` 或 `admin` 角色
-- **Header**: `Role: super_admin`
+- **权限**: 仅在没有有效超级管理员时开放
 
-**请求参数**:
 ```json
 {
-  "username": "newuser",
-  "name": "新用户",
-  "password": "123456",
-  "role": "employee",
-  "permissions": ["pending.view", "completed.view"]
+  "displayName": "系统管理员",
+  "username": "admin",
+  "password": "至少8位密码",
+  "confirmPassword": "至少8位密码"
 }
 ```
 
-**响应示例**:
-```json
-{
-  "success": true,
-  "message": "用户创建成功"
-}
-```
+接口在事务内再次检查有效超级管理员，防止并发创建多个初始超管。创建成功后
+初始化入口关闭；如果最后一个超级管理员被直接从数据库删除，入口会重新开放。
 
-### 1.4 删除用户
-- **URL**: `/api/users/<username>`
-- **Method**: `DELETE`
-- **权限**: 需要 `super_admin` 或 `admin` 角色
-- **Header**: `Role: super_admin`
+### 1.3 登录、退出和当前账号
 
-**响应示例**:
-```json
-{
-  "success": true,
-  "message": "用户删除成功"
-}
-```
+| Method | URL | 说明 |
+|---|---|---|
+| `POST` | `/api/auth/login` | 使用账号密码登录并建立 session |
+| `POST` | `/api/auth/logout` | 销毁当前 session |
+| `GET` | `/api/auth/me` | 获取当前账号、权限组和权限快照 |
+| `PUT` | `/api/auth/profile` | 修改当前账号姓名和头像地址 |
+| `PUT` | `/api/auth/password` | 校验当前密码后修改密码 |
 
-### 1.5 更新用户密码
-- **URL**: `/api/users/<username>/password`
-- **Method**: `PUT`
-- **权限**: 需要 `super_admin` 或 `admin` 角色
-- **Header**: `Role: super_admin`
+密码只保存 Werkzeug 哈希，任何列表和详情接口均不返回明文密码或密码哈希。
 
-**请求参数**:
-```json
-{
-  "password": "newpassword"
-}
-```
+### 1.4 后台账号管理
 
-**响应示例**:
-```json
-{
-  "success": true
-}
-```
+| Method | URL | 说明 |
+|---|---|---|
+| `GET` | `/api/admin/users` | 查询账号列表 |
+| `POST` | `/api/admin/users` | 创建账号并绑定权限组 |
+| `PUT` | `/api/admin/users/<user_id>` | 修改资料、状态和权限组 |
+| `PUT` | `/api/admin/users/<user_id>/password` | 重置账号密码 |
 
-### 1.6 更新用户权限
-- **URL**: `/api/users/<username>/permissions`
-- **Method**: `PUT`
-- **权限**: 需要 `super_admin` 或 `admin` 角色
-- **Header**: `Role: super_admin`
+以上接口仅允许超级管理员。系统禁止通过后台停用或移除最后一个有效超级管理员。
+账号不再直接保存权限数组，实际权限由 `user_roles -> role_permissions` 汇总。
 
-**请求参数**:
-```json
-{
-  "permissions": ["pending.view", "completed.view"],
-  "role": "employee",
-  "name": "新名字",
-  "createdAt": "2026-08-30"
-}
-```
+### 1.5 权限目录与权限组
 
-**响应示例**:
-```json
-{
-  "success": true
-}
-```
+| Method | URL | 说明 |
+|---|---|---|
+| `GET` | `/api/admin/permissions` | 获取触屏端权限目录 |
+| `GET` | `/api/admin/roles` | 获取权限组、成员数和权限编码 |
+| `POST` | `/api/admin/roles` | 创建权限组 |
+| `PUT` | `/api/admin/roles/<role_id>` | 修改权限组、数据范围和权限 |
+
+内置 `super_admin` 权限组拥有 `full_access = 1`，不允许通过普通编辑接口修改。
+普通权限组当前支持 `all`、`store`、`self` 三种数据范围标记。
+
+### 1.6 员工档案和可选登录账号
+
+| Method | URL | 说明 |
+|---|---|---|
+| `GET` | `/api/admin/employees` | 查询员工档案和绑定账号 |
+| `POST` | `/api/admin/employees` | 创建员工档案，可同时开通账号 |
+| `PUT` | `/api/admin/employees/<employee_id>` | 修改档案、密码和账号状态 |
+
+员工抽屉不配置权限组。新建员工账号后，在“权限管理”页面绑定权限组。没有填写
+登录账号时只创建员工档案，账号状态为 `pending`。
+
+### 1.7 已下线旧接口
+
+旧 `/api/login`、`/api/users`、`/api/users/<username>/permissions` 等接口不再
+注册。旧 `users.password`、`users.role`、`users.permissions` 表结构在 v4.0
+迁移时直接删除，不保留旧用户数据。
 
 ---
 
@@ -1442,7 +1404,7 @@
 
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `PUT`
-- **Header**: `Username: <当前登录账号>`
+- **身份**: 服务端 Session 中的当前登录账号
 - **适用范围**: 有订单编号和商品明细、且 `status` 为 `shipped` 的销售订单
 
 **审核请求**:
@@ -1463,7 +1425,7 @@
 
 审核在同一个 SQLite 事务中完成：
 
-1. 根据 `Username` 登录账号查询 `users.name`，将姓名写入 `orders.audit_by`。
+1. 从服务端 Session 读取当前用户姓名，写入 `orders.audit_by`。
 2. 写入 `audit_date`，并将 `audit_state` 更新为 `1`。
 3. 根据应收金额、本次收款和客户储值更新客户欠款与储值。
 4. 写入一条有效的 `order_audit` 客户账户流水。
@@ -1572,7 +1534,7 @@ receipt_image: File (图片文件)
 ### 5.10 更新订单已支付金额
 - **URL**: `/api/orders/<int:order_id>/paid-amount`
 - **Method**: `PUT`
-- **Header**: `Username: admin`
+- **权限**: 仅超级管理员
 - **说明**: 更新运费的已支付金额（用于物流对账）
 
 **请求参数**:
@@ -2159,7 +2121,7 @@ receipt_image: File (图片文件)
 ### 9.2 创建运费记录
 - **URL**: `/api/freight-records`
 - **Method**: `POST`
-- **Header**: `Username: admin`
+- **操作人**: 从服务端 Session 获取；未登录时使用系统默认名称
 
 **请求参数**:
 ```json
@@ -2215,7 +2177,7 @@ receipt_image: File (图片文件)
 ### 9.4 创建备用金记录
 - **URL**: `/api/freight-records/reserve-fund`
 - **Method**: `POST`
-- **Header**: `Username: admin`
+- **操作人**: 从服务端 Session 获取；未登录时使用系统默认名称
 
 **请求参数**:
 ```json
@@ -2266,7 +2228,7 @@ receipt_image: File (图片文件)
 ### 9.6 更新备用金金额
 - **URL**: `/api/freight-records/reserve-fund/<fund_id>`
 - **Method**: `PUT`
-- **Header**: `Username: admin`
+- **操作人**: 从服务端 Session 获取；未登录时使用系统默认名称
 
 **请求参数**:
 ```json
@@ -2388,7 +2350,7 @@ receipt_image: File (图片文件)
 - **URL**: `/api/hr/reports/upload`
 - **Method**: `POST`
 - **Content-Type**: `multipart/form-data`
-- **Header**: `Username`（可选，未提供时记录为 `unknown`）
+- **上传人**: 从服务端 Session 获取；未登录时记录为 `unknown`
 
 **请求参数**:
 
@@ -2400,7 +2362,6 @@ receipt_image: File (图片文件)
 **请求示例**:
 ```bash
 curl -X POST "http://localhost:5000/api/hr/reports/upload" `
-  -H "Username: admin" `
   -F "file=@D:\reports\检测报告.pdf" `
   -F "folder_path=2026/09"
 ```
@@ -2606,7 +2567,7 @@ GET /api/hr/reports/share/6d6f4c5e-1be1-4f91-b6e6-123456789abc
 | `file_hash` | TEXT | 文件 MD5 哈希 |
 | `file_size` | INTEGER | 文件大小，单位为字节 |
 | `file_type` | TEXT | 文件类型：`pdf`、`image`、`excel`、`word` |
-| `uploader` | TEXT | 上传人，由 `Username` 请求头写入 |
+| `uploader` | TEXT | 上传人，由服务端 Session 中的当前用户写入 |
 | `share_token` | TEXT | 分享 Token |
 | `share_expire` | TEXT | 分享过期时间 |
 | `created_at` | TEXT | 创建时间 |
@@ -3267,7 +3228,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 - **URL**: `/api/payment-receipts/<id>/audit`
 - **Method**: `POST`
-- **Header**: `Username` 传登录账号；后端解析用户姓名作为审核人和账户流水操作人
+- **操作人**: 从服务端 Session 获取当前用户姓名，作为审核人和账户流水操作人
 
 审核时按客户实时账户计算：
 
@@ -3283,7 +3244,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 - **URL**: `/api/payment-receipts/<id>/audit`
 - **Method**: `DELETE`
-- **Header**: `Username` 传登录账号；后端解析用户姓名作为反审核操作人
+- **操作人**: 从服务端 Session 获取当前用户姓名，作为反审核操作人
 
 反审核会恢复本单核销的客户欠款，撤回本单产生的预收储值，将原入账流水标记为 `reversed`，并写入 `customer_payment_reverse` 反向流水。
 
@@ -3403,7 +3364,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 - **URL**: `/api/returns/<id>/audit`
 - **Method**: `POST`
-- **Header**: `Username` 可选；传登录账号时，后端解析用户姓名作为客户流水操作人
+- **操作人**: 从服务端 Session 获取当前用户姓名，作为客户流水操作人
 
 审核在一个数据库事务中完成：
 
@@ -4268,7 +4229,7 @@ HTTPS 页面默认使用端口 `8443`。环境变量 `VITE_CLODOP_URL` 可以覆
 | 模板不存在 | `404` |
 | 数据库或 JSON 处理异常 | `500` |
 
-当前打印模板路由自身没有根据 `Username`、`Role` 再做角色判断，主要依赖后台菜单和前端权限控制。对外部署或多人环境中，应在后端增加管理员权限校验。
+当前打印模板路由尚未接入服务端管理员权限守卫，主要依赖后台入口限制。对外部署或多人环境中，应继续补充后端权限校验；客户端身份请求头不能作为替代方案。
 
 ---
 
@@ -4390,7 +4351,7 @@ ON print_templates(is_default);
 | customers_db.json | customers | 4 |
 | stores_db.json | stores | 3 |
 | warehouses_db.json | warehouses, warehouse_categories | 4 + N |
-| users_db.json | users | 9 |
+| users_db.json | 不再迁移 | v4.0 已清空旧用户数据，首次启动后由管理员初始化 |
 
 原材料商品档案 `raw_material_products` 是新增的独立表，没有对应的历史 JSON 迁移来源；新建或编辑后直接通过
 `/api/raw-material-products` 持久化到 SQLite。
@@ -4523,6 +4484,13 @@ SQLite 支持**多读一写**模式：
 
 ## 更新日志
 
+### v4.0.0 (2026-09-18)
+- 新增首次超级管理员初始化，依据有效全权限账号是否存在决定入口是否开放
+- 登录改为服务端 Session Cookie，停用客户端 `Username`、`Role` 身份请求头
+- 密码改为安全哈希，旧用户表和明文用户备份不再保留
+- 新增员工档案、账号、权限组、权限目录及其关联接口
+- 触屏端订单、回单和原材料出库接口增加服务端权限校验
+
 ### v3.4.0 (2026-09-17)
 - 新增 `print_templates` SQLite 数据表及业务类型、默认状态索引
 - 新增打印模板列表、详情、创建、更新、删除和设为默认接口
@@ -4531,7 +4499,7 @@ SQLite 支持**多读一写**模式：
 
 ### v3.1.0 (2026-09-16)
 - 补充销售订单审核与反审核请求、响应、账务联动和错误状态码
-- 审核人由 `Username` 登录账号解析为用户姓名后保存
+- 审核人姓名解析逻辑已在 v4.0 改为读取服务端 Session
 - 新增 `audit_state`、`audit_by`、`audit_date` 等字段说明
 - 旧数据库启动时自动补齐审核字段，并兼容转换历史账号值
 

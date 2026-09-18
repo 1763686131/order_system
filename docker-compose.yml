@@ -16,6 +16,10 @@ services:
     working_dir: /app
     environment:
       - TZ=Asia/Shanghai
+      # 生产环境应在 .env 中设置固定随机密钥，避免容器重启后登录会话失效。
+      - APP_SECRET_KEY=${APP_SECRET_KEY:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      - SESSION_COOKIE_SECURE=${SESSION_COOKIE_SECURE:-0}
       # 目录选择器初始可浏览的容器目录；可按 NAS 实际挂载点调整。
       - REPORTS_BROWSE_ROOTS=/mnt,/media,/volume1,/data,/app/uploads
     command: sh -c "pip install flask flask-cors -i https://pypi.tuna.tsinghua.edu.cn/simple && python app.py"

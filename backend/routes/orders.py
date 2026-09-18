@@ -2,13 +2,19 @@
 订单管理 API 路由
 """
 from flask import Blueprint, request, jsonify, Response, stream_with_context
-from utils.db_helper import read_orders, write_orders, read_users, read_customers, read_carrier_tags, write_carrier_tags
+from utils.db_helper import read_orders, write_orders, read_customers, read_carrier_tags, write_carrier_tags
 from utils.db import get_db
+from utils.auth import (
+    current_identity,
+    permission_granted,
+    require_login,
+    require_permission,
+    require_super_admin,
+)
 from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
 )
-from utils.user_helpers import resolve_user_display_name
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
@@ -80,6 +86,7 @@ def money(value):
 # ==========================================
 
 @orders_bp.route('', methods=['GET'])
+@require_permission('touch.order.read')
 def get_orders():
     """获取所有订单"""
     orders_data = read_orders()
@@ -87,6 +94,7 @@ def get_orders():
 
 
 @orders_bp.route('/events', methods=['GET'])
+@require_permission('touch.order.read')
 def order_events():
     """通过 SSE 推送订单变化，避免前台每隔几秒重复查询整张订单表。"""
     subscriber = Queue()
@@ -122,6 +130,7 @@ def order_events():
     )
 
 @orders_bp.route('/<int:order_id>', methods=['GET'])
+@require_permission('touch.order.read')
 def get_order(order_id):
     """获取单个订单详情"""
     orders_data = read_orders()
@@ -136,6 +145,7 @@ def get_order(order_id):
     return jsonify(order)
 
 @orders_bp.route('', methods=['POST'])
+@require_permission('touch.order.create')
 def add_order():
     """创建新订单 - 支持新旧两种格式"""
     with orders_lock:
@@ -423,6 +433,7 @@ def create_new_format_order(req_data):
     })
 
 @orders_bp.route('/<int:order_id>', methods=['PUT'])
+@require_login
 def update_order_status(order_id):
     """更新订单 - 支持状态更新和完整编辑"""
     req_data = request.json
@@ -431,26 +442,43 @@ def update_order_status(order_id):
     is_full_edit = 'items' in req_data and 'customerId' in req_data
 
     if is_full_edit:
+        if not permission_granted('touch.order.update'):
+            return jsonify(
+                {"success": False, "message": "当前账号没有编辑订单权限"}
+            ), 403
         # 完整订单编辑
         return update_full_order(order_id, req_data)
     else:
+        if 'audit_state' in req_data and 'status' not in req_data:
+            permission_code = 'touch.shipment.audit'
+        elif req_data.get('status') == 'completed':
+            permission_code = 'touch.order.complete'
+        elif req_data.get('status') == 'pending':
+            permission_code = 'touch.order.reopen'
+        else:
+            permission_code = 'touch.order.update'
+        if not permission_granted(permission_code):
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "当前账号没有执行此订单操作的权限",
+                    "permission": permission_code,
+                }
+            ), 403
         # 状态更新（原有逻辑）
         return update_order_status_only(order_id, req_data)
 
 
 def update_order_audit_state(order_id, audited):
     """审核销售订单时同步客户储值、应收欠款和客户账户流水。"""
-    operator_account = str(request.headers.get('Username') or '').strip()
+    operator_account = current_identity()
     now = datetime.now().isoformat(timespec='seconds')
     account_result = None
 
     with orders_lock:
         with get_db() as conn:
             conn.execute('BEGIN IMMEDIATE')
-            operator = resolve_user_display_name(
-                conn,
-                operator_account,
-            )
+            operator = operator_account
             order = conn.execute(
                 '''
                 SELECT id, status, audit_state, order_number, order_goods,
@@ -1087,11 +1115,9 @@ def update_full_order(order_id, req_data):
 
 
 @orders_bp.route('/<int:order_id>', methods=['DELETE'])
+@require_permission('touch.order.delete')
 def delete_order(order_id):
     """删除订单，并恢复该订单占用的库存。"""
-    req_role = request.headers.get('Role')
-    req_username = request.headers.get('Username')
-
     with get_db() as conn:
         target_row = conn.execute(
             'SELECT id, status, audit_state, order_number, order_goods FROM orders WHERE id = ?',
@@ -1110,24 +1136,6 @@ def delete_order(order_id):
 
     if target_row['order_number'] and order_goods and target_row['audit_state'] == 1:
         return jsonify({"success": False, "message": "已过账单据不可删除，请先反审核"}), 409
-
-    needed_perm = (
-        'completed.delete'
-        if target_row['status'] == 'completed'
-        else 'pending.delete'
-    )
-
-    has_p = False
-    if req_role == 'super_admin':
-        has_p = True
-    else:
-        for u in read_users():
-            if str(u['username']) == str(req_username):
-                has_p = needed_perm in u.get('permissions', [])
-                break
-
-    if not has_p:
-        return jsonify({"success": False, "message": "底层权限不足，拦截删除操作"}), 403
 
     with orders_lock:
         with get_db() as conn:
@@ -1167,21 +1175,9 @@ def delete_order(order_id):
     return jsonify({"success": True, "message": "删除成功"})
 
 @orders_bp.route('/<int:order_id>/edit', methods=['PUT'])
+@require_permission('touch.order.update')
 def edit_order_content(order_id):
     """编辑订单内容"""
-    req_role = request.headers.get('Role')
-    req_username = request.headers.get('Username')
-
-    has_p = False
-    if req_role == 'super_admin': has_p = True
-    else:
-        for u in read_users():
-            if str(u['username']) == str(req_username):
-                has_p = 'pending.edit' in u.get('permissions', [])
-                break
-
-    if not has_p: return jsonify({"message": "底层权限不足，拦截修改操作"}), 403
-
     req_data = request.json
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
@@ -1211,6 +1207,7 @@ def edit_order_content(order_id):
     return jsonify({"success": True})
 
 @orders_bp.route('/<int:order_id>/upload_receipt', methods=['POST'])
+@require_permission('touch.receipt.upload')
 def upload_receipt(order_id):
     """上传订单回单"""
     file = request.files.get('receipt_image')
@@ -1273,6 +1270,7 @@ def upload_receipt(order_id):
     })
 
 @orders_bp.route('/<int:order_id>/receipt', methods=['DELETE'])
+@require_permission('touch.receipt.delete')
 def delete_order_receipt(order_id):
     """删除订单回单"""
     orders_data = read_orders()
@@ -1302,6 +1300,7 @@ def delete_order_receipt(order_id):
     return jsonify({"success": True, "message": "回单图片已彻底删除"})
 
 @orders_bp.route('/<int:order_id>/paid-amount', methods=['PUT'])
+@require_super_admin
 def update_order_paid_amount(order_id):
     """更新订单的已支付金额"""
     req_data = request.json
@@ -1336,7 +1335,7 @@ def update_order_paid_amount(order_id):
         # 更新已支付金额
         order['freight_costs'][freight_cost_index]['paid_amount'] = paid_amount
         order['freight_costs'][freight_cost_index]['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        order['freight_costs'][freight_cost_index]['updated_by'] = request.headers.get('Username', 'admin')
+        order['freight_costs'][freight_cost_index]['updated_by'] = current_identity()
 
         orders[order_index] = order
         data['orders'] = orders

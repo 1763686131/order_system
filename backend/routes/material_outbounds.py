@@ -7,8 +7,8 @@ from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
 
+from utils.auth import current_identity, require_permission
 from utils.db import get_db
-from utils.user_helpers import resolve_user_display_name
 
 
 material_outbounds_bp = Blueprint(
@@ -76,11 +76,7 @@ def _decode_ids(value):
 
 
 def _operator(conn, default="系统用户"):
-    return resolve_user_display_name(
-        conn,
-        request.headers.get("Username"),
-        default,
-    )[:80]
+    return current_identity(default)[:80]
 
 
 def _settings_row(conn):
@@ -568,12 +564,14 @@ def _reverse_inventory(conn, document):
 
 
 @material_outbounds_bp.route("/material-outbound-settings", methods=["GET"])
+@require_permission("touch.material.read")
 def get_material_outbound_settings():
     with get_db() as conn:
         return jsonify(_serialize_settings(conn))
 
 
 @material_outbounds_bp.route("/material-outbound-settings", methods=["PUT"])
+@require_permission("touch.material.settings")
 def update_material_outbound_settings():
     data = request.get_json(silent=True) or {}
     try:
@@ -645,6 +643,7 @@ def update_material_outbound_settings():
 
 
 @material_outbounds_bp.route("/material-outbounds", methods=["GET"])
+@require_permission("touch.material.read")
 def list_material_outbounds():
     status = _text(request.args.get("status"), 20)
     start_date = _text(request.args.get("startDate"), 10)
@@ -671,6 +670,7 @@ def list_material_outbounds():
 
 
 @material_outbounds_bp.route("/material-outbounds/<int:outbound_id>", methods=["GET"])
+@require_permission("touch.material.read")
 def get_material_outbound(outbound_id):
     with get_db() as conn:
         row = conn.execute(
@@ -683,6 +683,7 @@ def get_material_outbound(outbound_id):
 
 
 @material_outbounds_bp.route("/material-outbounds", methods=["POST"])
+@require_permission("touch.material.create")
 def create_material_outbound():
     data = request.get_json(silent=True) or {}
     try:
@@ -711,6 +712,7 @@ def create_material_outbound():
 
 
 @material_outbounds_bp.route("/material-outbounds/<int:outbound_id>", methods=["PUT"])
+@require_permission("touch.material.update")
 def update_material_outbound(outbound_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -808,6 +810,7 @@ def update_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>/audit",
     methods=["POST"],
 )
+@require_permission("touch.material.audit")
 def audit_material_outbound(outbound_id):
     try:
         with _write_lock:
@@ -885,6 +888,7 @@ def audit_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>/audit",
     methods=["DELETE"],
 )
+@require_permission("touch.material.reverse_audit")
 def reverse_audit_material_outbound(outbound_id):
     try:
         with _write_lock:
@@ -936,6 +940,7 @@ def reverse_audit_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>",
     methods=["DELETE"],
 )
+@require_permission("touch.material.delete")
 def cancel_material_outbound(outbound_id):
     with _write_lock:
         with get_db() as conn:
@@ -977,6 +982,7 @@ def cancel_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>/restart",
     methods=["POST"],
 )
+@require_permission("touch.material.update")
 def restart_material_outbound(outbound_id):
     with _write_lock:
         with get_db() as conn:

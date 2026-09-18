@@ -1,15 +1,41 @@
 """
 订单管理系统后端主入口文件
 """
+from datetime import timedelta
 from flask import Flask, send_from_directory
 from flask_cors import CORS
 import os
+import secrets
 import webbrowser
 from threading import Timer
 
 # 创建 Flask 应用
 app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*", "allow_headers": ["Content-Type", "Username", "Role"]}})
+app.config.update(
+    SECRET_KEY=os.environ.get("APP_SECRET_KEY") or secrets.token_hex(32),
+    PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",
+)
+cors_origins = [
+    origin.strip()
+    for origin in os.environ.get(
+        "CORS_ORIGINS",
+        "http://localhost:5173,http://127.0.0.1:5173",
+    ).split(",")
+    if origin.strip()
+]
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": cors_origins,
+            "allow_headers": ["Content-Type"],
+        }
+    },
+    supports_credentials=True,
+)
 
 # 前端静态文件路径
 if os.path.exists('/app/frontend/index.html'):
@@ -24,6 +50,9 @@ FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
 # 导入并注册所有路由模块
 # ==========================================
 from routes.users import users_bp
+from routes.auth import auth_bp
+from routes.access import access_bp
+from routes.employees import employees_bp
 from routes.orders import orders_bp
 from routes.stores import stores_bp
 from routes.warehouses import warehouses_bp
@@ -41,6 +70,9 @@ from routes.bank_accounts import bank_accounts_bp, upload_bp as bank_account_upl
 from routes.print_templates import print_templates_bp
 
 app.register_blueprint(users_bp)
+app.register_blueprint(auth_bp)
+app.register_blueprint(access_bp)
+app.register_blueprint(employees_bp)
 app.register_blueprint(orders_bp)
 app.register_blueprint(stores_bp)
 app.register_blueprint(warehouses_bp)
@@ -90,33 +122,7 @@ def add_carrier_tag():
 
     return jsonify({'success': True, 'tags': tags})
 
-# ==========================================
-# 登录接口别名（兼容旧版前端）
-# ==========================================
 from flask import request, jsonify
-from utils.db_helper import read_users
-
-@app.route('/api/login', methods=['POST'])
-def login():
-    """用户登录"""
-    req_data = request.json
-    username = req_data.get('username')
-    password = req_data.get('password')
-
-    users = read_users()
-    for user in users:
-        if str(user['username']) == str(username) and user['password'] == password:
-            return jsonify({
-                "success": True,
-                "user": {
-                    "username": user['username'],
-                    "name": user.get('name', user['username']),
-                    "role": user.get('role', 'employee'),
-                    "permissions": user.get('permissions', [])
-                }
-            })
-
-    return jsonify({"success": False, "message": "账号或密码错误"}), 401
 
 # ==========================================
 # 静态文件上传路径

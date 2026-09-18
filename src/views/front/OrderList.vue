@@ -41,14 +41,14 @@
 
           <div v-if="order.isFirstCard" class="actions">
             <button
-              v-if="userStore.hasPerm('pending.complete')"
+              v-if="userStore.hasPerm('touch.order.complete')"
               class="btn btn-primary"
               @click="$emit('complete', order.id)"
             >
               确定完成
             </button>
             <button
-              v-if="userStore.hasPerm('pending.view_detail')"
+              v-if="userStore.hasPerm('touch.order.read')"
               class="btn btn-default"
               @click="toggleCard($event)"
             >
@@ -94,28 +94,28 @@
 
           <div class="actions-back">
             <button
-              v-if="userStore.hasPerm('pending.view_detail')"
+              v-if="userStore.hasPerm('touch.order.read')"
               class="btn btn-default"
               @click="toggleCard($event)"
             >
               ⇦返回
             </button>
             <button
-              v-if="userStore.hasPerm('pending.complete')"
+              v-if="userStore.hasPerm('touch.order.complete')"
               class="btn btn-primary"
               @click="$emit('complete', order.id)"
             >
               确定完成
             </button>
             <button
-              v-if="userStore.hasPerm('pending.edit')"
+              v-if="userStore.hasPerm('touch.order.update')"
               class="btn btn-danger"
               @click="$emit('edit', order.id)"
             >
               修改
             </button>
             <button
-              v-if="userStore.hasPerm('pending.copy')"
+              v-if="userStore.hasPerm('touch.order.copy')"
               class="btn btn-success"
               @click="$emit('copy', order.id)"
             >
@@ -177,21 +177,21 @@
 
       <div v-if="order.isFirstCard" class="actions-back" style="margin-top: 12px; padding-top: 12px;">
         <button
-          v-if="userStore.hasPerm('completed.uncomplete')"
+          v-if="userStore.hasPerm('touch.order.reopen')"
           class="btn btn-default"
           @click="$emit('uncomplete', order.id)"
         >
           撤销已完成
         </button>
         <button
-          v-if="userStore.hasPerm('completed.delete')"
+          v-if="userStore.hasPerm('touch.order.delete')"
           class="btn btn-danger"
           @click="$emit('delete', order.id)"
         >
           删除
         </button>
         <button
-          v-if="userStore.hasPerm('completed.copy')"
+          v-if="userStore.hasPerm('touch.order.copy')"
           class="btn btn-success"
           @click="$emit('copy', order.id)"
         >
@@ -223,7 +223,7 @@ const userStore = useUserStore()
 const stores = ref([])
 
 const isEmployee = computed(() => {
-  return userStore.role === 'employee' || userStore.role === 'operator'
+  return !userStore.canAccessAdmin
 })
 
 // 加载门店列表

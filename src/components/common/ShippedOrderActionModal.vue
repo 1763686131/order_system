@@ -543,7 +543,7 @@ const isReceiptMode = computed(() =>
   ['receipt', 'view_receipt'].includes(currentMode.value)
 )
 const canDeleteReceipt = computed(() =>
-  currentMode.value === 'view_receipt' && userStore.hasPerm('shipped.delete_receipt')
+  currentMode.value === 'view_receipt' && userStore.hasPerm('touch.receipt.delete')
 )
 const shouldShowGoodsToggle = computed(() =>
   currentOrderInfo.value.goodsItemCount > 2

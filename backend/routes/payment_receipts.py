@@ -8,11 +8,11 @@ import uuid
 from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
+from utils.auth import current_identity
 from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
 )
-from utils.user_helpers import resolve_user_display_name
 
 
 payment_receipts_bp = Blueprint(
@@ -54,11 +54,7 @@ def _date(value):
 
 
 def _operator(conn, default='系统用户'):
-    return resolve_user_display_name(
-        conn,
-        request.headers.get('Username'),
-        default,
-    )
+    return current_identity(default)
 
 
 def _next_document_no(conn, document_date):

@@ -6,6 +6,7 @@ from flask import Blueprint, request, jsonify
 from datetime import datetime
 import uuid
 from utils.db_helper import read_freight_records, write_freight_records
+from utils.auth import current_identity
 
 freight_bp = Blueprint('freight', __name__, url_prefix='/api/freight-records')
 
@@ -31,7 +32,7 @@ def create_freight_record():
         'totalAmount': req_data.get('totalAmount'),
         'reserveFund': req_data.get('reserveFund'),
         'createdAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'createdBy': request.headers.get('Username', '管理员')
+        'createdBy': current_identity('管理员')
     }
 
     data['freight_records'].append(record)
@@ -58,7 +59,7 @@ def create_reserve_fund():
         'date': req_data.get('date', datetime.now().strftime('%Y-%m-%d')),
         'note': req_data.get('note', ''),
         'createdAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'createdBy': request.headers.get('Username', '管理员')
+        'createdBy': current_identity('管理员')
     }
 
     data['reserve_funds'].append(fund)
@@ -109,7 +110,7 @@ def update_reserve_fund(fund_id):
     new_amount = float(req_data.get('amount', 0))
     funds[fund_index]['amount'] = new_amount
     funds[fund_index]['updatedAt'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    funds[fund_index]['updatedBy'] = request.headers.get('Username', '管理员')
+    funds[fund_index]['updatedBy'] = current_identity('管理员')
 
     data['reserve_funds'] = funds
     write_freight_records(data)

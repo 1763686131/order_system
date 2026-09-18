@@ -8,11 +8,11 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
+from utils.auth import current_identity
 from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
 )
-from utils.user_helpers import resolve_user_display_name
 
 
 returns_bp = Blueprint('returns', __name__, url_prefix='/api/returns')
@@ -66,10 +66,7 @@ def _text(value, max_length=None):
 
 
 def _operator(conn):
-    return resolve_user_display_name(
-        conn,
-        request.headers.get('Username'),
-    )[:80]
+    return current_identity()[:80]
 
 
 def _next_return_number(conn, return_date):

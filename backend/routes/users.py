@@ -1,139 +1,272 @@
-"""
-用户管理 API 路由
-100%从旧代码移植
-"""
-from flask import Blueprint, request, jsonify
-from utils.db_helper import read_users, write_users
+"""Super-admin account management APIs."""
 
-users_bp = Blueprint('users', __name__, url_prefix='/api/users')
+from flask import Blueprint, jsonify, request, session
+from werkzeug.security import generate_password_hash
 
-@users_bp.route('/login', methods=['POST'])
-def login():
-    """用户登录"""
-    req_data = request.json
-    users_data = read_users()
-    for u in users_data:
-        if str(u['username']) == str(req_data.get('username')) and u['password'] == req_data.get('password'):
-            return jsonify({
-                "success": True,
-                "user": {
-                    "username": u['username'],
-                    "name": u.get('name', u['username']),
-                    "role": u['role'],
-                    "permissions": u.get('permissions', [])
-                }
-            })
-    return jsonify({"success": False, "message": "账号或密码错误"}), 401
+from utils.auth import get_current_user, require_super_admin, serialize_user
+from utils.db import get_db
 
-@users_bp.route('', methods=['GET'])
-def get_all_users():
-    """获取所有用户"""
-    return jsonify(read_users())
 
-@users_bp.route('', methods=['POST'])
-def add_user():
-    """新增用户"""
-    req_role = request.headers.get('Role')
-    if req_role not in ['super_admin', 'admin']:
-        return jsonify({"message": "权限不足"}), 403
+users_bp = Blueprint("users", __name__, url_prefix="/api/admin/users")
 
-    req_data = request.json
-    users_data = read_users()
-    target_role = req_data.get('role', 'employee')
 
-    if req_role == 'admin' and target_role in ['super_admin', 'admin']:
-        return jsonify({"message": "越权操作：管理员只能创建员工账号"}), 403
+def _text(value, max_length):
+    return str(value or "").strip()[:max_length]
 
-    for u in users_data:
-        if str(u['username']) == str(req_data.get('username')):
-            return jsonify({"message": "账号已存在"}), 400
 
-    users_data.append({
-        "username": req_data.get('username'),
-        "name": req_data.get('name', req_data.get('username')),
-        "password": req_data.get('password'),
-        "role": target_role,
-        "permissions": req_data.get('permissions', [])
-    })
+def _normalize_role_ids(value):
+    if not isinstance(value, list):
+        return []
+    result = []
+    for item in value:
+        try:
+            role_id = int(item)
+        except (TypeError, ValueError):
+            continue
+        if role_id not in result:
+            result.append(role_id)
+    return result
 
-    write_users(users_data)
-    return jsonify({"success": True, "message": "用户创建成功"})
 
-@users_bp.route('/<username>', methods=['DELETE'])
-def delete_user(username):
-    """删除用户"""
-    req_role = request.headers.get('Role')
-    if req_role not in ['super_admin', 'admin']:
-        return jsonify({"message": "权限不足"}), 403
+def _validate_roles(conn, role_ids):
+    if not role_ids:
+        return []
+    placeholders = ",".join("?" for _ in role_ids)
+    rows = conn.execute(
+        f"""
+        SELECT id FROM roles
+        WHERE id IN ({placeholders}) AND status = 'active'
+        """,
+        role_ids,
+    ).fetchall()
+    valid_ids = [row["id"] for row in rows]
+    if len(valid_ids) != len(role_ids):
+        raise ValueError("包含不存在或已停用的权限组")
+    return valid_ids
 
-    users_data = read_users()
 
-    for u in users_data:
-        if str(u['username']) == str(username):
-            if u.get('role') in ['super_admin', 'admin'] and req_role == 'admin':
-                return jsonify({"message": "越权操作：管理员不能删除管理员/超管账号"}), 403
+def _active_super_admin_count(conn):
+    return conn.execute(
+        """
+        SELECT COUNT(DISTINCT users.id) AS total
+        FROM users
+        INNER JOIN user_roles ON user_roles.user_id = users.id
+        INNER JOIN roles ON roles.id = user_roles.role_id
+        WHERE users.status = 'active'
+          AND roles.status = 'active'
+          AND roles.full_access = 1
+        """
+    ).fetchone()["total"]
 
-            users_data.remove(u)
-            write_users(users_data)
-            return jsonify({"success": True, "message": "用户删除成功"})
 
-    return jsonify({"message": "用户不存在"}), 404
+def _is_active_super_admin(conn, user_id):
+    return bool(
+        conn.execute(
+            """
+            SELECT 1
+            FROM users
+            INNER JOIN user_roles ON user_roles.user_id = users.id
+            INNER JOIN roles ON roles.id = user_roles.role_id
+            WHERE users.id = ?
+              AND users.status = 'active'
+              AND roles.status = 'active'
+              AND roles.full_access = 1
+            LIMIT 1
+            """,
+            (user_id,),
+        ).fetchone()
+    )
 
-@users_bp.route('/<username>/password', methods=['PUT'])
-def update_user_password(username):
-    """更新用户密码"""
-    if request.headers.get('Role') not in ['super_admin', 'admin']:
-        return jsonify({"message": "权限不足"}), 403
-    req_data = request.json
-    users_data = read_users()
-    for u in users_data:
-        if str(u['username']) == str(username):
-            u['password'] = req_data.get('password')
-            break
-    write_users(users_data)
-    return jsonify({"success": True})
 
-@users_bp.route('/<username>/permissions', methods=['PUT'])
-def update_user_permissions(username):
-    """更新用户权限"""
-    req_role = request.headers.get('Role')
-    if req_role not in ['super_admin', 'admin']:
-        return jsonify({"message": "权限不足"}), 403
+def _roles_include_full_access(conn, role_ids):
+    if not role_ids:
+        return False
+    placeholders = ",".join("?" for _ in role_ids)
+    return bool(
+        conn.execute(
+            f"""
+            SELECT 1 FROM roles
+            WHERE id IN ({placeholders})
+              AND status = 'active'
+              AND full_access = 1
+            LIMIT 1
+            """,
+            role_ids,
+        ).fetchone()
+    )
 
-    req_data = request.json
-    perms = req_data.get('permissions', [])
-    new_role = req_data.get('role')
-    new_name = req_data.get('name')
-    new_created_at = req_data.get('createdAt')  # 新增：支持修改创建时间
 
-    users_data = read_users()
-    for u in users_data:
-        if str(u['username']) == str(username):
-            if req_role == 'admin' and u['role'] in ['super_admin', 'admin']:
-                return jsonify({"message": "越权：无权修改高级别账户"}), 403
+def _user_row(conn, user_id):
+    return conn.execute(
+        """
+        SELECT id, username, display_name, avatar_url, status,
+               must_change_password, last_login_at, permission_version,
+               created_at
+        FROM users WHERE id = ?
+        """,
+        (user_id,),
+    ).fetchone()
 
-            if req_role == 'admin':
-                admin_restricted = ['pending.edit', 'pending.delete', 'completed.delete', 'material.edit', 'material.edit_stock', 'material.delete']
-                old_perms = set(u.get('permissions', []))
-                new_perms = set(perms)
-                for restricted in admin_restricted:
-                    if restricted in old_perms:
-                        new_perms.add(restricted)
-                    else:
-                        new_perms.discard(restricted)
-                perms = list(new_perms)
 
-            u['permissions'] = perms
-            if new_name is not None:
-                u['name'] = new_name
+@users_bp.route("", methods=["GET"])
+@require_super_admin
+def list_users():
+    keyword = _text(request.args.get("keyword"), 80)
+    with get_db() as conn:
+        sql = """
+            SELECT id, username, display_name, avatar_url, status,
+                   must_change_password, last_login_at, permission_version,
+                   created_at
+            FROM users
+        """
+        params = []
+        if keyword:
+            sql += " WHERE username LIKE ? OR display_name LIKE ?"
+            pattern = f"%{keyword}%"
+            params.extend([pattern, pattern])
+        sql += " ORDER BY CASE status WHEN 'active' THEN 0 ELSE 1 END, id"
+        rows = conn.execute(sql, params).fetchall()
+        users = [serialize_user(conn, row) for row in rows]
+    return jsonify({"success": True, "users": users})
 
-            # 新增：支持修改创建时间
-            if new_created_at is not None:
-                u['createdAt'] = new_created_at
 
-            if new_role and req_role == 'super_admin' and u['role'] != 'super_admin':
-                u['role'] = new_role
-            break
+@users_bp.route("", methods=["POST"])
+@require_super_admin
+def create_user():
+    data = request.get_json(silent=True) or {}
+    username = _text(data.get("username"), 50)
+    display_name = _text(data.get("displayName") or data.get("name"), 80)
+    avatar_url = _text(data.get("avatarUrl"), 500)
+    password = str(data.get("password") or "")
+    status = "disabled" if data.get("status") == "disabled" else "active"
+    role_ids = _normalize_role_ids(data.get("roleIds"))
+    if not username or any(char.isspace() for char in username):
+        return jsonify({"success": False, "message": "登录账号不能为空或包含空格"}), 400
+    if not display_name:
+        return jsonify({"success": False, "message": "请输入显示姓名"}), 400
+    if len(password) < 8:
+        return jsonify({"success": False, "message": "初始密码至少需要 8 位"}), 400
 
-    write_users(users_data)
-    return jsonify({"success": True})
+    try:
+        with get_db() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            if conn.execute(
+                "SELECT 1 FROM users WHERE username = ? COLLATE NOCASE",
+                (username,),
+            ).fetchone():
+                return jsonify({"success": False, "message": "登录账号已存在"}), 409
+            role_ids = _validate_roles(conn, role_ids)
+            cursor = conn.execute(
+                """
+                INSERT INTO users (
+                    username, password_hash, display_name, name,
+                    avatar_url, status, must_change_password,
+                    permission_version, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, 1, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                """,
+                (
+                    username,
+                    generate_password_hash(password),
+                    display_name,
+                    display_name,
+                    avatar_url,
+                    status,
+                ),
+            )
+            for role_id in role_ids:
+                conn.execute(
+                    "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                    (cursor.lastrowid, role_id),
+                )
+            user = serialize_user(conn, _user_row(conn, cursor.lastrowid))
+        return jsonify(
+            {"success": True, "message": "账号创建成功", "user": user}
+        ), 201
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@users_bp.route("/<int:user_id>", methods=["PUT"])
+@require_super_admin
+def update_user(user_id):
+    data = request.get_json(silent=True) or {}
+    display_name = _text(data.get("displayName") or data.get("name"), 80)
+    avatar_url = _text(data.get("avatarUrl"), 500)
+    status = "disabled" if data.get("status") == "disabled" else "active"
+    role_ids = _normalize_role_ids(data.get("roleIds"))
+    if not display_name:
+        return jsonify({"success": False, "message": "显示姓名不能为空"}), 400
+
+    try:
+        with get_db() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            existing = _user_row(conn, user_id)
+            if not existing:
+                return jsonify({"success": False, "message": "账号不存在"}), 404
+            role_ids = _validate_roles(conn, role_ids)
+            loses_super_access = (
+                status != "active"
+                or not _roles_include_full_access(conn, role_ids)
+            )
+            if (
+                _is_active_super_admin(conn, user_id)
+                and loses_super_access
+                and _active_super_admin_count(conn) <= 1
+            ):
+                return jsonify(
+                    {"success": False, "message": "不能停用或移除最后一个超级管理员"}
+                ), 409
+
+            conn.execute(
+                """
+                UPDATE users
+                SET display_name = ?, name = ?, avatar_url = ?, status = ?,
+                    permission_version = permission_version + 1,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (display_name, display_name, avatar_url, status, user_id),
+            )
+            conn.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
+            for role_id in role_ids:
+                conn.execute(
+                    "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
+                    (user_id, role_id),
+                )
+            updated_row = _user_row(conn, user_id)
+            user = serialize_user(conn, updated_row)
+            current_user = get_current_user()
+            if current_user and current_user["id"] == user_id:
+                session["permission_version"] = updated_row["permission_version"]
+        return jsonify({"success": True, "message": "账号信息已更新", "user": user})
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@users_bp.route("/<int:user_id>/password", methods=["PUT"])
+@require_super_admin
+def reset_user_password(user_id):
+    data = request.get_json(silent=True) or {}
+    password = str(data.get("password") or "")
+    if len(password) < 8:
+        return jsonify({"success": False, "message": "新密码至少需要 8 位"}), 400
+
+    with get_db() as conn:
+        existing = _user_row(conn, user_id)
+        if not existing:
+            return jsonify({"success": False, "message": "账号不存在"}), 404
+        next_version = int(existing["permission_version"] or 1) + 1
+        conn.execute(
+            """
+            UPDATE users
+            SET password_hash = ?, must_change_password = 1,
+                permission_version = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (generate_password_hash(password), next_version, user_id),
+        )
+        current_user = get_current_user()
+        if current_user and current_user["id"] == user_id:
+            session["permission_version"] = next_version
+    return jsonify({"success": True, "message": "密码已重置"})

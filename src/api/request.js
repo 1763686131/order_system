@@ -1,5 +1,4 @@
 import axios from 'axios'
-import { useUserStore } from '@/stores/user'
 
 // 根据环境设置 baseURL
 const getBaseURL = () => {
@@ -17,25 +16,11 @@ const getBaseURL = () => {
 const request = axios.create({
   baseURL: getBaseURL(),
   timeout: 10000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
 })
-
-// 请求拦截器
-request.interceptors.request.use(
-  (config) => {
-    const userStore = useUserStore()
-    if (userStore.isLoggedIn) {
-      config.headers['Username'] = String(userStore.username)
-      config.headers['Role'] = String(userStore.role)
-    }
-    return config
-  },
-  (error) => {
-    return Promise.reject(error)
-  }
-)
 
 // 响应拦截器
 request.interceptors.response.use(

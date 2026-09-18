@@ -13,30 +13,29 @@ export const ORDER_TYPE = {
 
 // 权限常量
 export const PERMISSIONS = {
-  PENDING_ADD: 'pending.add',
-  PENDING_EDIT: 'pending.edit',
-  PENDING_DELETE: 'pending.delete',
-  PENDING_STATUS: 'pending.status',
-
-  COMPLETED_EDIT: 'completed.edit',
-  COMPLETED_DELETE: 'completed.delete',
-
-  SHIPPED_AUDIT: 'shipped.audit',
-  SHIPPED_RECEIPT: 'shipped.receipt',
-  SHIPPED_REVOKE: 'shipped.revoke',
-
-  MATERIAL_ADD: 'material.add',
-  MATERIAL_VIEW: 'material.view',
-
-  SYSTEM_USER_MANAGE: 'system.user_manage'
+  ORDER_READ: 'touch.order.read',
+  ORDER_CREATE: 'touch.order.create',
+  ORDER_UPDATE: 'touch.order.update',
+  ORDER_COMPLETE: 'touch.order.complete',
+  ORDER_REOPEN: 'touch.order.reopen',
+  ORDER_COPY: 'touch.order.copy',
+  ORDER_DELETE: 'touch.order.delete',
+  SHIPMENT_AUDIT: 'touch.shipment.audit',
+  RECEIPT_READ: 'touch.receipt.read',
+  RECEIPT_UPLOAD: 'touch.receipt.upload',
+  RECEIPT_DELETE: 'touch.receipt.delete',
+  MATERIAL_READ: 'touch.material.read',
+  MATERIAL_CREATE: 'touch.material.create',
+  MATERIAL_UPDATE: 'touch.material.update',
+  MATERIAL_AUDIT: 'touch.material.audit',
+  MATERIAL_REVERSE_AUDIT: 'touch.material.reverse_audit',
+  MATERIAL_DELETE: 'touch.material.delete',
+  MATERIAL_SETTINGS: 'touch.material.settings'
 }
 
 // 用户角色常量
 export const USER_ROLES = {
-  SUPER_ADMIN: 'super_admin',
-  ADMIN: 'admin',
-  EMPLOYEE: 'employee',
-  OPERATOR: 'operator'
+  SUPER_ADMIN: 'super_admin'
 }
 
 // 物流类型

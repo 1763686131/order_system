@@ -129,7 +129,7 @@ const userStore = useUserStore()
 const stores = ref([])
 
 const isEmployee = computed(() => {
-  return userStore.role === 'employee' || userStore.role === 'operator'
+  return !userStore.canAccessAdmin
 })
 
 // 加载门店列表
@@ -232,7 +232,7 @@ const getMethodTagStyle = (order) => {
   if (isAudited) {
     return 'background:#f0f5ff; color:#2f54eb; border:1px solid #adc6ff; cursor: not-allowed;'
   } else {
-    if (userStore.hasPerm('shipped.audit')) {
+    if (userStore.hasPerm('touch.shipment.audit')) {
       return 'background:#e6f4ff; color:#1677ff; border:1px solid #91caff; cursor: pointer; transition: all 0.2s;'
     } else {
       return 'background:#f5f5f5; color:#bfbfbf; border:1px solid #d9d9d9; cursor: not-allowed; opacity: 0.7;'
@@ -248,7 +248,7 @@ const getMethodTagTitle = (order) => {
   if (isAudited) {
     return '该订单已通过最终审核确认，系统已锁死'
   } else {
-    if (userStore.hasPerm('shipped.audit')) {
+    if (userStore.hasPerm('touch.shipment.audit')) {
       return '点击此处进行出库审核操作'
     } else {
       return '暂无权限进行出库审核操作'
@@ -292,7 +292,7 @@ const handleMethodClick = (order) => {
   }
   const isAudited = order.audit_state === 1
 
-  if (!isAudited && userStore.hasPerm('shipped.audit')) {
+  if (!isAudited && userStore.hasPerm('touch.shipment.audit')) {
     emit('audit', order.id)
   }
 }

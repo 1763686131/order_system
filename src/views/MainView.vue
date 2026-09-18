@@ -451,8 +451,7 @@ onMounted(() => {
     const order = orderStore.allOrders.find(o => o.id === orderId)
     if (!order) return
 
-    // 判断是否是员工角色
-    const isEmployee = userStore.role === 'employee' || userStore.role === 'operator'
+    const isEmployee = !userStore.canAccessAdmin
 
     // 订单类型文本
     const typeText = (order.type == 1) ? '绝缘订单' : '中固订单'
