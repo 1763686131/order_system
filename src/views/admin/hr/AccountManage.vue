@@ -100,10 +100,9 @@
               <th class="col-account">登录账号</th>
               <th class="col-job">部门 / 职位</th>
               <th class="col-phone">联系电话</th>
-              <th class="col-employment">在职状态</th>
+              <th class="col-status">状态</th>
               <th class="col-role">权限组</th>
-              <th class="col-date">入职日期</th>
-              <th class="col-login">最后登录时间</th>
+              <th class="col-time">时间信息</th>
               <th class="col-actions">操作</th>
             </tr>
           </thead>
@@ -128,8 +127,8 @@
               </td>
               <td>
                 <div class="account-cell">
-                  <strong>{{ employee.username || '未开通' }}</strong>
-                  <span :class="['status-badge', accountStatusClass(employee.accountStatus)]">
+                  <strong>{{ employee.username || '—' }}</strong>
+                  <span :class="['mini-badge', accountStatusClass(employee.accountStatus)]">
                     <i></i>{{ accountStatusLabel(employee.accountStatus) }}
                   </span>
                 </div>
@@ -137,12 +136,12 @@
               <td>
                 <div class="job-cell">
                   <strong>{{ employee.department }}</strong>
-                  <span>{{ employee.position }}</span>
+                  <span>{{ employee.position || '暂无职位' }}</span>
                 </div>
               </td>
-              <td class="tabular">{{ employee.phone || '-' }}</td>
+              <td class="tabular cell-muted">{{ employee.phone || '—' }}</td>
               <td>
-                <span :class="['status-badge', employmentStatusClass(employee.employmentStatus)]">
+                <span :class="['mini-badge', employmentStatusClass(employee.employmentStatus)]">
                   <i></i>{{ employmentStatusLabel(employee.employmentStatus) }}
                 </span>
               </td>
@@ -151,30 +150,50 @@
                   <span
                     v-for="role in employee.roleIds.slice(0, 2)"
                     :key="role"
-                    :class="['role-tag', roleTone(role)]"
+                    :class="['role-tag', 'role-' + roleTone(role)]"
                   >
                     {{ roleName(role) }}
                   </span>
                   <span v-if="employee.roleIds.length > 2" class="role-more">
                     +{{ employee.roleIds.length - 2 }}
                   </span>
-                  <span v-if="employee.roleIds.length === 0" class="empty-inline">未绑定</span>
+                  <span v-if="employee.roleIds.length === 0" class="empty-inline">—</span>
                 </div>
               </td>
-              <td class="tabular">{{ employee.hireDate || '-' }}</td>
-              <td class="tabular last-login-cell">{{ formatDateTime(employee.lastLoginAt) }}</td>
+              <td>
+                <div class="time-cell">
+                  <span class="time-primary tabular">入职: {{ employee.hireDate || '—' }}</span>
+                  <span class="time-secondary tabular">登录: {{ formatDateTime(employee.lastLoginAt) }}</span>
+                </div>
+              </td>
               <td>
                 <div class="row-actions" @click.stop>
-                  <button class="text-button" type="button" @click="openEmployee(employee)">查看</button>
-                  <button class="text-button" type="button" @click="openEdit(employee)">编辑</button>
-                  <button class="text-button" type="button" @click="toggleAccount(employee)">
-                    {{ employee.accountStatus === 'disabled' ? '启用账号' : '停用账号' }}
-                  </button>
+                  <button class="action-link" type="button" @click="openEmployee(employee)">查看</button>
+                  <button class="action-link" type="button" @click="openEdit(employee)">编辑</button>
+                  <div class="action-dropdown">
+                    <button class="action-more" type="button" title="更多操作">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="12" cy="5" r="1"></circle>
+                        <circle cx="12" cy="19" r="1"></circle>
+                      </svg>
+                    </button>
+                    <div class="action-menu">
+                      <button type="button" @click="openPasswordEditor">修改密码</button>
+                      <button
+                        type="button"
+                        class="action-danger"
+                        @click="confirmToggleAccount(employee)"
+                      >
+                        {{ employee.accountStatus === 'disabled' ? '启用账号' : '停用账号' }}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </td>
             </tr>
             <tr v-if="filteredEmployees.length === 0">
-              <td colspan="9">
+              <td colspan="8">
                 <div class="empty-state">
                   <span class="empty-icon">—</span>
                   <strong>没有匹配的员工</strong>
@@ -187,8 +206,38 @@
       </div>
 
       <div class="table-footer">
-        <span>员工档案是人员主体，登录账号按需开通，角色组请在角色组管理中统一分配。</span>
-        <span class="footer-summary">显示 {{ filteredEmployees.length }} / {{ employees.length }}</span>
+        <div class="footer-left">
+          <button class="footer-info-trigger" type="button" title="查看说明">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M12 16v-4"></path>
+              <path d="M12 8h.01"></path>
+            </svg>
+          </button>
+          <span class="footer-hint">员工档案是人员主体，登录账号按需开通，角色组请在角色组管理中统一分配。</span>
+        </div>
+        <div class="footer-pagination">
+          <span class="pagination-info">显示 {{ filteredEmployees.length }} / {{ employees.length }}</span>
+          <select v-model="pageSize" class="page-size-select">
+            <option :value="10">10 条/页</option>
+            <option :value="20">20 条/页</option>
+            <option :value="50">50 条/页</option>
+            <option :value="100">100 条/页</option>
+          </select>
+          <div class="pagination-controls">
+            <button class="pagination-btn" type="button" title="上一页" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m15 18-6-6 6-6"></path>
+              </svg>
+            </button>
+            <span class="pagination-current">1</span>
+            <button class="pagination-btn" type="button" title="下一页" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m9 18 6-6-6-6"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
       </div>
       </section>
     </template>
@@ -812,6 +861,8 @@ const filters = ref({
   accountStatus: ''
 })
 
+const pageSize = ref(20)
+
 const selectedEmployeeId = ref(null)
 const activeDetailTab = ref('profile')
 const drawerVisible = ref(false)
@@ -833,9 +884,8 @@ async function loadEmployeeData() {
       request.get('/admin/permissions')
     ])
     employees.value = employeeResponse.employees || []
-    roleGroups.value = (roleResponse.roles || []).map((role, index) => ({
-      ...role,
-      tone: ['green', 'blue', 'orange', 'purple', 'red'][index % 5]
+    roleGroups.value = (roleResponse.roles || []).map((role) => ({
+      ...role
     }))
     permissionModules.value = (permissionResponse.modules || []).map((module, index) => ({
       ...module,
@@ -1068,6 +1118,17 @@ async function toggleAccount(employee) {
   }
 }
 
+function confirmToggleAccount(employee) {
+  if (!employee.username) {
+    showNotice('该员工尚未开通登录账号')
+    return
+  }
+  const action = employee.accountStatus === 'disabled' ? '启用' : '停用'
+  if (window.confirm(`确认${action}账号 "${employee.username}"？\n\n${action === '停用' ? '停用后该员工将无法登录系统。' : ''}`)) {
+    toggleAccount(employee)
+  }
+}
+
 function resetFilters() {
   filters.value = {
     keyword: '',
@@ -1148,9 +1209,27 @@ function employmentStatusClass(status) {
 }
 
 function avatarStyle(employee) {
+  // 根据员工姓名生成不同的头像颜色
+  const colors = [
+    { bg: '#d1f4e8', color: '#0d7a5f' }, // 绿色
+    { bg: '#d4f0f7', color: '#0e5a6d' }, // 蓝色
+    { bg: '#ece5fb', color: '#5a4691' }, // 紫色
+    { bg: '#fde8cf', color: '#8b4508' }, // 橙色
+    { bg: '#fde1e4', color: '#991f29' }  // 红色
+  ]
+
+  // 简单的哈希函数，基于员工姓名或工号
+  const hashString = employee.displayName + (employee.employeeNo || '')
+  let hash = 0
+  for (let i = 0; i < hashString.length; i++) {
+    hash = hashString.charCodeAt(i) + ((hash << 5) - hash)
+  }
+  const colorIndex = Math.abs(hash) % colors.length
+  const selectedColor = colors[colorIndex]
+
   const style = {
-    backgroundColor: employee.avatarColor || '#e5e7eb',
-    color: '#275a4d'
+    backgroundColor: employee.avatarColor || selectedColor.bg,
+    color: employee.avatarColor ? '#275a4d' : selectedColor.color
   }
   if (employee.avatarUrl) {
     style.backgroundImage = `url("${employee.avatarUrl}")`
@@ -1476,6 +1555,9 @@ input[type='checkbox'] {
 .records-panel {
   margin-top: 14px;
   overflow: hidden;
+  min-height: calc(100vh - 180px);
+  display: flex;
+  flex-direction: column;
 }
 
 .workspace-nav + .records-panel {
@@ -1608,11 +1690,12 @@ input[type='checkbox'] {
 
 .table-scroll {
   overflow-x: auto;
+  flex: 1;
 }
 
 .employee-table {
   width: 100%;
-  min-width: 1405px;
+  min-width: 1280px;
   table-layout: fixed;
   border-collapse: collapse;
 }
@@ -1657,7 +1740,7 @@ input[type='checkbox'] {
 }
 
 .col-employee {
-  width: 215px;
+  width: 200px;
 }
 
 .col-account {
@@ -1665,38 +1748,33 @@ input[type='checkbox'] {
 }
 
 .col-job {
-  width: 155px;
+  width: 165px;
 }
 
 .col-phone {
-  width: 125px;
+  width: 120px;
 }
 
-.col-employment {
-  width: 110px;
+.col-status {
+  width: 100px;
 }
 
 .col-role {
-  width: 215px;
+  width: 200px;
 }
 
-.col-date {
-  width: 110px;
-}
-
-.col-login {
-  width: 145px;
+.col-time {
+  width: 160px;
 }
 
 .col-actions {
-  width: 170px;
+  width: 180px;
   text-align: center !important;
 }
 
-.last-login-cell {
-  color: var(--text-secondary);
-  font-size: 12px !important;
-  white-space: nowrap;
+.cell-muted {
+  color: #64748b;
+  font-size: 13px !important;
 }
 
 .employee-cell {
@@ -1718,7 +1796,8 @@ input[type='checkbox'] {
 
 .employee-copy,
 .account-cell,
-.job-cell {
+.job-cell,
+.time-cell {
   display: flex;
   min-width: 0;
   flex-direction: column;
@@ -1731,6 +1810,7 @@ input[type='checkbox'] {
   overflow: hidden;
   color: var(--text);
   font-size: 13px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1738,14 +1818,29 @@ input[type='checkbox'] {
 .employee-copy span,
 .job-cell span {
   overflow: hidden;
-  color: var(--text-muted);
+  color: #94a3b8;
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.account-cell .status-badge {
+.account-cell .mini-badge {
   width: fit-content;
+}
+
+.time-cell {
+  gap: 3px;
+}
+
+.time-primary {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.time-secondary {
+  color: #94a3b8;
+  font-size: 11px;
 }
 
 .status-badge {
@@ -1809,40 +1904,41 @@ input[type='checkbox'] {
   text-overflow: ellipsis;
 }
 
-.role-tag.green {
-  color: #13734f;
-  background: #eaf8f1;
+.role-tag.role-green {
+  color: #0d7a5f;
+  background: #d1f4e8;
 }
 
-.role-tag.blue {
-  color: #16647a;
-  background: #e7f5f8;
+.role-tag.role-blue {
+  color: #0e5a6d;
+  background: #d4f0f7;
 }
 
-.role-tag.orange {
-  color: #a4510b;
-  background: #fff3df;
+.role-tag.role-orange {
+  color: #8b4508;
+  background: #fde8cf;
 }
 
-.role-tag.red {
-  color: #b4232f;
-  background: #fcebed;
+.role-tag.role-red {
+  color: #991f29;
+  background: #fde1e4;
 }
 
-.role-tag.purple {
-  color: #6651a8;
-  background: #f1edff;
+.role-tag.role-purple {
+  color: #5a4691;
+  background: #ece5fb;
 }
 
-.role-tag.neutral,
+.role-tag.role-neutral,
 .role-more {
   color: var(--text-secondary);
   background: #f1f5f9;
 }
 
 .empty-inline {
-  color: var(--text-muted);
+  color: #cbd5e1;
   font-size: 12px;
+  font-style: italic;
 }
 
 .tabular {
@@ -1852,6 +1948,103 @@ input[type='checkbox'] {
 .row-actions {
   justify-content: center;
   gap: 10px;
+  position: relative;
+}
+
+.action-link {
+  padding: 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.action-link:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.action-dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.action-more {
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #64748b;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.action-more:hover {
+  color: var(--accent-dark);
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.action-more svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.action-dropdown:hover .action-menu {
+  display: block;
+}
+
+.action-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 100;
+  display: none;
+  min-width: 130px;
+  margin-top: 4px;
+  padding: 6px 0;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
+.action-menu button {
+  display: block;
+  width: 100%;
+  padding: 8px 14px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.action-menu button:hover {
+  background: #f8fafc;
+}
+
+.action-menu button.action-danger {
+  color: #dc2626;
+}
+
+.action-menu button.action-danger:hover {
+  background: #fef2f2;
 }
 
 .text-button {
@@ -1893,14 +2086,147 @@ input[type='checkbox'] {
 
 .table-footer {
   display: flex;
-  min-height: 48px;
+  min-height: 54px;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 16px;
   padding: 0 16px;
-  color: var(--text-muted);
   border-top: 1px solid var(--border);
   font-size: 12px;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+  min-width: 0;
+}
+
+.footer-info-trigger {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #94a3b8;
+  background: transparent;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.footer-info-trigger:hover {
+  color: var(--accent-dark);
+  background: #f1f5f9;
+}
+
+.footer-info-trigger svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.footer-hint {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.footer-pagination {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+.pagination-info {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.page-size-select {
+  width: 100px;
+  height: 32px;
+  padding: 0 8px;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.page-size-select:hover {
+  border-color: var(--accent);
+}
+
+.page-size-select:focus {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination-btn {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 5px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pagination-btn:not(:disabled):hover {
+  color: var(--accent-dark);
+  background: #f8fafc;
+  border-color: var(--accent);
+}
+
+.pagination-btn:disabled {
+  color: #cbd5e1;
+  background: #f8fafc;
+  cursor: not-allowed;
+}
+
+.pagination-btn svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.pagination-current {
+  min-width: 32px;
+  padding: 0 8px;
+  color: var(--text);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .footer-summary {
@@ -3082,6 +3408,22 @@ select:focus-visible,
   .permission-side {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .table-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+  }
+
+  .footer-left {
+    width: 100%;
+  }
+
+  .footer-pagination {
+    width: 100%;
+    justify-content: space-between;
+  }
 }
 
 @media (max-width: 780px) {
@@ -3229,6 +3571,25 @@ select:focus-visible,
     flex-direction: column;
     justify-content: center;
     padding: 10px 14px;
+  }
+
+  .footer-left {
+    width: 100%;
+  }
+
+  .footer-hint {
+    font-size: 11px;
+  }
+
+  .footer-pagination {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .pagination-info {
+    flex: 1 1 100%;
+    margin-bottom: 8px;
   }
 
   .form-grid {
