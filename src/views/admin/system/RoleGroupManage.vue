@@ -38,10 +38,23 @@
         </div>
       </div>
       <div class="role-context-actions">
-        <button class="button button-secondary" type="button" @click="toggleSelectedGroup">
+        <button
+          v-if="!selectedGroup.isSystem"
+          class="button button-secondary"
+          type="button"
+          @click="toggleSelectedGroup"
+        >
           {{ selectedGroup.status === 'enabled' ? '停用' : '启用' }}
         </button>
-        <button class="button button-ghost" type="button" @click="openEdit(selectedGroup)">编辑信息</button>
+        <button
+          v-if="!selectedGroup.isSystem"
+          class="button button-ghost"
+          type="button"
+          @click="openEdit(selectedGroup)"
+        >
+          编辑信息
+        </button>
+        <span v-else class="system-role-hint">系统内置角色组</span>
       </div>
     </div>
 
@@ -57,6 +70,7 @@
               class="button button-secondary compact-button"
               :class="{ 'mode-active': permissionAddMode }"
               type="button"
+              :disabled="selectedGroup.fullAccess"
               @click="togglePermissionAddMode"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -69,7 +83,7 @@
               class="button button-danger compact-button"
               :class="{ 'mode-active': permissionDeleteMode }"
               type="button"
-              :disabled="selectedGroup.permissions.length === 0"
+              :disabled="selectedGroup.fullAccess || selectedGroup.permissions.length === 0"
               @click="togglePermissionDeleteMode"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -163,6 +177,7 @@
                   class="scope-chip"
                   :class="{ active: selectedGroup.storeIds.includes(store.id) }"
                   type="button"
+                  :disabled="selectedGroup.fullAccess"
                   @click="toggleGroupScope('store', store.id)"
                 >
                   <i></i>{{ store.name }}
@@ -181,6 +196,7 @@
                   class="scope-chip"
                   :class="{ active: selectedGroup.warehouseIds.includes(warehouse.id) }"
                   type="button"
+                  :disabled="selectedGroup.fullAccess"
                   @click="toggleGroupScope('warehouse', warehouse.id)"
                 >
                   <i></i>{{ warehouse.name }}
@@ -276,8 +292,8 @@
               <strong>{{ member.name }}</strong>
               <small>{{ member.employeeNo }} · {{ member.department }}</small>
             </span>
-            <span :class="['member-account-status', member.accountStatus === 'active' ? 'active' : 'pending']">
-              {{ member.accountStatus === 'active' ? '正常' : '待完善' }}
+            <span :class="['member-account-status', member.accountStatus]">
+              {{ memberAccountStatusLabel(member.accountStatus) }}
             </span>
           </label>
           <div v-if="selectedMembers.length === 0" class="member-empty">
@@ -327,7 +343,12 @@
                 </label>
                 <label class="field">
                   <span>权限编码</span>
-                  <input v-model.trim="draft.code" type="text" placeholder="例如 finance_staff" />
+                  <input
+                    v-model.trim="draft.code"
+                    type="text"
+                    :disabled="editingGroup"
+                    placeholder="例如 finance_staff"
+                  />
                 </label>
                 <label class="field">
                   <span>状态</span>
@@ -367,170 +388,19 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import request from '@/api/request'
 
-const permissionModules = [
-  {
-    id: 'front',
-    name: '前端触屏端',
-    description: '触屏端入口和作业操作',
-    tone: 'green',
-    permissions: [
-      { id: 'front.access', name: '访问触屏端' },
-      { id: 'front.material_outbound.create', name: '录入原材料出库' },
-      { id: 'front.material_outbound.view', name: '查看本人出库记录' }
-    ]
-  },
-  {
-    id: 'sales',
-    name: '销售业务',
-    description: '客户、订单和物流信息',
-    tone: 'blue',
-    permissions: [
-      { id: 'sales.customer.view', name: '查看客户' },
-      { id: 'sales.order.create', name: '新增销售订单' },
-      { id: 'sales.order.edit', name: '修改销售订单' },
-      { id: 'sales.order.audit', name: '审核销售订单' }
-    ]
-  },
-  {
-    id: 'inventory',
-    name: '库存管理',
-    description: '入库、出库和库存流水',
-    tone: 'orange',
-    permissions: [
-      { id: 'inventory.view', name: '查看库存' },
-      { id: 'inventory.inbound.create', name: '录入入库单' },
-      { id: 'inventory.outbound.create', name: '录入出库单' },
-      { id: 'inventory.audit', name: '审核库存单据' }
-    ]
-  },
-  {
-    id: 'finance',
-    name: '财务管理',
-    description: '应收、收款和对账',
-    tone: 'purple',
-    permissions: [
-      { id: 'finance.receivable.view', name: '查看应收欠款' },
-      { id: 'finance.payment.create', name: '录入收款单' },
-      { id: 'finance.payment.audit', name: '审核收款单' },
-      { id: 'finance.reconciliation.view', name: '查看对账记录' }
-    ]
-  },
-  {
-    id: 'system',
-    name: '系统管理',
-    description: '账号、角色和基础配置',
-    tone: 'red',
-    permissions: [
-      { id: 'system.account.manage', name: '管理员工账号' },
-      { id: 'system.role.manage', name: '管理角色组' },
-      { id: 'system.store.manage', name: '管理门店' },
-      { id: 'system.settings.manage', name: '管理系统设置' }
-    ]
-  }
-]
+const permissionModules = ref([])
+const stores = ref([])
+const warehouses = ref([])
+const memberCatalog = ref([])
+const roleGroups = ref([])
+const allPermissionIds = computed(() =>
+  permissionModules.value.flatMap(module => module.permissions.map(permission => permission.id))
+)
 
-const allPermissionIds = permissionModules.flatMap(module => module.permissions.map(permission => permission.id))
-
-const stores = [
-  { id: 1, name: '一号门店' },
-  { id: 2, name: '二号门店' },
-  { id: 3, name: '直营网点' }
-]
-
-const warehouses = [
-  { id: 1, name: '成品仓' },
-  { id: 2, name: '原材料仓' },
-  { id: 3, name: '周转仓' }
-]
-
-const memberCatalog = [
-  { id: 1001, name: '张三', employeeNo: 'E-0001', department: '仓储部', accountStatus: 'active', avatarColor: '#d8f4ea' },
-  { id: 1002, name: '李四', employeeNo: 'E-0002', department: '财务部', accountStatus: 'active', avatarColor: '#e2edff' },
-  { id: 1003, name: '王五', employeeNo: 'E-0003', department: '销售部', accountStatus: 'pending', avatarColor: '#fff0d7' },
-  { id: 1004, name: '赵六', employeeNo: 'E-0004', department: '人事行政', accountStatus: 'disabled', avatarColor: '#eee4ff' }
-]
-
-const roleGroups = ref([
-  {
-    id: 'system_admin',
-    code: 'system_admin',
-    name: '系统管理员',
-    description: '负责系统基础资料、账号权限和运行配置维护。',
-    tone: 'red',
-    status: 'enabled',
-    memberIds: [1004],
-    permissions: allPermissionIds,
-    storeIds: [1, 2, 3],
-    warehouseIds: [1, 2, 3],
-    createdAt: '2026-09-01',
-    updatedAt: '2026-09-17'
-  },
-  {
-    id: 'finance',
-    code: 'finance_staff',
-    name: '财务人员',
-    description: '负责应收、收款、银行账户和物流对账业务。',
-    tone: 'purple',
-    status: 'enabled',
-    memberIds: [1002],
-    permissions: [
-      'finance.receivable.view',
-      'finance.payment.create',
-      'finance.reconciliation.view',
-      'sales.customer.view'
-    ],
-    storeIds: [1, 2, 3],
-    warehouseIds: [],
-    createdAt: '2026-09-02',
-    updatedAt: '2026-09-16'
-  },
-  {
-    id: 'warehouse',
-    code: 'warehouse_operator',
-    name: '仓库操作员',
-    description: '负责授权仓库内的库存查看、入库和出库录入。',
-    tone: 'orange',
-    status: 'enabled',
-    memberIds: [1001],
-    permissions: ['inventory.view', 'inventory.inbound.create', 'inventory.outbound.create'],
-    storeIds: [1],
-    warehouseIds: [1, 2],
-    createdAt: '2026-09-03',
-    updatedAt: '2026-09-15'
-  },
-  {
-    id: 'touch_staff',
-    code: 'touch_staff',
-    name: '触屏员工',
-    description: '仅开放前端触屏端作业，不接触财务和系统管理数据。',
-    tone: 'green',
-    status: 'enabled',
-    memberIds: [1001, 1003],
-    permissions: ['front.access', 'front.material_outbound.create', 'front.material_outbound.view'],
-    storeIds: [1],
-    warehouseIds: [1, 2],
-    createdAt: '2026-09-04',
-    updatedAt: '2026-09-17'
-  },
-  {
-    id: 'sales',
-    code: 'sales_staff',
-    name: '销售人员',
-    description: '负责客户维护、销售订单录入和订单跟进。',
-    tone: 'blue',
-    status: 'disabled',
-    memberIds: [1003],
-    permissions: ['sales.customer.view', 'sales.order.create', 'sales.order.edit'],
-    storeIds: [2],
-    warehouseIds: [],
-    createdAt: '2026-09-05',
-    updatedAt: '2026-09-12'
-  }
-])
-
-const selectedGroupId = ref('system_admin')
+const selectedGroupId = ref(null)
 const permissionAddMode = ref(false)
 const permissionDeleteMode = ref(false)
 const permissionDeleteTarget = ref(null)
@@ -542,16 +412,17 @@ const drawerVisible = ref(false)
 const editingGroup = ref(false)
 const draft = ref(createEmptyGroup())
 const notice = ref('')
+const saving = ref(false)
 let noticeTimer
 
 const selectedGroup = computed(() => roleGroups.value.find(group => group.id === selectedGroupId.value))
 const selectedMembers = computed(() => {
   if (!selectedGroup.value) return []
-  return memberCatalog.filter(member => selectedGroup.value.memberIds.includes(member.id))
+  return memberCatalog.value.filter(member => selectedGroup.value.memberIds.includes(member.id))
 })
 const displayedPermissionModules = computed(() => {
   const permissionIds = selectedGroup.value?.permissions || []
-  return permissionModules
+  return permissionModules.value
     .map(module => ({
       ...module,
       permissions: module.permissions.filter(permission =>
@@ -562,7 +433,7 @@ const displayedPermissionModules = computed(() => {
 })
 const availableMembers = computed(() => {
   if (!selectedGroup.value) return []
-  return memberCatalog.filter(member => !selectedGroup.value.memberIds.includes(member.id))
+  return memberCatalog.value.filter(member => !selectedGroup.value.memberIds.includes(member.id))
 })
 const memberSearchResults = computed(() => {
   const keyword = memberSearchQuery.value.trim().toLowerCase()
@@ -574,9 +445,67 @@ const memberSearchResults = computed(() => {
       .includes(keyword)
   )
 })
-const enabledGroupCount = computed(() => roleGroups.value.filter(group => group.status === 'enabled').length)
-const memberLinkCount = computed(() => roleGroups.value.reduce((total, group) => total + group.memberIds.length, 0))
-const permissionTotal = allPermissionIds.length
+const permissionTotal = computed(() => allPermissionIds.value.length)
+
+function toneForRole(role, index) {
+  if (role.fullAccess) return 'red'
+  return ['green', 'blue', 'orange', 'purple'][index % 4]
+}
+
+function mapRole(role, index = 0) {
+  return {
+    ...role,
+    tone: toneForRole(role, index),
+    status: role.status === 'active' ? 'enabled' : 'disabled',
+    permissions: role.fullAccess ? [...allPermissionIds.value] : [...(role.permissionCodes || [])],
+    memberIds: [...(role.memberIds || [])],
+    storeIds: role.fullAccess ? stores.value.map(store => store.id) : [...(role.storeIds || [])],
+    warehouseIds: role.fullAccess
+      ? warehouses.value.map(warehouse => warehouse.id)
+      : [...(role.warehouseIds || [])]
+  }
+}
+
+function mapEmployee(employee) {
+  return {
+    ...employee,
+    name: employee.displayName,
+    avatarColor: employee.avatarColor || '#e9f8f3'
+  }
+}
+
+async function loadAll() {
+  try {
+    const [permissionResponse, roleResponse, employeeResponse, storeResponse, warehouseResponse] =
+      await Promise.all([
+        request.get('/admin/permissions'),
+        request.get('/admin/roles'),
+        request.get('/admin/employees'),
+        request.get('/stores'),
+        request.get('/warehouses')
+      ])
+
+    stores.value = Array.isArray(storeResponse) ? storeResponse : []
+    warehouses.value = Array.isArray(warehouseResponse) ? warehouseResponse : []
+    permissionModules.value = (permissionResponse.modules || []).map((module, index) => ({
+      ...module,
+      id: module.code,
+      tone: ['green', 'blue', 'orange', 'purple'][index % 4],
+      permissions: (module.permissions || []).map(permission => ({
+        ...permission,
+        id: permission.code
+      }))
+    }))
+    memberCatalog.value = (employeeResponse.employees || []).map(mapEmployee)
+    roleGroups.value = (roleResponse.roles || []).map(mapRole)
+
+    if (!roleGroups.value.some(group => group.id === selectedGroupId.value)) {
+      selectedGroupId.value = roleGroups.value[0]?.id || null
+    }
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '角色组数据加载失败')
+  }
+}
 
 function createEmptyGroup() {
   return {
@@ -590,8 +519,9 @@ function createEmptyGroup() {
     permissions: [],
     storeIds: [],
     warehouseIds: [],
-    createdAt: '2026-09-17',
-    updatedAt: '2026-09-17'
+    dataScope: 'custom',
+    createdAt: '',
+    updatedAt: ''
   }
 }
 
@@ -626,36 +556,77 @@ function closeDrawer() {
   drawerVisible.value = false
 }
 
-function saveGroup() {
+function rolePayload(group) {
+  return {
+    code: group.code,
+    name: group.name,
+    description: group.description,
+    status: group.status === 'enabled' ? 'active' : 'disabled',
+    dataScope: group.dataScope || 'custom',
+    permissionCodes: [...group.permissions],
+    storeIds: [...group.storeIds],
+    warehouseIds: [...group.warehouseIds]
+  }
+}
+
+function replaceRole(role) {
+  const index = roleGroups.value.findIndex(group => group.id === role.id)
+  const mapped = mapRole(role, index < 0 ? roleGroups.value.length : index)
+  if (index < 0) roleGroups.value.push(mapped)
+  else roleGroups.value[index] = mapped
+  return mapped
+}
+
+async function persistRole(group, successMessage) {
+  try {
+    saving.value = true
+    const response = await request.put(`/admin/roles/${group.id}`, rolePayload(group))
+    replaceRole(response.role)
+    showNotice(response.message || successMessage)
+    return true
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '角色组保存失败')
+    await loadAll()
+    return false
+  } finally {
+    saving.value = false
+  }
+}
+
+async function saveGroup() {
   if (!draft.value.name) {
     showNotice('请先填写角色组名称')
     return
   }
 
-  const payload = {
+  const normalizedCode = draft.value.code
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  const payload = rolePayload({
     ...draft.value,
-    code: draft.value.code || draft.value.name.toLowerCase().replace(/\s+/g, '_'),
-    memberIds: [...draft.value.memberIds],
-    permissions: [...draft.value.permissions],
-    storeIds: [...draft.value.storeIds],
-    warehouseIds: [...draft.value.warehouseIds],
-    updatedAt: '2026-09-17'
-  }
+    code: normalizedCode || `role_${Date.now().toString(36)}`
+  })
 
-  if (editingGroup.value) {
-    const index = roleGroups.value.findIndex(group => group.id === payload.id)
-    if (index !== -1) roleGroups.value[index] = payload
-    showNotice('角色组已更新')
-  } else {
-    payload.id = `role_${Date.now()}`
-    roleGroups.value.push(payload)
-    selectedGroupId.value = payload.id
-    showNotice('角色组已创建')
+  try {
+    saving.value = true
+    const response = editingGroup.value
+      ? await request.put(`/admin/roles/${draft.value.id}`, payload)
+      : await request.post('/admin/roles', payload)
+    const savedRole = replaceRole(response.role)
+    selectedGroupId.value = savedRole.id
+    showNotice(response.message || (editingGroup.value ? '角色组已更新' : '角色组已创建'))
+    closeDrawer()
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '角色组保存失败')
+  } finally {
+    saving.value = false
   }
-  closeDrawer()
 }
 
 function togglePermissionAddMode() {
+  if (selectedGroup.value?.fullAccess) return
   permissionAddMode.value = !permissionAddMode.value
   permissionDeleteMode.value = false
   permissionDeleteTarget.value = null
@@ -663,6 +634,7 @@ function togglePermissionAddMode() {
 }
 
 function togglePermissionDeleteMode() {
+  if (selectedGroup.value?.fullAccess) return
   permissionDeleteMode.value = !permissionDeleteMode.value
   permissionAddMode.value = false
   permissionDeleteTarget.value = null
@@ -673,43 +645,42 @@ function handlePermissionRowClick(permissionId) {
   togglePermission(permissionId)
 }
 
-function togglePermission(permissionId) {
+async function togglePermission(permissionId) {
   if (!selectedGroup.value || permissionDeleteMode.value || !permissionAddMode.value) return
   if (selectedGroup.value.permissions.includes(permissionId)) return
   selectedGroup.value.permissions.push(permissionId)
-  selectedGroup.value.updatedAt = '2026-09-17'
-  showNotice('权限添加成功')
+  await persistRole(selectedGroup.value, '权限添加成功')
 }
 
-function toggleGroupScope(scopeType, scopeId) {
-  if (!selectedGroup.value) return
+async function toggleGroupScope(scopeType, scopeId) {
+  if (!selectedGroup.value || selectedGroup.value.fullAccess) return
   const key = scopeType === 'store' ? 'storeIds' : 'warehouseIds'
-  const ids = selectedGroup.value[key] || []
+  const ids = [...(selectedGroup.value[key] || [])]
   const index = ids.indexOf(scopeId)
 
   if (index === -1) {
     ids.push(scopeId)
-    showNotice(`${scopeType === 'store' ? '门店' : '仓库'}范围添加成功`)
   } else {
     ids.splice(index, 1)
-    showNotice(`${scopeType === 'store' ? '门店' : '仓库'}范围已移除`)
   }
   selectedGroup.value[key] = ids
-  selectedGroup.value.updatedAt = '2026-09-17'
+  await persistRole(
+    selectedGroup.value,
+    `${scopeType === 'store' ? '门店' : '仓库'}范围已更新`
+  )
 }
 
 function openPermissionDeleteConfirm(permissionId) {
   permissionDeleteTarget.value = permissionDeleteTarget.value === permissionId ? null : permissionId
 }
 
-function confirmPermissionDelete() {
+async function confirmPermissionDelete() {
   if (!selectedGroup.value || !permissionDeleteTarget.value) return
   selectedGroup.value.permissions = selectedGroup.value.permissions.filter(
     permissionId => permissionId !== permissionDeleteTarget.value
   )
-  selectedGroup.value.updatedAt = '2026-09-17'
   permissionDeleteTarget.value = null
-  showNotice('权限已删除')
+  await persistRole(selectedGroup.value, '权限已删除')
 }
 
 function cancelPermissionDelete() {
@@ -728,12 +699,30 @@ function selectMemberToAdd(member) {
   memberSearchOpen.value = false
 }
 
-function addSelectedMember() {
+async function persistMembers(employeeIds, successMessage) {
+  if (!selectedGroup.value) return false
+  try {
+    saving.value = true
+    const response = await request.put(
+      `/admin/roles/${selectedGroup.value.id}/members`,
+      { employeeIds }
+    )
+    replaceRole(response.role)
+    showNotice(response.message || successMessage)
+    return true
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '角色组成员保存失败')
+    await loadAll()
+    return false
+  } finally {
+    saving.value = false
+  }
+}
+
+async function addSelectedMember() {
   if (!selectedGroup.value || !memberToAddId.value) return
-  selectedGroup.value.memberIds.push(memberToAddId.value)
-  selectedGroup.value.updatedAt = '2026-09-17'
-  resetMemberSearch()
-  showNotice('成员添加成功')
+  const employeeIds = [...selectedGroup.value.memberIds, memberToAddId.value]
+  if (await persistMembers(employeeIds, '成员添加成功')) resetMemberSearch()
 }
 
 function resetMemberSearch() {
@@ -742,33 +731,23 @@ function resetMemberSearch() {
   memberToAddId.value = null
 }
 
-function deleteSelectedMembers() {
+async function deleteSelectedMembers() {
   if (!selectedGroup.value || selectedMemberIds.value.length === 0) return
-  selectedGroup.value.memberIds = selectedGroup.value.memberIds.filter(
+  const employeeIds = selectedGroup.value.memberIds.filter(
     memberId => !selectedMemberIds.value.includes(memberId)
   )
-  selectedGroup.value.updatedAt = '2026-09-17'
-  selectedMemberIds.value = []
-  showNotice('已删除选中的成员')
+  if (await persistMembers(employeeIds, '已删除选中的成员')) {
+    selectedMemberIds.value = []
+  }
 }
 
-function toggleSelectedGroup() {
-  if (!selectedGroup.value) return
+async function toggleSelectedGroup() {
+  if (!selectedGroup.value || selectedGroup.value.isSystem) return
   selectedGroup.value.status = selectedGroup.value.status === 'enabled' ? 'disabled' : 'enabled'
-  selectedGroup.value.updatedAt = '2026-09-17'
-  showNotice(selectedGroup.value.status === 'enabled' ? '角色组已启用' : '角色组已停用')
-}
-
-function removeMember(memberId) {
-  if (!selectedGroup.value) return
-  const index = selectedGroup.value.memberIds.indexOf(memberId)
-  if (index !== -1) selectedGroup.value.memberIds.splice(index, 1)
-  selectedGroup.value.updatedAt = '2026-09-17'
-  showNotice('员工已移出角色组')
-}
-
-function refreshGroups() {
-  showNotice('演示数据已刷新')
+  await persistRole(
+    selectedGroup.value,
+    selectedGroup.value.status === 'enabled' ? '角色组已启用' : '角色组已停用'
+  )
 }
 
 function showNotice(message) {
@@ -780,11 +759,29 @@ function showNotice(message) {
 }
 
 function avatarStyle(member) {
-  return {
+  const style = {
     backgroundColor: member.avatarColor || '#e5e7eb',
     color: '#275a4d'
   }
+  if (member.avatarUrl) {
+    style.backgroundImage = `url("${member.avatarUrl}")`
+    style.backgroundPosition = 'center'
+    style.backgroundRepeat = 'no-repeat'
+    style.backgroundSize = 'cover'
+    style.color = 'transparent'
+  }
+  return style
 }
+
+function memberAccountStatusLabel(status) {
+  return {
+    active: '正常',
+    disabled: '已停用',
+    pending: '待开通'
+  }[status] || '待开通'
+}
+
+onMounted(loadAll)
 </script>
 
 <style scoped>
@@ -939,6 +936,18 @@ h1 {
   color: var(--accent-dark);
   background: var(--accent-soft);
   border-color: var(--accent-border);
+}
+
+.button:disabled,
+.scope-chip:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.system-role-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
 }
 
 .metric-grid {
@@ -1483,6 +1492,10 @@ h1 {
 
 .member-account-status.pending {
   color: #a4510b;
+}
+
+.member-account-status.disabled {
+  color: #7b8492;
 }
 
 .text-button {

@@ -50,6 +50,20 @@ def _serialize_employee(conn, row):
         user_row = _user_row(conn, row["user_id"])
         if user_row:
             user = serialize_user(conn, user_row)
+    roles = [
+        dict(role)
+        for role in conn.execute(
+            """
+            SELECT roles.id, roles.code, roles.name, roles.description,
+                   roles.full_access, roles.data_scope
+            FROM employee_roles
+            INNER JOIN roles ON roles.id = employee_roles.role_id
+            WHERE employee_roles.employee_id = ?
+            ORDER BY roles.is_system DESC, roles.id
+            """,
+            (row["id"],),
+        ).fetchall()
+    ]
     return {
         "id": row["id"],
         "userId": row["user_id"],
@@ -70,8 +84,8 @@ def _serialize_employee(conn, row):
         "employmentStatus": row["employment_status"],
         "employmentType": row["employment_type"],
         "hireDate": row["hire_date"] or "",
-        "roleIds": user["roleIds"] if user else [],
-        "roles": user["roles"] if user else [],
+        "roleIds": [role["id"] for role in roles],
+        "roles": roles,
         "createdAt": row["created_at"],
     }
 
@@ -88,8 +102,10 @@ def _active_super_admin_count(conn):
         """
         SELECT COUNT(DISTINCT users.id) AS total
         FROM users
-        INNER JOIN user_roles ON user_roles.user_id = users.id
-        INNER JOIN roles ON roles.id = user_roles.role_id
+        INNER JOIN employees ON employees.user_id = users.id
+        INNER JOIN employee_roles
+            ON employee_roles.employee_id = employees.id
+        INNER JOIN roles ON roles.id = employee_roles.role_id
         WHERE users.status = 'active'
           AND roles.status = 'active'
           AND roles.full_access = 1
@@ -105,8 +121,10 @@ def _is_active_super_admin(conn, user_id):
             """
             SELECT 1
             FROM users
-            INNER JOIN user_roles ON user_roles.user_id = users.id
-            INNER JOIN roles ON roles.id = user_roles.role_id
+            INNER JOIN employees ON employees.user_id = users.id
+            INNER JOIN employee_roles
+                ON employee_roles.employee_id = employees.id
+            INNER JOIN roles ON roles.id = employee_roles.role_id
             WHERE users.id = ?
               AND users.status = 'active'
               AND roles.status = 'active'

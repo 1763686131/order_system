@@ -15,8 +15,9 @@ def _load_roles_and_permissions(conn, user_id):
             SELECT roles.id, roles.code, roles.name, roles.description,
                    roles.full_access, roles.data_scope
             FROM roles
-            INNER JOIN user_roles ON user_roles.role_id = roles.id
-            WHERE user_roles.user_id = ? AND roles.status = 'active'
+            INNER JOIN employee_roles ON employee_roles.role_id = roles.id
+            INNER JOIN employees ON employees.id = employee_roles.employee_id
+            WHERE employees.user_id = ? AND roles.status = 'active'
             ORDER BY roles.is_system DESC, roles.id
             """,
             (user_id,),
@@ -33,10 +34,12 @@ def _load_roles_and_permissions(conn, user_id):
                 FROM permissions
                 INNER JOIN role_permissions
                     ON role_permissions.permission_id = permissions.id
-                INNER JOIN user_roles
-                    ON user_roles.role_id = role_permissions.role_id
-                INNER JOIN roles ON roles.id = user_roles.role_id
-                WHERE user_roles.user_id = ? AND roles.status = 'active'
+                INNER JOIN employee_roles
+                    ON employee_roles.role_id = role_permissions.role_id
+                INNER JOIN employees
+                    ON employees.id = employee_roles.employee_id
+                INNER JOIN roles ON roles.id = employee_roles.role_id
+                WHERE employees.user_id = ? AND roles.status = 'active'
                 ORDER BY permissions.sort_order, permissions.id
                 """,
                 (user_id,),
@@ -48,8 +51,19 @@ def _load_roles_and_permissions(conn, user_id):
 def serialize_user(conn, row):
     roles, permissions, full_access = _load_roles_and_permissions(conn, row["id"])
     role_codes = [role["code"] for role in roles]
+    employee = conn.execute(
+        """
+        SELECT id, employee_no
+        FROM employees
+        WHERE user_id = ?
+        LIMIT 1
+        """,
+        (row["id"],),
+    ).fetchone()
     return {
         "id": row["id"],
+        "employeeId": employee["id"] if employee else None,
+        "employeeNo": employee["employee_no"] if employee else "",
         "username": row["username"],
         "name": row["display_name"],
         "displayName": row["display_name"],

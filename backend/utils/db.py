@@ -183,6 +183,40 @@ def _ensure_auth_schema(conn):
             """
         )
         cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS employee_roles (
+                employee_id INTEGER NOT NULL,
+                role_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (employee_id, role_id),
+                FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+                FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS role_stores (
+                role_id INTEGER NOT NULL,
+                store_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (role_id, store_id),
+                FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS role_warehouses (
+                role_id INTEGER NOT NULL,
+                warehouse_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (role_id, warehouse_id),
+                FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)"
         )
         cursor.execute(
@@ -193,10 +227,81 @@ def _ensure_auth_schema(conn):
         )
         cursor.execute(
             """
+            CREATE INDEX IF NOT EXISTS idx_employee_roles_role
+            ON employee_roles(role_id)
+            """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_role_permissions_permission
             ON role_permissions(permission_id)
             """
         )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_role_stores_store ON role_stores(store_id)"
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_role_warehouses_warehouse
+            ON role_warehouses(warehouse_id)
+            """
+        )
+
+        orphan_users = cursor.execute(
+            """
+            SELECT users.id, users.display_name, users.avatar_url, users.status
+            FROM users
+            LEFT JOIN employees ON employees.user_id = users.id
+            WHERE employees.id IS NULL
+            ORDER BY users.id
+            """
+        ).fetchall()
+        employee_sequence = int(
+            cursor.execute(
+                "SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM employees"
+            ).fetchone()["next_id"]
+        )
+        for user in orphan_users:
+            while True:
+                employee_no = f"E-{employee_sequence:04d}"
+                employee_sequence += 1
+                if not cursor.execute(
+                    """
+                    SELECT 1 FROM employees
+                    WHERE employee_no = ? COLLATE NOCASE
+                    """,
+                    (employee_no,),
+                ).fetchone():
+                    break
+            cursor.execute(
+                """
+                INSERT INTO employees (
+                    user_id, employee_no, display_name, avatar_url,
+                    employment_status, employment_type, account_status,
+                    created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, 'active', '正式', ?,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
+                """,
+                (
+                    user["id"],
+                    employee_no,
+                    user["display_name"],
+                    user["avatar_url"] or "",
+                    "active" if user["status"] == "active" else "disabled",
+                ),
+            )
+
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO employee_roles (employee_id, role_id, created_at)
+            SELECT employees.id, user_roles.role_id, user_roles.created_at
+            FROM user_roles
+            INNER JOIN employees ON employees.user_id = user_roles.user_id
+            """
+        )
+        cursor.execute("DELETE FROM user_roles")
 
         from utils.permission_catalog import PERMISSION_MODULES
 
@@ -271,7 +376,7 @@ def _ensure_auth_schema(conn):
         cursor.execute(
             """
             INSERT INTO system_meta (setting_key, setting_value, updated_at)
-            VALUES ('auth_schema_version', '2', CURRENT_TIMESTAMP)
+            VALUES ('auth_schema_version', '4', CURRENT_TIMESTAMP)
             ON CONFLICT(setting_key) DO UPDATE SET
                 setting_value = excluded.setting_value,
                 updated_at = CURRENT_TIMESTAMP

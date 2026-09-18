@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash
 
 from utils.auth import get_current_user, require_super_admin, serialize_user
 from utils.db import get_db
+from utils.employee_links import ensure_employee_for_user, sync_employee_from_user
 
 
 users_bp = Blueprint("users", __name__, url_prefix="/api/admin/users")
@@ -50,8 +51,10 @@ def _active_super_admin_count(conn):
         """
         SELECT COUNT(DISTINCT users.id) AS total
         FROM users
-        INNER JOIN user_roles ON user_roles.user_id = users.id
-        INNER JOIN roles ON roles.id = user_roles.role_id
+        INNER JOIN employees ON employees.user_id = users.id
+        INNER JOIN employee_roles
+            ON employee_roles.employee_id = employees.id
+        INNER JOIN roles ON roles.id = employee_roles.role_id
         WHERE users.status = 'active'
           AND roles.status = 'active'
           AND roles.full_access = 1
@@ -65,8 +68,10 @@ def _is_active_super_admin(conn, user_id):
             """
             SELECT 1
             FROM users
-            INNER JOIN user_roles ON user_roles.user_id = users.id
-            INNER JOIN roles ON roles.id = user_roles.role_id
+            INNER JOIN employees ON employees.user_id = users.id
+            INNER JOIN employee_roles
+                ON employee_roles.employee_id = employees.id
+            INNER JOIN roles ON roles.id = employee_roles.role_id
             WHERE users.id = ?
               AND users.status = 'active'
               AND roles.status = 'active'
@@ -173,10 +178,20 @@ def create_user():
                     status,
                 ),
             )
+            employee_id = ensure_employee_for_user(
+                conn,
+                cursor.lastrowid,
+                display_name,
+                avatar_url,
+                status,
+            )
             for role_id in role_ids:
                 conn.execute(
-                    "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
-                    (cursor.lastrowid, role_id),
+                    """
+                    INSERT INTO employee_roles (employee_id, role_id)
+                    VALUES (?, ?)
+                    """,
+                    (employee_id, role_id),
                 )
             user = serialize_user(conn, _user_row(conn, cursor.lastrowid))
         return jsonify(
@@ -227,11 +242,24 @@ def update_user(user_id):
                 """,
                 (display_name, display_name, avatar_url, status, user_id),
             )
-            conn.execute("DELETE FROM user_roles WHERE user_id = ?", (user_id,))
+            employee_id = sync_employee_from_user(
+                conn,
+                user_id,
+                display_name,
+                avatar_url,
+                status,
+            )
+            conn.execute(
+                "DELETE FROM employee_roles WHERE employee_id = ?",
+                (employee_id,),
+            )
             for role_id in role_ids:
                 conn.execute(
-                    "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
-                    (user_id, role_id),
+                    """
+                    INSERT INTO employee_roles (employee_id, role_id)
+                    VALUES (?, ?)
+                    """,
+                    (employee_id, role_id),
                 )
             updated_row = _user_row(conn, user_id)
             user = serialize_user(conn, updated_row)

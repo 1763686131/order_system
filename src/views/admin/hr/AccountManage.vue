@@ -185,7 +185,7 @@
       </div>
 
       <div class="table-footer">
-        <span>员工档案与登录账号分开存储，权限请在权限管理中统一分配。</span>
+        <span>员工档案是人员主体，登录账号按需开通，角色组请在角色组管理中统一分配。</span>
         <span class="footer-summary">显示 {{ filteredEmployees.length }} / {{ employees.length }}</span>
       </div>
       </section>
@@ -377,7 +377,7 @@
             <strong>{{ selectedEmployee.roleIds.length }} 个权限组</strong>
             <p>权限和数据范围由权限组统一维护，员工档案只保存绑定关系。</p>
           </div>
-          <span class="summary-hint">请前往权限管理维护绑定关系</span>
+          <span class="summary-hint">请前往角色组管理维护绑定关系</span>
         </article>
 
         <div class="permission-layout">
@@ -580,7 +580,7 @@
             <section class="form-section">
               <div class="section-heading">
                 <h3>账号绑定</h3>
-                <span>账号和员工档案分开存储</span>
+                <span>登录账号依附当前员工档案</span>
               </div>
               <div class="form-grid">
                 <label class="field">
@@ -694,9 +694,7 @@ async function loadEmployeeData() {
     employees.value = employeeResponse.employees || []
     roleGroups.value = (roleResponse.roles || []).map((role, index) => ({
       ...role,
-      tone: ['green', 'blue', 'orange', 'purple', 'red'][index % 5],
-      storeIds: [],
-      warehouseIds: []
+      tone: ['green', 'blue', 'orange', 'purple', 'red'][index % 5]
     }))
     permissionModules.value = (permissionResponse.modules || []).map((module, index) => ({
       ...module,

@@ -7,6 +7,7 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 from utils.auth import get_current_user, login_session, require_login, serialize_user
 from utils.db import get_db
+from utils.employee_links import ensure_employee_for_user, sync_employee_from_user
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -34,8 +35,10 @@ def _active_super_admin_count(conn):
         """
         SELECT COUNT(DISTINCT users.id) AS total
         FROM users
-        INNER JOIN user_roles ON user_roles.user_id = users.id
-        INNER JOIN roles ON roles.id = user_roles.role_id
+        INNER JOIN employees ON employees.user_id = users.id
+        INNER JOIN employee_roles
+            ON employee_roles.employee_id = employees.id
+        INNER JOIN roles ON roles.id = employee_roles.role_id
         WHERE users.status = 'active'
           AND roles.status = 'active'
           AND roles.full_access = 1
@@ -108,9 +111,18 @@ def bootstrap():
                     display_name,
                 ),
             )
+            employee_id = ensure_employee_for_user(
+                conn,
+                cursor.lastrowid,
+                display_name,
+                account_status="active",
+            )
             conn.execute(
-                "INSERT INTO user_roles (user_id, role_id) VALUES (?, ?)",
-                (cursor.lastrowid, role["id"]),
+                """
+                INSERT INTO employee_roles (employee_id, role_id)
+                VALUES (?, ?)
+                """,
+                (employee_id, role["id"]),
             )
             conn.execute(
                 """
@@ -207,6 +219,13 @@ def update_profile():
             WHERE id = ?
             """,
             (display_name, display_name, avatar_url, current_user["id"]),
+        )
+        sync_employee_from_user(
+            conn,
+            current_user["id"],
+            display_name,
+            avatar_url,
+            account_status="active",
         )
         row = conn.execute(
             """

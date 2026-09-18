@@ -357,7 +357,7 @@ const menuItems = ref([
     children: [
       { label: '门店管理', path: '/admin/stores' },
       { label: '系统设置', path: '/admin/settings' },
-      { label: '权限管理', path: '/admin/roles' },
+      { label: '角色组管理', path: '/admin/roles' },
       { label: '打印模板', path: '/admin/system/print-template' }
     ]
   }
