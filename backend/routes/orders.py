@@ -836,6 +836,12 @@ def update_order_status_only(order_id, req_data):
         )
 
     ns = req_data.get('status')
+    if 'status' in req_data and ns not in {'pending', 'completed', 'shipped'}:
+        return jsonify({
+            "success": False,
+            "message": "不支持的订单状态"
+        }), 400
+
     orders_data = read_orders()
     orders_list = orders_data.get('orders', [])
     changed_order = None
@@ -878,7 +884,7 @@ def update_order_status_only(order_id, req_data):
 
             if ns == 'completed':
                 x['completed_date'] = req_data.get('completed_date') or datetime.now().strftime('%Y-%m-%d %H:%M')
-                x['completed_by'] = req_data.get('completed_by', '')
+                x['completed_by'] = req_data.get('completed_by') or current_identity()
                 x['shipped_date'] = ""
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""
@@ -911,6 +917,7 @@ def update_order_status_only(order_id, req_data):
 
             elif ns == 'pending':
                 x['completed_date'] = ""
+                x['completed_by'] = ""
                 x['shipped_date'] = ""
                 x['logistics_no'] = ""
                 x['shipping_method'] = ""
@@ -919,11 +926,45 @@ def update_order_status_only(order_id, req_data):
             changed_order = dict(x)
             break
 
-    orders_data['orders'] = orders_list
-    write_orders(orders_data)
-    if changed_order is not None:
-        broadcast_order_event('updated', order=changed_order)
-    return jsonify({"success": True})
+    if changed_order is None:
+        return jsonify({"success": False, "message": "订单不存在"}), 404
+
+    with get_db() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE orders
+            SET status = ?,
+                completed_date = ?,
+                completed_by = ?,
+                shipped_date = ?,
+                shipping_method = ?,
+                shipping_custom = ?,
+                logistics_no = ?,
+                audit_state = ?,
+                freight_costs = ?
+            WHERE id = ?
+            """,
+            (
+                changed_order.get('status', 'pending'),
+                changed_order.get('completed_date') or '',
+                changed_order.get('completed_by') or '',
+                changed_order.get('shipped_date') or '',
+                changed_order.get('shipping_method') or '',
+                changed_order.get('shipping_custom') or '',
+                changed_order.get('logistics_no') or '',
+                changed_order.get('audit_state', 0),
+                json.dumps(
+                    changed_order.get('freight_costs', []),
+                    ensure_ascii=False
+                ),
+                order_id,
+            ),
+        )
+        if cursor.rowcount != 1:
+            return jsonify({"success": False, "message": "订单不存在"}), 404
+
+    broadcast_order_event('updated', order=changed_order)
+    return jsonify({"success": True, "data": changed_order})
 
 def update_full_order(order_id, req_data):
     """完整更新订单（编辑模式）"""

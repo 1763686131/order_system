@@ -531,6 +531,7 @@ def read_orders():
                 'type': order['type'],
                 'date': order['date'],
                 'completed_date': order['completed_date'],
+                'completed_by': order.get('completed_by') or '',
                 'shipped_date': order['shipped_date'],
                 'shipping_method': order['shipping_method'],
                 'shipping_custom': order['shipping_custom'],

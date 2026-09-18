@@ -1367,6 +1367,32 @@ def _ensure_customer_schema(conn):
                     ADD COLUMN audit_date TEXT
                     """
                 )
+            if "completed_by" not in order_columns:
+                cursor.execute(
+                    """
+                    ALTER TABLE orders
+                    ADD COLUMN completed_by TEXT
+                    """
+                )
+            # Legacy orders may contain 0 or deleted IDs from before foreign
+            # keys were enforced. Treat those missing relationships as unset.
+            for column_name, parent_table in (
+                ("store_id", "stores"),
+                ("customer_id", "customers"),
+                ("warehouse_id", "warehouses"),
+            ):
+                cursor.execute(
+                    f"""
+                    UPDATE orders
+                    SET {column_name} = NULL
+                    WHERE {column_name} IS NOT NULL
+                      AND NOT EXISTS (
+                          SELECT 1
+                          FROM {parent_table}
+                          WHERE {parent_table}.id = orders.{column_name}
+                      )
+                    """
+                )
             cursor.execute(
                 """
                 UPDATE orders
