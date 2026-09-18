@@ -245,65 +245,102 @@
         <div class="detail-column">
           <article class="detail-card identity-card">
             <div class="detail-card-heading">
-              <div>
-                <h3>个人信息</h3>
-                <span>花名册主档信息</span>
+              <div class="heading-with-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
+                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <div>
+                  <h3>个人信息</h3>
+                  <span>花名册主档信息</span>
+                </div>
               </div>
               <span class="card-index">01</span>
             </div>
-            <div class="identity-overview">
-              <span class="profile-avatar" :style="avatarStyle(selectedEmployee)">
-                {{ selectedEmployee.displayName.slice(0, 1) }}
-              </span>
-              <div>
-                <strong>{{ selectedEmployee.displayName }}</strong>
-                <span>{{ selectedEmployee.employeeNo }}</span>
-              </div>
-            </div>
             <dl class="info-grid">
               <div>
+                <dt>姓名</dt>
+                <dd class="dd-primary">{{ selectedEmployee.displayName }}</dd>
+              </div>
+              <div>
+                <dt>工号</dt>
+                <dd class="dd-primary tabular">{{ selectedEmployee.employeeNo || '—' }}</dd>
+              </div>
+              <div>
                 <dt>身份证号</dt>
-                <dd>{{ selectedEmployee.idCard || '未填写' }}</dd>
+                <dd class="dd-primary tabular">{{ selectedEmployee.idCard || '—' }}</dd>
               </div>
               <div>
                 <dt>用工类型</dt>
-                <dd>{{ selectedEmployee.employmentType || '未填写' }}</dd>
+                <dd class="dd-primary">{{ selectedEmployee.employmentType || '—' }}</dd>
               </div>
               <div>
                 <dt>入职日期</dt>
-                <dd class="tabular">{{ selectedEmployee.hireDate || '未填写' }}</dd>
+                <dd class="dd-primary tabular">{{ selectedEmployee.hireDate || '—' }}</dd>
               </div>
               <div>
                 <dt>当前状态</dt>
-                <dd>{{ employmentStatusLabel(selectedEmployee.employmentStatus) }}</dd>
+                <dd>
+                  <span :class="['mini-badge', employmentStatusClass(selectedEmployee.employmentStatus)]">
+                    <i></i>{{ employmentStatusLabel(selectedEmployee.employmentStatus) }}
+                  </span>
+                </dd>
               </div>
             </dl>
           </article>
 
           <article class="detail-card">
             <div class="detail-card-heading">
-              <div>
-                <h3>工作信息</h3>
-                <span>组织归属与岗位</span>
+              <div class="heading-with-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
+                  <rect x="2" y="7" width="20" height="14" rx="2"></rect>
+                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
+                </svg>
+                <div>
+                  <h3>工作信息</h3>
+                  <span>组织归属与岗位</span>
+                </div>
               </div>
               <span class="card-index">02</span>
             </div>
             <dl class="info-grid">
               <div>
                 <dt>所属部门</dt>
-                <dd>{{ selectedEmployee.department || '未填写' }}</dd>
+                <dd class="dd-primary">{{ selectedEmployee.department || '—' }}</dd>
               </div>
               <div>
                 <dt>职位</dt>
-                <dd>{{ selectedEmployee.position || '未填写' }}</dd>
+                <dd class="dd-primary">{{ selectedEmployee.position || '—' }}</dd>
               </div>
-              <div>
+              <div class="scope-field">
                 <dt>可访问门店</dt>
-                <dd>{{ selectedEmployeeScope.storeIds.length ? scopeNames(selectedEmployeeScope.storeIds, stores) : '未分配' }}</dd>
+                <dd>
+                  <div v-if="selectedEmployeeScope.storeIds.length" class="capsule-list">
+                    <span
+                      v-for="storeId in selectedEmployeeScope.storeIds"
+                      :key="storeId"
+                      class="capsule-tag capsule-green"
+                    >
+                      {{ stores.find(s => s.id === storeId)?.name || storeId }}
+                    </span>
+                  </div>
+                  <span v-else class="dd-empty">—</span>
+                </dd>
               </div>
-              <div>
+              <div class="scope-field">
                 <dt>可操作仓库</dt>
-                <dd>{{ selectedEmployeeScope.warehouseIds.length ? scopeNames(selectedEmployeeScope.warehouseIds, warehouses) : '未分配' }}</dd>
+                <dd>
+                  <div v-if="selectedEmployeeScope.warehouseIds.length" class="capsule-list">
+                    <span
+                      v-for="warehouseId in selectedEmployeeScope.warehouseIds"
+                      :key="warehouseId"
+                      class="capsule-tag capsule-blue"
+                    >
+                      {{ warehouses.find(w => w.id === warehouseId)?.name || warehouseId }}
+                    </span>
+                  </div>
+                  <span v-else class="dd-empty">—</span>
+                </dd>
               </div>
             </dl>
           </article>
@@ -312,46 +349,57 @@
         <div class="detail-column">
           <article class="detail-card">
             <div class="detail-card-heading">
-              <div>
-                <h3>联系方式</h3>
-                <span>后续人事行政资料</span>
+              <div class="heading-with-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                </svg>
+                <div>
+                  <h3>联系方式</h3>
+                  <span>后续人事行政资料</span>
+                </div>
               </div>
               <span class="card-index">03</span>
             </div>
             <dl class="info-grid single-column">
               <div>
                 <dt>联系电话</dt>
-                <dd class="tabular">{{ selectedEmployee.phone || '未填写' }}</dd>
+                <dd class="dd-primary tabular">{{ selectedEmployee.phone || '—' }}</dd>
               </div>
               <div>
                 <dt>家庭住址</dt>
-                <dd>{{ selectedEmployee.currentAddress || '未填写' }}</dd>
+                <dd class="dd-primary">{{ selectedEmployee.currentAddress || '—' }}</dd>
               </div>
               <div>
                 <dt>紧急联系人</dt>
-                <dd>{{ selectedEmployee.emergencyContact || '未填写' }}</dd>
+                <dd class="dd-primary">{{ selectedEmployee.emergencyContact || '—' }}</dd>
               </div>
               <div>
                 <dt>紧急联系电话</dt>
-                <dd class="tabular">{{ selectedEmployee.emergencyPhone || '未填写' }}</dd>
+                <dd class="dd-primary tabular">{{ selectedEmployee.emergencyPhone || '—' }}</dd>
               </div>
             </dl>
           </article>
 
           <article class="detail-card account-summary-card">
             <div class="detail-card-heading">
-              <div>
-                <h3>登录账号</h3>
-                <span>账号状态和权限组概览</span>
+              <div class="heading-with-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                <div>
+                  <h3>登录账号</h3>
+                  <span>账号状态和权限组概览</span>
+                </div>
               </div>
               <span class="card-index">04</span>
             </div>
-            <div class="account-summary">
+            <div class="account-summary-row">
               <div>
                 <span class="summary-label">账号</span>
-                <strong>{{ selectedEmployee.username || '暂未开通' }}</strong>
+                <strong class="account-username">{{ selectedEmployee.username || '暂未开通' }}</strong>
               </div>
-              <span :class="['status-badge', accountStatusClass(selectedEmployee.accountStatus)]">
+              <span :class="['mini-badge', accountStatusClass(selectedEmployee.accountStatus)]">
                 <i></i>{{ accountStatusLabel(selectedEmployee.accountStatus) }}
               </span>
             </div>
@@ -385,22 +433,26 @@
                 <span class="summary-label">最后登录时间</span>
                 <strong class="tabular">{{ formatDateTime(selectedEmployee.lastLoginAt) }}</strong>
               </div>
-              <button class="text-button password-edit-button" type="button" @click="openPasswordEditor">
+              <button class="button-link password-edit-button" type="button" @click="openPasswordEditor">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
                 修改密码
               </button>
             </div>
-            <div class="assigned-role-list">
+            <div class="assigned-role-section">
               <span class="summary-label">已绑定权限组</span>
-              <div class="role-list">
+              <div v-if="selectedEmployee.roleIds.length" class="capsule-list">
                 <span
                   v-for="roleId in selectedEmployee.roleIds"
                   :key="roleId"
-                  :class="['role-tag', roleTone(roleId)]"
+                  :class="['capsule-tag', 'capsule-' + roleTone(roleId)]"
                 >
                   {{ roleName(roleId) }}
                 </span>
-                <span v-if="selectedEmployee.roleIds.length === 0" class="empty-inline">暂未绑定权限组</span>
               </div>
+              <span v-else class="dd-empty">暂未绑定权限组</span>
             </div>
           </article>
         </div>
@@ -2204,11 +2256,11 @@ input[type='checkbox'] {
   justify-content: space-between;
   gap: 20px;
   margin-top: 14px;
-  padding: 14px 16px;
+  padding: 16px 20px;
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
   box-sizing: border-box;
 }
 
@@ -2272,9 +2324,9 @@ input[type='checkbox'] {
   margin-top: 10px;
   padding: 0 12px;
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
 }
 
 .detail-tab {
@@ -2351,19 +2403,17 @@ input[type='checkbox'] {
 .permission-main {
   min-width: 0;
   background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
   box-sizing: border-box;
 }
 
 .detail-card {
-  padding: 16px;
+  padding: 18px 20px;
 }
 
 .detail-card-heading,
-.account-summary,
-.assigned-role-list,
 .content-heading {
   display: flex;
   align-items: flex-start;
@@ -2375,9 +2425,29 @@ input[type='checkbox'] {
   margin-bottom: 15px;
 }
 
+.heading-with-icon {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.heading-icon {
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex: 0 0 18px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .detail-card-heading h3,
 .content-heading h3 {
   font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
 }
 
 .detail-card-heading span:not(.card-index),
@@ -2386,66 +2456,36 @@ input[type='checkbox'] {
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 12px;
+  font-weight: 400;
 }
 
 .card-index {
-  color: var(--border-strong);
+  color: #cbd5e1;
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
-}
-
-.identity-overview {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid var(--border);
-}
-
-.profile-avatar {
-  display: inline-flex;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  font-size: 18px;
-  font-weight: 750;
-}
-
-.identity-overview strong,
-.identity-overview span {
-  display: block;
-}
-
-.identity-overview strong {
-  font-size: 15px;
-}
-
-.identity-overview span {
-  margin-top: 4px;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
 }
 
 .info-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 15px 20px;
-  margin: 17px 0 0;
+  gap: 16px 20px;
+  margin: 0;
 }
 
 .info-grid.single-column {
   grid-template-columns: 1fr;
-  gap: 14px;
+  gap: 16px;
   margin-top: 0;
 }
 
 .info-grid div {
   min-width: 0;
+}
+
+.info-grid .scope-field {
+  grid-column: 1 / -1;
 }
 
 .info-grid dt,
@@ -2454,24 +2494,143 @@ input[type='checkbox'] {
 }
 
 .info-grid dt {
-  color: var(--text-muted);
-  font-size: 11px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .info-grid dd {
-  margin-top: 5px;
+  margin-top: 6px;
   overflow: hidden;
-  color: var(--text);
+  color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.account-summary {
+.info-grid dd.dd-primary {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.info-grid dd.dd-empty {
+  color: #cbd5e1;
+  font-style: italic;
+}
+
+.capsule-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.capsule-tag {
+  display: inline-flex;
+  min-height: 26px;
   align-items: center;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--border);
+  padding: 4px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.capsule-tag.capsule-green {
+  color: #0d7a5f;
+  background: #d1f4e8;
+  border: 1px solid #9de5cc;
+}
+
+.capsule-tag.capsule-blue {
+  color: #0e5a6d;
+  background: #d4f0f7;
+  border: 1px solid #a1dce9;
+}
+
+.capsule-tag.capsule-orange {
+  color: #8b4508;
+  background: #fde8cf;
+  border: 1px solid #f6c896;
+}
+
+.capsule-tag.capsule-purple {
+  color: #5a4691;
+  background: #ece5fb;
+  border: 1px solid #d0c2f3;
+}
+
+.capsule-tag.capsule-red {
+  color: #991f29;
+  background: #fde1e4;
+  border: 1px solid #f6b6bd;
+}
+
+.capsule-tag.capsule-neutral {
+  color: #475569;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+}
+
+.mini-badge {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+
+.mini-badge i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.mini-badge.status-success {
+  color: #0d7a5f;
+  background: #d1f4e8;
+}
+
+.mini-badge.status-warning {
+  color: #8b4508;
+  background: #fde8cf;
+}
+
+.mini-badge.status-info {
+  color: #0e5a6d;
+  background: #d4f0f7;
+}
+
+.mini-badge.status-disabled {
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.account-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.account-username {
+  display: block;
+  margin-top: 6px;
+  color: #1e293b;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .account-security-grid {
@@ -2479,8 +2638,8 @@ input[type='checkbox'] {
   grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr) auto;
   align-items: end;
   gap: 14px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
+  padding: 16px 0;
+  border-bottom: 1px solid #f1f5f9;
 }
 
 .account-security-item {
@@ -2489,9 +2648,11 @@ input[type='checkbox'] {
 
 .account-security-item > strong {
   display: block;
+  margin-top: 6px;
   overflow: hidden;
-  color: var(--text);
+  color: #1e293b;
   font-size: 13px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2501,42 +2662,74 @@ input[type='checkbox'] {
   min-width: 0;
   height: 34px;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .stored-password strong {
   overflow: hidden;
-  color: var(--text);
+  color: #475569;
   font-size: 13px;
+  font-weight: 500;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.button-link:hover {
+  color: var(--accent);
+}
+
+.button-link svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
 .password-edit-button {
   align-self: center;
-  white-space: nowrap;
 }
 
 .summary-label {
   display: block;
-  margin-bottom: 5px;
-  color: var(--text-muted);
-  font-size: 11px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
-.account-summary strong {
-  color: var(--text);
-  font-size: 14px;
+.assigned-role-section {
+  margin-top: 16px;
 }
 
-.assigned-role-list {
+.assigned-role-section .capsule-list {
+  margin-top: 10px;
+}
+
+.assigned-role-section .dd-empty {
   display: block;
-  margin-top: 14px;
-}
-
-.assigned-role-list .role-list {
-  min-height: 25px;
-  margin-top: 7px;
+  margin-top: 10px;
+  color: #cbd5e1;
+  font-size: 13px;
+  font-style: italic;
 }
 
 .password-input-wrap {
@@ -2558,11 +2751,12 @@ input[type='checkbox'] {
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: var(--text-muted, #8a96a8);
+  color: #94a3b8;
   background: transparent;
   border: 0;
-  border-radius: 4px;
+  border-radius: 5px;
   cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .password-input-wrap .password-toggle {
@@ -2573,7 +2767,7 @@ input[type='checkbox'] {
 
 .password-toggle:hover {
   color: var(--accent-dark, #08745a);
-  background: var(--accent-soft, #e9f8f3);
+  background: #e9f8f3;
 }
 
 .password-toggle svg {
@@ -2592,7 +2786,7 @@ input[type='checkbox'] {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  padding: 15px 16px;
+  padding: 18px 20px;
 }
 
 .permission-summary-card strong {
@@ -2614,7 +2808,7 @@ input[type='checkbox'] {
 }
 
 .permission-main {
-  padding: 16px;
+  padding: 18px 20px;
 }
 
 .content-heading {
@@ -2637,10 +2831,10 @@ input[type='checkbox'] {
 
 .employee-permission-module {
   min-width: 0;
-  padding: 12px;
+  padding: 13px 14px;
   background: #f8fafc;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
 }
 
 .module-heading {
@@ -2821,10 +3015,10 @@ input[type='checkbox'] {
 }
 
 .scope-summary div {
-  padding: 10px;
+  padding: 11px 12px;
   background: #f8fafc;
-  border: 1px solid var(--border);
-  border-radius: 5px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
 }
 
 .scope-summary span,
@@ -2833,14 +3027,16 @@ input[type='checkbox'] {
 }
 
 .scope-summary span {
-  color: var(--text-muted);
-  font-size: 11px;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .scope-summary strong {
-  margin-top: 5px;
-  color: var(--text);
+  margin-top: 6px;
+  color: #1e293b;
   font-size: 12px;
+  font-weight: 600;
   line-height: 1.5;
 }
 

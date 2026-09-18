@@ -1,6 +1,7 @@
 <template>
-  <main class="auth-page">
-    <section class="auth-panel" aria-labelledby="auth-title">
+  <div class="login-wrapper">
+    <main class="auth-page">
+      <section class="auth-panel" aria-labelledby="auth-title">
       <header class="auth-header">
         <div class="brand-mark" aria-hidden="true">订</div>
         <div>
@@ -93,6 +94,7 @@
       </form>
     </section>
   </main>
+  </div>
 </template>
 
 <script setup>
@@ -200,7 +202,24 @@ const handleLogin = async () => {
 onMounted(checkBootstrapStatus)
 </script>
 
+<style>
+/* 覆盖全局 body 样式，确保登录页不受影响 */
+body {
+  padding: 0 !important;
+  overflow: auto !important;
+}
+</style>
+
 <style scoped>
+.login-wrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 9999;
+}
+
 .auth-page {
   --accent: #0f9f78;
   --accent-dark: #08745a;
@@ -208,9 +227,11 @@ onMounted(checkBootstrapStatus)
   --border: #dfe5ec;
   --text: #172033;
   --text-secondary: #596579;
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   padding: 24px;
   color: var(--text);
   background:
