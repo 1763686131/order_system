@@ -372,8 +372,14 @@
                 {{ getContactAddress(order).substring(0, 15) }}{{ getContactAddress(order).length > 15 ? '...' : '' }}
               </td>
               <td class="material-cell" :title="getGoodsTooltip(order)">
-                <strong>{{ getGoodsDisplay(order).substring(0, 12) }}</strong>
-                <span v-if="getGoodsDisplay(order).length > 12">...</span>
+                <div class="goods-summary">
+                  <strong class="goods-summary-name">
+                    {{ getGoodsDisplay(order).substring(0, 12) }}{{ getGoodsDisplay(order).length > 12 ? '...' : '' }}
+                  </strong>
+                  <span v-if="getGoodsCount(order) > 1" class="goods-count-badge">
+                    商品+{{ getGoodsCount(order) }}
+                  </span>
+                </div>
               </td>
 
               <!-- 财务模式列 -->
@@ -1336,8 +1342,8 @@ const addButtonText = computed(() => {
 
 const searchPlaceholder = computed(() => {
   return props.mode === 'logistics'
-    ? '搜索物流单ID、客户、收货人、单号...'
-    : '搜索订单ID、客户、收货人...'
+    ? '搜索物流单ID、客户、收货人、电话、单号...'
+    : '搜索订单ID、客户、收货人、电话...'
 })
 
 const emptyMessage = computed(() => {
@@ -1459,7 +1465,7 @@ const filteredOrders = computed(() => {
 
   // 关键词搜索（扩展支持新字段）
   if (filters.value.keyword) {
-    const keyword = filters.value.keyword.toLowerCase()
+    const keyword = filters.value.keyword.trim().toLowerCase()
     result = result.filter(order => {
       // 订单ID
       if (String(order.id).toLowerCase().includes(keyword)) return true
@@ -1473,6 +1479,10 @@ const filteredOrders = computed(() => {
       // 联系人（新旧字段）
       if ((order.contact_person || '').toLowerCase().includes(keyword)) return true
       if ((order.receiver_name || '').toLowerCase().includes(keyword)) return true
+
+      // 联系电话（新旧字段）
+      if (String(order.contact_phone || '').toLowerCase().includes(keyword)) return true
+      if (String(order.receiver_phone || '').toLowerCase().includes(keyword)) return true
 
       // 联系地址（新旧字段）
       if ((order.contact_address || '').toLowerCase().includes(keyword)) return true
@@ -1621,14 +1631,16 @@ const getGoodsDisplay = (order) => {
   // 1. 如果有 order_goods 数组（新订单）
   if (order.order_goods && order.order_goods.length > 0) {
     const first = order.order_goods[0]
-    const count = order.order_goods.length
-    if (count > 1) {
-      return `${first.goods_name} 等${count}件商品`
-    }
-    return `${first.goods_name} ${first.spec || ''}`
+    return order.order_goods.length > 1
+      ? (first.goods_name || '-')
+      : `${first.goods_name || '-'} ${first.spec || ''}`.trim()
   }
   // 2. 回退到旧字段
   return order.goods_name || '-'
+}
+
+const getGoodsCount = (order) => {
+  return Array.isArray(order.order_goods) ? order.order_goods.length : 0
 }
 
 // 获取商品信息悬停提示
@@ -3446,24 +3458,38 @@ svg {
   max-width: 170px;
 }
 
-.material-cell strong,
-.material-cell span {
+.goods-summary {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 6px;
+}
+
+.material-cell .goods-summary-name {
   display: block;
+  min-width: 0;
   overflow: hidden;
+  color: #283548;
+  font-size: 13px;
+  font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.material-cell strong {
-  color: #283548;
-  font-size: 13px;
-  font-weight: 650;
-}
-
-.material-cell span {
-  margin-top: 3px;
-  color: var(--text-muted);
-  font-size: 11px;
+.material-cell .goods-count-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  color: #667085;
+  background: #eef2f6;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .money-value {
