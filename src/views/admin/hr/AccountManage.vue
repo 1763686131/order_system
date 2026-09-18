@@ -1071,7 +1071,7 @@ function avatarStyle(employee) {
   --text-secondary: #596579;
   --text-muted: #8a96a8;
   min-height: 100%;
-  padding: 20px;
+  padding: 0;
   color: var(--text);
   background: var(--page-bg);
   font-size: 14px;
@@ -1353,6 +1353,35 @@ input[type='checkbox'] {
 .records-panel {
   margin-top: 14px;
   overflow: hidden;
+}
+
+.workspace-nav + .records-panel {
+  margin-top: 0;
+  border-top: 0;
+  border-radius: 0 0 7px 7px;
+}
+
+.workspace-nav + .employee-context {
+  margin-top: 0;
+  border-top: 0;
+  border-radius: 0;
+}
+
+.employee-context + .detail-tabs {
+  margin-top: 0;
+  border-top: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.detail-tabs + .detail-content {
+  margin-top: 0;
+}
+
+.detail-tabs + .profile-content > .detail-column > .detail-card:first-child,
+.detail-tabs + .permission-content > .permission-summary-card {
+  border-top: 0;
+  border-radius: 0 0 7px 7px;
 }
 
 .records-toolbar {
@@ -1975,12 +2004,15 @@ input[type='checkbox'] {
   overflow-x: auto;
   background: #e8eef1;
   border: 1px solid var(--border);
+  border-bottom: 0;
   border-radius: 7px 7px 0 0;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  box-shadow: none;
   box-sizing: border-box;
 }
 
 .workspace-tab {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   min-width: 124px;
   height: 38px;
@@ -1990,15 +2022,15 @@ input[type='checkbox'] {
   padding: 0 13px;
   color: var(--text-secondary);
   background: transparent;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 6px 6px 0 0;
+  border: 0;
+  border-radius: 9px 9px 0 0;
   font: inherit;
   font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
   box-sizing: border-box;
+  transition: color 0.18s ease, background 0.18s ease;
 }
 
 .workspace-tab:hover {
@@ -2007,10 +2039,30 @@ input[type='checkbox'] {
 }
 
 .workspace-tab.active {
+  z-index: 2;
   color: var(--accent-dark);
   background: #fff;
-  border-color: var(--border);
-  box-shadow: 0 -1px 0 #fff;
+  box-shadow: inset 0 1px 0 rgba(203, 213, 225, 0.72);
+}
+
+.workspace-tab.active::before,
+.workspace-tab.active::after {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  content: '';
+  pointer-events: none;
+}
+
+.workspace-tab.active::before {
+  left: -10px;
+  background: radial-gradient(circle at 0 0, transparent 9px, #fff 10px);
+}
+
+.workspace-tab.active::after {
+  right: -10px;
+  background: radial-gradient(circle at 100% 0, transparent 9px, #fff 10px);
 }
 
 .workspace-tab svg {
@@ -2661,7 +2713,7 @@ select:focus-visible,
 
 @media (max-width: 780px) {
   .page-root {
-    padding: 14px;
+    padding: 0;
   }
 
   .page-header {
@@ -2678,11 +2730,8 @@ select:focus-visible,
   }
 
   .workspace-nav {
-    margin-right: -14px;
-    margin-left: -14px;
-    border-right: 0;
-    border-left: 0;
-    border-radius: 0;
+    margin-right: 0;
+    margin-left: 0;
   }
 
   .workspace-tab {

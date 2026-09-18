@@ -19,7 +19,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M12 5v14"></path>
           <path d="M5 12h14"></path>
-        </svg>
+          </svg>
         新增角色组
       </button>
     </nav>
@@ -53,18 +53,24 @@
             <span>{{ selectedGroup.permissions.length }} / {{ permissionTotal }} 项</span>
           </div>
           <div class="box-actions">
-            <button class="button button-secondary compact-button" type="button" @click="openPermissionPicker">
+            <button
+              class="button button-secondary compact-button"
+              :class="{ 'mode-active': permissionAddMode }"
+              type="button"
+              @click="togglePermissionAddMode"
+            >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 5v14"></path>
                 <path d="M5 12h14"></path>
               </svg>
-              添加权限
+              {{ permissionAddMode ? '完成添加' : '添加权限' }}
             </button>
             <button
               class="button button-danger compact-button"
+              :class="{ 'mode-active': permissionDeleteMode }"
               type="button"
-              :disabled="selectedPermissionIds.length === 0"
-              @click="deleteSelectedPermissions"
+              :disabled="selectedGroup.permissions.length === 0"
+              @click="togglePermissionDeleteMode"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M5 7h14"></path>
@@ -73,36 +79,13 @@
                 <path d="m9 7 .8-2h4.4l.8 2"></path>
                 <path d="m7 7 .7 13h8.6L17 7"></path>
               </svg>
-              删除权限
-            </button>
-          </div>
-        </div>
-
-        <div v-if="permissionPickerVisible" class="inline-picker">
-          <div class="inline-picker-header">
-            <strong>添加权限</strong>
-            <span>从权限目录选择未绑定项</span>
-          </div>
-          <div v-if="availablePermissions.length" class="picker-grid">
-            <label v-for="permission in availablePermissions" :key="permission.id" class="picker-option">
-              <input v-model="permissionPickerIds" type="checkbox" :value="permission.id" />
-              <span>
-                <strong>{{ permission.name }}</strong>
-                <small>{{ permission.moduleName }}</small>
-              </span>
-            </label>
-          </div>
-          <div v-else class="picker-empty">当前角色组已拥有全部权限</div>
-          <div class="inline-picker-actions">
-            <button class="button button-ghost compact-button" type="button" @click="closePermissionPicker">取消</button>
-            <button class="button button-primary compact-button" type="button" @click="addSelectedPermissions">
-              添加选中权限
+              {{ permissionDeleteMode ? '完成删除' : '删除权限' }}
             </button>
           </div>
         </div>
 
         <div class="permission-module-list">
-          <article v-for="module in permissionModules" :key="module.id" class="permission-module-box">
+          <article v-for="module in displayedPermissionModules" :key="module.id" class="permission-module-box">
             <div class="module-heading">
               <span :class="['module-dot', module.tone]"></span>
               <div>
@@ -111,28 +94,50 @@
               </div>
             </div>
             <div class="permission-row-list">
-              <label
+              <div
                 v-for="permission in module.permissions"
                 :key="permission.id"
                 class="permission-row"
-                :class="{ active: selectedGroup.permissions.includes(permission.id) }"
+                :class="{
+                  active: selectedGroup.permissions.includes(permission.id),
+                  addable: !selectedGroup.permissions.includes(permission.id),
+                  'add-mode': permissionAddMode,
+                  'delete-mode': permissionDeleteMode
+                }"
+                @click="handlePermissionRowClick(permission.id)"
               >
-                <input
-                  v-model="selectedPermissionIds"
-                  type="checkbox"
-                  :value="permission.id"
-                  :disabled="!selectedGroup.permissions.includes(permission.id)"
-                />
-                <span class="permission-row-state">
-                  {{ selectedGroup.permissions.includes(permission.id) ? '✓' : '' }}
-                </span>
                 <span class="permission-row-copy">
                   <strong>{{ permission.name }}</strong>
                   <small>{{ permission.id }}</small>
                 </span>
-              </label>
+                <div v-if="permissionDeleteMode && selectedGroup.permissions.includes(permission.id)" class="permission-remove-wrap">
+                  <button
+                    class="permission-remove"
+                    type="button"
+                    :aria-label="`删除${permission.name}`"
+                    @click.stop="openPermissionDeleteConfirm(permission.id)"
+                  >
+                    ×
+                  </button>
+                  <div
+                    v-if="permissionDeleteTarget === permission.id"
+                    class="permission-confirm-popover"
+                    @click.stop
+                  >
+                    <strong>确定删除吗？</strong>
+                    <div>
+                      <button type="button" @click="confirmPermissionDelete">删除</button>
+                      <button type="button" @click="cancelPermissionDelete">取消</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </article>
+        </div>
+        <div v-if="displayedPermissionModules.length === 0" class="permission-empty">
+          <strong>暂未配置权限</strong>
+          <span>点击“添加权限”查看全部权限</span>
         </div>
       </section>
 
@@ -143,7 +148,47 @@
             <span>{{ selectedGroup.memberIds.length }} 人</span>
           </div>
           <div class="box-actions">
-            <button class="button button-secondary compact-button" type="button" @click="openMemberPicker">
+            <div
+              class="member-search"
+              @focusin="memberSearchOpen = true"
+              @focusout="queueCloseMemberSearch"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5"></circle>
+                <path d="m16 16 4 4"></path>
+              </svg>
+              <input
+                v-model="memberSearchQuery"
+                type="search"
+                placeholder="搜索员工"
+                aria-label="搜索可添加员工"
+                @input="memberToAddId = null; memberSearchOpen = true"
+              />
+              <div v-if="memberSearchOpen" class="member-search-dropdown">
+                <button
+                  v-for="member in memberSearchResults"
+                  :key="member.id"
+                  type="button"
+                  @mousedown.prevent
+                  @click="selectMemberToAdd(member)"
+                >
+                  <span class="avatar small" :style="avatarStyle(member)">{{ member.name.slice(0, 1) }}</span>
+                  <span>
+                    <strong>{{ member.name }}</strong>
+                    <small>{{ member.employeeNo }} · {{ member.department }}</small>
+                  </span>
+                </button>
+                <span v-if="memberSearchResults.length === 0" class="member-search-empty">
+                  未找到可添加员工
+                </span>
+              </div>
+            </div>
+            <button
+              class="button button-secondary compact-button"
+              type="button"
+              :disabled="!memberToAddId"
+              @click="addSelectedMember"
+            >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 5v14"></path>
                 <path d="M5 12h14"></path>
@@ -164,30 +209,6 @@
                 <path d="m7 7 .7 13h8.6L17 7"></path>
               </svg>
               删除成员
-            </button>
-          </div>
-        </div>
-
-        <div v-if="memberPickerVisible" class="inline-picker member-picker">
-          <div class="inline-picker-header">
-            <strong>添加成员</strong>
-            <span>从员工花名册选择员工</span>
-          </div>
-          <div v-if="availableMembers.length" class="member-picker-list">
-            <label v-for="member in availableMembers" :key="member.id" class="picker-member-option">
-              <input v-model="memberPickerIds" type="checkbox" :value="member.id" />
-              <span class="avatar small" :style="avatarStyle(member)">{{ member.name.slice(0, 1) }}</span>
-              <span>
-                <strong>{{ member.name }}</strong>
-                <small>{{ member.employeeNo }} · {{ member.department }}</small>
-              </span>
-            </label>
-          </div>
-          <div v-else class="picker-empty">所有员工都已加入当前角色组</div>
-          <div class="inline-picker-actions">
-            <button class="button button-ghost compact-button" type="button" @click="closeMemberPicker">取消</button>
-            <button class="button button-primary compact-button" type="button" @click="addSelectedMembers">
-              添加选中成员
             </button>
           </div>
         </div>
@@ -228,12 +249,12 @@
     </transition>
 
     <Teleport to="body">
-      <div v-if="drawerVisible" class="drawer-layer" @click.self="closeDrawer">
-        <aside class="edit-drawer" role="dialog" aria-modal="true" aria-labelledby="role-drawer-title">
-          <div class="drawer-header">
+      <div v-if="drawerVisible" class="modal-layer" @click.self="closeDrawer">
+        <aside class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="role-modal-title">
+          <div class="modal-header">
             <div>
               <span class="drawer-eyebrow">{{ editingGroup ? '编辑角色组' : '新建角色组' }}</span>
-              <h2 id="role-drawer-title">{{ editingGroup ? draft.name : '新建角色组' }}</h2>
+              <h2 id="role-modal-title">{{ editingGroup ? '编辑角色组信息' : '新建角色组' }}</h2>
             </div>
             <button class="icon-button" type="button" title="关闭" @click="closeDrawer">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -243,11 +264,11 @@
             </button>
           </div>
 
-          <div class="drawer-body">
-            <section class="form-section">
+          <div class="modal-body">
+            <section class="form-section modal-form-section">
               <div class="section-heading">
                 <h3>角色组信息</h3>
-                <span>岗位职责模板</span>
+                <span>维护角色组的基本信息</span>
               </div>
               <div class="form-grid">
                 <label class="field">
@@ -281,49 +302,9 @@
                 </label>
               </div>
             </section>
-
-            <section class="form-section">
-              <div class="section-heading">
-                <h3>权限配置</h3>
-                <span>点击勾选业务动作</span>
-              </div>
-              <div class="drawer-permissions">
-                <div v-for="module in permissionModules" :key="module.id" class="drawer-module">
-                  <div class="drawer-module-title">
-                    <span :class="['module-dot', module.tone]"></span>
-                    <strong>{{ module.name }}</strong>
-                  </div>
-                  <label v-for="permission in module.permissions" :key="permission.id" class="check-item compact">
-                    <input v-model="draft.permissions" type="checkbox" :value="permission.id" />
-                    <span class="check-mark"></span>
-                    <span>
-                      <strong>{{ permission.name }}</strong>
-                      <small>{{ permission.id }}</small>
-                    </span>
-                  </label>
-                </div>
-              </div>
-            </section>
-
-            <section class="form-section">
-              <div class="section-heading">
-                <h3>绑定员工</h3>
-                <span>同一员工可以加入多个角色组</span>
-              </div>
-              <div class="member-check-list">
-                <label v-for="member in memberCatalog" :key="member.id" class="member-check-item">
-                  <input v-model="draft.memberIds" type="checkbox" :value="member.id" />
-                  <span class="avatar small" :style="avatarStyle(member)">{{ member.name.slice(0, 1) }}</span>
-                  <span>
-                    <strong>{{ member.name }}</strong>
-                    <small>{{ member.employeeNo }} · {{ member.department }}</small>
-                  </span>
-                </label>
-              </div>
-            </section>
           </div>
 
-          <div class="drawer-footer">
+          <div class="modal-footer">
             <button class="button button-secondary" type="button" @click="closeDrawer">取消</button>
             <button class="button button-primary" type="button" @click="saveGroup">
               {{ editingGroup ? '保存修改' : '创建角色组' }}
@@ -478,12 +459,13 @@ const roleGroups = ref([
 ])
 
 const selectedGroupId = ref('system_admin')
-const selectedPermissionIds = ref([])
-const permissionPickerIds = ref([])
-const permissionPickerVisible = ref(false)
+const permissionAddMode = ref(false)
+const permissionDeleteMode = ref(false)
+const permissionDeleteTarget = ref(null)
 const selectedMemberIds = ref([])
-const memberPickerIds = ref([])
-const memberPickerVisible = ref(false)
+const memberSearchQuery = ref('')
+const memberSearchOpen = ref(false)
+const memberToAddId = ref(null)
 const drawerVisible = ref(false)
 const editingGroup = ref(false)
 const draft = ref(createEmptyGroup())
@@ -495,20 +477,30 @@ const selectedMembers = computed(() => {
   if (!selectedGroup.value) return []
   return memberCatalog.filter(member => selectedGroup.value.memberIds.includes(member.id))
 })
-const availablePermissions = computed(() => {
-  if (!selectedGroup.value) return []
+const displayedPermissionModules = computed(() => {
+  const permissionIds = selectedGroup.value?.permissions || []
   return permissionModules
-    .flatMap(module =>
-      module.permissions.map(permission => ({
-        ...permission,
-        moduleName: module.name
-      }))
-    )
-    .filter(permission => !selectedGroup.value.permissions.includes(permission.id))
+    .map(module => ({
+      ...module,
+      permissions: module.permissions.filter(permission =>
+        permissionAddMode.value || permissionIds.includes(permission.id)
+      )
+    }))
+    .filter(module => module.permissions.length > 0)
 })
 const availableMembers = computed(() => {
   if (!selectedGroup.value) return []
   return memberCatalog.filter(member => !selectedGroup.value.memberIds.includes(member.id))
+})
+const memberSearchResults = computed(() => {
+  const keyword = memberSearchQuery.value.trim().toLowerCase()
+  if (!keyword) return availableMembers.value
+  return availableMembers.value.filter(member =>
+    [member.name, member.employeeNo, member.department]
+      .join(' ')
+      .toLowerCase()
+      .includes(keyword)
+  )
 })
 const enabledGroupCount = computed(() => roleGroups.value.filter(group => group.status === 'enabled').length)
 const memberLinkCount = computed(() => roleGroups.value.reduce((total, group) => total + group.memberIds.length, 0))
@@ -537,12 +529,11 @@ function openCreate() {
 
 function selectGroup(groupId) {
   selectedGroupId.value = groupId
-  selectedPermissionIds.value = []
-  permissionPickerIds.value = []
+  permissionAddMode.value = false
+  permissionDeleteMode.value = false
+  permissionDeleteTarget.value = null
   selectedMemberIds.value = []
-  memberPickerIds.value = []
-  permissionPickerVisible.value = false
-  memberPickerVisible.value = false
+  resetMemberSearch()
 }
 
 function openEdit(group) {
@@ -586,54 +577,74 @@ function saveGroup() {
   closeDrawer()
 }
 
-function openPermissionPicker() {
-  permissionPickerIds.value = []
-  permissionPickerVisible.value = true
-  memberPickerVisible.value = false
+function togglePermissionAddMode() {
+  permissionAddMode.value = !permissionAddMode.value
+  permissionDeleteMode.value = false
+  permissionDeleteTarget.value = null
+  if (permissionAddMode.value) showNotice('点击虚线权限即可添加')
 }
 
-function closePermissionPicker() {
-  permissionPickerVisible.value = false
-  permissionPickerIds.value = []
+function togglePermissionDeleteMode() {
+  permissionDeleteMode.value = !permissionDeleteMode.value
+  permissionAddMode.value = false
+  permissionDeleteTarget.value = null
 }
 
-function addSelectedPermissions() {
-  if (!selectedGroup.value) return
-  const selectedCount = permissionPickerIds.value.length
-  selectedGroup.value.permissions.push(...permissionPickerIds.value)
+function handlePermissionRowClick(permissionId) {
+  if (!permissionAddMode.value || permissionDeleteMode.value) return
+  togglePermission(permissionId)
+}
+
+function togglePermission(permissionId) {
+  if (!selectedGroup.value || permissionDeleteMode.value || !permissionAddMode.value) return
+  if (selectedGroup.value.permissions.includes(permissionId)) return
+  selectedGroup.value.permissions.push(permissionId)
   selectedGroup.value.updatedAt = '2026-09-17'
-  closePermissionPicker()
-  showNotice(selectedCount ? '权限已添加' : '未选择权限')
+  showNotice('权限添加成功')
 }
 
-function deleteSelectedPermissions() {
-  if (!selectedGroup.value || selectedPermissionIds.value.length === 0) return
+function openPermissionDeleteConfirm(permissionId) {
+  permissionDeleteTarget.value = permissionDeleteTarget.value === permissionId ? null : permissionId
+}
+
+function confirmPermissionDelete() {
+  if (!selectedGroup.value || !permissionDeleteTarget.value) return
   selectedGroup.value.permissions = selectedGroup.value.permissions.filter(
-    permissionId => !selectedPermissionIds.value.includes(permissionId)
+    permissionId => permissionId !== permissionDeleteTarget.value
   )
   selectedGroup.value.updatedAt = '2026-09-17'
-  selectedPermissionIds.value = []
-  showNotice('已删除选中的权限')
+  permissionDeleteTarget.value = null
+  showNotice('权限已删除')
 }
 
-function openMemberPicker() {
-  memberPickerIds.value = []
-  memberPickerVisible.value = true
-  permissionPickerVisible.value = false
+function cancelPermissionDelete() {
+  permissionDeleteTarget.value = null
 }
 
-function closeMemberPicker() {
-  memberPickerVisible.value = false
-  memberPickerIds.value = []
+function queueCloseMemberSearch() {
+  window.setTimeout(() => {
+    memberSearchOpen.value = false
+  }, 120)
 }
 
-function addSelectedMembers() {
-  if (!selectedGroup.value) return
-  const selectedCount = memberPickerIds.value.length
-  selectedGroup.value.memberIds.push(...memberPickerIds.value)
+function selectMemberToAdd(member) {
+  memberToAddId.value = member.id
+  memberSearchQuery.value = `${member.name} · ${member.employeeNo}`
+  memberSearchOpen.value = false
+}
+
+function addSelectedMember() {
+  if (!selectedGroup.value || !memberToAddId.value) return
+  selectedGroup.value.memberIds.push(memberToAddId.value)
   selectedGroup.value.updatedAt = '2026-09-17'
-  closeMemberPicker()
-  showNotice(selectedCount ? '成员已添加' : '未选择成员')
+  resetMemberSearch()
+  showNotice('成员添加成功')
+}
+
+function resetMemberSearch() {
+  memberSearchQuery.value = ''
+  memberSearchOpen.value = false
+  memberToAddId.value = null
 }
 
 function deleteSelectedMembers() {
@@ -696,7 +707,7 @@ function avatarStyle(member) {
   --text-secondary: #596579;
   --text-muted: #8a96a8;
   min-height: 100%;
-  padding: 20px;
+  padding: 0;
   color: var(--text);
   background: var(--page-bg);
   font-size: 14px;
@@ -706,14 +717,16 @@ function avatarStyle(member) {
 .page-header,
 .title-row,
 .header-actions,
-.detail-header,
-.detail-title,
-.detail-actions,
-.panel-header,
-.member-info,
-.section-heading,
-.drawer-header,
-.drawer-footer {
+  .detail-header,
+  .detail-title,
+  .detail-actions,
+  .panel-header,
+  .member-info,
+  .section-heading,
+  .drawer-header,
+  .drawer-footer,
+  .modal-header,
+  .modal-footer {
   display: flex;
   align-items: center;
 }
@@ -1452,40 +1465,68 @@ h1 {
   transform: translate(-50%, -8px);
 }
 
-.drawer-layer {
+.modal-layer {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --panel-bg: #fff;
+  --border: #dfe5ec;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
   position: fixed;
   inset: 0;
   z-index: 2000;
   display: flex;
-  justify-content: flex-end;
-  background: rgba(15, 23, 42, 0.35);
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1px);
+  box-sizing: border-box;
 }
 
-.edit-drawer {
+.edit-modal {
   display: flex;
-  width: min(680px, 100vw);
-  height: 100%;
+  width: min(620px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 48px));
   flex-direction: column;
   background: #fff;
-  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.16);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.2);
+  overflow: hidden;
 }
 
-.drawer-header {
+.modal-header {
   min-height: 78px;
   justify-content: space-between;
-  padding: 18px 22px;
+  gap: 16px;
+  padding: 18px 20px;
   border-bottom: 1px solid var(--border);
   box-sizing: border-box;
 }
 
-.drawer-header h2 {
+.modal-header h2 {
   font-size: 18px;
 }
 
-.drawer-body {
+.modal-body {
   flex: 1;
-  padding: 20px 22px;
+  padding: 20px;
   overflow-y: auto;
+  background: #f4f7f9;
+}
+
+.modal-form-section {
+  margin: 0;
+  padding: 15px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 7px;
 }
 
 .form-section + .form-section {
@@ -1644,10 +1685,12 @@ textarea:focus {
   align-items: center;
 }
 
-.drawer-footer {
+.modal-footer {
   justify-content: flex-end;
   gap: 8px;
-  padding: 13px 22px;
+  min-height: 68px;
+  padding: 13px 20px;
+  background: #fff;
   border-top: 1px solid var(--border);
 }
 
@@ -1659,13 +1702,15 @@ textarea:focus {
   padding-right: 8px;
   background: #e8eef1;
   border: 1px solid var(--border);
+  border-bottom: 0;
   border-radius: 7px 7px 0 0;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  box-shadow: none;
   box-sizing: border-box;
 }
 
 .role-tab-scroll {
   display: flex;
+  flex: 1 1 auto;
   min-width: 0;
   align-items: flex-end;
   gap: 3px;
@@ -1674,6 +1719,8 @@ textarea:focus {
 }
 
 .role-tab {
+  position: relative;
+  z-index: 1;
   display: inline-flex;
   min-width: 136px;
   height: 41px;
@@ -1683,15 +1730,15 @@ textarea:focus {
   padding: 0 13px;
   color: var(--text-secondary);
   background: transparent;
-  border: 1px solid transparent;
-  border-bottom: 0;
-  border-radius: 6px 6px 0 0;
+  border: 0;
+  border-radius: 9px 9px 0 0;
   font: inherit;
   font-size: 13px;
   font-weight: 650;
   white-space: nowrap;
   cursor: pointer;
   box-sizing: border-box;
+  transition: color 0.18s ease, background 0.18s ease;
 }
 
 .role-tab:hover {
@@ -1700,10 +1747,30 @@ textarea:focus {
 }
 
 .role-tab.active {
+  z-index: 2;
   color: var(--accent-dark);
   background: #fff;
-  border-color: var(--border);
-  box-shadow: 0 -1px 0 #fff;
+  box-shadow: inset 0 1px 0 rgba(203, 213, 225, 0.72);
+}
+
+.role-tab.active::before,
+.role-tab.active::after {
+  position: absolute;
+  bottom: 0;
+  width: 10px;
+  height: 10px;
+  content: '';
+  pointer-events: none;
+}
+
+.role-tab.active::before {
+  left: -10px;
+  background: radial-gradient(circle at 0 0, transparent 9px, #fff 10px);
+}
+
+.role-tab.active::after {
+  right: -10px;
+  background: radial-gradient(circle at 100% 0, transparent 9px, #fff 10px);
 }
 
 .role-tab-icon,
@@ -1772,6 +1839,7 @@ textarea:focus {
 
 .add-role-button {
   align-self: center;
+  margin-left: auto;
   flex: 0 0 auto;
 }
 
@@ -1781,12 +1849,13 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-top: 14px;
+  margin-top: 0;
   padding: 11px 15px;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 7px;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
+  border-top: 0;
+  border-radius: 0;
+  box-shadow: none;
   box-sizing: border-box;
 }
 
@@ -1837,19 +1906,27 @@ textarea:focus {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(360px, 0.85fr);
   gap: 14px;
-  margin-top: 14px;
+  margin-top: 0;
   align-items: start;
 }
 
 .permission-panel,
 .members-panel {
   min-width: 0;
-  overflow: hidden;
   background: #fff;
   border: 1px solid var(--border);
-  border-radius: 7px;
+  border-top: 0;
+  border-radius: 0 0 7px 7px;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.035);
   box-sizing: border-box;
+}
+
+.permission-panel {
+  overflow: visible;
+}
+
+.members-panel {
+  overflow: visible;
 }
 
 .box-header {
@@ -1882,6 +1959,8 @@ textarea:focus {
 
 .box-actions {
   display: flex;
+  min-width: 0;
+  align-items: center;
   flex: 0 0 auto;
   gap: 7px;
 }
@@ -1912,6 +1991,132 @@ textarea:focus {
 .button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
+}
+
+.button.mode-active {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.button-danger.mode-active {
+  color: #b4232f;
+  background: #fff1f2;
+  border-color: #e7b3b9;
+}
+
+.member-search {
+  position: relative;
+  display: flex;
+  width: 164px;
+  height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  color: var(--text-muted);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.member-search:focus-within {
+  color: var(--accent-dark);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+}
+
+.member-search > svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.member-search input {
+  width: auto;
+  flex: 1;
+  min-width: 0;
+  height: 32px;
+  padding: 0;
+  color: var(--text);
+  border: 0;
+  box-shadow: none;
+  font-size: 12px;
+}
+
+.member-search input:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.member-search-dropdown {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  left: 0;
+  z-index: 30;
+  max-height: 240px;
+  padding: 4px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+}
+
+.member-search-dropdown button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  color: var(--text);
+  text-align: left;
+  background: #fff;
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.member-search-dropdown button:hover {
+  background: var(--accent-soft);
+}
+
+.member-search-dropdown button > span:last-child {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.member-search-dropdown strong,
+.member-search-dropdown small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-search-dropdown strong {
+  font-size: 11px;
+}
+
+.member-search-dropdown small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.member-search-empty {
+  display: block;
+  padding: 10px 7px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-align: center;
 }
 
 .inline-picker {
@@ -2018,68 +2223,78 @@ textarea:focus {
 
 .permission-module-list {
   display: grid;
-  gap: 10px;
+  gap: 8px;
+  padding: 10px;
+}
+
+.permission-empty {
+  display: flex;
+  min-height: 150px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
   padding: 14px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.permission-empty strong {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.permission-empty span {
+  font-size: 11px;
 }
 
 .permission-module-box {
   min-width: 0;
-  padding: 12px;
+  padding: 10px;
   background: #f8fafc;
   border: 1px solid var(--border);
   border-radius: 6px;
 }
 
 .permission-module-box .module-heading {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .permission-row-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
 }
 
 .permission-row {
+  position: relative;
   display: flex;
   min-width: 0;
-  min-height: 48px;
+  min-height: 39px;
   align-items: center;
-  gap: 7px;
-  padding: 7px 8px;
+  gap: 5px;
+  padding: 5px 6px;
   background: #fff;
-  border: 1px solid var(--border);
+  border: 1px dashed var(--border-strong);
   border-radius: 5px;
-  cursor: pointer;
   box-sizing: border-box;
+  transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
-.permission-row:hover {
+.permission-row.add-mode.addable {
+  cursor: pointer;
+}
+
+.permission-row.add-mode.addable:hover {
+  background: #fbfffd;
   border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.08);
 }
 
 .permission-row.active {
   background: var(--accent-soft);
   border-color: var(--accent-border);
-}
-
-.permission-row-state {
-  display: inline-flex;
-  width: 15px;
-  height: 15px;
-  flex: 0 0 15px;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-muted);
-  background: #f1f5f9;
-  border-radius: 3px;
-  font-size: 10px;
-  font-weight: 800;
-}
-
-.permission-row.active .permission-row-state {
-  color: #fff;
-  background: var(--accent);
+  border-style: solid;
 }
 
 .permission-row-copy {
@@ -2097,14 +2312,104 @@ textarea:focus {
 
 .permission-row-copy strong {
   color: var(--text);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .permission-row-copy small {
-  margin-top: 3px;
+  margin-top: 2px;
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 9px;
+  font-size: 8px;
+}
+
+.permission-remove-wrap {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.permission-remove {
+  display: inline-flex;
+  width: 19px;
+  height: 19px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #b4232f;
+  background: #fff;
+  border: 1px solid #e7b3b9;
+  border-radius: 50%;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.permission-remove:hover {
+  color: #fff;
+  background: #c73543;
+  border-color: #c73543;
+}
+
+.permission-confirm-popover {
+  position: absolute;
+  right: -2px;
+  bottom: calc(100% + 7px);
+  z-index: 20;
+  width: 142px;
+  padding: 9px 10px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid #e7b3b9;
+  border-radius: 6px;
+  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
+  box-sizing: border-box;
+}
+
+.permission-confirm-popover::after {
+  position: absolute;
+  right: 7px;
+  bottom: -5px;
+  width: 8px;
+  height: 8px;
+  background: #fff;
+  border-right: 1px solid #e7b3b9;
+  border-bottom: 1px solid #e7b3b9;
+  content: '';
+  transform: rotate(45deg);
+}
+
+.permission-confirm-popover strong {
+  display: block;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.permission-confirm-popover > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.permission-confirm-popover button {
+  padding: 3px 7px;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.permission-confirm-popover button:first-child {
+  color: #fff;
+  background: #c73543;
+  border-color: #c73543;
+}
+
+.permission-confirm-popover button:hover {
+  filter: brightness(0.97);
 }
 
 .member-list {
@@ -2187,7 +2492,7 @@ textarea:focus-visible {
 
 @media (max-width: 780px) {
   .page-root {
-    padding: 14px;
+    padding: 0;
   }
 
   .role-tabs {
@@ -2232,11 +2537,19 @@ textarea:focus-visible {
     width: 100%;
   }
 
-  .box-actions .button {
+  .box-actions .button,
+  .box-actions .member-search {
     flex: 1;
   }
 
-  .permission-row-list,
+  .member-search {
+    width: auto;
+  }
+
+  .permission-row-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .picker-grid,
   .member-picker-list {
     grid-template-columns: 1fr;
@@ -2309,9 +2622,19 @@ textarea:focus-visible {
     display: none;
   }
 
-  .drawer-header,
-  .drawer-body,
-  .drawer-footer {
+  .modal-layer {
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .edit-modal {
+    width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px);
+  }
+
+  .modal-header,
+  .modal-body,
+  .modal-footer {
     padding-right: 16px;
     padding-left: 16px;
   }
@@ -2322,6 +2645,12 @@ textarea:focus-visible {
 
   .field-wide {
     grid-column: auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .permission-row-list {
+    grid-template-columns: 1fr;
   }
 }
 </style>
