@@ -297,11 +297,11 @@
               </div>
               <div>
                 <dt>可访问门店</dt>
-                <dd>{{ selectedEmployee.storeIds.length ? scopeNames(selectedEmployee.storeIds, stores) : '未分配' }}</dd>
+                <dd>{{ selectedEmployeeScope.storeIds.length ? scopeNames(selectedEmployeeScope.storeIds, stores) : '未分配' }}</dd>
               </div>
               <div>
                 <dt>可操作仓库</dt>
-                <dd>{{ selectedEmployee.warehouseIds.length ? scopeNames(selectedEmployee.warehouseIds, warehouses) : '未分配' }}</dd>
+                <dd>{{ selectedEmployeeScope.warehouseIds.length ? scopeNames(selectedEmployeeScope.warehouseIds, warehouses) : '未分配' }}</dd>
               </div>
             </dl>
           </article>
@@ -375,11 +375,9 @@
           <div>
             <span class="summary-label">当前权限来源</span>
             <strong>{{ selectedEmployee.roleIds.length }} 个角色组</strong>
-            <p>权限由角色组汇总，员工档案只保存绑定关系。</p>
+            <p>权限和数据范围由角色组统一维护，员工档案只保存绑定关系。</p>
           </div>
-          <button class="button button-secondary" type="button" @click="openEdit(selectedEmployee)">
-            调整角色组
-          </button>
+          <span class="summary-hint">请前往角色组管理维护绑定关系</span>
         </article>
 
         <div class="permission-layout">
@@ -444,11 +442,11 @@
               <div class="scope-summary">
                 <div>
                   <span>门店范围</span>
-                  <strong>{{ selectedEmployee.storeIds.length ? scopeNames(selectedEmployee.storeIds, stores) : '未分配' }}</strong>
+                  <strong>{{ selectedEmployeeScope.storeIds.length ? scopeNames(selectedEmployeeScope.storeIds, stores) : '未分配' }}</strong>
                 </div>
                 <div>
                   <span>仓库范围</span>
-                  <strong>{{ selectedEmployee.warehouseIds.length ? scopeNames(selectedEmployee.warehouseIds, warehouses) : '未分配' }}</strong>
+                  <strong>{{ selectedEmployeeScope.warehouseIds.length ? scopeNames(selectedEmployeeScope.warehouseIds, warehouses) : '未分配' }}</strong>
                 </div>
               </div>
             </article>
@@ -471,9 +469,36 @@
       <div v-if="drawerVisible" class="drawer-layer" @click.self="closeDrawer">
         <aside class="edit-drawer" role="dialog" aria-modal="true" aria-labelledby="employee-drawer-title">
           <div class="drawer-header">
-            <div>
-              <span class="drawer-eyebrow">{{ editingEmployee ? '编辑档案' : '新建档案' }}</span>
-              <h2 id="employee-drawer-title">{{ editingEmployee ? draft.displayName : '新增员工' }}</h2>
+            <div class="drawer-header-main">
+              <button
+                class="avatar-upload"
+                type="button"
+                title="上传头像"
+                :style="avatarStyle(draft)"
+                @click="avatarInput?.click()"
+              >
+                <span>{{ draft.displayName?.slice(0, 1) || '人' }}</span>
+                <i aria-hidden="true">+</i>
+              </button>
+              <input
+                ref="avatarInput"
+                class="avatar-upload-input"
+                type="file"
+                accept="image/*"
+                @change="handleAvatarUpload"
+              />
+              <div>
+                <span class="drawer-eyebrow">{{ editingEmployee ? '编辑档案' : '新建档案' }}</span>
+                <h2 id="employee-drawer-title">{{ editingEmployee ? draft.displayName : '新增员工' }}</h2>
+                <button
+                  v-if="draft.avatarUrl"
+                  class="avatar-remove-button"
+                  type="button"
+                  @click="removeAvatar"
+                >
+                  移除头像
+                </button>
+              </div>
             </div>
             <button class="icon-button" type="button" title="关闭" @click="closeDrawer">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -563,6 +588,24 @@
                   <input v-model.trim="draft.username" type="text" placeholder="未填写则暂不开通" />
                 </label>
                 <label class="field">
+                  <span>登录密码 <em v-if="!editingEmployee && draft.username">*</em></span>
+                  <input
+                    v-model.trim="draft.password"
+                    type="password"
+                    :placeholder="editingEmployee ? '留空保持原密码' : '请输入登录密码'"
+                    autocomplete="new-password"
+                  />
+                </label>
+                <label class="field">
+                  <span>确认密码 <em v-if="draft.password">*</em></span>
+                  <input
+                    v-model.trim="draft.passwordConfirm"
+                    type="password"
+                    placeholder="请再次输入登录密码"
+                    autocomplete="new-password"
+                  />
+                </label>
+                <label class="field">
                   <span>账号状态</span>
                   <select v-model="draft.accountStatus">
                     <option value="active">正常</option>
@@ -578,48 +621,6 @@
                   <span>紧急联系电话</span>
                   <input v-model.trim="draft.emergencyPhone" type="text" placeholder="联系电话" />
                 </label>
-              </div>
-            </section>
-
-            <section class="form-section">
-              <div class="section-heading">
-                <h3>角色组绑定</h3>
-                <span>员工加入角色组后获得对应权限</span>
-              </div>
-              <div class="check-grid">
-                <label v-for="role in roleGroups" :key="role.id" class="check-item">
-                  <input v-model="draft.roleIds" type="checkbox" :value="role.id" />
-                  <span class="check-mark"></span>
-                  <span>
-                    <strong>{{ role.name }}</strong>
-                    <small>{{ role.description }}</small>
-                  </span>
-                </label>
-              </div>
-            </section>
-
-            <section class="form-section">
-              <div class="section-heading">
-                <h3>数据范围</h3>
-                <span>先用门店 / 仓库占位，后端接入后按 ID 保存</span>
-              </div>
-              <div class="scope-block">
-                <span class="scope-label">可访问门店</span>
-                <div class="scope-list">
-                  <label v-for="store in stores" :key="store.id" class="scope-item">
-                    <input v-model="draft.storeIds" type="checkbox" :value="store.id" />
-                    <span>{{ store.name }}</span>
-                  </label>
-                </div>
-              </div>
-              <div class="scope-block">
-                <span class="scope-label">可操作仓库</span>
-                <div class="scope-list">
-                  <label v-for="warehouse in warehouses" :key="warehouse.id" class="scope-item">
-                    <input v-model="draft.warehouseIds" type="checkbox" :value="warehouse.id" />
-                    <span>{{ warehouse.name }}</span>
-                  </label>
-                </div>
               </div>
             </section>
           </div>
@@ -642,11 +643,46 @@ import { computed, ref } from 'vue'
 const departments = ['仓储部', '财务部', '销售部', '人事行政', '运营部']
 
 const roleGroups = [
-  { id: 'system_admin', name: '系统管理员', tone: 'red', description: '系统基础资料和账号权限' },
-  { id: 'finance', name: '财务人员', tone: 'blue', description: '应收、收款和财务对账' },
-  { id: 'warehouse', name: '仓库操作员', tone: 'orange', description: '入库、出库和库存日常操作' },
-  { id: 'touch_staff', name: '触屏员工', tone: 'green', description: '前端触屏端和授权仓库草稿' },
-  { id: 'sales', name: '销售人员', tone: 'purple', description: '客户和销售订单日常录入' }
+  {
+    id: 'system_admin',
+    name: '系统管理员',
+    tone: 'red',
+    description: '系统基础资料和账号权限',
+    storeIds: [1, 2, 3],
+    warehouseIds: [1, 2, 3]
+  },
+  {
+    id: 'finance',
+    name: '财务人员',
+    tone: 'blue',
+    description: '应收、收款和财务对账',
+    storeIds: [1, 2, 3],
+    warehouseIds: []
+  },
+  {
+    id: 'warehouse',
+    name: '仓库操作员',
+    tone: 'orange',
+    description: '入库、出库和库存日常操作',
+    storeIds: [1],
+    warehouseIds: [1, 2]
+  },
+  {
+    id: 'touch_staff',
+    name: '触屏员工',
+    tone: 'green',
+    description: '前端触屏端和授权仓库草稿',
+    storeIds: [1],
+    warehouseIds: [1, 2]
+  },
+  {
+    id: 'sales',
+    name: '销售人员',
+    tone: 'purple',
+    description: '客户和销售订单日常录入',
+    storeIds: [2],
+    warehouseIds: []
+  }
 ]
 
 const permissionModules = [
@@ -754,9 +790,7 @@ const employees = ref([
     employmentStatus: 'active',
     employmentType: '正式',
     hireDate: '2024-03-01',
-    roleIds: ['warehouse', 'touch_staff'],
-    storeIds: [1],
-    warehouseIds: [1, 2]
+    roleIds: ['warehouse', 'touch_staff']
   },
   {
     id: 1002,
@@ -775,9 +809,7 @@ const employees = ref([
     employmentStatus: 'active',
     employmentType: '正式',
     hireDate: '2023-08-15',
-    roleIds: ['finance'],
-    storeIds: [1, 2, 3],
-    warehouseIds: []
+    roleIds: ['finance']
   },
   {
     id: 1003,
@@ -796,9 +828,7 @@ const employees = ref([
     employmentStatus: 'probation',
     employmentType: '试用',
     hireDate: '2026-08-20',
-    roleIds: ['sales'],
-    storeIds: [2],
-    warehouseIds: []
+    roleIds: ['sales']
   },
   {
     id: 1004,
@@ -817,9 +847,7 @@ const employees = ref([
     employmentStatus: 'leave',
     employmentType: '正式',
     hireDate: '2022-11-03',
-    roleIds: [],
-    storeIds: [],
-    warehouseIds: []
+    roleIds: []
   }
 ])
 
@@ -835,11 +863,22 @@ const activeDetailTab = ref('profile')
 const drawerVisible = ref(false)
 const editingEmployee = ref(false)
 const draft = ref(createEmptyEmployee())
+const avatarInput = ref(null)
 const notice = ref('')
 let noticeTimer
 
 const selectedEmployee = computed(() => {
   return employees.value.find(employee => employee.id === selectedEmployeeId.value) || null
+})
+
+const selectedEmployeeScope = computed(() => {
+  const roleIds = selectedEmployee.value?.roleIds || []
+  return {
+    storeIds: [...new Set(roleIds.flatMap(roleId => roleGroups.find(role => role.id === roleId)?.storeIds || []))],
+    warehouseIds: [
+      ...new Set(roleIds.flatMap(roleId => roleGroups.find(role => role.id === roleId)?.warehouseIds || []))
+    ]
+  }
 })
 
 const selectedPermissionModules = computed(() => {
@@ -890,7 +929,11 @@ function createEmptyEmployee() {
     employeeNo: '',
     displayName: '',
     avatarColor: '#e5e7eb',
+    avatarUrl: '',
     username: '',
+    password: '',
+    passwordConfirm: '',
+    passwordSet: false,
     accountStatus: 'pending',
     department: departments[0],
     position: '',
@@ -902,9 +945,7 @@ function createEmptyEmployee() {
     employmentStatus: 'active',
     employmentType: '正式',
     hireDate: '',
-    roleIds: [],
-    storeIds: [],
-    warehouseIds: []
+    roleIds: []
   }
 }
 
@@ -929,8 +970,9 @@ function openEdit(employee) {
   draft.value = {
     ...employee,
     roleIds: [...employee.roleIds],
-    storeIds: [...employee.storeIds],
-    warehouseIds: [...employee.warehouseIds]
+    password: '',
+    passwordConfirm: '',
+    passwordSet: Boolean(employee.passwordSet || employee.username)
   }
   drawerVisible.value = true
 }
@@ -945,13 +987,24 @@ function saveEmployee() {
     return
   }
 
+  if (draft.value.username && !editingEmployee.value && !draft.value.password) {
+    showNotice('开通登录账号需要设置密码')
+    return
+  }
+
+  if (draft.value.password && draft.value.password !== draft.value.passwordConfirm) {
+    showNotice('两次输入的密码不一致')
+    return
+  }
+
   const payload = {
     ...draft.value,
     employeeNo: draft.value.employeeNo || `E-${String(employees.value.length + 1).padStart(4, '0')}`,
     roleIds: [...draft.value.roleIds],
-    storeIds: [...draft.value.storeIds],
-    warehouseIds: [...draft.value.warehouseIds]
+    passwordSet: Boolean(draft.value.password || draft.value.passwordSet)
   }
+  delete payload.password
+  delete payload.passwordConfirm
 
   if (editingEmployee.value) {
     const index = employees.value.findIndex(item => item.id === payload.id)
@@ -963,6 +1016,26 @@ function saveEmployee() {
     showNotice('员工档案已创建')
   }
   closeDrawer()
+}
+
+function handleAvatarUpload(event) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    showNotice('请选择图片格式的头像文件')
+    return
+  }
+
+  const reader = new FileReader()
+  reader.onload = () => {
+    draft.value.avatarUrl = String(reader.result || '')
+  }
+  reader.readAsDataURL(file)
+}
+
+function removeAvatar() {
+  draft.value.avatarUrl = ''
 }
 
 function toggleAccount(employee) {
@@ -1049,10 +1122,18 @@ function employmentStatusClass(status) {
 }
 
 function avatarStyle(employee) {
-  return {
+  const style = {
     backgroundColor: employee.avatarColor || '#e5e7eb',
     color: '#275a4d'
   }
+  if (employee.avatarUrl) {
+    style.backgroundImage = `url("${employee.avatarUrl}")`
+    style.backgroundPosition = 'center'
+    style.backgroundRepeat = 'no-repeat'
+    style.backgroundSize = 'cover'
+    style.color = 'transparent'
+  }
+  return style
 }
 </script>
 
@@ -1863,6 +1944,82 @@ input[type='checkbox'] {
   box-sizing: border-box;
 }
 
+.drawer-header-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.avatar-upload {
+  position: relative;
+  display: inline-flex;
+  width: 52px;
+  height: 52px;
+  flex: 0 0 52px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #275a4d;
+  background-color: #e5e7eb;
+  border: 1px solid var(--accent-border, #a9e5d2);
+  border-radius: 50%;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 750;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.avatar-upload:hover {
+  border-color: var(--accent, #0f9f78);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 15, 159, 120), 0.12);
+}
+
+.avatar-upload > i {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--accent, #0f9f78);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  font-size: 16px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.avatar-upload-input {
+  display: none;
+}
+
+.avatar-remove-button {
+  display: block;
+  margin-top: 4px;
+  padding: 0;
+  color: var(--text-muted, #8a96a8);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.avatar-remove-button:hover {
+  color: #b4232f;
+}
+
+.summary-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .drawer-header h2 {
   font-size: 18px;
 }
@@ -1925,90 +2082,6 @@ input[type='checkbox'] {
 
 .field-wide {
   grid-column: 1 / -1;
-}
-
-.check-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.check-item {
-  display: flex;
-  min-height: 58px;
-  align-items: flex-start;
-  gap: 9px;
-  padding: 11px;
-  background: #f8fafc;
-  border: 1px solid var(--border, #dfe5ec);
-  border-radius: 6px;
-  cursor: pointer;
-  box-sizing: border-box;
-}
-
-.check-item:has(input:checked) {
-  background: var(--accent-soft, #e9f8f3);
-  border-color: var(--accent-border, #a9e5d2);
-}
-
-.check-item input,
-.scope-item input {
-  margin: 2px 0 0;
-}
-
-.check-item strong,
-.check-item small {
-  display: block;
-}
-
-.check-item strong {
-  color: var(--text, #172033);
-  font-size: 12px;
-}
-
-.check-item small {
-  margin-top: 4px;
-  color: var(--text-muted, #8a96a8);
-  font-size: 11px;
-  line-height: 1.4;
-}
-
-.scope-block + .scope-block {
-  margin-top: 14px;
-}
-
-.scope-label {
-  display: block;
-  margin-bottom: 8px;
-  color: var(--text-secondary, #596579);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.scope-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.scope-item {
-  display: inline-flex;
-  min-height: 34px;
-  align-items: center;
-  gap: 7px;
-  padding: 0 10px;
-  color: var(--text-secondary, #596579);
-  background: #f8fafc;
-  border: 1px solid var(--border, #dfe5ec);
-  border-radius: 5px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.scope-item:has(input:checked) {
-  color: var(--accent-dark, #08745a);
-  background: var(--accent-soft, #e9f8f3);
-  border-color: var(--accent-border, #a9e5d2);
 }
 
 .drawer-footer {
@@ -2872,8 +2945,7 @@ select:focus-visible,
     padding: 10px 14px;
   }
 
-  .form-grid,
-  .check-grid {
+  .form-grid {
     grid-template-columns: 1fr;
   }
 

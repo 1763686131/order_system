@@ -139,6 +139,56 @@
           <strong>暂未配置权限</strong>
           <span>点击“添加权限”查看全部权限</span>
         </div>
+
+        <section class="scope-panel">
+          <div class="scope-panel-heading">
+            <div>
+              <h3>数据可见范围</h3>
+              <p>角色组成员将继承已启用的门店和仓库范围</p>
+            </div>
+            <span>
+              {{ selectedGroup.storeIds.length + selectedGroup.warehouseIds.length }} 项已配置
+            </span>
+          </div>
+          <div class="scope-config-grid">
+            <div class="scope-config-block">
+              <div class="scope-config-title">
+                <strong>门店范围</strong>
+                <span>点击标签切换</span>
+              </div>
+              <div class="scope-chip-list">
+                <button
+                  v-for="store in stores"
+                  :key="store.id"
+                  class="scope-chip"
+                  :class="{ active: selectedGroup.storeIds.includes(store.id) }"
+                  type="button"
+                  @click="toggleGroupScope('store', store.id)"
+                >
+                  <i></i>{{ store.name }}
+                </button>
+              </div>
+            </div>
+            <div class="scope-config-block">
+              <div class="scope-config-title">
+                <strong>仓库范围</strong>
+                <span>点击标签切换</span>
+              </div>
+              <div class="scope-chip-list">
+                <button
+                  v-for="warehouse in warehouses"
+                  :key="warehouse.id"
+                  class="scope-chip"
+                  :class="{ active: selectedGroup.warehouseIds.includes(warehouse.id) }"
+                  type="button"
+                  @click="toggleGroupScope('warehouse', warehouse.id)"
+                >
+                  <i></i>{{ warehouse.name }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       </section>
 
       <aside class="members-panel">
@@ -383,6 +433,18 @@ const permissionModules = [
 
 const allPermissionIds = permissionModules.flatMap(module => module.permissions.map(permission => permission.id))
 
+const stores = [
+  { id: 1, name: '一号门店' },
+  { id: 2, name: '二号门店' },
+  { id: 3, name: '直营网点' }
+]
+
+const warehouses = [
+  { id: 1, name: '成品仓' },
+  { id: 2, name: '原材料仓' },
+  { id: 3, name: '周转仓' }
+]
+
 const memberCatalog = [
   { id: 1001, name: '张三', employeeNo: 'E-0001', department: '仓储部', accountStatus: 'active', avatarColor: '#d8f4ea' },
   { id: 1002, name: '李四', employeeNo: 'E-0002', department: '财务部', accountStatus: 'active', avatarColor: '#e2edff' },
@@ -400,6 +462,8 @@ const roleGroups = ref([
     status: 'enabled',
     memberIds: [1004],
     permissions: allPermissionIds,
+    storeIds: [1, 2, 3],
+    warehouseIds: [1, 2, 3],
     createdAt: '2026-09-01',
     updatedAt: '2026-09-17'
   },
@@ -417,6 +481,8 @@ const roleGroups = ref([
       'finance.reconciliation.view',
       'sales.customer.view'
     ],
+    storeIds: [1, 2, 3],
+    warehouseIds: [],
     createdAt: '2026-09-02',
     updatedAt: '2026-09-16'
   },
@@ -429,6 +495,8 @@ const roleGroups = ref([
     status: 'enabled',
     memberIds: [1001],
     permissions: ['inventory.view', 'inventory.inbound.create', 'inventory.outbound.create'],
+    storeIds: [1],
+    warehouseIds: [1, 2],
     createdAt: '2026-09-03',
     updatedAt: '2026-09-15'
   },
@@ -441,6 +509,8 @@ const roleGroups = ref([
     status: 'enabled',
     memberIds: [1001, 1003],
     permissions: ['front.access', 'front.material_outbound.create', 'front.material_outbound.view'],
+    storeIds: [1],
+    warehouseIds: [1, 2],
     createdAt: '2026-09-04',
     updatedAt: '2026-09-17'
   },
@@ -453,6 +523,8 @@ const roleGroups = ref([
     status: 'disabled',
     memberIds: [1003],
     permissions: ['sales.customer.view', 'sales.order.create', 'sales.order.edit'],
+    storeIds: [2],
+    warehouseIds: [],
     createdAt: '2026-09-05',
     updatedAt: '2026-09-12'
   }
@@ -516,6 +588,8 @@ function createEmptyGroup() {
     status: 'enabled',
     memberIds: [],
     permissions: [],
+    storeIds: [],
+    warehouseIds: [],
     createdAt: '2026-09-17',
     updatedAt: '2026-09-17'
   }
@@ -541,7 +615,9 @@ function openEdit(group) {
   draft.value = {
     ...group,
     memberIds: [...group.memberIds],
-    permissions: [...group.permissions]
+    permissions: [...group.permissions],
+    storeIds: [...(group.storeIds || [])],
+    warehouseIds: [...(group.warehouseIds || [])]
   }
   drawerVisible.value = true
 }
@@ -561,6 +637,8 @@ function saveGroup() {
     code: draft.value.code || draft.value.name.toLowerCase().replace(/\s+/g, '_'),
     memberIds: [...draft.value.memberIds],
     permissions: [...draft.value.permissions],
+    storeIds: [...draft.value.storeIds],
+    warehouseIds: [...draft.value.warehouseIds],
     updatedAt: '2026-09-17'
   }
 
@@ -601,6 +679,23 @@ function togglePermission(permissionId) {
   selectedGroup.value.permissions.push(permissionId)
   selectedGroup.value.updatedAt = '2026-09-17'
   showNotice('权限添加成功')
+}
+
+function toggleGroupScope(scopeType, scopeId) {
+  if (!selectedGroup.value) return
+  const key = scopeType === 'store' ? 'storeIds' : 'warehouseIds'
+  const ids = selectedGroup.value[key] || []
+  const index = ids.indexOf(scopeId)
+
+  if (index === -1) {
+    ids.push(scopeId)
+    showNotice(`${scopeType === 'store' ? '门店' : '仓库'}范围添加成功`)
+  } else {
+    ids.splice(index, 1)
+    showNotice(`${scopeType === 'store' ? '门店' : '仓库'}范围已移除`)
+  }
+  selectedGroup.value[key] = ids
+  selectedGroup.value.updatedAt = '2026-09-17'
 }
 
 function openPermissionDeleteConfirm(permissionId) {
@@ -2248,6 +2343,119 @@ textarea:focus {
   font-size: 11px;
 }
 
+.scope-panel {
+  margin: 0 10px 10px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.scope-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 11px;
+}
+
+.scope-panel-heading h3 {
+  font-size: 13px;
+}
+
+.scope-panel-heading p {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.scope-panel-heading > span {
+  flex: 0 0 auto;
+  color: var(--accent-dark);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.scope-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.scope-config-block {
+  min-width: 0;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.scope-config-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.scope-config-title strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.scope-config-title span {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.scope-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.scope-chip {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px dashed var(--border-strong);
+  border-radius: 5px;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.scope-chip i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  background: #cbd5e1;
+  border-radius: 50%;
+}
+
+.scope-chip:hover {
+  color: var(--accent-dark);
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.07);
+}
+
+.scope-chip.active {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  border-style: solid;
+  font-weight: 650;
+}
+
+.scope-chip.active i {
+  background: var(--accent);
+}
+
 .permission-module-box {
   min-width: 0;
   padding: 10px;
@@ -2589,7 +2797,8 @@ textarea:focus-visible {
   .group-list,
   .permission-grid,
   .drawer-permissions,
-  .member-check-list {
+  .member-check-list,
+  .scope-config-grid {
     grid-template-columns: 1fr;
   }
 
