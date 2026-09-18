@@ -1185,28 +1185,37 @@ h1 {
 
 .button-primary {
   color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent, #0f9f78);
+  border-color: var(--accent, #0f9f78);
 }
 
-.button-primary:hover {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
-  box-shadow: 0 4px 12px rgba(var(--accent-rgb), 0.18);
+.button-primary:hover:not(:disabled) {
+  background: var(--accent-dark, #08745a);
+  border-color: var(--accent-dark, #08745a);
+  box-shadow: 0 4px 12px rgba(var(--accent-rgb, 15, 159, 120), 0.18);
 }
 
 .button-secondary,
 .button-ghost {
-  color: var(--text-secondary);
-  background: #fff;
-  border-color: var(--border-strong);
+  color: var(--text-secondary, #596579);
+  background: var(--panel-bg, #fff);
+  border-color: var(--border-strong, #cbd5e1);
 }
 
-.button-secondary:hover,
-.button-ghost:hover {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+.button-secondary:hover:not(:disabled),
+.button-ghost:hover:not(:disabled) {
+  color: var(--accent-dark, #08745a);
+  background: var(--accent-soft, #e9f8f3);
+  border-color: var(--accent-border, #a9e5d2);
+}
+
+.button:disabled {
+  color: #8a96a8;
+  background: #f1f5f9;
+  border-color: #dfe5ec;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
 }
 
 .metric-grid {
@@ -1297,9 +1306,9 @@ select {
   width: 100%;
   height: 38px;
   padding: 0 11px;
-  color: var(--text);
+  color: var(--text, #172033);
   background: #fff;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border-strong, #cbd5e1);
   border-radius: 5px;
   outline: none;
   font: inherit;
@@ -1314,14 +1323,14 @@ input::placeholder {
 
 input:focus,
 select:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
+  border-color: var(--accent, #0f9f78);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 15, 159, 120), 0.12);
 }
 
 input[type='checkbox'] {
   width: 16px;
   height: 16px;
-  accent-color: var(--accent);
+  accent-color: var(--accent, #0f9f78);
 }
 
 .input-with-icon {
@@ -1816,12 +1825,25 @@ input[type='checkbox'] {
 }
 
 .drawer-layer {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --panel-bg: #fff;
+  --border: #dfe5ec;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
   position: fixed;
   inset: 0;
   z-index: 2000;
   display: flex;
   justify-content: flex-end;
   background: rgba(15, 23, 42, 0.35);
+  color: var(--text, #172033);
+  font-size: 14px;
 }
 
 .edit-drawer {
@@ -1829,7 +1851,7 @@ input[type='checkbox'] {
   width: min(640px, 100vw);
   height: 100%;
   flex-direction: column;
-  background: #fff;
+  background: var(--panel-bg, #fff);
   box-shadow: -12px 0 32px rgba(15, 23, 42, 0.16);
 }
 
@@ -1837,7 +1859,7 @@ input[type='checkbox'] {
   min-height: 78px;
   justify-content: space-between;
   padding: 18px 22px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border, #dfe5ec);
   box-sizing: border-box;
 }
 
@@ -1851,29 +1873,30 @@ input[type='checkbox'] {
   height: 36px;
   align-items: center;
   justify-content: center;
-  color: var(--text-secondary);
-  background: #fff;
-  border: 1px solid var(--border-strong);
+  color: var(--text-secondary, #596579);
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--border-strong, #cbd5e1);
   border-radius: 5px;
   cursor: pointer;
 }
 
 .icon-button:hover {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+  color: var(--accent-dark, #08745a);
+  background: var(--accent-soft, #e9f8f3);
+  border-color: var(--accent-border, #a9e5d2);
 }
 
 .drawer-body {
   flex: 1;
   padding: 20px 22px;
+  color: var(--text, #172033);
   overflow-y: auto;
 }
 
 .form-section + .form-section {
   margin-top: 24px;
   padding-top: 22px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border, #dfe5ec);
 }
 
 .section-heading {
@@ -1917,15 +1940,15 @@ input[type='checkbox'] {
   gap: 9px;
   padding: 11px;
   background: #f8fafc;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #dfe5ec);
   border-radius: 6px;
   cursor: pointer;
   box-sizing: border-box;
 }
 
 .check-item:has(input:checked) {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+  background: var(--accent-soft, #e9f8f3);
+  border-color: var(--accent-border, #a9e5d2);
 }
 
 .check-item input,
@@ -1939,13 +1962,13 @@ input[type='checkbox'] {
 }
 
 .check-item strong {
-  color: var(--text);
+  color: var(--text, #172033);
   font-size: 12px;
 }
 
 .check-item small {
   margin-top: 4px;
-  color: var(--text-muted);
+  color: var(--text-muted, #8a96a8);
   font-size: 11px;
   line-height: 1.4;
 }
@@ -1957,7 +1980,7 @@ input[type='checkbox'] {
 .scope-label {
   display: block;
   margin-bottom: 8px;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #596579);
   font-size: 12px;
   font-weight: 650;
 }
@@ -1974,25 +1997,25 @@ input[type='checkbox'] {
   align-items: center;
   gap: 7px;
   padding: 0 10px;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #596579);
   background: #f8fafc;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border, #dfe5ec);
   border-radius: 5px;
   font-size: 12px;
   cursor: pointer;
 }
 
 .scope-item:has(input:checked) {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+  color: var(--accent-dark, #08745a);
+  background: var(--accent-soft, #e9f8f3);
+  border-color: var(--accent-border, #a9e5d2);
 }
 
 .drawer-footer {
   justify-content: flex-end;
   gap: 8px;
   padding: 13px 22px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border, #dfe5ec);
 }
 
 .workspace-nav {
@@ -2671,7 +2694,7 @@ button:focus-visible,
 input:focus-visible,
 select:focus-visible,
 .record-row:focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--accent, #0f9f78);
   outline-offset: 2px;
 }
 

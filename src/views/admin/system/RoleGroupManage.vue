@@ -2299,6 +2299,10 @@ textarea:focus {
   border-style: solid;
 }
 
+.permission-row.delete-mode {
+  padding-right: 31px;
+}
+
 .permission-row-copy {
   display: block;
   min-width: 0;
@@ -2327,8 +2331,9 @@ textarea:focus {
 }
 
 .permission-remove-wrap {
-  position: relative;
-  flex: 0 0 auto;
+  position: absolute;
+  top: 5px;
+  right: 5px;
 }
 
 .permission-remove {
