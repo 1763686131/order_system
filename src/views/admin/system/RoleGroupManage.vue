@@ -2257,23 +2257,25 @@ textarea:focus {
 }
 
 .permission-module-box .module-heading {
-  margin-bottom: 8px;
+  margin-bottom: 9px;
 }
 
 .permission-row-list {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .permission-row {
   position: relative;
   display: flex;
-  min-width: 0;
-  min-height: 39px;
+  width: 176px;
+  min-width: 150px;
+  min-height: 42px;
   align-items: center;
   gap: 5px;
-  padding: 5px 6px;
+  padding: 6px 8px;
   background: #fff;
   border: 1px dashed var(--border-strong);
   border-radius: 5px;
@@ -2312,14 +2314,16 @@ textarea:focus {
 
 .permission-row-copy strong {
   color: var(--text);
-  font-size: 10px;
+  font-size: 12px;
+  line-height: 1.25;
 }
 
 .permission-row-copy small {
-  margin-top: 2px;
+  margin-top: 3px;
   color: var(--text-muted);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 8px;
+  font-size: 9px;
+  line-height: 1.2;
 }
 
 .permission-remove-wrap {
@@ -2547,7 +2551,12 @@ textarea:focus-visible {
   }
 
   .permission-row-list {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .permission-row {
+    width: calc(50% - 3px);
+    min-width: 0;
   }
 
   .picker-grid,
@@ -2649,8 +2658,8 @@ textarea:focus-visible {
 }
 
 @media (max-width: 520px) {
-  .permission-row-list {
-    grid-template-columns: 1fr;
+  .permission-row {
+    width: 100%;
   }
 }
 </style>
