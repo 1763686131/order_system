@@ -41,7 +41,7 @@
                   <circle cx="11" cy="11" r="6.5"></circle>
                   <path d="m16 16 4.5 4.5"></path>
                 </svg>
-                <input v-model.trim="filters.keyword" type="search" placeholder="搜索姓名 / 工号 / 账号" />
+                <input v-model.trim="filters.keyword" type="search" placeholder="搜索姓名 / 工号 / 账号 / 手机号" />
               </label>
               <select v-model="filters.department" title="按部门筛选">
                 <option value="">全部部门</option>
@@ -103,6 +103,7 @@
               <th class="col-employment">在职状态</th>
               <th class="col-role">权限组</th>
               <th class="col-date">入职日期</th>
+              <th class="col-login">最后登录时间</th>
               <th class="col-actions">操作</th>
             </tr>
           </thead>
@@ -139,7 +140,7 @@
                   <span>{{ employee.position }}</span>
                 </div>
               </td>
-              <td class="tabular">{{ employee.phone }}</td>
+              <td class="tabular">{{ employee.phone || '-' }}</td>
               <td>
                 <span :class="['status-badge', employmentStatusClass(employee.employmentStatus)]">
                   <i></i>{{ employmentStatusLabel(employee.employmentStatus) }}
@@ -161,6 +162,7 @@
                 </div>
               </td>
               <td class="tabular">{{ employee.hireDate || '-' }}</td>
+              <td class="tabular last-login-cell">{{ formatDateTime(employee.lastLoginAt) }}</td>
               <td>
                 <div class="row-actions" @click.stop>
                   <button class="text-button" type="button" @click="openEmployee(employee)">查看</button>
@@ -172,7 +174,7 @@
               </td>
             </tr>
             <tr v-if="filteredEmployees.length === 0">
-              <td colspan="8">
+              <td colspan="9">
                 <div class="empty-state">
                   <span class="empty-icon">—</span>
                   <strong>没有匹配的员工</strong>
@@ -353,6 +355,40 @@
                 <i></i>{{ accountStatusLabel(selectedEmployee.accountStatus) }}
               </span>
             </div>
+            <div v-if="selectedEmployee.username" class="account-security-grid">
+              <div class="account-security-item">
+                <span class="summary-label">登录密码</span>
+                <div class="stored-password">
+                  <strong>
+                    {{ detailPasswordVisible ? '已加密，无法查看原密码' : '••••••••' }}
+                  </strong>
+                  <button
+                    class="password-toggle"
+                    type="button"
+                    :title="detailPasswordVisible ? '隐藏密码说明' : '查看密码'"
+                    :aria-label="detailPasswordVisible ? '隐藏密码说明' : '查看密码'"
+                    @click="toggleStoredPasswordVisibility"
+                  >
+                    <svg v-if="detailPasswordVisible" viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+                      <circle cx="12" cy="12" r="2.5"></circle>
+                    </svg>
+                    <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="m3 3 18 18"></path>
+                      <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16.7 16.7 0 0 1-2.2 2.9"></path>
+                      <path d="M6.6 6.6C4 8.3 2.5 12 2.5 12s3.5 6 9.5 6c1.4 0 2.7-.3 3.8-.7"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="account-security-item">
+                <span class="summary-label">最后登录时间</span>
+                <strong class="tabular">{{ formatDateTime(selectedEmployee.lastLoginAt) }}</strong>
+              </div>
+              <button class="text-button password-edit-button" type="button" @click="openPasswordEditor">
+                修改密码
+              </button>
+            </div>
             <div class="assigned-role-list">
               <span class="summary-label">已绑定权限组</span>
               <div class="role-list">
@@ -524,6 +560,16 @@
                   <input v-model.trim="draft.employeeNo" type="text" placeholder="例如 E-0008" />
                 </label>
                 <label class="field">
+                  <span>手机号</span>
+                  <input
+                    v-model.trim="draft.phone"
+                    type="tel"
+                    inputmode="tel"
+                    maxlength="30"
+                    placeholder="请输入员工手机号"
+                  />
+                </label>
+                <label class="field">
                   <span>身份证号</span>
                   <input v-model.trim="draft.idCard" type="text" placeholder="建议后端加密存储" />
                 </label>
@@ -594,21 +640,60 @@
                 </label>
                 <label class="field">
                   <span>登录密码 <em v-if="!editingEmployee && draft.username">*</em></span>
-                  <input
-                    v-model.trim="draft.password"
-                    type="password"
-                    :placeholder="editingEmployee ? '留空保持原密码' : '请输入登录密码'"
-                    autocomplete="new-password"
-                  />
+                  <div class="password-input-wrap">
+                    <input
+                      ref="passwordInput"
+                      v-model.trim="draft.password"
+                      :type="passwordVisible ? 'text' : 'password'"
+                      :placeholder="editingEmployee ? '留空保持原密码' : '请输入登录密码'"
+                      autocomplete="new-password"
+                    />
+                    <button
+                      class="password-toggle"
+                      type="button"
+                      :title="passwordVisible ? '隐藏密码' : '显示密码'"
+                      :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
+                      @click="passwordVisible = !passwordVisible"
+                    >
+                      <svg v-if="passwordVisible" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+                        <circle cx="12" cy="12" r="2.5"></circle>
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m3 3 18 18"></path>
+                        <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16.7 16.7 0 0 1-2.2 2.9"></path>
+                        <path d="M6.6 6.6C4 8.3 2.5 12 2.5 12s3.5 6 9.5 6c1.4 0 2.7-.3 3.8-.7"></path>
+                      </svg>
+                    </button>
+                  </div>
                 </label>
                 <label class="field">
                   <span>确认密码 <em v-if="draft.password">*</em></span>
-                  <input
-                    v-model.trim="draft.passwordConfirm"
-                    type="password"
-                    placeholder="请再次输入登录密码"
-                    autocomplete="new-password"
-                  />
+                  <div class="password-input-wrap">
+                    <input
+                      v-model.trim="draft.passwordConfirm"
+                      :type="passwordConfirmVisible ? 'text' : 'password'"
+                      placeholder="请再次输入登录密码"
+                      autocomplete="new-password"
+                    />
+                    <button
+                      class="password-toggle"
+                      type="button"
+                      :title="passwordConfirmVisible ? '隐藏确认密码' : '显示确认密码'"
+                      :aria-label="passwordConfirmVisible ? '隐藏确认密码' : '显示确认密码'"
+                      @click="passwordConfirmVisible = !passwordConfirmVisible"
+                    >
+                      <svg v-if="passwordConfirmVisible" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+                        <circle cx="12" cy="12" r="2.5"></circle>
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m3 3 18 18"></path>
+                        <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6s-1.5 2.6-3.8 4.3"></path>
+                        <path d="M6.6 6.6C4 8.3 2.5 12 2.5 12s3.5 6 9.5 6c1.4 0 2.7-.3 3.8-.7"></path>
+                      </svg>
+                    </button>
+                  </div>
                 </label>
                 <label class="field">
                   <span>账号状态</span>
@@ -643,7 +728,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import request from '@/api/request'
 
 const departments = ['仓储部', '财务部', '销售部', '人事行政', '运营部']
@@ -681,6 +766,10 @@ const drawerVisible = ref(false)
 const editingEmployee = ref(false)
 const draft = ref(createEmptyEmployee())
 const avatarInput = ref(null)
+const passwordInput = ref(null)
+const passwordVisible = ref(false)
+const passwordConfirmVisible = ref(false)
+const detailPasswordVisible = ref(false)
 const notice = ref('')
 let noticeTimer
 
@@ -795,17 +884,21 @@ function createEmptyEmployee() {
 function openCreate() {
   editingEmployee.value = false
   draft.value = createEmptyEmployee()
+  passwordVisible.value = false
+  passwordConfirmVisible.value = false
   drawerVisible.value = true
 }
 
 function openEmployee(employee) {
   selectedEmployeeId.value = employee.id
   activeDetailTab.value = 'profile'
+  detailPasswordVisible.value = false
 }
 
 function goToList() {
   selectedEmployeeId.value = null
   activeDetailTab.value = 'profile'
+  detailPasswordVisible.value = false
 }
 
 function openEdit(employee) {
@@ -817,11 +910,32 @@ function openEdit(employee) {
     passwordConfirm: '',
     passwordSet: Boolean(employee.passwordSet || employee.username)
   }
+  passwordVisible.value = false
+  passwordConfirmVisible.value = false
   drawerVisible.value = true
 }
 
 function closeDrawer() {
   drawerVisible.value = false
+  passwordVisible.value = false
+  passwordConfirmVisible.value = false
+}
+
+function toggleStoredPasswordVisibility() {
+  detailPasswordVisible.value = !detailPasswordVisible.value
+  if (detailPasswordVisible.value) {
+    showNotice('现有密码采用不可逆加密保存，无法查看原密码，可通过“修改密码”设置新密码')
+  }
+}
+
+async function openPasswordEditor() {
+  if (!selectedEmployee.value?.username) {
+    showNotice('该员工尚未开通登录账号')
+    return
+  }
+  openEdit(selectedEmployee.value)
+  await nextTick()
+  passwordInput.value?.focus()
 }
 
 async function saveEmployee() {
@@ -994,6 +1108,11 @@ function avatarStyle(employee) {
     style.color = 'transparent'
   }
   return style
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').slice(0, 16)
 }
 
 onMounted(loadEmployeeData)
@@ -1441,7 +1560,7 @@ input[type='checkbox'] {
 
 .employee-table {
   width: 100%;
-  min-width: 1260px;
+  min-width: 1405px;
   table-layout: fixed;
   border-collapse: collapse;
 }
@@ -1513,9 +1632,19 @@ input[type='checkbox'] {
   width: 110px;
 }
 
+.col-login {
+  width: 145px;
+}
+
 .col-actions {
   width: 170px;
   text-align: center !important;
+}
+
+.last-login-cell {
+  color: var(--text-secondary);
+  font-size: 12px !important;
+  white-space: nowrap;
 }
 
 .employee-cell {
@@ -2345,6 +2474,49 @@ input[type='checkbox'] {
   border-bottom: 1px solid var(--border);
 }
 
+.account-security-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-security-item {
+  min-width: 0;
+}
+
+.account-security-item > strong {
+  display: block;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stored-password {
+  display: flex;
+  min-width: 0;
+  height: 34px;
+  align-items: center;
+  gap: 5px;
+}
+
+.stored-password strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.password-edit-button {
+  align-self: center;
+  white-space: nowrap;
+}
+
 .summary-label {
   display: block;
   margin-bottom: 5px;
@@ -2365,6 +2537,53 @@ input[type='checkbox'] {
 .assigned-role-list .role-list {
   min-height: 25px;
   margin-top: 7px;
+}
+
+.password-input-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.password-input-wrap input {
+  width: 100%;
+  padding-right: 40px;
+  box-sizing: border-box;
+}
+
+.password-toggle {
+  display: inline-flex;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-muted, #8a96a8);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.password-input-wrap .password-toggle {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+}
+
+.password-toggle:hover {
+  color: var(--accent-dark, #08745a);
+  background: var(--accent-soft, #e9f8f3);
+}
+
+.password-toggle svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
 .permission-summary-card {
@@ -2716,6 +2935,15 @@ select:focus-visible,
   .detail-tab {
     flex: 1;
     justify-content: center;
+  }
+
+  .account-security-grid {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .password-edit-button {
+    justify-self: start;
   }
 
   .metric-grid {

@@ -74,6 +74,7 @@ def _serialize_employee(conn, row):
         "username": user["username"] if user else "",
         "passwordSet": bool(user),
         "accountStatus": row["account_status"] if user else "pending",
+        "lastLoginAt": user["lastLoginAt"] if user else None,
         "department": row["department"] or "",
         "position": row["position"] or "",
         "phone": row["phone"] or "",
