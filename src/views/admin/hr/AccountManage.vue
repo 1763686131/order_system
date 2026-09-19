@@ -630,7 +630,7 @@
               <button
                 class="avatar-upload"
                 type="button"
-                title="上传头像"
+                title="选择并裁剪头像"
                 :style="avatarStyle(draft)"
                 @click="avatarInput?.click()"
               >
@@ -874,11 +874,19 @@
         </aside>
       </div>
     </Teleport>
+
+    <AvatarCropper
+      :visible="avatarCropVisible"
+      :file="avatarCropFile"
+      @cancel="closeAvatarCropper"
+      @confirm="applyCroppedAvatar"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import AvatarCropper from '@/components/admin/AvatarCropper.vue'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { mergeRolePermissions, mergeRoleScopes } from '@/utils/accessControl'
@@ -920,6 +928,8 @@ const departmentSelectorOpen = ref(false)
 const draft = ref(createEmptyEmployee())
 const avatarInput = ref(null)
 const pendingAvatarFile = ref(null)
+const avatarCropVisible = ref(false)
+const avatarCropFile = ref(null)
 const passwordInput = ref(null)
 const passwordVisible = ref(false)
 const passwordConfirmVisible = ref(false)
@@ -1220,10 +1230,21 @@ function handleAvatarUpload(event) {
     return
   }
 
+  avatarCropFile.value = file
+  avatarCropVisible.value = true
+}
+
+function applyCroppedAvatar(file) {
   revokeAvatarPreview()
   pendingAvatarFile.value = file
   draft.value.avatarPreviewUrl = URL.createObjectURL(file)
   draft.value.avatarRemovalRequested = false
+  closeAvatarCropper()
+}
+
+function closeAvatarCropper() {
+  avatarCropVisible.value = false
+  avatarCropFile.value = null
 }
 
 function removeAvatar() {
@@ -1241,6 +1262,7 @@ function revokeAvatarPreview() {
 }
 
 function resetPendingAvatar() {
+  closeAvatarCropper()
   revokeAvatarPreview()
   pendingAvatarFile.value = null
 }

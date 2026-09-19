@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `4.2` |
+| 权限/API 文档版本 | `4.4` |
 | 文档更新 | `2026-09-19` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
@@ -34,11 +34,23 @@
 - 物流、快递运费对账及 Excel 导出
 - 数据库打印模板、可视化设计、业务变量预览、浏览器打印和 C-Lodop 本地打印
 - 首次部署超级管理员初始化、员工档案、登录账号和角色组管理
+- 员工头像裁剪、缩放、上传、替换和物理文件清理
 - 部门配置、员工多部门归属、部门员工维护和职位内联编辑
 - 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
 - 原材料触屏出库、审核和库存流水
 
 ## 2026-09-19 更新
+
+### 员工头像上传与裁剪
+
+- 员工档案头像不再以 Base64 写入 SQLite，数据库只保存 `/uploads/employee-avatars/...` 访问路径。
+- 头像文件按月份保存到 `uploads/employee-avatars/YYYY-MM/`，替换或删除头像时同步清理旧文件。
+- 员工编辑抽屉选择图片后先打开裁剪弹窗，不会立即上传或覆盖原头像。
+- 裁剪弹窗支持鼠标和触摸拖动、滑块和滚轮缩放、方向键微调、重置、取消和确认。
+- 圆形选区用于模拟最终头像显示范围，确认后在浏览器中生成 `512 × 512` 的正方形 WebP 图片；浏览器不支持 WebP 导出时回退为 PNG。
+- 只有保存员工档案时才通过头像接口上传裁剪结果；编辑当前登录账号时，后台顶部头像、姓名、电话和职位会立即同步。
+- 上传接口校验实际图片内容，支持 JPG、PNG、WebP 和 GIF，原始选择文件最大 `5 MB`。
+- 服务启动时会把历史 Base64 员工头像迁移为受管文件路径，避免数据库继续保存大段图片数据。
 
 ### 账号、角色组与数据范围
 
@@ -259,6 +271,7 @@ order_system/
 │  │  └─ hr_reports.py               # 人事报告接口
 │  ├─ utils/
 │  │  ├─ auth.py                     # Session、权限装饰器和当前用户序列化
+│  │  ├─ avatar_storage.py            # 员工头像校验、保存、删除和历史 Base64 迁移
 │  │  ├─ access_scope.py             # 角色门店/仓库范围合并与数据过滤
 │  │  ├─ permission_catalog.py       # 触屏、后台路由和销售订单操作权限目录
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
@@ -285,6 +298,7 @@ order_system/
 │  │  │  ├─ SearchOrderModal.vue     # 全局订单搜索
 │  │  │  └─ SmartCalculator.vue      # 计算器
 │  │  ├─ admin/
+│  │  │  ├─ AvatarCropper.vue        # 员工头像拖动、缩放和裁剪弹窗
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  └─ StoreFormModal.vue       # 门店维护弹窗
 │  │  ├─ print/
@@ -327,7 +341,7 @@ order_system/
 │  │     │  ├─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
 │  │     │  └─ PrintTemplate.vue     # 打印模板管理
 │  │     └─ hr/
-│  │        ├─ AccountManage.vue     # 员工档案和可选登录账号
+│  │        ├─ AccountManage.vue     # 员工档案、可选登录账号和头像上传
 │  │        ├─ DepartmentManage.vue  # 部门配置、员工归属和职位维护
 │  │        └─ Reports.vue           # 人事检测报告
 │  ├─ router/index.js                # 前端路由和登录守卫
@@ -349,7 +363,8 @@ order_system/
 │  ├─ 权限角色分组优化方案.md        # 账号、员工、角色组和数据范围设计
 │  ├─ 银行账户管理-后端开发提示词.md  # 银行账户模块后端开发指引
 │  └─ BUG及优化文档.md               # 问题与优化记录
-├─ uploads/                          # 回单、收款附件、报告和银行卡图片等上传文件
+├─ uploads/                          # 回单、头像、收款附件、报告和银行卡图片等上传文件
+│  ├─ employee-avatars/              # 员工头像，内部继续按 YYYY-MM 分目录
 │  └─ bank-cards/                    # 银行卡相关文件（由系统配置指定路径）
 │     ├─ backgrounds/                # 银行卡背景图
 │     └─ icons/                      # 银行 LOGO 图标
@@ -536,7 +551,25 @@ import {
 | `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
 | `/admin/finance/debt-details/:type/:targetId` | 欠款详情 | 前端模拟数据（待接入后端 API） |
 | `/admin/system/print-template` | 打印模板管理和设计器 | `/api/print-templates` |
+| `/admin/hr/employees` | 员工档案、登录账号和头像维护 | `/api/admin/employees`、`/api/admin/employees/:id/avatar` |
 | `/admin/hr/departments` | 部门配置和部门员工管理 | `/api/admin/departments`、`/api/admin/employees` |
+
+## 员工与头像关键接口
+
+| 方法 | 地址 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/admin/employees` | 查询员工档案、部门、账号和头像路径 |
+| `POST` | `/api/admin/employees` | 创建员工档案，可同时开通登录账号 |
+| `PUT` | `/api/admin/employees/:id` | 修改员工档案、密码和账号状态 |
+| `POST` | `/api/admin/employees/:id/avatar` | 上传或替换裁剪后的员工头像 |
+| `DELETE` | `/api/admin/employees/:id/avatar` | 清空头像路径并删除受管物理文件 |
+| `DELETE` | `/api/admin/employees/:id/account` | 解绑登录账号并保留员工档案 |
+
+头像上传使用 `multipart/form-data`，文件字段名为 `avatar`。前端
+`AvatarCropper.vue` 只负责浏览器内预览和裁剪，确认后把裁剪结果暂存在当前页面；
+`AccountManage.vue` 保存员工成功后才调用头像接口。取消裁剪、关闭员工抽屉或未点击保存
+都不会上传文件。完整请求和响应见
+[API 接口文档](docs/API接口文档.md#16-员工档案和可选登录账号)。
 
 ## 库存关键接口
 
@@ -701,6 +734,11 @@ order-system-print-client-config
 
 收款附件保存到 `uploads/payment-receipts/YYYY-MM/`，数据库仅保存附件访问地址。删除待审核收款单或替换附件时，后端会同步清理不再使用的文件。
 
+员工头像保存到 `uploads/employee-avatars/YYYY-MM/`。`employees.avatar_url` 和绑定账号的
+`users.avatar_url` 保存同一个 `/uploads/employee-avatars/...` 访问路径，不保存 Base64
+图片内容。替换或删除头像时只会删除该目录中的受管文件，并限制文件操作不能越过头像
+根目录。
+
 `data/backup_before_cleanup/` 中的 JSON 文件仅用于历史迁移和备份参考，当前业务接口以 SQLite 为准。
 
 打印模板本身保存在 SQLite；C-Lodop 地址、端口和打印机名称保存在每台客户端浏览器的 `localStorage`，不会随数据库备份迁移到其他电脑。
@@ -857,6 +895,15 @@ C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localSt
 - [BUG 及优化记录](docs/BUG及优化文档.md)
 
 ## 更新日志
+
+### 2026-09-19 - 员工头像文件存储与裁剪
+
+- 新增员工头像上传、替换和删除接口，数据库改为只保存图片路径
+- 新增 `backend/utils/avatar_storage.py`，统一校验格式、限制大小并安全清理旧文件
+- 新增 `AvatarCropper.vue`，支持圆形选区、拖动、缩放、方向键微调和重置
+- 裁剪结果统一输出为 `512 × 512` 图片，保存员工档案时才上传
+- 历史 Base64 头像在后端启动时迁移到 `uploads/employee-avatars/YYYY-MM/`
+- 当前登录员工更新头像后，后台顶栏个人信息同步刷新
 
 ### 2026-09-19 - 账号、角色组与数据范围
 
