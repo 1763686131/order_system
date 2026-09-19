@@ -73,118 +73,34 @@
             <h2>权限组</h2>
             <span>{{ selectedGroup.permissions.length }} / {{ permissionTotal }} 项</span>
           </div>
-          <div class="box-actions">
-            <button
-              v-if="!permissionConfigMode"
-              class="button button-secondary compact-button"
-              type="button"
-              :disabled="selectedGroup.fullAccess"
-              @click="startPermissionConfig"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
-              </svg>
-              配置权限
-            </button>
-            <button
-              v-if="permissionConfigMode"
-              class="button button-secondary compact-button"
-              type="button"
-              :disabled="saving"
-              @click="cancelPermissionConfig"
-            >
-              取消
-            </button>
-            <button
-              v-if="permissionConfigMode"
-              class="button button-primary compact-button"
-              type="button"
-              :disabled="saving"
-              @click="finishPermissionConfig"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m5 12 4 4L19 6"></path>
-              </svg>
-              {{ saving ? '保存中...' : '完成' }}
-            </button>
-          </div>
+          <span class="permission-panel-hint">点击分类配置权限</span>
         </div>
 
-        <div class="permission-module-list">
-          <article v-for="module in displayedPermissionModules" :key="module.id" class="permission-module-box">
-            <div class="module-heading">
-              <div class="module-heading-main">
-                <span :class="['module-dot', module.tone]"></span>
-                <div>
-                  <strong>{{ module.name }}</strong>
-                  <small>{{ module.description }}</small>
-                </div>
-              </div>
-              <div v-if="permissionConfigMode" class="module-permission-actions">
-                <button
-                  type="button"
-                  :disabled="isModuleFullySelected(module)"
-                  @click="selectModulePermissions(module)"
-                >
-                  全选
-                </button>
-                <button
-                  type="button"
-                  :disabled="isModuleEmpty(module)"
-                  @click="clearModulePermissions(module)"
-                >
-                  清空
-                </button>
-              </div>
-            </div>
-            <div class="permission-row-list">
-              <div
-                v-for="permission in module.permissions"
-                :key="permission.id"
-                class="permission-row"
-                :class="{
-                  active: selectedGroup.permissions.includes(permission.id),
-                  addable: !selectedGroup.permissions.includes(permission.id),
-                  'config-mode': permissionConfigMode
-                }"
-                :aria-label="`${permission.name}，权限编码 ${permission.id}`"
-                tabindex="0"
-                @click="handlePermissionRowClick(permission)"
-                @keydown.enter.self.prevent="handlePermissionRowClick(permission)"
-                @keydown.space.self.prevent="handlePermissionRowClick(permission)"
-              >
-                <span class="permission-row-copy">
-                  <strong>{{ permission.name }}</strong>
-                </span>
-                <span class="permission-code-tooltip" role="tooltip">
-                  {{ permission.id }}
-                </span>
-                <button
-                  v-if="permissionConfigMode && !selectedGroup.permissions.includes(permission.id)"
-                  class="permission-add"
-                  type="button"
-                  :aria-label="`添加${permission.name}`"
-                  @click.stop="addPermission(permission)"
-                >
-                  <span>+</span><em>添加</em>
-                </button>
-                <button
-                  v-if="permissionConfigMode && selectedGroup.permissions.includes(permission.id)"
-                  class="permission-remove"
-                  type="button"
-                  :aria-label="`移除${permission.name}`"
-                  @click.stop="removePermission(permission)"
-                >
-                  ×
-                </button>
-              </div>
-            </div>
-          </article>
-        </div>
-        <div v-if="displayedPermissionModules.length === 0" class="permission-empty">
-          <strong>暂未配置权限</strong>
-          <span>点击“配置权限”查看并添加权限</span>
+        <div class="permission-category-grid">
+          <button
+            v-for="module in permissionModules"
+            :key="module.id"
+            class="permission-category"
+            :class="{
+              empty: moduleSelectedCount(module) === 0,
+              complete: moduleSelectedCount(module) === module.permissions.length
+            }"
+            type="button"
+            @click="openPermissionModule(module)"
+          >
+            <span class="permission-category-main">
+              <span :class="['module-dot', module.tone]"></span>
+              <strong>{{ module.name }}</strong>
+            </span>
+            <span class="permission-category-count">
+              <b>{{ moduleSelectedCount(module) }}</b>
+              <i>/</i>
+              {{ module.permissions.length }}
+            </span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m9 6 6 6-6 6"></path>
+            </svg>
+          </button>
         </div>
 
         <section class="scope-panel">
@@ -348,6 +264,162 @@
     </transition>
 
     <Teleport to="body">
+      <div
+        v-if="permissionModalVisible && activePermissionModule"
+        class="modal-layer permission-modal-layer"
+        @click.self="closePermissionModal"
+      >
+        <section
+          class="permission-config-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="permission-modal-title"
+        >
+          <div class="modal-header permission-modal-header">
+            <div class="permission-modal-title">
+              <span :class="['permission-modal-icon', activePermissionModule.tone]">
+                {{ activePermissionModule.name.slice(0, 1) }}
+              </span>
+              <div>
+                <span class="drawer-eyebrow">权限分类</span>
+                <h2 id="permission-modal-title">{{ activePermissionModule.name }}</h2>
+                <p>{{ activePermissionModule.description }}</p>
+              </div>
+            </div>
+            <button
+              class="icon-button"
+              type="button"
+              title="关闭"
+              :disabled="saving"
+              @click="closePermissionModal"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12"></path>
+                <path d="m18 6-12 12"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="permission-modal-toolbar">
+            <label class="permission-modal-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5"></circle>
+                <path d="m16 16 4 4"></path>
+              </svg>
+              <input
+                v-model="permissionSearchQuery"
+                type="search"
+                placeholder="搜索权限名称"
+                aria-label="搜索当前分类权限"
+              />
+            </label>
+            <div v-if="!permissionModalReadonly" class="permission-modal-actions">
+              <button
+                type="button"
+                :disabled="permissionModalSelectedCount === activePermissionModule.permissions.length"
+                @click="selectAllModulePermissions"
+              >
+                全选
+              </button>
+              <button
+                type="button"
+                :disabled="permissionModalSelectedCount === 0"
+                @click="clearModulePermissions"
+              >
+                清空
+              </button>
+            </div>
+          </div>
+
+          <div class="permission-modal-body">
+            <div class="permission-modal-grid">
+              <div
+                v-for="permission in filteredModulePermissions"
+                :key="permission.id"
+                class="permission-row"
+                :class="{
+                  active: permissionModalDraft.includes(permission.id),
+                  addable: !permissionModalDraft.includes(permission.id),
+                  'config-mode': !permissionModalReadonly,
+                  readonly: permissionModalReadonly
+                }"
+                :aria-label="`${permission.name}，权限编码 ${permission.id}`"
+                :tabindex="permissionModalReadonly ? -1 : 0"
+                @click="togglePermissionDraft(permission)"
+                @keydown.enter.self.prevent="togglePermissionDraft(permission)"
+                @keydown.space.self.prevent="togglePermissionDraft(permission)"
+              >
+                <span class="permission-row-copy">
+                  <strong>{{ permission.name }}</strong>
+                </span>
+                <span class="permission-code-tooltip" role="tooltip">
+                  {{ permission.id }}
+                </span>
+                <button
+                  v-if="!permissionModalReadonly && !permissionModalDraft.includes(permission.id)"
+                  class="permission-add"
+                  type="button"
+                  :aria-label="`添加${permission.name}`"
+                  @click.stop="togglePermissionDraft(permission)"
+                >
+                  <span>+</span><em>添加</em>
+                </button>
+                <button
+                  v-if="!permissionModalReadonly && permissionModalDraft.includes(permission.id)"
+                  class="permission-remove"
+                  type="button"
+                  :aria-label="`移除${permission.name}`"
+                  @click.stop="togglePermissionDraft(permission)"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+            <div v-if="filteredModulePermissions.length === 0" class="permission-modal-empty">
+              没有找到匹配的权限
+            </div>
+          </div>
+
+          <div class="modal-footer permission-modal-footer">
+            <span>
+              已选择
+              <strong>{{ permissionModalSelectedCount }}</strong>
+              / {{ activePermissionModule.permissions.length }} 项
+            </span>
+            <div>
+              <button
+                v-if="permissionModalReadonly"
+                class="button button-secondary"
+                type="button"
+                @click="closePermissionModal"
+              >
+                关闭
+              </button>
+              <template v-else>
+                <button
+                  class="button button-secondary"
+                  type="button"
+                  :disabled="saving"
+                  @click="closePermissionModal"
+                >
+                  取消
+                </button>
+                <button
+                  class="button button-primary"
+                  type="button"
+                  :disabled="saving || !permissionModalChanged"
+                  @click="savePermissionModule"
+                >
+                  {{ saving ? '保存中...' : '保存配置' }}
+                </button>
+              </template>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
       <div v-if="drawerVisible" class="modal-layer" @click.self="closeDrawer">
         <aside class="edit-modal" role="dialog" aria-modal="true" aria-labelledby="role-modal-title">
           <div class="modal-header">
@@ -469,8 +541,11 @@ const allPermissionIds = computed(() =>
 )
 
 const selectedGroupId = ref(null)
-const permissionConfigMode = ref(false)
-const permissionSnapshot = ref([])
+const permissionModalVisible = ref(false)
+const activePermissionModuleId = ref(null)
+const permissionSearchQuery = ref('')
+const permissionModalDraft = ref([])
+const permissionModalSnapshot = ref([])
 const selectedMemberIds = ref([])
 const memberSearchQuery = ref('')
 const memberSearchOpen = ref(false)
@@ -487,16 +562,23 @@ const selectedMembers = computed(() => {
   if (!selectedGroup.value) return []
   return memberCatalog.value.filter(member => selectedGroup.value.memberIds.includes(member.id))
 })
-const displayedPermissionModules = computed(() => {
-  const permissionIds = selectedGroup.value?.permissions || []
-  return permissionModules.value
-    .map(module => ({
-      ...module,
-      permissions: module.permissions.filter(permission =>
-        permissionConfigMode.value || permissionIds.includes(permission.id)
-      )
-    }))
-    .filter(module => module.permissions.length > 0)
+const activePermissionModule = computed(() =>
+  permissionModules.value.find(module => module.id === activePermissionModuleId.value) || null
+)
+const permissionModalReadonly = computed(() => Boolean(selectedGroup.value?.fullAccess))
+const filteredModulePermissions = computed(() => {
+  const permissions = activePermissionModule.value?.permissions || []
+  const keyword = permissionSearchQuery.value.trim().toLowerCase()
+  if (!keyword) return permissions
+  return permissions.filter(permission =>
+    [permission.name, permission.id].join(' ').toLowerCase().includes(keyword)
+  )
+})
+const permissionModalSelectedCount = computed(() => permissionModalDraft.value.length)
+const permissionModalChanged = computed(() => {
+  const original = [...permissionModalSnapshot.value].sort()
+  const current = [...permissionModalDraft.value].sort()
+  return JSON.stringify(original) !== JSON.stringify(current)
 })
 const availableMembers = computed(() => {
   if (!selectedGroup.value) return []
@@ -603,12 +685,8 @@ function openCreate() {
 }
 
 function selectGroup(groupId) {
-  if (permissionConfigMode.value && selectedGroup.value) {
-    selectedGroup.value.permissions = [...permissionSnapshot.value]
-  }
+  closePermissionModal()
   selectedGroupId.value = groupId
-  permissionConfigMode.value = false
-  permissionSnapshot.value = []
   selectedMemberIds.value = []
   resetMemberSearch()
 }
@@ -700,86 +778,80 @@ async function saveGroup() {
   }
 }
 
-function startPermissionConfig() {
-  if (selectedGroup.value?.fullAccess) return
-  permissionSnapshot.value = [...selectedGroup.value.permissions]
-  permissionConfigMode.value = true
+function moduleSelectedCount(module) {
+  if (!selectedGroup.value) return 0
+  return module.permissions.filter(permission =>
+    selectedGroup.value.permissions.includes(permission.id)
+  ).length
 }
 
-function cancelPermissionConfig() {
+function openPermissionModule(module) {
   if (!selectedGroup.value) return
-  selectedGroup.value.permissions = [...permissionSnapshot.value]
-  permissionSnapshot.value = []
-  permissionConfigMode.value = false
-  showNotice('已取消权限修改')
+  const selectedIds = module.permissions
+    .filter(permission => selectedGroup.value.permissions.includes(permission.id))
+    .map(permission => permission.id)
+  activePermissionModuleId.value = module.id
+  permissionSearchQuery.value = ''
+  permissionModalDraft.value = [...selectedIds]
+  permissionModalSnapshot.value = [...selectedIds]
+  permissionModalVisible.value = true
 }
 
-async function finishPermissionConfig() {
-  if (!selectedGroup.value || !permissionConfigMode.value) return
-  const originalPermissions = [...permissionSnapshot.value].sort()
-  const currentPermissions = [...selectedGroup.value.permissions].sort()
-  if (JSON.stringify(originalPermissions) === JSON.stringify(currentPermissions)) {
-    permissionSnapshot.value = []
-    permissionConfigMode.value = false
-    showNotice('权限配置没有变化')
+function closePermissionModal() {
+  if (saving.value) return
+  permissionModalVisible.value = false
+  activePermissionModuleId.value = null
+  permissionSearchQuery.value = ''
+  permissionModalDraft.value = []
+  permissionModalSnapshot.value = []
+}
+
+function togglePermissionDraft(permission) {
+  if (permissionModalReadonly.value) return
+  const permissionIds = [...permissionModalDraft.value]
+  const index = permissionIds.indexOf(permission.id)
+  if (index === -1) permissionIds.push(permission.id)
+  else permissionIds.splice(index, 1)
+  permissionModalDraft.value = permissionIds
+}
+
+function selectAllModulePermissions() {
+  if (!activePermissionModule.value || permissionModalReadonly.value) return
+  permissionModalDraft.value = activePermissionModule.value.permissions.map(
+    permission => permission.id
+  )
+}
+
+function clearModulePermissions() {
+  if (permissionModalReadonly.value) return
+  permissionModalDraft.value = []
+}
+
+async function savePermissionModule() {
+  if (
+    !selectedGroup.value ||
+    !activePermissionModule.value ||
+    permissionModalReadonly.value ||
+    !permissionModalChanged.value
+  ) {
     return
   }
-  if (await persistRole(selectedGroup.value, '权限配置已保存')) {
-    permissionSnapshot.value = []
-    permissionConfigMode.value = false
-  } else {
-    permissionSnapshot.value = []
-    permissionConfigMode.value = false
-  }
-}
 
-function handlePermissionRowClick(permission) {
-  if (!permissionConfigMode.value || !selectedGroup.value) return
-  if (!selectedGroup.value.permissions.includes(permission.id)) {
-    addPermission(permission)
-  }
-}
-
-function addPermission(permission) {
-  if (!permissionConfigMode.value || !selectedGroup.value) return
-  if (selectedGroup.value.permissions.includes(permission.id)) return
-  selectedGroup.value.permissions.push(permission.id)
-}
-
-function removePermission(permission) {
-  if (!permissionConfigMode.value || !selectedGroup.value) return
-  selectedGroup.value.permissions = selectedGroup.value.permissions.filter(
-    permissionId => permissionId !== permission.id
+  const moduleIds = new Set(
+    activePermissionModule.value.permissions.map(permission => permission.id)
   )
-}
-
-function isModuleFullySelected(module) {
-  if (!selectedGroup.value) return false
-  return module.permissions.every(permission =>
-    selectedGroup.value.permissions.includes(permission.id)
-  )
-}
-
-function isModuleEmpty(module) {
-  if (!selectedGroup.value) return true
-  return module.permissions.every(permission =>
-    !selectedGroup.value.permissions.includes(permission.id)
-  )
-}
-
-function selectModulePermissions(module) {
-  if (!permissionConfigMode.value || !selectedGroup.value) return
-  const permissionIds = new Set(selectedGroup.value.permissions)
-  module.permissions.forEach(permission => permissionIds.add(permission.id))
-  selectedGroup.value.permissions = [...permissionIds]
-}
-
-function clearModulePermissions(module) {
-  if (!permissionConfigMode.value || !selectedGroup.value) return
-  const moduleIds = new Set(module.permissions.map(permission => permission.id))
-  selectedGroup.value.permissions = selectedGroup.value.permissions.filter(
+  const permissionsOutsideModule = selectedGroup.value.permissions.filter(
     permissionId => !moduleIds.has(permissionId)
   )
+  const roleToSave = {
+    ...selectedGroup.value,
+    permissions: [...permissionsOutsideModule, ...permissionModalDraft.value]
+  }
+  const moduleName = activePermissionModule.value.name
+
+  if (await persistRole(roleToSave, `${moduleName}权限已保存`)) {
+    closePermissionModal()
+  }
 }
 
 async function toggleGroupScope(scopeType, scopeId) {
@@ -1722,6 +1794,200 @@ h1 {
   overflow: hidden;
 }
 
+.permission-config-modal {
+  display: flex;
+  width: min(860px, calc(100vw - 48px));
+  max-height: min(720px, calc(100vh - 48px));
+  flex-direction: column;
+  color: var(--text);
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--border, #dfe5ec);
+  border-radius: 7px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.permission-modal-header {
+  min-height: 90px;
+}
+
+.permission-modal-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.permission-modal-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  font-size: 15px;
+}
+
+.permission-modal-title > div {
+  min-width: 0;
+}
+
+.permission-modal-title .drawer-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.permission-modal-title h2 {
+  line-height: 1.3;
+}
+
+.permission-modal-title p {
+  margin-top: 4px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-modal-toolbar {
+  display: flex;
+  min-height: 59px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 10px 20px;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.permission-modal-search {
+  display: flex;
+  width: min(320px, 100%);
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--text-muted);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.permission-modal-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+}
+
+.permission-modal-search svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.permission-modal-search input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-size: 12px;
+}
+
+.permission-modal-search input::placeholder {
+  color: var(--text-muted);
+}
+
+.permission-modal-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.permission-modal-actions button {
+  padding: 3px 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.permission-modal-actions button:hover:not(:disabled) {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.permission-modal-actions button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.permission-modal-body {
+  min-height: 220px;
+  flex: 1;
+  padding: 34px 20px 20px;
+  overflow-y: auto;
+  background: #f4f7f9;
+}
+
+.permission-modal-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  align-items: stretch;
+  gap: 8px;
+}
+
+.permission-modal-grid .permission-row {
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+}
+
+.permission-modal-empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.permission-modal-footer {
+  justify-content: space-between;
+}
+
+.permission-modal-footer > span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.permission-modal-footer > span strong {
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
+.permission-modal-footer > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .modal-header {
   min-height: 78px;
   justify-content: space-between;
@@ -2101,7 +2367,8 @@ textarea:focus {
 }
 
 .role-tab-icon,
-.role-context-icon {
+.role-context-icon,
+.permission-modal-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -2119,31 +2386,36 @@ textarea:focus {
 }
 
 .role-tab-icon.green,
-.role-context-icon.green {
+.role-context-icon.green,
+.permission-modal-icon.green {
   color: #13734f;
   background: #eaf8f1;
 }
 
 .role-tab-icon.blue,
-.role-context-icon.blue {
+.role-context-icon.blue,
+.permission-modal-icon.blue {
   color: #16647a;
   background: #e7f5f8;
 }
 
 .role-tab-icon.orange,
-.role-context-icon.orange {
+.role-context-icon.orange,
+.permission-modal-icon.orange {
   color: #a4510b;
   background: #fff3df;
 }
 
 .role-tab-icon.red,
-.role-context-icon.red {
+.role-context-icon.red,
+.permission-modal-icon.red {
   color: #b4232f;
   background: #fcebed;
 }
 
 .role-tab-icon.purple,
-.role-context-icon.purple {
+.role-context-icon.purple,
+.permission-modal-icon.purple {
   color: #6651a8;
   background: #f1edff;
 }
@@ -2282,6 +2554,11 @@ textarea:focus {
   color: var(--text-muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
+}
+
+.permission-panel-hint {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .box-actions {
@@ -2561,31 +2838,102 @@ textarea:focus {
   text-align: center;
 }
 
-.permission-module-list {
+.permission-category-grid {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 7px;
   padding: 10px;
 }
 
-.permission-empty {
-  display: flex;
-  min-height: 150px;
+.permission-category {
+  display: grid;
+  min-width: 0;
+  min-height: 43px;
+  grid-template-columns: minmax(0, 1fr) auto 14px;
   align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 6px;
-  padding: 14px;
+  gap: 8px;
+  padding: 7px 9px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.permission-category:hover,
+.permission-category:focus-visible {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.07);
+  outline: 0;
+}
+
+.permission-category.empty {
+  background: #f8fafc;
+  border-style: dashed;
+}
+
+.permission-category.complete {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.permission-category-main {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.permission-category-main strong {
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-category-count {
+  display: inline-flex;
+  min-width: 42px;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 3px;
   color: var(--text-muted);
-  text-align: center;
-}
-
-.permission-empty strong {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.permission-empty span {
   font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.permission-category-count b {
+  color: var(--accent-dark);
+  font-size: 12px;
+}
+
+.permission-category-count i {
+  color: var(--border-strong);
+  font-style: normal;
+}
+
+.permission-category > svg {
+  width: 14px;
+  height: 14px;
+  color: var(--text-muted);
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: color 0.18s ease, transform 0.18s ease;
+}
+
+.permission-category:hover > svg,
+.permission-category:focus-visible > svg {
+  color: var(--accent);
+  transform: translateX(2px);
 }
 
 .scope-panel {
@@ -2701,59 +3049,6 @@ textarea:focus {
   background: var(--accent);
 }
 
-.permission-module-box {
-  min-width: 0;
-  padding: 10px;
-  background: #f8fafc;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.permission-module-box .module-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 9px;
-}
-
-.module-heading-main {
-  display: flex;
-  min-width: 0;
-  align-items: flex-start;
-  gap: 8px;
-}
-
-.module-permission-actions {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  gap: 9px;
-}
-
-.module-permission-actions button {
-  padding: 2px 0;
-  color: var(--accent-dark);
-  background: transparent;
-  border: 0;
-  font: inherit;
-  font-size: 10px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.module-permission-actions button:hover:not(:disabled) {
-  color: var(--accent);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.module-permission-actions button:disabled {
-  color: var(--text-muted);
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
 .permission-row-list {
   display: flex;
   align-items: stretch;
@@ -2803,6 +3098,10 @@ textarea:focus {
   background: var(--accent-soft);
   border-color: var(--accent-border);
   border-style: solid;
+}
+
+.permission-row.readonly {
+  cursor: default;
 }
 
 .permission-row.config-mode.active {
@@ -3196,6 +3495,41 @@ textarea:focus-visible {
     max-height: calc(100vh - 32px);
   }
 
+  .permission-config-modal {
+    width: calc(100vw - 32px);
+    max-height: calc(100vh - 32px);
+  }
+
+  .permission-modal-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .permission-modal-search {
+    width: 100%;
+  }
+
+  .permission-modal-actions {
+    justify-content: flex-end;
+  }
+
+  .permission-modal-body {
+    padding-right: 16px;
+    padding-left: 16px;
+  }
+
+  .permission-modal-footer {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .permission-modal-footer > div {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
   .modal-header,
   .modal-body,
   .modal-footer {
@@ -3217,6 +3551,18 @@ textarea:focus-visible {
 }
 
 @media (max-width: 520px) {
+  .permission-category-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-modal-title p {
+    white-space: normal;
+  }
+
+  .permission-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
   .permission-row {
     width: 100%;
   }
