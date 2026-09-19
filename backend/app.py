@@ -90,6 +90,7 @@ from routes.auth import auth_bp
 from routes.access import access_bp
 from routes.employees import employees_bp
 from routes.departments import departments_bp
+from routes.directory import directory_bp
 from routes.orders import orders_bp
 from routes.stores import stores_bp
 from routes.warehouses import warehouses_bp
@@ -111,6 +112,7 @@ app.register_blueprint(auth_bp)
 app.register_blueprint(access_bp)
 app.register_blueprint(employees_bp)
 app.register_blueprint(departments_bp)
+app.register_blueprint(directory_bp)
 app.register_blueprint(orders_bp)
 app.register_blueprint(stores_bp)
 app.register_blueprint(warehouses_bp)
