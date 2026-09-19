@@ -8,6 +8,7 @@ import secrets
 
 from flask import g, jsonify, request, session
 
+from utils.access_scope import attach_role_scopes, merge_role_scopes
 from utils.db import get_db
 from utils.permission_catalog import ALL_PERMISSION_CODES
 
@@ -108,40 +109,7 @@ def _load_roles_and_permissions(conn, user_id):
             (user_id,),
         ).fetchall()
     ]
-    role_ids = [role["id"] for role in roles]
-    if role_ids:
-        placeholders = ",".join("?" for _ in role_ids)
-        store_rows = conn.execute(
-            f"""
-            SELECT role_id, store_id
-            FROM role_stores
-            WHERE role_id IN ({placeholders})
-            ORDER BY role_id, store_id
-            """,
-            role_ids,
-        ).fetchall()
-        warehouse_rows = conn.execute(
-            f"""
-            SELECT role_id, warehouse_id
-            FROM role_warehouses
-            WHERE role_id IN ({placeholders})
-            ORDER BY role_id, warehouse_id
-            """,
-            role_ids,
-        ).fetchall()
-    else:
-        store_rows = []
-        warehouse_rows = []
-
-    stores_by_role = {role_id: [] for role_id in role_ids}
-    warehouses_by_role = {role_id: [] for role_id in role_ids}
-    for scope in store_rows:
-        stores_by_role[scope["role_id"]].append(scope["store_id"])
-    for scope in warehouse_rows:
-        warehouses_by_role[scope["role_id"]].append(scope["warehouse_id"])
-    for role in roles:
-        role["storeIds"] = stores_by_role.get(role["id"], [])
-        role["warehouseIds"] = warehouses_by_role.get(role["id"], [])
+    attach_role_scopes(conn, roles)
 
     full_access = any(bool(role["full_access"]) for role in roles)
     can_access_admin = full_access or any(
@@ -182,16 +150,7 @@ def serialize_user(conn, row):
         long_session,
     ) = _load_roles_and_permissions(conn, row["id"])
     role_codes = [role["code"] for role in roles]
-    store_ids = sorted({
-        store_id
-        for role in roles
-        for store_id in role.get("storeIds", [])
-    })
-    warehouse_ids = sorted({
-        warehouse_id
-        for role in roles
-        for warehouse_id in role.get("warehouseIds", [])
-    })
+    access_scope = merge_role_scopes(roles, full_access)
     employee = conn.execute(
         """
         SELECT id, employee_no
@@ -222,24 +181,10 @@ def serialize_user(conn, row):
         "isSuperAdmin": full_access,
         "canAccessAdmin": can_access_admin,
         "longSession": long_session,
-        "allStores": full_access,
-        "allWarehouses": full_access,
-        "storeIds": store_ids,
-        "warehouseIds": warehouse_ids,
-    }
-
-
-def accessible_store_ids(user=None):
-    """Return None for unrestricted access, otherwise permitted store IDs."""
-    current_user = user if user is not None else get_current_user()
-    if not current_user:
-        return set()
-    if current_user.get("allStores") or current_user.get("isSuperAdmin"):
-        return None
-    return {
-        int(store_id)
-        for store_id in current_user.get("storeIds", [])
-        if str(store_id).isdigit()
+        "allStores": access_scope["allStores"],
+        "allWarehouses": access_scope["allWarehouses"],
+        "storeIds": access_scope["storeIds"],
+        "warehouseIds": access_scope["warehouseIds"],
     }
 
 

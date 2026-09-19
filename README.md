@@ -8,8 +8,9 @@
 
 | 项目 | 内容 |
 | --- | --- |
-| 应用版本 | `3.1.0` |
-| 文档更新 | `2026-09-17` |
+| 应用版本 | `3.0.0`（以 `package.json` 为准） |
+| 权限/API 文档版本 | `4.1` |
+| 文档更新 | `2026-09-19` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -32,8 +33,28 @@
 - 回单上传、查看、旋转和删除
 - 物流、快递运费对账及 Excel 导出
 - 数据库打印模板、可视化设计、业务变量预览、浏览器打印和 C-Lodop 本地打印
-- 用户、角色和细粒度权限管理
-- 原材料使用/生产流水记录
+- 首次部署超级管理员初始化、员工档案、登录账号和角色组管理
+- 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
+- 原材料触屏出库、审核和库存流水
+
+## 2026-09-19 更新
+
+### 账号、角色组与数据范围
+
+- 登录改为服务端 Session Cookie，不再接受前端伪造的 `Username`、`Role` 身份请求头。
+- 新数据库没有有效超级管理员时，登录页仅显示一次初始化入口；系统不提供默认账号或默认密码。
+- 创建首位超级管理员时会同步创建同名员工档案，并绑定内置 `super_admin` 角色组。
+- 员工档案是人员主体，登录账号是可选能力；角色组成员统一绑定员工，不在员工抽屉重复配置权限。
+- `canAccessAdmin` 独立控制后台访问，`longSession` 独立控制 365 天滑动会话，二者都不会把普通角色提升为超级管理员。
+- 后台侧栏大类由 `admin.route.*` 权限控制；触屏端按钮和接口由 `touch.*` 权限控制。
+- 多角色权限、门店和仓库范围采用并集；任一角色为全权限角色时，数据范围不受限制。
+- 销售订单列表默认展示全部授权门店；只有一个授权门店时隐藏门店选择器，多个门店时才显示“全部/门店”滑块。
+- 登录设备会记录设备名称、浏览器、操作系统、局域网 IP、最近活动和到期时间，超级管理员可以撤销会话或删除历史记录。
+
+权限判断和数据范围不再散落在业务组件中：
+
+- 前端统一使用 `src/utils/accessControl.js`，后台路由映射使用 `src/utils/adminAccess.js`。
+- 后端统一使用 `backend/utils/access_scope.py`，Session、权限装饰器和用户序列化使用 `backend/utils/auth.py`。
 
 ## 2026-09-17 更新
 
@@ -198,6 +219,16 @@ Windows 本地环境可运行：
 
 `docker-compose.yml` 当前包含 NAS 环境的固定挂载路径。换机器部署前，必须先修改其中的宿主机路径。
 
+### 首次部署
+
+1. 启动前后端并打开登录页。
+2. 登录页请求 `GET /api/auth/bootstrap-status`。
+3. 如果数据库中不存在“启用账号 + 启用全权限角色组”的超级管理员，页面显示创建超级管理员表单。
+4. 输入管理员姓名、登录账号和至少 8 位密码完成初始化。
+5. 初始化成功后创建入口关闭，后续只显示登录表单。
+
+系统不再默认创建账号 `1` 或任何固定密码。判断条件是有效超级管理员是否存在，而不是用户表是否为空；如果数据库中仍有普通账号但超级管理员已被删除，初始化入口会重新开放。
+
 ## 项目结构
 
 ```text
@@ -205,6 +236,10 @@ order_system/
 ├─ backend/
 │  ├─ app.py                         # Flask 入口、蓝图注册和静态文件服务
 │  ├─ routes/
+│  │  ├─ auth.py                     # 初始化、登录、退出、当前账号和密码修改
+│  │  ├─ access.py                   # 权限目录、角色组、成员和数据范围
+│  │  ├─ employees.py                # 员工档案和可选登录账号
+│  │  ├─ users.py                    # 账号维护和管理员重置密码
 │  │  ├─ orders.py                   # 销售订单和物流状态接口
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
 │  │  ├─ raw_material_products.py    # 原材料商品档案接口
@@ -214,12 +249,14 @@ order_system/
 │  │  ├─ warehouses.py               # 仓库接口
 │  │  ├─ customers.py                # 客户、应收欠款与账户汇总接口
 │  │  ├─ payment_receipts.py         # 收款单、附件、审核和反审核接口
-│  │  ├─ settings.py                 # 系统配置、路径管理和目录浏览接口
+│  │  ├─ settings.py                 # 系统路径和登录设备会话管理
 │  │  ├─ print_templates.py          # 打印模板 CRUD、默认模板和历史模板迁移
 │  │  ├─ freight.py                  # 运费与对账接口
-│  │  ├─ users.py                    # 用户、角色与权限接口
 │  │  └─ hr_reports.py               # 人事报告接口
 │  ├─ utils/
+│  │  ├─ auth.py                     # Session、权限装饰器和当前用户序列化
+│  │  ├─ access_scope.py             # 角色门店/仓库范围合并与数据过滤
+│  │  ├─ permission_catalog.py       # 触屏端和后台路由权限目录
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
 │  │  └─ db_helper.py                # 历史数据兼容读写
 │  ├─ tools/                         # 数据备份等维护脚本
@@ -228,14 +265,13 @@ order_system/
 │  └─ start.bat
 ├─ src/
 │  ├─ api/
-│  │  ├─ request.js                  # Axios 实例、认证头和统一响应处理
+│  │  ├─ request.js                  # Axios 实例、Cookie 会话和统一响应处理
 │  │  └─ printTemplate.js            # 打印模板接口与字段标准化
 │  ├─ stores/
 │  │  ├─ user.js                     # 登录、用户和权限状态
 │  │  ├─ order.js                    # 销售订单状态
 │  │  ├─ orderDraft.js               # 销售订单草稿
 │  │  ├─ stockDraft.js               # 入库单会话内存草稿
-│  │  ├─ material.js                 # 原材料业务流水
 │  │  └─ nomi.js                     # 辅助工具状态
 │  ├─ components/
 │  │  ├─ CustomModal.vue             # 自定义通用弹窗组件（符合设计规范）
@@ -282,12 +318,17 @@ order_system/
 │  │     │  ├─ BankAccounts.vue       # 银行账户管理（卡片展示、翻转查看余额）
 │  │     │  ├─ DebtDetails.vue        # 欠款详情页面（应收/应付通用，显示期初欠款和储值记录）
 │  │     │  └─ ...                   # 物流、快递运费对账
-│  │     ├─ system/                  # 用户、角色、门店和系统配置
+│  │     ├─ system/                  # 角色组、门店、打印模板和系统配置
+│  │     │  ├─ RoleGroupManage.vue   # 权限、成员、会话策略和数据范围
 │  │     │  ├─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
 │  │     │  └─ PrintTemplate.vue     # 打印模板管理
-│  │     └─ hr/                      # 人事报告
+│  │     └─ hr/
+│  │        ├─ AccountManage.vue     # 员工档案和可选登录账号
+│  │        └─ Reports.vue           # 人事检测报告
 │  ├─ router/index.js                # 前端路由和登录守卫
 │  ├─ utils/
+│  │  ├─ accessControl.js            # 权限、角色并集和数据范围过滤
+│  │  ├─ adminAccess.js              # 后台大类路由权限映射
 │  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
 │  │  ├─ printClientConfig.js        # 本地打印配置和默认端口
 │  │  ├─ chineseMoney.js             # 金额中文大写
@@ -300,7 +341,7 @@ order_system/
 │  ├─ API接口文档.md                 # 完整 API 参数、响应和业务规则
 │  ├─ 打印机项目实现.md              # 打印模板、预览、浏览器打印和 C-Lodop 实现
 │  ├─ 组件样式规范.md                 # 后台页面视觉和组件复用规范
-│  ├─ 数据库表单说明.md              # 数据表说明
+│  ├─ 权限角色分组优化方案.md        # 账号、员工、角色组和数据范围设计
 │  ├─ 银行账户管理-后端开发提示词.md  # 银行账户模块后端开发指引
 │  └─ BUG及优化文档.md               # 问题与优化记录
 ├─ uploads/                          # 回单、收款附件、报告和银行卡图片等上传文件
@@ -315,16 +356,54 @@ order_system/
 └─ README.md
 ```
 
+## 权限与数据范围
+
+### 身份关系
+
+```text
+员工档案 employees
+  ├─ 可选登录账号 users
+  └─ employee_roles
+       └─ 角色组 roles
+            ├─ role_permissions -> permissions
+            ├─ role_stores -> stores
+            └─ role_warehouses -> warehouses
+```
+
+员工可以没有登录账号，但登录账号必须绑定员工档案。权限组成员维护使用员工 ID，因此可以先建立员工档案和岗位权限，之后再开通账号。
+
+### 权限合并
+
+- 多个角色组的权限编码取并集。
+- 多个角色组的门店、仓库 ID 取并集，不会互相覆盖。
+- 任一启用角色组具有 `full_access = 1` 时，账号为超级管理员并获得全部权限和全部数据范围。
+- `canAccessAdmin` 只表示允许进入后台；后台具体大类仍需对应 `admin.route.*` 权限。
+- `longSession` 只控制会话期限。任一角色启用后，该账号使用 365 天滑动续期；否则为 7 天。
+- 未配置任何门店范围的非超级管理员不会看到门店订单，这不是“默认查看全部”。
+
+### 集中接入
+
+业务组件不要自行判断 `isSuperAdmin`、拼接角色权限或重复实现门店过滤。前端统一从 `useUserStore()` 获取当前账号，再调用：
+
+```js
+import {
+  filterAccessibleOptions,
+  filterRecordsByScope,
+  hasPermission
+} from '@/utils/accessControl'
+```
+
+后端接口必须使用权限装饰器，并在涉及门店或仓库数据时调用 `backend/utils/access_scope.py`。前端过滤用于界面体验，后端过滤才是数据安全边界。
+
 ## 财务与客户账户规则
 
 ### 账户口径
 
 - `customers.initial_receivable` 保存客户期初欠款，`initial_receivable_at` 保存录入或最后修改时间。
 - `customers.balance` 保存客户储值余额，`balance_at` 保存储值调整时间。
-- `customers.receivable` 保存客户当前应收欠款，由期初欠款、订单欠款、收款和退货联动计算。
+- `customers.receivable` 保存客户当前应收欠款，由期初欠款、订单欠款、收款和退货联动计算，欠款始终使用正数。
 - 修改期初欠款时，应收欠款自动调整：`新应收 = 旧应收 - 旧期初欠款 + 新期初欠款`。
-- 输入 0 或留空保存客户时，系统会清空对应的金额字段和时间戳字段。tomers.receivable` 保存当前应收欠款，欠款始终使用正数。
-- `customers.balance` 保存客户可用的预收储值余额。
+- 输入 0 或留空保存客户时，系统会清空对应的金额字段和时间戳字段。
 - 客户账户净额按 `balance - receivable` 计算；结果为负数表示客户仍有欠款。
 - `customer_account_transactions` 保存订单审核、收款审核及其反审核流水，用于后续对账和追溯。
 
@@ -595,6 +674,16 @@ order-system-print-client-config
 - `customer_account_transactions`：订单审核、收款审核和反审核产生的客户账户流水
 - `print_templates`：打印模板元数据、纸张尺寸和设计器 JSON
 
+账号权限核心表：
+
+- `users`：登录账号、密码哈希、状态、权限版本和最后登录时间
+- `employees`：员工主档及可选账号关联
+- `roles`：角色组、后台访问、长会话和全权限标记
+- `permissions`、`role_permissions`：权限目录和角色权限关系
+- `employee_roles`：员工与角色组关系
+- `role_stores`、`role_warehouses`：角色组门店和仓库范围
+- `auth_sessions`：设备会话、IP、活动时间、到期时间和撤销状态
+
 退货单审核会在 `stock_balances`、`stock_movements` 中留下可追溯的库存返还记录；反审核按退货单号删除对应库存流水并恢复审核前库存。
 
 收款附件保存到 `uploads/payment-receipts/YYYY-MM/`，数据库仅保存附件访问地址。删除待审核收款单或替换附件时，后端会同步清理不再使用的文件。
@@ -611,6 +700,9 @@ order-system-print-client-config
 - 页面级组件放在 `src/views/`，可复用弹窗放在 `src/components/`。
 - 组件样式优先使用 `<style scoped>`，公共样式放在 `src/assets/styles/`。
 - API 请求统一使用 `src/api/request.js`，接口地址保持 `/api` 相对路径。
+- 登录和身份统一依赖服务端 Session Cookie，禁止重新增加 `Username`、`Role` 等客户端身份请求头。
+- 页面权限、角色并集和数据范围统一使用 `src/utils/accessControl.js`；后台菜单与路由权限映射统一使用 `src/utils/adminAccess.js`。
+- 后端权限校验统一使用 `backend/utils/auth.py` 的装饰器，门店/仓库数据过滤统一使用 `backend/utils/access_scope.py`。
 - 打印模板请求统一使用 `src/api/printTemplate.js`，页面不要直接处理后端下划线字段。
 - 打印弹窗、预览和 C-Lodop 设置统一复用 `src/components/print/`，不要在业务页面复制实现。
 - 业务单据必须先转换为统一打印变量，再交给 `OrderPrintPreview.vue` 渲染。
@@ -651,6 +743,22 @@ docker restart my_order_app
 `backend/Dockerfile` 当前配置了在线 pip 镜像。严格断网环境下应使用预构建镜像，或把镜像源改为内网地址。
 
 ## 常见问题
+
+### 第一次部署的默认账号和密码是什么
+
+没有默认账号和密码。数据库不存在有效超级管理员时，登录页会显示初始化表单，由现场管理员创建首个超级管理员。初始化完成后表单自动关闭。
+
+### 为什么员工已经有账号但看不到后台菜单
+
+角色组需要同时启用 `canAccessAdmin` 和对应的 `admin.route.*` 权限。`canAccessAdmin` 只允许进入后台，不代表自动拥有全部后台页面。
+
+### 为什么销售订单列表没有数据或没有门店滑块
+
+先检查员工所属角色组的门店范围。非超级管理员只会收到授权门店的订单；没有门店权限时列表为空，只有一个门店时不显示门店滑块，两个及以上门店时才显示选择器。
+
+### 同一员工加入多个角色组会不会冲突
+
+权限、门店和仓库范围都取并集；任一角色允许后台访问或长会话，对应能力即生效；任一角色是全权限角色时账号获得完整权限。角色不会按先后顺序互相覆盖。
 
 ### 保存收款单后客户欠款为什么没有变化
 
@@ -717,12 +825,20 @@ C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localSt
 - [API 接口文档](docs/API接口文档.md)
 - [打印机项目实现](docs/打印机项目实现.md)
 - [后台列表页视觉与组件样式规范](docs/组件样式规范.md)
-- [数据库表单说明](docs/数据库表单说明.md)
+- [权限角色分组优化方案](docs/权限角色分组优化方案.md)
 - [SQLite 迁移说明](MIGRATION_SQLITE.md)
 - [SQLite 使用说明](README_SQLITE.md)
 - [BUG 及优化记录](docs/BUG及优化文档.md)
 
 ## 更新日志
+
+### 2026-09-19 - 账号、角色组与数据范围
+
+- 新增首次超级管理员初始化，不再提供默认账号
+- 员工档案、登录账号和角色组成员关系改为统一数据模型
+- 新增后台路由权限、长会话策略和登录设备管理
+- 新增门店、仓库数据范围并集，销售订单列表接入后端范围过滤
+- 新增前端 `accessControl.js` 和后端 `access_scope.py` 集中管理访问规则
 
 ### 2026-09-17 - 打印模板与本地打印
 

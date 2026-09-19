@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v4.1** (2026-09-19) - 新增后台路由权限、登录设备会话、角色门店/仓库数据范围及前后端集中访问控制
 - **v4.0** (2026-09-18) - 重构 session 登录、首次超级管理员初始化、账号、员工档案、权限组和触屏端后端鉴权
 - **v3.4** (2026-09-17) - 新增打印模板数据库、模板 CRUD、默认模板和旧 localStorage 模板迁移接口
 - **v3.3** (2026-09-16) - 下线旧 `/api/materials` 使用/生产流水接口并删除 `material_records`、旧 `remark_tags` 表
@@ -141,6 +142,49 @@
 | `PUT` | `/api/auth/profile` | 修改当前账号姓名和头像地址 |
 | `PUT` | `/api/auth/password` | 校验当前密码后修改密码 |
 
+登录请求：
+
+```json
+{
+  "username": "zhangsan",
+  "password": "至少8位密码",
+  "device": {
+    "id": "浏览器本地生成的设备ID",
+    "name": "Windows · Chrome",
+    "timezone": "Asia/Shanghai"
+  }
+}
+```
+
+`device` 可省略。未提交设备名称时，后端会根据 `User-Agent` 生成浏览器和操作系统名称；IP 地址由服务端读取，启用可信代理头需要设置 `TRUST_PROXY_HEADERS=1`。
+
+`GET /api/auth/me` 和登录成功响应中的 `user` 包含当前权限快照：
+
+```json
+{
+  "id": 2,
+  "employeeId": 1,
+  "employeeNo": "E-0001",
+  "username": "zhangsan",
+  "displayName": "张三",
+  "roleIds": [4, 7],
+  "roles": [],
+  "permissions": [
+    "touch.order.read",
+    "admin.route.sales"
+  ],
+  "isSuperAdmin": false,
+  "canAccessAdmin": true,
+  "longSession": true,
+  "allStores": false,
+  "allWarehouses": false,
+  "storeIds": [1, 2],
+  "warehouseIds": [1, 3]
+}
+```
+
+普通会话采用 7 天滑动有效期，具有任一 `longSession` 角色时采用 365 天滑动有效期。服务端最多每 5 分钟刷新一次 `last_seen_at` 和到期时间。角色、权限、账号状态或密码发生变更时会增加 `permission_version`；执行变更的当前会话会同步新版本，其他仍持有旧版本的会话在下一次请求时失效。
+
 密码只保存 Werkzeug 哈希，任何列表和详情接口均不返回明文密码或密码哈希。
 
 ### 1.4 后台账号管理
@@ -148,19 +192,21 @@
 | Method | URL | 说明 |
 |---|---|---|
 | `GET` | `/api/admin/users` | 查询账号列表 |
-| `POST` | `/api/admin/users` | 创建账号并绑定权限组 |
-| `PUT` | `/api/admin/users/<user_id>` | 修改资料、状态和权限组 |
+| `POST` | `/api/admin/users` | 创建账号、同步员工档案并绑定权限组 |
+| `PUT` | `/api/admin/users/<user_id>` | 修改资料、状态并更新员工角色组 |
 | `PUT` | `/api/admin/users/<user_id>/password` | 重置账号密码 |
 
 以上接口仅允许超级管理员。系统禁止通过后台停用或移除最后一个有效超级管理员。
 账号不再直接保存权限数组，实际权限通过账号绑定的员工档案，从
 `employee_roles -> role_permissions` 汇总。
 
+后台界面应优先通过员工档案接口开通账号，`/api/admin/users` 保留给账号级管理和兼容调用。创建账号时如果没有对应员工档案，服务端会自动创建同名员工档案。
+
 ### 1.5 权限目录与权限组
 
 | Method | URL | 说明 |
 |---|---|---|
-| `GET` | `/api/admin/permissions` | 获取触屏端权限目录 |
+| `GET` | `/api/admin/permissions` | 获取触屏端和后台路由权限目录 |
 | `GET` | `/api/admin/roles` | 获取权限组、成员数和权限编码 |
 | `POST` | `/api/admin/roles` | 创建权限组 |
 | `PUT` | `/api/admin/roles/<role_id>` | 修改权限组、数据范围和权限 |
@@ -173,6 +219,38 @@
 角色组成员来自员工档案。未开通账号的员工也可以先加入角色组；后续在员工档案中
 开通账号后，会直接继承该员工已有的角色组和权限。
 门店和仓库范围分别保存在 `role_stores`、`role_warehouses`。
+
+创建或修改角色组的请求体：
+
+```json
+{
+  "code": "sales_office",
+  "name": "销售内勤",
+  "description": "销售订单和客户资料维护",
+  "status": "active",
+  "canAccessAdmin": true,
+  "longSession": false,
+  "dataScope": "custom",
+  "permissionCodes": [
+    "admin.route.sales",
+    "touch.order.read"
+  ],
+  "storeIds": [1, 2],
+  "warehouseIds": [1]
+}
+```
+
+`code` 仅在创建时使用，必须以小写字母开头且只能包含小写字母、数字和下划线。当前实际门店、仓库授权以 `storeIds`、`warehouseIds` 关联表为准；`dataScope` 作为范围策略元数据保留，不能单独替代范围 ID。
+
+角色组成员更新：
+
+```json
+{
+  "employeeIds": [1, 3, 8]
+}
+```
+
+更新角色权限、范围或成员后，受影响账号的 `permission_version` 会增加，使其他旧会话中的权限快照失效。超级管理员组必须至少保留一名启用账号成员。
 
 ### 1.6 员工档案和可选登录账号
 
@@ -194,7 +272,73 @@
 任何员工和账号查询接口都不会返回明文密码或密码哈希；需要修改密码时直接提交
 新密码。
 
-### 1.7 已下线旧接口
+员工创建或修改请求的核心字段：
+
+```json
+{
+  "displayName": "张三",
+  "employeeNo": "E-0008",
+  "avatarUrl": "",
+  "phone": "13800001024",
+  "department": "销售部",
+  "position": "销售内勤",
+  "employmentStatus": "active",
+  "employmentType": "正式",
+  "hireDate": "2026-09-19",
+  "username": "zhangsan",
+  "password": "至少8位密码",
+  "accountStatus": "active"
+}
+```
+
+`username` 留空时只保存员工档案。已有账号修改时，`password` 留空表示保持原密码。
+
+### 1.7 登录设备和会话
+
+| Method | URL | 说明 |
+|---|---|---|
+| `GET` | `/api/settings/login-devices` | 查询全部设备会话 |
+| `POST` | `/api/settings/login-devices/<session_id>/revoke` | 撤销指定会话 |
+| `DELETE` | `/api/settings/login-devices/<session_id>` | 删除会话历史记录 |
+
+以上接口仅允许超级管理员。设备记录包含 `deviceName`、`sessionKind`、`browser`、`operatingSystem`、`timezone`、`ipAddress`、`createdAt`、`lastSeenAt`、`expiresAt`、`status` 和 `currentSession`。
+
+`revoke` 保留审计记录并使会话失效；`DELETE` 会永久删除记录。撤销当前浏览器会话后，下一次需要认证的请求会返回 `401`。
+
+### 1.8 权限和数据范围规则
+
+权限能力分为三层：
+
+1. `full_access`：仅内置超级管理员角色使用，拥有全部权限和全部数据范围。
+2. `canAccessAdmin` + `admin.route.*`：前者允许进入后台，后者控制后台侧栏大类和对应路由。
+3. `touch.*`：控制触屏端按钮及对应后端操作接口。
+
+同一员工加入多个启用角色组时：
+
+- 权限编码取并集。
+- 门店 ID、仓库 ID 分别取并集。
+- 任一角色启用 `canAccessAdmin`，账号即可进入后台。
+- 任一角色启用 `longSession`，账号使用 365 天滑动会话。
+- 任一角色为 `full_access`，账号成为超级管理员且数据范围不受限制。
+
+非超级管理员没有配置门店或仓库范围时，对应授权集合为空，不应回退为全部数据。
+
+当前 `GET /api/orders` 和 `GET /api/orders/<id>` 已在后端按登录用户的门店范围过滤。前端销售列表只展示授权门店，授权门店数量大于 1 时显示门店滑块，等于 1 时隐藏滑块并直接展示该门店数据。
+
+订单写操作、订单 SSE 事件和其他业务模块尚未全部接入门店/仓库范围强制校验。继续接入时必须在后端使用 `backend/utils/access_scope.py` 校验目标记录或查询结果，不能只依赖前端隐藏。
+
+前端公共规则位于：
+
+- `src/utils/accessControl.js`：权限判断、角色并集、门店/仓库选项和记录过滤。
+- `src/utils/adminAccess.js`：后台大类权限与路由映射。
+
+后端公共规则位于：
+
+- `backend/utils/auth.py`：Session、当前用户、权限装饰器和权限版本。
+- `backend/utils/access_scope.py`：角色范围读取、并集合并和查询结果过滤。
+- `backend/utils/permission_catalog.py`：权限模块和权限编码目录。
+
+### 1.9 已下线旧接口
 
 旧 `/api/login`、`/api/users`、`/api/users/<username>/permissions` 等接口不再
 注册。旧 `users.password`、`users.role`、`users.permissions` 表结构在 v4.0
@@ -1095,7 +1239,11 @@
 ### 5.1 获取所有订单
 - **URL**: `/api/orders`
 - **Method**: `GET`
-- **说明**: 获取所有订单列表，新旧订单格式共存；返回结果包含订单包装和物流服务字段
+- **权限**: 登录账号必须拥有 `touch.order.read`，超级管理员直接通过
+- **数据范围**: 服务端只返回当前账号授权门店内的订单
+- **说明**: 获取可见订单列表，新旧订单格式共存；返回结果包含订单包装和物流服务字段
+
+门店范围来自当前账号所有启用角色组的 `storeIds` 并集。超级管理员不受限制；非超级管理员没有配置任何门店时返回空数组。历史订单优先读取 `store_id`，缺失时兼容使用旧 `type` 字段映射门店。
 
 **响应示例（旧订单）**:
 ```json
@@ -1231,16 +1379,28 @@
 订单表中对应的 SQLite 字段为 `goods_packaging TEXT` 和
 `logistics_service TEXT`，两者保存的是字符值。
 
+#### 5.1.1 订单实时事件
+- **URL**: `/api/orders/events`
+- **Method**: `GET`
+- **响应类型**: `text/event-stream`
+- **权限**: `touch.order.read`
+- **说明**: 建立 SSE 长连接；订单变化时推送 `order-change` 事件，连接空闲时发送保活注释，断线后浏览器按 3 秒间隔自动重连
+
+事件只用于通知客户端订单发生变化，页面应重新请求 `GET /api/orders` 获取经过门店范围过滤的最新列表。当前 SSE 连接已校验查看订单权限，但事件载荷尚未按门店范围拆分，不能把事件中的订单内容直接作为越权数据展示。
+
 ### 5.2 获取单个订单详情
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `GET`
+- **权限**: `touch.order.read`
+- **数据范围**: 订单必须属于当前账号授权门店
 - **说明**: 获取订单详细信息，用于订单编辑
 
-**响应示例**: 同 5.1，返回单个订单对象
+**响应示例**: 同 5.1，返回单个订单对象。订单不存在或超出门店数据范围时统一返回 `404`，避免通过 ID 判断无权访问的数据是否存在。
 
 ### 5.3 创建订单（新销售单）
 - **URL**: `/api/orders`
 - **Method**: `POST`
+- **权限**: 当前账号必须启用 `canAccessAdmin`
 - **说明**: 创建新订单（type=1），包含完整商品明细和财务信息
 
 **请求参数**:
@@ -1329,6 +1489,11 @@
 ### 5.4 更新订单（编辑销售单）
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `PUT`
+- **权限**:
+  - 完整编辑订单内容需要 `canAccessAdmin`
+  - `status=completed` 需要 `touch.order.complete`
+  - `status=pending` 需要 `touch.order.reopen`
+  - 发货、物流和 `audit_state` 操作需要 `touch.shipment.audit`
 - **说明**: 更新订单信息，支持编辑商品明细、财务信息等
 
 **请求参数（完整订单更新）**:
@@ -1422,6 +1587,7 @@
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `PUT`
 - **身份**: 服务端 Session 中的当前登录账号
+- **权限**: `touch.shipment.audit`
 - **适用范围**: 有订单编号和商品明细、且 `status` 为 `shipped` 的销售订单
 
 **审核请求**:
@@ -1480,7 +1646,7 @@
 | 字段 | 类型 | 说明 |
 |---|---|---|
 | `audit_state` | integer | `0` 未审核，`1` 已审核/已过账 |
-| `audit_by` | string | 审核人姓名；由请求头中的登录账号解析 |
+| `audit_by` | string | 审核人姓名；由服务端 Session 中的当前账号解析 |
 | `audit_date` | string | 审核时间，ISO 8601 格式 |
 | `balance_applied` | number | 本单使用的客户储值 |
 | `current_debt` | number | 审核后本单实际增加的应收欠款 |
@@ -1496,6 +1662,7 @@
 ### 5.6 删除订单
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `DELETE`
+- **权限**: `touch.order.delete`
 - **说明**: 删除订单，新订单删除时会自动恢复库存
 
 **响应示例**:
@@ -1514,6 +1681,7 @@
 ### 5.7 上传回单图片
 - **URL**: `/api/orders/<int:order_id>/upload_receipt`
 - **Method**: `POST`
+- **权限**: `touch.receipt.upload`
 - **Content-Type**: `multipart/form-data`
 - **说明**: 上传订单的发货回单图片
 
@@ -1526,14 +1694,15 @@ receipt_image: File (图片文件)
 ```json
 {
   "success": true,
-  "receipt_img_url": "/uploads/receipts/123_1693901234.jpg",
-  "message": "回单上传成功"
+  "image_url": "/uploads/2026-09/uuid.jpg",
+  "message": "新图片上传并保存成功，旧图片已清理"
 }
 ```
 
 ### 5.8 删除回单图片
 - **URL**: `/api/orders/<int:order_id>/receipt`
 - **Method**: `DELETE`
+- **权限**: `touch.receipt.delete`
 - **说明**: 删除订单的回单图片（从数据库和硬盘中彻底删除）
 
 **响应示例**:
@@ -4278,14 +4447,22 @@ HTTPS 页面默认使用端口 `8443`。环境变量 `VITE_CLODOP_URL` 可以覆
 ### 表结构
 
 **核心表**:
-- `orders` - 订单表（209条记录）
-- `products` - 商品表（15条记录）
+- `orders` - 订单表
+- `products` - 成品商品档案表
 - `raw_material_products` - 原材料商品档案表
-- `inventory` - 库存表（6条记录）
-- `customers` - 客户表（4条记录）
-- `stores` - 门店表（3条记录）
-- `warehouses` - 仓库表（4条记录）
-- `users` - 用户表（9条记录）
+- `inventory` - 历史兼容成品库存表
+- `customers` - 客户档案、应收和储值表
+- `stores` - 门店表
+- `warehouses` - 仓库表
+- `users` - 登录账号、密码哈希、状态和权限版本
+- `employees` - 员工主档和可选账号关联
+- `roles` - 角色组、全权限、后台访问、长会话和范围策略
+- `permissions` - 权限目录
+- `role_permissions` - 角色组与权限关系
+- `employee_roles` - 员工与角色组关系
+- `role_stores` - 角色组门店范围
+- `role_warehouses` - 角色组仓库范围
+- `auth_sessions` - 登录设备、Session 哈希、IP、活动时间和撤销状态
 - `suppliers` - 供应商基础资料表
 - `stock_inbounds` - 入库单头与状态、汇总信息表
 - `stock_inbound_items` - 入库单明细表
@@ -4359,16 +4536,16 @@ ON print_templates(is_default);
 
 ### 数据迁移
 
-从 JSON 迁移到 SQLite 的数据映射：
+早期 JSON 数据迁移到 SQLite 的历史映射如下。表内记录数会随业务变化，文档不再写死当前数量：
 
-| JSON 文件 | SQLite 表 | 记录数 |
+| JSON 文件 | SQLite 表 | 当前规则 |
 |-----------|----------|--------|
-| orders_db.json | orders | 209 |
-| products_db.json | products, inventory | 15 + 6 |
-| customers_db.json | customers | 4 |
-| stores_db.json | stores | 3 |
-| warehouses_db.json | warehouses, warehouse_categories | 4 + N |
-| users_db.json | 不再迁移 | v4.0 已清空旧用户数据，首次启动后由管理员初始化 |
+| orders_db.json | orders | 仅用于历史订单迁移 |
+| products_db.json | products, inventory | 仅用于历史成品和兼容库存迁移 |
+| customers_db.json | customers | 仅用于历史客户迁移 |
+| stores_db.json | stores | 仅用于历史门店迁移 |
+| warehouses_db.json | warehouses, warehouse_categories | 仅用于历史仓库迁移 |
+| users_db.json | 不再迁移 | v4.0 已清空旧用户数据，由登录页初始化首位超级管理员 |
 
 原材料商品档案 `raw_material_products` 是新增的独立表，没有对应的历史 JSON 迁移来源；新建或编辑后直接通过
 `/api/raw-material-products` 持久化到 SQLite。
@@ -4386,20 +4563,41 @@ ON print_templates(is_default);
 
 ## 权限说明
 
-### 角色类型
-- `super_admin` - 超级管理员（拥有所有权限）
-- `admin` - 管理员（受限的管理权限）
-- `employee` - 员工（基础权限）
+### 角色模型
 
-### 权限列表
-- `pending.view` - 查看待处理订单
-- `pending.edit` - 编辑待处理订单
-- `pending.delete` - 删除待处理订单
-- `completed.view` - 查看已完成订单
-- `completed.delete` - 删除已完成订单
-- `material.edit` - 编辑材料
-- `material.edit_stock` - 编辑库存
-- `material.delete` - 删除材料
+系统不再使用固定的 `admin`、`employee` 枚举决定权限。除内置 `super_admin` 外，其余角色组均由管理员创建，通过权限编码、成员、后台访问、会话策略和数据范围组合能力。
+
+### 触屏端权限
+
+| 权限编码 | 中文名称 |
+|---|---|
+| `touch.order.read` | 查看订单 |
+| `touch.order.reopen` | 恢复订单 |
+| `touch.order.copy` | 复制订单 |
+| `touch.order.delete` | 删除订单 |
+| `touch.order.complete` | 完成订单 |
+| `touch.shipment.audit` | 审核发货 |
+| `touch.receipt.read` | 查看回单 |
+| `touch.receipt.upload` | 上传回单 |
+| `touch.receipt.delete` | 删除回单 |
+| `touch.material.read` | 查看出库 |
+| `touch.material.audit` | 审核出库 |
+| `touch.material.create` | 录入出库 |
+
+### 后台路由权限
+
+| 权限编码 | 控制范围 |
+|---|---|
+| `admin.route.dashboard` | 后台首页 |
+| `admin.route.products` | 商品和原材料 |
+| `admin.route.sales` | 销售、物流、退货和客户 |
+| `admin.route.purchase` | 采购、供应商和采购入库 |
+| `admin.route.inventory` | 库存、出入库记录和仓库 |
+| `admin.route.finance` | 应收、收款、账户和对账 |
+| `admin.route.hr` | 员工、公司资料和检测报告 |
+| `admin.route.system` | 门店、系统、角色组和打印模板 |
+
+后台路由权限控制菜单和前端路由访问，不自动代替业务写接口的服务端权限校验。新增敏感接口时仍应使用 `require_super_admin`、`require_admin_access` 或 `require_permission`。
 
 ---
 
@@ -4500,6 +4698,14 @@ SQLite 支持**多读一写**模式：
 ---
 
 ## 更新日志
+
+### v4.1.0 (2026-09-19)
+- 新增后台大类路由权限 `admin.route.*`，与 `canAccessAdmin` 分离
+- 新增 7 天/365 天滑动会话、设备信息记录、会话撤销和历史删除接口
+- 当前用户响应新增 `allStores`、`allWarehouses`、`storeIds` 和 `warehouseIds`
+- 多角色权限、门店和仓库范围改为并集合并，超级管理员保持全范围
+- 订单列表和详情在后端按授权门店过滤，单门店前端隐藏门店选择器
+- 前端访问规则集中到 `accessControl.js`，后端数据范围集中到 `access_scope.py`
 
 ### v4.0.0 (2026-09-18)
 - 新增首次超级管理员初始化，依据有效全权限账号是否存在决定入口是否开放

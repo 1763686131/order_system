@@ -151,7 +151,7 @@
         <div class="toolbar-filters">
           <!-- 门店分类滑块 -->
           <div
-            v-if="stores.length > 1"
+            v-if="showStoreSelector"
             class="material-type-slider"
             role="tablist"
             aria-label="门店分类筛选"
@@ -1084,6 +1084,11 @@ import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { useUserStore } from '@/stores/user'
+import {
+  filterAccessibleOptions,
+  filterRecordsByScope,
+  hasMultipleScopeOptions
+} from '@/utils/accessControl'
 import { formatOrderForCopy } from '@/utils/tools'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
@@ -1113,6 +1118,7 @@ const loading = ref(false)
 const stores = ref([])
 const products = ref([]) // 商品列表，用于反查商品名称
 const warehouses = ref([])
+const showStoreSelector = computed(() => hasMultipleScopeOptions(stores.value))
 
 // 打印模板预览
 const printTemplateDialogOpen = ref(false)
@@ -1272,11 +1278,6 @@ const getOrderStoreId = (order) => {
   return null
 }
 
-const canAccessStore = (storeId) => {
-  if (userStore.allStores || userStore.isSuperAdmin) return true
-  return userStore.storeIds.includes(Number(storeId))
-}
-
 // 根据 store_id 或 type 获取门店名称
 const getStoreName = (order) => {
   const storeId = getOrderStoreId(order)
@@ -1399,8 +1400,10 @@ const fetchOrdersData = async () => {
     ])
 
     // 只显示当前账号有权访问且状态为 active 的门店
-    stores.value = storesData.filter(store =>
-      store.status === 'active' && canAccessStore(store.id)
+    stores.value = filterAccessibleOptions(
+      storesData.filter(store => store.status === 'active'),
+      userStore,
+      'store'
     )
     if (
       filters.value.category &&
@@ -1416,8 +1419,11 @@ const fetchOrdersData = async () => {
     warehouses.value = Array.isArray(warehousesData) ? warehousesData : []
 
     if (ordersResponse && Array.isArray(ordersResponse)) {
-      const scopedOrders = ordersResponse.filter(order =>
-        canAccessStore(getOrderStoreId(order))
+      const scopedOrders = filterRecordsByScope(
+        ordersResponse,
+        userStore,
+        'store',
+        getOrderStoreId
       )
       // 更新 orderStore 的所有订单数据
       orderStore.setOrders(scopedOrders)

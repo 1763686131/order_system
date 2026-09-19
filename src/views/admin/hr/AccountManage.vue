@@ -831,14 +831,12 @@
 <script setup>
 import { computed, nextTick, onMounted, ref } from 'vue'
 import request from '@/api/request'
+import { mergeRolePermissions, mergeRoleScopes } from '@/utils/accessControl'
 
 const departments = ['仓储部', '财务部', '销售部', '人事行政', '运营部']
 
 const roleGroups = ref([])
 const permissionModules = ref([])
-const rolePermissionMap = computed(() => Object.fromEntries(
-  roleGroups.value.map(role => [role.id, role.permissionCodes || []])
-))
 
 const stores = [
   { id: 1, name: '一号门店' },
@@ -905,21 +903,21 @@ const selectedEmployee = computed(() => {
   return employees.value.find(employee => employee.id === selectedEmployeeId.value) || null
 })
 
+const selectedEmployeeRoles = computed(() => {
+  const roleIds = new Set(selectedEmployee.value?.roleIds || [])
+  return roleGroups.value.filter(role => roleIds.has(role.id))
+})
+
 const selectedEmployeeScope = computed(() => {
-  const roleIds = selectedEmployee.value?.roleIds || []
-  return {
-    storeIds: [...new Set(roleIds.flatMap(roleId => roleGroups.value.find(role => role.id === roleId)?.storeIds || []))],
-    warehouseIds: [
-      ...new Set(roleIds.flatMap(roleId => roleGroups.value.find(role => role.id === roleId)?.warehouseIds || []))
-    ]
-  }
+  return mergeRoleScopes(selectedEmployeeRoles.value, {
+    storeIds: stores.map(store => store.id),
+    warehouseIds: warehouses.map(warehouse => warehouse.id)
+  })
 })
 
 const selectedPermissionModules = computed(() => {
   if (!selectedEmployee.value) return []
-  const enabledPermissions = new Set(
-    selectedEmployee.value.roleIds.flatMap(roleId => rolePermissionMap.value[roleId] || [])
-  )
+  const enabledPermissions = new Set(mergeRolePermissions(selectedEmployeeRoles.value))
   return permissionModules.value.map(module => ({
     ...module,
     permissions: module.permissions.map(permission => ({

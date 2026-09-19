@@ -4,8 +4,8 @@
 from flask import Blueprint, request, jsonify, Response, stream_with_context
 from utils.db_helper import read_orders, write_orders, read_customers, read_carrier_tags, write_carrier_tags
 from utils.db import get_db
+from utils.access_scope import filter_records_by_scope
 from utils.auth import (
-    accessible_store_ids,
     current_identity,
     get_current_user,
     permission_granted,
@@ -63,14 +63,12 @@ def order_store_id(order):
 
 
 def filter_orders_by_store_scope(orders, user=None):
-    allowed_store_ids = accessible_store_ids(user)
-    if allowed_store_ids is None:
-        return orders
-    return [
-        order
-        for order in orders
-        if order_store_id(order) in allowed_store_ids
-    ]
+    return filter_records_by_scope(
+        orders,
+        user,
+        "store",
+        order_store_id,
+    )
 
 
 def normalize_logistics_service(value):

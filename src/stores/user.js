@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import request from '@/api/request'
+import { hasPermission, normalizeAccessState } from '@/utils/accessControl'
 
 const DEVICE_ID_KEY = 'order_system_device_id'
 
@@ -60,34 +61,27 @@ export const useUserStore = defineStore('user', {
       return state.roles.map(role => role.name).join('、') || '普通账号'
     },
     hasPerm: (state) => {
-      return (permissionCode) => (
-        state.isSuperAdmin || state.permissions.includes(permissionCode)
-      )
+      return (permissionCode) => hasPermission(state, permissionCode)
     }
   },
 
   actions: {
     setUser(userData = {}) {
+      const accessState = normalizeAccessState(userData)
       this.id = userData.id || null
       this.username = userData.username || ''
       this.name = userData.displayName || userData.name || ''
       this.avatarUrl = userData.avatarUrl || ''
       this.role = userData.role || ''
       this.roles = Array.isArray(userData.roles) ? userData.roles : []
-      this.permissions = Array.isArray(userData.permissions)
-        ? userData.permissions
-        : []
-      this.isSuperAdmin = Boolean(userData.isSuperAdmin)
-      this.canAccessAdmin = Boolean(userData.canAccessAdmin)
-      this.longSession = Boolean(userData.longSession)
-      this.allStores = Boolean(userData.allStores || userData.isSuperAdmin)
-      this.allWarehouses = Boolean(userData.allWarehouses || userData.isSuperAdmin)
-      this.storeIds = Array.isArray(userData.storeIds)
-        ? userData.storeIds.map(Number).filter(Number.isInteger)
-        : []
-      this.warehouseIds = Array.isArray(userData.warehouseIds)
-        ? userData.warehouseIds.map(Number).filter(Number.isInteger)
-        : []
+      this.permissions = accessState.permissions
+      this.isSuperAdmin = accessState.isSuperAdmin
+      this.canAccessAdmin = accessState.canAccessAdmin
+      this.longSession = accessState.longSession
+      this.allStores = accessState.allStores
+      this.allWarehouses = accessState.allWarehouses
+      this.storeIds = accessState.storeIds
+      this.warehouseIds = accessState.warehouseIds
       this.mustChangePassword = Boolean(userData.mustChangePassword)
       this.authChecked = true
     },
