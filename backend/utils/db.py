@@ -695,12 +695,16 @@ def _ensure_auth_schema(conn):
         cursor.execute(
             """
             INSERT INTO system_meta (setting_key, setting_value, updated_at)
-            VALUES ('auth_schema_version', '9', CURRENT_TIMESTAMP)
+            VALUES ('auth_schema_version', '10', CURRENT_TIMESTAMP)
             ON CONFLICT(setting_key) DO UPDATE SET
                 setting_value = excluded.setting_value,
                 updated_at = CURRENT_TIMESTAMP
             """
         )
+
+        from utils.avatar_storage import migrate_avatar_data_urls
+
+        migrate_avatar_data_urls(conn)
         conn.commit()
         _auth_schema_ready = True
 

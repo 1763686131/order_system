@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v4.4** (2026-09-19) - 新增员工头像文件上传、替换和删除接口，历史 Base64 头像自动迁移为文件路径
 - **v4.3** (2026-09-20) - 新增后台只读通讯录接口、部门折叠员工列表及最近活动在线状态
 - **v4.2** (2026-09-19) - 新增部门配置接口、员工多部门关联、部门员工维护及最近活跃设备字段
 - **v4.1** (2026-09-19) - 新增后台路由权限、登录设备会话、角色门店/仓库数据范围及前后端集中访问控制
@@ -263,6 +264,8 @@
 | `GET` | `/api/admin/employees` | 查询员工档案和绑定账号 |
 | `POST` | `/api/admin/employees` | 创建员工档案，可同时开通账号 |
 | `PUT` | `/api/admin/employees/<employee_id>` | 修改档案、密码和账号状态 |
+| `POST` | `/api/admin/employees/<employee_id>/avatar` | 上传或替换员工头像 |
+| `DELETE` | `/api/admin/employees/<employee_id>/avatar` | 删除员工头像及物理文件 |
 | `DELETE` | `/api/admin/employees/<employee_id>/account` | 解绑并删除登录账号，保留员工档案 |
 
 以上员工和部门接口仅允许超级管理员调用。员工抽屉不配置权限组，角色组关系统一在“角色组管理”页面维护。没有填写
@@ -286,7 +289,6 @@
 {
   "displayName": "张三",
   "employeeNo": "E-0008",
-  "avatarUrl": "",
   "phone": "13800001024",
   "departmentIds": [2, 3],
   "position": "销售内勤",
@@ -309,6 +311,24 @@
 提交非空 `password` 会重新生成密码哈希。解绑账号会删除 `users` 中的账号及其会话，
 但不会删除员工档案、部门关系或角色组成员关系；解绑当前登录账号和最后一个有效
 超级管理员账号会被拒绝。
+
+头像不再通过员工 JSON 请求提交 Base64 数据。新建员工后，使用
+`multipart/form-data` 调用头像接口，文件字段名为 `avatar`；支持 JPG、PNG、WebP、
+GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据库中的
+`employees.avatar_url` 和绑定账号的 `users.avatar_url` 只保存
+`/uploads/employee-avatars/YYYY-MM/文件名` 路径。替换和删除头像时会同步清理旧的
+物理文件；服务启动时会把历史 Base64 头像迁移到该目录。
+
+上传头像响应示例：
+
+```json
+{
+  "success": true,
+  "message": "头像上传成功，旧头像已清理",
+  "avatarUrl": "/uploads/employee-avatars/2026-09/employee_8_xxx.jpg",
+  "employee": {}
+}
+```
 
 员工列表中与登录状态相关的字段示例：
 

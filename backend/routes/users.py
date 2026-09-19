@@ -4,6 +4,7 @@ from flask import Blueprint, jsonify, request, session
 from werkzeug.security import generate_password_hash
 
 from utils.auth import get_current_user, require_super_admin, serialize_user
+from utils.avatar_storage import normalize_avatar_url
 from utils.db import get_db
 from utils.employee_links import ensure_employee_for_user, sync_employee_from_user
 
@@ -141,7 +142,6 @@ def create_user():
     data = request.get_json(silent=True) or {}
     username = _text(data.get("username"), 50)
     display_name = _text(data.get("displayName") or data.get("name"), 80)
-    avatar_url = _text(data.get("avatarUrl"), 500)
     password = str(data.get("password") or "")
     status = "disabled" if data.get("status") == "disabled" else "active"
     role_ids = _normalize_role_ids(data.get("roleIds"))
@@ -153,6 +153,7 @@ def create_user():
         return jsonify({"success": False, "message": "初始密码至少需要 8 位"}), 400
 
     try:
+        avatar_url = normalize_avatar_url(data.get("avatarUrl"))
         with get_db() as conn:
             conn.execute("BEGIN IMMEDIATE")
             if conn.execute(
@@ -206,13 +207,13 @@ def create_user():
 def update_user(user_id):
     data = request.get_json(silent=True) or {}
     display_name = _text(data.get("displayName") or data.get("name"), 80)
-    avatar_url = _text(data.get("avatarUrl"), 500)
     status = "disabled" if data.get("status") == "disabled" else "active"
     role_ids = _normalize_role_ids(data.get("roleIds"))
     if not display_name:
         return jsonify({"success": False, "message": "显示姓名不能为空"}), 400
 
     try:
+        avatar_url = normalize_avatar_url(data.get("avatarUrl"))
         with get_db() as conn:
             conn.execute("BEGIN IMMEDIATE")
             existing = _user_row(conn, user_id)

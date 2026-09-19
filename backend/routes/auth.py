@@ -12,6 +12,7 @@ from utils.auth import (
     revoke_current_session,
     serialize_user,
 )
+from utils.avatar_storage import normalize_avatar_url
 from utils.db import get_db
 from utils.employee_links import ensure_employee_for_user, sync_employee_from_user
 
@@ -216,38 +217,41 @@ def current_account():
 def update_profile():
     data = request.get_json(silent=True) or {}
     display_name = _text(data.get("displayName") or data.get("name"), 80)
-    avatar_url = _text(data.get("avatarUrl"), 500)
     if not display_name:
         return jsonify({"success": False, "message": "显示姓名不能为空"}), 400
 
-    current_user = get_current_user()
-    with get_db() as conn:
-        conn.execute(
-            """
-            UPDATE users
-            SET display_name = ?, name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
-            WHERE id = ?
-            """,
-            (display_name, display_name, avatar_url, current_user["id"]),
-        )
-        sync_employee_from_user(
-            conn,
-            current_user["id"],
-            display_name,
-            avatar_url,
-            account_status="active",
-        )
-        row = conn.execute(
-            """
-            SELECT id, username, display_name, avatar_url, status,
-                   must_change_password, last_login_at, permission_version,
-                   created_at
-            FROM users WHERE id = ?
-            """,
-            (current_user["id"],),
-        ).fetchone()
-        user = serialize_user(conn, row)
-    return jsonify({"success": True, "message": "资料已更新", "user": user})
+    try:
+        avatar_url = normalize_avatar_url(data.get("avatarUrl"))
+        current_user = get_current_user()
+        with get_db() as conn:
+            conn.execute(
+                """
+                UPDATE users
+                SET display_name = ?, name = ?, avatar_url = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (display_name, display_name, avatar_url, current_user["id"]),
+            )
+            sync_employee_from_user(
+                conn,
+                current_user["id"],
+                display_name,
+                avatar_url,
+                account_status="active",
+            )
+            row = conn.execute(
+                """
+                SELECT id, username, display_name, avatar_url, status,
+                       must_change_password, last_login_at, permission_version,
+                       created_at
+                FROM users WHERE id = ?
+                """,
+                (current_user["id"],),
+            ).fetchone()
+            user = serialize_user(conn, row)
+        return jsonify({"success": True, "message": "资料已更新", "user": user})
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
 
 
 @auth_bp.route("/password", methods=["PUT"])

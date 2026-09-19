@@ -4,6 +4,12 @@ from flask import Blueprint, jsonify, request, session
 from werkzeug.security import generate_password_hash
 
 from utils.auth import get_current_user, require_super_admin, serialize_user
+from utils.avatar_storage import (
+    MAX_AVATAR_BYTES,
+    delete_managed_avatar,
+    normalize_avatar_url,
+    save_avatar_upload,
+)
 from utils.db import get_db
 
 
@@ -241,6 +247,7 @@ def _employee_values(data):
     display_name = _text(data.get("displayName"), 80)
     if not display_name:
         raise ValueError("员工姓名不能为空")
+    avatar_url = normalize_avatar_url(data.get("avatarUrl"))
     department_ids = _department_ids(
         data.get("departmentIds")
         if "departmentIds" in data
@@ -248,7 +255,7 @@ def _employee_values(data):
     )
     return {
         "display_name": display_name,
-        "avatar_url": _text(data.get("avatarUrl"), 200000),
+        "avatar_url": avatar_url,
         "department_ids": department_ids,
         "department_id": department_ids[0] if department_ids else None,
         "position": _text(data.get("position"), 80),
@@ -387,6 +394,7 @@ def create_employee():
     data = request.get_json(silent=True) or {}
     try:
         values = _employee_values(data)
+        values["avatar_url"] = ""
         with get_db() as conn:
             conn.execute("BEGIN IMMEDIATE")
             _validate_departments(conn, values["department_ids"])
@@ -464,6 +472,7 @@ def update_employee(employee_id):
                 return jsonify({"success": False, "message": "员工工号已存在"}), 409
 
             user_id = existing["user_id"]
+            values["avatar_url"] = existing["avatar_url"] or ""
             password = str(data.get("password") or "")
             existing_department_ids = _employee_department_ids(conn, employee_id)
             allow_disabled_departments = set(existing_department_ids).intersection(
@@ -564,6 +573,122 @@ def update_employee(employee_id):
         )
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@employees_bp.route("/<int:employee_id>/avatar", methods=["POST"])
+@require_super_admin
+def upload_employee_avatar(employee_id):
+    if (
+        request.content_length
+        and request.content_length > MAX_AVATAR_BYTES + 64 * 1024
+    ):
+        return jsonify({"success": False, "message": "头像图片不能超过 5MB"}), 413
+    avatar_file = request.files.get("avatar")
+    if not avatar_file or not avatar_file.filename:
+        return jsonify({"success": False, "message": "请选择头像图片"}), 400
+
+    with get_db() as conn:
+        if not _employee_row(conn, employee_id):
+            return jsonify({"success": False, "message": "员工档案不存在"}), 404
+
+    new_avatar_url = ""
+    old_avatar_url = ""
+    try:
+        new_avatar_url = save_avatar_upload(avatar_file, employee_id)
+        with get_db() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            employee_row = _employee_row(conn, employee_id)
+            if not employee_row:
+                delete_managed_avatar(new_avatar_url)
+                return jsonify({"success": False, "message": "员工档案不存在"}), 404
+
+            old_avatar_url = employee_row["avatar_url"] or ""
+            conn.execute(
+                """
+                UPDATE employees
+                SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (new_avatar_url, employee_id),
+            )
+            if employee_row["user_id"]:
+                conn.execute(
+                    """
+                    UPDATE users
+                    SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                    """,
+                    (new_avatar_url, employee_row["user_id"]),
+                )
+            employee = _serialize_employee(conn, _employee_row(conn, employee_id))
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception:
+        if new_avatar_url:
+            try:
+                delete_managed_avatar(new_avatar_url)
+            except OSError:
+                pass
+        return jsonify({"success": False, "message": "头像上传失败"}), 500
+
+    if old_avatar_url and old_avatar_url != new_avatar_url:
+        try:
+            delete_managed_avatar(old_avatar_url)
+        except OSError:
+            pass
+    return jsonify(
+        {
+            "success": True,
+            "message": "头像上传成功，旧头像已清理",
+            "avatarUrl": new_avatar_url,
+            "employee": employee,
+        }
+    )
+
+
+@employees_bp.route("/<int:employee_id>/avatar", methods=["DELETE"])
+@require_super_admin
+def delete_employee_avatar(employee_id):
+    old_avatar_url = ""
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        employee_row = _employee_row(conn, employee_id)
+        if not employee_row:
+            return jsonify({"success": False, "message": "员工档案不存在"}), 404
+
+        old_avatar_url = employee_row["avatar_url"] or ""
+        conn.execute(
+            """
+            UPDATE employees
+            SET avatar_url = '', updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (employee_id,),
+        )
+        if employee_row["user_id"]:
+            conn.execute(
+                """
+                UPDATE users
+                SET avatar_url = '', updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (employee_row["user_id"],),
+            )
+        employee = _serialize_employee(conn, _employee_row(conn, employee_id))
+
+    if old_avatar_url:
+        try:
+            delete_managed_avatar(old_avatar_url)
+        except OSError:
+            pass
+    return jsonify(
+        {
+            "success": True,
+            "message": "头像已删除",
+            "avatarUrl": "",
+            "employee": employee,
+        }
+    )
 
 
 @employees_bp.route("/<int:employee_id>/account", methods=["DELETE"])

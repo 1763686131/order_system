@@ -641,14 +641,14 @@
                 ref="avatarInput"
                 class="avatar-upload-input"
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,image/gif"
                 @change="handleAvatarUpload"
               />
               <div>
                 <span class="drawer-eyebrow">{{ editingEmployee ? '编辑档案' : '新建档案' }}</span>
                 <h2 id="employee-drawer-title">{{ editingEmployee ? draft.displayName : '新增员工' }}</h2>
                 <button
-                  v-if="draft.avatarUrl"
+                  v-if="draft.avatarPreviewUrl || (!draft.avatarRemovalRequested && draft.avatarUrl)"
                   class="avatar-remove-button"
                   type="button"
                   @click="removeAvatar"
@@ -878,10 +878,12 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
 import { mergeRolePermissions, mergeRoleScopes } from '@/utils/accessControl'
 
+const userStore = useUserStore()
 const departments = ref([])
 
 const roleGroups = ref([])
@@ -917,6 +919,7 @@ const editingEmployee = ref(false)
 const departmentSelectorOpen = ref(false)
 const draft = ref(createEmptyEmployee())
 const avatarInput = ref(null)
+const pendingAvatarFile = ref(null)
 const passwordInput = ref(null)
 const passwordVisible = ref(false)
 const passwordConfirmVisible = ref(false)
@@ -1015,6 +1018,8 @@ function createEmptyEmployee() {
     displayName: '',
     avatarColor: '#e5e7eb',
     avatarUrl: '',
+    avatarPreviewUrl: '',
+    avatarRemovalRequested: false,
     username: '',
     password: '',
     passwordConfirm: '',
@@ -1036,6 +1041,7 @@ function createEmptyEmployee() {
 }
 
 function openCreate() {
+  resetPendingAvatar()
   editingEmployee.value = false
   draft.value = createEmptyEmployee()
   const defaultDepartmentId = departments.value.find(item => item.status === 'active')?.id || null
@@ -1060,9 +1066,12 @@ function goToList() {
 }
 
 function openEdit(employee) {
+  resetPendingAvatar()
   editingEmployee.value = true
   draft.value = {
     ...employee,
+    avatarPreviewUrl: '',
+    avatarRemovalRequested: false,
     departmentIds: [...(employee.departmentIds || (employee.departmentId ? [employee.departmentId] : []))],
     roleIds: [...employee.roleIds],
     password: '',
@@ -1076,6 +1085,7 @@ function openEdit(employee) {
 }
 
 function closeDrawer() {
+  resetPendingAvatar()
   drawerVisible.value = false
   passwordVisible.value = false
   passwordConfirmVisible.value = false
@@ -1137,21 +1147,56 @@ async function saveEmployee() {
   }
 
   try {
+    const {
+      avatarPreviewUrl,
+      avatarRemovalRequested,
+      passwordConfirm,
+      ...employeePayload
+    } = draft.value
     const payload = {
-      ...draft.value,
+      ...employeePayload,
       roleIds: [...draft.value.roleIds]
     }
     const response = editingEmployee.value
       ? await request.put(`/admin/employees/${draft.value.id}`, payload)
       : await request.post('/admin/employees', payload)
-    const savedEmployee = response.employee
+    let savedEmployee = response.employee
+    let avatarError = ''
+    try {
+      if (pendingAvatarFile.value) {
+        const uploadData = new FormData()
+        uploadData.append('avatar', pendingAvatarFile.value)
+        const avatarResponse = await request({
+          url: `/admin/employees/${savedEmployee.id}/avatar`,
+          method: 'POST',
+          data: uploadData,
+          headers: { 'Content-Type': 'multipart/form-data' }
+        })
+        savedEmployee = avatarResponse.employee
+      } else if (avatarRemovalRequested && savedEmployee.avatarUrl) {
+        const avatarResponse = await request.delete(`/admin/employees/${savedEmployee.id}/avatar`)
+        savedEmployee = avatarResponse.employee
+      }
+    } catch (error) {
+      avatarError = error?.response?.data?.message || '头像处理失败'
+    }
     if (editingEmployee.value) {
       const index = employees.value.findIndex(item => item.id === savedEmployee.id)
       if (index !== -1) employees.value[index] = savedEmployee
     } else {
       employees.value.unshift(savedEmployee)
     }
-    showNotice(response.message || '员工档案已保存')
+    if (Number(savedEmployee.userId) === Number(userStore.id)) {
+      userStore.name = savedEmployee.displayName
+      userStore.avatarUrl = savedEmployee.avatarUrl || ''
+      userStore.phone = savedEmployee.phone || ''
+      userStore.position = savedEmployee.position || ''
+    }
+    showNotice(
+      avatarError
+        ? `员工档案已保存，但${avatarError}`
+        : response.message || '员工档案已保存'
+    )
     closeDrawer()
   } catch (error) {
     showNotice(error?.response?.data?.message || '员工档案保存失败')
@@ -1166,16 +1211,38 @@ function handleAvatarUpload(event) {
     showNotice('请选择图片格式的头像文件')
     return
   }
-
-  const reader = new FileReader()
-  reader.onload = () => {
-    draft.value.avatarUrl = String(reader.result || '')
+  if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+    showNotice('头像仅支持 JPG、PNG、WebP 或 GIF 图片')
+    return
   }
-  reader.readAsDataURL(file)
+  if (file.size > 5 * 1024 * 1024) {
+    showNotice('头像图片不能超过 5MB')
+    return
+  }
+
+  revokeAvatarPreview()
+  pendingAvatarFile.value = file
+  draft.value.avatarPreviewUrl = URL.createObjectURL(file)
+  draft.value.avatarRemovalRequested = false
 }
 
 function removeAvatar() {
-  draft.value.avatarUrl = ''
+  const hasStoredAvatar = Boolean(draft.value.avatarUrl)
+  revokeAvatarPreview()
+  pendingAvatarFile.value = null
+  draft.value.avatarRemovalRequested = hasStoredAvatar
+}
+
+function revokeAvatarPreview() {
+  if (draft.value.avatarPreviewUrl) {
+    URL.revokeObjectURL(draft.value.avatarPreviewUrl)
+    draft.value.avatarPreviewUrl = ''
+  }
+}
+
+function resetPendingAvatar() {
+  revokeAvatarPreview()
+  pendingAvatarFile.value = null
 }
 
 async function toggleAccount(employee) {
@@ -1338,8 +1405,10 @@ function avatarStyle(employee) {
     backgroundColor: employee.avatarColor || selectedColor.bg,
     color: employee.avatarColor ? '#275a4d' : selectedColor.color
   }
-  if (employee.avatarUrl) {
-    style.backgroundImage = `url("${employee.avatarUrl}")`
+  const avatarUrl = employee.avatarPreviewUrl
+    || (employee.avatarRemovalRequested ? '' : employee.avatarUrl)
+  if (avatarUrl) {
+    style.backgroundImage = `url("${avatarUrl}")`
     style.backgroundPosition = 'center'
     style.backgroundRepeat = 'no-repeat'
     style.backgroundSize = 'cover'
@@ -1376,6 +1445,7 @@ function deviceDescription(device) {
 }
 
 onMounted(loadEmployeeData)
+onBeforeUnmount(resetPendingAvatar)
 </script>
 
 <style scoped>
