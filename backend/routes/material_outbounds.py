@@ -5,7 +5,8 @@ import threading
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, Response, jsonify, request, stream_with_context
+from queue import Empty, Queue
 
 from utils.auth import current_identity, require_admin_access, require_permission
 from utils.db import get_db
@@ -19,6 +20,21 @@ material_outbounds_bp = Blueprint(
 
 _write_lock = threading.Lock()
 _QUANTITY_EPSILON = 0.0000001
+material_outbound_event_subscribers = set()
+material_outbound_event_subscribers_lock = threading.Lock()
+
+
+def broadcast_material_outbound_event(action, outbound=None, outbound_id=None):
+    """向已连接的触屏页面推送原材料出库记录变更事件。"""
+    payload = {
+        "action": action,
+        "outbound": outbound,
+        "outboundId": outbound_id if outbound_id is not None else (outbound or {}).get("id"),
+    }
+    with material_outbound_event_subscribers_lock:
+        subscribers = list(material_outbound_event_subscribers)
+    for subscriber in subscribers:
+        subscriber.put(payload)
 
 
 def _now():
@@ -642,6 +658,39 @@ def update_material_outbound_settings():
         ), 500
 
 
+@material_outbounds_bp.route("/material-outbounds/events", methods=["GET"])
+@require_permission("touch.material.read")
+def material_outbound_events():
+    """通过 SSE 推送原材料出库记录变化。"""
+    subscriber = Queue()
+    with material_outbound_event_subscribers_lock:
+        material_outbound_event_subscribers.add(subscriber)
+
+    def event_stream():
+        yield "retry: 3000\nevent: connected\ndata: {}\n\n"
+        try:
+            while True:
+                try:
+                    payload = subscriber.get(timeout=20)
+                    data = json.dumps(payload, ensure_ascii=False)
+                    yield f"event: material-outbound-change\ndata: {data}\n\n"
+                except Empty:
+                    yield ": keep-alive\n\n"
+        finally:
+            with material_outbound_event_subscribers_lock:
+                material_outbound_event_subscribers.discard(subscriber)
+
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @material_outbounds_bp.route("/material-outbounds", methods=["GET"])
 @require_permission("touch.material.read")
 def list_material_outbounds():
@@ -696,11 +745,17 @@ def create_material_outbound():
                     "SELECT * FROM material_outbounds WHERE id = ?",
                     (outbound_id,),
                 ).fetchone()
+                material_outbound = _serialize_document(conn, row)
+                conn.commit()
+                broadcast_material_outbound_event(
+                    "created",
+                    outbound=material_outbound,
+                )
                 return jsonify(
                     {
                         "success": True,
                         "message": "原材料出库草稿已提交，等待管理员审核",
-                        "materialOutbound": _serialize_document(conn, row),
+                        "materialOutbound": material_outbound,
                     }
                 ), 201
     except ValueError as exc:
@@ -791,11 +846,17 @@ def update_material_outbound(outbound_id):
                     "SELECT * FROM material_outbounds WHERE id = ?",
                     (outbound_id,),
                 ).fetchone()
+                material_outbound = _serialize_document(conn, updated)
+                conn.commit()
+                broadcast_material_outbound_event(
+                    "updated",
+                    outbound=material_outbound,
+                )
                 return jsonify(
                     {
                         "success": True,
                         "message": "原材料出库草稿已更新",
-                        "materialOutbound": _serialize_document(conn, updated),
+                        "materialOutbound": material_outbound,
                     }
                 )
     except ValueError as exc:
@@ -869,11 +930,17 @@ def audit_material_outbound(outbound_id):
                     "SELECT * FROM material_outbounds WHERE id = ?",
                     (outbound_id,),
                 ).fetchone()
+                material_outbound = _serialize_document(conn, updated)
+                conn.commit()
+                broadcast_material_outbound_event(
+                    "reviewed",
+                    outbound=material_outbound,
+                )
                 return jsonify(
                     {
                         "success": True,
                         "message": "审核成功，原材料库存已按先进先出扣减",
-                        "materialOutbound": _serialize_document(conn, updated),
+                        "materialOutbound": material_outbound,
                     }
                 )
     except ValueError as exc:
@@ -921,11 +988,17 @@ def reverse_audit_material_outbound(outbound_id):
                     "SELECT * FROM material_outbounds WHERE id = ?",
                     (outbound_id,),
                 ).fetchone()
+                material_outbound = _serialize_document(conn, updated)
+                conn.commit()
+                broadcast_material_outbound_event(
+                    "reversed",
+                    outbound=material_outbound,
+                )
                 return jsonify(
                     {
                         "success": True,
                         "message": "反审核成功，原材料库存已回补",
-                        "materialOutbound": _serialize_document(conn, updated),
+                        "materialOutbound": material_outbound,
                     }
                 )
     except ValueError as exc:
@@ -966,6 +1039,11 @@ def cancel_material_outbound(outbound_id):
                     "DELETE FROM material_outbounds WHERE id = ?",
                     (outbound_id,),
                 )
+                conn.commit()
+                broadcast_material_outbound_event(
+                    "deleted",
+                    outbound_id=outbound_id,
+                )
                 return jsonify({"success": True, "message": "已作废单据已删除"})
             conn.execute(
                 """
@@ -974,6 +1052,16 @@ def cancel_material_outbound(outbound_id):
                 WHERE id = ?
                 """,
                 (_now(), outbound_id),
+            )
+            updated = conn.execute(
+                "SELECT * FROM material_outbounds WHERE id = ?",
+                (outbound_id,),
+            ).fetchone()
+            material_outbound = _serialize_document(conn, updated)
+            conn.commit()
+            broadcast_material_outbound_event(
+                "cancelled",
+                outbound=material_outbound,
             )
             return jsonify({"success": True, "message": "原材料出库草稿已作废"})
 
@@ -1011,10 +1099,16 @@ def restart_material_outbound(outbound_id):
                 "SELECT * FROM material_outbounds WHERE id = ?",
                 (outbound_id,),
             ).fetchone()
+            material_outbound = _serialize_document(conn, updated)
+            conn.commit()
+            broadcast_material_outbound_event(
+                "restarted",
+                outbound=material_outbound,
+            )
             return jsonify(
                 {
                     "success": True,
                     "message": "原材料出库单已重新启用",
-                    "materialOutbound": _serialize_document(conn, updated),
+                    "materialOutbound": material_outbound,
                 }
             )

@@ -2369,6 +2369,15 @@ receipt_image: File (图片文件)
 
 每张单据包含门店、仓库、原材料快照、出库数量、成品数量、备注、录入人、审核人与审核时间。
 
+#### 8.3.1 原材料出库实时事件
+- **URL**: `/api/material-outbounds/events`
+- **Method**: `GET`
+- **响应类型**: `text/event-stream`
+- **权限**: `touch.material.read`
+- **说明**: 建立 SSE 长连接；原材料出库单新增、修改、审核、反审核、作废、删除或重新启用时推送 `material-outbound-change` 事件，连接空闲时发送保活注释，断线后浏览器按 3 秒间隔自动重连。
+
+事件只用于通知客户端原材料出库记录发生变化。页面收到事件后应重新请求 `GET /api/material-outbounds` 获取最新列表，不直接将事件载荷作为页面数据展示。
+
 ### 8.4 员工提交原材料出库草稿
 - **URL**: `/api/material-outbounds`
 - **Method**: `POST`

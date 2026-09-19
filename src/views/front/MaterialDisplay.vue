@@ -63,6 +63,10 @@ const loadError = ref('')
 const records = ref([])
 const filterStartDate = ref('')
 const filterEndDate = ref('')
+let materialEventSource = null
+let fallbackPollingInterval = null
+let isFetching = false
+let refreshQueued = false
 
 const emptyMessage = computed(() => (
   filterStartDate.value && filterEndDate.value
@@ -112,9 +116,18 @@ const defaultDateRange = () => {
   return { start: format(start), end: format(end) }
 }
 
-const fetchRecords = async () => {
-  loading.value = true
-  loadError.value = ''
+const fetchRecords = async ({ silent = false } = {}) => {
+  if (isFetching) {
+    refreshQueued = true
+    return
+  }
+
+  isFetching = true
+  if (!silent) {
+    loading.value = true
+    loadError.value = ''
+  }
+
   try {
     const range = filterStartDate.value && filterEndDate.value
       ? { start: filterStartDate.value, end: filterEndDate.value }
@@ -129,11 +142,19 @@ const fetchRecords = async () => {
       }
     })
     records.value = Array.isArray(response) ? response : []
+    loadError.value = ''
   } catch (error) {
-    loadError.value = error?.response?.data?.message || '原材料出库记录加载失败。'
-    records.value = []
+    if (!silent || records.value.length === 0) {
+      loadError.value = error?.response?.data?.message || '原材料出库记录加载失败。'
+      records.value = []
+    }
   } finally {
-    loading.value = false
+    isFetching = false
+    if (!silent) loading.value = false
+    if (refreshQueued) {
+      refreshQueued = false
+      fetchRecords({ silent: true })
+    }
   }
 }
 
@@ -145,14 +166,53 @@ const handleDateFilter = event => {
 
 const handleRefresh = () => fetchRecords()
 
+const refreshFromRealtimeEvent = () => {
+  fetchRecords({ silent: true })
+  window.dispatchEvent(new CustomEvent('refresh-material-stocks'))
+}
+
+const connectMaterialEvents = () => {
+  if (typeof EventSource === 'undefined') {
+    console.warn('当前浏览器不支持 SSE，原材料记录启用轮询降级方案')
+    fallbackPollingInterval = window.setInterval(() => {
+      fetchRecords({ silent: true })
+    }, 3000)
+    return
+  }
+
+  const eventSource = new EventSource('/api/material-outbounds/events')
+  materialEventSource = eventSource
+  let hasConnected = false
+
+  eventSource.addEventListener('material-outbound-change', () => {
+    refreshFromRealtimeEvent()
+  })
+
+  eventSource.onopen = () => {
+    if (hasConnected) {
+      refreshFromRealtimeEvent()
+    }
+    hasConnected = true
+  }
+
+  eventSource.onerror = () => {
+    console.warn('原材料记录实时连接暂时断开，等待浏览器自动重连')
+  }
+}
+
 onMounted(() => {
   fetchRecords()
+  connectMaterialEvents()
   window.addEventListener('filter-material-date', handleDateFilter)
   window.addEventListener('refresh-materials', handleRefresh)
   window.addEventListener('refresh-material-outbounds', handleRefresh)
 })
 
 onBeforeUnmount(() => {
+  materialEventSource?.close()
+  if (fallbackPollingInterval) {
+    window.clearInterval(fallbackPollingInterval)
+  }
   window.removeEventListener('filter-material-date', handleDateFilter)
   window.removeEventListener('refresh-materials', handleRefresh)
   window.removeEventListener('refresh-material-outbounds', handleRefresh)

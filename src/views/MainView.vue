@@ -402,6 +402,7 @@ onMounted(() => {
   window.addEventListener('refresh-orders', fetchOrders)
   window.addEventListener('refresh-materials', fetchMaterialStocks)
   window.addEventListener('refresh-material-outbounds', fetchMaterialStocks)
+  window.addEventListener('refresh-material-stocks', fetchMaterialStocks)
 
   // 监听切换 tab 事件
   switchTabHandler = (e) => {
@@ -518,6 +519,7 @@ onUnmounted(() => {
   window.removeEventListener('refresh-orders', fetchOrders)
   window.removeEventListener('refresh-materials', fetchMaterialStocks)
   window.removeEventListener('refresh-material-outbounds', fetchMaterialStocks)
+  window.removeEventListener('refresh-material-stocks', fetchMaterialStocks)
   if (switchTabHandler) {
     window.removeEventListener('switch-tab', switchTabHandler)
   }
