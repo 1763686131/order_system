@@ -108,13 +108,6 @@
               确定完成
             </button>
             <button
-              v-if="userStore.hasPerm('touch.order.update')"
-              class="btn btn-danger"
-              @click="$emit('edit', order.id)"
-            >
-              修改
-            </button>
-            <button
               v-if="userStore.hasPerm('touch.order.copy')"
               class="btn btn-success"
               @click="$emit('copy', order.id)"
@@ -217,7 +210,7 @@ const props = defineProps({
     required: true // 'pending' 或 'completed'
   }
 })
-defineEmits(['complete', 'uncomplete', 'delete', 'edit', 'copy'])
+defineEmits(['complete', 'uncomplete', 'delete', 'copy'])
 
 const userStore = useUserStore()
 const stores = ref([])

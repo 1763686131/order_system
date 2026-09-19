@@ -9,6 +9,7 @@ import secrets
 from flask import g, jsonify, request, session
 
 from utils.db import get_db
+from utils.permission_catalog import ALL_PERMISSION_CODES
 
 
 SESSION_TOKEN_KEY = "auth_session_token"
@@ -132,6 +133,7 @@ def _load_roles_and_permissions(conn, user_id):
                 """,
                 (user_id,),
             ).fetchall()
+            if row["code"] in ALL_PERMISSION_CODES
         ]
     return roles, permissions, full_access, can_access_admin, long_session
 
@@ -345,6 +347,19 @@ def require_super_admin(view):
             return jsonify({"success": False, "message": "请先登录"}), 401
         if not user.get("isSuperAdmin"):
             return jsonify({"success": False, "message": "仅超级管理员可操作"}), 403
+        return view(*args, **kwargs)
+
+    return wrapped
+
+
+def require_admin_access(view):
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        user = get_current_user()
+        if not user:
+            return jsonify({"success": False, "message": "请先登录"}), 401
+        if not user.get("canAccessAdmin"):
+            return jsonify({"success": False, "message": "当前账号不能访问后台管理功能"}), 403
         return view(*args, **kwargs)
 
     return wrapped

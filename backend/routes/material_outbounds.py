@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 
 from flask import Blueprint, jsonify, request
 
-from utils.auth import current_identity, require_permission
+from utils.auth import current_identity, require_admin_access, require_permission
 from utils.db import get_db
 
 
@@ -571,7 +571,7 @@ def get_material_outbound_settings():
 
 
 @material_outbounds_bp.route("/material-outbound-settings", methods=["PUT"])
-@require_permission("touch.material.settings")
+@require_admin_access
 def update_material_outbound_settings():
     data = request.get_json(silent=True) or {}
     try:
@@ -712,7 +712,7 @@ def create_material_outbound():
 
 
 @material_outbounds_bp.route("/material-outbounds/<int:outbound_id>", methods=["PUT"])
-@require_permission("touch.material.update")
+@require_admin_access
 def update_material_outbound(outbound_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -888,7 +888,7 @@ def audit_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>/audit",
     methods=["DELETE"],
 )
-@require_permission("touch.material.reverse_audit")
+@require_admin_access
 def reverse_audit_material_outbound(outbound_id):
     try:
         with _write_lock:
@@ -940,7 +940,7 @@ def reverse_audit_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>",
     methods=["DELETE"],
 )
-@require_permission("touch.material.delete")
+@require_admin_access
 def cancel_material_outbound(outbound_id):
     with _write_lock:
         with get_db() as conn:
@@ -982,7 +982,7 @@ def cancel_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>/restart",
     methods=["POST"],
 )
-@require_permission("touch.material.update")
+@require_admin_access
 def restart_material_outbound(outbound_id):
     with _write_lock:
         with get_db() as conn:

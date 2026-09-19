@@ -6,7 +6,9 @@ from utils.db_helper import read_orders, write_orders, read_customers, read_carr
 from utils.db import get_db
 from utils.auth import (
     current_identity,
+    get_current_user,
     permission_granted,
+    require_admin_access,
     require_login,
     require_permission,
     require_super_admin,
@@ -145,7 +147,7 @@ def get_order(order_id):
     return jsonify(order)
 
 @orders_bp.route('', methods=['POST'])
-@require_permission('touch.order.create')
+@require_admin_access
 def add_order():
     """创建新订单 - 支持新旧两种格式"""
     with orders_lock:
@@ -442,9 +444,9 @@ def update_order_status(order_id):
     is_full_edit = 'items' in req_data and 'customerId' in req_data
 
     if is_full_edit:
-        if not permission_granted('touch.order.update'):
+        if not get_current_user().get('canAccessAdmin'):
             return jsonify(
-                {"success": False, "message": "当前账号没有编辑订单权限"}
+                {"success": False, "message": "订单内容只能在后台管理端修改"}
             ), 403
         # 完整订单编辑
         return update_full_order(order_id, req_data)
@@ -456,7 +458,7 @@ def update_order_status(order_id):
         elif req_data.get('status') == 'pending':
             permission_code = 'touch.order.reopen'
         else:
-            permission_code = 'touch.order.update'
+            permission_code = 'touch.shipment.audit'
         if not permission_granted(permission_code):
             return jsonify(
                 {
@@ -1216,7 +1218,7 @@ def delete_order(order_id):
     return jsonify({"success": True, "message": "删除成功"})
 
 @orders_bp.route('/<int:order_id>/edit', methods=['PUT'])
-@require_permission('touch.order.update')
+@require_admin_access
 def edit_order_content(order_id):
     """编辑订单内容"""
     req_data = request.json

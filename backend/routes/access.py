@@ -11,6 +11,7 @@ from utils.permission_catalog import ALL_PERMISSION_CODES, PERMISSION_MODULES
 
 access_bp = Blueprint("access", __name__, url_prefix="/api/admin")
 ROLE_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{2,39}$")
+VALID_PERMISSION_CODES = set(ALL_PERMISSION_CODES)
 
 
 def _text(value, max_length):
@@ -23,7 +24,7 @@ def _permission_codes(value):
     result = []
     for item in value:
         code = _text(item, 100)
-        if code and code not in result:
+        if code in VALID_PERMISSION_CODES and code not in result:
             result.append(code)
     return result
 
@@ -56,6 +57,7 @@ def _serialize_role(conn, row):
             """,
             (row["id"],),
         ).fetchall()
+        if permission["code"] in VALID_PERMISSION_CODES
     ]
     member_ids = [
         member["id"]

@@ -401,6 +401,23 @@ def _ensure_auth_schema(conn):
                     ),
                 )
 
+        valid_touch_permission_codes = [
+            permission["code"]
+            for module in PERMISSION_MODULES
+            for permission in module["permissions"]
+            if permission["code"].startswith("touch.")
+        ]
+        if valid_touch_permission_codes:
+            placeholders = ",".join("?" for _ in valid_touch_permission_codes)
+            cursor.execute(
+                f"""
+                DELETE FROM permissions
+                WHERE code LIKE 'touch.%'
+                  AND code NOT IN ({placeholders})
+                """,
+                valid_touch_permission_codes,
+            )
+
         cursor.execute(
             """
             INSERT INTO roles (

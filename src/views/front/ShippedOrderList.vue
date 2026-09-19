@@ -50,7 +50,11 @@
                 发货方式: {{ getShippingMethod(order) }}
               </div>
               <span
-                v-if="order.receipt_img_url && String(order.receipt_img_url).trim() !== ''"
+                v-if="
+                  order.receipt_img_url &&
+                  String(order.receipt_img_url).trim() !== '' &&
+                  userStore.hasPerm('touch.receipt.read')
+                "
                 class="receipt-pure-tag"
                 style="cursor: pointer;"
                 title="点击查看回单详情"
@@ -225,7 +229,9 @@ const getShippingMethod = (order) => {
 // 获取发货方式标签样式
 const getMethodTagStyle = (order) => {
   if (order.status === 'completed') {
-    return 'background:#f3f4f6; color:#9ca3af; border:1px solid #d1d5db; cursor: pointer; transition: all 0.2s;'
+    return userStore.hasPerm('touch.shipment.audit')
+      ? 'background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; cursor: pointer; transition: all 0.2s;'
+      : 'background:#f5f5f5; color:#bfbfbf; border:1px solid #d9d9d9; cursor: not-allowed; opacity: 0.7;'
   }
   const isAudited = order.audit_state === 1
 
@@ -242,7 +248,11 @@ const getMethodTagStyle = (order) => {
 
 // 获取发货方式标签提示
 const getMethodTagTitle = (order) => {
-  if (order.status === 'completed') return '点击录入物流信息'
+  if (order.status === 'completed') {
+    return userStore.hasPerm('touch.shipment.audit')
+      ? '点击录入物流信息'
+      : '暂无权限录入物流信息'
+  }
   const isAudited = order.audit_state === 1
 
   if (isAudited) {
@@ -264,15 +274,24 @@ const hasLogisticsNumber = (order) => {
 
 const getLogisticsTagStyle = (order) => {
   if (!hasLogisticsNumber(order)) {
-    return 'background:#f3f4f6; color:#9ca3af; border:1px solid #d1d5db; cursor: pointer; transition: all 0.2s;'
+    return userStore.hasPerm('touch.shipment.audit')
+      ? 'background:#f3f4f6; color:#6b7280; border:1px solid #d1d5db; cursor: pointer; transition: all 0.2s;'
+      : 'background:#f5f5f5; color:#bfbfbf; border:1px solid #d9d9d9; cursor: not-allowed; opacity: 0.7;'
   }
-  return 'background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; transition: all 0.2s;'
+  return userStore.hasPerm('touch.receipt.upload')
+    ? 'background:#fff0f6; color:#eb2f96; border:1px solid #ffadd2; cursor: pointer; transition: all 0.2s;'
+    : 'background:#f5f5f5; color:#bfbfbf; border:1px solid #d9d9d9; cursor: not-allowed; opacity: 0.7;'
 }
 
 // 获取物流单号标签提示
 const getLogisticsTagTitle = (order) => {
-  if (!hasLogisticsNumber(order)) return '点击录入物流信息'
-  return order.receipt_img_url ? '点击管理回单图片' : '点击上传回单图片'
+  if (!hasLogisticsNumber(order)) {
+    return userStore.hasPerm('touch.shipment.audit')
+      ? '点击录入物流信息'
+      : '暂无权限录入物流信息'
+  }
+  if (!userStore.hasPerm('touch.receipt.upload')) return '暂无权限上传回单图片'
+  return order.receipt_img_url ? '点击替换回单图片' : '点击上传回单图片'
 }
 
 // 处理标签悬停
@@ -287,7 +306,9 @@ const handleTagHover = (event, isEntering) => {
 // 处理发货方式点击
 const handleMethodClick = (order) => {
   if (order.status === 'completed') {
-    emit('logistics', order.id)
+    if (userStore.hasPerm('touch.shipment.audit')) {
+      emit('logistics', order.id)
+    }
     return
   }
   const isAudited = order.audit_state === 1
@@ -300,10 +321,14 @@ const handleMethodClick = (order) => {
 // 处理物流单号点击
 const handleLogisticsClick = (order) => {
   if (!hasLogisticsNumber(order)) {
-    emit('logistics', order.id)
+    if (userStore.hasPerm('touch.shipment.audit')) {
+      emit('logistics', order.id)
+    }
     return
   }
-  emit('manage-receipt', order.id)
+  if (userStore.hasPerm('touch.receipt.upload')) {
+    emit('manage-receipt', order.id)
+  }
 }
 
 // 展开/收起货物列表

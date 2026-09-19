@@ -31,14 +31,6 @@
       </div>
 
       <div
-        v-if="showAddOrder"
-        class="fab-item"
-        @click="handleCreateOrder"
-      >
-        录入订单信息
-      </div>
-
-      <div
         class="fab-item"
         @click="handleSearch"
       >
@@ -113,7 +105,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
-  'create-order',
   'create-material',
   'search'
 ])
@@ -122,16 +113,6 @@ const router = useRouter()
 const route = useRoute()
 const nomiStore = useNomiStore()
 const userStore = useUserStore()
-
-// 根据权限和当前tab控制菜单项显示
-const showAddOrder = computed(() => {
-  // 在原材料页面隐藏（防止用户点错，不分权限）
-  // Tab 3: 原材料数据
-  if (nomiStore.currentTab === 3) return false
-
-  // 其他页面根据权限显示
-  return userStore.hasPerm('touch.order.create')
-})
 
 const showAddMaterial = computed(() => {
   // 在订单页面（未完成、已完成、已出库）隐藏（防止用户点错，不分权限）
@@ -239,12 +220,6 @@ const handleClickOutside = (e) => {
 const handleCreateMaterial = () => {
   nomiStore.closeMenu()
   emit('create-material')
-}
-
-// 录入订单
-const handleCreateOrder = () => {
-  nomiStore.closeMenu()
-  emit('create-order')
 }
 
 // 搜索

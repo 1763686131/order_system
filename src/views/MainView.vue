@@ -23,7 +23,6 @@
         :orders="pendingOrders"
         status-type="pending"
         @complete="handleComplete"
-        @edit="handleEdit"
         @copy="handleCopy"
       />
     </div>
@@ -94,7 +93,6 @@
     <!-- 小圆智能助手 -->
     <NomiFloatingAI
       :user-role="userStore.role"
-      @create-order="handleCreateOrder"
       @create-material="handleCreateMaterial"
       @search="handleSearchOrder"
     />
@@ -247,11 +245,6 @@ const handleUncomplete = (orderId) => {
   }
 }
 
-// 处理编辑
-const handleEdit = (orderId) => {
-  window.openEditOrderModal(orderId)
-}
-
 // 处理删除
 const handleDelete = (orderId) => {
   window.deleteOrder(orderId)
@@ -288,11 +281,6 @@ const handleViewReceipt = (orderId) => {
 const getCurrentTabName = () => {
   const tabNames = ['pending', 'completed', 'shipped', 'materials']
   return tabNames[nomiStore.currentTab] || 'pending'
-}
-
-// 小圆组件：创建订单
-const handleCreateOrder = () => {
-  console.log('创建订单功能已移除')
 }
 
 // 小圆组件：创建原材料

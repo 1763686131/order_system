@@ -14,8 +14,6 @@ export const ORDER_TYPE = {
 // 权限常量
 export const PERMISSIONS = {
   ORDER_READ: 'touch.order.read',
-  ORDER_CREATE: 'touch.order.create',
-  ORDER_UPDATE: 'touch.order.update',
   ORDER_COMPLETE: 'touch.order.complete',
   ORDER_REOPEN: 'touch.order.reopen',
   ORDER_COPY: 'touch.order.copy',
@@ -26,11 +24,7 @@ export const PERMISSIONS = {
   RECEIPT_DELETE: 'touch.receipt.delete',
   MATERIAL_READ: 'touch.material.read',
   MATERIAL_CREATE: 'touch.material.create',
-  MATERIAL_UPDATE: 'touch.material.update',
-  MATERIAL_AUDIT: 'touch.material.audit',
-  MATERIAL_REVERSE_AUDIT: 'touch.material.reverse_audit',
-  MATERIAL_DELETE: 'touch.material.delete',
-  MATERIAL_SETTINGS: 'touch.material.settings'
+  MATERIAL_AUDIT: 'touch.material.audit'
 }
 
 // 用户角色常量
