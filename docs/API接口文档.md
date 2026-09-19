@@ -264,15 +264,16 @@
 | `PUT` | `/api/admin/employees/<employee_id>` | 修改档案、密码和账号状态 |
 | `DELETE` | `/api/admin/employees/<employee_id>/account` | 解绑并删除登录账号，保留员工档案 |
 
-员工抽屉不配置权限组，角色组关系统一在“角色组管理”页面维护。没有填写
+以上员工和部门接口仅允许超级管理员调用。员工抽屉不配置权限组，角色组关系统一在“角色组管理”页面维护。没有填写
 登录账号时只创建员工档案，账号状态为 `pending`。账号是员工档案的可选能力，
 系统会保证每个账号都绑定一条员工档案，但允许员工档案没有账号。
 
 员工档案创建和修改请求支持 `phone` 字段，用于保存员工手机号；员工列表响应会
 返回 `phone`。绑定账号的员工还会返回 `lastLoginAt`、`lastActiveAt` 和
 `lastActiveDevice`，未登录或未开通账号时为 `null`。`lastLoginAt` 表示最近一次
-成功登录，`lastActiveAt` 表示最近一次被服务端会话续期或访问，员工列表应优先展示
-最近活跃时间和设备信息。
+成功登录，`lastActiveAt` 表示最近一次被服务端记录的会话活动（最多每 5 分钟写入一次），员工列表应优先展示
+最近活跃时间和设备信息。`position` 当前是员工档案级字段；员工属于多个部门时，
+部门管理页修改职位会更新该员工的统一职位，不会为每个部门分别保存职位。
 
 密码仅在创建账号或修改密码时通过 `password` 提交，服务端只保存不可逆哈希。
 任何员工和账号查询接口都不会返回明文密码或密码哈希；需要修改密码时直接提交
@@ -370,9 +371,10 @@
 }
 ```
 
-停用部门前必须先调整仍归属该部门的员工；删除部门前必须同时满足没有员工、
-没有下级部门。部门管理页向员工添加部门、从当前部门移除员工或修改员工职位，
-最终都通过 `PUT /api/admin/employees/<employee_id>` 提交完整的 `departmentIds`。
+部门状态只有 `active` 和 `disabled`。停用部门不能新分配员工，但修改已有员工时可以
+暂时保留其原有停用部门；删除部门前必须同时满足没有员工、没有下级部门。部门管理页
+向员工添加部门、从当前部门移除员工或修改员工职位，最终都通过
+`PUT /api/admin/employees/<employee_id>` 提交完整的 `departmentIds`。
 
 ### 1.7 登录设备和会话
 
@@ -385,6 +387,41 @@
 以上接口仅允许超级管理员。设备记录包含 `deviceName`、`sessionKind`、`browser`、`operatingSystem`、`timezone`、`ipAddress`、`createdAt`、`lastSeenAt`、`expiresAt`、`status` 和 `currentSession`。
 
 `revoke` 保留审计记录并使会话失效；`DELETE` 会永久删除记录。撤销当前浏览器会话后，下一次需要认证的请求会返回 `401`。
+
+查询响应示例：
+
+```json
+{
+  "success": true,
+  "data": [
+    {
+      "id": 12,
+      "deviceName": "Windows · Chrome",
+      "sessionKind": "admin",
+      "browser": "Chrome",
+      "operatingSystem": "Windows",
+      "timezone": "Asia/Shanghai",
+      "ipAddress": "172.17.0.1",
+      "createdAt": "2026-09-19 13:38:00",
+      "lastSeenAt": "2026-09-19 13:38:00",
+      "expiresAt": "2027-09-19 13:38:00",
+      "status": "active",
+      "currentSession": true,
+      "username": "zhangsan",
+      "displayName": "张三"
+    }
+  ],
+  "activeCount": 1
+}
+```
+
+登录时建议为每台浏览器或触屏设备持久化唯一的 `device.id`。同一账号使用相同
+`device.id` 再次登录时，服务端会更新原设备记录、替换 session token、刷新登录时间和
+到期时间，不会重复新增一行；未提交 `device.id` 时，每次登录都会创建新的会话记录。
+`sessionKind` 由当前账号是否拥有 `canAccessAdmin` 决定：有后台访问能力为 `admin`，否则为
+`touch`，与当前打开的路由无关。角色或权限变化会通过 `permission_version` 让旧权限快照
+失效；会话在重新登录或活动刷新时按最新能力更新类型和续期策略。`status` 可能为
+`active`、`revoked` 或 `expired`。
 
 ### 1.8 权限和数据范围规则
 
