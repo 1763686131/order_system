@@ -355,6 +355,7 @@ const allMenuItems = [
     permission: ADMIN_ROUTE_PERMISSIONS.HR,
     children: [
       { label: '员工管理', path: '/admin/hr/employees' },
+      { label: '部门管理', path: '/admin/hr/departments' },
       { label: '公司资料', path: '/admin/hr/company' },
       { label: '检测报告', path: '/admin/hr/reports' }
     ]

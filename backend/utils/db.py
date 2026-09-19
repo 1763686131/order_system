@@ -37,6 +37,7 @@ _auth_schema_lock = Lock()
 _auth_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
+DEFAULT_DEPARTMENT_NAMES = ('仓储部', '财务部', '销售部', '人事行政', '运营部')
 
 
 def _ensure_auth_schema(conn):
@@ -188,12 +189,28 @@ def _ensure_auth_schema(conn):
         )
         cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS departments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                parent_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'active',
+                sort_order INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_id) REFERENCES departments(id) ON DELETE SET NULL,
+                CHECK (status IN ('active', 'disabled'))
+            )
+            """
+        )
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS employees (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER UNIQUE,
                 employee_no TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 display_name TEXT NOT NULL,
                 avatar_url TEXT NOT NULL DEFAULT '',
+                department_id INTEGER,
                 department TEXT NOT NULL DEFAULT '',
                 position TEXT NOT NULL DEFAULT '',
                 phone TEXT NOT NULL DEFAULT '',
@@ -211,6 +228,64 @@ def _ensure_auth_schema(conn):
                 CHECK (employment_status IN ('active', 'probation', 'leave', 'resigned')),
                 CHECK (account_status IN ('active', 'pending', 'disabled'))
             )
+            """
+        )
+        employee_columns = {
+            row["name"] for row in cursor.execute("PRAGMA table_info(employees)")
+        }
+        if "department_id" not in employee_columns:
+            cursor.execute(
+                "ALTER TABLE employees ADD COLUMN department_id INTEGER"
+            )
+
+        for sort_order, department_name in enumerate(DEFAULT_DEPARTMENT_NAMES):
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO departments (name, status, sort_order)
+                VALUES (?, 'active', ?)
+                """,
+                (department_name, sort_order),
+            )
+
+        legacy_department_rows = cursor.execute(
+            """
+            SELECT DISTINCT trim(department) AS name
+            FROM employees
+            WHERE department IS NOT NULL AND trim(department) <> ''
+            """
+        ).fetchall()
+        next_department_order = cursor.execute(
+            "SELECT COALESCE(MAX(sort_order), -1) + 1 AS next_order FROM departments"
+        ).fetchone()["next_order"]
+        for legacy_department in legacy_department_rows:
+            department_name = legacy_department["name"]
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO departments (name, status, sort_order)
+                VALUES (?, 'active', ?)
+                """,
+                (department_name, next_department_order),
+            )
+            next_department_order += 1
+
+        cursor.execute(
+            """
+            UPDATE employees
+            SET department_id = (
+                SELECT departments.id
+                FROM departments
+                WHERE departments.name = trim(employees.department) COLLATE NOCASE
+            )
+            WHERE (department_id IS NULL OR department_id = 0)
+              AND department IS NOT NULL
+              AND trim(department) <> ''
+            """
+        )
+        cursor.execute(
+            """
+            UPDATE employees
+            SET department = ''
+            WHERE department_id IS NOT NULL
             """
         )
         cursor.execute(
@@ -280,6 +355,10 @@ def _ensure_auth_schema(conn):
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_employees_user ON employees(user_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_employees_department "
+            "ON employees(department_id)"
         )
         cursor.execute(
             """
@@ -581,7 +660,7 @@ def _ensure_auth_schema(conn):
         cursor.execute(
             """
             INSERT INTO system_meta (setting_key, setting_value, updated_at)
-            VALUES ('auth_schema_version', '7', CURRENT_TIMESTAMP)
+            VALUES ('auth_schema_version', '8', CURRENT_TIMESTAMP)
             ON CONFLICT(setting_key) DO UPDATE SET
                 setting_value = excluded.setting_value,
                 updated_at = CURRENT_TIMESTAMP

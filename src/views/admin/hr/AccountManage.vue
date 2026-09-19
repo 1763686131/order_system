@@ -45,8 +45,8 @@
               </label>
               <select v-model="filters.department" title="按部门筛选">
                 <option value="">全部部门</option>
-                <option v-for="department in departments" :key="department" :value="department">
-                  {{ department }}
+                <option v-for="department in departments" :key="department.id" :value="department.id">
+                  {{ department.name }}
                 </option>
               </select>
               <select v-model="filters.employmentStatus" title="按在职状态筛选">
@@ -727,9 +727,15 @@
               <div class="form-grid">
                 <label class="field">
                   <span>部门</span>
-                  <select v-model="draft.department">
-                    <option v-for="department in departments" :key="department" :value="department">
-                      {{ department }}
+                  <select v-model="draft.departmentId">
+                    <option :value="null">未分配部门</option>
+                    <option
+                      v-for="department in departments"
+                      :key="department.id"
+                      :value="department.id"
+                      :disabled="department.status !== 'active' && department.id !== draft.departmentId"
+                    >
+                      {{ department.name }}{{ department.status === 'disabled' ? '（已停用）' : '' }}
                     </option>
                   </select>
                 </label>
@@ -853,7 +859,7 @@ import { computed, nextTick, onMounted, ref } from 'vue'
 import request from '@/api/request'
 import { mergeRolePermissions, mergeRoleScopes } from '@/utils/accessControl'
 
-const departments = ['仓储部', '财务部', '销售部', '人事行政', '运营部']
+const departments = ref([])
 
 const roleGroups = ref([])
 const permissionModules = ref([])
@@ -896,12 +902,14 @@ let noticeTimer
 
 async function loadEmployeeData() {
   try {
-    const [employeeResponse, roleResponse, permissionResponse] = await Promise.all([
+    const [employeeResponse, roleResponse, permissionResponse, departmentResponse] = await Promise.all([
       request.get('/admin/employees'),
       request.get('/admin/roles'),
-      request.get('/admin/permissions')
+      request.get('/admin/permissions'),
+      request.get('/admin/departments')
     ])
     employees.value = employeeResponse.employees || []
+    departments.value = departmentResponse.departments || []
     roleGroups.value = (roleResponse.roles || []).map((role) => ({
       ...role
     }))
@@ -963,7 +971,7 @@ const filteredEmployees = computed(() => {
         .join(' ')
         .toLowerCase()
         .includes(keyword)
-    const matchesDepartment = !filters.value.department || employee.department === filters.value.department
+    const matchesDepartment = !filters.value.department || employee.departmentId === Number(filters.value.department)
     const matchesEmployment =
       !filters.value.employmentStatus || employee.employmentStatus === filters.value.employmentStatus
     const matchesAccount = !filters.value.accountStatus || employee.accountStatus === filters.value.accountStatus
@@ -987,7 +995,7 @@ function createEmptyEmployee() {
     passwordConfirm: '',
     passwordSet: false,
     accountStatus: 'pending',
-    department: departments[0],
+    departmentId: null,
     position: '',
     phone: '',
     idCard: '',
@@ -1004,6 +1012,7 @@ function createEmptyEmployee() {
 function openCreate() {
   editingEmployee.value = false
   draft.value = createEmptyEmployee()
+  draft.value.departmentId = departments.value.find(item => item.status === 'active')?.id || null
   passwordVisible.value = false
   passwordConfirmVisible.value = false
   drawerVisible.value = true

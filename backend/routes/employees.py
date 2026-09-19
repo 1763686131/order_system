@@ -30,6 +30,16 @@ def _employment_status(value):
     )
 
 
+def _department_id(value):
+    if value in (None, ""):
+        return None
+    try:
+        department_id = int(value)
+    except (TypeError, ValueError):
+        raise ValueError("部门选择无效")
+    return department_id if department_id > 0 else None
+
+
 def _user_row(conn, user_id):
     if not user_id:
         return None
@@ -68,11 +78,17 @@ def _latest_auth_session(conn, user_id):
 def _serialize_employee(conn, row):
     user = None
     latest_session = None
+    department = None
     if row["user_id"]:
         user_row = _user_row(conn, row["user_id"])
         if user_row:
             user = serialize_user(conn, user_row)
             latest_session = _latest_auth_session(conn, row["user_id"])
+    if row["department_id"]:
+        department = conn.execute(
+            "SELECT id, name, status FROM departments WHERE id = ?",
+            (row["department_id"],),
+        ).fetchone()
     roles = [
         dict(role)
         for role in conn.execute(
@@ -107,7 +123,9 @@ def _serialize_employee(conn, row):
             "ipAddress": latest_session["ip_address"],
             "status": latest_session["session_status"],
         } if latest_session else None,
-        "department": row["department"] or "",
+        "departmentId": department["id"] if department else None,
+        "department": department["name"] if department else "",
+        "departmentStatus": department["status"] if department else None,
         "position": row["position"] or "",
         "phone": row["phone"] or "",
         "idCard": row["id_card"] or "",
@@ -191,7 +209,7 @@ def _employee_values(data):
     return {
         "display_name": display_name,
         "avatar_url": _text(data.get("avatarUrl"), 200000),
-        "department": _text(data.get("department"), 80),
+        "department_id": _department_id(data.get("departmentId")),
         "position": _text(data.get("position"), 80),
         "phone": _text(data.get("phone"), 30),
         "id_card": _text(data.get("idCard"), 40),
@@ -240,6 +258,20 @@ def _create_bound_user(conn, data, values):
     return cursor.lastrowid
 
 
+def _validate_department(conn, department_id, allow_disabled=False):
+    if department_id is None:
+        return None
+    department = conn.execute(
+        "SELECT id, name, status FROM departments WHERE id = ?",
+        (department_id,),
+    ).fetchone()
+    if not department:
+        raise ValueError("部门不存在")
+    if department["status"] != "active" and not allow_disabled:
+        raise ValueError("停用部门不能分配新员工")
+    return department
+
+
 @employees_bp.route("", methods=["GET"])
 @require_super_admin
 def list_employees():
@@ -267,6 +299,7 @@ def create_employee():
         values = _employee_values(data)
         with get_db() as conn:
             conn.execute("BEGIN IMMEDIATE")
+            _validate_department(conn, values["department_id"])
             employee_no = _text(data.get("employeeNo"), 40) or _next_employee_no(conn)
             if conn.execute(
                 "SELECT 1 FROM employees WHERE employee_no = ? COLLATE NOCASE",
@@ -277,13 +310,13 @@ def create_employee():
             cursor = conn.execute(
                 """
                 INSERT INTO employees (
-                    user_id, employee_no, display_name, avatar_url,
+                    user_id, employee_no, display_name, avatar_url, department_id,
                     department, position, phone, id_card, current_address,
                     emergency_contact, emergency_phone, employment_status,
                     employment_type, hire_date, account_status,
                     created_at, updated_at
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """,
@@ -292,7 +325,8 @@ def create_employee():
                     employee_no,
                     values["display_name"],
                     values["avatar_url"],
-                    values["department"],
+                    values["department_id"],
+                    "",
                     values["position"],
                     values["phone"],
                     values["id_card"],
@@ -340,6 +374,15 @@ def update_employee(employee_id):
 
             user_id = existing["user_id"]
             password = str(data.get("password") or "")
+            allow_disabled_department = bool(
+                existing["department_id"]
+                and values["department_id"] == existing["department_id"]
+            )
+            _validate_department(
+                conn,
+                values["department_id"],
+                allow_disabled=allow_disabled_department,
+            )
             if user_id:
                 if (
                     values["account_status"] != "active"
@@ -393,7 +436,7 @@ def update_employee(employee_id):
                 """
                 UPDATE employees SET
                     user_id = ?, employee_no = ?, display_name = ?,
-                    avatar_url = ?, department = ?, position = ?, phone = ?,
+                    avatar_url = ?, department_id = ?, department = ?, position = ?, phone = ?,
                     id_card = ?, current_address = ?, emergency_contact = ?,
                     emergency_phone = ?, employment_status = ?,
                     employment_type = ?, hire_date = ?, account_status = ?,
@@ -405,7 +448,8 @@ def update_employee(employee_id):
                     employee_no,
                     values["display_name"],
                     values["avatar_url"],
-                    values["department"],
+                    values["department_id"],
+                    "",
                     values["position"],
                     values["phone"],
                     values["id_card"],

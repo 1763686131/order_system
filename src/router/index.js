@@ -258,6 +258,12 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'hr/departments',
+        name: 'admin-hr-departments',
+        component: () => import('@/views/admin/hr/DepartmentManage.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'system/print-template',
         name: 'admin-print-template',
         component: () => import('@/views/admin/system/PrintTemplate.vue'),
