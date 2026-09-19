@@ -102,6 +102,7 @@ import { nextTick, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
+import { getDefaultAdminPath } from '@/utils/adminAccess'
 
 const route = useRoute()
 const router = useRouter()
@@ -189,7 +190,7 @@ const handleLogin = async () => {
       ? route.query.redirect
       : ''
     const target = redirect || (
-      userStore.canAccessAdmin ? '/admin/dashboard' : '/main'
+      userStore.canAccessAdmin ? getDefaultAdminPath(userStore) : '/main'
     )
     await router.replace(target)
   } catch (error) {

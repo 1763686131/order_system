@@ -175,6 +175,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import request from '@/api/request'
+import { ADMIN_ROUTE_PERMISSIONS } from '@/utils/adminAccess'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
 
@@ -286,15 +287,17 @@ const icons = {
   truck: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>'
 }
 
-const menuItems = ref([
+const allMenuItems = [
   {
     label: '首页',
     icon: icons.home,
-    path: '/admin/dashboard'
+    path: '/admin/dashboard',
+    permission: ADMIN_ROUTE_PERMISSIONS.DASHBOARD
   },
   {
     label: '商品',
     icon: icons.package,
+    permission: ADMIN_ROUTE_PERMISSIONS.PRODUCTS,
     children: [
       { label: '商品列表', path: '/admin/products' },
       { label: '原材料列表', path: '/admin/materials' }
@@ -303,6 +306,7 @@ const menuItems = ref([
   {
     label: '销售',
     icon: icons.cart,
+    permission: ADMIN_ROUTE_PERMISSIONS.SALES,
     children: [
       { label: '销售订单', path: '/admin/sales' },
       { label: '物流列表', path: '/admin/sales/logistics' },
@@ -313,6 +317,7 @@ const menuItems = ref([
   {
     label: '采购',
     icon: icons.truck,
+    permission: ADMIN_ROUTE_PERMISSIONS.PURCHASE,
     children: [
       { label: '采购订单', path: '/admin/purchase/orders' },
       { label: '供应商管理', path: '/admin/purchase/suppliers' },
@@ -322,6 +327,7 @@ const menuItems = ref([
   {
     label: '库存',
     icon: icons.chart,
+    permission: ADMIN_ROUTE_PERMISSIONS.INVENTORY,
     children: [
       { label: '成品库存', path: '/admin/inventory' },
       { label: '原材料库存', path: '/admin/inventory/materials' },
@@ -334,6 +340,7 @@ const menuItems = ref([
   {
     label: '财务',
     icon: icons.dollar,
+    permission: ADMIN_ROUTE_PERMISSIONS.FINANCE,
     children: [
       { label: '应收欠款', path: '/admin/finance/receivables' },
       { label: '收款历史', path: '/admin/finance/payment-history' },
@@ -345,6 +352,7 @@ const menuItems = ref([
   {
     label: '人事行政',
     icon: icons.briefcase,
+    permission: ADMIN_ROUTE_PERMISSIONS.HR,
     children: [
       { label: '员工管理', path: '/admin/hr/employees' },
       { label: '公司资料', path: '/admin/hr/company' },
@@ -354,6 +362,7 @@ const menuItems = ref([
   {
     label: '设置',
     icon: icons.settings,
+    permission: ADMIN_ROUTE_PERMISSIONS.SYSTEM,
     children: [
       { label: '门店管理', path: '/admin/stores' },
       { label: '系统设置', path: '/admin/settings' },
@@ -361,7 +370,11 @@ const menuItems = ref([
       { label: '打印模板', path: '/admin/system/print-template' }
     ]
   }
-])
+]
+
+const menuItems = computed(() =>
+  allMenuItems.filter(item => userStore.hasPerm(item.permission))
+)
 
 const expandedMenus = ref([])
 
@@ -386,7 +399,11 @@ const isChildActive = (children) => {
 const currentPath = computed(() => route.path)
 const showOrderDraftShortcut = computed(() => {
   const isSalesFormRoute = route.name === 'admin-sales-create' || route.name === 'admin-sales-edit'
-  return orderDraftStore.hasDraft && !isSalesFormRoute
+  return (
+    userStore.hasPerm(ADMIN_ROUTE_PERMISSIONS.SALES) &&
+    orderDraftStore.hasDraft &&
+    !isSalesFormRoute
+  )
 })
 
 const currentMenuLabel = computed(() => {

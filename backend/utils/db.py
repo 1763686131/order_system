@@ -418,6 +418,40 @@ def _ensure_auth_schema(conn):
                 valid_touch_permission_codes,
             )
 
+        admin_route_permission_codes = [
+            permission["code"]
+            for module in PERMISSION_MODULES
+            for permission in module["permissions"]
+            if permission["code"].startswith("admin.route.")
+        ]
+        route_permission_migration = cursor.execute(
+            """
+            SELECT setting_value
+            FROM system_meta
+            WHERE setting_key = 'admin_route_permissions_v1'
+            """
+        ).fetchone()
+        if not route_permission_migration and admin_route_permission_codes:
+            placeholders = ",".join("?" for _ in admin_route_permission_codes)
+            cursor.execute(
+                f"""
+                INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+                SELECT roles.id, permissions.id
+                FROM roles
+                CROSS JOIN permissions
+                WHERE roles.can_access_admin = 1
+                  AND roles.full_access = 0
+                  AND permissions.code IN ({placeholders})
+                """,
+                admin_route_permission_codes,
+            )
+            cursor.execute(
+                """
+                INSERT INTO system_meta (setting_key, setting_value, updated_at)
+                VALUES ('admin_route_permissions_v1', '1', CURRENT_TIMESTAMP)
+                """
+            )
+
         cursor.execute(
             """
             INSERT INTO roles (

@@ -68,6 +68,53 @@ PERMISSION_MODULES = [
             },
         ],
     },
+    {
+        "code": "admin_routes",
+        "name": "后台路由",
+        "description": "控制后台管理侧栏大类和对应页面访问",
+        "permissions": [
+            {
+                "code": "admin.route.dashboard",
+                "name": "访问首页",
+                "description": "显示并访问后台数据看板",
+            },
+            {
+                "code": "admin.route.products",
+                "name": "访问商品",
+                "description": "显示并访问商品和原材料管理",
+            },
+            {
+                "code": "admin.route.sales",
+                "name": "访问销售",
+                "description": "显示并访问销售、物流、退货和客户管理",
+            },
+            {
+                "code": "admin.route.purchase",
+                "name": "访问采购",
+                "description": "显示并访问采购订单、供应商和采购入库",
+            },
+            {
+                "code": "admin.route.inventory",
+                "name": "访问库存",
+                "description": "显示并访问库存、出入库记录和仓库管理",
+            },
+            {
+                "code": "admin.route.finance",
+                "name": "访问财务",
+                "description": "显示并访问应收、收款、账户和对账页面",
+            },
+            {
+                "code": "admin.route.hr",
+                "name": "访问人事行政",
+                "description": "显示并访问员工、公司资料和检测报告",
+            },
+            {
+                "code": "admin.route.system",
+                "name": "访问设置",
+                "description": "显示并访问门店、系统、角色组和打印模板",
+            },
+        ],
+    },
 ]
 
 ALL_PERMISSION_CODES = [

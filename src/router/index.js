@@ -3,6 +3,7 @@ import { useUserStore } from '@/stores/user'
 import LoginView from '@/views/LoginView.vue'
 import MainView from '@/views/MainView.vue'
 import Admin from '@/views/Admin.vue'
+import { getAdminRoutePermission, getDefaultAdminPath } from '@/utils/adminAccess'
 
 const routes = [
   {
@@ -277,8 +278,17 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAdmin && !userStore.canAccessAdmin) return '/main'
 
+  const adminPermission = getAdminRoutePermission(to.path)
+  if (
+    adminPermission &&
+    userStore.canAccessAdmin &&
+    !userStore.hasPerm(adminPermission)
+  ) {
+    return getDefaultAdminPath(userStore)
+  }
+
   if (to.path === '/login' && loggedIn) {
-    return userStore.canAccessAdmin ? '/admin/dashboard' : '/main'
+    return userStore.canAccessAdmin ? getDefaultAdminPath(userStore) : '/main'
   }
 
   return true
