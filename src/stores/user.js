@@ -44,6 +44,7 @@ export const useUserStore = defineStore('user', {
     permissions: [],
     isSuperAdmin: false,
     canAccessAdmin: false,
+    longSession: false,
     mustChangePassword: false,
     authChecked: false
   }),
@@ -74,6 +75,7 @@ export const useUserStore = defineStore('user', {
         : []
       this.isSuperAdmin = Boolean(userData.isSuperAdmin)
       this.canAccessAdmin = Boolean(userData.canAccessAdmin)
+      this.longSession = Boolean(userData.longSession)
       this.mustChangePassword = Boolean(userData.mustChangePassword)
       this.authChecked = true
     },
@@ -88,6 +90,7 @@ export const useUserStore = defineStore('user', {
       this.permissions = []
       this.isSuperAdmin = false
       this.canAccessAdmin = false
+      this.longSession = false
       this.mustChangePassword = false
       localStorage.removeItem('local_user')
     },

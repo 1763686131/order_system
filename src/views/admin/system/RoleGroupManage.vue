@@ -35,6 +35,14 @@
             </span>
           </div>
           <span class="role-context-meta">{{ selectedGroup.code }} · {{ selectedGroup.description }}</span>
+          <div class="role-policy-summary">
+            <span :class="{ active: selectedGroup.canAccessAdmin }">
+              {{ selectedGroup.canAccessAdmin ? '后台可访问' : '仅触屏端' }}
+            </span>
+            <span :class="{ active: selectedGroup.longSession }">
+              {{ selectedGroup.longSession ? '长期会话 365 天' : '标准会话 7 天' }}
+            </span>
+          </div>
         </div>
       </div>
       <div class="role-context-actions">
@@ -373,6 +381,41 @@
                 </label>
               </div>
             </section>
+
+            <section class="form-section modal-form-section access-policy-section">
+              <div class="section-heading">
+                <h3>访问与会话</h3>
+                <span>后台入口与登录时长分别控制</span>
+              </div>
+              <div class="access-policy-grid">
+                <label
+                  class="policy-toggle-card"
+                  :class="{ active: draft.canAccessAdmin }"
+                >
+                  <span class="policy-toggle-copy">
+                    <strong>允许访问后台</strong>
+                    <small>可进入后台管理页面，但不会获得超级管理员身份</small>
+                  </span>
+                  <span class="policy-switch">
+                    <input v-model="draft.canAccessAdmin" type="checkbox" />
+                    <i></i>
+                  </span>
+                </label>
+                <label
+                  class="policy-toggle-card"
+                  :class="{ active: draft.longSession }"
+                >
+                  <span class="policy-toggle-copy">
+                    <strong>长期登录会话</strong>
+                    <small>开启后 365 天滑动续期，关闭后为 7 天</small>
+                  </span>
+                  <span class="policy-switch">
+                    <input v-model="draft.longSession" type="checkbox" />
+                    <i></i>
+                  </span>
+                </label>
+              </div>
+            </section>
           </div>
 
           <div class="modal-footer">
@@ -455,6 +498,8 @@ function toneForRole(role, index) {
 function mapRole(role, index = 0) {
   return {
     ...role,
+    canAccessAdmin: Boolean(role.canAccessAdmin || role.fullAccess),
+    longSession: Boolean(role.longSession),
     tone: toneForRole(role, index),
     status: role.status === 'active' ? 'enabled' : 'disabled',
     permissions: role.fullAccess ? [...allPermissionIds.value] : [...(role.permissionCodes || [])],
@@ -520,6 +565,8 @@ function createEmptyGroup() {
     storeIds: [],
     warehouseIds: [],
     dataScope: 'custom',
+    canAccessAdmin: false,
+    longSession: true,
     createdAt: '',
     updatedAt: ''
   }
@@ -562,6 +609,8 @@ function rolePayload(group) {
     name: group.name,
     description: group.description,
     status: group.status === 'enabled' ? 'active' : 'disabled',
+    canAccessAdmin: Boolean(group.canAccessAdmin),
+    longSession: Boolean(group.longSession),
     dataScope: group.dataScope || 'custom',
     permissionCodes: [...group.permissions],
     storeIds: [...group.storeIds],
@@ -1637,6 +1686,112 @@ h1 {
   border-radius: 7px;
 }
 
+.form-section.modal-form-section + .form-section.modal-form-section {
+  margin-top: 12px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+}
+
+.access-policy-section .section-heading {
+  align-items: flex-start;
+}
+
+.access-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.policy-toggle-card {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.policy-toggle-card:hover,
+.policy-toggle-card.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.policy-toggle-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.policy-toggle-copy strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.policy-toggle-copy small {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.policy-switch {
+  position: relative;
+  display: inline-flex;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 38px;
+}
+
+.policy-switch input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.policy-switch i {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  background: var(--border-strong);
+  border-radius: 999px;
+  transition: background 0.18s ease;
+}
+
+.policy-switch i::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+  content: '';
+  transition: transform 0.18s ease;
+}
+
+.policy-switch input:checked + i {
+  background: var(--accent);
+}
+
+.policy-switch input:checked + i::after {
+  transform: translateX(16px);
+}
+
+.policy-switch input:focus-visible + i {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .form-section + .form-section {
   margin-top: 24px;
   padding-top: 22px;
@@ -2208,6 +2363,31 @@ textarea:focus {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.role-policy-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 5px;
+}
+
+.role-policy-summary span {
+  display: inline-flex;
+  min-height: 20px;
+  align-items: center;
+  padding: 2px 7px;
+  color: #64748b;
+  background: #f1f5f9;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.role-policy-summary span.active {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
 }
 
 .member-search-dropdown strong {
@@ -2876,6 +3056,10 @@ textarea:focus-visible {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .access-policy-grid {
     grid-template-columns: 1fr;
   }
 

@@ -12,8 +12,8 @@ from utils.db import get_db
 
 
 SESSION_TOKEN_KEY = "auth_session_token"
-ADMIN_SESSION_DAYS = 7
-TOUCH_SESSION_DAYS = 365
+STANDARD_SESSION_DAYS = 7
+LONG_SESSION_DAYS = 365
 SESSION_TOUCH_INTERVAL_MINUTES = 5
 
 
@@ -96,7 +96,8 @@ def _load_roles_and_permissions(conn, user_id):
         for row in conn.execute(
             """
             SELECT roles.id, roles.code, roles.name, roles.description,
-                   roles.full_access, roles.data_scope
+                   roles.full_access, roles.can_access_admin,
+                   roles.long_session, roles.data_scope
             FROM roles
             INNER JOIN employee_roles ON employee_roles.role_id = roles.id
             INNER JOIN employees ON employees.id = employee_roles.employee_id
@@ -107,6 +108,10 @@ def _load_roles_and_permissions(conn, user_id):
         ).fetchall()
     ]
     full_access = any(bool(role["full_access"]) for role in roles)
+    can_access_admin = full_access or any(
+        bool(role["can_access_admin"]) for role in roles
+    )
+    long_session = any(bool(role["long_session"]) for role in roles)
     permissions = []
     if not full_access:
         permissions = [
@@ -128,11 +133,17 @@ def _load_roles_and_permissions(conn, user_id):
                 (user_id,),
             ).fetchall()
         ]
-    return roles, permissions, full_access
+    return roles, permissions, full_access, can_access_admin, long_session
 
 
 def serialize_user(conn, row):
-    roles, permissions, full_access = _load_roles_and_permissions(conn, row["id"])
+    (
+        roles,
+        permissions,
+        full_access,
+        can_access_admin,
+        long_session,
+    ) = _load_roles_and_permissions(conn, row["id"])
     role_codes = [role["code"] for role in roles]
     employee = conn.execute(
         """
@@ -162,7 +173,8 @@ def serialize_user(conn, row):
         ),
         "permissions": permissions,
         "isSuperAdmin": full_access,
-        "canAccessAdmin": full_access,
+        "canAccessAdmin": can_access_admin,
+        "longSession": long_session,
     }
 
 
@@ -220,19 +232,25 @@ def get_current_user():
             session_row["last_seen_at"],
             "%Y-%m-%d %H:%M:%S",
         )
+        current_user = serialize_user(conn, row)
         if now - last_seen >= timedelta(minutes=SESSION_TOUCH_INTERVAL_MINUTES):
             duration = (
-                ADMIN_SESSION_DAYS
-                if session_row["session_kind"] == "admin"
-                else TOUCH_SESSION_DAYS
+                LONG_SESSION_DAYS
+                if current_user.get("longSession")
+                else STANDARD_SESSION_DAYS
+            )
+            session_kind = (
+                "admin" if current_user.get("canAccessAdmin") else "touch"
             )
             conn.execute(
                 """
                 UPDATE auth_sessions
-                SET last_seen_at = ?, expires_at = ?, ip_address = ?
+                SET session_kind = ?, last_seen_at = ?,
+                    expires_at = ?, ip_address = ?
                 WHERE id = ?
                 """,
                 (
+                    session_kind,
                     _format_db_datetime(now),
                     _format_db_datetime(now + timedelta(days=duration)),
                     _client_ip(),
@@ -240,7 +258,7 @@ def get_current_user():
                 ),
             )
         g.current_auth_session_id = session_row["id"]
-        g.current_user = serialize_user(conn, row)
+        g.current_user = current_user
         return g.current_user
 
 
@@ -249,7 +267,11 @@ def login_session(conn, user_row, user, device=None):
     token = secrets.token_urlsafe(32)
     now = _utc_now()
     session_kind = "admin" if user.get("canAccessAdmin") else "touch"
-    duration = ADMIN_SESSION_DAYS if session_kind == "admin" else TOUCH_SESSION_DAYS
+    duration = (
+        LONG_SESSION_DAYS
+        if user.get("longSession")
+        else STANDARD_SESSION_DAYS
+    )
     user_agent = _safe_text(request.headers.get("User-Agent"), 500)
     browser, operating_system = _parse_user_agent(user_agent)
     device_name = _safe_text(device.get("name"), 100)

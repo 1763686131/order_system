@@ -167,6 +167,9 @@
 | `PUT` | `/api/admin/roles/<role_id>/members` | 使用员工 ID 更新角色组成员 |
 
 内置 `super_admin` 权限组拥有 `full_access = 1`，不允许通过普通编辑接口修改。
+权限组创建和修改请求支持 `canAccessAdmin` 与 `longSession` 两个布尔字段：
+前者只控制是否允许进入后台，后者控制登录会话采用 365 天还是 7 天滑动续期。
+两者均不改变 `full_access`，因此行政办公人员可以进入后台但不会成为超级管理员。
 角色组成员来自员工档案。未开通账号的员工也可以先加入角色组；后续在员工档案中
 开通账号后，会直接继承该员工已有的角色组和权限。
 门店和仓库范围分别保存在 `role_stores`、`role_warehouses`。

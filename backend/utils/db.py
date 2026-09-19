@@ -109,6 +109,8 @@ def _ensure_auth_schema(conn):
                 status TEXT NOT NULL DEFAULT 'active',
                 is_system INTEGER NOT NULL DEFAULT 0,
                 full_access INTEGER NOT NULL DEFAULT 0,
+                can_access_admin INTEGER NOT NULL DEFAULT 0,
+                long_session INTEGER NOT NULL DEFAULT 1,
                 data_scope TEXT NOT NULL DEFAULT 'all',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -116,6 +118,35 @@ def _ensure_auth_schema(conn):
             )
             """
         )
+        role_columns = {
+            row["name"] for row in cursor.execute("PRAGMA table_info(roles)")
+        }
+        if "can_access_admin" not in role_columns:
+            cursor.execute(
+                """
+                ALTER TABLE roles
+                ADD COLUMN can_access_admin INTEGER NOT NULL DEFAULT 0
+                """
+            )
+            cursor.execute(
+                """
+                UPDATE roles
+                SET can_access_admin = CASE WHEN full_access = 1 THEN 1 ELSE 0 END
+                """
+            )
+        if "long_session" not in role_columns:
+            cursor.execute(
+                """
+                ALTER TABLE roles
+                ADD COLUMN long_session INTEGER NOT NULL DEFAULT 1
+                """
+            )
+            cursor.execute(
+                """
+                UPDATE roles
+                SET long_session = CASE WHEN full_access = 1 THEN 0 ELSE 1 END
+                """
+            )
         cursor.execute(
             """
             CREATE TABLE IF NOT EXISTS permissions (
@@ -374,10 +405,11 @@ def _ensure_auth_schema(conn):
             """
             INSERT INTO roles (
                 code, name, description, status, is_system,
-                full_access, data_scope, updated_at
+                full_access, can_access_admin, long_session,
+                data_scope, updated_at
             ) VALUES (
                 'super_admin', '超级管理员', '系统内置最高权限组',
-                'active', 1, 1, 'all', CURRENT_TIMESTAMP
+                'active', 1, 1, 1, 0, 'all', CURRENT_TIMESTAMP
             )
             ON CONFLICT(code) DO UPDATE SET
                 name = excluded.name,
@@ -385,6 +417,8 @@ def _ensure_auth_schema(conn):
                 status = 'active',
                 is_system = 1,
                 full_access = 1,
+                can_access_admin = 1,
+                long_session = 0,
                 data_scope = 'all',
                 updated_at = CURRENT_TIMESTAMP
             """
@@ -413,7 +447,7 @@ def _ensure_auth_schema(conn):
         cursor.execute(
             """
             INSERT INTO system_meta (setting_key, setting_value, updated_at)
-            VALUES ('auth_schema_version', '5', CURRENT_TIMESTAMP)
+            VALUES ('auth_schema_version', '6', CURRENT_TIMESTAMP)
             ON CONFLICT(setting_key) DO UPDATE SET
                 setting_value = excluded.setting_value,
                 updated_at = CURRENT_TIMESTAMP

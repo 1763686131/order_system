@@ -98,6 +98,8 @@ def _serialize_role(conn, row):
         "status": row["status"],
         "isSystem": bool(row["is_system"]),
         "fullAccess": bool(row["full_access"]),
+        "canAccessAdmin": bool(row["can_access_admin"]),
+        "longSession": bool(row["long_session"]),
         "dataScope": row["data_scope"],
         "permissionCodes": permission_codes,
         "memberIds": member_ids,
@@ -113,7 +115,8 @@ def _role_row(conn, role_id):
     return conn.execute(
         """
         SELECT id, code, name, description, status, is_system,
-               full_access, data_scope, created_at, updated_at
+               full_access, can_access_admin, long_session,
+               data_scope, created_at, updated_at
         FROM roles WHERE id = ?
         """,
         (role_id,),
@@ -186,7 +189,8 @@ def list_roles():
         rows = conn.execute(
             """
             SELECT id, code, name, description, status, is_system,
-                   full_access, data_scope, created_at, updated_at
+                   full_access, can_access_admin, long_session,
+                   data_scope, created_at, updated_at
             FROM roles
             ORDER BY is_system DESC, status, id
             """
@@ -203,6 +207,8 @@ def create_role():
     name = _text(data.get("name"), 80)
     description = _text(data.get("description"), 300)
     status = "disabled" if data.get("status") == "disabled" else "active"
+    can_access_admin = 1 if data.get("canAccessAdmin") else 0
+    long_session = 1 if data.get("longSession") else 0
     data_scope = _text(data.get("dataScope"), 30) or "all"
     permission_codes = _permission_codes(data.get("permissionCodes"))
     store_ids = _integer_ids(data.get("storeIds"))
@@ -229,10 +235,22 @@ def create_role():
                 """
                 INSERT INTO roles (
                     code, name, description, status, is_system,
-                    full_access, data_scope, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, 0, 0, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                    full_access, can_access_admin, long_session,
+                    data_scope, created_at, updated_at
+                ) VALUES (
+                    ?, ?, ?, ?, 0, 0, ?, ?, ?,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                )
                 """,
-                (code, name, description, status, data_scope),
+                (
+                    code,
+                    name,
+                    description,
+                    status,
+                    can_access_admin,
+                    long_session,
+                    data_scope,
+                ),
             )
             _replace_permissions(conn, cursor.lastrowid, permission_codes)
             _replace_scope(
@@ -256,6 +274,8 @@ def update_role(role_id):
     name = _text(data.get("name"), 80)
     description = _text(data.get("description"), 300)
     status = "disabled" if data.get("status") == "disabled" else "active"
+    can_access_admin = 1 if data.get("canAccessAdmin") else 0
+    long_session = 1 if data.get("longSession") else 0
     data_scope = _text(data.get("dataScope"), 30) or "all"
     permission_codes = _permission_codes(data.get("permissionCodes"))
     store_ids = _integer_ids(data.get("storeIds"))
@@ -276,11 +296,20 @@ def update_role(role_id):
             conn.execute(
                 """
                 UPDATE roles
-                SET name = ?, description = ?, status = ?, data_scope = ?,
+                SET name = ?, description = ?, status = ?,
+                    can_access_admin = ?, long_session = ?, data_scope = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
-                (name, description, status, data_scope, role_id),
+                (
+                    name,
+                    description,
+                    status,
+                    can_access_admin,
+                    long_session,
+                    data_scope,
+                    role_id,
+                ),
             )
             _replace_permissions(conn, role_id, permission_codes)
             _replace_scope(conn, role_id, store_ids, warehouse_ids)
