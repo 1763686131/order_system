@@ -44,12 +44,35 @@ def _user_row(conn, user_id):
     ).fetchone()
 
 
+def _latest_auth_session(conn, user_id):
+    if not user_id:
+        return None
+    return conn.execute(
+        """
+        SELECT device_name, session_kind, browser, operating_system,
+               ip_address, last_seen_at,
+               CASE
+                   WHEN revoked_at IS NOT NULL THEN 'revoked'
+                   WHEN datetime(expires_at) <= CURRENT_TIMESTAMP THEN 'expired'
+                   ELSE 'active'
+               END AS session_status
+        FROM auth_sessions
+        WHERE user_id = ?
+        ORDER BY datetime(last_seen_at) DESC, id DESC
+        LIMIT 1
+        """,
+        (user_id,),
+    ).fetchone()
+
+
 def _serialize_employee(conn, row):
     user = None
+    latest_session = None
     if row["user_id"]:
         user_row = _user_row(conn, row["user_id"])
         if user_row:
             user = serialize_user(conn, user_row)
+            latest_session = _latest_auth_session(conn, row["user_id"])
     roles = [
         dict(role)
         for role in conn.execute(
@@ -75,6 +98,15 @@ def _serialize_employee(conn, row):
         "passwordSet": bool(user),
         "accountStatus": row["account_status"] if user else "pending",
         "lastLoginAt": user["lastLoginAt"] if user else None,
+        "lastActiveAt": latest_session["last_seen_at"] if latest_session else None,
+        "lastActiveDevice": {
+            "deviceName": latest_session["device_name"],
+            "sessionKind": latest_session["session_kind"],
+            "browser": latest_session["browser"],
+            "operatingSystem": latest_session["operating_system"],
+            "ipAddress": latest_session["ip_address"],
+            "status": latest_session["session_status"],
+        } if latest_session else None,
         "department": row["department"] or "",
         "position": row["position"] or "",
         "phone": row["phone"] or "",

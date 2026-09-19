@@ -102,7 +102,8 @@
               <th class="col-phone">联系电话</th>
               <th class="col-status">状态</th>
               <th class="col-role">权限组</th>
-              <th class="col-time">时间信息</th>
+              <th class="col-device">设备信息</th>
+              <th class="col-time">入职 / 最近活跃</th>
               <th class="col-actions">操作</th>
             </tr>
           </thead>
@@ -161,9 +162,20 @@
                 </div>
               </td>
               <td>
+                <div v-if="employee.lastActiveDevice" class="device-cell">
+                  <strong :title="employee.lastActiveDevice.deviceName || '未命名设备'">
+                    {{ employee.lastActiveDevice.deviceName || '未命名设备' }}
+                  </strong>
+                  <span :title="deviceDescription(employee.lastActiveDevice)">
+                    {{ deviceDescription(employee.lastActiveDevice) }}
+                  </span>
+                </div>
+                <span v-else class="empty-inline">—</span>
+              </td>
+              <td>
                 <div class="time-cell">
                   <span class="time-primary tabular">入职: {{ employee.hireDate || '—' }}</span>
-                  <span class="time-secondary tabular">登录: {{ formatDateTime(employee.lastLoginAt) }}</span>
+                  <span class="time-secondary tabular">活跃: {{ formatDateTime(employee.lastActiveAt) }}</span>
                 </div>
               </td>
               <td>
@@ -193,7 +205,7 @@
               </td>
             </tr>
             <tr v-if="filteredEmployees.length === 0">
-              <td colspan="8">
+              <td colspan="9">
                 <div class="empty-state">
                   <span class="empty-icon">—</span>
                   <strong>没有匹配的员工</strong>
@@ -479,8 +491,8 @@
                 </div>
               </div>
               <div class="account-security-item">
-                <span class="summary-label">最后登录时间</span>
-                <strong class="tabular">{{ formatDateTime(selectedEmployee.lastLoginAt) }}</strong>
+                <span class="summary-label">最近活跃时间</span>
+                <strong class="tabular">{{ formatDateTime(selectedEmployee.lastActiveAt) }}</strong>
               </div>
               <button class="button-link password-edit-button" type="button" @click="openPasswordEditor">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1241,7 +1253,29 @@ function avatarStyle(employee) {
 
 function formatDateTime(value) {
   if (!value) return '-'
-  return String(value).replace('T', ' ').slice(0, 16)
+  const normalized = String(value).replace(' ', 'T')
+  const dateValue = /(Z|[+-]\d{2}:\d{2})$/.test(normalized)
+    ? normalized
+    : `${normalized}Z`
+  const date = new Date(dateValue)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date)
+}
+
+function deviceDescription(device) {
+  const terminal = device?.sessionKind === 'touch' ? '触屏端' : '后台管理'
+  return [
+    terminal,
+    device?.operatingSystem || '未知系统',
+    device?.browser || '未知浏览器'
+  ].join(' · ')
 }
 
 onMounted(loadEmployeeData)
@@ -1693,7 +1727,7 @@ input[type='checkbox'] {
 
 .employee-table {
   width: 100%;
-  min-width: 1280px;
+  min-width: 1470px;
   table-layout: fixed;
   border-collapse: collapse;
 }
@@ -1761,6 +1795,10 @@ input[type='checkbox'] {
   width: 200px;
 }
 
+.col-device {
+  width: 190px;
+}
+
 .col-time {
   width: 160px;
 }
@@ -1795,6 +1833,7 @@ input[type='checkbox'] {
 .employee-copy,
 .account-cell,
 .job-cell,
+.device-cell,
 .time-cell {
   display: flex;
   min-width: 0;
@@ -1804,7 +1843,8 @@ input[type='checkbox'] {
 
 .employee-copy strong,
 .account-cell strong,
-.job-cell strong {
+.job-cell strong,
+.device-cell strong {
   overflow: hidden;
   color: var(--text);
   font-size: 13px;
@@ -1814,7 +1854,8 @@ input[type='checkbox'] {
 }
 
 .employee-copy span,
-.job-cell span {
+.job-cell span,
+.device-cell span {
   overflow: hidden;
   color: #94a3b8;
   font-size: 12px;
