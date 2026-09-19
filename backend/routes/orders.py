@@ -5,6 +5,7 @@ from flask import Blueprint, request, jsonify, Response, stream_with_context
 from utils.db_helper import read_orders, write_orders, read_customers, read_carrier_tags, write_carrier_tags
 from utils.db import get_db
 from utils.auth import (
+    accessible_store_ids,
     current_identity,
     get_current_user,
     permission_granted,
@@ -42,6 +43,34 @@ MONEY_QUANT = Decimal('0.01')
 # 订单实时推送订阅者。每个前台页面对应一个队列，订单写入成功后立即广播。
 order_event_subscribers = set()
 order_event_subscribers_lock = threading.Lock()
+
+
+def order_store_id(order):
+    """Resolve the store for both current and legacy order records."""
+    store_id = order.get('store_id', order.get('storeId'))
+    if store_id not in (None, ''):
+        try:
+            return int(store_id)
+        except (TypeError, ValueError):
+            return None
+
+    order_type = order.get('type')
+    if order_type in (1, '1'):
+        return 1
+    if order_type in (2, '2'):
+        return 2
+    return None
+
+
+def filter_orders_by_store_scope(orders, user=None):
+    allowed_store_ids = accessible_store_ids(user)
+    if allowed_store_ids is None:
+        return orders
+    return [
+        order
+        for order in orders
+        if order_store_id(order) in allowed_store_ids
+    ]
 
 
 def normalize_logistics_service(value):
@@ -92,7 +121,11 @@ def money(value):
 def get_orders():
     """获取所有订单"""
     orders_data = read_orders()
-    return jsonify(orders_data.get('orders', []))
+    orders = filter_orders_by_store_scope(
+        orders_data.get('orders', []),
+        get_current_user(),
+    )
+    return jsonify(orders)
 
 
 @orders_bp.route('/events', methods=['GET'])
@@ -136,7 +169,10 @@ def order_events():
 def get_order(order_id):
     """获取单个订单详情"""
     orders_data = read_orders()
-    orders = orders_data.get('orders', [])
+    orders = filter_orders_by_store_scope(
+        orders_data.get('orders', []),
+        get_current_user(),
+    )
 
     # 查找订单
     order = next((o for o in orders if o.get('id') == order_id), None)

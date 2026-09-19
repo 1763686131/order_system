@@ -150,7 +150,12 @@
       <header class="records-toolbar">
         <div class="toolbar-filters">
           <!-- 门店分类滑块 -->
-          <div class="material-type-slider" role="tablist" aria-label="门店分类筛选">
+          <div
+            v-if="stores.length > 1"
+            class="material-type-slider"
+            role="tablist"
+            aria-label="门店分类筛选"
+          >
             <button
               :class="['slider-tab', { active: filters.category === '' }]"
               type="button"
@@ -1078,6 +1083,7 @@ import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
+import { useUserStore } from '@/stores/user'
 import { formatOrderForCopy } from '@/utils/tools'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
@@ -1096,6 +1102,7 @@ const props = defineProps({
 
 const orderStore = useOrderStore()
 const orderDraftStore = useOrderDraftStore()
+const userStore = useUserStore()
 
 // 注入 Admin 组件提供的方法
 const setHeaderActions = inject('setHeaderActions', null)
@@ -1254,30 +1261,46 @@ watch(() => props.mode, () => {
 })
 
 
+const getOrderStoreId = (order) => {
+  const storeId = order.store_id ?? order.storeId
+  if (storeId !== undefined && storeId !== null && storeId !== '') {
+    const normalizedId = Number(storeId)
+    return Number.isInteger(normalizedId) ? normalizedId : null
+  }
+  if (order.type === 1 || order.type === '1') return 1
+  if (order.type === 2 || order.type === '2') return 2
+  return null
+}
+
+const canAccessStore = (storeId) => {
+  if (userStore.allStores || userStore.isSuperAdmin) return true
+  return userStore.storeIds.includes(Number(storeId))
+}
+
 // 根据 store_id 或 type 获取门店名称
 const getStoreName = (order) => {
-  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const storeId = getOrderStoreId(order)
   const store = stores.value.find(s => s.id === storeId)
   return store ? store.name : '未知门店'
 }
 
 // 根据 store_id 或 type 获取门店背景颜色
 const getStoreColor = (order) => {
-  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const storeId = getOrderStoreId(order)
   const store = stores.value.find(s => s.id === storeId)
   return store?.color || '#f5f5f5'
 }
 
 // 根据 store_id 或 type 获取门店字体颜色
 const getStoreTextColor = (order) => {
-  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const storeId = getOrderStoreId(order)
   const store = stores.value.find(s => s.id === storeId)
   return store?.textColor || '#333333'
 }
 
 // 根据 store_id 或 type 判断是否为绝缘（用于样式，已废弃）
 const isInsulationStore = (order) => {
-  const storeId = order.store_id || (order.type === 1 ? 1 : 2)
+  const storeId = getOrderStoreId(order)
   return storeId === 1
 }
 
@@ -1375,8 +1398,16 @@ const fetchOrdersData = async () => {
       })
     ])
 
-    // 只显示状态为 active 的门店
-    stores.value = storesData.filter(store => store.status === 'active')
+    // 只显示当前账号有权访问且状态为 active 的门店
+    stores.value = storesData.filter(store =>
+      store.status === 'active' && canAccessStore(store.id)
+    )
+    if (
+      filters.value.category &&
+      !stores.value.some(store => filters.value.category === `${store.name}订单`)
+    ) {
+      filters.value.category = ''
+    }
 
     // 保存商品列表
     if (productsData && Array.isArray(productsData)) {
@@ -1385,16 +1416,19 @@ const fetchOrdersData = async () => {
     warehouses.value = Array.isArray(warehousesData) ? warehousesData : []
 
     if (ordersResponse && Array.isArray(ordersResponse)) {
+      const scopedOrders = ordersResponse.filter(order =>
+        canAccessStore(getOrderStoreId(order))
+      )
       // 更新 orderStore 的所有订单数据
-      orderStore.setOrders(ordersResponse)
+      orderStore.setOrders(scopedOrders)
 
       // 完成后的订单直接进入物流列表，录入物流信息后再转为已发货。
       if (props.mode === 'logistics') {
-        orders.value = ordersResponse.filter(order =>
+        orders.value = scopedOrders.filter(order =>
           order.status === 'completed' || order.status === 'shipped'
         )
       } else {
-        orders.value = ordersResponse
+        orders.value = scopedOrders
       }
     } else {
       orders.value = []
@@ -3191,6 +3225,10 @@ svg {
   border-radius: 8px;
   box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.08);
   margin-left: 16px;
+}
+
+.toolbar-filters > .status-filter-slider:first-child {
+  margin-left: 0;
 }
 
 .slider-tab {

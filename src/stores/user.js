@@ -45,6 +45,10 @@ export const useUserStore = defineStore('user', {
     isSuperAdmin: false,
     canAccessAdmin: false,
     longSession: false,
+    allStores: false,
+    allWarehouses: false,
+    storeIds: [],
+    warehouseIds: [],
     mustChangePassword: false,
     authChecked: false
   }),
@@ -76,6 +80,14 @@ export const useUserStore = defineStore('user', {
       this.isSuperAdmin = Boolean(userData.isSuperAdmin)
       this.canAccessAdmin = Boolean(userData.canAccessAdmin)
       this.longSession = Boolean(userData.longSession)
+      this.allStores = Boolean(userData.allStores || userData.isSuperAdmin)
+      this.allWarehouses = Boolean(userData.allWarehouses || userData.isSuperAdmin)
+      this.storeIds = Array.isArray(userData.storeIds)
+        ? userData.storeIds.map(Number).filter(Number.isInteger)
+        : []
+      this.warehouseIds = Array.isArray(userData.warehouseIds)
+        ? userData.warehouseIds.map(Number).filter(Number.isInteger)
+        : []
       this.mustChangePassword = Boolean(userData.mustChangePassword)
       this.authChecked = true
     },
@@ -91,6 +103,10 @@ export const useUserStore = defineStore('user', {
       this.isSuperAdmin = false
       this.canAccessAdmin = false
       this.longSession = false
+      this.allStores = false
+      this.allWarehouses = false
+      this.storeIds = []
+      this.warehouseIds = []
       this.mustChangePassword = false
       localStorage.removeItem('local_user')
     },
