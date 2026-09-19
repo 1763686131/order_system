@@ -284,15 +284,75 @@ def login_session(conn, user_row, user, device=None):
     )
     user_agent = _safe_text(request.headers.get("User-Agent"), 500)
     browser, operating_system = _parse_user_agent(user_agent)
+    device_id = _safe_text(device.get("id"), 100)
     device_name = _safe_text(device.get("name"), 100)
     if not device_name:
         device_name = f"{operating_system} · {browser}"
+
+    previous_token = session.get(SESSION_TOKEN_KEY)
+    previous_user_id = session.get("user_id")
+    if previous_token:
+        conn.execute(
+            """
+            UPDATE auth_sessions
+            SET revoked_at = COALESCE(revoked_at, ?),
+                revoked_by = COALESCE(revoked_by, ?)
+            WHERE session_token_hash = ?
+            """,
+            (
+                _format_db_datetime(now),
+                previous_user_id,
+                _session_token_hash(previous_token),
+            ),
+        )
 
     session.clear()
     session.permanent = True
     session["user_id"] = user_row["id"]
     session["permission_version"] = int(user_row["permission_version"] or 1)
     session[SESSION_TOKEN_KEY] = token
+    session_values = (
+        _session_token_hash(token),
+        device_name,
+        session_kind,
+        browser,
+        operating_system,
+        _safe_text(device.get("timezone"), 80),
+        user_agent,
+        _client_ip(),
+        _format_db_datetime(now),
+        _format_db_datetime(now),
+        _format_db_datetime(now + timedelta(days=duration)),
+    )
+
+    existing_session = None
+    if device_id:
+        existing_session = conn.execute(
+            """
+            SELECT id
+            FROM auth_sessions
+            WHERE user_id = ? AND device_id = ?
+            LIMIT 1
+            """,
+            (user_row["id"], device_id),
+        ).fetchone()
+
+    if existing_session:
+        conn.execute(
+            """
+            UPDATE auth_sessions
+            SET session_token_hash = ?, device_name = ?,
+                session_kind = ?, browser = ?, operating_system = ?,
+                timezone = ?, user_agent = ?, ip_address = ?,
+                created_at = ?, last_seen_at = ?, expires_at = ?,
+                revoked_at = NULL, revoked_by = NULL
+            WHERE id = ?
+            """,
+            (*session_values, existing_session["id"]),
+        )
+        g.current_auth_session_id = existing_session["id"]
+        return
+
     cursor = conn.execute(
         """
         INSERT INTO auth_sessions (
@@ -302,19 +362,10 @@ def login_session(conn, user_row, user, device=None):
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
-            _session_token_hash(token),
+            session_values[0],
             user_row["id"],
-            _safe_text(device.get("id"), 100),
-            device_name,
-            session_kind,
-            browser,
-            operating_system,
-            _safe_text(device.get("timezone"), 80),
-            user_agent,
-            _client_ip(),
-            _format_db_datetime(now),
-            _format_db_datetime(now),
-            _format_db_datetime(now + timedelta(days=duration)),
+            device_id,
+            *session_values[1:],
         ),
     )
     g.current_auth_session_id = cursor.lastrowid

@@ -295,6 +295,25 @@ def _ensure_auth_schema(conn):
         )
         cursor.execute(
             """
+            DELETE FROM auth_sessions
+            WHERE device_id <> ''
+              AND id NOT IN (
+                  SELECT MAX(id)
+                  FROM auth_sessions
+                  WHERE device_id <> ''
+                  GROUP BY user_id, device_id
+              )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_auth_sessions_user_device
+            ON auth_sessions(user_id, device_id)
+            WHERE device_id <> ''
+            """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_employee_roles_role
             ON employee_roles(role_id)
             """
@@ -562,7 +581,7 @@ def _ensure_auth_schema(conn):
         cursor.execute(
             """
             INSERT INTO system_meta (setting_key, setting_value, updated_at)
-            VALUES ('auth_schema_version', '6', CURRENT_TIMESTAMP)
+            VALUES ('auth_schema_version', '7', CURRENT_TIMESTAMP)
             ON CONFLICT(setting_key) DO UPDATE SET
                 setting_value = excluded.setting_value,
                 updated_at = CURRENT_TIMESTAMP
