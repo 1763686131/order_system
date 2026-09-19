@@ -7,18 +7,33 @@
             <h2>部门配置</h2>
             <span>{{ departments.length }} 个部门 · {{ totalEmployeeCount }} 名员工</span>
           </div>
-          <button
-            class="icon-button"
-            type="button"
-            title="新增部门"
-            aria-label="新增部门"
-            @click="openCreate"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 5v14"></path>
-              <path d="M5 12h14"></path>
-            </svg>
-          </button>
+          <div class="department-header-actions">
+            <button
+              v-if="selectedDepartment"
+              class="icon-button"
+              type="button"
+              title="编辑当前部门"
+              aria-label="编辑当前部门"
+              @click="openEdit(selectedDepartment)"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m4 16.5-.8 3.3 3.3-.8L18 7.5 15.5 5 4 16.5Z"></path>
+                <path d="m14.5 6 2.5 2.5"></path>
+              </svg>
+            </button>
+            <button
+              class="icon-button"
+              type="button"
+              title="新增部门"
+              aria-label="新增部门"
+              @click="openCreate"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+            </button>
+          </div>
         </div>
 
         <div class="department-list">
@@ -69,57 +84,6 @@
           </button>
         </div>
 
-        <section v-if="editorVisible" class="department-editor">
-          <div class="editor-heading">
-            <div>
-              <span class="editor-eyebrow">{{ editingDepartment ? '编辑部门' : '新增部门' }}</span>
-              <h3>{{ editingDepartment ? '部门信息' : '新建部门' }}</h3>
-            </div>
-            <button
-              v-if="editingDepartment"
-              class="editor-close"
-              type="button"
-              title="取消编辑"
-              @click="cancelEdit"
-            >
-              ×
-            </button>
-          </div>
-
-          <label class="field">
-            <span>部门名称 <em>*</em></span>
-            <input v-model.trim="departmentDraft.name" type="text" placeholder="例如 销售部" />
-          </label>
-          <label class="field">
-            <span>状态</span>
-            <select v-model="departmentDraft.status">
-              <option value="active">启用</option>
-              <option value="disabled">停用</option>
-            </select>
-          </label>
-          <label class="field">
-            <span>排序</span>
-            <input v-model.number="departmentDraft.sortOrder" type="number" min="0" step="1" />
-          </label>
-
-          <p class="editor-hint">
-            有员工归属的部门不能停用或删除，请先到员工管理调整员工部门。
-          </p>
-          <div class="editor-actions">
-            <button class="button button-primary" type="button" :disabled="saving" @click="saveDepartment">
-              {{ saving ? '保存中...' : '保存部门' }}
-            </button>
-            <button
-              v-if="editingDepartment && departmentDraft.employeeCount === 0"
-              class="button button-danger"
-              type="button"
-              :disabled="saving"
-              @click="deleteDepartment"
-            >
-              删除部门
-            </button>
-          </div>
-        </section>
       </aside>
 
       <section class="employee-panel">
@@ -136,6 +100,20 @@
               </svg>
               <input v-model.trim="employeeSearch" type="search" placeholder="搜索员工" />
             </label>
+            <button
+              v-if="selectedDepartment"
+              class="button button-primary"
+              type="button"
+              :disabled="selectedDepartment.status !== 'active'"
+              :title="selectedDepartment.status !== 'active' ? '停用部门不能添加员工' : '添加员工'"
+              @click="openAddEmployee"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+              添加员工
+            </button>
             <button class="button button-secondary" type="button" @click="goToEmployees">
               员工管理
             </button>
@@ -193,6 +171,135 @@
       </section>
     </section>
 
+    <Teleport to="body">
+      <div v-if="departmentModalVisible" class="modal-layer" @click.self="closeDepartmentModal">
+        <section class="department-modal" role="dialog" aria-modal="true" aria-labelledby="department-modal-title">
+          <div class="modal-header">
+            <div>
+              <span class="modal-eyebrow">{{ editingDepartment ? '编辑部门' : '新增部门' }}</span>
+              <h2 id="department-modal-title">{{ editingDepartment ? '部门信息' : '新建部门' }}</h2>
+            </div>
+            <button class="icon-button" type="button" title="关闭" :disabled="saving" @click="closeDepartmentModal">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12"></path>
+                <path d="m18 6-12 12"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="modal-body">
+            <label class="field">
+              <span>部门名称 <em>*</em></span>
+              <input v-model.trim="departmentDraft.name" type="text" placeholder="例如 销售部" />
+            </label>
+            <label class="field">
+              <span>状态</span>
+              <select v-model="departmentDraft.status">
+                <option value="active">启用</option>
+                <option value="disabled">停用</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>排序</span>
+              <input v-model.number="departmentDraft.sortOrder" type="number" min="0" step="1" />
+            </label>
+            <p class="modal-hint">
+              有员工归属的部门不能停用或删除，请先到员工管理调整员工部门。
+            </p>
+          </div>
+
+          <div class="modal-footer">
+            <button
+              v-if="editingDepartment && departmentDraft.employeeCount === 0"
+              class="button button-danger"
+              type="button"
+              :disabled="saving"
+              @click="deleteDepartment"
+            >
+              删除部门
+            </button>
+            <span v-else></span>
+            <div class="modal-footer-actions">
+              <button class="button button-secondary" type="button" :disabled="saving" @click="closeDepartmentModal">
+                取消
+              </button>
+              <button class="button button-primary" type="button" :disabled="saving" @click="saveDepartment">
+                {{ saving ? '保存中...' : '保存部门' }}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div v-if="employeeModalVisible && selectedDepartment" class="modal-layer" @click.self="closeAddEmployee">
+        <section class="employee-picker-modal" role="dialog" aria-modal="true" aria-labelledby="employee-picker-title">
+          <div class="modal-header">
+            <div>
+              <span class="modal-eyebrow">添加员工</span>
+              <h2 id="employee-picker-title">加入{{ selectedDepartment.name }}</h2>
+            </div>
+            <button class="icon-button" type="button" title="关闭" :disabled="saving" @click="closeAddEmployee">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 6 12 12"></path>
+                <path d="m18 6-12 12"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="picker-toolbar">
+            <label class="picker-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5"></circle>
+                <path d="m16 16 4 4"></path>
+              </svg>
+              <input v-model.trim="employeePickerQuery" type="search" placeholder="搜索姓名、工号或手机号" />
+            </label>
+            <span>已选择 {{ employeePickerSelectedIds.length }} 人</span>
+          </div>
+
+          <div class="employee-picker-body">
+            <label
+              v-for="employee in availableEmployees"
+              :key="employee.id"
+              class="employee-picker-option"
+              :class="{ selected: employeePickerSelectedIds.includes(employee.id) }"
+            >
+              <input v-model="employeePickerSelectedIds" type="checkbox" :value="employee.id" />
+              <span class="avatar" :style="avatarStyle(employee)">{{ employee.displayName.slice(0, 1) }}</span>
+              <span class="employee-picker-copy">
+                <strong>{{ employee.displayName }}</strong>
+                <small>{{ employee.employeeNo }} · {{ employee.department || '未分配部门' }} · {{ employee.phone || '暂无电话' }}</small>
+              </span>
+              <span v-if="employee.departmentId" class="employee-picker-move-hint">调整部门</span>
+            </label>
+            <div v-if="availableEmployees.length === 0" class="picker-empty">
+              <strong>{{ employeePickerQuery ? '没有找到匹配员工' : '暂无可添加员工' }}</strong>
+              <span>{{ employeePickerQuery ? '请调整搜索条件后重试' : '当前部门外暂无其他员工' }}</span>
+            </div>
+          </div>
+
+          <div class="modal-footer">
+            <span class="picker-hint">选择其他部门员工会将其调整到当前部门</span>
+            <div class="modal-footer-actions">
+              <button class="button button-secondary" type="button" :disabled="saving" @click="closeAddEmployee">
+                取消
+              </button>
+              <button
+                class="button button-primary"
+                type="button"
+                :disabled="saving || employeePickerSelectedIds.length === 0"
+                @click="addSelectedEmployees"
+              >
+                {{ saving ? '添加中...' : '确认添加' }}
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
     <transition name="notice">
       <div v-if="notice" class="page-notice" role="status">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -219,6 +326,11 @@ const employees = ref([])
 const selectedDepartmentId = ref(null)
 const employeeSearch = ref('')
 const editingDepartment = ref(false)
+const departmentModalVisible = ref(false)
+const departmentModalReturnId = ref(null)
+const employeeModalVisible = ref(false)
+const employeePickerQuery = ref('')
+const employeePickerSelectedIds = ref([])
 const departmentDraft = ref(createEmptyDepartment())
 const saving = ref(false)
 const notice = ref('')
@@ -228,7 +340,6 @@ const selectedDepartment = computed(() =>
   departments.value.find(item => item.id === selectedDepartmentId.value) || null
 )
 
-const editorVisible = computed(() => editingDepartment.value || Boolean(selectedDepartment.value))
 const totalEmployeeCount = computed(() => employees.value.length)
 const unassignedEmployeeCount = computed(() =>
   employees.value.filter(employee => !employee.departmentId).length
@@ -265,6 +376,19 @@ const filteredEmployees = computed(() => {
   )
 })
 
+const availableEmployees = computed(() => {
+  if (!selectedDepartment.value) return []
+  const keyword = employeePickerQuery.value.toLowerCase()
+  return employees.value.filter(employee => {
+    if (employee.departmentId === selectedDepartment.value.id) return false
+    if (!keyword) return true
+    return [employee.displayName, employee.employeeNo, employee.phone, employee.department]
+      .join(' ')
+      .toLowerCase()
+      .includes(keyword)
+  })
+})
+
 function createEmptyDepartment() {
   return {
     id: null,
@@ -294,9 +418,6 @@ async function loadData(preferredId = selectedDepartmentId.value) {
     } else {
       selectedDepartmentId.value = departments.value[0]?.id || ALL_ID
     }
-    if (selectedDepartment.value && !editingDepartment.value) {
-      startEdit(selectedDepartment.value)
-    }
   } catch (error) {
     showNotice(error?.response?.data?.message || '部门数据加载失败')
   }
@@ -304,38 +425,42 @@ async function loadData(preferredId = selectedDepartmentId.value) {
 
 function selectDepartment(department) {
   selectedDepartmentId.value = department.id
-  startEdit(department)
+  employeeSearch.value = ''
 }
 
 function selectVirtualDepartment(id) {
   selectedDepartmentId.value = id
-  editingDepartment.value = false
-  departmentDraft.value = createEmptyDepartment()
+  employeeSearch.value = ''
 }
 
-function startEdit(department) {
+function openEdit(department) {
+  if (!department) return
+  departmentModalReturnId.value = department.id
   editingDepartment.value = true
   departmentDraft.value = { ...department }
+  departmentModalVisible.value = true
 }
 
 function openCreate() {
+  departmentModalReturnId.value = selectedDepartmentId.value
   selectedDepartmentId.value = null
-  editingDepartment.value = false
   departmentDraft.value = {
     ...createEmptyDepartment(),
     sortOrder: departments.value.length
   }
   editingDepartment.value = true
+  departmentModalVisible.value = true
 }
 
-function cancelEdit() {
-  if (departmentDraft.value.id) {
-    selectedDepartmentId.value = departmentDraft.value.id
-    startEdit(departments.value.find(item => item.id === departmentDraft.value.id))
-    return
+function closeDepartmentModal() {
+  if (saving.value) return
+  if (!editingDepartment.value || !departmentDraft.value.id) {
+    selectedDepartmentId.value = departmentModalReturnId.value || departments.value[0]?.id || ALL_ID
   }
-  selectedDepartmentId.value = departments.value[0]?.id || ALL_ID
-  editingDepartment.value = Boolean(selectedDepartment.value && selectedDepartmentId.value !== ALL_ID)
+  departmentModalVisible.value = false
+  editingDepartment.value = false
+  departmentModalReturnId.value = null
+  departmentDraft.value = createEmptyDepartment()
 }
 
 async function saveDepartment() {
@@ -354,8 +479,11 @@ async function saveDepartment() {
       ? await request.put(`/admin/departments/${departmentDraft.value.id}`, payload)
       : await request.post('/admin/departments', payload)
     showNotice(response.message || '部门已保存')
+    const nextDepartmentId = response.department?.id || departmentDraft.value.id
+    departmentModalVisible.value = false
     editingDepartment.value = false
-    await loadData(response.department?.id || departmentDraft.value.id)
+    departmentModalReturnId.value = null
+    await loadData(nextDepartmentId)
   } catch (error) {
     showNotice(error?.response?.data?.message || '部门保存失败')
   } finally {
@@ -370,10 +498,66 @@ async function deleteDepartment() {
     saving.value = true
     const response = await request.delete(`/admin/departments/${departmentDraft.value.id}`)
     showNotice(response.message || '部门已删除')
+    departmentModalVisible.value = false
     editingDepartment.value = false
+    departmentModalReturnId.value = null
     await loadData(ALL_ID)
   } catch (error) {
     showNotice(error?.response?.data?.message || '部门删除失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+function openAddEmployee() {
+  if (!selectedDepartment.value || selectedDepartment.value.status !== 'active') return
+  employeePickerQuery.value = ''
+  employeePickerSelectedIds.value = []
+  employeeModalVisible.value = true
+}
+
+function closeAddEmployee() {
+  if (saving.value) return
+  employeeModalVisible.value = false
+  employeePickerQuery.value = ''
+  employeePickerSelectedIds.value = []
+}
+
+function employeeUpdatePayload(employee, departmentId) {
+  return {
+    ...employee,
+    departmentId,
+    password: '',
+    passwordConfirm: '',
+    roleIds: Array.isArray(employee.roleIds) ? [...employee.roleIds] : []
+  }
+}
+
+async function addSelectedEmployees() {
+  if (!selectedDepartment.value || employeePickerSelectedIds.value.length === 0) return
+  const targetDepartmentId = selectedDepartment.value.id
+  const selectedEmployees = employees.value.filter(employee =>
+    employeePickerSelectedIds.value.includes(employee.id)
+  )
+  try {
+    saving.value = true
+    let addedCount = 0
+    for (const employee of selectedEmployees) {
+      const response = await request.put(
+        `/admin/employees/${employee.id}`,
+        employeeUpdatePayload(employee, targetDepartmentId)
+      )
+      const index = employees.value.findIndex(item => item.id === employee.id)
+      if (index !== -1 && response.employee) employees.value[index] = response.employee
+      addedCount += 1
+    }
+    showNotice(`已添加 ${addedCount} 名员工到${selectedDepartment.value.name}`)
+    employeeModalVisible.value = false
+    employeePickerQuery.value = ''
+    employeePickerSelectedIds.value = []
+    await loadData(targetDepartmentId)
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '员工添加失败，已完成的绑定已保留')
   } finally {
     saving.value = false
   }
@@ -478,6 +662,12 @@ onMounted(() => loadData())
   margin-top: 4px;
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.department-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .icon-button {
@@ -589,42 +779,6 @@ onMounted(() => loadData())
   text-align: right;
 }
 
-.department-editor {
-  margin: 8px;
-  padding: 14px;
-  background: #f8fafc;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-}
-
-.editor-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.editor-eyebrow {
-  color: var(--text-muted);
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.editor-heading h3 { margin-top: 4px; font-size: 14px; }
-
-.editor-close {
-  padding: 0 4px;
-  color: var(--text-muted);
-  background: transparent;
-  border: 0;
-  font-size: 20px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.editor-close:hover { color: #b4232f; }
-
 .field {
   display: block;
   margin-top: 12px;
@@ -662,21 +816,11 @@ onMounted(() => loadData())
   border-color: var(--accent);
 }
 
-.editor-hint {
-  margin-top: 12px;
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.editor-actions,
 .employee-panel-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-
-.editor-actions { margin-top: 14px; }
 
 .button {
   display: inline-flex;
@@ -695,12 +839,259 @@ onMounted(() => loadData())
 }
 
 .button:disabled { opacity: 0.55; cursor: not-allowed; }
+.button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
 .button-primary { color: #fff; background: var(--accent); border-color: var(--accent); }
 .button-primary:hover:not(:disabled) { background: var(--accent-dark); border-color: var(--accent-dark); }
 .button-secondary { color: var(--text-secondary); background: #fff; border-color: var(--border-strong); }
 .button-secondary:hover { color: var(--accent-dark); background: var(--accent-soft); border-color: var(--accent-border); }
 .button-danger { color: #b4232f; background: #fff; border-color: #efb4bc; }
 .button-danger:hover:not(:disabled) { background: #fcebed; }
+
+.modal-layer {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --panel-bg: #fff;
+  --border: #dfe5ec;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, 0.42);
+  backdrop-filter: blur(1px);
+  box-sizing: border-box;
+}
+
+.department-modal,
+.employee-picker-modal {
+  display: flex;
+  width: min(520px, calc(100vw - 32px));
+  max-height: min(680px, calc(100vh - 32px));
+  flex-direction: column;
+  color: var(--text);
+  background: var(--panel-bg, #fff);
+  border: 1px solid var(--border, #dfe5ec);
+  border-radius: 7px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.22);
+  overflow: hidden;
+}
+
+.employee-picker-modal {
+  width: min(660px, calc(100vw - 32px));
+}
+
+.modal-header {
+  display: flex;
+  min-height: 78px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.modal-eyebrow {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.modal-header h2 {
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.modal-body {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  background: #f8fafc;
+}
+
+.modal-body .field:first-child { margin-top: 0; }
+
+.modal-hint {
+  margin-top: 14px;
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.modal-footer {
+  display: flex;
+  min-height: 70px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 14px 20px;
+  background: #fff;
+  border-top: 1px solid var(--border);
+  box-sizing: border-box;
+}
+
+.modal-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.picker-toolbar {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.picker-toolbar > span {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.picker-search {
+  display: flex;
+  width: min(330px, 100%);
+  height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  color: var(--text-muted);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+.picker-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+}
+
+.picker-search svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.picker-search input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+  font-size: 12px;
+}
+
+.employee-picker-body {
+  min-height: 180px;
+  max-height: 390px;
+  padding: 14px 20px;
+  overflow-y: auto;
+  background: #f4f7f9;
+}
+
+.employee-picker-option {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+
+.employee-picker-option:last-child { margin-bottom: 0; }
+
+.employee-picker-option:hover,
+.employee-picker-option.selected {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.employee-picker-option input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  accent-color: var(--accent);
+}
+
+.employee-picker-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.employee-picker-copy strong,
+.employee-picker-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-picker-copy strong { color: var(--text); font-size: 13px; }
+.employee-picker-copy small { color: var(--text-muted); font-size: 11px; }
+
+.employee-picker-move-hint {
+  flex: 0 0 auto;
+  color: #a4510b;
+  font-size: 11px;
+}
+
+.picker-empty {
+  display: flex;
+  min-height: 180px;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 6px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.picker-empty strong { color: var(--text-secondary); font-size: 13px; }
+.picker-empty span,
+.picker-hint { font-size: 11px; }
+.picker-hint { color: var(--text-muted); }
 
 .employee-panel-header { align-items: center; }
 
@@ -847,8 +1238,15 @@ onMounted(() => loadData())
 @media (max-width: 680px) {
   .department-list { grid-template-columns: 1fr; }
   .employee-panel-header { align-items: flex-start; flex-direction: column; }
-  .employee-panel-actions { width: 100%; }
+  .employee-panel-actions { width: 100%; flex-wrap: wrap; }
   .search-box { flex: 1; width: auto; }
+  .modal-layer { padding: 12px; }
+  .picker-toolbar { align-items: stretch; flex-direction: column; }
+  .picker-search { width: 100%; }
+  .picker-toolbar > span { align-self: flex-end; }
+  .modal-footer { align-items: flex-end; flex-direction: column; }
+  .modal-footer > span { align-self: flex-start; }
+  .modal-footer-actions { width: 100%; justify-content: flex-end; }
   .page-notice { right: 14px; bottom: 14px; left: 14px; }
 }
 </style>
