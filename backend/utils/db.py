@@ -452,6 +452,70 @@ def _ensure_auth_schema(conn):
                 """
             )
 
+        admin_sales_order_permission_codes = [
+            permission["code"]
+            for module in PERMISSION_MODULES
+            for permission in module["permissions"]
+            if permission["code"].startswith("admin.sales.order.")
+        ]
+        if admin_sales_order_permission_codes:
+            placeholders = ",".join(
+                "?" for _ in admin_sales_order_permission_codes
+            )
+            cursor.execute(
+                f"""
+                DELETE FROM permissions
+                WHERE code LIKE 'admin.sales.order.%'
+                  AND code NOT IN ({placeholders})
+                """,
+                admin_sales_order_permission_codes,
+            )
+
+        sales_order_permission_migration = cursor.execute(
+            """
+            SELECT setting_value
+            FROM system_meta
+            WHERE setting_key = 'admin_sales_order_permissions_v1'
+            """
+        ).fetchone()
+        if (
+            not sales_order_permission_migration
+            and admin_sales_order_permission_codes
+        ):
+            placeholders = ",".join(
+                "?" for _ in admin_sales_order_permission_codes
+            )
+            cursor.execute(
+                f"""
+                INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+                SELECT roles.id, sales_permissions.id
+                FROM roles
+                CROSS JOIN permissions AS sales_permissions
+                WHERE roles.can_access_admin = 1
+                  AND roles.full_access = 0
+                  AND sales_permissions.code IN ({placeholders})
+                  AND EXISTS (
+                      SELECT 1
+                      FROM role_permissions AS route_links
+                      INNER JOIN permissions AS route_permissions
+                          ON route_permissions.id = route_links.permission_id
+                      WHERE route_links.role_id = roles.id
+                        AND route_permissions.code = 'admin.route.sales'
+                  )
+                """,
+                admin_sales_order_permission_codes,
+            )
+            cursor.execute(
+                """
+                INSERT INTO system_meta (setting_key, setting_value, updated_at)
+                VALUES (
+                    'admin_sales_order_permissions_v1',
+                    '1',
+                    CURRENT_TIMESTAMP
+                )
+                """
+            )
+
         cursor.execute(
             """
             INSERT INTO roles (

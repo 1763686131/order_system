@@ -9,6 +9,18 @@ const SCOPE_FIELDS = {
   }
 }
 
+export const ADMIN_SALES_ORDER_PERMISSIONS = {
+  CREATE: 'admin.sales.order.create',
+  EDIT: 'admin.sales.order.edit',
+  DELETE: 'admin.sales.order.delete',
+  PRINT: 'admin.sales.order.print',
+  EXPORT: 'admin.sales.order.export',
+  COMPLETE: 'admin.sales.order.complete',
+  REOPEN: 'admin.sales.order.reopen',
+  AUDIT: 'admin.sales.order.audit',
+  REVERSE_AUDIT: 'admin.sales.order.reverse_audit'
+}
+
 const normalizeIds = (values) => {
   if (!Array.isArray(values)) return []
   return [...new Set(values.map(Number).filter(Number.isInteger))]

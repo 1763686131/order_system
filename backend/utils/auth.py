@@ -337,6 +337,15 @@ def permission_granted(permission_code):
     )
 
 
+def admin_permission_granted(permission_code):
+    user = get_current_user()
+    return bool(
+        user
+        and user.get("canAccessAdmin")
+        and permission_granted(permission_code)
+    )
+
+
 def require_login(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
@@ -380,6 +389,32 @@ def require_permission(permission_code):
             user = get_current_user()
             if not user:
                 return jsonify({"success": False, "message": "请先登录"}), 401
+            if not permission_granted(permission_code):
+                return jsonify(
+                    {
+                        "success": False,
+                        "message": "当前账号没有执行此操作的权限",
+                        "permission": permission_code,
+                    }
+                ), 403
+            return view(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
+
+
+def require_admin_permission(permission_code):
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            user = get_current_user()
+            if not user:
+                return jsonify({"success": False, "message": "请先登录"}), 401
+            if not user.get("canAccessAdmin"):
+                return jsonify(
+                    {"success": False, "message": "当前账号不能访问后台管理功能"}
+                ), 403
             if not permission_granted(permission_code):
                 return jsonify(
                     {

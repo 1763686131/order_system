@@ -206,7 +206,7 @@
 
 | Method | URL | 说明 |
 |---|---|---|
-| `GET` | `/api/admin/permissions` | 获取触屏端和后台路由权限目录 |
+| `GET` | `/api/admin/permissions` | 获取触屏端、后台路由和销售订单操作权限目录 |
 | `GET` | `/api/admin/roles` | 获取权限组、成员数和权限编码 |
 | `POST` | `/api/admin/roles` | 创建权限组 |
 | `PUT` | `/api/admin/roles/<role_id>` | 修改权限组、数据范围和权限 |
@@ -233,7 +233,9 @@
   "dataScope": "custom",
   "permissionCodes": [
     "admin.route.sales",
-    "touch.order.read"
+    "touch.order.read",
+    "admin.sales.order.create",
+    "admin.sales.order.edit"
   ],
   "storeIds": [1, 2],
   "warehouseIds": [1]
@@ -1400,7 +1402,7 @@
 ### 5.3 创建订单（新销售单）
 - **URL**: `/api/orders`
 - **Method**: `POST`
-- **权限**: 当前账号必须启用 `canAccessAdmin`
+- **权限**: 当前账号必须启用 `canAccessAdmin`，并拥有 `admin.sales.order.create`
 - **说明**: 创建新订单（type=1），包含完整商品明细和财务信息
 
 **请求参数**:
@@ -1490,10 +1492,11 @@
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `PUT`
 - **权限**:
-  - 完整编辑订单内容需要 `canAccessAdmin`
-  - `status=completed` 需要 `touch.order.complete`
-  - `status=pending` 需要 `touch.order.reopen`
-  - 发货、物流和 `audit_state` 操作需要 `touch.shipment.audit`
+  - 完整编辑订单内容需要 `canAccessAdmin` 和 `admin.sales.order.edit`
+  - `status=completed` 需要 `touch.order.complete`，或后台账号拥有 `admin.sales.order.complete`
+  - `status=pending` 需要 `touch.order.reopen`，或后台账号拥有 `admin.sales.order.reopen`
+  - 发货和物流录入需要 `touch.shipment.audit`
+  - `audit_state` 审核与反审核权限见 5.5
 - **说明**: 更新订单信息，支持编辑商品明细、财务信息等
 
 **请求参数（完整订单更新）**:
@@ -1587,7 +1590,10 @@
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `PUT`
 - **身份**: 服务端 Session 中的当前登录账号
-- **权限**: `touch.shipment.audit`
+- **权限**:
+  - 触屏端审核或反审核使用 `touch.shipment.audit`
+  - 后台审核使用 `admin.sales.order.audit`
+  - 后台反审核使用 `admin.sales.order.reverse_audit`
 - **适用范围**: 有订单编号和商品明细、且 `status` 为 `shipped` 的销售订单
 
 **审核请求**:
@@ -1662,7 +1668,7 @@
 ### 5.6 删除订单
 - **URL**: `/api/orders/<int:order_id>`
 - **Method**: `DELETE`
-- **权限**: `touch.order.delete`
+- **权限**: `touch.order.delete`，或后台账号拥有 `admin.sales.order.delete`
 - **说明**: 删除订单，新订单删除时会自动恢复库存
 
 **响应示例**:
@@ -4597,7 +4603,23 @@ ON print_templates(is_default);
 | `admin.route.hr` | 员工、公司资料和检测报告 |
 | `admin.route.system` | 门店、系统、角色组和打印模板 |
 
-后台路由权限控制菜单和前端路由访问，不自动代替业务写接口的服务端权限校验。新增敏感接口时仍应使用 `require_super_admin`、`require_admin_access` 或 `require_permission`。
+后台路由权限控制菜单和前端路由访问，不自动代替业务写接口的服务端权限校验。新增敏感接口时仍应使用 `require_super_admin`、`require_admin_access`、`require_admin_permission` 或 `require_permission`。
+
+### 销售订单操作权限
+
+| 权限编码 | 控制按钮或操作 |
+|---|---|
+| `admin.sales.order.create` | 新建订单、复制为新订单及创建接口 |
+| `admin.sales.order.edit` | 编辑订单及完整订单更新接口 |
+| `admin.sales.order.delete` | 单个删除、批量删除及删除接口 |
+| `admin.sales.order.print` | 打印订单 |
+| `admin.sales.order.export` | 导出销售订单 |
+| `admin.sales.order.complete` | 强制完成订单 |
+| `admin.sales.order.reopen` | 撤销已完成 |
+| `admin.sales.order.audit` | 审核销售订单 |
+| `admin.sales.order.reverse_audit` | 反审核销售订单 |
+
+这些权限只对启用了 `canAccessAdmin` 的后台账号生效。超级管理员自动拥有全部权限。升级时，已经拥有 `admin.route.sales` 的非超级管理员角色会一次性继承全部销售订单操作权限，以保持原有操作能力，后续可在角色组管理中逐项移除。
 
 ---
 
@@ -4706,6 +4728,7 @@ SQLite 支持**多读一写**模式：
 - 多角色权限、门店和仓库范围改为并集合并，超级管理员保持全范围
 - 订单列表和详情在后端按授权门店过滤，单门店前端隐藏门店选择器
 - 前端访问规则集中到 `accessControl.js`，后端数据范围集中到 `access_scope.py`
+- 新增 `admin.sales.order.*` 权限分类，销售订单按钮、表单路由和写接口统一按操作权限校验
 
 ### v4.0.0 (2026-09-18)
 - 新增首次超级管理员初始化，依据有效全权限账号是否存在决定入口是否开放

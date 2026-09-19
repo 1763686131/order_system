@@ -234,6 +234,7 @@
             </svg>
           </button>
           <button
+            v-if="mode !== 'finance' || canExportSalesOrders"
             class="button button-export"
             type="button"
             title="导出Excel"
@@ -247,7 +248,7 @@
             导出 Excel
           </button>
           <button
-            v-if="mode === 'finance'"
+            v-if="mode === 'finance' && canCreateSalesOrders"
             class="button button-primary create-button"
             type="button"
             @click="handleAdd"
@@ -260,7 +261,7 @@
           </button>
           <!-- 批量删除按钮 -->
           <button
-            v-if="mode === 'finance'"
+            v-if="mode === 'finance' && canDeleteSalesOrders"
             class="button button-delete"
             :class="{ 'has-selection': selectedOrders.length > 0 }"
             type="button"
@@ -283,7 +284,7 @@
         <table class="records-table">
           <thead>
             <tr>
-              <th class="col-checkbox">
+              <th v-if="mode !== 'finance' || canDeleteSalesOrders" class="col-checkbox">
                 <input
                   type="checkbox"
                   :checked="isAllSelected"
@@ -350,7 +351,11 @@
               @click="openOrderDetail(order)"
               @keydown.enter.self.prevent="openOrderDetail(order)"
             >
-              <td class="col-checkbox" @click.stop>
+              <td
+                v-if="mode !== 'finance' || canDeleteSalesOrders"
+                class="col-checkbox"
+                @click.stop
+              >
                 <input
                   type="checkbox"
                   :checked="isSelected(order.id)"
@@ -444,7 +449,7 @@
               <td class="operation-column" @click.stop>
                 <div class="row-actions">
                   <button
-                    v-if="mode === 'finance' && isNewOrder(order)"
+                    v-if="mode === 'finance' && canCreateSalesOrders && isNewOrder(order)"
                     type="button"
                     title="复制为新订单"
                     @click="handleCopySalesOrder(order)"
@@ -466,6 +471,7 @@
                     </svg>
                   </button>
                   <button
+                    v-if="canPrintSalesOrders"
                     type="button"
                     title="打印订单"
                     @click="handlePrintOrder(order)"
@@ -477,7 +483,12 @@
                     </svg>
                   </button>
                   <button
-                    v-if="mode === 'finance' && isSalesOrder(order) && !isOrderAudited(order)"
+                    v-if="
+                      mode === 'finance' &&
+                      canEditSalesOrders &&
+                      isSalesOrder(order) &&
+                      !isOrderAudited(order)
+                    "
                     type="button"
                     title="编辑订单"
                     @click="handleEditOrder(order)"
@@ -488,7 +499,11 @@
                     </svg>
                   </button>
                   <button
-                    v-if="mode === 'finance' && order.status === 'completed'"
+                    v-if="
+                      mode === 'finance' &&
+                      canReopenSalesOrders &&
+                      order.status === 'completed'
+                    "
                     type="button"
                     title="撤销已完成"
                     @click="handleUncompleteOrder(order)"
@@ -771,7 +786,12 @@
             <footer class="detail-modal-footer">
               <div class="detail-modal-left-actions">
                 <button
-                  v-if="mode === 'finance' && isSalesOrder(selectedOrder) && !isOrderAudited(selectedOrder)"
+                  v-if="
+                    mode === 'finance' &&
+                    canEditSalesOrders &&
+                    isSalesOrder(selectedOrder) &&
+                    !isOrderAudited(selectedOrder)
+                  "
                   class="button button-edit"
                   type="button"
                   @click="handleEditOrder(selectedOrder)"
@@ -848,7 +868,11 @@
                   {{ orderActionLoading === 'reverse-audit' ? '反审核中...' : '反审核' }}
                 </button>
                 <button
-                  v-if="mode === 'finance' && selectedOrder.status === 'completed'"
+                  v-if="
+                    mode === 'finance' &&
+                    canReopenSalesOrders &&
+                    selectedOrder.status === 'completed'
+                  "
                   class="button button-reverse-audit"
                   type="button"
                   :disabled="orderActionLoading !== ''"
@@ -857,7 +881,11 @@
                   {{ orderActionLoading === 'uncomplete' ? '撤销中...' : '撤销已完成' }}
                 </button>
                 <button
-                  v-if="mode === 'finance' && selectedOrder.status === 'pending'"
+                  v-if="
+                    mode === 'finance' &&
+                    canCompleteSalesOrders &&
+                    selectedOrder.status === 'pending'
+                  "
                   class="button button-force-complete"
                   type="button"
                   :disabled="orderActionLoading !== ''"
@@ -1085,6 +1113,7 @@ import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { useUserStore } from '@/stores/user'
 import {
+  ADMIN_SALES_ORDER_PERMISSIONS,
   filterAccessibleOptions,
   filterRecordsByScope,
   hasMultipleScopeOptions
@@ -1108,6 +1137,33 @@ const props = defineProps({
 const orderStore = useOrderStore()
 const orderDraftStore = useOrderDraftStore()
 const userStore = useUserStore()
+const canCreateSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.CREATE)
+)
+const canEditSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.EDIT)
+)
+const canDeleteSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.DELETE)
+)
+const canPrintSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.PRINT)
+)
+const canExportSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.EXPORT)
+)
+const canCompleteSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.COMPLETE)
+)
+const canReopenSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.REOPEN)
+)
+const canAuditSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.AUDIT)
+)
+const canReverseAuditSalesOrders = computed(() =>
+  userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.REVERSE_AUDIT)
+)
 
 // 注入 Admin 组件提供的方法
 const setHeaderActions = inject('setHeaderActions', null)
@@ -1209,7 +1265,7 @@ const sortOrder = ref('desc') // 'desc' = 最近到远, 'asc' = 最远到近
 onMounted(() => {
   if (setHeaderActions) {
     // 订单列表只显示导出按钮（新增订单按钮已移到顶部）
-    if (props.mode === 'finance') {
+    if (props.mode === 'finance' && canExportSalesOrders.value) {
       setHeaderActions(() =>
         h('button', {
           class: 'btn-export',
@@ -1220,7 +1276,7 @@ onMounted(() => {
           '导出数据'
         ])
       )
-    } else {
+    } else if (props.mode === 'logistics') {
       // 物流列表只显示导出按钮
       setHeaderActions(() =>
         h('button', {
@@ -1232,7 +1288,7 @@ onMounted(() => {
           '导出数据'
         ])
       )
-    }
+    } else setHeaderActions(null)
   }
 
   // 注册全局刷新回调，当弹窗操作完成后刷新数据
@@ -1375,7 +1431,8 @@ const emptyMessage = computed(() => {
 })
 
 const columnCount = computed(() => {
-  return props.mode === 'logistics' ? 14 : 14
+  if (props.mode === 'logistics') return 14
+  return canDeleteSalesOrders.value ? 14 : 13
 })
 
 // 获取订单数据
@@ -1773,7 +1830,8 @@ const isSalesOrder = (order) => {
 
 const isOrderAudited = (order) => Number(order?.audit_state) === 1
 const isSalesOrderLocked = (order) => isSalesOrder(order) && isOrderAudited(order)
-const canDeleteOrder = (order) => !isSalesOrderLocked(order)
+const canDeleteOrder = (order) =>
+  canDeleteSalesOrders.value && !isSalesOrderLocked(order)
 
 // 根据 product_id 查找商品名称
 const getProductNameById = (productId) => {
@@ -2100,6 +2158,7 @@ const getStatusCount = (status) => {
 }
 
 const handleAdd = () => {
+  if (!canCreateSalesOrders.value) return
   openOrderTask({ name: 'admin-sales-create' })
 }
 
@@ -2114,12 +2173,14 @@ const handleEdit = (order) => {
 
 // 编辑订单（跳转到编辑页面）
 const handleEditOrder = (order) => {
+  if (!canEditSalesOrders.value) return
   closeDetailModal()
   openOrderTask({ name: 'admin-sales-edit', params: { id: order.id } })
 }
 
 // 打印订单
 const handlePrintOrder = (order) => {
+  if (!canPrintSalesOrders.value) return
   if (isNewOrder(order)) {
     printTargetOrder.value = order
     selectedPrintTemplate.value = null
@@ -2134,6 +2195,7 @@ const handlePrintOrder = (order) => {
 
 // 复制新格式销售订单：进入新增页并由表单重新生成订单编号
 const handleCopySalesOrder = (order) => {
+  if (!canCreateSalesOrders.value) return
   openOrderTask(
     {
       name: 'admin-sales-create',
@@ -2267,13 +2329,15 @@ const handleLogisticsAction = (order) => {
 }
 
 const canAuditOrder = (order) => {
-  return isSalesOrder(order) &&
+  return canAuditSalesOrders.value &&
+    isSalesOrder(order) &&
     order?.status === 'shipped' &&
     !isOrderAudited(order)
 }
 
 const canReverseAuditOrder = (order) => {
-  return isSalesOrder(order) &&
+  return canReverseAuditSalesOrders.value &&
+    isSalesOrder(order) &&
     order?.status === 'shipped' &&
     isOrderAudited(order)
 }
@@ -2446,6 +2510,7 @@ const handleClickOutside = (event) => {
 }
 
 const handleUncompleteOrder = async (order) => {
+  if (!canReopenSalesOrders.value) return
   if (!order || order.status !== 'completed') return
   const confirmed = await requestConfirmation({
     title: '确认撤销完成',
@@ -2477,6 +2542,7 @@ const handleUncompleteOrder = async (order) => {
 }
 
 const handleForceComplete = async (order) => {
+  if (!canCompleteSalesOrders.value) return
   if (!order) return
   if (order.status === 'completed') {
     showNotice('订单已完成，无需重复操作', 'info')
@@ -2528,6 +2594,7 @@ const handleViewReceipt = (order) => {
 }
 
 const handleDelete = async (order) => {
+  if (!canDeleteSalesOrders.value) return
   if (isSalesOrderLocked(order)) {
     showNotice('已过账单据不可删除，请先反审核', 'error')
     return
@@ -2569,6 +2636,7 @@ const handleDelete = async (order) => {
 }
 
 const handleBatchDelete = async () => {
+  if (!canDeleteSalesOrders.value) return
   if (selectedOrders.value.length === 0) {
     showNotice('请先选择要删除的订单', 'error')
     return
@@ -2632,6 +2700,7 @@ const handleBatchDelete = async () => {
 }
 
 const handleExport = () => {
+  if (props.mode === 'finance' && !canExportSalesOrders.value) return
   console.log('导出数据')
 }
 

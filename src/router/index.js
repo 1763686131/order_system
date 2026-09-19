@@ -4,6 +4,7 @@ import LoginView from '@/views/LoginView.vue'
 import MainView from '@/views/MainView.vue'
 import Admin from '@/views/Admin.vue'
 import { getAdminRoutePermission, getDefaultAdminPath } from '@/utils/adminAccess'
+import { ADMIN_SALES_ORDER_PERMISSIONS } from '@/utils/accessControl'
 
 const routes = [
   {
@@ -186,14 +187,20 @@ const routes = [
         path: 'sales/create',
         name: 'admin-sales-create',
         component: () => import('@/views/admin/sales/OrderForm.vue'),
-        meta: { requiresAuth: true }
+        meta: {
+          requiresAuth: true,
+          permission: ADMIN_SALES_ORDER_PERMISSIONS.CREATE
+        }
       },
       {
         path: 'sales/edit/:id',
         name: 'admin-sales-edit',
         component: () => import('@/views/admin/sales/OrderForm.vue'),
         props: route => ({ orderId: Number(route.params.id) }),
-        meta: { requiresAuth: true }
+        meta: {
+          requiresAuth: true,
+          permission: ADMIN_SALES_ORDER_PERMISSIONS.EDIT
+        }
       },
       {
         path: 'purchase/orders',
@@ -285,6 +292,10 @@ router.beforeEach(async (to) => {
     !userStore.hasPerm(adminPermission)
   ) {
     return getDefaultAdminPath(userStore)
+  }
+
+  if (to.meta.permission && !userStore.hasPerm(to.meta.permission)) {
+    return '/admin/sales'
   }
 
   if (to.path === '/login' && loggedIn) {

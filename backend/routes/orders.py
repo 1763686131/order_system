@@ -6,10 +6,11 @@ from utils.db_helper import read_orders, write_orders, read_customers, read_carr
 from utils.db import get_db
 from utils.access_scope import filter_records_by_scope
 from utils.auth import (
+    admin_permission_granted,
     current_identity,
     get_current_user,
     permission_granted,
-    require_admin_access,
+    require_admin_permission,
     require_login,
     require_permission,
     require_super_admin,
@@ -18,6 +19,7 @@ from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
 )
+from utils.permission_catalog import ADMIN_SALES_ORDER_PERMISSIONS
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
@@ -181,7 +183,7 @@ def get_order(order_id):
     return jsonify(order)
 
 @orders_bp.route('', methods=['POST'])
-@require_admin_access
+@require_admin_permission(ADMIN_SALES_ORDER_PERMISSIONS["create"])
 def add_order():
     """创建新订单 - 支持新旧两种格式"""
     with orders_lock:
@@ -478,27 +480,51 @@ def update_order_status(order_id):
     is_full_edit = 'items' in req_data and 'customerId' in req_data
 
     if is_full_edit:
-        if not get_current_user().get('canAccessAdmin'):
-            return jsonify(
-                {"success": False, "message": "订单内容只能在后台管理端修改"}
-            ), 403
+        if not admin_permission_granted(
+            ADMIN_SALES_ORDER_PERMISSIONS["edit"]
+        ):
+            return jsonify({
+                "success": False,
+                "message": "当前账号没有编辑销售订单的权限",
+                "permission": ADMIN_SALES_ORDER_PERMISSIONS["edit"],
+            }), 403
         # 完整订单编辑
         return update_full_order(order_id, req_data)
     else:
         if 'audit_state' in req_data and 'status' not in req_data:
-            permission_code = 'touch.shipment.audit'
+            admin_permission_code = (
+                ADMIN_SALES_ORDER_PERMISSIONS["audit"]
+                if bool(req_data.get('audit_state'))
+                else ADMIN_SALES_ORDER_PERMISSIONS["reverse_audit"]
+            )
+            permission_codes = (
+                'touch.shipment.audit',
+                admin_permission_code,
+            )
         elif req_data.get('status') == 'completed':
-            permission_code = 'touch.order.complete'
+            permission_codes = (
+                'touch.order.complete',
+                ADMIN_SALES_ORDER_PERMISSIONS["complete"],
+            )
         elif req_data.get('status') == 'pending':
-            permission_code = 'touch.order.reopen'
+            permission_codes = (
+                'touch.order.reopen',
+                ADMIN_SALES_ORDER_PERMISSIONS["reopen"],
+            )
         else:
-            permission_code = 'touch.shipment.audit'
-        if not permission_granted(permission_code):
+            permission_codes = ('touch.shipment.audit',)
+        if not (
+            permission_granted(permission_codes[0])
+            or (
+                len(permission_codes) > 1
+                and admin_permission_granted(permission_codes[1])
+            )
+        ):
             return jsonify(
                 {
                     "success": False,
                     "message": "当前账号没有执行此订单操作的权限",
-                    "permission": permission_code,
+                    "permissions": list(permission_codes),
                 }
             ), 403
         # 状态更新（原有逻辑）
@@ -1192,9 +1218,24 @@ def update_full_order(order_id, req_data):
 
 
 @orders_bp.route('/<int:order_id>', methods=['DELETE'])
-@require_permission('touch.order.delete')
+@require_login
 def delete_order(order_id):
     """删除订单，并恢复该订单占用的库存。"""
+    if not (
+        permission_granted('touch.order.delete')
+        or admin_permission_granted(
+            ADMIN_SALES_ORDER_PERMISSIONS["delete"]
+        )
+    ):
+        return jsonify({
+            "success": False,
+            "message": "当前账号没有删除销售订单的权限",
+            "permissions": [
+                "touch.order.delete",
+                ADMIN_SALES_ORDER_PERMISSIONS["delete"],
+            ],
+        }), 403
+
     with get_db() as conn:
         target_row = conn.execute(
             'SELECT id, status, audit_state, order_number, order_goods FROM orders WHERE id = ?',
@@ -1252,7 +1293,7 @@ def delete_order(order_id):
     return jsonify({"success": True, "message": "删除成功"})
 
 @orders_bp.route('/<int:order_id>/edit', methods=['PUT'])
-@require_admin_access
+@require_admin_permission(ADMIN_SALES_ORDER_PERMISSIONS["edit"])
 def edit_order_content(order_id):
     """编辑订单内容"""
     req_data = request.json

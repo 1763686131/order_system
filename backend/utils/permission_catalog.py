@@ -1,5 +1,17 @@
 """Permission catalog used by auth schema, API responses, and UI metadata."""
 
+ADMIN_SALES_ORDER_PERMISSIONS = {
+    "create": "admin.sales.order.create",
+    "edit": "admin.sales.order.edit",
+    "delete": "admin.sales.order.delete",
+    "print": "admin.sales.order.print",
+    "export": "admin.sales.order.export",
+    "complete": "admin.sales.order.complete",
+    "reopen": "admin.sales.order.reopen",
+    "audit": "admin.sales.order.audit",
+    "reverse_audit": "admin.sales.order.reverse_audit",
+}
+
 PERMISSION_MODULES = [
     {
         "code": "touch_terminal",
@@ -112,6 +124,58 @@ PERMISSION_MODULES = [
                 "code": "admin.route.system",
                 "name": "访问设置",
                 "description": "显示并访问门店、系统、角色组和打印模板",
+            },
+        ],
+    },
+    {
+        "code": "admin_sales_orders",
+        "name": "销售订单操作",
+        "description": "控制后台销售订单列表中的新增、修改和状态操作",
+        "permissions": [
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["create"],
+                "name": "新建/复制订单",
+                "description": "新建销售订单或复制现有订单生成新单",
+            },
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["edit"],
+                "name": "编辑订单",
+                "description": "修改未过账销售订单的内容",
+            },
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["delete"],
+                "name": "删除订单",
+                "description": "删除未过账销售订单并恢复库存",
+            },
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["print"],
+                "name": "打印订单",
+                "description": "打开销售订单打印模板和预览",
+            },
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["export"],
+                "name": "导出订单",
+                "description": "导出销售订单列表",
+            },
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["complete"],
+                "name": "完成订单",
+                "description": "在后台将待处理订单标记为已完成",
+            },
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["reopen"],
+                "name": "撤销完成",
+                "description": "在后台将已完成订单恢复为待处理",
+            },
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["audit"],
+                "name": "审核订单",
+                "description": "审核已发货销售订单并更新客户账户",
+            },
+            {
+                "code": ADMIN_SALES_ORDER_PERMISSIONS["reverse_audit"],
+                "name": "反审核订单",
+                "description": "撤销销售订单审核及相关客户账户流水",
             },
         ],
     },
