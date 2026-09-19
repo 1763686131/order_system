@@ -428,3 +428,50 @@ def update_employee(employee_id):
         )
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@employees_bp.route("/<int:employee_id>/account", methods=["DELETE"])
+@require_super_admin
+def unbind_employee_account(employee_id):
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        employee = _employee_row(conn, employee_id)
+        if not employee:
+            return jsonify({"success": False, "message": "员工档案不存在"}), 404
+        user_id = employee["user_id"]
+        if not user_id:
+            return jsonify({"success": False, "message": "该员工尚未绑定登录账号"}), 409
+        current_user = get_current_user()
+        if current_user and current_user["id"] == user_id:
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "不能解绑当前正在使用的登录账号",
+                }
+            ), 409
+        if _is_active_super_admin(conn, user_id) and _active_super_admin_count(conn) <= 1:
+            return jsonify(
+                {
+                    "success": False,
+                    "message": "不能解绑最后一个超级管理员账号",
+                }
+            ), 409
+
+        conn.execute(
+            """
+            UPDATE employees
+            SET user_id = NULL, account_status = 'pending',
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (employee_id,),
+        )
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        updated_employee = _serialize_employee(conn, _employee_row(conn, employee_id))
+    return jsonify(
+        {
+            "success": True,
+            "message": "账号已解绑，员工档案和权限组已保留",
+            "employee": updated_employee,
+        }
+    )

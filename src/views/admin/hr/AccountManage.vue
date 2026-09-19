@@ -191,13 +191,21 @@
                       </svg>
                     </button>
                     <div class="action-menu">
-                      <button type="button" @click="openPasswordEditor">修改密码</button>
+                      <button type="button" @click="openPasswordEditor(employee)">修改密码</button>
                       <button
                         type="button"
                         class="action-danger"
                         @click="confirmToggleAccount(employee)"
                       >
                         {{ employee.accountStatus === 'disabled' ? '启用账号' : '停用账号' }}
+                      </button>
+                      <button
+                        v-if="employee.username"
+                        type="button"
+                        class="action-danger"
+                        @click="confirmUnbindAccount(employee)"
+                      >
+                        解绑账号
                       </button>
                     </div>
                   </div>
@@ -1040,12 +1048,13 @@ function toggleStoredPasswordVisibility() {
   }
 }
 
-async function openPasswordEditor() {
-  if (!selectedEmployee.value?.username) {
+async function openPasswordEditor(employee = selectedEmployee.value) {
+  if (!employee?.username) {
     showNotice('该员工尚未开通登录账号')
     return
   }
-  openEdit(selectedEmployee.value)
+  selectedEmployeeId.value = employee.id
+  openEdit(employee)
   await nextTick()
   passwordInput.value?.focus()
 }
@@ -1136,6 +1145,33 @@ function confirmToggleAccount(employee) {
   const action = employee.accountStatus === 'disabled' ? '启用' : '停用'
   if (window.confirm(`确认${action}账号 "${employee.username}"？\n\n${action === '停用' ? '停用后该员工将无法登录系统。' : ''}`)) {
     toggleAccount(employee)
+  }
+}
+
+async function unbindAccount(employee) {
+  try {
+    const response = await request.delete(`/admin/employees/${employee.id}/account`)
+    const index = employees.value.findIndex(item => item.id === employee.id)
+    if (index !== -1) employees.value[index] = response.employee
+    if (selectedEmployeeId.value === employee.id) {
+      detailPasswordVisible.value = false
+    }
+    showNotice(response.message || '账号已解绑')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '账号解绑失败')
+  }
+}
+
+function confirmUnbindAccount(employee) {
+  if (!employee.username) {
+    showNotice('该员工尚未开通登录账号')
+    return
+  }
+  const confirmed = window.confirm(
+    `确认解绑账号 "${employee.username}"？\n\n解绑后将删除该账号及其登录会话，员工档案和权限组会保留，之后可以重新绑定。`
+  )
+  if (confirmed) {
+    unbindAccount(employee)
   }
 }
 
@@ -1841,6 +1877,10 @@ input[type='checkbox'] {
   gap: 4px;
 }
 
+.account-cell {
+  align-items: flex-start;
+}
+
 .employee-copy strong,
 .account-cell strong,
 .job-cell strong,
@@ -2044,19 +2084,32 @@ input[type='checkbox'] {
   display: block;
 }
 
+.action-dropdown:focus-within .action-menu {
+  display: block;
+}
+
 .action-menu {
   position: absolute;
-  top: 100%;
+  top: calc(100% - 2px);
   right: 0;
   z-index: 100;
   display: none;
   min-width: 130px;
-  margin-top: 4px;
+  margin-top: 0;
   padding: 6px 0;
   background: #fff;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
+}
+
+.action-menu::before {
+  position: absolute;
+  top: -7px;
+  right: 0;
+  left: 0;
+  height: 7px;
+  content: '';
 }
 
 .action-menu button {
