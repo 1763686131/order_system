@@ -1,6 +1,38 @@
 import { defineStore } from 'pinia'
 import request from '@/api/request'
 
+const DEVICE_ID_KEY = 'order_system_device_id'
+
+const getBrowserName = () => {
+  const userAgent = navigator.userAgent || ''
+  if (userAgent.includes('Edg/')) return 'Edge'
+  if (userAgent.includes('Chrome/')) return 'Chrome'
+  if (userAgent.includes('Firefox/')) return 'Firefox'
+  if (userAgent.includes('Safari/')) return 'Safari'
+  return '浏览器'
+}
+
+const getDeviceIdentity = () => {
+  let deviceId = ''
+  try {
+    deviceId = localStorage.getItem(DEVICE_ID_KEY) || ''
+    if (!deviceId) {
+      deviceId = globalThis.crypto?.randomUUID?.()
+        || `device-${Date.now()}-${Math.random().toString(16).slice(2)}`
+      localStorage.setItem(DEVICE_ID_KEY, deviceId)
+    }
+  } catch {
+    deviceId = `device-${Date.now()}`
+  }
+
+  const platform = navigator.userAgentData?.platform || navigator.platform || '新设备'
+  return {
+    id: deviceId,
+    name: `${platform} · ${getBrowserName()}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+  }
+}
+
 export const useUserStore = defineStore('user', {
   state: () => ({
     id: null,
@@ -79,7 +111,11 @@ export const useUserStore = defineStore('user', {
     },
 
     async login(username, password) {
-      const response = await request.post('/auth/login', { username, password })
+      const response = await request.post('/auth/login', {
+        username,
+        password,
+        device: getDeviceIdentity()
+      })
       if (response.success && response.user) this.setUser(response.user)
       return response
     },

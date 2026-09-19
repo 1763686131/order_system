@@ -659,6 +659,125 @@
           </div>
         </div>
       </div>
+
+      <div class="settings-section">
+        <div class="section-header" @click="toggleSection('devices')">
+          <div class="header-left">
+            <svg class="section-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="3" y="4" width="18" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/>
+              <line x1="12" y1="18" x2="12" y2="21"/>
+            </svg>
+            <h4 class="section-title">登录设备</h4>
+            <span class="section-badge">{{ activeDeviceCount }} 台在线</span>
+          </div>
+          <svg
+            class="toggle-icon"
+            :class="{ expanded: expandedSections.devices }"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+          >
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+
+        <div v-show="expandedSections.devices" class="section-content device-section-content">
+          <div class="device-toolbar">
+            <div>
+              <strong>已登录设备与会话</strong>
+              <p>IP 为服务器收到的局域网来源地址。撤销后该设备下次请求会立即退出登录。</p>
+            </div>
+            <button
+              class="btn-secondary btn-sm"
+              type="button"
+              :disabled="deviceLoading"
+              @click.stop="loadLoginDevices"
+            >
+              <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.5 15a9 9 0 1 1-2.1-9.4L23 10"/>
+              </svg>
+              刷新
+            </button>
+          </div>
+
+          <div
+            v-if="deviceNotice.text"
+            class="device-notice"
+            :class="deviceNotice.type"
+          >
+            {{ deviceNotice.text }}
+          </div>
+
+          <div v-if="deviceLoading" class="device-empty">正在读取登录设备...</div>
+          <div v-else-if="!deviceSessions.length" class="device-empty">
+            暂无可管理的登录设备。
+          </div>
+          <div v-else class="device-table-wrap">
+            <table class="device-table">
+              <thead>
+                <tr>
+                  <th>设备</th>
+                  <th>登录账号</th>
+                  <th>局域网 IP</th>
+                  <th>登录时间</th>
+                  <th>最近活跃</th>
+                  <th>有效期</th>
+                  <th>状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="device in deviceSessions" :key="device.id">
+                  <td>
+                    <div class="device-name-line">
+                      <strong>{{ device.deviceName || '未命名设备' }}</strong>
+                      <span v-if="device.currentSession" class="current-device-badge">当前设备</span>
+                    </div>
+                    <span class="device-meta">
+                      {{ sessionKindLabel(device.sessionKind) }} ·
+                      {{ device.operatingSystem || '未知系统' }} ·
+                      {{ device.browser || '未知浏览器' }}
+                    </span>
+                  </td>
+                  <td>
+                    <strong>{{ device.displayName || device.username }}</strong>
+                    <span class="device-meta">{{ device.username }}</span>
+                  </td>
+                  <td class="device-ip">{{ device.ipAddress || '-' }}</td>
+                  <td>{{ formatDeviceTime(device.createdAt) }}</td>
+                  <td>{{ formatDeviceTime(device.lastSeenAt) }}</td>
+                  <td>{{ formatDeviceTime(device.expiresAt) }}</td>
+                  <td>
+                    <span class="device-status" :class="device.status">
+                      {{ deviceStatusLabel(device.status) }}
+                    </span>
+                  </td>
+                  <td>
+                    <div class="device-actions">
+                      <button
+                        v-if="device.status === 'active'"
+                        class="device-action revoke"
+                        type="button"
+                        @click="revokeDevice(device)"
+                      >
+                        撤销
+                      </button>
+                      <button
+                        class="device-action delete"
+                        type="button"
+                        @click="deleteDevice(device)"
+                      >
+                        删除
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div
@@ -732,16 +851,33 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
+
+const router = useRouter()
+const userStore = useUserStore()
 
 // 控制各区块展开/收起
 const expandedSections = reactive({
   path: true,
   message: false,
   business: false,
-  security: false
+  security: false,
+  devices: false
 })
+
+const deviceSessions = ref([])
+const deviceLoading = ref(false)
+const deviceLoaded = ref(false)
+const deviceNotice = reactive({
+  type: 'success',
+  text: ''
+})
+const activeDeviceCount = computed(() => (
+  deviceSessions.value.filter(device => device.status === 'active').length
+))
 
 // 路径配置
 const pathConfig = reactive({
@@ -807,7 +943,107 @@ const securityConfig = reactive({
 
 // 切换区块展开状态
 const toggleSection = (section) => {
-  expandedSections[section] = !expandedSections[section]
+  const opening = !expandedSections[section]
+  expandedSections[section] = opening
+  if (section === 'devices' && opening && !deviceLoaded.value) {
+    loadLoginDevices()
+  }
+}
+
+const setDeviceNotice = (text, type = 'success') => {
+  deviceNotice.text = text
+  deviceNotice.type = type
+}
+
+const loadLoginDevices = async () => {
+  if (deviceLoading.value) return
+  deviceLoading.value = true
+  deviceNotice.text = ''
+  try {
+    const response = await request.get('/settings/login-devices')
+    deviceSessions.value = Array.isArray(response.data) ? response.data : []
+    deviceLoaded.value = true
+  } catch (error) {
+    setDeviceNotice(
+      error.response?.data?.message || '登录设备读取失败',
+      'error'
+    )
+  } finally {
+    deviceLoading.value = false
+  }
+}
+
+const formatDeviceTime = (value) => {
+  if (!value) return '-'
+  const normalized = String(value).replace(' ', 'T')
+  const dateValue = /(Z|[+-]\d{2}:\d{2})$/.test(normalized)
+    ? normalized
+    : `${normalized}Z`
+  const date = new Date(dateValue)
+  if (Number.isNaN(date.getTime())) return value
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date)
+}
+
+const deviceStatusLabel = (status) => ({
+  active: '在线',
+  revoked: '已撤销',
+  expired: '已过期'
+}[status] || '未知')
+
+const sessionKindLabel = (sessionKind) => (
+  sessionKind === 'touch' ? '触屏端' : '后台管理'
+)
+
+const leaveRevokedSession = async () => {
+  userStore.clearUser()
+  userStore.authChecked = true
+  await router.replace({
+    name: 'login',
+    query: { reason: 'device-session-ended' }
+  })
+}
+
+const revokeDevice = async (device) => {
+  const currentHint = device.currentSession ? '，撤销后当前页面会退出登录' : ''
+  if (!window.confirm(`确认撤销“${device.deviceName || '该设备'}”的登录吗${currentHint}？`)) {
+    return
+  }
+  try {
+    const response = await request.post(`/settings/login-devices/${device.id}/revoke`)
+    if (device.currentSession) {
+      await leaveRevokedSession()
+      return
+    }
+    await loadLoginDevices()
+    setDeviceNotice(response.message || '设备登录已撤销')
+  } catch (error) {
+    setDeviceNotice(error.response?.data?.message || '撤销设备登录失败', 'error')
+  }
+}
+
+const deleteDevice = async (device) => {
+  const currentHint = device.currentSession ? '，删除后当前页面会退出登录' : ''
+  if (!window.confirm(`确认删除“${device.deviceName || '该设备'}”的登录记录吗${currentHint}？`)) {
+    return
+  }
+  try {
+    const response = await request.delete(`/settings/login-devices/${device.id}`)
+    if (device.currentSession) {
+      await leaveRevokedSession()
+      return
+    }
+    await loadLoginDevices()
+    setDeviceNotice(response.message || '设备记录已删除')
+  } catch (error) {
+    setDeviceNotice(error.response?.data?.message || '删除设备记录失败', 'error')
+  }
 }
 
 // 保存各配置
@@ -913,6 +1149,7 @@ const saveSecurityConfig = () => {
 
 onMounted(() => {
   loadPathConfig()
+  loadLoginDevices()
   // 这里可以加载配置数据
   console.log('设置页面已加载')
 })
@@ -1368,6 +1605,237 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
+.btn-primary:disabled,
+.btn-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  box-shadow: none;
+}
+
+.device-section-content {
+  padding: 0;
+}
+
+.device-toolbar {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.device-toolbar strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.device-toolbar p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.device-notice {
+  margin: 12px 20px 0;
+  padding: 9px 11px;
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 13px;
+}
+
+.device-notice.error {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #b42318;
+}
+
+.device-empty {
+  padding: 38px 20px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.device-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.device-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.device-table th,
+.device-table td {
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.device-table th {
+  background: #f8fafc;
+  color: #526078;
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.device-table th:first-child,
+.device-table td:first-child {
+  width: 220px;
+  padding-left: 20px;
+}
+
+.device-table th:nth-child(2),
+.device-table td:nth-child(2) {
+  width: 130px;
+}
+
+.device-table th:nth-child(3),
+.device-table td:nth-child(3) {
+  width: 130px;
+}
+
+.device-table th:nth-child(4),
+.device-table td:nth-child(4),
+.device-table th:nth-child(5),
+.device-table td:nth-child(5),
+.device-table th:nth-child(6),
+.device-table td:nth-child(6) {
+  width: 150px;
+}
+
+.device-table th:nth-child(7),
+.device-table td:nth-child(7) {
+  width: 78px;
+}
+
+.device-table th:last-child,
+.device-table td:last-child {
+  width: 112px;
+  padding-right: 20px;
+}
+
+.device-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.device-table tbody tr:hover {
+  background: #fbfdfd;
+}
+
+.device-table strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.device-name-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.device-name-line strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.current-device-badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.device-meta {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.device-ip {
+  color: var(--text);
+  font-family: Consolas, Monaco, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+.device-status {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.device-status.active {
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+}
+
+.device-status.revoked {
+  background: #fff1f2;
+  color: #b42318;
+}
+
+.device-status.expired {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.device-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.device-action {
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.device-action.revoke {
+  color: #a16207;
+}
+
+.device-action.delete {
+  color: #c2414f;
+}
+
+.device-action:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 /* 响应式 */
 @media (max-width: 1280px) {
   .config-grid {
@@ -1398,6 +1866,15 @@ onMounted(() => {
   }
 
   .btn-primary {
+    width: 100%;
+  }
+
+  .device-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .device-toolbar .btn-secondary {
     width: 100%;
   }
 }

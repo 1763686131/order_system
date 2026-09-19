@@ -1,10 +1,93 @@
 """Session authentication and permission helpers."""
 
+from datetime import datetime, timedelta, timezone
 from functools import wraps
+import hashlib
+import os
+import secrets
 
-from flask import g, jsonify, session
+from flask import g, jsonify, request, session
 
 from utils.db import get_db
+
+
+SESSION_TOKEN_KEY = "auth_session_token"
+ADMIN_SESSION_DAYS = 7
+TOUCH_SESSION_DAYS = 365
+SESSION_TOUCH_INTERVAL_MINUTES = 5
+
+
+def _utc_now():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _format_db_datetime(value):
+    return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _session_token_hash(token):
+    return hashlib.sha256(str(token or "").encode("utf-8")).hexdigest()
+
+
+def _safe_text(value, max_length):
+    return str(value or "").strip()[:max_length]
+
+
+def _client_ip():
+    if os.environ.get("TRUST_PROXY_HEADERS", "0") == "1":
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            return _safe_text(forwarded.split(",", 1)[0], 64)
+    return _safe_text(request.remote_addr, 64)
+
+
+def _parse_user_agent(user_agent):
+    value = str(user_agent or "")
+    if "Edg/" in value:
+        browser = "Microsoft Edge"
+    elif "Chrome/" in value and "Chromium/" not in value:
+        browser = "Chrome"
+    elif "Firefox/" in value:
+        browser = "Firefox"
+    elif "Safari/" in value and "Chrome/" not in value:
+        browser = "Safari"
+    elif "Chromium/" in value:
+        browser = "Chromium"
+    else:
+        browser = "浏览器"
+
+    if "Windows" in value:
+        operating_system = "Windows"
+    elif "Android" in value:
+        operating_system = "Android"
+    elif "iPhone" in value or "iPad" in value:
+        operating_system = "iOS"
+    elif "Mac OS X" in value:
+        operating_system = "macOS"
+    elif "Linux" in value:
+        operating_system = "Linux"
+    else:
+        operating_system = "未知系统"
+    return browser, operating_system
+
+
+def current_session_id():
+    return getattr(g, "current_auth_session_id", None)
+
+
+def revoke_current_session(conn, revoked_by=None):
+    token = session.get(SESSION_TOKEN_KEY)
+    if not token:
+        return
+    conn.execute(
+        """
+        UPDATE auth_sessions
+        SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+            revoked_by = COALESCE(revoked_by, ?)
+        WHERE session_token_hash = ?
+        """,
+        (revoked_by, _session_token_hash(token)),
+    )
 
 
 def _load_roles_and_permissions(conn, user_id):
@@ -88,11 +171,32 @@ def get_current_user():
         return g.current_user
 
     user_id = session.get("user_id")
-    if not user_id:
+    session_token = session.get(SESSION_TOKEN_KEY)
+    if not user_id or not session_token:
         g.current_user = None
         return None
 
     with get_db() as conn:
+        now = _utc_now()
+        session_row = conn.execute(
+            """
+            SELECT id, user_id, session_kind, last_seen_at, expires_at, revoked_at
+            FROM auth_sessions
+            WHERE session_token_hash = ?
+            LIMIT 1
+            """,
+            (_session_token_hash(session_token),),
+        ).fetchone()
+        if (
+            not session_row
+            or int(session_row["user_id"]) != int(user_id)
+            or session_row["revoked_at"]
+            or session_row["expires_at"] <= _format_db_datetime(now)
+        ):
+            session.clear()
+            g.current_user = None
+            return None
+
         row = conn.execute(
             """
             SELECT id, username, display_name, avatar_url, status,
@@ -112,15 +216,76 @@ def get_current_user():
             session.clear()
             g.current_user = None
             return None
+        last_seen = datetime.strptime(
+            session_row["last_seen_at"],
+            "%Y-%m-%d %H:%M:%S",
+        )
+        if now - last_seen >= timedelta(minutes=SESSION_TOUCH_INTERVAL_MINUTES):
+            duration = (
+                ADMIN_SESSION_DAYS
+                if session_row["session_kind"] == "admin"
+                else TOUCH_SESSION_DAYS
+            )
+            conn.execute(
+                """
+                UPDATE auth_sessions
+                SET last_seen_at = ?, expires_at = ?, ip_address = ?
+                WHERE id = ?
+                """,
+                (
+                    _format_db_datetime(now),
+                    _format_db_datetime(now + timedelta(days=duration)),
+                    _client_ip(),
+                    session_row["id"],
+                ),
+            )
+        g.current_auth_session_id = session_row["id"]
         g.current_user = serialize_user(conn, row)
         return g.current_user
 
 
-def login_session(user_row):
+def login_session(conn, user_row, user, device=None):
+    device = device if isinstance(device, dict) else {}
+    token = secrets.token_urlsafe(32)
+    now = _utc_now()
+    session_kind = "admin" if user.get("canAccessAdmin") else "touch"
+    duration = ADMIN_SESSION_DAYS if session_kind == "admin" else TOUCH_SESSION_DAYS
+    user_agent = _safe_text(request.headers.get("User-Agent"), 500)
+    browser, operating_system = _parse_user_agent(user_agent)
+    device_name = _safe_text(device.get("name"), 100)
+    if not device_name:
+        device_name = f"{operating_system} · {browser}"
+
     session.clear()
     session.permanent = True
     session["user_id"] = user_row["id"]
     session["permission_version"] = int(user_row["permission_version"] or 1)
+    session[SESSION_TOKEN_KEY] = token
+    cursor = conn.execute(
+        """
+        INSERT INTO auth_sessions (
+            session_token_hash, user_id, device_id, device_name,
+            session_kind, browser, operating_system, timezone,
+            user_agent, ip_address, created_at, last_seen_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            _session_token_hash(token),
+            user_row["id"],
+            _safe_text(device.get("id"), 100),
+            device_name,
+            session_kind,
+            browser,
+            operating_system,
+            _safe_text(device.get("timezone"), 80),
+            user_agent,
+            _client_ip(),
+            _format_db_datetime(now),
+            _format_db_datetime(now),
+            _format_db_datetime(now + timedelta(days=duration)),
+        ),
+    )
+    g.current_auth_session_id = cursor.lastrowid
 
 
 def current_identity(default="系统用户"):

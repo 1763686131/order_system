@@ -9,11 +9,47 @@ import secrets
 import webbrowser
 from threading import Timer
 
+
+def _load_secret_key():
+    configured_key = str(os.environ.get("APP_SECRET_KEY") or "").strip()
+    if configured_key:
+        return configured_key
+
+    if os.path.isdir("/app/data"):
+        secret_path = "/app/data/.app_secret_key"
+    else:
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        secret_path = os.path.join(project_root, "data", ".app_secret_key")
+
+    os.makedirs(os.path.dirname(secret_path), exist_ok=True)
+    try:
+        with open(secret_path, "r", encoding="utf-8") as secret_file:
+            persisted_key = secret_file.read().strip()
+            if persisted_key:
+                return persisted_key
+    except FileNotFoundError:
+        pass
+
+    generated_key = secrets.token_hex(32)
+    try:
+        descriptor = os.open(
+            secret_path,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL,
+            0o600,
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as secret_file:
+            secret_file.write(generated_key)
+        return generated_key
+    except FileExistsError:
+        with open(secret_path, "r", encoding="utf-8") as secret_file:
+            return secret_file.read().strip() or generated_key
+
+
 # 创建 Flask 应用
 app = Flask(__name__)
 app.config.update(
-    SECRET_KEY=os.environ.get("APP_SECRET_KEY") or secrets.token_hex(32),
-    PERMANENT_SESSION_LIFETIME=timedelta(days=7),
+    SECRET_KEY=_load_secret_key(),
+    PERMANENT_SESSION_LIFETIME=timedelta(days=365),
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Lax",
     SESSION_COOKIE_SECURE=os.environ.get("SESSION_COOKIE_SECURE", "0") == "1",

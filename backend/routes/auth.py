@@ -5,7 +5,13 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
-from utils.auth import get_current_user, login_session, require_login, serialize_user
+from utils.auth import (
+    get_current_user,
+    login_session,
+    require_login,
+    revoke_current_session,
+    serialize_user,
+)
 from utils.db import get_db
 from utils.employee_links import ensure_employee_for_user, sync_employee_from_user
 
@@ -183,14 +189,18 @@ def login():
             """,
             (row["id"],),
         ).fetchone()
-        login_session(refreshed)
         user = serialize_user(conn, refreshed)
+        login_session(conn, refreshed, user, data.get("device"))
 
     return jsonify({"success": True, "user": user})
 
 
 @auth_bp.route("/logout", methods=["POST"])
 def logout():
+    user_id = session.get("user_id")
+    if user_id:
+        with get_db() as conn:
+            revoke_current_session(conn, revoked_by=user_id)
     session.clear()
     return jsonify({"success": True})
 

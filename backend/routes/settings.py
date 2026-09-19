@@ -2,6 +2,12 @@
 
 from flask import Blueprint, jsonify, request
 
+from utils.auth import (
+    current_session_id,
+    get_current_user,
+    require_super_admin,
+)
+from utils.db import get_db
 from utils.system_settings import (
     DEFAULT_BANK_CARD_BG_PATH,
     DEFAULT_BANK_ICON_PATH,
@@ -153,3 +159,102 @@ def browse_directories():
     if not path:
         data["roots"] = get_browse_roots()
     return jsonify({"success": True, "data": data})
+
+
+@settings_bp.route("/login-devices", methods=["GET"])
+@require_super_admin
+def get_login_devices():
+    active_session_id = current_session_id()
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT auth_sessions.id, auth_sessions.device_name,
+                   auth_sessions.session_kind, auth_sessions.browser,
+                   auth_sessions.operating_system, auth_sessions.timezone,
+                   auth_sessions.ip_address, auth_sessions.created_at,
+                   auth_sessions.last_seen_at, auth_sessions.expires_at,
+                   auth_sessions.revoked_at, users.username, users.display_name,
+                   CASE
+                       WHEN auth_sessions.revoked_at IS NOT NULL THEN 'revoked'
+                       WHEN datetime(auth_sessions.expires_at) <= CURRENT_TIMESTAMP
+                           THEN 'expired'
+                       ELSE 'active'
+                   END AS session_status
+            FROM auth_sessions
+            INNER JOIN users ON users.id = auth_sessions.user_id
+            ORDER BY
+                CASE
+                    WHEN auth_sessions.revoked_at IS NULL
+                         AND datetime(auth_sessions.expires_at) > CURRENT_TIMESTAMP
+                    THEN 0
+                    ELSE 1
+                END,
+                auth_sessions.last_seen_at DESC,
+                auth_sessions.id DESC
+            """
+        ).fetchall()
+
+    devices = [
+        {
+            "id": row["id"],
+            "deviceName": row["device_name"],
+            "sessionKind": row["session_kind"],
+            "browser": row["browser"],
+            "operatingSystem": row["operating_system"],
+            "timezone": row["timezone"],
+            "ipAddress": row["ip_address"],
+            "createdAt": row["created_at"],
+            "lastSeenAt": row["last_seen_at"],
+            "expiresAt": row["expires_at"],
+            "revokedAt": row["revoked_at"],
+            "status": row["session_status"],
+            "username": row["username"],
+            "displayName": row["display_name"],
+            "currentSession": row["id"] == active_session_id,
+        }
+        for row in rows
+    ]
+    return jsonify(
+        {
+            "success": True,
+            "data": devices,
+            "activeCount": sum(item["status"] == "active" for item in devices),
+        }
+    )
+
+
+@settings_bp.route("/login-devices/<int:session_id>/revoke", methods=["POST"])
+@require_super_admin
+def revoke_login_device(session_id):
+    current_user = get_current_user()
+    with get_db() as conn:
+        target = conn.execute(
+            "SELECT id, revoked_at FROM auth_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        if not target:
+            return jsonify({"success": False, "message": "登录设备记录不存在"}), 404
+        conn.execute(
+            """
+            UPDATE auth_sessions
+            SET revoked_at = COALESCE(revoked_at, CURRENT_TIMESTAMP),
+                revoked_by = COALESCE(revoked_by, ?)
+            WHERE id = ?
+            """,
+            (current_user["id"], session_id),
+        )
+    return jsonify({"success": True, "message": "设备登录已撤销"})
+
+
+@settings_bp.route("/login-devices/<int:session_id>", methods=["DELETE"])
+@require_super_admin
+def delete_login_device(session_id):
+    with get_db() as conn:
+        target = conn.execute(
+            "SELECT id FROM auth_sessions WHERE id = ?",
+            (session_id,),
+        ).fetchone()
+        if not target:
+            return jsonify({"success": False, "message": "登录设备记录不存在"}), 404
+        conn.execute("DELETE FROM auth_sessions WHERE id = ?", (session_id,))
+    return jsonify({"success": True, "message": "设备记录已删除"})

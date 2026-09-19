@@ -184,6 +184,31 @@ def _ensure_auth_schema(conn):
         )
         cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_token_hash TEXT NOT NULL UNIQUE,
+                user_id INTEGER NOT NULL,
+                device_id TEXT NOT NULL DEFAULT '',
+                device_name TEXT NOT NULL DEFAULT '',
+                session_kind TEXT NOT NULL DEFAULT 'touch',
+                browser TEXT NOT NULL DEFAULT '',
+                operating_system TEXT NOT NULL DEFAULT '',
+                timezone TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TEXT NOT NULL,
+                revoked_at TEXT,
+                revoked_by INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (revoked_by) REFERENCES users(id) ON DELETE SET NULL,
+                CHECK (session_kind IN ('admin', 'touch'))
+            )
+            """
+        )
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS employee_roles (
                 employee_id INTEGER NOT NULL,
                 role_id INTEGER NOT NULL,
@@ -224,6 +249,18 @@ def _ensure_auth_schema(conn):
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_employees_user ON employees(user_id)"
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_auth_sessions_user
+            ON auth_sessions(user_id, last_seen_at DESC)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_auth_sessions_active
+            ON auth_sessions(revoked_at, expires_at)
+            """
         )
         cursor.execute(
             """
@@ -376,7 +413,7 @@ def _ensure_auth_schema(conn):
         cursor.execute(
             """
             INSERT INTO system_meta (setting_key, setting_value, updated_at)
-            VALUES ('auth_schema_version', '4', CURRENT_TIMESTAMP)
+            VALUES ('auth_schema_version', '5', CURRENT_TIMESTAMP)
             ON CONFLICT(setting_key) DO UPDATE SET
                 setting_value = excluded.setting_value,
                 updated_at = CURRENT_TIMESTAMP
