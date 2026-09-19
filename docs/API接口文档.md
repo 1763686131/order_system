@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v4.2** (2026-09-19) - 新增部门配置接口、员工多部门关联、部门员工维护及最近活跃设备字段
 - **v4.1** (2026-09-19) - 新增后台路由权限、登录设备会话、角色门店/仓库数据范围及前后端集中访问控制
 - **v4.0** (2026-09-18) - 重构 session 登录、首次超级管理员初始化、账号、员工档案、权限组和触屏端后端鉴权
 - **v3.4** (2026-09-17) - 新增打印模板数据库、模板 CRUD、默认模板和旧 localStorage 模板迁移接口
@@ -261,14 +262,17 @@
 | `GET` | `/api/admin/employees` | 查询员工档案和绑定账号 |
 | `POST` | `/api/admin/employees` | 创建员工档案，可同时开通账号 |
 | `PUT` | `/api/admin/employees/<employee_id>` | 修改档案、密码和账号状态 |
+| `DELETE` | `/api/admin/employees/<employee_id>/account` | 解绑并删除登录账号，保留员工档案 |
 
 员工抽屉不配置权限组，角色组关系统一在“角色组管理”页面维护。没有填写
 登录账号时只创建员工档案，账号状态为 `pending`。账号是员工档案的可选能力，
 系统会保证每个账号都绑定一条员工档案，但允许员工档案没有账号。
 
 员工档案创建和修改请求支持 `phone` 字段，用于保存员工手机号；员工列表响应会
-返回 `phone`。绑定账号的员工还会返回 `lastLoginAt`，未登录或未开通账号时为
-`null`。
+返回 `phone`。绑定账号的员工还会返回 `lastLoginAt`、`lastActiveAt` 和
+`lastActiveDevice`，未登录或未开通账号时为 `null`。`lastLoginAt` 表示最近一次
+成功登录，`lastActiveAt` 表示最近一次被服务端会话续期或访问，员工列表应优先展示
+最近活跃时间和设备信息。
 
 密码仅在创建账号或修改密码时通过 `password` 提交，服务端只保存不可逆哈希。
 任何员工和账号查询接口都不会返回明文密码或密码哈希；需要修改密码时直接提交
@@ -282,7 +286,7 @@
   "employeeNo": "E-0008",
   "avatarUrl": "",
   "phone": "13800001024",
-  "department": "销售部",
+  "departmentIds": [2, 3],
   "position": "销售内勤",
   "employmentStatus": "active",
   "employmentType": "正式",
@@ -293,7 +297,82 @@
 }
 ```
 
-`username` 留空时只保存员工档案。已有账号修改时，`password` 留空表示保持原密码。
+`departmentIds` 是员工部门关系的写入字段，数组第一项为主部门，其余为兼任部门；
+传入空数组表示清空部门归属。响应中的 `departmentId` 是主部门 ID，`departments`
+是完整部门对象数组，`department` 仅用于兼容旧页面的拼接显示文本，不应作为新的
+写入字段。`departmentId` 仍可作为旧客户端的单部门兼容参数，但新客户端应统一使用
+`departmentIds`。
+
+`username` 留空时只保存员工档案。已有账号修改时，`password` 留空表示保持原密码；
+提交非空 `password` 会重新生成密码哈希。解绑账号会删除 `users` 中的账号及其会话，
+但不会删除员工档案、部门关系或角色组成员关系；解绑当前登录账号和最后一个有效
+超级管理员账号会被拒绝。
+
+员工列表中与登录状态相关的字段示例：
+
+```json
+{
+  "phone": "13800001024",
+  "lastLoginAt": "2026-09-19 09:04:00",
+  "lastActiveAt": "2026-09-19 09:19:00",
+  "lastActiveDevice": {
+    "deviceName": "Windows · Chrome",
+    "sessionKind": "admin",
+    "browser": "Chrome",
+    "operatingSystem": "Windows",
+    "ipAddress": "172.17.0.1",
+    "status": "active"
+  }
+}
+```
+
+### 1.6.1 部门配置与员工多部门关系
+
+部门配置和员工部门归属仅允许超级管理员维护。员工可以同时属于多个部门，
+部门关系与角色组关系相互独立；员工是否能访问后台、能看到哪些页面和数据，仍由
+角色组权限及门店/仓库范围决定。
+
+| Method | URL | 说明 |
+|---|---|---|
+| `GET` | `/api/admin/departments` | 查询部门列表及员工数量 |
+| `POST` | `/api/admin/departments` | 新增部门 |
+| `PUT` | `/api/admin/departments/<department_id>` | 修改部门名称、上级、状态和排序 |
+| `DELETE` | `/api/admin/departments/<department_id>` | 删除没有员工且没有下级部门的部门 |
+
+新增或修改部门请求体：
+
+```json
+{
+  "name": "财务部",
+  "parentId": null,
+  "status": "active",
+  "sortOrder": 2
+}
+```
+
+部门列表响应示例：
+
+```json
+{
+  "success": true,
+  "departments": [
+    {
+      "id": 2,
+      "name": "财务部",
+      "parentId": null,
+      "status": "active",
+      "sortOrder": 2,
+      "employeeCount": 3,
+      "createdAt": "2026-09-19 09:00:00",
+      "updatedAt": "2026-09-19 09:00:00"
+    }
+  ]
+}
+```
+
+停用部门前必须先调整仍归属该部门的员工；删除部门前必须同时满足没有员工、
+没有下级部门。部门管理页向员工添加部门、从当前部门移除员工或修改员工职位，
+最终都通过 `PUT /api/admin/employees/<employee_id>` 提交完整的 `departmentIds`。
 
 ### 1.7 登录设备和会话
 
@@ -322,6 +401,9 @@
 - 任一角色启用 `canAccessAdmin`，账号即可进入后台。
 - 任一角色启用 `longSession`，账号使用 365 天滑动会话。
 - 任一角色为 `full_access`，账号成为超级管理员且数据范围不受限制。
+
+员工属于多个部门不会产生权限叠加或冲突；部门只描述组织归属，权限仍按员工加入的
+角色组计算。一个角色组没有门店范围时不会覆盖另一个角色组已经授予的门店范围。
 
 非超级管理员没有配置门店或仓库范围时，对应授权集合为空，不应回退为全部数据。
 

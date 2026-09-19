@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `4.1` |
+| 权限/API 文档版本 | `4.2` |
 | 文档更新 | `2026-09-19` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
@@ -34,6 +34,7 @@
 - 物流、快递运费对账及 Excel 导出
 - 数据库打印模板、可视化设计、业务变量预览、浏览器打印和 C-Lodop 本地打印
 - 首次部署超级管理员初始化、员工档案、登录账号和角色组管理
+- 部门配置、员工多部门归属、部门员工维护和职位内联编辑
 - 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
 - 原材料触屏出库、审核和库存流水
 
@@ -50,6 +51,8 @@
 - 多角色权限、门店和仓库范围采用并集；任一角色为全权限角色时，数据范围不受限制。
 - 销售订单列表默认展示全部授权门店；只有一个授权门店时隐藏门店选择器，多个门店时才显示“全部/门店”滑块。
 - 登录设备会记录设备名称、浏览器、操作系统、局域网 IP、最近活动和到期时间，超级管理员可以撤销会话或删除历史记录。
+- 部门与员工采用独立关系表，员工可以同时归属多个部门；第一项部门作为主部门，其余作为兼任部门。
+- 部门管理只维护组织归属，不直接授予权限；后台访问、菜单、触屏操作和门店/仓库范围仍由角色组统一决定。
 
 权限判断和数据范围不再散落在业务组件中：
 
@@ -239,6 +242,7 @@ order_system/
 │  │  ├─ auth.py                     # 初始化、登录、退出、当前账号和密码修改
 │  │  ├─ access.py                   # 权限目录、角色组、成员和数据范围
 │  │  ├─ employees.py                # 员工档案和可选登录账号
+│  │  ├─ departments.py              # 部门配置和部门员工数量
 │  │  ├─ users.py                    # 账号维护和管理员重置密码
 │  │  ├─ orders.py                   # 销售订单和物流状态接口
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
@@ -324,6 +328,7 @@ order_system/
 │  │     │  └─ PrintTemplate.vue     # 打印模板管理
 │  │     └─ hr/
 │  │        ├─ AccountManage.vue     # 员工档案和可选登录账号
+│  │        ├─ DepartmentManage.vue  # 部门配置、员工归属和职位维护
 │  │        └─ Reports.vue           # 人事检测报告
 │  ├─ router/index.js                # 前端路由和登录守卫
 │  ├─ utils/
@@ -363,6 +368,8 @@ order_system/
 ```text
 员工档案 employees
   ├─ 可选登录账号 users
+  ├─ employee_departments
+  │    └─ 部门 departments（支持一名员工归属多个部门）
   └─ employee_roles
        └─ 角色组 roles
             ├─ role_permissions -> permissions
@@ -370,7 +377,10 @@ order_system/
             └─ role_warehouses -> warehouses
 ```
 
-员工可以没有登录账号，但登录账号必须绑定员工档案。权限组成员维护使用员工 ID，因此可以先建立员工档案和岗位权限，之后再开通账号。
+员工可以没有登录账号，但登录账号必须绑定员工档案。员工可以同时归属多个部门，
+`employee_departments` 的第一项为主部门。权限组成员维护使用员工 ID，因此可以先
+建立员工档案、部门归属和岗位权限，之后再开通账号。部门归属不等于权限，权限组仍
+通过 `employee_roles` 独立维护。
 
 ### 权限合并
 
@@ -526,6 +536,7 @@ import {
 | `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
 | `/admin/finance/debt-details/:type/:targetId` | 欠款详情 | 前端模拟数据（待接入后端 API） |
 | `/admin/system/print-template` | 打印模板管理和设计器 | `/api/print-templates` |
+| `/admin/hr/departments` | 部门配置和部门员工管理 | `/api/admin/departments`、`/api/admin/employees` |
 
 ## 库存关键接口
 
@@ -678,6 +689,8 @@ order-system-print-client-config
 
 - `users`：登录账号、密码哈希、状态、权限版本和最后登录时间
 - `employees`：员工主档及可选账号关联
+- `departments`：部门名称、上下级关系、启停状态和排序
+- `employee_departments`：员工与部门的多对多关系及主部门标记
 - `roles`：角色组、后台访问、长会话和全权限标记
 - `permissions`、`role_permissions`：权限目录和角色权限关系
 - `employee_roles`：员工与角色组关系
@@ -755,6 +768,12 @@ docker restart my_order_app
 ### 为什么销售订单列表没有数据或没有门店滑块
 
 先检查员工所属角色组的门店范围。非超级管理员只会收到授权门店的订单；没有门店权限时列表为空，只有一个门店时不显示门店滑块，两个及以上门店时才显示选择器。
+
+### 一个员工可以同时属于多个部门吗
+
+可以。员工档案中使用部门多选，部门关系保存在 `employee_departments`，第一项是主部门，
+其余是兼任部门。部门管理页面可以从当前部门移除员工或修改其职位；这些操作不会自动
+改变角色组、后台访问权限或门店/仓库数据范围。
 
 ### 同一员工加入多个角色组会不会冲突
 
@@ -839,6 +858,7 @@ C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localSt
 - 新增后台路由权限、长会话策略和登录设备管理
 - 新增后台销售订单按钮权限，分别控制新增、编辑、删除、打印、导出、完成和审核操作
 - 新增门店、仓库数据范围并集，销售订单列表接入后端范围过滤
+- 新增部门配置接口和部门管理页面，员工支持多部门归属、主部门标记和部门内职位维护
 - 新增前端 `accessControl.js` 和后端 `access_scope.py` 集中管理访问规则
 
 ### 2026-09-17 - 打印模板与本地打印

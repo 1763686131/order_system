@@ -725,20 +725,43 @@
                 <span>用于组织和后续人事接口</span>
               </div>
               <div class="form-grid">
-                <label class="field">
+                <div class="field">
                   <span>部门</span>
-                  <select v-model="draft.departmentId">
-                    <option :value="null">未分配部门</option>
-                    <option
-                      v-for="department in departments"
-                      :key="department.id"
-                      :value="department.id"
-                      :disabled="department.status !== 'active' && department.id !== draft.departmentId"
+                  <div class="department-multi-select" :class="{ open: departmentSelectorOpen }">
+                    <button
+                      class="department-multi-trigger"
+                      type="button"
+                      :aria-expanded="departmentSelectorOpen"
+                      @click="departmentSelectorOpen = !departmentSelectorOpen"
                     >
-                      {{ department.name }}{{ department.status === 'disabled' ? '（已停用）' : '' }}
-                    </option>
-                  </select>
-                </label>
+                      <span>{{ departmentSelectionLabel }}</span>
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m7 10 5 5 5-5"></path>
+                      </svg>
+                    </button>
+                    <div v-if="departmentSelectorOpen" class="department-multi-menu">
+                      <label
+                        v-for="department in departments"
+                        :key="department.id"
+                        class="department-multi-option"
+                        :class="{ selected: draft.departmentIds.includes(department.id) }"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="draft.departmentIds.includes(department.id)"
+                          :disabled="department.status !== 'active' && !draft.departmentIds.includes(department.id)"
+                          @change="toggleDraftDepartment(department.id)"
+                        />
+                        <span>{{ department.name }}</span>
+                        <small v-if="department.status !== 'active'">已停用</small>
+                      </label>
+                      <span v-if="departments.length === 0" class="department-multi-empty">
+                        暂无部门配置
+                      </span>
+                    </div>
+                  </div>
+                  <small class="field-hint">可同时选择多个部门，第一项作为主部门</small>
+                </div>
                 <label class="field">
                   <span>职位</span>
                   <input v-model.trim="draft.position" type="text" placeholder="请输入职位" />
@@ -891,6 +914,7 @@ const selectedEmployeeId = ref(null)
 const activeDetailTab = ref('profile')
 const drawerVisible = ref(false)
 const editingEmployee = ref(false)
+const departmentSelectorOpen = ref(false)
 const draft = ref(createEmptyEmployee())
 const avatarInput = ref(null)
 const passwordInput = ref(null)
@@ -971,7 +995,8 @@ const filteredEmployees = computed(() => {
         .join(' ')
         .toLowerCase()
         .includes(keyword)
-    const matchesDepartment = !filters.value.department || employee.departmentId === Number(filters.value.department)
+    const employeeDepartmentIds = employee.departmentIds || (employee.departmentId ? [employee.departmentId] : [])
+    const matchesDepartment = !filters.value.department || employeeDepartmentIds.includes(Number(filters.value.department))
     const matchesEmployment =
       !filters.value.employmentStatus || employee.employmentStatus === filters.value.employmentStatus
     const matchesAccount = !filters.value.accountStatus || employee.accountStatus === filters.value.accountStatus
@@ -996,6 +1021,7 @@ function createEmptyEmployee() {
     passwordSet: false,
     accountStatus: 'pending',
     departmentId: null,
+    departmentIds: [],
     position: '',
     phone: '',
     idCard: '',
@@ -1012,7 +1038,10 @@ function createEmptyEmployee() {
 function openCreate() {
   editingEmployee.value = false
   draft.value = createEmptyEmployee()
-  draft.value.departmentId = departments.value.find(item => item.status === 'active')?.id || null
+  const defaultDepartmentId = departments.value.find(item => item.status === 'active')?.id || null
+  draft.value.departmentId = defaultDepartmentId
+  draft.value.departmentIds = defaultDepartmentId ? [defaultDepartmentId] : []
+  departmentSelectorOpen.value = false
   passwordVisible.value = false
   passwordConfirmVisible.value = false
   drawerVisible.value = true
@@ -1034,6 +1063,7 @@ function openEdit(employee) {
   editingEmployee.value = true
   draft.value = {
     ...employee,
+    departmentIds: [...(employee.departmentIds || (employee.departmentId ? [employee.departmentId] : []))],
     roleIds: [...employee.roleIds],
     password: '',
     passwordConfirm: '',
@@ -1041,6 +1071,7 @@ function openEdit(employee) {
   }
   passwordVisible.value = false
   passwordConfirmVisible.value = false
+  departmentSelectorOpen.value = false
   drawerVisible.value = true
 }
 
@@ -1048,6 +1079,27 @@ function closeDrawer() {
   drawerVisible.value = false
   passwordVisible.value = false
   passwordConfirmVisible.value = false
+  departmentSelectorOpen.value = false
+}
+
+const departmentSelectionLabel = computed(() => {
+  const selectedIds = draft.value.departmentIds || []
+  const selectedNames = departments.value
+    .filter(department => selectedIds.includes(department.id))
+    .map(department => department.name)
+  return selectedNames.length ? selectedNames.join('、') : '未分配部门'
+})
+
+function toggleDraftDepartment(departmentId) {
+  const selectedIds = [...(draft.value.departmentIds || [])]
+  const index = selectedIds.indexOf(departmentId)
+  if (index === -1) {
+    selectedIds.push(departmentId)
+  } else {
+    selectedIds.splice(index, 1)
+  }
+  draft.value.departmentIds = selectedIds
+  draft.value.departmentId = selectedIds[0] || null
 }
 
 function toggleStoredPasswordVisibility() {
@@ -1595,6 +1647,124 @@ input:focus,
 select:focus {
   border-color: var(--accent, #0f9f78);
   box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 15, 159, 120), 0.12);
+}
+
+.department-multi-select {
+  position: relative;
+}
+
+.department-multi-trigger {
+  display: flex;
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 11px;
+  color: var(--text, #172033);
+  text-align: left;
+  background: #fff;
+  border: 1px solid var(--border-strong, #cbd5e1);
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+}
+
+.department-multi-trigger:hover,
+.department-multi-select.open .department-multi-trigger {
+  border-color: var(--accent, #0f9f78);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 15, 159, 120), 0.12);
+}
+
+.department-multi-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.department-multi-trigger svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  transition: transform 0.18s ease;
+}
+
+.department-multi-select.open .department-multi-trigger svg {
+  transform: rotate(180deg);
+}
+
+.department-multi-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  left: 0;
+  z-index: 30;
+  max-height: 220px;
+  padding: 6px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid var(--border-strong, #cbd5e1);
+  border-radius: 6px;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+}
+
+.department-multi-option {
+  display: flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  color: var(--text, #172033);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.department-multi-option:hover,
+.department-multi-option.selected {
+  background: var(--accent-soft, #e9f8f3);
+}
+
+.department-multi-option input {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  accent-color: var(--accent, #0f9f78);
+}
+
+.department-multi-option > span {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.department-multi-option small {
+  color: var(--text-muted, #8a96a8);
+  font-size: 11px;
+}
+
+.department-multi-empty {
+  display: block;
+  padding: 10px 8px;
+  color: var(--text-muted, #8a96a8);
+  font-size: 12px;
+  text-align: center;
+}
+
+.field-hint {
+  margin-top: 5px;
+  color: var(--text-muted, #8a96a8);
+  font-size: 11px;
+  line-height: 1.4;
 }
 
 input[type='checkbox'] {

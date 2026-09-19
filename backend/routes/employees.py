@@ -30,14 +30,23 @@ def _employment_status(value):
     )
 
 
-def _department_id(value):
+def _department_ids(value):
     if value in (None, ""):
-        return None
-    try:
-        department_id = int(value)
-    except (TypeError, ValueError):
-        raise ValueError("部门选择无效")
-    return department_id if department_id > 0 else None
+        return []
+    values = value if isinstance(value, (list, tuple, set)) else [value]
+    department_ids = []
+    for item in values:
+        if item in (None, ""):
+            continue
+        try:
+            department_id = int(item)
+        except (TypeError, ValueError):
+            raise ValueError("部门选择无效")
+        if department_id <= 0:
+            raise ValueError("部门选择无效")
+        if department_id not in department_ids:
+            department_ids.append(department_id)
+    return department_ids
 
 
 def _user_row(conn, user_id):
@@ -75,20 +84,37 @@ def _latest_auth_session(conn, user_id):
     ).fetchone()
 
 
+def _employee_department_rows(conn, employee_id):
+    return conn.execute(
+        """
+        SELECT departments.id, departments.name, departments.status,
+               employee_departments.is_primary
+        FROM employee_departments
+        INNER JOIN departments ON departments.id = employee_departments.department_id
+        WHERE employee_departments.employee_id = ?
+        ORDER BY employee_departments.is_primary DESC,
+                 departments.sort_order, departments.id
+        """,
+        (employee_id,),
+    ).fetchall()
+
+
 def _serialize_employee(conn, row):
     user = None
     latest_session = None
-    department = None
+    department_rows = _employee_department_rows(conn, row["id"])
+    if not department_rows and row["department_id"]:
+        department = conn.execute(
+            "SELECT id, name, status, 1 AS is_primary FROM departments WHERE id = ?",
+            (row["department_id"],),
+        ).fetchone()
+        department_rows = [department] if department else []
     if row["user_id"]:
         user_row = _user_row(conn, row["user_id"])
         if user_row:
             user = serialize_user(conn, user_row)
             latest_session = _latest_auth_session(conn, row["user_id"])
-    if row["department_id"]:
-        department = conn.execute(
-            "SELECT id, name, status FROM departments WHERE id = ?",
-            (row["department_id"],),
-        ).fetchone()
+    primary_department = department_rows[0] if department_rows else None
     roles = [
         dict(role)
         for role in conn.execute(
@@ -123,9 +149,18 @@ def _serialize_employee(conn, row):
             "ipAddress": latest_session["ip_address"],
             "status": latest_session["session_status"],
         } if latest_session else None,
-        "departmentId": department["id"] if department else None,
-        "department": department["name"] if department else "",
-        "departmentStatus": department["status"] if department else None,
+        "departmentId": primary_department["id"] if primary_department else None,
+        "departmentIds": [department["id"] for department in department_rows],
+        "departments": [
+            {
+                "id": department["id"],
+                "name": department["name"],
+                "status": department["status"],
+            }
+            for department in department_rows
+        ],
+        "department": "、".join(department["name"] for department in department_rows),
+        "departmentStatus": primary_department["status"] if primary_department else None,
         "position": row["position"] or "",
         "phone": row["phone"] or "",
         "idCard": row["id_card"] or "",
@@ -206,10 +241,16 @@ def _employee_values(data):
     display_name = _text(data.get("displayName"), 80)
     if not display_name:
         raise ValueError("员工姓名不能为空")
+    department_ids = _department_ids(
+        data.get("departmentIds")
+        if "departmentIds" in data
+        else data.get("departmentId")
+    )
     return {
         "display_name": display_name,
         "avatar_url": _text(data.get("avatarUrl"), 200000),
-        "department_id": _department_id(data.get("departmentId")),
+        "department_ids": department_ids,
+        "department_id": department_ids[0] if department_ids else None,
         "position": _text(data.get("position"), 80),
         "phone": _text(data.get("phone"), 30),
         "id_card": _text(data.get("idCard"), 40),
@@ -258,18 +299,67 @@ def _create_bound_user(conn, data, values):
     return cursor.lastrowid
 
 
-def _validate_department(conn, department_id, allow_disabled=False):
-    if department_id is None:
-        return None
-    department = conn.execute(
-        "SELECT id, name, status FROM departments WHERE id = ?",
-        (department_id,),
-    ).fetchone()
-    if not department:
+def _validate_departments(conn, department_ids, allow_disabled_ids=None):
+    if not department_ids:
+        return []
+    allow_disabled_ids = set(allow_disabled_ids or [])
+    placeholders = ", ".join("?" for _ in department_ids)
+    rows = conn.execute(
+        f"""
+        SELECT id, name, status
+        FROM departments
+        WHERE id IN ({placeholders})
+        """,
+        tuple(department_ids),
+    ).fetchall()
+    departments = {row["id"]: row for row in rows}
+    if len(departments) != len(set(department_ids)):
         raise ValueError("部门不存在")
-    if department["status"] != "active" and not allow_disabled:
-        raise ValueError("停用部门不能分配新员工")
-    return department
+    for department_id in department_ids:
+        department = departments[department_id]
+        if department["status"] != "active" and department_id not in allow_disabled_ids:
+            raise ValueError("停用部门不能分配新员工")
+    return [departments[department_id] for department_id in department_ids]
+
+
+def _employee_department_ids(conn, employee_id):
+    department_ids = [
+        row["department_id"]
+        for row in conn.execute(
+            """
+            SELECT department_id
+            FROM employee_departments
+            WHERE employee_id = ?
+            ORDER BY is_primary DESC, department_id
+            """,
+            (employee_id,),
+        ).fetchall()
+    ]
+    if not department_ids:
+        legacy_row = conn.execute(
+            "SELECT department_id FROM employees WHERE id = ?",
+            (employee_id,),
+        ).fetchone()
+        if legacy_row and legacy_row["department_id"]:
+            department_ids = [legacy_row["department_id"]]
+    return department_ids
+
+
+def _set_employee_departments(conn, employee_id, department_ids):
+    conn.execute(
+        "DELETE FROM employee_departments WHERE employee_id = ?",
+        (employee_id,),
+    )
+    conn.executemany(
+        """
+        INSERT INTO employee_departments (employee_id, department_id, is_primary)
+        VALUES (?, ?, ?)
+        """,
+        [
+            (employee_id, department_id, 1 if index == 0 else 0)
+            for index, department_id in enumerate(department_ids)
+        ],
+    )
 
 
 @employees_bp.route("", methods=["GET"])
@@ -299,7 +389,7 @@ def create_employee():
         values = _employee_values(data)
         with get_db() as conn:
             conn.execute("BEGIN IMMEDIATE")
-            _validate_department(conn, values["department_id"])
+            _validate_departments(conn, values["department_ids"])
             employee_no = _text(data.get("employeeNo"), 40) or _next_employee_no(conn)
             if conn.execute(
                 "SELECT 1 FROM employees WHERE employee_no = ? COLLATE NOCASE",
@@ -339,6 +429,7 @@ def create_employee():
                     values["account_status"] if user_id else "pending",
                 ),
             )
+            _set_employee_departments(conn, cursor.lastrowid, values["department_ids"])
             employee = _serialize_employee(
                 conn,
                 _employee_row(conn, cursor.lastrowid),
@@ -374,14 +465,14 @@ def update_employee(employee_id):
 
             user_id = existing["user_id"]
             password = str(data.get("password") or "")
-            allow_disabled_department = bool(
-                existing["department_id"]
-                and values["department_id"] == existing["department_id"]
+            existing_department_ids = _employee_department_ids(conn, employee_id)
+            allow_disabled_departments = set(existing_department_ids).intersection(
+                values["department_ids"]
             )
-            _validate_department(
+            _validate_departments(
                 conn,
-                values["department_id"],
-                allow_disabled=allow_disabled_department,
+                values["department_ids"],
+                allow_disabled_ids=allow_disabled_departments,
             )
             if user_id:
                 if (
@@ -463,6 +554,7 @@ def update_employee(employee_id):
                     employee_id,
                 ),
             )
+            _set_employee_departments(conn, employee_id, values["department_ids"])
             employee = _serialize_employee(
                 conn,
                 _employee_row(conn, employee_id),

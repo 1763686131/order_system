@@ -133,7 +133,11 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="employee in filteredEmployees" :key="employee.id">
+              <tr
+                v-for="employee in filteredEmployees"
+                :key="employee.id"
+                @contextmenu.prevent="openEmployeeContextMenu($event, employee)"
+              >
                 <td>
                   <div class="employee-cell">
                     <span class="avatar" :style="avatarStyle(employee)">{{ employee.displayName.slice(0, 1) }}</span>
@@ -144,7 +148,43 @@
                   </div>
                 </td>
                 <td class="tabular">{{ employee.employeeNo }}</td>
-                <td>{{ employee.position || '暂无职位' }}</td>
+                <td class="position-cell">
+                  <div v-if="editingPositionEmployeeId === employee.id" class="inline-position-editor">
+                    <input
+                      ref="positionInput"
+                      v-model.trim="editingPositionValue"
+                      type="text"
+                      placeholder="请输入职位"
+                      @click.stop
+                      @keydown.enter.prevent="savePosition(employee)"
+                      @keydown.esc.prevent="cancelPositionEdit"
+                    />
+                    <button
+                      class="inline-action confirm"
+                      type="button"
+                      title="确认修改"
+                      aria-label="确认修改"
+                      @click.stop="savePosition(employee)"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m5 12 4 4L19 6"></path>
+                      </svg>
+                    </button>
+                    <button
+                      class="inline-action cancel"
+                      type="button"
+                      title="取消修改"
+                      aria-label="取消修改"
+                      @click.stop="cancelPositionEdit"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m6 6 12 12"></path>
+                        <path d="m18 6-12 12"></path>
+                      </svg>
+                    </button>
+                  </div>
+                  <span v-else>{{ employee.position || '暂无职位' }}</span>
+                </td>
                 <td class="tabular">{{ employee.phone || '—' }}</td>
                 <td>
                   <span :class="['status-badge', employee.accountStatus]">
@@ -170,6 +210,29 @@
         </div>
       </section>
     </section>
+
+    <div
+      v-if="contextMenuVisible"
+      class="employee-context-menu"
+      :style="contextMenuStyle"
+      role="menu"
+      @click.stop
+    >
+      <button
+        type="button"
+        role="menuitem"
+        :disabled="!selectedDepartment"
+        @click="removeEmployeeFromDepartment(contextMenuEmployee)"
+      >
+        移除当前部门
+      </button>
+      <button type="button" role="menuitem" @click="openPositionEditor(contextMenuEmployee)">
+        修改职位
+      </button>
+      <button type="button" role="menuitem" @click="closeEmployeeContextMenu">
+        取消
+      </button>
+    </div>
 
     <Teleport to="body">
       <div v-if="departmentModalVisible" class="modal-layer" @click.self="closeDepartmentModal">
@@ -272,7 +335,7 @@
                 <strong>{{ employee.displayName }}</strong>
                 <small>{{ employee.employeeNo }} · {{ employee.department || '未分配部门' }} · {{ employee.phone || '暂无电话' }}</small>
               </span>
-              <span v-if="employee.departmentId" class="employee-picker-move-hint">调整部门</span>
+              <span v-if="getEmployeeDepartmentIds(employee).length" class="employee-picker-move-hint">已有部门</span>
             </label>
             <div v-if="availableEmployees.length === 0" class="picker-empty">
               <strong>{{ employeePickerQuery ? '没有找到匹配员工' : '暂无可添加员工' }}</strong>
@@ -281,7 +344,7 @@
           </div>
 
           <div class="modal-footer">
-            <span class="picker-hint">选择其他部门员工会将其调整到当前部门</span>
+            <span class="picker-hint">添加后保留员工原有部门，可同时归属多个部门</span>
             <div class="modal-footer-actions">
               <button class="button button-secondary" type="button" :disabled="saving" @click="closeAddEmployee">
                 取消
@@ -313,7 +376,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
 
@@ -331,6 +394,12 @@ const departmentModalReturnId = ref(null)
 const employeeModalVisible = ref(false)
 const employeePickerQuery = ref('')
 const employeePickerSelectedIds = ref([])
+const contextMenuVisible = ref(false)
+const contextMenuEmployee = ref(null)
+const contextMenuPosition = ref({ x: 0, y: 0 })
+const editingPositionEmployeeId = ref(null)
+const editingPositionValue = ref('')
+const positionInput = ref(null)
 const departmentDraft = ref(createEmptyDepartment())
 const saving = ref(false)
 const notice = ref('')
@@ -340,9 +409,20 @@ const selectedDepartment = computed(() =>
   departments.value.find(item => item.id === selectedDepartmentId.value) || null
 )
 
+const contextMenuStyle = computed(() => {
+  const width = 156
+  const height = 132
+  const maxX = typeof window === 'undefined' ? contextMenuPosition.value.x : window.innerWidth - width - 8
+  const maxY = typeof window === 'undefined' ? contextMenuPosition.value.y : window.innerHeight - height - 8
+  return {
+    left: `${Math.max(8, Math.min(contextMenuPosition.value.x, maxX))}px`,
+    top: `${Math.max(8, Math.min(contextMenuPosition.value.y, maxY))}px`
+  }
+})
+
 const totalEmployeeCount = computed(() => employees.value.length)
 const unassignedEmployeeCount = computed(() =>
-  employees.value.filter(employee => !employee.departmentId).length
+  employees.value.filter(employee => getEmployeeDepartmentIds(employee).length === 0).length
 )
 
 const employeePanelTitle = computed(() => {
@@ -360,9 +440,11 @@ const employeePanelHint = computed(() => {
 const departmentEmployees = computed(() => {
   if (selectedDepartmentId.value === ALL_ID) return employees.value
   if (selectedDepartmentId.value === UNASSIGNED_ID) {
-    return employees.value.filter(employee => !employee.departmentId)
+    return employees.value.filter(employee => getEmployeeDepartmentIds(employee).length === 0)
   }
-  return employees.value.filter(employee => employee.departmentId === selectedDepartmentId.value)
+  return employees.value.filter(employee =>
+    getEmployeeDepartmentIds(employee).includes(selectedDepartmentId.value)
+  )
 })
 
 const filteredEmployees = computed(() => {
@@ -380,7 +462,7 @@ const availableEmployees = computed(() => {
   if (!selectedDepartment.value) return []
   const keyword = employeePickerQuery.value.toLowerCase()
   return employees.value.filter(employee => {
-    if (employee.departmentId === selectedDepartment.value.id) return false
+    if (getEmployeeDepartmentIds(employee).includes(selectedDepartment.value.id)) return false
     if (!keyword) return true
     return [employee.displayName, employee.employeeNo, employee.phone, employee.department]
       .join(' ')
@@ -524,13 +606,98 @@ function closeAddEmployee() {
 }
 
 function employeeUpdatePayload(employee, departmentId) {
+  const departmentIds = [...new Set([
+    ...getEmployeeDepartmentIds(employee),
+    departmentId
+  ])]
+  return buildEmployeeUpdatePayload(employee, departmentIds)
+}
+
+function buildEmployeeUpdatePayload(employee, departmentIds, overrides = {}) {
   return {
     ...employee,
-    departmentId,
+    ...overrides,
+    departmentId: departmentIds[0] || null,
+    departmentIds: [...departmentIds],
     password: '',
     passwordConfirm: '',
     roleIds: Array.isArray(employee.roleIds) ? [...employee.roleIds] : []
   }
+}
+
+async function updateEmployee(employee, payload, successMessage) {
+  try {
+    saving.value = true
+    const response = await request.put(`/admin/employees/${employee.id}`, payload)
+    const index = employees.value.findIndex(item => item.id === employee.id)
+    if (index !== -1 && response.employee) employees.value[index] = response.employee
+    showNotice(successMessage || response.message)
+    return response.employee || employee
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '员工信息更新失败')
+    return null
+  } finally {
+    saving.value = false
+  }
+}
+
+function openEmployeeContextMenu(event, employee) {
+  contextMenuEmployee.value = employee
+  contextMenuPosition.value = { x: event.clientX, y: event.clientY }
+  contextMenuVisible.value = true
+}
+
+function closeEmployeeContextMenu() {
+  contextMenuVisible.value = false
+  contextMenuEmployee.value = null
+}
+
+async function removeEmployeeFromDepartment(employee) {
+  const department = selectedDepartment.value
+  if (!department || !employee || saving.value) return
+  const nextDepartmentIds = getEmployeeDepartmentIds(employee).filter(
+    departmentId => departmentId !== department.id
+  )
+  closeEmployeeContextMenu()
+  const updatedEmployee = await updateEmployee(
+    employee,
+    buildEmployeeUpdatePayload(employee, nextDepartmentIds),
+    `已从${department.name}移除员工`
+  )
+  if (updatedEmployee) await loadData(department.id)
+}
+
+async function openPositionEditor(employee) {
+  if (!employee) return
+  closeEmployeeContextMenu()
+  editingPositionEmployeeId.value = employee.id
+  editingPositionValue.value = employee.position || ''
+  await nextTick()
+  const input = Array.isArray(positionInput.value) ? positionInput.value[0] : positionInput.value
+  input?.focus()
+}
+
+function cancelPositionEdit() {
+  editingPositionEmployeeId.value = null
+  editingPositionValue.value = ''
+}
+
+async function savePosition(employee) {
+  if (!employee || editingPositionEmployeeId.value !== employee.id || saving.value) return
+  const position = editingPositionValue.value.trim()
+  const departmentIds = getEmployeeDepartmentIds(employee)
+  const updatedEmployee = await updateEmployee(
+    employee,
+    buildEmployeeUpdatePayload(employee, departmentIds, { position }),
+    '职位已修改'
+  )
+  if (updatedEmployee) cancelPositionEdit()
+}
+
+function getEmployeeDepartmentIds(employee) {
+  return (employee?.departmentIds || (employee?.departmentId ? [employee.departmentId] : []))
+    .map(Number)
+    .filter(Boolean)
 }
 
 async function addSelectedEmployees() {
@@ -602,7 +769,22 @@ function showNotice(message) {
   }, 3000)
 }
 
-onMounted(() => loadData())
+function handleWindowClick() {
+  closeEmployeeContextMenu()
+}
+
+onMounted(() => {
+  loadData()
+  window.addEventListener('click', handleWindowClick)
+  window.addEventListener('resize', closeEmployeeContextMenu)
+  window.addEventListener('scroll', closeEmployeeContextMenu, true)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('click', handleWindowClick)
+  window.removeEventListener('resize', closeEmployeeContextMenu)
+  window.removeEventListener('scroll', closeEmployeeContextMenu, true)
+})
 </script>
 
 <style scoped>
@@ -1140,12 +1322,112 @@ onMounted(() => loadData())
   vertical-align: middle;
 }
 
+.employee-table tbody tr {
+  cursor: context-menu;
+}
+
 .employee-table th:first-child { width: 190px; }
 .employee-table th:nth-child(2) { width: 100px; }
 .employee-table th:nth-child(3) { width: 140px; }
 .employee-table th:nth-child(4) { width: 135px; }
 .employee-table th:nth-child(5),
 .employee-table th:nth-child(6) { width: 100px; }
+
+.position-cell {
+  min-width: 160px;
+}
+
+.inline-position-editor {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.inline-position-editor input {
+  min-width: 0;
+  width: 116px;
+  height: 30px;
+  padding: 0 8px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  outline: 0;
+  font: inherit;
+  font-size: 12px;
+  box-shadow: 0 0 0 3px rgba(15, 159, 120, 0.1);
+  box-sizing: border-box;
+}
+
+.inline-action {
+  display: inline-flex;
+  width: 27px;
+  height: 27px;
+  flex: 0 0 27px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.inline-action svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+.inline-action.confirm { color: #13734f; }
+.inline-action.confirm:hover { background: #eaf8f1; border-color: var(--accent-border); }
+.inline-action.cancel { color: #b4232f; }
+.inline-action.cancel:hover { background: #fcebed; border-color: #efb4bc; }
+
+.employee-context-menu {
+  position: fixed;
+  z-index: 2200;
+  display: flex;
+  width: 156px;
+  padding: 5px;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.18);
+}
+
+.employee-context-menu button {
+  min-height: 34px;
+  padding: 0 10px;
+  color: var(--text-secondary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+}
+
+.employee-context-menu button:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+
+.employee-context-menu button:first-child:hover:not(:disabled) {
+  color: #b4232f;
+  background: #fcebed;
+}
+
+.employee-context-menu button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+}
 
 .employee-cell {
   display: flex;

@@ -238,6 +238,21 @@ def _ensure_auth_schema(conn):
                 "ALTER TABLE employees ADD COLUMN department_id INTEGER"
             )
 
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS employee_departments (
+                employee_id INTEGER NOT NULL,
+                department_id INTEGER NOT NULL,
+                is_primary INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                PRIMARY KEY (employee_id, department_id),
+                FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+                FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE,
+                CHECK (is_primary IN (0, 1))
+            )
+            """
+        )
+
         for sort_order, department_name in enumerate(DEFAULT_DEPARTMENT_NAMES):
             cursor.execute(
                 """
@@ -286,6 +301,18 @@ def _ensure_auth_schema(conn):
             UPDATE employees
             SET department = ''
             WHERE department_id IS NOT NULL
+            """
+        )
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO employee_departments (employee_id, department_id, is_primary)
+            SELECT id, department_id, 1
+            FROM employees
+            WHERE department_id IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM departments
+                  WHERE departments.id = employees.department_id
+              )
             """
         )
         cursor.execute(
@@ -359,6 +386,14 @@ def _ensure_auth_schema(conn):
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_employees_department "
             "ON employees(department_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_employee_departments_department "
+            "ON employee_departments(department_id, employee_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_employee_departments_employee "
+            "ON employee_departments(employee_id, is_primary DESC)"
         )
         cursor.execute(
             """
@@ -660,7 +695,7 @@ def _ensure_auth_schema(conn):
         cursor.execute(
             """
             INSERT INTO system_meta (setting_key, setting_value, updated_at)
-            VALUES ('auth_schema_version', '8', CURRENT_TIMESTAMP)
+            VALUES ('auth_schema_version', '9', CURRENT_TIMESTAMP)
             ON CONFLICT(setting_key) DO UPDATE SET
                 setting_value = excluded.setting_value,
                 updated_at = CURRENT_TIMESTAMP

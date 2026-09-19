@@ -30,7 +30,11 @@ def _sort_order(value, default=0):
 
 def _serialize_department(conn, row):
     employee_count = conn.execute(
-        "SELECT COUNT(*) AS total FROM employees WHERE department_id = ?",
+        """
+        SELECT COUNT(DISTINCT employee_id) AS total
+        FROM employee_departments
+        WHERE department_id = ?
+        """,
         (row["id"],),
     ).fetchone()["total"]
     return {
@@ -140,7 +144,7 @@ def update_department(department_id):
             ).fetchone():
                 return jsonify({"success": False, "message": "部门名称已存在"}), 409
             if next_status == "disabled" and conn.execute(
-                "SELECT 1 FROM employees WHERE department_id = ?",
+                "SELECT 1 FROM employee_departments WHERE department_id = ?",
                 (department_id,),
             ).fetchone():
                 return jsonify(
@@ -175,7 +179,11 @@ def delete_department(department_id):
         if not current:
             return jsonify({"success": False, "message": "部门不存在"}), 404
         employee_count = conn.execute(
-            "SELECT COUNT(*) AS total FROM employees WHERE department_id = ?",
+            """
+            SELECT COUNT(DISTINCT employee_id) AS total
+            FROM employee_departments
+            WHERE department_id = ?
+            """,
             (department_id,),
         ).fetchone()["total"]
         if employee_count:
