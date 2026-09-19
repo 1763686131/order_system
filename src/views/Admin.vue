@@ -130,14 +130,59 @@
               </svg>
               <span class="badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
             </button>
-            <div class="user-info">
-              <div class="user-avatar">
-                <svg class="avatar-icon" viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                  <circle cx="12" cy="7" r="4"/>
-                </svg>
-              </div>
-              <span class="user-name">{{ userStore.name || userStore.username || '用户' }}</span>
+            <div class="user-profile">
+              <button
+                class="user-info"
+                type="button"
+                aria-label="查看个人详细信息"
+              >
+                <div class="user-avatar">
+                  <img
+                    v-if="userStore.avatarUrl && !avatarLoadFailed"
+                    :src="userStore.avatarUrl"
+                    alt=""
+                    @error="handleAvatarError"
+                  >
+                  <svg v-else class="avatar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+                <span class="user-name">{{ userDisplayName }}</span>
+              </button>
+
+              <section class="user-detail-card" aria-label="个人详细信息">
+                <div class="detail-avatar">
+                  <img
+                    v-if="userStore.avatarUrl && !avatarLoadFailed"
+                    :src="userStore.avatarUrl"
+                    :alt="`${userDisplayName}的头像`"
+                    @error="handleAvatarError"
+                  >
+                  <svg v-else class="detail-avatar-icon" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                    <circle cx="12" cy="7" r="4"/>
+                  </svg>
+                </div>
+
+                <strong class="detail-name">{{ userDisplayName }}</strong>
+
+                <div class="detail-contact">
+                  <div class="detail-field">
+                    <span>电话</span>
+                    <strong>{{ userStore.phone || '未填写' }}</strong>
+                  </div>
+                  <div class="detail-field">
+                    <span>职位</span>
+                    <strong>{{ userStore.position || '未设置' }}</strong>
+                  </div>
+                </div>
+
+                <div class="detail-permission">
+                  <span>权限信息</span>
+                  <strong>{{ permissionSummary }}</strong>
+                </div>
+              </section>
             </div>
             <button class="logout-btn" @click="logout">退出系统</button>
           </div>
@@ -188,6 +233,31 @@ const notificationCount = ref(3)
 const shippedActionModal = ref(null)
 const stockRecordModal = ref(null)
 const activeContentRef = ref(null)
+const avatarLoadFailed = ref(false)
+
+const userDisplayName = computed(() => {
+  return userStore.name || userStore.username || '用户'
+})
+
+const permissionSummary = computed(() => {
+  const roleNames = userStore.roles
+    .map(role => role?.name)
+    .filter(Boolean)
+  const permissionCount = userStore.permissions.length
+
+  if (userStore.isSuperAdmin) return '超级管理员 · 全部权限'
+  if (roleNames.length && permissionCount) {
+    return `${roleNames.join('、')} · ${permissionCount} 项权限`
+  }
+  if (roleNames.length) return roleNames.join('、')
+  if (permissionCount) return `已授权 ${permissionCount} 项权限`
+  if (userStore.canAccessAdmin) return '后台管理权限'
+  return '普通账号'
+})
+
+const handleAvatarError = () => {
+  avatarLoadFailed.value = true
+}
 
 // 侧边栏折叠状态
 const isSidebarCollapsed = ref(false)
@@ -462,6 +532,7 @@ const logout = async () => {
   --accent-rgb: 15, 159, 120;
   --accent-dark: #08745a;
   --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
   --page-bg: #f4f7f8;
   --panel-bg: #ffffff;
   --border: #e2e8f0;
@@ -656,11 +727,16 @@ const logout = async () => {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+  overflow: visible;
 }
 
 /* 顶部栏样式 */
 .top-header {
+  position: relative;
+  z-index: 100;
+  flex: 0 0 62px;
   height: 62px;
   background: var(--panel-bg);
   border-bottom: 1px solid var(--border);
@@ -915,11 +991,35 @@ const logout = async () => {
   box-shadow: 0 1px 3px rgba(239, 68, 68, 0.3);
 }
 
+.user-profile {
+  position: relative;
+  z-index: 20;
+}
+
 .user-info {
   display: flex;
+  height: 38px;
   align-items: center;
   gap: 10px;
-  padding: 0 10px;
+  padding: 0 10px 0 6px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+  font: inherit;
+  transition: background 0.18s ease, border-color 0.18s ease;
+}
+
+.user-info:hover,
+.user-profile:focus-within .user-info {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.user-info:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .user-avatar {
@@ -933,6 +1033,13 @@ const logout = async () => {
   justify-content: center;
   flex-shrink: 0;
   overflow: hidden;
+}
+
+.user-avatar img,
+.detail-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .avatar-icon {
@@ -949,6 +1056,147 @@ const logout = async () => {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  white-space: nowrap;
+}
+
+.user-detail-card {
+  position: absolute;
+  z-index: 2000;
+  top: calc(100% + 10px);
+  right: 0;
+  width: 320px;
+  padding: 18px;
+  color: var(--text);
+  background: var(--panel-bg);
+  border: 1px solid #dfe5ec;
+  border-radius: 7px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  box-sizing: border-box;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transform-origin: top right;
+  transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+}
+
+.user-detail-card::before,
+.user-detail-card::after {
+  position: absolute;
+  right: 22px;
+  width: 0;
+  height: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.user-detail-card::before {
+  top: -8px;
+  border-right: 8px solid transparent;
+  border-bottom: 8px solid #dfe5ec;
+  border-left: 8px solid transparent;
+}
+
+.user-detail-card::after {
+  top: -7px;
+  right: 23px;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid var(--panel-bg);
+  border-left: 7px solid transparent;
+}
+
+.user-profile:hover .user-detail-card,
+.user-profile:focus-within .user-detail-card {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.detail-avatar {
+  display: flex;
+  width: 64px;
+  height: 64px;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto;
+  overflow: hidden;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 50%;
+}
+
+.detail-avatar-icon {
+  width: 30px;
+  height: 30px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.detail-name {
+  display: block;
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 650;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.detail-contact {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  margin-top: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-field {
+  min-width: 0;
+  padding: 0 12px;
+}
+
+.detail-field:first-child {
+  padding-left: 0;
+  border-right: 1px solid var(--border);
+}
+
+.detail-field:last-child {
+  padding-right: 0;
+}
+
+.detail-field span,
+.detail-permission span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.detail-field strong,
+.detail-permission strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.detail-permission {
+  margin-top: 14px;
+}
+
+.detail-permission strong {
+  color: var(--accent-dark);
 }
 
 .logout-btn {
@@ -979,6 +1227,7 @@ const logout = async () => {
 /* 主内容区 */
 .main-content {
   flex: 1;
+  min-height: 0;
   padding: 20px;
   overflow-y: auto;
   background: var(--page-bg);
@@ -1029,8 +1278,32 @@ const logout = async () => {
     display: none;
   }
 
+  .user-info {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .user-detail-card {
+    position: fixed;
+    top: 64px;
+    right: 12px;
+    width: min(320px, calc(100vw - 24px));
+  }
+
+  .user-detail-card::before,
+  .user-detail-card::after {
+    display: none;
+  }
+
   .main-content {
     padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .user-detail-card {
+    transition: none;
   }
 }
 </style>

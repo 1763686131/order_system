@@ -40,6 +40,8 @@ export const useUserStore = defineStore('user', {
     username: '',
     name: '',
     avatarUrl: '',
+    phone: '',
+    position: '',
     role: '',
     roles: [],
     permissions: [],
@@ -72,6 +74,8 @@ export const useUserStore = defineStore('user', {
       this.username = userData.username || ''
       this.name = userData.displayName || userData.name || ''
       this.avatarUrl = userData.avatarUrl || ''
+      this.phone = userData.phone || ''
+      this.position = userData.position || ''
       this.role = userData.role || ''
       this.roles = Array.isArray(userData.roles) ? userData.roles : []
       this.permissions = accessState.permissions
@@ -91,6 +95,8 @@ export const useUserStore = defineStore('user', {
       this.username = ''
       this.name = ''
       this.avatarUrl = ''
+      this.phone = ''
+      this.position = ''
       this.role = ''
       this.roles = []
       this.permissions = []

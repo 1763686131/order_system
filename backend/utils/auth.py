@@ -153,7 +153,7 @@ def serialize_user(conn, row):
     access_scope = merge_role_scopes(roles, full_access)
     employee = conn.execute(
         """
-        SELECT id, employee_no
+        SELECT id, employee_no, phone, position
         FROM employees
         WHERE user_id = ?
         LIMIT 1
@@ -164,6 +164,8 @@ def serialize_user(conn, row):
         "id": row["id"],
         "employeeId": employee["id"] if employee else None,
         "employeeNo": employee["employee_no"] if employee else "",
+        "phone": employee["phone"] if employee else "",
+        "position": employee["position"] if employee else "",
         "username": row["username"],
         "name": row["display_name"],
         "displayName": row["display_name"],
