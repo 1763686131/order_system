@@ -75,33 +75,38 @@
           </div>
           <div class="box-actions">
             <button
+              v-if="!permissionConfigMode"
               class="button button-secondary compact-button"
-              :class="{ 'mode-active': permissionAddMode }"
               type="button"
               :disabled="selectedGroup.fullAccess"
-              @click="togglePermissionAddMode"
+              @click="startPermissionConfig"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 5v14"></path>
-                <path d="M5 12h14"></path>
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
               </svg>
-              {{ permissionAddMode ? '完成添加' : '添加权限' }}
+              配置权限
             </button>
             <button
-              class="button button-danger compact-button"
-              :class="{ 'mode-active': permissionDeleteMode }"
+              v-if="permissionConfigMode"
+              class="button button-secondary compact-button"
               type="button"
-              :disabled="selectedGroup.fullAccess || selectedGroup.permissions.length === 0"
-              @click="togglePermissionDeleteMode"
+              :disabled="saving"
+              @click="cancelPermissionConfig"
+            >
+              取消
+            </button>
+            <button
+              v-if="permissionConfigMode"
+              class="button button-primary compact-button"
+              type="button"
+              :disabled="saving"
+              @click="finishPermissionConfig"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 7h14"></path>
-                <path d="M10 11v6"></path>
-                <path d="M14 11v6"></path>
-                <path d="m9 7 .8-2h4.4l.8 2"></path>
-                <path d="m7 7 .7 13h8.6L17 7"></path>
+                <path d="m5 12 4 4L19 6"></path>
               </svg>
-              {{ permissionDeleteMode ? '完成删除' : '删除权限' }}
+              {{ saving ? '保存中...' : '完成' }}
             </button>
           </div>
         </div>
@@ -109,10 +114,28 @@
         <div class="permission-module-list">
           <article v-for="module in displayedPermissionModules" :key="module.id" class="permission-module-box">
             <div class="module-heading">
-              <span :class="['module-dot', module.tone]"></span>
-              <div>
-                <strong>{{ module.name }}</strong>
-                <small>{{ module.description }}</small>
+              <div class="module-heading-main">
+                <span :class="['module-dot', module.tone]"></span>
+                <div>
+                  <strong>{{ module.name }}</strong>
+                  <small>{{ module.description }}</small>
+                </div>
+              </div>
+              <div v-if="permissionConfigMode" class="module-permission-actions">
+                <button
+                  type="button"
+                  :disabled="isModuleFullySelected(module)"
+                  @click="selectModulePermissions(module)"
+                >
+                  全选
+                </button>
+                <button
+                  type="button"
+                  :disabled="isModuleEmpty(module)"
+                  @click="clearModulePermissions(module)"
+                >
+                  清空
+                </button>
               </div>
             </div>
             <div class="permission-row-list">
@@ -123,43 +146,45 @@
                 :class="{
                   active: selectedGroup.permissions.includes(permission.id),
                   addable: !selectedGroup.permissions.includes(permission.id),
-                  'add-mode': permissionAddMode,
-                  'delete-mode': permissionDeleteMode
+                  'config-mode': permissionConfigMode
                 }"
-                @click="handlePermissionRowClick(permission.id)"
+                :aria-label="`${permission.name}，权限编码 ${permission.id}`"
+                tabindex="0"
+                @click="handlePermissionRowClick(permission)"
+                @keydown.enter.self.prevent="handlePermissionRowClick(permission)"
+                @keydown.space.self.prevent="handlePermissionRowClick(permission)"
               >
                 <span class="permission-row-copy">
                   <strong>{{ permission.name }}</strong>
-                  <small>{{ permission.id }}</small>
                 </span>
-                <div v-if="permissionDeleteMode && selectedGroup.permissions.includes(permission.id)" class="permission-remove-wrap">
-                  <button
-                    class="permission-remove"
-                    type="button"
-                    :aria-label="`删除${permission.name}`"
-                    @click.stop="openPermissionDeleteConfirm(permission.id)"
-                  >
-                    ×
-                  </button>
-                  <div
-                    v-if="permissionDeleteTarget === permission.id"
-                    class="permission-confirm-popover"
-                    @click.stop
-                  >
-                    <strong>确定删除吗？</strong>
-                    <div>
-                      <button type="button" @click="confirmPermissionDelete">删除</button>
-                      <button type="button" @click="cancelPermissionDelete">取消</button>
-                    </div>
-                  </div>
-                </div>
+                <span class="permission-code-tooltip" role="tooltip">
+                  {{ permission.id }}
+                </span>
+                <button
+                  v-if="permissionConfigMode && !selectedGroup.permissions.includes(permission.id)"
+                  class="permission-add"
+                  type="button"
+                  :aria-label="`添加${permission.name}`"
+                  @click.stop="addPermission(permission)"
+                >
+                  <span>+</span><em>添加</em>
+                </button>
+                <button
+                  v-if="permissionConfigMode && selectedGroup.permissions.includes(permission.id)"
+                  class="permission-remove"
+                  type="button"
+                  :aria-label="`移除${permission.name}`"
+                  @click.stop="removePermission(permission)"
+                >
+                  ×
+                </button>
               </div>
             </div>
           </article>
         </div>
         <div v-if="displayedPermissionModules.length === 0" class="permission-empty">
           <strong>暂未配置权限</strong>
-          <span>点击“添加权限”查看全部权限</span>
+          <span>点击“配置权限”查看并添加权限</span>
         </div>
 
         <section class="scope-panel">
@@ -444,9 +469,8 @@ const allPermissionIds = computed(() =>
 )
 
 const selectedGroupId = ref(null)
-const permissionAddMode = ref(false)
-const permissionDeleteMode = ref(false)
-const permissionDeleteTarget = ref(null)
+const permissionConfigMode = ref(false)
+const permissionSnapshot = ref([])
 const selectedMemberIds = ref([])
 const memberSearchQuery = ref('')
 const memberSearchOpen = ref(false)
@@ -469,7 +493,7 @@ const displayedPermissionModules = computed(() => {
     .map(module => ({
       ...module,
       permissions: module.permissions.filter(permission =>
-        permissionAddMode.value || permissionIds.includes(permission.id)
+        permissionConfigMode.value || permissionIds.includes(permission.id)
       )
     }))
     .filter(module => module.permissions.length > 0)
@@ -579,10 +603,12 @@ function openCreate() {
 }
 
 function selectGroup(groupId) {
+  if (permissionConfigMode.value && selectedGroup.value) {
+    selectedGroup.value.permissions = [...permissionSnapshot.value]
+  }
   selectedGroupId.value = groupId
-  permissionAddMode.value = false
-  permissionDeleteMode.value = false
-  permissionDeleteTarget.value = null
+  permissionConfigMode.value = false
+  permissionSnapshot.value = []
   selectedMemberIds.value = []
   resetMemberSearch()
 }
@@ -631,7 +657,7 @@ async function persistRole(group, successMessage) {
     saving.value = true
     const response = await request.put(`/admin/roles/${group.id}`, rolePayload(group))
     replaceRole(response.role)
-    showNotice(response.message || successMessage)
+    showNotice(successMessage || response.message || '角色组已更新')
     return true
   } catch (error) {
     showNotice(error?.response?.data?.message || '角色组保存失败')
@@ -674,31 +700,86 @@ async function saveGroup() {
   }
 }
 
-function togglePermissionAddMode() {
+function startPermissionConfig() {
   if (selectedGroup.value?.fullAccess) return
-  permissionAddMode.value = !permissionAddMode.value
-  permissionDeleteMode.value = false
-  permissionDeleteTarget.value = null
-  if (permissionAddMode.value) showNotice('点击虚线权限即可添加')
+  permissionSnapshot.value = [...selectedGroup.value.permissions]
+  permissionConfigMode.value = true
 }
 
-function togglePermissionDeleteMode() {
-  if (selectedGroup.value?.fullAccess) return
-  permissionDeleteMode.value = !permissionDeleteMode.value
-  permissionAddMode.value = false
-  permissionDeleteTarget.value = null
+function cancelPermissionConfig() {
+  if (!selectedGroup.value) return
+  selectedGroup.value.permissions = [...permissionSnapshot.value]
+  permissionSnapshot.value = []
+  permissionConfigMode.value = false
+  showNotice('已取消权限修改')
 }
 
-function handlePermissionRowClick(permissionId) {
-  if (!permissionAddMode.value || permissionDeleteMode.value) return
-  togglePermission(permissionId)
+async function finishPermissionConfig() {
+  if (!selectedGroup.value || !permissionConfigMode.value) return
+  const originalPermissions = [...permissionSnapshot.value].sort()
+  const currentPermissions = [...selectedGroup.value.permissions].sort()
+  if (JSON.stringify(originalPermissions) === JSON.stringify(currentPermissions)) {
+    permissionSnapshot.value = []
+    permissionConfigMode.value = false
+    showNotice('权限配置没有变化')
+    return
+  }
+  if (await persistRole(selectedGroup.value, '权限配置已保存')) {
+    permissionSnapshot.value = []
+    permissionConfigMode.value = false
+  } else {
+    permissionSnapshot.value = []
+    permissionConfigMode.value = false
+  }
 }
 
-async function togglePermission(permissionId) {
-  if (!selectedGroup.value || permissionDeleteMode.value || !permissionAddMode.value) return
-  if (selectedGroup.value.permissions.includes(permissionId)) return
-  selectedGroup.value.permissions.push(permissionId)
-  await persistRole(selectedGroup.value, '权限添加成功')
+function handlePermissionRowClick(permission) {
+  if (!permissionConfigMode.value || !selectedGroup.value) return
+  if (!selectedGroup.value.permissions.includes(permission.id)) {
+    addPermission(permission)
+  }
+}
+
+function addPermission(permission) {
+  if (!permissionConfigMode.value || !selectedGroup.value) return
+  if (selectedGroup.value.permissions.includes(permission.id)) return
+  selectedGroup.value.permissions.push(permission.id)
+}
+
+function removePermission(permission) {
+  if (!permissionConfigMode.value || !selectedGroup.value) return
+  selectedGroup.value.permissions = selectedGroup.value.permissions.filter(
+    permissionId => permissionId !== permission.id
+  )
+}
+
+function isModuleFullySelected(module) {
+  if (!selectedGroup.value) return false
+  return module.permissions.every(permission =>
+    selectedGroup.value.permissions.includes(permission.id)
+  )
+}
+
+function isModuleEmpty(module) {
+  if (!selectedGroup.value) return true
+  return module.permissions.every(permission =>
+    !selectedGroup.value.permissions.includes(permission.id)
+  )
+}
+
+function selectModulePermissions(module) {
+  if (!permissionConfigMode.value || !selectedGroup.value) return
+  const permissionIds = new Set(selectedGroup.value.permissions)
+  module.permissions.forEach(permission => permissionIds.add(permission.id))
+  selectedGroup.value.permissions = [...permissionIds]
+}
+
+function clearModulePermissions(module) {
+  if (!permissionConfigMode.value || !selectedGroup.value) return
+  const moduleIds = new Set(module.permissions.map(permission => permission.id))
+  selectedGroup.value.permissions = selectedGroup.value.permissions.filter(
+    permissionId => !moduleIds.has(permissionId)
+  )
 }
 
 async function toggleGroupScope(scopeType, scopeId) {
@@ -717,23 +798,6 @@ async function toggleGroupScope(scopeType, scopeId) {
     selectedGroup.value,
     `${scopeType === 'store' ? '门店' : '仓库'}范围已更新`
   )
-}
-
-function openPermissionDeleteConfirm(permissionId) {
-  permissionDeleteTarget.value = permissionDeleteTarget.value === permissionId ? null : permissionId
-}
-
-async function confirmPermissionDelete() {
-  if (!selectedGroup.value || !permissionDeleteTarget.value) return
-  selectedGroup.value.permissions = selectedGroup.value.permissions.filter(
-    permissionId => permissionId !== permissionDeleteTarget.value
-  )
-  permissionDeleteTarget.value = null
-  await persistRole(selectedGroup.value, '权限已删除')
-}
-
-function cancelPermissionDelete() {
-  permissionDeleteTarget.value = null
 }
 
 function queueCloseMemberSearch() {
@@ -2256,18 +2320,6 @@ textarea:focus {
   opacity: 0.45;
 }
 
-.button.mode-active {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-}
-
-.button-danger.mode-active {
-  color: #b4232f;
-  background: #fff1f2;
-  border-color: #e7b3b9;
-}
-
 .member-search {
   position: relative;
   display: flex;
@@ -2658,7 +2710,48 @@ textarea:focus {
 }
 
 .permission-module-box .module-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 9px;
+}
+
+.module-heading-main {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.module-permission-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 9px;
+}
+
+.module-permission-actions button {
+  padding: 2px 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  font: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.module-permission-actions button:hover:not(:disabled) {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.module-permission-actions button:disabled {
+  color: var(--text-muted);
+  cursor: not-allowed;
+  opacity: 0.5;
 }
 
 .permission-row-list {
@@ -2673,10 +2766,10 @@ textarea:focus {
   display: flex;
   width: 176px;
   min-width: 150px;
-  min-height: 42px;
+  min-height: 38px;
   align-items: center;
   gap: 5px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   background: #fff;
   border: 1px dashed var(--border-strong);
   border-radius: 5px;
@@ -2684,14 +2777,26 @@ textarea:focus {
   transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
 }
 
-.permission-row.add-mode.addable {
+.permission-row:hover,
+.permission-row:focus-within {
+  z-index: 10;
+}
+
+.permission-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.permission-row.config-mode.addable {
+  padding-right: 61px;
   cursor: pointer;
 }
 
-.permission-row.add-mode.addable:hover {
-  background: #fbfffd;
-  border-color: var(--accent-border);
-  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.08);
+.permission-row.config-mode.addable:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(var(--accent-rgb), 0.09);
 }
 
 .permission-row.active {
@@ -2700,7 +2805,7 @@ textarea:focus {
   border-style: solid;
 }
 
-.permission-row.delete-mode {
+.permission-row.config-mode.active {
   padding-right: 31px;
 }
 
@@ -2709,8 +2814,7 @@ textarea:focus {
   min-width: 0;
 }
 
-.permission-row-copy strong,
-.permission-row-copy small {
+.permission-row-copy strong {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2723,35 +2827,120 @@ textarea:focus {
   line-height: 1.25;
 }
 
-.permission-row-copy small {
-  margin-top: 3px;
-  color: var(--text-muted);
+.permission-code-tooltip {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 7px;
+  z-index: 30;
+  max-width: 240px;
+  padding: 5px 8px;
+  overflow: hidden;
+  color: #fff;
+  background: #273244;
+  border-radius: 4px;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.18);
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 9px;
-  line-height: 1.2;
+  font-size: 10px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px);
+  visibility: hidden;
+  transition: opacity 0.16s ease, transform 0.16s ease, visibility 0.16s ease;
 }
 
-.permission-remove-wrap {
+.permission-code-tooltip::after {
+  position: absolute;
+  top: 100%;
+  left: 10px;
+  width: 0;
+  height: 0;
+  border-top: 5px solid #273244;
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+  content: '';
+}
+
+.permission-row:hover .permission-code-tooltip,
+.permission-row:focus-visible .permission-code-tooltip,
+.permission-row:focus-within .permission-code-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.permission-add,
+.permission-remove {
   position: absolute;
   top: 5px;
   right: 5px;
-}
-
-.permission-remove {
   display: inline-flex;
   width: 19px;
   height: 19px;
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: #b4232f;
   background: #fff;
-  border: 1px solid #e7b3b9;
   border-radius: 50%;
   font: inherit;
-  font-size: 15px;
   line-height: 1;
   cursor: pointer;
+  transition: width 0.18s ease, color 0.18s ease, background 0.18s ease, border-color 0.18s ease, opacity 0.18s ease;
+}
+
+.permission-add {
+  color: var(--accent-dark);
+  border: 1px solid var(--accent-border);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.permission-add span {
+  flex: 0 0 auto;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.permission-add em {
+  width: 0;
+  overflow: hidden;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 700;
+  opacity: 0;
+  transition: width 0.18s ease, opacity 0.18s ease;
+}
+
+.permission-row.config-mode.addable:hover .permission-add,
+.permission-add:focus-visible {
+  width: 50px;
+  gap: 2px;
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+  border-radius: 999px;
+}
+
+.permission-row.config-mode.addable:hover .permission-add em,
+.permission-add:focus-visible em {
+  width: 22px;
+  opacity: 1;
+}
+
+.permission-remove {
+  color: #b4232f;
+  border: 1px solid #e7b3b9;
+  font-size: 15px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.permission-row.config-mode.active:hover .permission-remove,
+.permission-remove:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .permission-remove:hover {
@@ -2760,66 +2949,25 @@ textarea:focus {
   border-color: #c73543;
 }
 
-.permission-confirm-popover {
-  position: absolute;
-  right: -2px;
-  bottom: calc(100% + 7px);
-  z-index: 20;
-  width: 142px;
-  padding: 9px 10px;
-  color: var(--text);
-  background: #fff;
-  border: 1px solid #e7b3b9;
-  border-radius: 6px;
-  box-shadow: 0 8px 22px rgba(15, 23, 42, 0.16);
-  box-sizing: border-box;
-}
+@media (hover: none) {
+  .permission-row.config-mode.active .permission-remove {
+    opacity: 1;
+    pointer-events: auto;
+  }
 
-.permission-confirm-popover::after {
-  position: absolute;
-  right: 7px;
-  bottom: -5px;
-  width: 8px;
-  height: 8px;
-  background: #fff;
-  border-right: 1px solid #e7b3b9;
-  border-bottom: 1px solid #e7b3b9;
-  content: '';
-  transform: rotate(45deg);
-}
+  .permission-add {
+    width: 50px;
+    gap: 2px;
+    color: #fff;
+    background: var(--accent);
+    border-color: var(--accent);
+    border-radius: 999px;
+  }
 
-.permission-confirm-popover strong {
-  display: block;
-  font-size: 11px;
-  font-weight: 650;
-}
-
-.permission-confirm-popover > div {
-  display: flex;
-  justify-content: flex-end;
-  gap: 5px;
-  margin-top: 8px;
-}
-
-.permission-confirm-popover button {
-  padding: 3px 7px;
-  color: var(--text-secondary);
-  background: #fff;
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  font: inherit;
-  font-size: 10px;
-  cursor: pointer;
-}
-
-.permission-confirm-popover button:first-child {
-  color: #fff;
-  background: #c73543;
-  border-color: #c73543;
-}
-
-.permission-confirm-popover button:hover {
-  filter: brightness(0.97);
+  .permission-add em {
+    width: 22px;
+    opacity: 1;
+  }
 }
 
 .member-list {
