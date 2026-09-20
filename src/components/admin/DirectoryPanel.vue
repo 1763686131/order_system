@@ -88,6 +88,10 @@
                   v-for="employee in group.employees"
                   :key="`${group.id}-${employee.id}`"
                   class="directory-employee"
+                  tabindex="0"
+                  title="双击打开留言"
+                  @dblclick.stop="openEmployeeChat(employee)"
+                  @keydown.enter="openEmployeeChat(employee)"
                 >
                   <div class="directory-avatar" aria-hidden="true">
                     <span>{{ employeeInitials(employee) }}</span>
@@ -137,7 +141,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import request from '@/api/request'
 
-const emit = defineEmits(['open-change'])
+const emit = defineEmits(['open-change', 'open-chat'])
 
 const directoryRef = ref(null)
 const directoryOpen = ref(false)
@@ -267,6 +271,17 @@ const employeePresenceTitle = employee => {
   if (employee.online) return '最近 10 分钟内有活动'
   if (employee.lastActiveAt) return `最近活跃：${employee.lastActiveAt}`
   return '暂无登录活动'
+}
+
+const openEmployeeChat = employee => {
+  emit('open-chat', {
+    id: employee.id,
+    displayName: employee.displayName || '员工',
+    phone: employee.phone || '',
+    position: employee.position || '',
+    avatarUrl: employee.avatarUrl || '',
+    online: Boolean(employee.online)
+  })
 }
 
 const handleDirectoryClickOutside = event => {
@@ -581,10 +596,22 @@ onUnmounted(() => {
   gap: 10px;
   padding: 9px 14px 9px 40px;
   border-bottom: 1px solid #edf1f5;
+  cursor: pointer;
+  outline: none;
+  transition: background 0.18s ease;
 }
 
 .directory-employee:last-child {
   border-bottom: 0;
+}
+
+.directory-employee:hover,
+.directory-employee:focus-visible {
+  background: var(--accent-soft);
+}
+
+.directory-employee:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
 }
 
 .directory-avatar {

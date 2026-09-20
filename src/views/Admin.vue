@@ -124,16 +124,16 @@
               </svg>
               <span class="badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
             </button>
-            <button class="icon-btn notification" title="留言消息">
-              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-              <span class="badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
-            </button>
+            <MessageInbox
+              ref="messageInboxRef"
+              @open-change="handleMessageInboxOpenChange"
+              @open-chat="openChat"
+            />
 
             <DirectoryPanel
               ref="directoryPanelRef"
               @open-change="handleDirectoryOpenChange"
+              @open-chat="openChat"
             />
 
             <div class="user-profile">
@@ -262,6 +262,12 @@
     <!-- 弹窗组件 -->
     <ShippedOrderActionModal ref="shippedActionModal" @refresh="handleRefresh" />
     <StockInOrderModal ref="stockRecordModal" @saved="handleStockRecordSaved" />
+    <ChatWindow
+      v-model="chatWindowOpen"
+      :contact="activeChatContact"
+      :messages="activeChatMessages"
+      @send="handleChatSend"
+    />
   </div>
 </template>
 
@@ -272,7 +278,9 @@ import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import request from '@/api/request'
 import { ADMIN_ROUTE_PERMISSIONS } from '@/utils/adminAccess'
+import ChatWindow from '@/components/admin/ChatWindow.vue'
 import DirectoryPanel from '@/components/admin/DirectoryPanel.vue'
+import MessageInbox from '@/components/admin/MessageInbox.vue'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
 
@@ -289,6 +297,33 @@ const avatarLoadFailed = ref(false)
 const accountMenuRef = ref(null)
 const accountMenuOpen = ref(false)
 const directoryPanelRef = ref(null)
+const messageInboxRef = ref(null)
+const chatWindowOpen = ref(false)
+const activeChatContact = ref(null)
+const chatConversations = ref({
+  'demo-contact-1': [
+    {
+      id: 'demo-contact-1-message-1',
+      sender: 'them',
+      text: '下午的客户报价我已经整理好了，稍后发给你。',
+      time: '今天 10:32'
+    },
+    {
+      id: 'demo-contact-1-message-2',
+      sender: 'me',
+      text: '好的，收到后我看一下。',
+      time: '今天 10:35'
+    }
+  ],
+  'demo-contact-2': [
+    {
+      id: 'demo-contact-2-message-1',
+      sender: 'them',
+      text: '上周的收款单已经完成核对。',
+      time: '昨天 16:08'
+    }
+  ]
+})
 
 const userDisplayName = computed(() => {
   return userStore.name || userStore.username || '用户'
@@ -314,12 +349,67 @@ const handleAvatarError = () => {
   avatarLoadFailed.value = true
 }
 
+const activeChatMessages = computed(() => {
+  const contactId = activeChatContact.value?.id
+  return contactId ? chatConversations.value[String(contactId)] || [] : []
+})
+
+const openChat = contact => {
+  activeChatContact.value = {
+    id: contact?.id || `contact-${Date.now()}`,
+    displayName: contact?.displayName || contact?.name || '通讯录好友',
+    phone: contact?.phone || '',
+    position: contact?.position || '',
+    avatarUrl: contact?.avatarUrl || '',
+    online: Boolean(contact?.online)
+  }
+  directoryPanelRef.value?.close()
+  messageInboxRef.value?.close()
+  closeAccountMenu()
+  chatWindowOpen.value = true
+}
+
+const handleChatSend = ({ contact, message }) => {
+  const contactId = String(contact?.id || '')
+  if (!contactId) return
+
+  const currentMessages = chatConversations.value[contactId] || [
+    {
+      id: `demo-${contactId}-welcome`,
+      sender: 'them',
+      text: `你好，这里是和${contact?.displayName || '通讯录好友'}的留言对话。`,
+      time: '今天 09:30'
+    },
+    {
+      id: `demo-${contactId}-reply`,
+      sender: 'me',
+      text: '好的，收到。后续可以在这里留言沟通。',
+      time: '今天 09:32'
+    }
+  ]
+  chatConversations.value = {
+    ...chatConversations.value,
+    [contactId]: [...currentMessages, message]
+  }
+}
+
 const handleDirectoryOpenChange = isOpen => {
-  if (isOpen) closeAccountMenu()
+  if (isOpen) {
+    closeAccountMenu()
+    messageInboxRef.value?.close()
+  }
+}
+
+const handleMessageInboxOpenChange = isOpen => {
+  if (isOpen) {
+    closeAccountMenu()
+    directoryPanelRef.value?.close()
+  }
 }
 
 const toggleAccountMenu = () => {
   directoryPanelRef.value?.close()
+  messageInboxRef.value?.close()
   accountMenuOpen.value = !accountMenuOpen.value
 }
 
