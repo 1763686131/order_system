@@ -282,14 +282,20 @@
           <span class="detail-tab-count">{{ selectedPermissionCount }}</span>
         </button>
         <div class="detail-tab-actions">
-          <button class="button button-ghost" type="button" @click="goToList">返回列表</button>
-          <button class="button button-secondary" type="button" @click="openEdit(selectedEmployee)">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m4 16-.8 4.8L8 20l10.8-10.8a2.1 2.1 0 0 0-3-3L4 16Z"></path>
-              <path d="m14.5 7.5 2 2"></path>
-            </svg>
-            编辑档案
-          </button>
+          <template v-if="inlineEditing">
+            <button class="button button-ghost" type="button" @click="cancelInlineEdit">取消</button>
+            <button class="button button-secondary" type="button" @click="saveEmployee">保存修改</button>
+          </template>
+          <template v-else>
+            <button class="button button-ghost" type="button" @click="goToList">返回列表</button>
+            <button class="button button-secondary" type="button" @click="openEdit(selectedEmployee)">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m4 16-.8 4.8L8 20l10.8-10.8a2.1 2.1 0 0 0-3-3L4 16Z"></path>
+                <path d="m14.5 7.5 2 2"></path>
+              </svg>
+              编辑档案
+            </button>
+          </template>
         </div>
       </nav>
 
@@ -298,15 +304,46 @@
           <article class="detail-card identity-card">
             <span class="card-index identity-card-index">01</span>
             <div class="identity-card-layout">
-              <div class="identity-card-profile">
-                <span class="identity-card-avatar" :style="avatarStyle(selectedEmployee)">
+              <div class="identity-card-profile" :class="{ 'is-editing': inlineEditing }">
+                <button
+                  v-if="inlineEditing"
+                  class="identity-card-avatar inline-avatar-button"
+                  type="button"
+                  title="选择并裁剪头像"
+                  :style="avatarStyle(draft)"
+                  @click="avatarInput?.click()"
+                >
+                  <span>{{ draft.displayName?.slice(0, 1) || '人' }}</span>
+                  <i aria-hidden="true">+</i>
+                </button>
+                <span v-else class="identity-card-avatar" :style="avatarStyle(selectedEmployee)">
                   {{ selectedEmployee.displayName.slice(0, 1) }}
                 </span>
+                <input
+                  v-if="inlineEditing"
+                  ref="avatarInput"
+                  class="avatar-upload-input"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  @change="handleAvatarUpload"
+                />
+                <div v-if="inlineEditing" class="inline-avatar-actions">
+                  <button
+                    v-if="draft.avatarPreviewUrl || (!draft.avatarRemovalRequested && draft.avatarUrl)"
+                    class="avatar-remove-button"
+                    type="button"
+                    @click="removeAvatar"
+                  >
+                    移除头像
+                  </button>
+                  <span>点击头像更换</span>
+                </div>
               </div>
               <dl class="info-grid identity-info-grid">
                 <div>
                   <dt>姓名</dt>
-                  <dd class="dd-primary">{{ selectedEmployee.displayName }}</dd>
+                  <dd v-if="inlineEditing"><input v-model.trim="draft.displayName" class="inline-detail-input" type="text" /></dd>
+                  <dd v-else class="dd-primary">{{ selectedEmployee.displayName }}</dd>
                 </div>
                 <div>
                   <dt>工号</dt>
@@ -314,19 +351,41 @@
                 </div>
                 <div>
                   <dt>部门</dt>
-                  <dd class="dd-primary">{{ selectedEmployee.department || '—' }}</dd>
+                  <dd v-if="inlineEditing">
+                    <select
+                      class="inline-detail-select"
+                      :value="draft.departmentIds?.[0] || ''"
+                      @change="setInlineDepartment"
+                    >
+                      <option value="">未分配部门</option>
+                      <option v-for="department in departments" :key="department.id" :value="department.id">
+                        {{ department.name }}
+                      </option>
+                    </select>
+                  </dd>
+                  <dd v-else class="dd-primary">{{ selectedEmployee.department || '—' }}</dd>
                 </div>
                 <div>
                   <dt>职位</dt>
-                  <dd class="dd-primary">{{ selectedEmployee.position || '—' }}</dd>
+                  <dd v-if="inlineEditing"><input v-model.trim="draft.position" class="inline-detail-input" type="text" /></dd>
+                  <dd v-else class="dd-primary">{{ selectedEmployee.position || '—' }}</dd>
                 </div>
                 <div>
                   <dt>入职日期</dt>
-                  <dd class="dd-primary tabular">{{ selectedEmployee.hireDate || '—' }}</dd>
+                  <dd v-if="inlineEditing"><input v-model="draft.hireDate" class="inline-detail-input tabular" type="date" /></dd>
+                  <dd v-else class="dd-primary tabular">{{ selectedEmployee.hireDate || '—' }}</dd>
                 </div>
                 <div>
                   <dt>当前状态</dt>
-                  <dd>
+                  <dd v-if="inlineEditing">
+                    <select v-model="draft.employmentStatus" class="inline-detail-select">
+                      <option value="active">在职</option>
+                      <option value="probation">试用期</option>
+                      <option value="leave">休假</option>
+                      <option value="resigned">离职</option>
+                    </select>
+                  </dd>
+                  <dd v-else>
                     <span :class="['mini-badge', employmentStatusClass(selectedEmployee.employmentStatus)]">
                       <i></i>{{ employmentStatusLabel(selectedEmployee.employmentStatus) }}
                     </span>
@@ -336,98 +395,7 @@
             </div>
           </article>
 
-          <article class="detail-card">
-            <div class="detail-card-heading">
-              <div class="heading-with-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
-                  <rect x="2" y="7" width="20" height="14" rx="2"></rect>
-                  <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path>
-                </svg>
-                <div>
-                  <h3>工作信息</h3>
-                  <span>组织归属与岗位</span>
-                </div>
-              </div>
-              <span class="card-index">02</span>
-            </div>
-            <dl class="info-grid">
-              <div>
-                <dt>所属部门</dt>
-                <dd class="dd-primary">{{ selectedEmployee.department || '—' }}</dd>
-              </div>
-              <div>
-                <dt>职位</dt>
-                <dd class="dd-primary">{{ selectedEmployee.position || '—' }}</dd>
-              </div>
-              <div class="scope-field">
-                <dt>可访问门店</dt>
-                <dd>
-                  <div v-if="selectedEmployeeScope.storeIds.length" class="capsule-list">
-                    <span
-                      v-for="storeId in selectedEmployeeScope.storeIds"
-                      :key="storeId"
-                      class="capsule-tag capsule-green"
-                    >
-                      {{ scopeOptionName(storeId, stores) || storeId }}
-                    </span>
-                  </div>
-                  <span v-else class="dd-empty">—</span>
-                </dd>
-              </div>
-              <div class="scope-field">
-                <dt>可操作仓库</dt>
-                <dd>
-                  <div v-if="selectedEmployeeScope.warehouseIds.length" class="capsule-list">
-                    <span
-                      v-for="warehouseId in selectedEmployeeScope.warehouseIds"
-                      :key="warehouseId"
-                      class="capsule-tag capsule-blue"
-                    >
-                      {{ scopeOptionName(warehouseId, warehouses) || warehouseId }}
-                    </span>
-                  </div>
-                  <span v-else class="dd-empty">—</span>
-                </dd>
-              </div>
-            </dl>
-          </article>
-        </div>
-
-        <div class="detail-column">
-          <article class="detail-card">
-            <div class="detail-card-heading">
-              <div class="heading-with-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
-                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
-                </svg>
-                <div>
-                  <h3>联系方式</h3>
-                  <span>后续人事行政资料</span>
-                </div>
-              </div>
-              <span class="card-index">03</span>
-            </div>
-            <dl class="info-grid single-column">
-              <div>
-                <dt>联系电话</dt>
-                <dd class="dd-primary tabular">{{ selectedEmployee.phone || '—' }}</dd>
-              </div>
-              <div>
-                <dt>家庭住址</dt>
-                <dd class="dd-primary">{{ selectedEmployee.currentAddress || '—' }}</dd>
-              </div>
-              <div>
-                <dt>紧急联系人</dt>
-                <dd class="dd-primary">{{ selectedEmployee.emergencyContact || '—' }}</dd>
-              </div>
-              <div>
-                <dt>紧急联系电话</dt>
-                <dd class="dd-primary tabular">{{ selectedEmployee.emergencyPhone || '—' }}</dd>
-              </div>
-            </dl>
-          </article>
-
-          <article class="detail-card account-summary-card">
+          <article class="detail-card account-card">
             <div class="detail-card-heading">
               <div class="heading-with-icon">
                 <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
@@ -439,67 +407,203 @@
                   <span>账号状态和权限组概览</span>
                 </div>
               </div>
-              <span class="card-index">04</span>
+              <span class="card-index">02</span>
             </div>
-            <div class="account-summary-row">
-              <div>
-                <span class="summary-label">账号</span>
-                <strong class="account-username">{{ selectedEmployee.username || '暂未开通' }}</strong>
-              </div>
-              <span :class="['mini-badge', accountStatusClass(selectedEmployee.accountStatus)]">
-                <i></i>{{ accountStatusLabel(selectedEmployee.accountStatus) }}
-              </span>
-            </div>
-            <div v-if="selectedEmployee.username" class="account-security-grid">
-              <div class="account-security-item">
-                <span class="summary-label">登录密码</span>
-                <div class="stored-password">
-                  <strong>
-                    {{ detailPasswordVisible ? '已加密，无法查看原密码' : '••••••••' }}
-                  </strong>
-                  <button
-                    class="password-toggle"
-                    type="button"
-                    :title="detailPasswordVisible ? '隐藏密码说明' : '查看密码'"
-                    :aria-label="detailPasswordVisible ? '隐藏密码说明' : '查看密码'"
-                    @click="toggleStoredPasswordVisibility"
-                  >
-                    <svg v-if="detailPasswordVisible" viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
-                      <circle cx="12" cy="12" r="2.5"></circle>
-                    </svg>
-                    <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="m3 3 18 18"></path>
-                      <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16.7 16.7 0 0 1-2.2 2.9"></path>
-                      <path d="M6.6 6.6C4 8.3 2.5 12 2.5 12s3.5 6 9.5 6c1.4 0 2.7-.3 3.8-.7"></path>
-                    </svg>
-                  </button>
+
+            <section class="account-section">
+              <div class="account-summary-row">
+                <div>
+                  <span class="summary-label">账号</span>
+                  <input
+                    v-if="inlineEditing"
+                    v-model.trim="draft.username"
+                    class="inline-account-input"
+                    type="text"
+                    :disabled="draft.passwordSet"
+                    placeholder="未填写则暂不开通"
+                  />
+                  <strong v-else class="account-username">{{ selectedEmployee.username || '暂未开通' }}</strong>
                 </div>
-              </div>
-              <div class="account-security-item">
-                <span class="summary-label">最近活跃时间</span>
-                <strong class="tabular">{{ formatDateTime(selectedEmployee.lastActiveAt) }}</strong>
-              </div>
-              <button class="button-link password-edit-button" type="button" @click="openPasswordEditor">
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                </svg>
-                修改密码
-              </button>
-            </div>
-            <div class="assigned-role-section">
-              <span class="summary-label">已绑定权限组</span>
-              <div v-if="selectedEmployee.roleIds.length" class="capsule-list">
-                <span
-                  v-for="roleId in selectedEmployee.roleIds"
-                  :key="roleId"
-                  :class="['capsule-tag', 'capsule-' + roleTone(roleId)]"
-                >
-                  {{ roleName(roleId) }}
+                <select v-if="inlineEditing" v-model="draft.accountStatus" class="inline-account-status">
+                  <option value="active">正常</option>
+                  <option value="pending">待开通</option>
+                  <option value="disabled">已停用</option>
+                </select>
+                <span v-else :class="['mini-badge', accountStatusClass(selectedEmployee.accountStatus)]">
+                  <i></i>{{ accountStatusLabel(selectedEmployee.accountStatus) }}
                 </span>
               </div>
-              <span v-else class="dd-empty">暂未绑定权限组</span>
+              <div v-if="inlineEditing" class="inline-password-grid">
+                <label class="inline-password-field">
+                  <span class="summary-label">登录密码</span>
+                  <input
+                    ref="passwordInput"
+                    v-model.trim="draft.password"
+                    :type="passwordVisible ? 'text' : 'password'"
+                    placeholder="留空保持原密码"
+                    autocomplete="new-password"
+                  />
+                </label>
+                <label class="inline-password-field">
+                  <span class="summary-label">确认密码</span>
+                  <input
+                    v-model.trim="draft.passwordConfirm"
+                    :type="passwordConfirmVisible ? 'text' : 'password'"
+                    placeholder="再次输入新密码"
+                    autocomplete="new-password"
+                  />
+                </label>
+              </div>
+              <div v-else-if="selectedEmployee.username" class="account-security-grid">
+                <div class="account-security-item">
+                  <span class="summary-label">登录密码</span>
+                  <div class="stored-password">
+                    <strong>
+                      {{ detailPasswordVisible ? '已加密，无法查看原密码' : '••••••••' }}
+                    </strong>
+                    <button
+                      class="password-toggle"
+                      type="button"
+                      :title="detailPasswordVisible ? '隐藏密码说明' : '查看密码'"
+                      :aria-label="detailPasswordVisible ? '隐藏密码说明' : '查看密码'"
+                      @click="toggleStoredPasswordVisibility"
+                    >
+                      <svg v-if="detailPasswordVisible" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+                        <circle cx="12" cy="12" r="2.5"></circle>
+                      </svg>
+                      <svg v-else viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="m3 3 18 18"></path>
+                        <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16.7 16.7 0 0 1-2.2 2.9"></path>
+                        <path d="M6.6 6.6C4 8.3 2.5 12 2.5 12s3.5 6 9.5 6c1.4 0 2.7-.3 3.8-.7"></path>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+                <div class="account-security-item">
+                  <span class="summary-label">最近活跃时间</span>
+                  <strong class="tabular">{{ formatDateTime(selectedEmployee.lastActiveAt) }}</strong>
+                </div>
+                <button class="button-link password-edit-button" type="button" @click="openPasswordEditor">
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                  </svg>
+                  修改密码
+                </button>
+              </div>
+              <div class="assigned-role-section">
+                <span class="summary-label">已绑定权限组</span>
+                <div v-if="selectedEmployee.roleIds.length" class="capsule-list">
+                  <span
+                    v-for="roleId in selectedEmployee.roleIds"
+                    :key="roleId"
+                    :class="['capsule-tag', 'capsule-' + roleTone(roleId)]"
+                  >
+                    {{ roleName(roleId) }}
+                  </span>
+                </div>
+                <span v-else class="dd-empty">暂未绑定权限组</span>
+              </div>
+            </section>
+          </article>
+        </div>
+
+        <div class="detail-column">
+          <article class="detail-card employee-basic-table-card">
+            <div class="detail-card-heading">
+              <div class="heading-with-icon">
+                <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
+                  <path d="M4 3h16v18H4z"></path>
+                  <path d="M8 7h8M8 11h8M8 15h5"></path>
+                </svg>
+                <div>
+                  <h3>员工基本资料</h3>
+                  <span>人事档案扩展信息</span>
+                </div>
+              </div>
+              <span class="card-index">03</span>
+            </div>
+            <div class="employee-basic-table-wrap">
+              <table class="employee-basic-table">
+                <colgroup>
+                  <col class="basic-label-column">
+                  <col>
+                  <col class="basic-label-column">
+                  <col>
+                </colgroup>
+                <tbody>
+                  <tr>
+                    <th scope="row">性别</th>
+                    <td>{{ selectedEmployee.gender || '—' }}</td>
+                    <th scope="row">民族</th>
+                    <td>{{ selectedEmployee.nation || selectedEmployee.ethnicity || '—' }}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">身体状况</th>
+                    <td colspan="3">{{ selectedEmployee.healthStatus || selectedEmployee.health || '—' }}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">出生日期</th>
+                    <td>{{ selectedEmployee.birthDate || selectedEmployee.birthday || '—' }}</td>
+                    <th scope="row">身份证号码</th>
+                    <td>
+                      <input v-if="inlineEditing" v-model.trim="draft.idCard" class="inline-table-input" type="text" />
+                      <span v-else>{{ selectedEmployee.idCard || '—' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">政治面貌</th>
+                    <td>{{ selectedEmployee.politicalStatus || selectedEmployee.politicalOutlook || '—' }}</td>
+                    <th scope="row">婚姻状况</th>
+                    <td>{{ selectedEmployee.maritalStatus || selectedEmployee.marital || '—' }}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">文化水平</th>
+                    <td>{{ selectedEmployee.educationLevel || selectedEmployee.education || '—' }}</td>
+                    <th scope="row">专业</th>
+                    <td>{{ selectedEmployee.major || '—' }}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">毕业学校</th>
+                    <td colspan="3">{{ selectedEmployee.graduationSchool || selectedEmployee.school || '—' }}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">毕业时间</th>
+                    <td>{{ selectedEmployee.graduationDate || selectedEmployee.graduationTime || '—' }}</td>
+                    <th scope="row">工作年限</th>
+                    <td>{{ selectedEmployee.workYears || '—' }}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">联系电话</th>
+                    <td>
+                      <input v-if="inlineEditing" v-model.trim="draft.phone" class="inline-table-input" type="tel" />
+                      <span v-else>{{ selectedEmployee.phone || '—' }}</span>
+                    </td>
+                    <th scope="row">邮箱</th>
+                    <td>{{ selectedEmployee.email || '—' }}</td>
+                  </tr>
+                  <tr>
+                    <th scope="row">家庭住址</th>
+                    <td colspan="3">
+                      <input v-if="inlineEditing" v-model.trim="draft.currentAddress" class="inline-table-input" type="text" />
+                      <span v-else>{{ selectedEmployee.currentAddress || '—' }}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <th scope="row">紧急联系人</th>
+                    <td>
+                      <input v-if="inlineEditing" v-model.trim="draft.emergencyContact" class="inline-table-input" type="text" />
+                      <span v-else>{{ selectedEmployee.emergencyContact || '—' }}</span>
+                    </td>
+                    <th scope="row">紧急联系电话</th>
+                    <td>
+                      <input v-if="inlineEditing" v-model.trim="draft.emergencyPhone" class="inline-table-input" type="tel" />
+                      <span v-else>{{ selectedEmployee.emergencyPhone || '—' }}</span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </article>
         </div>
@@ -891,6 +995,7 @@ const pageSize = ref(20)
 
 const selectedEmployeeId = ref(null)
 const activeDetailTab = ref('profile')
+const inlineEditing = ref(false)
 const drawerVisible = ref(false)
 const editingEmployee = ref(false)
 const departmentSelectorOpen = ref(false)
@@ -1032,6 +1137,7 @@ function createEmptyEmployee() {
 
 function openCreate() {
   resetPendingAvatar()
+  inlineEditing.value = false
   editingEmployee.value = false
   draft.value = createEmptyEmployee()
   const defaultDepartmentId = departments.value.find(item => item.status === 'active')?.id || null
@@ -1044,12 +1150,14 @@ function openCreate() {
 }
 
 function openEmployee(employee) {
+  if (inlineEditing.value) cancelInlineEdit()
   selectedEmployeeId.value = employee.id
   activeDetailTab.value = 'profile'
   detailPasswordVisible.value = false
 }
 
 function goToList() {
+  if (inlineEditing.value) cancelInlineEdit()
   selectedEmployeeId.value = null
   activeDetailTab.value = 'profile'
   detailPasswordVisible.value = false
@@ -1057,6 +1165,8 @@ function goToList() {
 
 function openEdit(employee) {
   resetPendingAvatar()
+  selectedEmployeeId.value = employee.id
+  activeDetailTab.value = 'profile'
   editingEmployee.value = true
   draft.value = {
     ...employee,
@@ -1071,7 +1181,8 @@ function openEdit(employee) {
   passwordVisible.value = false
   passwordConfirmVisible.value = false
   departmentSelectorOpen.value = false
-  drawerVisible.value = true
+  drawerVisible.value = false
+  inlineEditing.value = true
 }
 
 function closeDrawer() {
@@ -1080,6 +1191,21 @@ function closeDrawer() {
   passwordVisible.value = false
   passwordConfirmVisible.value = false
   departmentSelectorOpen.value = false
+}
+
+function cancelInlineEdit() {
+  resetPendingAvatar()
+  inlineEditing.value = false
+  editingEmployee.value = false
+  passwordVisible.value = false
+  passwordConfirmVisible.value = false
+  departmentSelectorOpen.value = false
+}
+
+function setInlineDepartment(event) {
+  const departmentId = Number(event.target.value) || null
+  draft.value.departmentId = departmentId
+  draft.value.departmentIds = departmentId ? [departmentId] : []
 }
 
 const departmentSelectionLabel = computed(() => {
@@ -1126,7 +1252,7 @@ async function saveEmployee() {
     return
   }
 
-  if (draft.value.username && !editingEmployee.value && !draft.value.password) {
+  if (draft.value.username && !draft.value.passwordSet && !draft.value.password) {
     showNotice('开通登录账号需要设置密码')
     return
   }
@@ -1187,7 +1313,11 @@ async function saveEmployee() {
         ? `员工档案已保存，但${avatarError}`
         : response.message || '员工档案已保存'
     )
-    closeDrawer()
+    if (inlineEditing.value) {
+      cancelInlineEdit()
+    } else {
+      closeDrawer()
+    }
   } catch (error) {
     showNotice(error?.response?.data?.message || '员工档案保存失败')
   }
@@ -2955,44 +3085,120 @@ input[type='checkbox'] {
   border-right: 1px solid #eef2f6;
 }
 
+.identity-card-profile.is-editing {
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inline-avatar-button {
+  position: relative;
+  padding: 0;
+  color: #275a4d;
+  background-color: #e5e7eb;
+  border-color: #a9e5d2;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.inline-avatar-button:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(15, 159, 120, 0.12);
+}
+
+.inline-avatar-button > i {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  display: inline-flex;
+  width: 28px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--accent);
+  border: 2px solid #fff;
+  border-radius: 50%;
+  font-size: 20px;
+  font-style: normal;
+  line-height: 1;
+}
+
+.inline-avatar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.inline-avatar-actions .avatar-remove-button {
+  margin-top: 0;
+}
+
 .identity-info-grid {
   align-content: center;
   gap: 26px 24px;
 }
 
 .identity-card .identity-info-grid dt {
-  font-size: 18px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
 .identity-card .identity-info-grid dd {
   margin-top: 8px;
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1.4;
 }
 
 .identity-card .identity-info-grid > div:last-child dt {
-  font-size: 18px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
 .identity-card .identity-info-grid > div:last-child dd {
   margin-top: 8px;
-  font-size: 18px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
 .identity-card .identity-info-grid > div:last-child .mini-badge {
-  min-height: 32px;
-  gap: 8px;
-  padding: 5px 14px;
-  font-size: 18px;
+  min-height: 28px;
+  gap: 7px;
+  padding: 4px 12px;
+  font-size: 16px;
 }
 
 .identity-card .identity-info-grid > div:last-child .mini-badge i {
-  width: 8px;
-  height: 8px;
-  flex-basis: 8px;
+  width: 7px;
+  height: 7px;
+  flex-basis: 7px;
+}
+
+.inline-detail-input,
+.inline-detail-select {
+  width: 100%;
+  min-width: 0;
+  min-height: 32px;
+  padding: 3px 7px;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  box-sizing: border-box;
+}
+
+.inline-detail-input:focus,
+.inline-detail-select:focus,
+.inline-account-input:focus,
+.inline-account-status:focus,
+.inline-table-input:focus,
+.inline-password-field input:focus {
+  outline: 2px solid rgba(15, 159, 120, 0.2);
+  border-color: var(--accent);
 }
 
 .detail-tab-actions {
@@ -3074,7 +3280,7 @@ input[type='checkbox'] {
 
 .profile-content {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
   gap: 14px;
 }
 
@@ -3110,6 +3316,64 @@ input[type='checkbox'] {
 
 .detail-card-heading {
   margin-bottom: 15px;
+}
+
+.employee-basic-table-card {
+  height: 100%;
+}
+
+.employee-basic-table-wrap {
+  overflow-x: auto;
+}
+
+.employee-basic-table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #334155;
+  font-size: 13px;
+}
+
+.employee-basic-table .basic-label-column {
+  width: 20%;
+}
+
+.employee-basic-table th,
+.employee-basic-table td {
+  min-height: 42px;
+  padding: 11px 12px;
+  border: 1px solid #cbd5e1;
+  line-height: 1.45;
+  text-align: left;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.employee-basic-table th {
+  color: #64748b;
+  background: #f8fafc;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.employee-basic-table td {
+  color: #1e293b;
+  background: #fff;
+}
+
+.inline-table-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 5px 7px;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
 }
 
 .heading-with-icon {
@@ -3320,6 +3584,28 @@ input[type='checkbox'] {
   font-weight: 600;
 }
 
+.inline-account-input,
+.inline-account-status {
+  min-height: 32px;
+  margin-top: 6px;
+  padding: 5px 8px;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+.inline-account-input {
+  width: 180px;
+}
+
+.inline-account-status {
+  margin-top: 0;
+}
+
 .account-security-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(150px, 1fr) auto;
@@ -3327,6 +3613,32 @@ input[type='checkbox'] {
   gap: 14px;
   padding: 16px 0;
   border-bottom: 1px solid #f1f5f9;
+}
+
+.inline-password-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.inline-password-field {
+  min-width: 0;
+}
+
+.inline-password-field input {
+  width: 100%;
+  min-height: 34px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  color: #1e293b;
+  background: #f8fafc;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
 }
 
 .account-security-item {
@@ -3918,6 +4230,14 @@ select:focus-visible,
     grid-template-columns: 1fr;
   }
 
+  .employee-basic-table-card {
+    height: auto;
+  }
+
+  .employee-basic-table {
+    min-width: 480px;
+  }
+
   .identity-card-layout {
     grid-template-columns: 1fr;
     gap: 16px;
@@ -3943,11 +4263,19 @@ select:focus-visible,
   }
 
   .identity-card .identity-info-grid dt {
-    font-size: 18px;
+    font-size: 12px;
   }
 
   .identity-card .identity-info-grid dd {
-    font-size: 18px;
+    font-size: 12px;
+  }
+
+  .inline-password-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .inline-account-input {
+    width: min(180px, 100%);
   }
 
   .permission-summary-card {
