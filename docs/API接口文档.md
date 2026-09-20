@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v4.7** (2026-09-20) - 新增局域网 WebRTC 文件直传信令、确认和状态接口
 - **v4.6** (2026-09-20) - 新增后台留言与审核通知 SSE 实时变化事件
 - **v4.5** (2026-09-20) - 新增一对一留言、10MB 私有附件、未读状态和单据审核通知接口
 - **v4.4** (2026-09-19) - 新增员工头像文件上传、替换和删除接口，历史 Base64 头像自动迁移为文件路径
@@ -4775,10 +4776,11 @@ POST /api/admin/notifications/read-all
 | `chat_conversations` | 唯一的一对一员工会话及最后消息 |
 | `chat_messages` | 文字或服务器附件消息、发送人、收件人和已读时间 |
 | `chat_attachments` | 附件文件元数据和私有存储路径 |
+| `peer_file_transfers` | WebRTC 临时信令、参与者、文件元数据和传输状态 |
 | `notifications` | 用户级审核/系统通知、目标路由和处理状态 |
 
-第一阶段的 HTTP 接口继续负责完整数据查询和写入；第二阶段增加 SSE 变化提醒。WebSocket、
-消息送达回执和 WebRTC 点对点大文件传输不在本版接口范围内。
+第一阶段的 HTTP 接口继续负责完整数据查询和写入；第二阶段增加 SSE 变化提醒；第三阶段增加
+WebRTC 局域网文件直传。WebSocket 和文字消息送达回执不在本版接口范围内。
 
 ### 17.12 留言与通知实时事件
 
@@ -4796,6 +4798,7 @@ Accept: text/event-stream
 | `message-change` | 新留言、附件消息或消息已读状态变化 | `latestId`、`unreadCount`、`latestReadAt` |
 | `notification-change` | 新通知、已读或已处理状态变化 | `latestId`、`unreadCount`、`latestChangeAt` |
 | `session-ended` | 当前登录会话被撤销或过期 | 空对象 |
+| `transfer-change` | 在线文件请求、应答或传输状态变化 | `revision`、`pendingCount` |
 
 事件载荷只是变化信号和计数摘要，不包含留言正文、附件路径或单据详情。客户端收到事件后，
 必须重新调用第 17.2、17.3 或 17.8 节的普通 HTTP 接口获取当前用户有权查看的完整数据。
@@ -4813,6 +4816,106 @@ Accept: text/event-stream
 网关或 NAS 反向代理仍可能需要单独配置。当前实现从 SQLite 读取变化摘要，不依赖 Python
 进程内队列，因此可以跨多个后端进程观察到数据库变化；连接规模扩大后应改用 Redis
 Pub/Sub 或消息队列减少查询压力。
+
+### 17.13 局域网在线文件直传
+
+在线直传使用 WebRTC DataChannel。后端只负责参与者鉴权、在线校验、Offer/Answer 临时交换和
+状态留痕，不接收文件二进制内容。所有接口要求 `admin.message.attachment` 权限。
+
+#### 17.13.1 创建传输请求
+
+```http
+POST /api/admin/peer-transfers
+Content-Type: application/json
+```
+
+```json
+{
+  "recipientEmployeeId": 8,
+  "fileName": "盘点资料.zip",
+  "fileSize": 734003200,
+  "mimeType": "application/zip",
+  "offer": {
+    "type": "offer",
+    "sdp": "..."
+  }
+}
+```
+
+- 不设置业务文件大小上限，但 `fileSize` 必须是正整数且不超过 JavaScript 安全整数。
+- 接收方必须有启用账号、`admin.message.attachment` 权限、处于在职或试用状态，并存在最近
+  `2` 分钟活跃的后台 Session。
+- 服务端不提供 STUN/TURN，Offer 由浏览器使用空 `iceServers` 生成，仅面向可直连局域网。
+- 请求创建后 `5` 分钟内未响应会过期。
+
+#### 17.13.2 查询请求或待接收列表
+
+```http
+GET /api/admin/peer-transfers/:transferId
+GET /api/admin/peer-transfers/pending
+```
+
+单条接口只允许发送人或接收人访问。待接收接口最多返回当前员工最早的 10 条有效请求。
+接收方在 `offered` 状态得到 `offer`；发送方在 `accepted` 状态得到 `answer`。另一方的信令
+字段不会返回。
+
+#### 17.13.3 同意或拒绝
+
+```http
+POST /api/admin/peer-transfers/:transferId/respond
+Content-Type: application/json
+```
+
+同意：
+
+```json
+{
+  "accepted": true,
+  "answer": {
+    "type": "answer",
+    "sdp": "..."
+  }
+}
+```
+
+拒绝只提交 `{ "accepted": false }`。只有接收方能处理 `offered` 请求；首个设备处理后，其他
+已登录设备再次响应会得到 `409`。同意后活动有效期延长为 `24` 小时。
+
+#### 17.13.4 更新传输状态
+
+```http
+POST /api/admin/peer-transfers/:transferId/status
+Content-Type: application/json
+```
+
+```json
+{
+  "status": "transferring",
+  "reason": ""
+}
+```
+
+状态流转：
+
+```text
+offered -> accepted -> transferring -> completed
+   |          |              |
+   +----------+--------------+-> cancelled / failed / expired
+   +-> rejected
+```
+
+- `transferring` 只能由发送方在 DataChannel 打开后提交。
+- `completed` 只能由接收方在文件写入或下载准备完成后提交。
+- `cancelled`、`failed` 可由任一参与者在活动状态提交，`reason` 最多 200 字。
+- 完成时服务端生成一条“在线直传文件”文字留言作为留痕，但不生成可下载附件。
+- 完成、拒绝、取消、失败或过期后清空 Offer/Answer；终态记录保留 7 天后清理。
+
+状态由 SSE 的 `transfer-change` 通知双方，60 秒 HTTP 查询作为降级。DataChannel 使用 32KB
+有序分块和发送缓冲背压。支持 File System Access API 且处于安全上下文时，接收端直接写入
+用户选择的文件；否则浏览器需要在内存中拼接 Blob 后下载，因此可接收大小受浏览器内存限制。
+
+常见失败条件包括：双方不在同一可互访网络、无线 AP 开启客户端隔离、终端防火墙阻止连接、
+浏览器不支持 WebRTC，或接收方在连接建立前关闭后台页面。系统不会把失败的大文件自动上传到服务器。
 
 ---
 
@@ -5111,6 +5214,11 @@ SQLite 支持**多读一写**模式：
 ---
 
 ## 更新日志
+
+### v4.7.0 (2026-09-20)
+- 新增 WebRTC 局域网文件直传创建、查询、同意/拒绝和状态更新接口
+- SSE 增加 `transfer-change`，Offer/Answer 只对传输参与者开放并在终态清空
+- 前端增加在线直传/离线附件选择、接收确认、进度、取消、磁盘流式写入和内存降级下载
 
 ### v4.6.0 (2026-09-20)
 - 新增 `/api/admin/realtime/events` SSE 长连接，推送留言、已读状态和审核通知变化信号

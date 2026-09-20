@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `4.6` |
+| 权限/API 文档版本 | `4.7` |
 | 文档更新 | `2026-09-20` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
@@ -70,10 +70,15 @@
 - 销售订单、采购入库、原材料出库、收款单和退货单进入待审核状态时，系统向拥有对应
   审核通知权限的角色组成员创建通知；审核完成后通知自动标记为已处理。
 - 第二阶段使用浏览器原生 `EventSource` 完成服务端单向实时提醒；当前场景不需要 WebSocket，
-  浏览器点对点文件传输仍未实现。
+  第三阶段继续复用该通道传递 WebRTC 信令变化。
+- 在线联系人支持 WebRTC DataChannel 局域网文件直传。发起后必须由对方同意，文件按分块直接
+  在两个浏览器之间传输，不上传服务器；完成后仅写入一条不含文件内容的聊天留痕。
+- 在线直传不设置业务文件大小上限。Chromium 安全环境可直接写入接收方选择的磁盘位置；
+  其他环境在内存中接收后触发下载，实际大小仍受浏览器内存、磁盘和局域网稳定性限制。
+- `10 MB` 以内文件可在“在线直传”和“离线附件”间选择；超过 `10 MB` 只能在线直传。
 
-新增数据表为 `chat_conversations`、`chat_messages`、`chat_attachments` 和
-`notifications`。新增权限为 `admin.message.*` 以及四类业务审核通知权限；销售订单继续复用
+新增数据表为 `chat_conversations`、`chat_messages`、`chat_attachments`、
+`peer_file_transfers` 和 `notifications`。新增权限为 `admin.message.*` 以及四类业务审核通知权限；销售订单继续复用
 `admin.sales.order.audit`。完整进度和后续事项见 [工作进度](docs/工作进度.md)。
 
 ## 2026-09-19 更新
@@ -296,6 +301,7 @@ order_system/
 │  │  ├─ messages.py                 # 一对一留言、已读状态和私有附件
 │  │  ├─ notifications.py            # 当前员工的审核与系统通知
 │  │  ├─ admin_realtime.py           # 留言和通知变化的 SSE 长连接
+│  │  ├─ peer_transfers.py            # WebRTC 文件直传信令与状态机
 │  │  ├─ users.py                    # 账号维护和管理员重置密码
 │  │  ├─ orders.py                   # 销售订单和物流状态接口
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
@@ -395,6 +401,7 @@ order_system/
 │  │  ├─ accessControl.js            # 权限、角色并集和数据范围过滤
 │  │  ├─ adminAccess.js              # 后台大类路由权限映射
 │  │  ├─ adminRealtime.js            # 后台组件共享的 EventSource 客户端
+│  │  ├─ peerFileTransfer.js          # WebRTC DataChannel 分块收发
 │  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
 │  │  ├─ printClientConfig.js        # 本地打印配置和默认端口
 │  │  ├─ chineseMoney.js             # 金额中文大写
@@ -646,6 +653,10 @@ import {
 | `GET` | `/api/admin/messages/attachments/:id/download` | 会话参与者下载附件 |
 | `GET` | `/api/admin/notifications` | 当前员工的审核通知 |
 | `GET` | `/api/admin/realtime/events` | 留言和通知变化的 SSE 实时事件流 |
+| `POST` | `/api/admin/peer-transfers` | 创建在线文件直传请求 |
+| `GET` | `/api/admin/peer-transfers/pending` | 查询待接收的直传请求 |
+| `POST` | `/api/admin/peer-transfers/:id/respond` | 同意或拒绝直传请求 |
+| `POST` | `/api/admin/peer-transfers/:id/status` | 更新直传、完成、取消或失败状态 |
 | `POST` | `/api/admin/notifications/:id/read` | 标记单条通知已读 |
 | `POST` | `/api/admin/notifications/read-all` | 全部通知已读 |
 
@@ -983,6 +994,7 @@ C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localSt
 - `MessageInbox.vue` 与 `ChatWindow.vue` 接入真实后端数据和自动刷新。
 - 新增角色组留言权限与单据审核通知权限，五类业务单据进入待审核时自动通知审核人。
 - 新增共享 SSE 通道，留言、已读状态和审核通知变化通常约 1 秒刷新，并保留 60 秒降级查询。
+- 新增 WebRTC 局域网在线文件直传，包含接收确认、进度、取消、失败处理和聊天留痕。
 - 新增 `docs/工作进度.md`，记录阶段进度、点对点文件和运维注意事项。
 
 ### 2026-09-19 - 员工头像文件存储与裁剪

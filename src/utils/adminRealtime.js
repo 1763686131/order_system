@@ -29,12 +29,16 @@ const connect = () => {
     emit('connection', { connected: true })
     emit('messages', payload.messages || {})
     emit('notifications', payload.notifications || {})
+    emit('transfers', payload.transfers || {})
   })
   eventSource.addEventListener('message-change', event => {
     emit('messages', parsePayload(event))
   })
   eventSource.addEventListener('notification-change', event => {
     emit('notifications', parsePayload(event))
+  })
+  eventSource.addEventListener('transfer-change', event => {
+    emit('transfers', parsePayload(event))
   })
   eventSource.addEventListener('session-ended', () => {
     emit('connection', { connected: false, sessionEnded: true })

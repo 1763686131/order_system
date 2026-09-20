@@ -85,6 +85,21 @@ def _snapshot(employee_id, session_id, touch_presence=False):
             """,
             (employee_id,),
         ).fetchone()
+        transfer_row = conn.execute(
+            """
+            SELECT COALESCE(SUM(revision), 0) AS revision_total,
+                   COALESCE(SUM(
+                       CASE
+                           WHEN recipient_employee_id = ? AND status = 'offered'
+                            AND datetime(expires_at) > CURRENT_TIMESTAMP
+                           THEN 1 ELSE 0
+                       END
+                   ), 0) AS pending_count
+            FROM peer_file_transfers
+            WHERE sender_employee_id = ? OR recipient_employee_id = ?
+            """,
+            (employee_id, employee_id, employee_id),
+        ).fetchone()
 
     return {
         "messages": {
@@ -96,6 +111,10 @@ def _snapshot(employee_id, session_id, touch_presence=False):
             "latestId": int(notification_row["latest_id"] or 0),
             "unreadCount": int(notification_row["unread_count"] or 0),
             "latestChangeAt": notification_row["latest_change_at"] or "",
+        },
+        "transfers": {
+            "revision": int(transfer_row["revision_total"] or 0),
+            "pendingCount": int(transfer_row["pending_count"] or 0),
         },
     }
 
@@ -132,6 +151,8 @@ def admin_realtime_events():
                 yield _event("message-change", current["messages"])
             if current["notifications"] != previous["notifications"]:
                 yield _event("notification-change", current["notifications"])
+            if current["transfers"] != previous["transfers"]:
+                yield _event("transfer-change", current["transfers"])
 
             if now - last_keep_alive >= KEEP_ALIVE_SECONDS:
                 yield ": keep-alive\n\n"

@@ -771,6 +771,35 @@ def _ensure_messaging_schema(conn):
                 FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
             );
 
+            CREATE TABLE IF NOT EXISTS peer_file_transfers (
+                id TEXT PRIMARY KEY,
+                sender_employee_id INTEGER NOT NULL,
+                recipient_employee_id INTEGER NOT NULL,
+                file_name TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+                offer_sdp TEXT NOT NULL,
+                answer_sdp TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'offered',
+                revision INTEGER NOT NULL DEFAULT 1,
+                failure_reason TEXT NOT NULL DEFAULT '',
+                completion_message_id INTEGER,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                expires_at TEXT NOT NULL,
+                responded_at TEXT,
+                completed_at TEXT,
+                CHECK (sender_employee_id <> recipient_employee_id),
+                CHECK (file_size > 0),
+                CHECK (status IN (
+                    'offered', 'accepted', 'transferring', 'completed',
+                    'rejected', 'cancelled', 'failed', 'expired'
+                )),
+                FOREIGN KEY (sender_employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+                FOREIGN KEY (completion_message_id) REFERENCES chat_messages(id) ON DELETE SET NULL
+            );
+
             CREATE TABLE IF NOT EXISTS notifications (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 recipient_employee_id INTEGER NOT NULL,
@@ -800,6 +829,10 @@ def _ensure_messaging_schema(conn):
             WHERE client_message_id <> '';
             CREATE INDEX IF NOT EXISTS idx_chat_conversations_activity
             ON chat_conversations(last_message_at DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_peer_file_transfers_sender
+            ON peer_file_transfers(sender_employee_id, updated_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_peer_file_transfers_recipient
+            ON peer_file_transfers(recipient_employee_id, status, updated_at DESC);
             CREATE INDEX IF NOT EXISTS idx_notifications_recipient
             ON notifications(recipient_employee_id, status, id DESC);
             """

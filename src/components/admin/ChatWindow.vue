@@ -115,13 +115,54 @@
               {{ actionError }}
             </div>
 
+            <div v-if="peerTransfer" class="peer-transfer-progress" aria-live="polite">
+              <div class="peer-transfer-heading">
+                <span>
+                  <strong>{{ peerTransfer.fileName }}</strong>
+                  <small>{{ peerTransferStatusText }}</small>
+                </span>
+                <button
+                  v-if="peerTransferCancelable"
+                  type="button"
+                  @click="cancelPeerTransfer"
+                >取消</button>
+              </div>
+              <div class="peer-transfer-track" aria-hidden="true">
+                <i :style="{ width: `${peerTransferPercent}%` }"></i>
+              </div>
+              <span class="peer-transfer-summary">
+                {{ formatFileSize(peerTransfer.transferredBytes) }} / {{ formatFileSize(peerTransfer.totalBytes) }}
+                <b>{{ peerTransferPercent }}%</b>
+              </span>
+            </div>
+
             <div v-if="selectedFile" class="chat-selected-file">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
                 <path d="M14 2v6h6"/>
               </svg>
-              <span>{{ selectedFile.name }}</span>
+              <span>
+                <strong>{{ selectedFile.name }}</strong>
+                <small>{{ formatFileSize(selectedFile.size) }}</small>
+              </span>
+              <div class="transfer-mode-switch" aria-label="附件发送方式">
+                <button
+                  type="button"
+                  :class="{ active: selectedTransferMode === 'peer' }"
+                  :disabled="!peerTransferAvailable"
+                  title="双方在线时文件不经过服务器"
+                  @click="setTransferMode('peer')"
+                >在线直传</button>
+                <button
+                  type="button"
+                  :class="{ active: selectedTransferMode === 'server' }"
+                  :disabled="selectedFile.size > serverAttachmentLimit"
+                  title="保存到服务器，支持对方离线接收，最大10MB"
+                  @click="setTransferMode('server')"
+                >离线附件</button>
+              </div>
               <button
+                class="selected-file-remove"
                 type="button"
                 title="移除附件"
                 aria-label="移除附件"
@@ -154,6 +195,7 @@
               <button
                 class="chat-icon-button chat-attach-button"
                 type="button"
+                :disabled="peerTransferCancelable"
                 title="选择附件"
                 aria-label="选择附件"
                 @click="openFilePicker"
@@ -173,12 +215,45 @@
                   <path d="m22 2-7 20-4-9-9-4Z"/>
                   <path d="M22 2 11 13"/>
                 </svg>
-                <span>{{ sending ? '发送中' : '发送' }}</span>
+                <span>{{ sendButtonText }}</span>
               </button>
             </div>
           </footer>
         </section>
       </div>
+    </Transition>
+
+    <Transition name="peer-request">
+      <section
+        v-if="incomingTransfer"
+        class="peer-request-card"
+        role="dialog"
+        aria-modal="true"
+        aria-label="在线文件接收请求"
+      >
+        <div class="peer-request-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <path d="M14 2v6h6M12 18v-6M9.5 14.5 12 12l2.5 2.5"/>
+          </svg>
+        </div>
+        <div class="peer-request-copy">
+          <strong>{{ incomingTransfer.peer?.displayName || '同事' }} 请求发送文件</strong>
+          <span>{{ incomingTransfer.fileName }}</span>
+          <small>{{ formatFileSize(incomingTransfer.fileSize) }} · 局域网在线直传</small>
+        </div>
+        <div class="peer-request-actions">
+          <button type="button" :disabled="processingIncoming" @click="rejectIncomingTransfer">
+            拒绝
+          </button>
+          <button
+            class="primary"
+            type="button"
+            :disabled="processingIncoming || peerTransferCancelable"
+            @click="acceptIncomingTransfer"
+          >{{ processingIncoming ? '建立连接中' : '同意接收' }}</button>
+        </div>
+      </section>
     </Transition>
   </Teleport>
 </template>
@@ -187,9 +262,17 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import request from '@/api/request'
 import { subscribeAdminRealtime } from '@/utils/adminRealtime'
+import {
+  canStreamPeerFileToDisk,
+  choosePeerFileDestination,
+  createPeerFileReceiver,
+  createPeerFileSender,
+  supportsPeerFileTransfer
+} from '@/utils/peerFileTransfer'
 
 const CHAT_WINDOW_POSITION_KEY = 'order-system-chat-window-position'
 const CHAT_WINDOW_EDGE_GAP = 12
+const SERVER_ATTACHMENT_LIMIT = 10 * 1024 * 1024
 
 const props = defineProps({
   modelValue: {
@@ -208,7 +291,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'message-sent'])
+const emit = defineEmits(['update:modelValue', 'message-sent', 'open-contact'])
 
 const windowRef = ref(null)
 const messageListRef = ref(null)
@@ -216,6 +299,7 @@ const composerRef = ref(null)
 const fileInputRef = ref(null)
 const draftMessage = ref('')
 const selectedFile = ref(null)
+const selectedTransferMode = ref('server')
 const displayedMessages = ref([])
 const loading = ref(false)
 const sending = ref(false)
@@ -223,6 +307,9 @@ const loadError = ref('')
 const actionError = ref('')
 const windowPosition = ref(null)
 const dragging = ref(false)
+const peerTransfer = ref(null)
+const incomingTransfer = ref(null)
+const processingIncoming = ref(false)
 
 let dragPointerId = null
 let dragStartX = 0
@@ -234,6 +321,14 @@ let dragHeight = 0
 let previousUserSelect = ''
 let refreshTimer = null
 let unsubscribeRealtime = null
+let unsubscribeTransferRealtime = null
+let transferFallbackTimer = null
+let activePeerSession = null
+let syncingTransfers = false
+let applyingPeerAnswer = false
+let peerAnswerApplied = false
+
+const serverAttachmentLimit = SERVER_ATTACHMENT_LIMIT
 
 const contactName = computed(() => {
   return props.contact?.displayName || props.contact?.name || '通讯录好友'
@@ -245,7 +340,46 @@ const contactInitials = computed(() => {
 })
 
 const canSend = computed(() => {
-  return Boolean(draftMessage.value || selectedFile.value)
+  return Boolean(draftMessage.value || selectedFile.value) && !peerTransferCancelable.value
+})
+
+const peerTransferAvailable = computed(() => (
+  Boolean(props.contact?.online) && supportsPeerFileTransfer()
+))
+
+const peerTransferCancelable = computed(() => (
+  Boolean(peerTransfer.value) && ['preparing', 'offered', 'connecting', 'transferring', 'sent'].includes(
+    peerTransfer.value.status
+  )
+))
+
+const peerTransferPercent = computed(() => {
+  const total = Number(peerTransfer.value?.totalBytes || 0)
+  const transferred = Number(peerTransfer.value?.transferredBytes || 0)
+  if (!total) return 0
+  return Math.min(100, Math.round((transferred / total) * 100))
+})
+
+const peerTransferStatusText = computed(() => {
+  const labels = {
+    preparing: '正在生成局域网连接',
+    offered: '等待对方同意接收',
+    connecting: '对方已同意，正在建立连接',
+    transferring: peerTransfer.value?.direction === 'incoming' ? '正在接收' : '正在发送',
+    sent: '文件已发送，等待对方保存完成',
+    completed: '传输完成',
+    rejected: '对方已拒绝',
+    cancelled: '传输已取消',
+    failed: peerTransfer.value?.error || '传输失败',
+    expired: '接收请求已过期'
+  }
+  return labels[peerTransfer.value?.status] || '在线直传'
+})
+
+const sendButtonText = computed(() => {
+  if (sending.value) return selectedTransferMode.value === 'peer' ? '连接中' : '发送中'
+  if (selectedFile.value && selectedTransferMode.value === 'peer') return '发起直传'
+  return '发送'
 })
 
 const windowStyle = computed(() => {
@@ -309,39 +443,164 @@ const close = () => {
   emit('update:modelValue', false)
 }
 
+const appendSentMessage = message => {
+  if (!message) return
+  displayedMessages.value.push(normalizeMessage(message))
+  emit('message-sent', message)
+  scrollToBottom()
+}
+
+const sendTextContent = async content => {
+  if (!content) return null
+  const response = await request.post('/admin/messages', {
+    recipientEmployeeId: props.contact.id,
+    content,
+    clientMessageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  })
+  appendSentMessage(response.message)
+  return response.message
+}
+
+const clearSelectedFile = () => {
+  selectedFile.value = null
+  selectedTransferMode.value = 'server'
+  if (fileInputRef.value) fileInputRef.value.value = ''
+}
+
+const reportPeerStatus = async (status, reason = '') => {
+  const transferId = peerTransfer.value?.id
+  if (!transferId) return null
+  try {
+    return await request.post(`/admin/peer-transfers/${transferId}/status`, { status, reason })
+  } catch (error) {
+    if (error?.response?.status !== 409) throw error
+    return null
+  }
+}
+
+const closePeerSession = async ({ abort = false } = {}) => {
+  const session = activePeerSession
+  activePeerSession = null
+  if (!session) return
+  if (abort && typeof session.abort === 'function') {
+    await session.abort()
+    return
+  }
+  session.close?.()
+}
+
+const failPeerTransfer = async error => {
+  const message = error?.message || '局域网文件传输失败'
+  if (peerTransfer.value?.status === 'sent') return
+  if (peerTransfer.value) {
+    peerTransfer.value = {
+      ...peerTransfer.value,
+      status: 'failed',
+      error: message,
+      terminalHandled: true
+    }
+  }
+  actionError.value = message
+  try {
+    await reportPeerStatus('failed', message)
+  } catch {
+    // 原始连接错误优先展示，状态还会通过过期机制收敛。
+  }
+  await closePeerSession({ abort: true })
+}
+
+const startPeerTransfer = async file => {
+  if (!supportsPeerFileTransfer()) {
+    throw new Error('当前浏览器不支持局域网在线直传')
+  }
+  if (!props.contact?.online) {
+    throw new Error('对方当前不在线，请改用10MB以内的离线附件')
+  }
+
+  peerTransfer.value = {
+    id: '',
+    direction: 'outgoing',
+    fileName: file.name,
+    totalBytes: file.size,
+    transferredBytes: 0,
+    status: 'preparing'
+  }
+  peerAnswerApplied = false
+  const session = createPeerFileSender({
+    file,
+    onProgress: transferredBytes => {
+      if (!peerTransfer.value) return
+      peerTransfer.value = { ...peerTransfer.value, transferredBytes }
+    },
+    onStatus: status => {
+      if (!peerTransfer.value) return
+      peerTransfer.value = { ...peerTransfer.value, status }
+      if (status === 'transferring') {
+        reportPeerStatus('transferring').catch(error => failPeerTransfer(error))
+      }
+    },
+    onComplete: () => {
+      if (!peerTransfer.value) return
+      peerTransfer.value = {
+        ...peerTransfer.value,
+        status: 'sent',
+        transferredBytes: file.size
+      }
+    },
+    onError: failPeerTransfer
+  })
+  activePeerSession = session
+  try {
+    const offer = await session.createOffer()
+    const response = await request.post('/admin/peer-transfers', {
+      recipientEmployeeId: props.contact.id,
+      fileName: file.name,
+      fileSize: file.size,
+      mimeType: file.type || 'application/octet-stream',
+      offer
+    }, { timeout: 45000 })
+    peerTransfer.value = {
+      ...peerTransfer.value,
+      id: response.transfer.id,
+      status: 'offered'
+    }
+  } catch (error) {
+    await closePeerSession({ abort: true })
+    peerTransfer.value = null
+    throw error
+  }
+}
+
 const sendMessage = async () => {
   if (!canSend.value || sending.value || !props.contact?.id) return
 
   sending.value = true
   actionError.value = ''
   const file = selectedFile.value
+  const text = draftMessage.value
   try {
-    let response
-    if (file) {
+    if (file && selectedTransferMode.value === 'peer') {
+      await startPeerTransfer(file)
+      if (text) await sendTextContent(text)
+    } else if (file) {
       const formData = new FormData()
       formData.append('recipientEmployeeId', String(props.contact.id))
-      formData.append('content', draftMessage.value)
+      formData.append('content', text)
       formData.append('file', file)
-      response = await request.post('/admin/messages/attachments', formData, {
+      const response = await request.post('/admin/messages/attachments', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 120000
       })
+      appendSentMessage(response.message)
     } else {
-      response = await request.post('/admin/messages', {
-        recipientEmployeeId: props.contact.id,
-        content: draftMessage.value,
-        clientMessageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`
-      })
+      await sendTextContent(text)
     }
-    displayedMessages.value.push(normalizeMessage(response.message))
-    emit('message-sent', response.message)
     draftMessage.value = ''
-    selectedFile.value = null
-    if (fileInputRef.value) fileInputRef.value.value = ''
-    scrollToBottom()
+    clearSelectedFile()
     composerRef.value?.focus()
   } catch (error) {
-    actionError.value = error?.response?.data?.message || error?.response?.data?.error || '留言发送失败'
+    actionError.value = error?.response?.data?.message || error?.response?.data?.error ||
+      error?.message || '留言发送失败'
   } finally {
     sending.value = false
   }
@@ -353,26 +612,186 @@ const openFilePicker = () => {
 
 const handleFileChange = event => {
   const file = event.target.files?.[0] || null
-  if (file && file.size > 10 * 1024 * 1024) {
-    actionError.value = '离线附件最大支持10MB'
+  actionError.value = ''
+  selectedFile.value = file
+  if (!file) return
+  if (file.size > SERVER_ATTACHMENT_LIMIT && !peerTransferAvailable.value) {
+    actionError.value = '超过10MB的文件需要对方在线并使用支持WebRTC的浏览器'
     event.target.value = ''
     selectedFile.value = null
     return
   }
-  actionError.value = ''
-  selectedFile.value = file
+  selectedTransferMode.value = peerTransferAvailable.value ? 'peer' : 'server'
 }
 
-const clearSelectedFile = () => {
-  selectedFile.value = null
-  if (fileInputRef.value) fileInputRef.value.value = ''
+const setTransferMode = mode => {
+  if (mode === 'peer' && !peerTransferAvailable.value) {
+    actionError.value = '在线直传需要对方在线且双方浏览器支持WebRTC'
+    return
+  }
+  if (mode === 'server' && selectedFile.value?.size > SERVER_ATTACHMENT_LIMIT) {
+    actionError.value = '离线附件最大支持10MB'
+    return
+  }
+  actionError.value = ''
+  selectedTransferMode.value = mode
 }
 
 const formatFileSize = size => {
   if (!size) return '0 B'
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-  return `${(size / 1024 / 1024).toFixed(1)} MB`
+  if (size < 1024 * 1024 * 1024) return `${(size / 1024 / 1024).toFixed(1)} MB`
+  return `${(size / 1024 / 1024 / 1024).toFixed(2)} GB`
+}
+
+const syncPeerTransfers = async () => {
+  if (syncingTransfers || !supportsPeerFileTransfer()) return
+  syncingTransfers = true
+  try {
+    if (peerTransfer.value?.id && !peerTransfer.value.terminalHandled) {
+      const response = await request.get(`/admin/peer-transfers/${peerTransfer.value.id}`)
+      const remote = response.transfer
+      if (
+        peerTransfer.value.direction === 'outgoing' &&
+        remote.status === 'accepted' && remote.answer && !applyingPeerAnswer && !peerAnswerApplied
+      ) {
+        applyingPeerAnswer = true
+        peerTransfer.value = { ...peerTransfer.value, status: 'connecting' }
+        try {
+          await activePeerSession?.applyAnswer(remote.answer)
+          peerAnswerApplied = true
+        } catch (error) {
+          await failPeerTransfer(error)
+        } finally {
+          applyingPeerAnswer = false
+        }
+      } else if (['completed', 'rejected', 'cancelled', 'failed', 'expired'].includes(remote.status)) {
+        peerTransfer.value = {
+          ...peerTransfer.value,
+          status: remote.status,
+          error: remote.failureReason || '',
+          terminalHandled: true
+        }
+        await closePeerSession({ abort: remote.status !== 'completed' })
+        if (remote.status === 'completed' && props.modelValue) {
+          await loadMessages({ silent: true })
+          emit('message-sent')
+        }
+      }
+    }
+
+    const pendingResponse = await request.get('/admin/peer-transfers/pending')
+    const pending = pendingResponse?.transfers || []
+    if (!peerTransferCancelable.value) {
+      incomingTransfer.value = pending[0] || null
+    }
+  } catch (error) {
+    if (error?.response?.status !== 403 && error?.response?.status !== 404) {
+      console.error('同步在线文件传输失败', error)
+    }
+  } finally {
+    syncingTransfers = false
+  }
+}
+
+const rejectIncomingTransfer = async () => {
+  if (!incomingTransfer.value || processingIncoming.value) return
+  processingIncoming.value = true
+  try {
+    await request.post(`/admin/peer-transfers/${incomingTransfer.value.id}/respond`, {
+      accepted: false
+    })
+    incomingTransfer.value = null
+  } catch (error) {
+    actionError.value = error?.response?.data?.message || '拒绝文件失败'
+  } finally {
+    processingIncoming.value = false
+  }
+}
+
+const acceptIncomingTransfer = async () => {
+  const incoming = incomingTransfer.value
+  if (!incoming || processingIncoming.value || peerTransferCancelable.value) return
+  processingIncoming.value = true
+  let writable = null
+  try {
+    if (canStreamPeerFileToDisk()) {
+      writable = await choosePeerFileDestination(incoming.fileName)
+    }
+    emit('open-contact', incoming.peer)
+    peerTransfer.value = {
+      id: incoming.id,
+      direction: 'incoming',
+      fileName: incoming.fileName,
+      totalBytes: Number(incoming.fileSize),
+      transferredBytes: 0,
+      status: 'connecting'
+    }
+    const session = createPeerFileReceiver({
+      metadata: incoming,
+      writable,
+      onProgress: transferredBytes => {
+        if (!peerTransfer.value) return
+        peerTransfer.value = { ...peerTransfer.value, transferredBytes }
+      },
+      onStatus: status => {
+        if (!peerTransfer.value) return
+        peerTransfer.value = { ...peerTransfer.value, status }
+      },
+      onComplete: async () => {
+        if (!peerTransfer.value) return
+        peerTransfer.value = {
+          ...peerTransfer.value,
+          status: 'completed',
+          transferredBytes: Number(incoming.fileSize)
+        }
+        try {
+          await reportPeerStatus('completed')
+          peerTransfer.value = { ...peerTransfer.value, terminalHandled: true }
+          await nextTick()
+          await loadMessages({ silent: true })
+          emit('message-sent')
+        } catch (error) {
+          actionError.value = error?.response?.data?.message || '文件已保存，但完成状态登记失败'
+        } finally {
+          await closePeerSession()
+        }
+      },
+      onError: failPeerTransfer
+    })
+    activePeerSession = session
+    const answer = await session.createAnswer(incoming.offer)
+    await request.post(`/admin/peer-transfers/${incoming.id}/respond`, {
+      accepted: true,
+      answer
+    }, { timeout: 45000 })
+    incomingTransfer.value = null
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      await failPeerTransfer(error)
+      incomingTransfer.value = null
+    }
+  } finally {
+    processingIncoming.value = false
+  }
+}
+
+const cancelPeerTransfer = async () => {
+  if (!peerTransferCancelable.value) return
+  try {
+    await reportPeerStatus('cancelled')
+  } catch {
+    // 本地立即终止，远端会在连接断开或信令过期后结束。
+  }
+  await closePeerSession({ abort: true })
+  if (peerTransfer.value) {
+    peerTransfer.value = {
+      ...peerTransfer.value,
+      status: 'cancelled',
+      terminalHandled: true
+    }
+  }
 }
 
 const hideBrokenAvatar = event => {
@@ -508,7 +927,7 @@ watch(
     if (!visible) return
     displayedMessages.value = []
     draftMessage.value = ''
-    selectedFile.value = null
+    clearSelectedFile()
     actionError.value = ''
     loadMessages()
     refreshTimer = window.setInterval(() => loadMessages({ silent: true }), 60000)
@@ -523,6 +942,9 @@ onMounted(() => {
   unsubscribeRealtime = subscribeAdminRealtime('messages', () => {
     if (props.modelValue) loadMessages({ silent: true })
   })
+  unsubscribeTransferRealtime = subscribeAdminRealtime('transfers', syncPeerTransfers)
+  transferFallbackTimer = window.setInterval(syncPeerTransfers, 60000)
+  syncPeerTransfers()
   window.addEventListener('resize', handleViewportResize)
 })
 
@@ -536,7 +958,10 @@ onUnmounted(() => {
   window.removeEventListener('pointercancel', stopDrag)
   window.removeEventListener('resize', handleViewportResize)
   unsubscribeRealtime?.()
+  unsubscribeTransferRealtime?.()
   if (refreshTimer) window.clearInterval(refreshTimer)
+  if (transferFallbackTimer) window.clearInterval(transferFallbackTimer)
+  closePeerSession({ abort: true })
 })
 
 defineExpose({ close })
@@ -915,13 +1340,32 @@ defineExpose({ close })
 }
 
 .chat-selected-file > span {
+  display: flex;
   min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  overflow: hidden;
+}
+
+.chat-selected-file > span strong,
+.chat-selected-file > span small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.chat-selected-file button {
+.chat-selected-file > span strong {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
+
+.chat-selected-file > span small {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.chat-selected-file .selected-file-remove {
   display: inline-flex;
   width: 22px;
   height: 22px;
@@ -937,12 +1381,12 @@ defineExpose({ close })
   cursor: pointer;
 }
 
-.chat-selected-file button:hover {
+.chat-selected-file .selected-file-remove:hover {
   color: var(--accent-dark);
   background: var(--accent-soft);
 }
 
-.chat-selected-file button svg {
+.chat-selected-file .selected-file-remove svg {
   width: 14px;
   height: 14px;
   fill: none;
@@ -950,6 +1394,215 @@ defineExpose({ close })
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
+}
+
+.transfer-mode-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  padding: 2px;
+  background: #edf1f5;
+  border-radius: 5px;
+}
+
+.chat-selected-file .transfer-mode-switch button {
+  width: auto;
+  height: 24px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 7px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.chat-selected-file .transfer-mode-switch button.active {
+  color: var(--accent-dark);
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.chat-selected-file .transfer-mode-switch button:disabled {
+  color: #a8b1bf;
+  cursor: not-allowed;
+}
+
+.peer-transfer-progress {
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  background: #f6faf9;
+  border: 1px solid #cfe7df;
+  border-radius: 5px;
+}
+
+.peer-transfer-heading,
+.peer-transfer-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.peer-transfer-heading > span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.peer-transfer-heading strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peer-transfer-heading small,
+.peer-transfer-summary {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.peer-transfer-heading button {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  color: #b42318;
+  background: #ffffff;
+  border: 1px solid #f0c5c1;
+  border-radius: 4px;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.peer-transfer-track {
+  height: 5px;
+  margin: 8px 0 5px;
+  overflow: hidden;
+  background: #dfe8e5;
+  border-radius: 3px;
+}
+
+.peer-transfer-track i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 0.16s ease;
+}
+
+.peer-transfer-summary b {
+  color: var(--accent-dark);
+  font-weight: 650;
+}
+
+.peer-request-card {
+  position: fixed;
+  top: 72px;
+  right: 24px;
+  z-index: 10020;
+  display: grid;
+  width: min(370px, calc(100vw - 32px));
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 10px 12px;
+  padding: 14px;
+  color: #172033;
+  background: #ffffff;
+  border: 1px solid #d9e1e8;
+  border-radius: 7px;
+  box-shadow: 0 16px 38px rgba(15, 23, 42, 0.2);
+}
+
+.peer-request-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  grid-row: 1 / span 2;
+  place-items: center;
+  color: #08745a;
+  background: #e9f8f3;
+  border: 1px solid #a9e5d2;
+  border-radius: 50%;
+}
+
+.peer-request-icon svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.peer-request-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.peer-request-copy strong {
+  font-size: 13px;
+}
+
+.peer-request-copy span,
+.peer-request-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.peer-request-copy span {
+  color: #39465a;
+  font-size: 12px;
+}
+
+.peer-request-copy small {
+  color: #7b8798;
+  font-size: 10px;
+}
+
+.peer-request-actions {
+  display: flex;
+  grid-column: 2;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.peer-request-actions button {
+  height: 30px;
+  padding: 0 10px;
+  color: #596579;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.peer-request-actions button.primary {
+  color: #ffffff;
+  background: #0f9f78;
+  border-color: #0f9f78;
+}
+
+.peer-request-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.peer-request-enter-active,
+.peer-request-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.peer-request-enter-from,
+.peer-request-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 
 .chat-composer-row {
@@ -1060,6 +1713,26 @@ defineExpose({ close })
     bottom: 12px;
     width: calc(100vw - 24px);
     height: calc(100vh - 24px);
+  }
+
+  .peer-request-card {
+    top: 12px;
+    right: 12px;
+    width: calc(100vw - 24px);
+    box-sizing: border-box;
+  }
+
+  .chat-selected-file {
+    flex-wrap: wrap;
+  }
+
+  .transfer-mode-switch {
+    order: 4;
+    width: 100%;
+  }
+
+  .chat-selected-file .transfer-mode-switch button {
+    flex: 1;
   }
 }
 

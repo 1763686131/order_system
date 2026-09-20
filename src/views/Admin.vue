@@ -266,6 +266,7 @@
       v-model="chatWindowOpen"
       :contact="activeChatContact"
       @message-sent="messageInboxRef?.refresh()"
+      @open-contact="openChat"
     />
   </div>
 </template>
