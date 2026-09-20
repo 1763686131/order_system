@@ -263,33 +263,6 @@
     </template>
 
     <template v-else>
-      <section class="employee-context">
-        <div class="context-identity">
-          <span class="context-avatar" :style="avatarStyle(selectedEmployee)">
-            {{ selectedEmployee.displayName.slice(0, 1) }}
-          </span>
-          <div>
-            <div class="context-title">
-              <h2>{{ selectedEmployee.displayName }}</h2>
-              <span :class="['status-badge', employmentStatusClass(selectedEmployee.employmentStatus)]">
-                <i></i>{{ employmentStatusLabel(selectedEmployee.employmentStatus) }}
-              </span>
-            </div>
-            <p>{{ selectedEmployee.employeeNo }} · {{ selectedEmployee.department }} · {{ selectedEmployee.position }}</p>
-          </div>
-        </div>
-        <div class="context-actions">
-          <button class="button button-secondary" type="button" @click="openEdit(selectedEmployee)">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="m4 16-.8 4.8L8 20l10.8-10.8a2.1 2.1 0 0 0-3-3L4 16Z"></path>
-              <path d="m14.5 7.5 2 2"></path>
-            </svg>
-            编辑档案
-          </button>
-          <button class="button button-ghost" type="button" @click="goToList">返回列表</button>
-        </div>
-      </section>
-
       <nav class="detail-tabs" aria-label="员工详情导航">
         <button
           class="detail-tab"
@@ -308,54 +281,59 @@
           权限控制
           <span class="detail-tab-count">{{ selectedPermissionCount }}</span>
         </button>
+        <div class="detail-tab-actions">
+          <button class="button button-ghost" type="button" @click="goToList">返回列表</button>
+          <button class="button button-secondary" type="button" @click="openEdit(selectedEmployee)">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m4 16-.8 4.8L8 20l10.8-10.8a2.1 2.1 0 0 0-3-3L4 16Z"></path>
+              <path d="m14.5 7.5 2 2"></path>
+            </svg>
+            编辑档案
+          </button>
+        </div>
       </nav>
 
       <section v-if="activeDetailTab === 'profile'" class="detail-content profile-content">
         <div class="detail-column">
           <article class="detail-card identity-card">
-            <div class="detail-card-heading">
-              <div class="heading-with-icon">
-                <svg viewBox="0 0 24 24" aria-hidden="true" class="heading-icon">
-                  <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"></path>
-                  <circle cx="12" cy="7" r="4"></circle>
-                </svg>
+            <span class="card-index identity-card-index">01</span>
+            <div class="identity-card-layout">
+              <div class="identity-card-profile">
+                <span class="identity-card-avatar" :style="avatarStyle(selectedEmployee)">
+                  {{ selectedEmployee.displayName.slice(0, 1) }}
+                </span>
+              </div>
+              <dl class="info-grid identity-info-grid">
                 <div>
-                  <h3>个人信息</h3>
-                  <span>花名册主档信息</span>
+                  <dt>姓名</dt>
+                  <dd class="dd-primary">{{ selectedEmployee.displayName }}</dd>
                 </div>
-              </div>
-              <span class="card-index">01</span>
+                <div>
+                  <dt>工号</dt>
+                  <dd class="dd-primary tabular">{{ selectedEmployee.employeeNo || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>部门</dt>
+                  <dd class="dd-primary">{{ selectedEmployee.department || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>职位</dt>
+                  <dd class="dd-primary">{{ selectedEmployee.position || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>入职日期</dt>
+                  <dd class="dd-primary tabular">{{ selectedEmployee.hireDate || '—' }}</dd>
+                </div>
+                <div>
+                  <dt>当前状态</dt>
+                  <dd>
+                    <span :class="['mini-badge', employmentStatusClass(selectedEmployee.employmentStatus)]">
+                      <i></i>{{ employmentStatusLabel(selectedEmployee.employmentStatus) }}
+                    </span>
+                  </dd>
+                </div>
+              </dl>
             </div>
-            <dl class="info-grid">
-              <div>
-                <dt>姓名</dt>
-                <dd class="dd-primary">{{ selectedEmployee.displayName }}</dd>
-              </div>
-              <div>
-                <dt>工号</dt>
-                <dd class="dd-primary tabular">{{ selectedEmployee.employeeNo || '—' }}</dd>
-              </div>
-              <div>
-                <dt>身份证号</dt>
-                <dd class="dd-primary tabular">{{ selectedEmployee.idCard || '—' }}</dd>
-              </div>
-              <div>
-                <dt>用工类型</dt>
-                <dd class="dd-primary">{{ selectedEmployee.employmentType || '—' }}</dd>
-              </div>
-              <div>
-                <dt>入职日期</dt>
-                <dd class="dd-primary tabular">{{ selectedEmployee.hireDate || '—' }}</dd>
-              </div>
-              <div>
-                <dt>当前状态</dt>
-                <dd>
-                  <span :class="['mini-badge', employmentStatusClass(selectedEmployee.employmentStatus)]">
-                    <i></i>{{ employmentStatusLabel(selectedEmployee.employmentStatus) }}
-                  </span>
-                </dd>
-              </div>
-            </dl>
           </article>
 
           <article class="detail-card">
@@ -390,7 +368,7 @@
                       :key="storeId"
                       class="capsule-tag capsule-green"
                     >
-                      {{ stores.find(s => s.id === storeId)?.name || storeId }}
+                      {{ scopeOptionName(storeId, stores) || storeId }}
                     </span>
                   </div>
                   <span v-else class="dd-empty">—</span>
@@ -405,7 +383,7 @@
                       :key="warehouseId"
                       class="capsule-tag capsule-blue"
                     >
-                      {{ warehouses.find(w => w.id === warehouseId)?.name || warehouseId }}
+                      {{ scopeOptionName(warehouseId, warehouses) || warehouseId }}
                     </span>
                   </div>
                   <span v-else class="dd-empty">—</span>
@@ -897,17 +875,8 @@ const departments = ref([])
 const roleGroups = ref([])
 const permissionModules = ref([])
 
-const stores = [
-  { id: 1, name: '一号门店' },
-  { id: 2, name: '二号门店' },
-  { id: 3, name: '直营网点' }
-]
-
-const warehouses = [
-  { id: 1, name: '成品仓' },
-  { id: 2, name: '原材料仓' },
-  { id: 3, name: '周转仓' }
-]
+const stores = ref([])
+const warehouses = ref([])
 
 const employees = ref([])
 
@@ -939,14 +908,25 @@ let noticeTimer
 
 async function loadEmployeeData() {
   try {
-    const [employeeResponse, roleResponse, permissionResponse, departmentResponse] = await Promise.all([
+    const [
+      employeeResponse,
+      roleResponse,
+      permissionResponse,
+      departmentResponse,
+      storeResponse,
+      warehouseResponse
+    ] = await Promise.all([
       request.get('/admin/employees'),
       request.get('/admin/roles'),
       request.get('/admin/permissions'),
-      request.get('/admin/departments')
+      request.get('/admin/departments'),
+      request.get('/stores'),
+      request.get('/warehouses')
     ])
     employees.value = employeeResponse.employees || []
     departments.value = departmentResponse.departments || []
+    stores.value = Array.isArray(storeResponse) ? storeResponse : []
+    warehouses.value = Array.isArray(warehouseResponse) ? warehouseResponse : []
     roleGroups.value = (roleResponse.roles || []).map((role) => ({
       ...role
     }))
@@ -975,8 +955,8 @@ const selectedEmployeeRoles = computed(() => {
 
 const selectedEmployeeScope = computed(() => {
   return mergeRoleScopes(selectedEmployeeRoles.value, {
-    storeIds: stores.map(store => store.id),
-    warehouseIds: warehouses.map(warehouse => warehouse.id)
+    storeIds: stores.value.map(store => store.id),
+    warehouseIds: warehouses.value.map(warehouse => warehouse.id)
   })
 })
 
@@ -1363,9 +1343,13 @@ function roleDescription(roleId) {
   return roleGroups.value.find(role => role.id === roleId)?.description || '未配置角色说明'
 }
 
+function scopeOptionName(id, options) {
+  return options.find(option => String(option.id) === String(id))?.name || ''
+}
+
 function scopeNames(ids, options) {
   return ids
-    .map(id => options.find(option => option.id === id)?.name)
+    .map(id => scopeOptionName(id, options))
     .filter(Boolean)
     .join('、')
 }
@@ -1905,17 +1889,10 @@ input[type='checkbox'] {
   border-radius: 0 0 7px 7px;
 }
 
-.workspace-nav + .employee-context {
+.workspace-nav + .detail-tabs {
   margin-top: 0;
   border-top: 0;
   border-radius: 0;
-}
-
-.employee-context + .detail-tabs {
-  margin-top: 0;
-  border-top: 0;
-  border-radius: 0;
-  box-shadow: none;
 }
 
 .detail-tabs + .detail-content {
@@ -2938,72 +2915,93 @@ input[type='checkbox'] {
   background: #fcebed;
 }
 
-.employee-context {
-  display: flex;
-  min-height: 78px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  margin-top: 14px;
-  padding: 16px 20px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04), 0 1px 2px rgba(15, 23, 42, 0.02);
-  box-sizing: border-box;
-}
-
-.context-identity,
-.context-title {
-  display: flex;
-  align-items: center;
-}
-
-.context-identity {
-  min-width: 0;
-  gap: 11px;
-}
-
-.context-avatar {
+.identity-card-avatar {
   display: inline-flex;
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
+  width: 176px;
+  height: 176px;
+  flex: 0 0 176px;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  font-size: 17px;
+  border: 4px solid #fff;
+  box-shadow: 0 0 0 1px #dbe5e9, 0 5px 12px rgba(15, 23, 42, 0.08);
+  font-size: 52px;
   font-weight: 750;
 }
 
-.context-identity > div {
-  min-width: 0;
+.identity-card {
+  position: relative;
 }
 
-.context-title {
-  gap: 9px;
+.identity-card-index {
+  position: absolute;
+  top: 18px;
+  right: 20px;
 }
 
-.context-title h2 {
-  overflow: hidden;
-  font-size: 17px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.identity-card-layout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 20px;
+  align-items: stretch;
 }
 
-.context-identity p {
-  margin-top: 5px;
-  overflow: hidden;
-  color: var(--text-secondary);
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.context-actions {
+.identity-card-profile {
   display: flex;
+  min-height: 190px;
+  align-items: center;
+  justify-content: center;
+  padding-right: 20px;
+  border-right: 1px solid #eef2f6;
+}
+
+.identity-info-grid {
+  align-content: center;
+  gap: 26px 24px;
+}
+
+.identity-card .identity-info-grid dt {
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.identity-card .identity-info-grid dd {
+  margin-top: 8px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.identity-card .identity-info-grid > div:last-child dt {
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.identity-card .identity-info-grid > div:last-child dd {
+  margin-top: 8px;
+  font-size: 18px;
+  line-height: 1.4;
+}
+
+.identity-card .identity-info-grid > div:last-child .mini-badge {
+  min-height: 32px;
+  gap: 8px;
+  padding: 5px 14px;
+  font-size: 18px;
+}
+
+.identity-card .identity-info-grid > div:last-child .mini-badge i {
+  width: 8px;
+  height: 8px;
+  flex-basis: 8px;
+}
+
+.detail-tab-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
   flex: 0 0 auto;
   gap: 8px;
+  margin-left: auto;
 }
 
 .detail-tabs {
@@ -3514,11 +3512,13 @@ input[type='checkbox'] {
 
 .employee-permission-grid {
   display: grid;
+  align-items: start;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
 .employee-permission-module {
+  align-self: start;
   min-width: 0;
   padding: 13px 14px;
   background: #f8fafc;
@@ -3578,21 +3578,27 @@ input[type='checkbox'] {
 }
 
 .employee-permission-list {
-  display: grid;
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 6px;
 }
 
 .employee-permission-chip {
   display: flex;
+  flex: 0 1 auto;
   min-height: 29px;
   align-items: center;
   gap: 7px;
+  max-width: 100%;
   padding: 4px 8px;
   color: var(--text-muted);
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 5px;
   font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
   box-sizing: border-box;
 }
 
@@ -3816,17 +3822,13 @@ select:focus-visible,
     min-width: 116px;
   }
 
-  .employee-context {
-    align-items: flex-start;
-    flex-direction: column;
+  .detail-tab-actions {
+    gap: 6px;
   }
 
-  .context-actions {
-    width: 100%;
-  }
-
-  .context-actions .button {
-    flex: 1;
+  .detail-tab-actions .button {
+    padding-right: 10px;
+    padding-left: 10px;
   }
 
   .detail-tabs {
@@ -3914,6 +3916,38 @@ select:focus-visible,
   .profile-content,
   .permission-side {
     grid-template-columns: 1fr;
+  }
+
+  .identity-card-layout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .identity-card-profile {
+    min-height: 160px;
+    padding-right: 0;
+    padding-bottom: 16px;
+    border-right: 0;
+    border-bottom: 1px solid #eef2f6;
+  }
+
+  .identity-card-avatar {
+    width: 136px;
+    height: 136px;
+    flex-basis: 136px;
+    font-size: 40px;
+  }
+
+  .identity-info-grid {
+    gap: 18px 16px;
+  }
+
+  .identity-card .identity-info-grid dt {
+    font-size: 18px;
+  }
+
+  .identity-card .identity-info-grid dd {
+    font-size: 18px;
   }
 
   .permission-summary-card {
