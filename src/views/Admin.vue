@@ -117,15 +117,15 @@
                 <path d="M2 12l10 5 10-5"/>
               </svg>
             </button>
-            <button class="icon-btn" title="审核通知">
-              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
-              <span class="badge" v-if="notificationCount > 0">{{ notificationCount }}</span>
-            </button>
+            <MessageInbox
+              ref="notificationInboxRef"
+              mode="notifications"
+              @open-change="handleNotificationInboxOpenChange"
+              @open-notification="openNotification"
+            />
             <MessageInbox
               ref="messageInboxRef"
+              mode="messages"
               @open-change="handleMessageInboxOpenChange"
               @open-chat="openChat"
             />
@@ -289,7 +289,6 @@ const route = useRoute()
 const userStore = useUserStore()
 const orderDraftStore = useOrderDraftStore()
 
-const notificationCount = ref(3)
 const shippedActionModal = ref(null)
 const stockRecordModal = ref(null)
 const activeContentRef = ref(null)
@@ -298,6 +297,7 @@ const accountMenuRef = ref(null)
 const accountMenuOpen = ref(false)
 const directoryPanelRef = ref(null)
 const messageInboxRef = ref(null)
+const notificationInboxRef = ref(null)
 const chatWindowOpen = ref(false)
 const activeChatContact = ref(null)
 const chatConversations = ref({
@@ -369,6 +369,18 @@ const openChat = contact => {
   chatWindowOpen.value = true
 }
 
+const openNotification = notification => {
+  notificationInboxRef.value?.close()
+  messageInboxRef.value?.close()
+  directoryPanelRef.value?.close()
+  closeAccountMenu()
+  chatWindowOpen.value = false
+
+  if (notification?.target) {
+    router.push(notification.target)
+  }
+}
+
 const handleChatSend = ({ contact, message }) => {
   const contactId = String(contact?.id || '')
   if (!contactId) return
@@ -397,6 +409,7 @@ const handleDirectoryOpenChange = isOpen => {
   if (isOpen) {
     closeAccountMenu()
     messageInboxRef.value?.close()
+    notificationInboxRef.value?.close()
   }
 }
 
@@ -404,12 +417,22 @@ const handleMessageInboxOpenChange = isOpen => {
   if (isOpen) {
     closeAccountMenu()
     directoryPanelRef.value?.close()
+    notificationInboxRef.value?.close()
+  }
+}
+
+const handleNotificationInboxOpenChange = isOpen => {
+  if (isOpen) {
+    closeAccountMenu()
+    directoryPanelRef.value?.close()
+    messageInboxRef.value?.close()
   }
 }
 
 const toggleAccountMenu = () => {
   directoryPanelRef.value?.close()
   messageInboxRef.value?.close()
+  notificationInboxRef.value?.close()
   accountMenuOpen.value = !accountMenuOpen.value
 }
 

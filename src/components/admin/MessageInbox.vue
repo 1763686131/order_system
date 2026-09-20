@@ -5,16 +5,20 @@
     @keydown.esc="close"
   >
     <button
-      class="icon-btn message-inbox-trigger"
+      :class="['icon-btn', 'message-inbox-trigger', { 'is-notification': isNotificationMode }]"
       type="button"
-      title="留言消息"
-      aria-label="打开留言消息"
-      aria-controls="message-inbox-panel"
+      :title="triggerTitle"
+      :aria-label="triggerTitle"
+      :aria-controls="panelId"
       :aria-expanded="inboxOpen"
       @click.stop="toggle"
     >
       <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+        <template v-if="isNotificationMode">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </template>
+        <path v-else d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
       </svg>
       <span v-if="unreadCount > 0" class="badge">
         {{ unreadCount > 99 ? '99+' : unreadCount }}
@@ -24,13 +28,13 @@
     <Transition name="message-inbox">
       <section
         v-if="inboxOpen"
-        id="message-inbox-panel"
-        class="message-inbox-panel"
-        aria-label="留言消息"
+        :id="panelId"
+        :class="['message-inbox-panel', { 'is-notification-panel': isNotificationMode }]"
+        :aria-label="panelTitle"
       >
         <header class="message-inbox-header">
           <div>
-            <strong>留言消息</strong>
+            <strong>{{ panelTitle }}</strong>
             <span>{{ unreadCount }} 条未读</span>
           </div>
           <button
@@ -46,39 +50,82 @@
         <div class="message-inbox-list">
           <div v-if="!messageItems.length" class="message-inbox-empty">
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.8 8.8 0 0 1-3.8-.9L4 19l.9-3.1A7.4 7.4 0 0 1 4.5 12 7.5 7.5 0 0 1 12 4.5a7.5 7.5 0 0 1 8 7Z"/>
-              <path d="M8.5 12h.01M12 12h.01M15.5 12h.01"/>
+              <path v-if="isNotificationMode" d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path v-else d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.8 8.8 0 0 1-3.8-.9L4 19l.9-3.1A7.4 7.4 0 0 1 4.5 12 7.5 7.5 0 0 1 12 4.5a7.5 7.5 0 0 1 8 7Z"/>
+              <path v-if="isNotificationMode" d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              <path v-else d="M8.5 12h.01M12 12h.01M15.5 12h.01"/>
             </svg>
-            <span>暂无留言消息</span>
+            <span>{{ isNotificationMode ? '暂无通知消息' : '暂无留言消息' }}</span>
           </div>
 
-          <button
-            v-for="item in messageItems"
-            :key="item.id"
-            :class="['message-inbox-item', { unread: item.unread }]"
-            type="button"
-            @click="openMessage(item)"
-          >
-            <div class="message-inbox-avatar" aria-hidden="true">
-              <span>{{ contactInitials(item.contact) }}</span>
-              <img
-                v-if="item.contact?.avatarUrl"
-                :src="item.contact.avatarUrl"
-                alt=""
-                @error="hideBrokenAvatar"
-              >
-            </div>
-
-            <div class="message-inbox-main">
-              <div class="message-inbox-title">
-                <strong>{{ item.contact?.displayName || '通讯录好友' }}</strong>
-                <time>{{ item.time }}</time>
+          <template v-else-if="isNotificationMode">
+            <article
+              v-for="item in messageItems"
+              :key="item.id"
+              :class="['message-inbox-item', 'notification-item', { unread: item.unread }]"
+            >
+              <div :class="['notification-item-icon', `type-${item.type || 'system'}`]" aria-hidden="true">
+                <svg viewBox="0 0 24 24">
+                  <path v-if="item.type === 'leave'" d="M6 4h12M6 20h12M8 4v5l4 3 4-3V4M8 20v-5l4-3 4 3v5"/>
+                  <path v-else-if="item.type === 'payment'" d="M4 6h16v12H4zM4 10h16M8 15h3"/>
+                  <path v-else d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"/>
+                </svg>
               </div>
-              <p>{{ item.preview }}</p>
-            </div>
 
-            <span v-if="item.unread" class="message-unread-dot" aria-label="未读"></span>
-          </button>
+              <div class="message-inbox-main notification-main">
+                <div class="message-inbox-title">
+                  <strong>{{ item.title }}</strong>
+                  <time>{{ item.time }}</time>
+                </div>
+                <p>{{ item.preview }}</p>
+                <span class="notification-type-label">{{ item.typeLabel || '系统通知' }}</span>
+              </div>
+
+              <div class="notification-item-actions">
+                <span v-if="item.unread" class="message-unread-dot" aria-label="未读"></span>
+                <button
+                  class="notification-go-button"
+                  type="button"
+                  @click.stop="openNotification(item)"
+                >
+                  立即前往
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M5 12h13M13 6l6 6-6 6"/>
+                  </svg>
+                </button>
+              </div>
+            </article>
+          </template>
+
+          <template v-else>
+            <button
+              v-for="item in messageItems"
+              :key="item.id"
+              :class="['message-inbox-item', { unread: item.unread }]"
+              type="button"
+              @click="openMessage(item)"
+            >
+              <div class="message-inbox-avatar" aria-hidden="true">
+                <span>{{ contactInitials(item.contact) }}</span>
+                <img
+                  v-if="item.contact?.avatarUrl"
+                  :src="item.contact.avatarUrl"
+                  alt=""
+                  @error="hideBrokenAvatar"
+                >
+              </div>
+
+              <div class="message-inbox-main">
+                <div class="message-inbox-title">
+                  <strong>{{ item.contact?.displayName || '通讯录好友' }}</strong>
+                  <time>{{ item.time }}</time>
+                </div>
+                <p>{{ item.preview }}</p>
+              </div>
+
+              <span v-if="item.unread" class="message-unread-dot" aria-label="未读"></span>
+            </button>
+          </template>
         </div>
       </section>
     </Transition>
@@ -89,6 +136,11 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
+  mode: {
+    type: String,
+    default: 'messages',
+    validator: value => ['messages', 'notifications'].includes(value)
+  },
   messages: {
     type: Array,
     default: () => [
@@ -135,17 +187,79 @@ const props = defineProps({
         unread: false
       }
     ]
+  },
+  notifications: {
+    type: Array,
+    default: () => [
+      {
+        id: 'demo-notification-1',
+        type: 'audit',
+        typeLabel: '单据审核',
+        title: '销售订单待审核',
+        preview: '销售订单 XS20260920018 等待你审核，请及时处理。',
+        time: '今天 11:20',
+        unread: true,
+        target: {
+          name: 'admin-sales',
+          params: {},
+          query: { documentNo: 'XS20260920018' }
+        }
+      },
+      {
+        id: 'demo-notification-2',
+        type: 'leave',
+        typeLabel: '假期批准',
+        title: '请假申请待处理',
+        preview: '林悦提交了 9 月 25 日的年假申请。',
+        time: '今天 09:45',
+        unread: true,
+        target: {
+          name: 'admin-hr-reports',
+          params: {},
+          query: { tab: 'leave', applicationId: 'QJ20260925001' }
+        }
+      },
+      {
+        id: 'demo-notification-3',
+        type: 'payment',
+        typeLabel: '收款审核',
+        title: '收款单审核完成',
+        preview: '收款单 SK20260919006 已完成审核入账。',
+        time: '昨天 16:08',
+        unread: false,
+        target: {
+          name: 'admin-finance-payment-history',
+          params: {},
+          query: { documentNo: 'SK20260919006' }
+        }
+      }
+    ]
   }
 })
 
-const emit = defineEmits(['open-chat', 'open-change'])
+const emit = defineEmits(['open-chat', 'open-change', 'open-notification'])
 
 const inboxRef = ref(null)
 const inboxOpen = ref(false)
 const readMessageIds = ref([])
 
+const isNotificationMode = computed(() => props.mode === 'notifications')
+const panelId = computed(() => {
+  return isNotificationMode.value ? 'notification-inbox-panel' : 'message-inbox-panel'
+})
+const triggerTitle = computed(() => {
+  return isNotificationMode.value ? '打开审核通知' : '打开留言消息'
+})
+const panelTitle = computed(() => {
+  return isNotificationMode.value ? '审核通知' : '留言消息'
+})
+
+const sourceItems = computed(() => {
+  return isNotificationMode.value ? props.notifications : props.messages
+})
+
 const messageItems = computed(() => {
-  return props.messages.map(item => ({
+  return sourceItems.value.map(item => ({
     ...item,
     unread: Boolean(item.unread) && !readMessageIds.value.includes(item.id)
   }))
@@ -183,8 +297,16 @@ const openMessage = item => {
   emit('open-chat', item.contact)
 }
 
+const openNotification = item => {
+  if (item.unread && !readMessageIds.value.includes(item.id)) {
+    readMessageIds.value = [...readMessageIds.value, item.id]
+  }
+  close()
+  emit('open-notification', item)
+}
+
 const markAllRead = () => {
-  readMessageIds.value = props.messages
+  readMessageIds.value = sourceItems.value
     .filter(item => item.unread)
     .map(item => item.id)
 }
@@ -291,6 +413,10 @@ onUnmounted(() => {
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
 }
 
+.message-inbox-panel.is-notification-panel {
+  width: 430px;
+}
+
 .message-inbox-header {
   display: flex;
   min-height: 58px;
@@ -371,6 +497,107 @@ onUnmounted(() => {
 .message-inbox-item:hover,
 .message-inbox-item.unread {
   background: #f8fcfa;
+}
+
+.notification-item {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  cursor: default;
+}
+
+.notification-item-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+}
+
+.notification-item-icon.type-leave {
+  color: #a4510b;
+  background: #fff3df;
+  border-color: #f5d39e;
+}
+
+.notification-item-icon.type-payment {
+  color: #16647a;
+  background: #e7f5f8;
+  border-color: #b9dfe8;
+}
+
+.notification-item-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.notification-main {
+  align-self: center;
+}
+
+.notification-type-label {
+  display: inline-block;
+  margin-top: 5px;
+  padding: 2px 6px;
+  color: var(--text-secondary);
+  background: #f1f5f9;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.notification-item-actions {
+  display: flex;
+  min-width: 74px;
+  align-items: flex-end;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notification-go-button {
+  display: inline-flex;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 8px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 650;
+  white-space: nowrap;
+  transition: background 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+}
+
+.notification-go-button:hover {
+  color: #ffffff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.notification-go-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.notification-go-button svg {
+  width: 13px;
+  height: 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .message-inbox-avatar {
@@ -478,13 +705,18 @@ onUnmounted(() => {
     right: 12px;
     width: calc(100vw - 24px);
   }
+
+  .message-inbox-panel.is-notification-panel {
+    width: calc(100vw - 24px);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .message-inbox-enter-active,
   .message-inbox-leave-active,
   .icon-btn,
-  .message-inbox-item {
+  .message-inbox-item,
+  .notification-go-button {
     transition: none;
   }
 }
