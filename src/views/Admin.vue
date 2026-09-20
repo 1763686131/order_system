@@ -265,8 +265,7 @@
     <ChatWindow
       v-model="chatWindowOpen"
       :contact="activeChatContact"
-      :messages="activeChatMessages"
-      @send="handleChatSend"
+      @message-sent="messageInboxRef?.refresh()"
     />
   </div>
 </template>
@@ -300,30 +299,6 @@ const messageInboxRef = ref(null)
 const notificationInboxRef = ref(null)
 const chatWindowOpen = ref(false)
 const activeChatContact = ref(null)
-const chatConversations = ref({
-  'demo-contact-1': [
-    {
-      id: 'demo-contact-1-message-1',
-      sender: 'them',
-      text: '下午的客户报价我已经整理好了，稍后发给你。',
-      time: '今天 10:32'
-    },
-    {
-      id: 'demo-contact-1-message-2',
-      sender: 'me',
-      text: '好的，收到后我看一下。',
-      time: '今天 10:35'
-    }
-  ],
-  'demo-contact-2': [
-    {
-      id: 'demo-contact-2-message-1',
-      sender: 'them',
-      text: '上周的收款单已经完成核对。',
-      time: '昨天 16:08'
-    }
-  ]
-})
 
 const userDisplayName = computed(() => {
   return userStore.name || userStore.username || '用户'
@@ -349,11 +324,6 @@ const handleAvatarError = () => {
   avatarLoadFailed.value = true
 }
 
-const activeChatMessages = computed(() => {
-  const contactId = activeChatContact.value?.id
-  return contactId ? chatConversations.value[String(contactId)] || [] : []
-})
-
 const openChat = contact => {
   activeChatContact.value = {
     id: contact?.id || `contact-${Date.now()}`,
@@ -378,30 +348,6 @@ const openNotification = notification => {
 
   if (notification?.target) {
     router.push(notification.target)
-  }
-}
-
-const handleChatSend = ({ contact, message }) => {
-  const contactId = String(contact?.id || '')
-  if (!contactId) return
-
-  const currentMessages = chatConversations.value[contactId] || [
-    {
-      id: `demo-${contactId}-welcome`,
-      sender: 'them',
-      text: `你好，这里是和${contact?.displayName || '通讯录好友'}的留言对话。`,
-      time: '今天 09:30'
-    },
-    {
-      id: `demo-${contactId}-reply`,
-      sender: 'me',
-      text: '好的，收到。后续可以在这里留言沟通。',
-      time: '今天 09:32'
-    }
-  ]
-  chatConversations.value = {
-    ...chatConversations.value,
-    [contactId]: [...currentMessages, message]
   }
 }
 

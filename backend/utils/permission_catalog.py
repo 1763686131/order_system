@@ -12,6 +12,19 @@ ADMIN_SALES_ORDER_PERMISSIONS = {
     "reverse_audit": "admin.sales.order.reverse_audit",
 }
 
+ADMIN_MESSAGE_PERMISSIONS = {
+    "read": "admin.message.read",
+    "send": "admin.message.send",
+    "attachment": "admin.message.attachment",
+}
+
+ADMIN_AUDIT_NOTIFICATION_PERMISSIONS = {
+    "stock_inbound": "admin.inventory.stock_inbound.audit",
+    "material_outbound": "admin.inventory.material_outbound.audit",
+    "payment_receipt": "admin.finance.payment_receipt.audit",
+    "return_order": "admin.sales.return.audit",
+}
+
 PERMISSION_MODULES = [
     {
         "code": "touch_terminal",
@@ -176,6 +189,55 @@ PERMISSION_MODULES = [
                 "code": ADMIN_SALES_ORDER_PERMISSIONS["reverse_audit"],
                 "name": "反审核订单",
                 "description": "撤销销售订单审核及相关客户账户流水",
+            },
+        ],
+    },
+    {
+        "code": "admin_messages",
+        "name": "留言与通知",
+        "description": "控制后台留言、附件和审核通知功能",
+        "permissions": [
+            {
+                "code": ADMIN_MESSAGE_PERMISSIONS["read"],
+                "name": "查看留言",
+                "description": "查看自己的会话、留言和未读数量",
+            },
+            {
+                "code": ADMIN_MESSAGE_PERMISSIONS["send"],
+                "name": "发送留言",
+                "description": "向通讯录员工发送文字留言",
+            },
+            {
+                "code": ADMIN_MESSAGE_PERMISSIONS["attachment"],
+                "name": "收发附件",
+                "description": "上传和下载留言中的服务器附件",
+            },
+        ],
+    },
+    {
+        "code": "admin_audit_notifications",
+        "name": "单据审核通知",
+        "description": "决定角色组接收哪些待审核单据通知",
+        "permissions": [
+            {
+                "code": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["stock_inbound"],
+                "name": "采购入库审核",
+                "description": "审核采购入库单并接收待审核通知",
+            },
+            {
+                "code": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["material_outbound"],
+                "name": "原材料出库审核",
+                "description": "审核原材料出库单并接收待审核通知",
+            },
+            {
+                "code": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["payment_receipt"],
+                "name": "收款单审核",
+                "description": "审核收款单并接收待审核通知",
+            },
+            {
+                "code": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["return_order"],
+                "name": "退货单审核",
+                "description": "审核退货单并接收待审核通知",
             },
         ],
     },

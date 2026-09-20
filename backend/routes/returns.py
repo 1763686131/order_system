@@ -8,7 +8,9 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
-from utils.auth import current_identity
+from utils.auth import current_identity, require_admin_permission
+from utils.notifications import create_audit_notifications, complete_audit_notifications
+from utils.permission_catalog import ADMIN_AUDIT_NOTIFICATION_PERMISSIONS
 from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
@@ -793,6 +795,13 @@ def create_return_draft():
                 return_id = cursor.lastrowid
                 _insert_return_items(conn, return_id, items)
                 result = _serialize_return(conn, return_id)
+                create_audit_notifications(
+                    conn,
+                    "return_order",
+                    return_id,
+                    return_number,
+                    f"退货单 {return_number} 已提交，请及时审核。",
+                )
         return jsonify({'success': True, 'message': '退货单草稿保存成功，请审核后计入客户流水和库存',
                         'returnNumber': result['returnNumber'], 'returnId': result['id'], 'returnOrder': result}), 201
     except ValueError as exc:
@@ -868,6 +877,7 @@ def update_return_draft(return_id):
 
 
 @returns_bp.route('/<int:return_id>/audit', methods=['POST'])
+@require_admin_permission(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["return_order"])
 def audit_return(return_id):
     try:
         with _write_lock:
@@ -902,6 +912,7 @@ def audit_return(return_id):
                     row['settlement_account'],
                     -refund_amount,
                 )
+                complete_audit_notifications(conn, "return_order", return_id)
                 result = _serialize_return(conn, return_id)
         return jsonify({'success': True, 'message': f'退货单已审核，应退金额 {return_amount:.2f} 元，核销客户应收 {_writeoff:.2f} 元，本次退款 {refund_amount:.2f} 元并返还库存',
                         'debtBefore': float(debt_before), 'debtAfter': float(debt_after), 'returnOrder': result})
@@ -912,6 +923,7 @@ def audit_return(return_id):
 
 
 @returns_bp.route('/<int:return_id>/reverse-audit', methods=['POST'])
+@require_admin_permission(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["return_order"])
 def reverse_audit_return(return_id):
     try:
         with _write_lock:
@@ -941,6 +953,14 @@ def reverse_audit_return(return_id):
                 conn.execute('UPDATE customers SET receivable = ?, updated_at = ? WHERE id = ?', (float(debt_after), now, customer['id']))
                 conn.execute("UPDATE customer_account_transactions SET status = 'reversed', reversed_at = ? WHERE id = ?", (now, tx['id']))
                 conn.execute("UPDATE return_orders SET status='draft', account_transaction_id=NULL, debt_before=0, debt_after=0, updated_at=? WHERE id=?", (now, return_id))
+                create_audit_notifications(
+                    conn,
+                    "return_order",
+                    return_id,
+                    row["return_number"],
+                    f"退货单 {row['return_number']} 已反审核，请重新审核。",
+                    event_version=f"reverse:{now}",
+                )
                 result = _serialize_return(conn, return_id)
         return jsonify({'success': True, 'message': '退货单已反审核，客户流水和库存已恢复', 'returnOrder': result})
     except ValueError as exc:
@@ -960,6 +980,7 @@ def delete_return_draft(return_id):
                     return jsonify({'success': False, 'message': '退货单不存在'}), 404
                 if item['status'] in ('audited', 'completed') or item['account_transaction_id']:
                     return jsonify({'success': False, 'message': '已审核单据不能删除，请先反审核'}), 409
+                complete_audit_notifications(conn, "return_order", return_id)
                 conn.execute('DELETE FROM return_order_items WHERE return_id = ?', (return_id,))
                 conn.execute('DELETE FROM return_orders WHERE id = ?', (return_id,))
         return jsonify({'success': True, 'message': '退货单草稿已删除'})

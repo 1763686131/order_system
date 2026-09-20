@@ -58,7 +58,16 @@
             class="chat-message-list"
             aria-live="polite"
           >
-            <div v-if="!displayedMessages.length" class="chat-empty">
+            <div v-if="loading && !displayedMessages.length" class="chat-empty">
+              <strong>正在加载留言...</strong>
+            </div>
+
+            <div v-else-if="loadError && !displayedMessages.length" class="chat-empty">
+              <strong>留言加载失败</strong>
+              <span>{{ loadError }}</span>
+            </div>
+
+            <div v-else-if="!displayedMessages.length" class="chat-empty">
               <span class="chat-empty-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24">
                   <path d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.8 8.8 0 0 1-3.8-.9L4 19l.9-3.1A7.4 7.4 0 0 1 4.5 12 7.5 7.5 0 0 1 12 4.5a7.5 7.5 0 0 1 8 7Z"/>
@@ -79,6 +88,11 @@
                   <div
                     v-if="message.type === 'file'"
                     class="chat-file-message"
+                    role="button"
+                    tabindex="0"
+                    title="下载附件"
+                    @click="downloadAttachment(message)"
+                    @keydown.enter="downloadAttachment(message)"
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
                       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -86,7 +100,7 @@
                     </svg>
                     <span>
                       <strong>{{ message.fileName }}</strong>
-                      <small>{{ message.fileSize || '本地演示附件' }}</small>
+                      <small>{{ message.fileSize }}</small>
                     </span>
                   </div>
                   <p v-else>{{ message.text }}</p>
@@ -97,6 +111,10 @@
           </div>
 
           <footer class="chat-composer">
+            <div v-if="actionError" class="chat-action-error" role="alert">
+              {{ actionError }}
+            </div>
+
             <div v-if="selectedFile" class="chat-selected-file">
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
@@ -148,14 +166,14 @@
               <button
                 class="chat-send-button"
                 type="button"
-                :disabled="!canSend"
+                :disabled="!canSend || sending"
                 @click="sendMessage"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="m22 2-7 20-4-9-9-4Z"/>
                   <path d="M22 2 11 13"/>
                 </svg>
-                <span>发送</span>
+                <span>{{ sending ? '发送中' : '发送' }}</span>
               </button>
             </div>
           </footer>
@@ -167,6 +185,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import request from '@/api/request'
 
 const CHAT_WINDOW_POSITION_KEY = 'order-system-chat-window-position'
 const CHAT_WINDOW_EDGE_GAP = 12
@@ -185,14 +204,10 @@ const props = defineProps({
       online: false,
       avatarUrl: ''
     })
-  },
-  messages: {
-    type: Array,
-    default: () => []
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'send'])
+const emit = defineEmits(['update:modelValue', 'message-sent'])
 
 const windowRef = ref(null)
 const messageListRef = ref(null)
@@ -201,6 +216,10 @@ const fileInputRef = ref(null)
 const draftMessage = ref('')
 const selectedFile = ref(null)
 const displayedMessages = ref([])
+const loading = ref(false)
+const sending = ref(false)
+const loadError = ref('')
+const actionError = ref('')
 const windowPosition = ref(null)
 const dragging = ref(false)
 
@@ -212,6 +231,7 @@ let dragStartTop = 0
 let dragWidth = 0
 let dragHeight = 0
 let previousUserSelect = ''
+let refreshTimer = null
 
 const contactName = computed(() => {
   return props.contact?.displayName || props.contact?.name || '通讯录好友'
@@ -237,27 +257,43 @@ const windowStyle = computed(() => {
   }
 })
 
-const demoMessages = computed(() => {
-  return [
-    {
-      id: `demo-${props.contact?.id || 'contact'}-1`,
-      sender: 'them',
-      text: `你好，这里是和${contactName.value}的留言对话。`,
-      time: '今天 09:30'
-    },
-    {
-      id: `demo-${props.contact?.id || 'contact'}-2`,
-      sender: 'me',
-      text: '好的，收到。后续可以在这里留言沟通。',
-      time: '今天 09:32'
-    }
-  ]
+const formatMessageTime = value => {
+  if (!value) return ''
+  const normalized = String(value).replace(' ', 'T')
+  const date = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(normalized)
+    ? `${normalized}Z`
+    : normalized)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+}
+
+const normalizeMessage = message => ({
+  ...message,
+  fileName: message.attachment?.fileName || '',
+  fileSize: message.attachment ? formatFileSize(message.attachment.fileSize) : '',
+  downloadUrl: message.attachment?.downloadUrl || '',
+  time: formatMessageTime(message.createdAt)
 })
 
-const syncMessages = () => {
-  displayedMessages.value = props.messages.length
-    ? props.messages.map(message => ({ ...message }))
-    : demoMessages.value.map(message => ({ ...message }))
+const loadMessages = async ({ silent = false } = {}) => {
+  if (!props.modelValue || !props.contact?.id) return
+  if (!silent) loading.value = true
+  loadError.value = ''
+  try {
+    const response = await request.get(`/admin/messages/with/${props.contact.id}/messages`)
+    displayedMessages.value = (response?.messages || []).map(normalizeMessage)
+    await scrollToBottom()
+  } catch (error) {
+    loadError.value = error?.response?.data?.message || '请稍后重试'
+  } finally {
+    loading.value = false
+  }
 }
 
 const scrollToBottom = async () => {
@@ -271,31 +307,42 @@ const close = () => {
   emit('update:modelValue', false)
 }
 
-const sendMessage = () => {
-  if (!canSend.value) return
+const sendMessage = async () => {
+  if (!canSend.value || sending.value || !props.contact?.id) return
 
+  sending.value = true
+  actionError.value = ''
   const file = selectedFile.value
-  const message = {
-    id: `local-${Date.now()}`,
-    sender: 'me',
-    type: file ? 'file' : 'text',
-    text: draftMessage.value,
-    fileName: file?.name || '',
-    fileSize: file ? formatFileSize(file.size) : '',
-    time: '刚刚'
+  try {
+    let response
+    if (file) {
+      const formData = new FormData()
+      formData.append('recipientEmployeeId', String(props.contact.id))
+      formData.append('content', draftMessage.value)
+      formData.append('file', file)
+      response = await request.post('/admin/messages/attachments', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000
+      })
+    } else {
+      response = await request.post('/admin/messages', {
+        recipientEmployeeId: props.contact.id,
+        content: draftMessage.value,
+        clientMessageId: `${Date.now()}-${Math.random().toString(16).slice(2)}`
+      })
+    }
+    displayedMessages.value.push(normalizeMessage(response.message))
+    emit('message-sent', response.message)
+    draftMessage.value = ''
+    selectedFile.value = null
+    if (fileInputRef.value) fileInputRef.value.value = ''
+    scrollToBottom()
+    composerRef.value?.focus()
+  } catch (error) {
+    actionError.value = error?.response?.data?.message || error?.response?.data?.error || '留言发送失败'
+  } finally {
+    sending.value = false
   }
-
-  displayedMessages.value.push(message)
-  emit('send', {
-    contact: props.contact,
-    message
-  })
-
-  draftMessage.value = ''
-  selectedFile.value = null
-  if (fileInputRef.value) fileInputRef.value.value = ''
-  scrollToBottom()
-  composerRef.value?.focus()
 }
 
 const openFilePicker = () => {
@@ -303,7 +350,15 @@ const openFilePicker = () => {
 }
 
 const handleFileChange = event => {
-  selectedFile.value = event.target.files?.[0] || null
+  const file = event.target.files?.[0] || null
+  if (file && file.size > 10 * 1024 * 1024) {
+    actionError.value = '离线附件最大支持10MB'
+    event.target.value = ''
+    selectedFile.value = null
+    return
+  }
+  actionError.value = ''
+  selectedFile.value = file
 }
 
 const clearSelectedFile = () => {
@@ -320,6 +375,10 @@ const formatFileSize = size => {
 
 const hideBrokenAvatar = event => {
   event.currentTarget.style.display = 'none'
+}
+
+const downloadAttachment = message => {
+  if (message.downloadUrl) window.open(message.downloadUrl, '_blank', 'noopener')
 }
 
 const loadStoredPosition = () => {
@@ -438,17 +497,23 @@ const handleViewportResize = () => {
 }
 
 watch(
-  () => [props.modelValue, props.contact?.id, props.messages],
+  () => [props.modelValue, props.contact?.id],
   ([visible]) => {
+    if (refreshTimer) {
+      window.clearInterval(refreshTimer)
+      refreshTimer = null
+    }
     if (!visible) return
-    syncMessages()
+    displayedMessages.value = []
     draftMessage.value = ''
     selectedFile.value = null
+    actionError.value = ''
+    loadMessages()
+    refreshTimer = window.setInterval(() => loadMessages({ silent: true }), 5000)
     nextTick(() => clampStoredPosition(true))
-    scrollToBottom()
     nextTick(() => composerRef.value?.focus())
   },
-  { deep: true, immediate: true }
+  { immediate: true }
 )
 
 onMounted(() => {
@@ -465,6 +530,7 @@ onUnmounted(() => {
   window.removeEventListener('pointerup', stopDrag)
   window.removeEventListener('pointercancel', stopDrag)
   window.removeEventListener('resize', handleViewportResize)
+  if (refreshTimer) window.clearInterval(refreshTimer)
 })
 
 defineExpose({ close })
@@ -808,6 +874,13 @@ defineExpose({ close })
   padding: 10px 12px 12px;
   background: var(--panel-bg);
   border-top: 1px solid var(--border);
+}
+
+.chat-action-error {
+  margin-bottom: 8px;
+  color: #b42318;
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .chat-selected-file {

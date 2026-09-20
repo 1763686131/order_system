@@ -48,7 +48,16 @@
         </header>
 
         <div class="message-inbox-list">
-          <div v-if="!messageItems.length" class="message-inbox-empty">
+          <div v-if="loading && !messageItems.length" class="message-inbox-empty">
+            <span>正在加载...</span>
+          </div>
+
+          <div v-else-if="loadError && !messageItems.length" class="message-inbox-empty">
+            <span>{{ loadError }}</span>
+            <button type="button" class="message-inbox-read-all" @click="loadItems">重新加载</button>
+          </div>
+
+          <div v-else-if="!messageItems.length" class="message-inbox-empty">
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path v-if="isNotificationMode" d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
               <path v-else d="M20 11.5a7.5 7.5 0 0 1-8 7.5 8.8 8.8 0 0 1-3.8-.9L4 19l.9-3.1A7.4 7.4 0 0 1 4.5 12 7.5 7.5 0 0 1 12 4.5a7.5 7.5 0 0 1 8 7Z"/>
@@ -134,106 +143,13 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import request from '@/api/request'
 
 const props = defineProps({
   mode: {
     type: String,
     default: 'messages',
     validator: value => ['messages', 'notifications'].includes(value)
-  },
-  messages: {
-    type: Array,
-    default: () => [
-      {
-        id: 'demo-message-1',
-        contact: {
-          id: 'demo-contact-1',
-          displayName: '柯晓',
-          position: '总经理',
-          phone: '17534534236',
-          online: false,
-          avatarUrl: ''
-        },
-        preview: '下午的客户报价我已经整理好了，稍后发给你。',
-        time: '今天 10:32',
-        unread: true
-      },
-      {
-        id: 'demo-message-2',
-        contact: {
-          id: 'demo-contact-2',
-          displayName: '林悦',
-          position: '财务专员',
-          phone: '13800001025',
-          online: true,
-          avatarUrl: ''
-        },
-        preview: '上周的收款单已经完成核对。',
-        time: '昨天 16:08',
-        unread: true
-      },
-      {
-        id: 'demo-message-3',
-        contact: {
-          id: 'demo-contact-3',
-          displayName: '陈默',
-          position: '仓库管理员',
-          phone: '13800001026',
-          online: false,
-          avatarUrl: ''
-        },
-        preview: '原材料入库记录我已经补充备注。',
-        time: '周五',
-        unread: false
-      }
-    ]
-  },
-  notifications: {
-    type: Array,
-    default: () => [
-      {
-        id: 'demo-notification-1',
-        type: 'audit',
-        typeLabel: '单据审核',
-        title: '销售订单待审核',
-        preview: '销售订单 XS20260920018 等待你审核，请及时处理。',
-        time: '今天 11:20',
-        unread: true,
-        target: {
-          name: 'admin-sales',
-          params: {},
-          query: { documentNo: 'XS20260920018' }
-        }
-      },
-      {
-        id: 'demo-notification-2',
-        type: 'leave',
-        typeLabel: '假期批准',
-        title: '请假申请待处理',
-        preview: '林悦提交了 9 月 25 日的年假申请。',
-        time: '今天 09:45',
-        unread: true,
-        target: {
-          name: 'admin-hr-reports',
-          params: {},
-          query: { tab: 'leave', applicationId: 'QJ20260925001' }
-        }
-      },
-      {
-        id: 'demo-notification-3',
-        type: 'payment',
-        typeLabel: '收款审核',
-        title: '收款单审核完成',
-        preview: '收款单 SK20260919006 已完成审核入账。',
-        time: '昨天 16:08',
-        unread: false,
-        target: {
-          name: 'admin-finance-payment-history',
-          params: {},
-          query: { documentNo: 'SK20260919006' }
-        }
-      }
-    ]
   }
 })
 
@@ -241,7 +157,11 @@ const emit = defineEmits(['open-chat', 'open-change', 'open-notification'])
 
 const inboxRef = ref(null)
 const inboxOpen = ref(false)
-const readMessageIds = ref([])
+const sourceItems = ref([])
+const loading = ref(false)
+const loadError = ref('')
+const remoteUnreadCount = ref(0)
+let refreshTimer = null
 
 const isNotificationMode = computed(() => props.mode === 'notifications')
 const panelId = computed(() => {
@@ -254,19 +174,12 @@ const panelTitle = computed(() => {
   return isNotificationMode.value ? '审核通知' : '留言消息'
 })
 
-const sourceItems = computed(() => {
-  return isNotificationMode.value ? props.notifications : props.messages
-})
-
 const messageItems = computed(() => {
-  return sourceItems.value.map(item => ({
-    ...item,
-    unread: Boolean(item.unread) && !readMessageIds.value.includes(item.id)
-  }))
+  return sourceItems.value
 })
 
 const unreadCount = computed(() => {
-  return messageItems.value.filter(item => item.unread).length
+  return remoteUnreadCount.value
 })
 
 const contactInitials = contact => {
@@ -278,6 +191,55 @@ const hideBrokenAvatar = event => {
   event.currentTarget.style.display = 'none'
 }
 
+const formatTime = value => {
+  if (!value) return ''
+  const normalized = String(value).replace(' ', 'T')
+  const date = new Date(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(normalized)
+    ? `${normalized}Z`
+    : normalized)
+  if (Number.isNaN(date.getTime())) return value
+  const now = new Date()
+  const sameDay = date.toDateString() === now.toDateString()
+  if (sameDay) {
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
+  }
+  return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' })
+}
+
+const loadItems = async ({ silent = false } = {}) => {
+  if (!silent) loading.value = true
+  loadError.value = ''
+  try {
+    if (isNotificationMode.value) {
+      const [response, countResponse] = await Promise.all([
+        request.get('/admin/notifications', { params: { limit: 50 } }),
+        request.get('/admin/notifications/unread-count')
+      ])
+      sourceItems.value = (response?.notifications || []).map(item => ({
+        ...item,
+        time: formatTime(item.createdAt)
+      }))
+      remoteUnreadCount.value = Number(countResponse?.unreadCount || 0)
+    } else {
+      const [response, countResponse] = await Promise.all([
+        request.get('/admin/messages/conversations', { params: { limit: 50 } }),
+        request.get('/admin/messages/unread-count')
+      ])
+      sourceItems.value = (response?.conversations || []).map(item => ({
+        ...item,
+        contact: { ...item.contact, conversationId: item.id },
+        time: formatTime(item.lastMessageAt),
+        unread: Number(item.unreadCount || 0) > 0
+      }))
+      remoteUnreadCount.value = Number(countResponse?.unreadCount || 0)
+    }
+  } catch (error) {
+    loadError.value = error?.response?.data?.message || '消息加载失败'
+  } finally {
+    loading.value = false
+  }
+}
+
 const close = () => {
   if (!inboxOpen.value) return
   inboxOpen.value = false
@@ -287,28 +249,34 @@ const close = () => {
 const toggle = () => {
   inboxOpen.value = !inboxOpen.value
   emit('open-change', inboxOpen.value)
+  if (inboxOpen.value) loadItems()
 }
 
-const openMessage = item => {
-  if (item.unread && !readMessageIds.value.includes(item.id)) {
-    readMessageIds.value = [...readMessageIds.value, item.id]
+const openMessage = async item => {
+  if (item.unread) {
+    await request.post(`/admin/messages/conversations/${item.id}/read`).catch(() => {})
   }
   close()
   emit('open-chat', item.contact)
+  loadItems({ silent: true })
 }
 
-const openNotification = item => {
-  if (item.unread && !readMessageIds.value.includes(item.id)) {
-    readMessageIds.value = [...readMessageIds.value, item.id]
+const openNotification = async item => {
+  if (item.unread) {
+    await request.post(`/admin/notifications/${item.id}/read`).catch(() => {})
   }
   close()
   emit('open-notification', item)
+  loadItems({ silent: true })
 }
 
-const markAllRead = () => {
-  readMessageIds.value = sourceItems.value
-    .filter(item => item.unread)
-    .map(item => item.id)
+const markAllRead = async () => {
+  if (isNotificationMode.value) {
+    await request.post('/admin/notifications/read-all')
+  } else {
+    await request.post('/admin/messages/read-all')
+  }
+  await loadItems({ silent: true })
 }
 
 const handleClickOutside = event => {
@@ -318,15 +286,19 @@ const handleClickOutside = event => {
 }
 
 defineExpose({
-  close
+  close,
+  refresh: loadItems
 })
 
 onMounted(() => {
   document.addEventListener('pointerdown', handleClickOutside)
+  loadItems()
+  refreshTimer = window.setInterval(() => loadItems({ silent: true }), 20000)
 })
 
 onUnmounted(() => {
   document.removeEventListener('pointerdown', handleClickOutside)
+  if (refreshTimer) window.clearInterval(refreshTimer)
 })
 </script>
 

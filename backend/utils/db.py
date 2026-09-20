@@ -35,6 +35,8 @@ _print_templates_schema_lock = Lock()
 _print_templates_schema_ready = False
 _auth_schema_lock = Lock()
 _auth_schema_ready = False
+_messaging_schema_lock = Lock()
+_messaging_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 DEFAULT_DEPARTMENT_NAMES = ('仓储部', '财务部', '销售部', '人事行政', '运营部')
@@ -707,6 +709,175 @@ def _ensure_auth_schema(conn):
         migrate_avatar_data_urls(conn)
         conn.commit()
         _auth_schema_ready = True
+
+
+def _ensure_messaging_schema(conn):
+    """Create private messaging, attachment, and notification tables."""
+    global _messaging_schema_ready
+    if _messaging_schema_ready:
+        return
+
+    with _messaging_schema_lock:
+        if _messaging_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS chat_conversations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                employee_a_id INTEGER NOT NULL,
+                employee_b_id INTEGER NOT NULL,
+                last_message_id INTEGER,
+                last_message_at TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE (employee_a_id, employee_b_id),
+                CHECK (employee_a_id < employee_b_id),
+                FOREIGN KEY (employee_a_id) REFERENCES employees(id) ON DELETE CASCADE,
+                FOREIGN KEY (employee_b_id) REFERENCES employees(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id INTEGER NOT NULL,
+                sender_employee_id INTEGER NOT NULL,
+                recipient_employee_id INTEGER NOT NULL,
+                message_type TEXT NOT NULL DEFAULT 'text',
+                content TEXT NOT NULL DEFAULT '',
+                client_message_id TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'sent',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                read_at TEXT,
+                CHECK (message_type IN ('text', 'server_file')),
+                CHECK (status IN ('sent', 'deleted')),
+                FOREIGN KEY (conversation_id) REFERENCES chat_conversations(id) ON DELETE CASCADE,
+                FOREIGN KEY (sender_employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+                FOREIGN KEY (recipient_employee_id) REFERENCES employees(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS chat_attachments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                message_id INTEGER NOT NULL UNIQUE,
+                original_name TEXT NOT NULL,
+                stored_name TEXT NOT NULL,
+                storage_path TEXT NOT NULL UNIQUE,
+                file_size INTEGER NOT NULL,
+                mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+                sha256 TEXT NOT NULL DEFAULT '',
+                transfer_mode TEXT NOT NULL DEFAULT 'server',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CHECK (transfer_mode = 'server'),
+                FOREIGN KEY (message_id) REFERENCES chat_messages(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                recipient_employee_id INTEGER NOT NULL,
+                notification_type TEXT NOT NULL DEFAULT 'system',
+                title TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                document_type TEXT NOT NULL DEFAULT '',
+                document_id TEXT NOT NULL DEFAULT '',
+                document_no TEXT NOT NULL DEFAULT '',
+                target_json TEXT NOT NULL DEFAULT '{}',
+                event_key TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'unread',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                read_at TEXT,
+                handled_at TEXT,
+                UNIQUE (recipient_employee_id, event_key),
+                CHECK (status IN ('unread', 'read', 'handled')),
+                FOREIGN KEY (recipient_employee_id) REFERENCES employees(id) ON DELETE CASCADE
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation
+            ON chat_messages(conversation_id, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_recipient_unread
+            ON chat_messages(recipient_employee_id, read_at, id DESC);
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_chat_messages_client_id
+            ON chat_messages(sender_employee_id, client_message_id)
+            WHERE client_message_id <> '';
+            CREATE INDEX IF NOT EXISTS idx_chat_conversations_activity
+            ON chat_conversations(last_message_at DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_notifications_recipient
+            ON notifications(recipient_employee_id, status, id DESC);
+            """
+        )
+
+        from utils.permission_catalog import (
+            ADMIN_AUDIT_NOTIFICATION_PERMISSIONS,
+            ADMIN_MESSAGE_PERMISSIONS,
+        )
+
+        messaging_codes = list(ADMIN_MESSAGE_PERMISSIONS.values())
+        messaging_migration = cursor.execute(
+            """
+            SELECT setting_value FROM system_meta
+            WHERE setting_key = 'admin_message_permissions_v1'
+            """
+        ).fetchone()
+        if not messaging_migration:
+            placeholders = ",".join("?" for _ in messaging_codes)
+            cursor.execute(
+                f"""
+                INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+                SELECT roles.id, permissions.id
+                FROM roles CROSS JOIN permissions
+                WHERE roles.can_access_admin = 1
+                  AND permissions.code IN ({placeholders})
+                """,
+                messaging_codes,
+            )
+            cursor.execute(
+                """
+                INSERT INTO system_meta (setting_key, setting_value, updated_at)
+                VALUES ('admin_message_permissions_v1', '1', CURRENT_TIMESTAMP)
+                """
+            )
+
+        route_mappings = {
+            "admin.route.purchase": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["stock_inbound"],
+            "admin.route.inventory": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["material_outbound"],
+            "admin.route.finance": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["payment_receipt"],
+            "admin.route.sales": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["return_order"],
+        }
+        audit_migration = cursor.execute(
+            """
+            SELECT setting_value FROM system_meta
+            WHERE setting_key = 'admin_audit_notification_permissions_v1'
+            """
+        ).fetchone()
+        if not audit_migration:
+            for route_code, audit_code in route_mappings.items():
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+                    SELECT roles.id, audit_permissions.id
+                    FROM roles
+                    INNER JOIN role_permissions AS route_links
+                        ON route_links.role_id = roles.id
+                    INNER JOIN permissions AS route_permissions
+                        ON route_permissions.id = route_links.permission_id
+                    CROSS JOIN permissions AS audit_permissions
+                    WHERE roles.can_access_admin = 1
+                      AND route_permissions.code = ?
+                      AND audit_permissions.code = ?
+                    """,
+                    (route_code, audit_code),
+                )
+            cursor.execute(
+                """
+                INSERT INTO system_meta (setting_key, setting_value, updated_at)
+                VALUES (
+                    'admin_audit_notification_permissions_v1',
+                    '1', CURRENT_TIMESTAMP
+                )
+                """
+            )
+
+        conn.commit()
+        _messaging_schema_ready = True
 
 
 def _ensure_units_schema(conn):
@@ -1783,6 +1954,7 @@ def get_db():
     conn.execute("PRAGMA foreign_keys = ON")
     try:
         _ensure_auth_schema(conn)
+        _ensure_messaging_schema(conn)
         _ensure_units_schema(conn)
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)

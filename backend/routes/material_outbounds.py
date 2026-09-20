@@ -8,8 +8,16 @@ from decimal import Decimal, InvalidOperation
 from flask import Blueprint, Response, jsonify, request, stream_with_context
 from queue import Empty, Queue
 
-from utils.auth import current_identity, require_admin_access, require_permission
+from utils.auth import (
+    current_identity,
+    require_admin_access,
+    require_admin_permission,
+    require_any_permission,
+    require_permission,
+)
 from utils.db import get_db
+from utils.notifications import create_audit_notifications, complete_audit_notifications
+from utils.permission_catalog import ADMIN_AUDIT_NOTIFICATION_PERMISSIONS
 
 
 material_outbounds_bp = Blueprint(
@@ -746,6 +754,13 @@ def create_material_outbound():
                     (outbound_id,),
                 ).fetchone()
                 material_outbound = _serialize_document(conn, row)
+                create_audit_notifications(
+                    conn,
+                    "material_outbound",
+                    outbound_id,
+                    row["document_no"],
+                    f"原材料出库单 {row['document_no']} 已提交，请及时审核。",
+                )
                 conn.commit()
                 broadcast_material_outbound_event(
                     "created",
@@ -871,7 +886,10 @@ def update_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>/audit",
     methods=["POST"],
 )
-@require_permission("touch.material.audit")
+@require_any_permission(
+    "touch.material.audit",
+    ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["material_outbound"],
+)
 def audit_material_outbound(outbound_id):
     try:
         with _write_lock:
@@ -930,6 +948,7 @@ def audit_material_outbound(outbound_id):
                     "SELECT * FROM material_outbounds WHERE id = ?",
                     (outbound_id,),
                 ).fetchone()
+                complete_audit_notifications(conn, "material_outbound", outbound_id)
                 material_outbound = _serialize_document(conn, updated)
                 conn.commit()
                 broadcast_material_outbound_event(
@@ -955,7 +974,7 @@ def audit_material_outbound(outbound_id):
     "/material-outbounds/<int:outbound_id>/audit",
     methods=["DELETE"],
 )
-@require_admin_access
+@require_admin_permission(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["material_outbound"])
 def reverse_audit_material_outbound(outbound_id):
     try:
         with _write_lock:
@@ -988,6 +1007,14 @@ def reverse_audit_material_outbound(outbound_id):
                     "SELECT * FROM material_outbounds WHERE id = ?",
                     (outbound_id,),
                 ).fetchone()
+                create_audit_notifications(
+                    conn,
+                    "material_outbound",
+                    outbound_id,
+                    updated["document_no"],
+                    f"原材料出库单 {updated['document_no']} 已反审核，请重新审核。",
+                    event_version=f"reverse:{now}",
+                )
                 material_outbound = _serialize_document(conn, updated)
                 conn.commit()
                 broadcast_material_outbound_event(
@@ -1031,6 +1058,7 @@ def cancel_material_outbound(outbound_id):
                     {"success": False, "message": "已审核单据请先反审核"}
                 ), 409
             if document["status"] == "cancelled":
+                complete_audit_notifications(conn, "material_outbound", outbound_id)
                 conn.execute(
                     "DELETE FROM material_outbound_items WHERE outbound_id = ?",
                     (outbound_id,),
@@ -1053,6 +1081,7 @@ def cancel_material_outbound(outbound_id):
                 """,
                 (_now(), outbound_id),
             )
+            complete_audit_notifications(conn, "material_outbound", outbound_id)
             updated = conn.execute(
                 "SELECT * FROM material_outbounds WHERE id = ?",
                 (outbound_id,),
@@ -1087,18 +1116,27 @@ def restart_material_outbound(outbound_id):
                 return jsonify(
                     {"success": False, "message": "只有已作废单据可以重新启用"}
                 ), 409
+            now = _now()
             conn.execute(
                 """
                 UPDATE material_outbounds
                 SET status = 'draft', updated_at = ?
                 WHERE id = ?
                 """,
-                (_now(), outbound_id),
+                (now, outbound_id),
             )
             updated = conn.execute(
                 "SELECT * FROM material_outbounds WHERE id = ?",
                 (outbound_id,),
             ).fetchone()
+            create_audit_notifications(
+                conn,
+                "material_outbound",
+                outbound_id,
+                updated["document_no"],
+                f"原材料出库单 {updated['document_no']} 已重新提交，请及时审核。",
+                event_version=f"restart:{now}",
+            )
             material_outbound = _serialize_document(conn, updated)
             conn.commit()
             broadcast_material_outbound_event(

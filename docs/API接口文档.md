@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v4.5** (2026-09-20) - 新增一对一留言、10MB 私有附件、未读状态和单据审核通知接口
 - **v4.4** (2026-09-19) - 新增员工头像文件上传、替换和删除接口，历史 Base64 头像自动迁移为文件路径
 - **v4.3** (2026-09-20) - 新增后台只读通讯录接口、部门折叠员工列表及最近活动在线状态
 - **v4.2** (2026-09-19) - 新增部门配置接口、员工多部门关联、部门员工维护及最近活跃设备字段
@@ -4617,6 +4618,169 @@ HTTPS 页面默认使用端口 `8443`。环境变量 `VITE_CLODOP_URL` 可以覆
 
 ---
 
+## 17. 留言、附件与审核通知
+
+本模块仅供已登录且可访问后台的员工使用。发送人和收件箱身份始终取服务端 Session，
+前端不能提交或伪造发送人 ID。
+
+### 17.1 权限
+
+| 权限码 | 用途 |
+| --- | --- |
+| `admin.message.read` | 查看会话、留言和未读数量，标记已读 |
+| `admin.message.send` | 发送一对一文字留言 |
+| `admin.message.attachment` | 上传和下载会话附件 |
+| `admin.inventory.stock_inbound.audit` | 审核/反审核采购入库单并接收通知 |
+| `admin.inventory.material_outbound.audit` | 审核/反审核原材料出库单并接收通知 |
+| `admin.finance.payment_receipt.audit` | 审核/反审核收款单并接收通知 |
+| `admin.sales.return.audit` | 审核/反审核退货单并接收通知 |
+| `admin.sales.order.audit` | 审核销售订单并接收对应通知 |
+
+升级时，现有后台角色会一次性获得留言权限；四类新增审核通知权限按角色已有的后台大类
+路由权限初始化。之后管理员可在角色组中独立调整，服务重启不会重新覆盖。
+
+### 17.2 查询会话
+
+```http
+GET /api/admin/messages/conversations?limit=50
+```
+
+响应中的 `unreadCount` 是该会话当前员工尚未阅读的消息数，`contact.online` 使用最近
+10 分钟有效会话计算。
+
+```json
+{
+  "success": true,
+  "conversations": [
+    {
+      "id": 12,
+      "contact": {
+        "id": 8,
+        "displayName": "张明",
+        "avatarUrl": "/uploads/employee-avatars/2026-09/example.webp",
+        "phone": "13800000000",
+        "position": "仓库主管",
+        "online": true
+      },
+      "preview": "入库单已经补充完成。",
+      "lastMessageAt": "2026-09-20 10:20:30",
+      "unreadCount": 2
+    }
+  ]
+}
+```
+
+### 17.3 查询留言历史
+
+```http
+GET /api/admin/messages/with/:employeeId/messages
+GET /api/admin/messages/conversations/:conversationId/messages?limit=50&beforeId=200
+```
+
+第一个接口用于前端从通讯录直接打开联系人，查询成功时会把对方发来的未读留言标记为已读。
+第二个接口用于按会话分页，`beforeId` 表示读取该消息之前的数据。
+
+### 17.4 发送文字留言
+
+```http
+POST /api/admin/messages
+Content-Type: application/json
+```
+
+```json
+{
+  "recipientEmployeeId": 8,
+  "content": "入库单已经补充完成。",
+  "clientMessageId": "1726800000000-a1b2c3"
+}
+```
+
+- `content` 必填，去除首尾空白后最多 `2000` 字。
+- `clientMessageId` 可选，同一发送人重复提交相同值时返回已有消息，避免重复发送。
+- 不能给自己发送留言，收件人必须绑定启用账号且处于在职或试用状态。
+
+### 17.5 标记会话已读与未读总数
+
+```http
+POST /api/admin/messages/conversations/:conversationId/read
+POST /api/admin/messages/read-all
+GET  /api/admin/messages/unread-count
+```
+
+当前员工只能操作自己参与的会话。
+
+### 17.6 上传服务器附件
+
+```http
+POST /api/admin/messages/attachments
+Content-Type: multipart/form-data
+```
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `recipientEmployeeId` | 是 | 收件员工 ID |
+| `file` | 是 | 单个附件，最大 `10 MB` |
+| `content` | 否 | 最多 2000 字的附件备注 |
+
+附件保存在 `uploads/chat-attachments/YYYY-MM/`，数据库保存原始文件名、随机存储名、相对路径、
+大小、MIME 和 SHA-256。附件目录虽然位于 `uploads` 下，但响应不会返回静态 `/uploads` 地址。
+
+### 17.7 下载附件
+
+```http
+GET /api/admin/messages/attachments/:attachmentId/download
+```
+
+只有附件所在会话的发送人或收件人可以下载。无权访问和不存在均返回 `404`，服务器文件丢失也返回
+`404`。成功时返回附件流并使用原始文件名下载。
+
+### 17.8 查询审核通知
+
+```http
+GET /api/admin/notifications?limit=50&beforeId=100&unreadOnly=false
+GET /api/admin/notifications/unread-count
+```
+
+通知只返回当前员工自己的数据。通知 `target` 是 Vue Router 可直接使用的路由对象，包含目标页面、
+`documentId` 和 `documentNo` 查询参数。
+
+### 17.9 通知已读
+
+```http
+POST /api/admin/notifications/:notificationId/read
+POST /api/admin/notifications/read-all
+```
+
+审核成功后，同一单据发给所有审核人的通知统一进入 `handled` 状态并记录 `handledAt`。
+单据被删除、作废或退出待审核状态时也会结束旧通知；反审核或重新启用后会创建新的待审核通知。
+
+### 17.10 自动审核通知触发规则
+
+| 单据 | 触发时机 | 目标页面 |
+| --- | --- | --- |
+| 销售订单 | 状态变为 `shipped` 且等待账务审核 | `admin-sales` |
+| 采购入库单 | 新建 `draft` | `admin-stock-in` |
+| 原材料出库单 | 触屏端提交 `draft` | `admin-inventory-material-outbounds` |
+| 收款单 | 新建 `draft` | `admin-finance-payment-history` |
+| 退货单 | 新建 `draft` | `admin-sales-returns` |
+
+同一员工、同一单据和同一提交事件通过唯一键去重。超级管理员会收到全部审核通知；普通员工只有在
+启用角色组中拥有对应审核通知权限时才会收到。
+
+### 17.11 数据表
+
+| 表名 | 用途 |
+| --- | --- |
+| `chat_conversations` | 唯一的一对一员工会话及最后消息 |
+| `chat_messages` | 文字或服务器附件消息、发送人、收件人和已读时间 |
+| `chat_attachments` | 附件文件元数据和私有存储路径 |
+| `notifications` | 用户级审核/系统通知、目标路由和处理状态 |
+
+第一阶段采用 HTTP 定时查询。WebSocket 实时推送、消息送达回执、WebRTC 点对点大文件传输不在
+本版接口范围内。
+
+---
+
 ## 错误响应格式
 
 多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
@@ -4912,6 +5076,13 @@ SQLite 支持**多读一写**模式：
 ---
 
 ## 更新日志
+
+### v4.5.0 (2026-09-20)
+- 新增一对一离线留言、会话列表、历史消息、未读数量和已读接口
+- 新增最大 10MB 的服务器附件上传与会话参与者鉴权下载
+- 新增用户级通知列表、未读统计和已读接口
+- 销售订单、采购入库、原材料出库、收款单和退货单接入审核通知
+- 新增留言权限与四类审核通知权限
 
 ### v4.1.0 (2026-09-19)
 - 新增后台大类路由权限 `admin.route.*`，与 `canAccessAdmin` 分离

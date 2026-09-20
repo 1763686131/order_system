@@ -20,6 +20,7 @@ from utils.bank_account_helpers import (
     resolve_settlement_account,
 )
 from utils.permission_catalog import ADMIN_SALES_ORDER_PERMISSIONS
+from utils.notifications import create_audit_notifications, complete_audit_notifications
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
@@ -870,6 +871,18 @@ def update_order_audit_state(order_id, audited):
                         'message': '历史订单无账户流水，仅撤销审核状态',
                     }
 
+            if audited:
+                complete_audit_notifications(conn, "sales_order", order_id)
+            else:
+                create_audit_notifications(
+                    conn,
+                    "sales_order",
+                    order_id,
+                    order["order_number"],
+                    f"销售订单 {order['order_number']} 已反审核，请重新审核。",
+                    event_version=f"reverse:{now}",
+                )
+
     updated_order = next(
         (
             item for item in read_orders().get('orders', [])
@@ -1024,6 +1037,17 @@ def update_order_status_only(order_id, req_data):
         )
         if cursor.rowcount != 1:
             return jsonify({"success": False, "message": "订单不存在"}), 404
+        if 'status' in req_data and changed_order.get('status') == 'shipped':
+            document_no = changed_order.get('order_number') or str(order_id)
+            create_audit_notifications(
+                conn,
+                "sales_order",
+                order_id,
+                document_no,
+                f"销售订单 {document_no} 已发货，请及时审核。",
+            )
+        elif 'status' in req_data:
+            complete_audit_notifications(conn, "sales_order", order_id)
 
     broadcast_order_event('updated', order=changed_order)
     return jsonify({"success": True, "data": changed_order})
@@ -1258,6 +1282,7 @@ def delete_order(order_id):
     with orders_lock:
         with get_db() as conn:
             cursor = conn.cursor()
+            complete_audit_notifications(conn, "sales_order", order_id)
             cursor.execute('DELETE FROM orders WHERE id = ?', (order_id,))
             if cursor.rowcount != 1:
                 return jsonify({"success": False, "message": "订单已不存在"}), 404

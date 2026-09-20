@@ -8,7 +8,9 @@ import uuid
 from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
-from utils.auth import current_identity
+from utils.auth import current_identity, require_admin_permission
+from utils.notifications import create_audit_notifications, complete_audit_notifications
+from utils.permission_catalog import ADMIN_AUDIT_NOTIFICATION_PERMISSIONS
 from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
@@ -349,6 +351,13 @@ def create_payment_receipt():
                     )
                 )
                 receipt = _serialize(_receipt_row(conn, cursor.lastrowid))
+                create_audit_notifications(
+                    conn,
+                    "payment_receipt",
+                    receipt["id"],
+                    receipt["documentNo"],
+                    f"收款单 {receipt['documentNo']} 已提交，请及时审核。",
+                )
         return jsonify({
             'success': True,
             'message': '收款单已保存，等待审核入账',
@@ -480,6 +489,7 @@ def delete_payment_receipt(receipt_id):
             if receipt['status'] != 'draft':
                 return jsonify({'error': '已审核收款单不能删除，请先反审核'}), 409
             attachment_url = receipt['attachment_url'] or ''
+            complete_audit_notifications(conn, "payment_receipt", receipt_id)
             conn.execute('DELETE FROM payment_receipts WHERE id = ?', (receipt_id,))
     try:
         _remove_attachment(attachment_url)
@@ -489,6 +499,7 @@ def delete_payment_receipt(receipt_id):
 
 
 @payment_receipts_bp.route('/<int:receipt_id>/audit', methods=['POST'])
+@require_admin_permission(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["payment_receipt"])
 def audit_payment_receipt(receipt_id):
     now = datetime.now().isoformat(timespec='seconds')
     try:
@@ -616,6 +627,7 @@ def audit_payment_receipt(receipt_id):
                         receipt_id,
                     )
                 )
+                complete_audit_notifications(conn, "payment_receipt", receipt_id)
                 result = _serialize(_receipt_row(conn, receipt_id))
         return jsonify({
             'success': True,
@@ -632,6 +644,7 @@ def audit_payment_receipt(receipt_id):
 
 
 @payment_receipts_bp.route('/<int:receipt_id>/audit', methods=['DELETE'])
+@require_admin_permission(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["payment_receipt"])
 def reverse_payment_receipt(receipt_id):
     now = datetime.now().isoformat(timespec='seconds')
     try:
@@ -779,6 +792,14 @@ def reverse_payment_receipt(receipt_id):
                     )
                 )
                 result = _serialize(_receipt_row(conn, receipt_id))
+                create_audit_notifications(
+                    conn,
+                    "payment_receipt",
+                    receipt_id,
+                    receipt["document_no"],
+                    f"收款单 {receipt['document_no']} 已反审核，请重新审核。",
+                    event_version=f"reverse:{now}",
+                )
         return jsonify({
             'success': True,
             'message': '反审核成功，客户欠款与储值余额已恢复',

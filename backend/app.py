@@ -2,7 +2,7 @@
 订单管理系统后端主入口文件
 """
 from datetime import timedelta
-from flask import Flask, send_from_directory
+from flask import Flask, abort, send_from_directory
 from flask_cors import CORS
 import os
 import secrets
@@ -106,6 +106,8 @@ from routes.payment_receipts import payment_receipts_bp
 from routes.returns import returns_bp
 from routes.bank_accounts import bank_accounts_bp, upload_bp as bank_account_upload_bp
 from routes.print_templates import print_templates_bp
+from routes.messages import messages_bp
+from routes.notifications import notifications_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(auth_bp)
@@ -129,6 +131,8 @@ app.register_blueprint(returns_bp)
 app.register_blueprint(bank_accounts_bp)
 app.register_blueprint(bank_account_upload_bp)
 app.register_blueprint(print_templates_bp)
+app.register_blueprint(messages_bp)
+app.register_blueprint(notifications_bp)
 
 # ==========================================
 # 健康检查接口
@@ -170,6 +174,9 @@ from flask import request, jsonify
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """访问上传的文件"""
+    if filename.startswith('chat-attachments/'):
+        abort(404)
+
     # 银行卡图片目录可在系统设置中修改；其它历史上传仍使用默认 uploads 根目录。
     if filename.startswith('bank-cards/backgrounds/'):
         from utils.system_settings import DEFAULT_BANK_CARD_BG_PATH, get_setting, normalize_server_path

@@ -13,6 +13,9 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
+from utils.notifications import create_audit_notifications, complete_audit_notifications
+from utils.auth import require_admin_permission
+from utils.permission_catalog import ADMIN_AUDIT_NOTIFICATION_PERMISSIONS
 
 
 stock_inbounds_bp = Blueprint(
@@ -584,6 +587,13 @@ def create_stock_inbound():
             with get_db() as conn:
                 values = _document_values(conn, data)
                 row = _document_insert(conn, values)
+                create_audit_notifications(
+                    conn,
+                    "stock_inbound",
+                    row["id"],
+                    row["document_no"],
+                    f"采购入库单 {row['document_no']} 已提交，请及时审核。",
+                )
                 return jsonify({'success': True, 'message': '入库单保存成功', 'stockIn': _serialize_document(conn, row), 'id': row['id']}), 201
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
@@ -651,10 +661,12 @@ def cancel_stock_inbound(inbound_id):
         if _is_audited(row['status']):
             return jsonify({'success': False, 'message': '已审核单据不能直接删除，请先反审核'}), 409
         if row['status'] == 'cancelled':
+            complete_audit_notifications(conn, "stock_inbound", inbound_id)
             conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (inbound_id,))
             conn.execute('DELETE FROM stock_inbounds WHERE id = ?', (inbound_id,))
             return jsonify({'success': True, 'message': '已红冲入库单已删除', 'deleted': True})
         conn.execute("UPDATE stock_inbounds SET status = 'cancelled', updated_at = ? WHERE id = ?", (_now(), inbound_id))
+        complete_audit_notifications(conn, "stock_inbound", inbound_id)
         return jsonify({'success': True, 'message': '入库单已作废'})
 
 
@@ -668,11 +680,20 @@ def restart_stock_inbound(inbound_id):
                 return jsonify({'success': False, 'message': '入库单不存在'}), 404
             if row['status'] != 'cancelled':
                 return jsonify({'success': False, 'message': '只有已红冲单据可以重新启用'}), 409
+            now = _now()
             conn.execute(
                 "UPDATE stock_inbounds SET status = 'draft', updated_at = ? WHERE id = ?",
-                (_now(), inbound_id),
+                (now, inbound_id),
             )
             updated = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+            create_audit_notifications(
+                conn,
+                "stock_inbound",
+                inbound_id,
+                updated["document_no"],
+                f"采购入库单 {updated['document_no']} 已重新提交，请及时审核。",
+                event_version=f"restart:{now}",
+            )
             return jsonify({
                 'success': True,
                 'message': '入库单已重新启用',
@@ -681,6 +702,7 @@ def restart_stock_inbound(inbound_id):
 
 
 @stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>/audit', methods=['POST'])
+@require_admin_permission(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["stock_inbound"])
 def audit_stock_inbound(inbound_id):
     """审核待审核入库单，并在同一事务内写入库存余额和流水。"""
     try:
@@ -713,6 +735,7 @@ def audit_stock_inbound(inbound_id):
                 )
                 audited_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                 _post_items(conn, audited_row, [dict(item) for item in item_rows])
+                complete_audit_notifications(conn, "stock_inbound", inbound_id)
                 return jsonify({
                     'success': True,
                     'message': '入库单审核成功，库存已更新',
@@ -725,6 +748,7 @@ def audit_stock_inbound(inbound_id):
 
 
 @stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>/audit', methods=['DELETE'])
+@require_admin_permission(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["stock_inbound"])
 def reverse_audit_stock_inbound(inbound_id):
     """反审核入库单，并回退该单据此前写入的库存流水。"""
     try:
@@ -742,6 +766,14 @@ def reverse_audit_stock_inbound(inbound_id):
                     (now, inbound_id),
                 )
                 updated = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+                create_audit_notifications(
+                    conn,
+                    "stock_inbound",
+                    inbound_id,
+                    updated["document_no"],
+                    f"采购入库单 {updated['document_no']} 已反审核，请重新审核。",
+                    event_version=f"reverse:{now}",
+                )
                 return jsonify({
                     'success': True,
                     'message': '入库单已反审核，库存已回退',
