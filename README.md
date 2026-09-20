@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `4.4` |
+| 权限/API 文档版本 | `4.6` |
 | 文档更新 | `2026-09-20` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
@@ -55,7 +55,7 @@
 - 组件通过 `open-change` 事件通知父组件打开状态，并通过公开的 `close()`、
   `reload()` 方法支持父组件后续控制和扩展。
 
-### 留言与审核通知第一阶段
+### 留言与审核通知（第一、二阶段）
 
 后台留言已从静态演示数据接入 Flask 和 SQLite。通讯录双击员工、留言列表点击会话均可打开
 同一个可拖动聊天窗口；窗口位置继续保存在浏览器 `localStorage`。
@@ -64,10 +64,13 @@
 - 支持最大 `10 MB` 的服务器附件。文件保存在
   `uploads/chat-attachments/YYYY-MM/`，数据库只保存随机路径和元数据。
 - 附件不能通过 `/uploads` 静态地址直接访问，下载接口会验证当前员工是否为会话参与者。
-- 留言列表和审核通知每 `20` 秒刷新，已打开的聊天窗口每 `5` 秒刷新。
+- 后台通过共享的 SSE 长连接接收留言、已读状态和审核通知变化信号，通常约 `1` 秒内刷新；
+  完整数据仍由原有鉴权接口获取，不直接信任事件载荷。
+- SSE 不可用或暂时断开时保留每 `60` 秒一次的查询作为降级兜底，浏览器会自动重连长连接。
 - 销售订单、采购入库、原材料出库、收款单和退货单进入待审核状态时，系统向拥有对应
   审核通知权限的角色组成员创建通知；审核完成后通知自动标记为已处理。
-- 第一阶段使用 HTTP 定时刷新，尚未接入 WebSocket 和浏览器点对点文件传输。
+- 第二阶段使用浏览器原生 `EventSource` 完成服务端单向实时提醒；当前场景不需要 WebSocket，
+  浏览器点对点文件传输仍未实现。
 
 新增数据表为 `chat_conversations`、`chat_messages`、`chat_attachments` 和
 `notifications`。新增权限为 `admin.message.*` 以及四类业务审核通知权限；销售订单继续复用
@@ -292,6 +295,7 @@ order_system/
 │  │  ├─ directory.py                # 后台通讯录与在线状态
 │  │  ├─ messages.py                 # 一对一留言、已读状态和私有附件
 │  │  ├─ notifications.py            # 当前员工的审核与系统通知
+│  │  ├─ admin_realtime.py           # 留言和通知变化的 SSE 长连接
 │  │  ├─ users.py                    # 账号维护和管理员重置密码
 │  │  ├─ orders.py                   # 销售订单和物流状态接口
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
@@ -390,6 +394,7 @@ order_system/
 │  ├─ utils/
 │  │  ├─ accessControl.js            # 权限、角色并集和数据范围过滤
 │  │  ├─ adminAccess.js              # 后台大类路由权限映射
+│  │  ├─ adminRealtime.js            # 后台组件共享的 EventSource 客户端
 │  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
 │  │  ├─ printClientConfig.js        # 本地打印配置和默认端口
 │  │  ├─ chineseMoney.js             # 金额中文大写
@@ -640,6 +645,7 @@ import {
 | `POST` | `/api/admin/messages/attachments` | 上传最大 10MB 的私有附件 |
 | `GET` | `/api/admin/messages/attachments/:id/download` | 会话参与者下载附件 |
 | `GET` | `/api/admin/notifications` | 当前员工的审核通知 |
+| `GET` | `/api/admin/realtime/events` | 留言和通知变化的 SSE 实时事件流 |
 | `POST` | `/api/admin/notifications/:id/read` | 标记单条通知已读 |
 | `POST` | `/api/admin/notifications/read-all` | 全部通知已读 |
 
@@ -969,14 +975,15 @@ C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localSt
 
 ## 更新日志
 
-### 2026-09-20 - 通讯录留言与审核通知第一阶段
+### 2026-09-20 - 通讯录留言与审核通知第一、二阶段
 
 - 新增 `src/components/admin/DirectoryPanel.vue`，承载后台通讯录的模板、状态、数据请求和样式。
 - `Admin.vue` 改为通过组件引用和事件控制通讯录，不再混合维护通讯录内部业务状态。
 - 新增一对一离线留言、会话未读、已读状态和 10MB 私有附件上传下载接口。
 - `MessageInbox.vue` 与 `ChatWindow.vue` 接入真实后端数据和自动刷新。
 - 新增角色组留言权限与单据审核通知权限，五类业务单据进入待审核时自动通知审核人。
-- 新增 `docs/工作进度.md`，记录第二阶段 WebSocket、点对点文件和运维注意事项。
+- 新增共享 SSE 通道，留言、已读状态和审核通知变化通常约 1 秒刷新，并保留 60 秒降级查询。
+- 新增 `docs/工作进度.md`，记录阶段进度、点对点文件和运维注意事项。
 
 ### 2026-09-19 - 员工头像文件存储与裁剪
 

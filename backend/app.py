@@ -108,6 +108,7 @@ from routes.bank_accounts import bank_accounts_bp, upload_bp as bank_account_upl
 from routes.print_templates import print_templates_bp
 from routes.messages import messages_bp
 from routes.notifications import notifications_bp
+from routes.admin_realtime import admin_realtime_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(auth_bp)
@@ -133,6 +134,7 @@ app.register_blueprint(bank_account_upload_bp)
 app.register_blueprint(print_templates_bp)
 app.register_blueprint(messages_bp)
 app.register_blueprint(notifications_bp)
+app.register_blueprint(admin_realtime_bp)
 
 # ==========================================
 # 健康检查接口

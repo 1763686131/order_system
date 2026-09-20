@@ -144,6 +144,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import request from '@/api/request'
+import { subscribeAdminRealtime } from '@/utils/adminRealtime'
 
 const props = defineProps({
   mode: {
@@ -162,6 +163,7 @@ const loading = ref(false)
 const loadError = ref('')
 const remoteUnreadCount = ref(0)
 let refreshTimer = null
+let unsubscribeRealtime = null
 
 const isNotificationMode = computed(() => props.mode === 'notifications')
 const panelId = computed(() => {
@@ -293,11 +295,16 @@ defineExpose({
 onMounted(() => {
   document.addEventListener('pointerdown', handleClickOutside)
   loadItems()
-  refreshTimer = window.setInterval(() => loadItems({ silent: true }), 20000)
+  unsubscribeRealtime = subscribeAdminRealtime(
+    isNotificationMode.value ? 'notifications' : 'messages',
+    () => loadItems({ silent: true })
+  )
+  refreshTimer = window.setInterval(() => loadItems({ silent: true }), 60000)
 })
 
 onUnmounted(() => {
   document.removeEventListener('pointerdown', handleClickOutside)
+  unsubscribeRealtime?.()
   if (refreshTimer) window.clearInterval(refreshTimer)
 })
 </script>

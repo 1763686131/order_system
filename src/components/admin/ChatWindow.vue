@@ -186,6 +186,7 @@
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import request from '@/api/request'
+import { subscribeAdminRealtime } from '@/utils/adminRealtime'
 
 const CHAT_WINDOW_POSITION_KEY = 'order-system-chat-window-position'
 const CHAT_WINDOW_EDGE_GAP = 12
@@ -232,6 +233,7 @@ let dragWidth = 0
 let dragHeight = 0
 let previousUserSelect = ''
 let refreshTimer = null
+let unsubscribeRealtime = null
 
 const contactName = computed(() => {
   return props.contact?.displayName || props.contact?.name || '通讯录好友'
@@ -509,7 +511,7 @@ watch(
     selectedFile.value = null
     actionError.value = ''
     loadMessages()
-    refreshTimer = window.setInterval(() => loadMessages({ silent: true }), 5000)
+    refreshTimer = window.setInterval(() => loadMessages({ silent: true }), 60000)
     nextTick(() => clampStoredPosition(true))
     nextTick(() => composerRef.value?.focus())
   },
@@ -518,6 +520,9 @@ watch(
 
 onMounted(() => {
   loadStoredPosition()
+  unsubscribeRealtime = subscribeAdminRealtime('messages', () => {
+    if (props.modelValue) loadMessages({ silent: true })
+  })
   window.addEventListener('resize', handleViewportResize)
 })
 
@@ -530,6 +535,7 @@ onUnmounted(() => {
   window.removeEventListener('pointerup', stopDrag)
   window.removeEventListener('pointercancel', stopDrag)
   window.removeEventListener('resize', handleViewportResize)
+  unsubscribeRealtime?.()
   if (refreshTimer) window.clearInterval(refreshTimer)
 })
 
