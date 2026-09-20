@@ -296,7 +296,8 @@ order_system/
 │  │  │  ├─ StockInOrderModal.vue    # 原材料/成品共用入库弹窗
 │  │  │  ├─ ConfirmModal.vue         # 通用确认弹窗
 │  │  │  ├─ SearchOrderModal.vue     # 全局订单搜索
-│  │  │  └─ SmartCalculator.vue      # 计算器
+│  │  │  ├─ ShippedOrderActionModal.vue #物流发货-回单上传窗口
+│  │  │  └─ NomiFloatingAI.vue       # nomi小人
 │  │  ├─ admin/
 │  │  │  ├─ AvatarCropper.vue        # 员工头像拖动、缩放和裁剪弹窗
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
