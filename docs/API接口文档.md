@@ -4743,8 +4743,9 @@ GET /api/admin/notifications?limit=50&beforeId=100&unreadOnly=false
 GET /api/admin/notifications/unread-count
 ```
 
-通知只返回当前员工自己的数据。通知 `target` 是 Vue Router 可直接使用的路由对象，包含目标页面、
-`documentId` 和 `documentNo` 查询参数。
+通知只返回当前员工自己且尚未处理的数据，已经审核完成并进入 `handled` 状态的通知不再返回。
+通知 `target` 是 Vue Router 可直接使用的路由对象，包含目标页面、`documentId` 和 `documentNo`
+查询参数。`handled` 记录仍保留在数据库中用于追踪。
 
 ### 17.9 通知已读
 

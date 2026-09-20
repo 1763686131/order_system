@@ -57,7 +57,7 @@ def list_notifications():
     limit = _limit_arg()
     before_id = request.args.get("beforeId", type=int)
     unread_only = str(request.args.get("unreadOnly") or "").lower() in {"1", "true", "yes"}
-    clauses = ["recipient_employee_id = ?"]
+    clauses = ["recipient_employee_id = ?", "status <> 'handled'"]
     params = [employee_id]
     if before_id:
         clauses.append("id < ?")

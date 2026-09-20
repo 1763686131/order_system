@@ -1107,7 +1107,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
@@ -1125,6 +1125,7 @@ import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 
 const router = useRouter()
+const route = useRoute()
 
 const props = defineProps({
   mode: {
@@ -1322,6 +1323,10 @@ watch(() => props.mode, () => {
   fetchOrdersData()
 })
 
+watch(() => route.query.documentId, () => {
+  openNotificationOrderFromRoute()
+})
+
 
 const getOrderStoreId = (order) => {
   const storeId = order.store_id ?? order.storeId
@@ -1501,6 +1506,7 @@ const fetchOrdersData = async () => {
     orders.value = []
   } finally {
     loading.value = false
+    await openNotificationOrderFromRoute()
   }
 }
 
@@ -2053,6 +2059,37 @@ const currentDetailOrder = ref(null)
 const openOrderDetail = (order) => {
   selectedOrder.value = order
   detailModalOpen.value = true
+}
+
+const clearNotificationOrderQuery = async () => {
+  const query = { ...route.query }
+  delete query.documentId
+  delete query.documentNo
+  await router.replace({
+    name: route.name,
+    params: route.params,
+    query,
+    hash: route.hash
+  })
+}
+
+const openNotificationOrderFromRoute = async () => {
+  if (props.mode !== 'finance' || loading.value) return
+
+  const rawDocumentId = Array.isArray(route.query.documentId)
+    ? route.query.documentId[0]
+    : route.query.documentId
+  const documentId = String(rawDocumentId || '').trim()
+  if (!documentId) return
+
+  const order = orders.value.find(item => String(item.id) === documentId)
+  if (order) {
+    openOrderDetail(order)
+  } else {
+    showNotice('未找到该待审核订单，单据可能已删除或不在当前数据权限范围内', 'error')
+  }
+
+  await clearNotificationOrderQuery()
 }
 
 // 关闭详情弹窗

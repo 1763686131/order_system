@@ -106,7 +106,6 @@
               </span>
               <span class="pulse-dot" aria-hidden="true"></span>
             </button>
-            <component v-if="headerActions" :is="headerActions"></component>
           </div>
 
           <div class="header-icons">
@@ -272,7 +271,7 @@
 </template>
 
 <script setup>
-import { ref, computed, provide, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
@@ -400,14 +399,6 @@ const isSidebarCollapsed = ref(false)
 const toggleSidebar = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
-
-// 用于子组件注入的按钮操作
-const headerActions = ref(null)
-
-// 提供给子组件的方法
-provide('setHeaderActions', (actions) => {
-  headerActions.value = actions
-})
 
 // 注册全局方法供子组件调用
 onMounted(() => {
