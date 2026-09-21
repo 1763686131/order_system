@@ -351,11 +351,12 @@
                 </div>
                 <div>
                   <dt>部门</dt>
-                  <dd v-if="inlineEditing">
+                  <dd v-if="inlineEditing" class="department-detail-cell">
                     <div
                       ref="departmentSelector"
                       class="department-multi-select inline-department-select"
                       :class="{ open: departmentSelectorOpen }"
+                      @pointerdown.stop
                       @keydown.esc.stop="departmentSelectorOpen = false"
                     >
                       <button
@@ -363,7 +364,7 @@
                         type="button"
                         :aria-expanded="departmentSelectorOpen"
                         aria-haspopup="listbox"
-                        @click="departmentSelectorOpen = !departmentSelectorOpen"
+                        @click.stop="toggleDepartmentSelector"
                       >
                         <span :class="{ placeholder: !draft.departmentIds.length }">
                           {{ departmentSelectionLabel }}
@@ -1101,6 +1102,10 @@ function closeDepartmentSelectorOnOutside(event) {
   }
 }
 
+function toggleDepartmentSelector() {
+  departmentSelectorOpen.value = !departmentSelectorOpen.value
+}
+
 function syncIdentityFields() {
   const identity = String(draft.value.idCard || '').trim()
   const digits = identity.toUpperCase()
@@ -1834,6 +1839,14 @@ select:focus {
 
 .inline-department-select {
   width: 100%;
+}
+
+.department-detail-cell {
+  overflow: visible !important;
+}
+
+.inline-department-select.open {
+  z-index: 40;
 }
 
 .department-multi-trigger {
