@@ -352,16 +352,54 @@
                 <div>
                   <dt>部门</dt>
                   <dd v-if="inlineEditing">
-                    <select
-                      class="inline-detail-select"
-                      :value="draft.departmentIds?.[0] || ''"
-                      @change="setInlineDepartment"
+                    <div
+                      ref="departmentSelector"
+                      class="department-multi-select inline-department-select"
+                      :class="{ open: departmentSelectorOpen }"
+                      @keydown.esc.stop="departmentSelectorOpen = false"
                     >
-                      <option value="">未分配部门</option>
-                      <option v-for="department in departments" :key="department.id" :value="department.id">
-                        {{ department.name }}
-                      </option>
-                    </select>
+                      <button
+                        class="department-multi-trigger"
+                        type="button"
+                        :aria-expanded="departmentSelectorOpen"
+                        aria-haspopup="listbox"
+                        @click="departmentSelectorOpen = !departmentSelectorOpen"
+                      >
+                        <span :class="{ placeholder: !draft.departmentIds.length }">
+                          {{ departmentSelectionLabel }}
+                        </span>
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path d="m7 10 5 5 5-5"></path>
+                        </svg>
+                      </button>
+                      <div
+                        v-if="departmentSelectorOpen"
+                        class="department-multi-menu"
+                        role="listbox"
+                        aria-multiselectable="true"
+                      >
+                        <label
+                          v-for="department in departments"
+                          :key="department.id"
+                          class="department-multi-option"
+                          :class="{ selected: draft.departmentIds.includes(department.id) }"
+                          role="option"
+                          :aria-selected="draft.departmentIds.includes(department.id)"
+                        >
+                          <input
+                            type="checkbox"
+                            :checked="draft.departmentIds.includes(department.id)"
+                            :disabled="department.status !== 'active' && !draft.departmentIds.includes(department.id)"
+                            @change="toggleDraftDepartment(department.id)"
+                          />
+                          <span>{{ department.name }}</span>
+                          <small v-if="department.status !== 'active'">已停用</small>
+                        </label>
+                        <span v-if="departments.length === 0" class="department-multi-empty">
+                          暂无部门配置
+                        </span>
+                      </div>
+                    </div>
                   </dd>
                   <dd v-else class="dd-primary">{{ selectedEmployee.department || '—' }}</dd>
                 </div>
@@ -796,323 +834,6 @@
       </div>
     </transition>
 
-    <Teleport to="body">
-      <div v-if="drawerVisible" class="drawer-layer" @click.self="closeDrawer">
-        <aside class="edit-drawer" role="dialog" aria-modal="true" aria-labelledby="employee-drawer-title">
-          <div class="drawer-header">
-            <div class="drawer-header-main">
-              <button
-                class="avatar-upload"
-                type="button"
-                title="选择并裁剪头像"
-                :style="avatarStyle(draft)"
-                @click="avatarInput?.click()"
-              >
-                <span>{{ draft.displayName?.slice(0, 1) || '人' }}</span>
-                <i aria-hidden="true">+</i>
-              </button>
-              <input
-                ref="avatarInput"
-                class="avatar-upload-input"
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
-                @change="handleAvatarUpload"
-              />
-              <div>
-                <span class="drawer-eyebrow">{{ editingEmployee ? '编辑档案' : '新建档案' }}</span>
-                <h2 id="employee-drawer-title">{{ editingEmployee ? draft.displayName : '新增员工' }}</h2>
-                <button
-                  v-if="draft.avatarPreviewUrl || (!draft.avatarRemovalRequested && draft.avatarUrl)"
-                  class="avatar-remove-button"
-                  type="button"
-                  @click="removeAvatar"
-                >
-                  移除头像
-                </button>
-              </div>
-            </div>
-            <button class="icon-button" type="button" title="关闭" @click="closeDrawer">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m6 6 12 12"></path>
-                <path d="m18 6-12 12"></path>
-              </svg>
-            </button>
-          </div>
-
-          <div class="drawer-body">
-            <section class="form-section">
-              <div class="section-heading">
-                <h3>基本信息</h3>
-                <span>花名册主档</span>
-              </div>
-              <div class="form-grid">
-                <label class="field">
-                  <span>姓名 <em>*</em></span>
-                  <input v-model.trim="draft.displayName" type="text" placeholder="请输入员工姓名" />
-                </label>
-                <label class="field">
-                  <span>工号</span>
-                  <input v-model.trim="draft.employeeNo" type="text" placeholder="例如 E-0008" />
-                </label>
-                <label class="field">
-                  <span>手机号</span>
-                  <input
-                    v-model.trim="draft.phone"
-                    type="tel"
-                    inputmode="tel"
-                    maxlength="30"
-                    placeholder="请输入员工手机号"
-                  />
-                </label>
-                <label class="field">
-                  <span>身份证号</span>
-                  <input
-                    v-model.trim="draft.idCard"
-                    type="text"
-                    inputmode="numeric"
-                    maxlength="18"
-                    placeholder="输入后自动识别生日和性别"
-                    @input="syncIdentityFields"
-                  />
-                </label>
-                <label class="field">
-                  <span>性别</span>
-                  <select v-model="draft.gender">
-                    <option value="">未填写</option>
-                    <option value="男">男</option>
-                    <option value="女">女</option>
-                    <option value="其他">其他</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span>民族</span>
-                  <input v-model.trim="draft.nation" type="text" placeholder="请输入民族" />
-                </label>
-                <label class="field">
-                  <span>出生日期</span>
-                  <input v-model="draft.birthDate" type="date" />
-                </label>
-                <label class="field">
-                  <span>政治面貌</span>
-                  <input v-model.trim="draft.politicalStatus" type="text" placeholder="请输入政治面貌" />
-                </label>
-                <label class="field">
-                  <span>婚姻状况</span>
-                  <input v-model.trim="draft.maritalStatus" type="text" placeholder="请输入婚姻状况" />
-                </label>
-                <label class="field field-wide">
-                  <span>身体状况</span>
-                  <input v-model.trim="draft.healthStatus" type="text" placeholder="请输入身体状况" />
-                </label>
-                <label class="field field-wide">
-                  <span>籍贯</span>
-                  <input v-model.trim="draft.nativePlace" type="text" placeholder="根据身份证前六位自动填充，可手动修改" />
-                  <small class="field-hint">身份证识别的是户籍地址所在省级区域，仅作为籍贯参考</small>
-                </label>
-                <label class="field">
-                  <span>用工类型</span>
-                  <select v-model="draft.employmentType">
-                    <option value="正式">正式</option>
-                    <option value="试用">试用</option>
-                    <option value="兼职">兼职</option>
-                    <option value="外包">外包</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span>在职状态</span>
-                  <select v-model="draft.employmentStatus">
-                    <option value="active">在职</option>
-                    <option value="probation">试用期</option>
-                    <option value="leave">休假</option>
-                    <option value="resigned">离职</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span>入职日期</span>
-                  <input v-model="draft.hireDate" type="date" />
-                </label>
-              </div>
-            </section>
-
-            <section class="form-section">
-              <div class="section-heading">
-                <h3>工作信息</h3>
-                <span>用于组织和后续人事接口</span>
-              </div>
-              <div class="form-grid">
-                <div class="field">
-                  <span>部门</span>
-                  <div class="department-multi-select" :class="{ open: departmentSelectorOpen }">
-                    <button
-                      class="department-multi-trigger"
-                      type="button"
-                      :aria-expanded="departmentSelectorOpen"
-                      @click="departmentSelectorOpen = !departmentSelectorOpen"
-                    >
-                      <span>{{ departmentSelectionLabel }}</span>
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="m7 10 5 5 5-5"></path>
-                      </svg>
-                    </button>
-                    <div v-if="departmentSelectorOpen" class="department-multi-menu">
-                      <label
-                        v-for="department in departments"
-                        :key="department.id"
-                        class="department-multi-option"
-                        :class="{ selected: draft.departmentIds.includes(department.id) }"
-                      >
-                        <input
-                          type="checkbox"
-                          :checked="draft.departmentIds.includes(department.id)"
-                          :disabled="department.status !== 'active' && !draft.departmentIds.includes(department.id)"
-                          @change="toggleDraftDepartment(department.id)"
-                        />
-                        <span>{{ department.name }}</span>
-                        <small v-if="department.status !== 'active'">已停用</small>
-                      </label>
-                      <span v-if="departments.length === 0" class="department-multi-empty">
-                        暂无部门配置
-                      </span>
-                    </div>
-                  </div>
-                  <small class="field-hint">可同时选择多个部门，第一项作为主部门</small>
-                </div>
-                <label class="field">
-                  <span>职位</span>
-                  <input v-model.trim="draft.position" type="text" placeholder="请输入职位" />
-                </label>
-                <label class="field field-wide">
-                  <span>家庭住址</span>
-                  <input v-model.trim="draft.currentAddress" type="text" placeholder="请输入现居住地址" />
-                </label>
-                <label class="field">
-                  <span>文化水平</span>
-                  <input v-model.trim="draft.educationLevel" type="text" placeholder="请输入文化水平" />
-                </label>
-                <label class="field">
-                  <span>专业</span>
-                  <input v-model.trim="draft.major" type="text" placeholder="请输入专业" />
-                </label>
-                <label class="field field-wide">
-                  <span>毕业学校</span>
-                  <input v-model.trim="draft.graduationSchool" type="text" placeholder="请输入毕业学校" />
-                </label>
-                <label class="field">
-                  <span>毕业时间</span>
-                  <input v-model="draft.graduationDate" type="date" />
-                </label>
-                <label class="field">
-                  <span>工作年限</span>
-                  <input v-model.trim="draft.workYears" type="text" placeholder="例如 5 年" />
-                </label>
-              </div>
-            </section>
-
-            <section class="form-section">
-              <div class="section-heading">
-                <h3>账号绑定</h3>
-                <span>登录账号依附当前员工档案</span>
-              </div>
-              <div class="form-grid">
-                <label class="field">
-                  <span>登录账号</span>
-                  <input
-                    v-model.trim="draft.username"
-                    type="text"
-                    :disabled="editingEmployee && draft.passwordSet"
-                    placeholder="未填写则暂不开通"
-                  />
-                </label>
-                <label class="field">
-                  <span>登录密码 <em v-if="!editingEmployee && draft.username">*</em></span>
-                  <div class="password-input-wrap">
-                    <input
-                      ref="passwordInput"
-                      v-model.trim="draft.password"
-                      :type="passwordVisible ? 'text' : 'password'"
-                      :placeholder="editingEmployee ? '留空保持原密码' : '请输入登录密码'"
-                      autocomplete="new-password"
-                    />
-                    <button
-                      class="password-toggle"
-                      type="button"
-                      :title="passwordVisible ? '隐藏密码' : '显示密码'"
-                      :aria-label="passwordVisible ? '隐藏密码' : '显示密码'"
-                      @click="passwordVisible = !passwordVisible"
-                    >
-                      <svg v-if="passwordVisible" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
-                        <circle cx="12" cy="12" r="2.5"></circle>
-                      </svg>
-                      <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="m3 3 18 18"></path>
-                        <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6a16.7 16.7 0 0 1-2.2 2.9"></path>
-                        <path d="M6.6 6.6C4 8.3 2.5 12 2.5 12s3.5 6 9.5 6c1.4 0 2.7-.3 3.8-.7"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </label>
-                <label class="field">
-                  <span>确认密码 <em v-if="draft.password">*</em></span>
-                  <div class="password-input-wrap">
-                    <input
-                      v-model.trim="draft.passwordConfirm"
-                      :type="passwordConfirmVisible ? 'text' : 'password'"
-                      placeholder="请再次输入登录密码"
-                      autocomplete="new-password"
-                    />
-                    <button
-                      class="password-toggle"
-                      type="button"
-                      :title="passwordConfirmVisible ? '隐藏确认密码' : '显示确认密码'"
-                      :aria-label="passwordConfirmVisible ? '隐藏确认密码' : '显示确认密码'"
-                      @click="passwordConfirmVisible = !passwordConfirmVisible"
-                    >
-                      <svg v-if="passwordConfirmVisible" viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
-                        <circle cx="12" cy="12" r="2.5"></circle>
-                      </svg>
-                      <svg v-else viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="m3 3 18 18"></path>
-                        <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6 0 9.5 6 9.5 6s-1.5 2.6-3.8 4.3"></path>
-                        <path d="M6.6 6.6C4 8.3 2.5 12 2.5 12s3.5 6 9.5 6c1.4 0 2.7-.3 3.8-.7"></path>
-                      </svg>
-                    </button>
-                  </div>
-                </label>
-                <label class="field">
-                  <span>账号状态</span>
-                  <select v-model="draft.accountStatus">
-                    <option value="active">正常</option>
-                    <option value="pending">待开通</option>
-                    <option value="disabled">已停用</option>
-                  </select>
-                </label>
-                <label class="field">
-                  <span>紧急联系人</span>
-                  <input v-model.trim="draft.emergencyContact" type="text" placeholder="姓名 / 称谓" />
-                </label>
-                <label class="field">
-                  <span>紧急联系电话</span>
-                  <input v-model.trim="draft.emergencyPhone" type="text" placeholder="联系电话" />
-                </label>
-                <label class="field field-wide">
-                  <span>邮箱</span>
-                  <input v-model.trim="draft.email" type="email" placeholder="请输入邮箱" />
-                </label>
-              </div>
-            </section>
-          </div>
-
-          <div class="drawer-footer">
-            <button class="button button-secondary" type="button" @click="closeDrawer">取消</button>
-            <button class="button button-primary" type="button" @click="saveEmployee">
-              {{ editingEmployee ? '保存修改' : '创建员工' }}
-            </button>
-          </div>
-        </aside>
-      </div>
-    </Teleport>
 
     <AvatarCropper
       :visible="avatarCropVisible"
@@ -1154,9 +875,9 @@ const selectedEmployeeId = ref(null)
 const creatingEmployee = ref(false)
 const activeDetailTab = ref('profile')
 const inlineEditing = ref(false)
-const drawerVisible = ref(false)
 const editingEmployee = ref(false)
 const departmentSelectorOpen = ref(false)
+const departmentSelector = ref(null)
 const draft = ref(createEmptyEmployee())
 const avatarInput = ref(null)
 const pendingAvatarFile = ref(null)
@@ -1323,7 +1044,6 @@ function openCreate() {
   departmentSelectorOpen.value = false
   passwordVisible.value = false
   passwordConfirmVisible.value = false
-  drawerVisible.value = false
 }
 
 function openEmployee(employee) {
@@ -1362,16 +1082,7 @@ function openEdit(employee) {
   passwordVisible.value = false
   passwordConfirmVisible.value = false
   departmentSelectorOpen.value = false
-  drawerVisible.value = false
   inlineEditing.value = true
-}
-
-function closeDrawer() {
-  resetPendingAvatar()
-  drawerVisible.value = false
-  passwordVisible.value = false
-  passwordConfirmVisible.value = false
-  departmentSelectorOpen.value = false
 }
 
 function cancelInlineEdit() {
@@ -1384,10 +1095,10 @@ function cancelInlineEdit() {
   departmentSelectorOpen.value = false
 }
 
-function setInlineDepartment(event) {
-  const departmentId = Number(event.target.value) || null
-  draft.value.departmentId = departmentId
-  draft.value.departmentIds = departmentId ? [departmentId] : []
+function closeDepartmentSelectorOnOutside(event) {
+  if (departmentSelectorOpen.value && !departmentSelector.value?.contains(event.target)) {
+    departmentSelectorOpen.value = false
+  }
 }
 
 function syncIdentityFields() {
@@ -1570,10 +1281,8 @@ async function saveEmployee() {
       editingEmployee.value = false
       draft.value = { ...savedEmployee, password: '', passwordConfirm: '', passwordSet: Boolean(savedEmployee.passwordSet) }
       resetPendingAvatar()
-    } else if (inlineEditing.value) {
-      cancelInlineEdit()
     } else {
-      closeDrawer()
+      cancelInlineEdit()
     }
   } catch (error) {
     showNotice(error?.response?.data?.message || '员工档案保存失败')
@@ -1858,8 +1567,15 @@ function deviceDescription(device) {
   ].join(' · ')
 }
 
-onMounted(loadEmployeeData)
-onBeforeUnmount(resetPendingAvatar)
+onMounted(() => {
+  loadEmployeeData()
+  document.addEventListener('pointerdown', closeDepartmentSelectorOnOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeDepartmentSelectorOnOutside)
+  resetPendingAvatar()
+})
 </script>
 
 <style scoped>
@@ -1891,9 +1607,7 @@ onBeforeUnmount(resetPendingAvatar)
 .toolbar-actions,
 .employee-cell,
 .account-cell,
-.row-actions,
-.drawer-header,
-.drawer-footer {
+.row-actions {
   display: flex;
   align-items: center;
 }
@@ -1904,8 +1618,7 @@ onBeforeUnmount(resetPendingAvatar)
   margin-bottom: 16px;
 }
 
-.breadcrumb,
-.drawer-eyebrow {
+.breadcrumb {
   margin-bottom: 7px;
   color: var(--text-muted);
   font-size: 12px;
@@ -2089,24 +1802,6 @@ h1 {
   align-items: end;
 }
 
-.field {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 7px;
-}
-
-.field > span {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.field em {
-  color: #dc3545;
-  font-style: normal;
-}
-
 input,
 select {
   width: 100%;
@@ -2135,6 +1830,10 @@ select:focus {
 
 .department-multi-select {
   position: relative;
+}
+
+.inline-department-select {
+  width: 100%;
 }
 
 .department-multi-trigger {
@@ -2168,6 +1867,11 @@ select:focus {
   white-space: nowrap;
 }
 
+.department-multi-trigger > span.placeholder {
+  color: #94a3b8;
+  font-weight: 400;
+}
+
 .department-multi-trigger svg {
   width: 16px;
   height: 16px;
@@ -2197,6 +1901,20 @@ select:focus {
   border: 1px solid var(--border-strong, #cbd5e1);
   border-radius: 6px;
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.16);
+}
+
+.inline-department-select .department-multi-trigger {
+  min-height: 32px;
+  padding: 3px 7px;
+  background: #f8fafc;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.inline-department-select .department-multi-menu {
+  min-width: 100%;
+  max-height: 240px;
 }
 
 .department-multi-option {
@@ -2242,13 +1960,6 @@ select:focus {
   color: var(--text-muted, #8a96a8);
   font-size: 12px;
   text-align: center;
-}
-
-.field-hint {
-  margin-top: 5px;
-  color: var(--text-muted, #8a96a8);
-  font-size: 11px;
-  line-height: 1.4;
 }
 
 input[type='checkbox'] {
@@ -3022,95 +2733,6 @@ input[type='checkbox'] {
   transform: translate(-50%, -8px);
 }
 
-.drawer-layer {
-  --accent: #0f9f78;
-  --accent-rgb: 15, 159, 120;
-  --accent-dark: #08745a;
-  --accent-soft: #e9f8f3;
-  --accent-border: #a9e5d2;
-  --panel-bg: #fff;
-  --border: #dfe5ec;
-  --border-strong: #cbd5e1;
-  --text: #172033;
-  --text-secondary: #596579;
-  --text-muted: #8a96a8;
-  position: fixed;
-  inset: 0;
-  z-index: 2000;
-  display: flex;
-  justify-content: flex-end;
-  background: rgba(15, 23, 42, 0.35);
-  color: var(--text, #172033);
-  font-size: 14px;
-}
-
-.edit-drawer {
-  display: flex;
-  width: min(640px, 100vw);
-  height: 100%;
-  flex-direction: column;
-  background: var(--panel-bg, #fff);
-  box-shadow: -12px 0 32px rgba(15, 23, 42, 0.16);
-}
-
-.drawer-header {
-  min-height: 78px;
-  justify-content: space-between;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--border, #dfe5ec);
-  box-sizing: border-box;
-}
-
-.drawer-header-main {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 12px;
-}
-
-.avatar-upload {
-  position: relative;
-  display: inline-flex;
-  width: 52px;
-  height: 52px;
-  flex: 0 0 52px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: #275a4d;
-  background-color: #e5e7eb;
-  border: 1px solid var(--accent-border, #a9e5d2);
-  border-radius: 50%;
-  font: inherit;
-  font-size: 18px;
-  font-weight: 750;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.avatar-upload:hover {
-  border-color: var(--accent, #0f9f78);
-  box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 15, 159, 120), 0.12);
-}
-
-.avatar-upload > i {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: var(--accent, #0f9f78);
-  border: 2px solid #fff;
-  border-radius: 50%;
-  font-size: 16px;
-  font-style: normal;
-  line-height: 1;
-}
-
 .avatar-upload-input {
   display: none;
 }
@@ -3137,10 +2759,6 @@ input[type='checkbox'] {
   white-space: nowrap;
 }
 
-.drawer-header h2 {
-  font-size: 18px;
-}
-
 .icon-button {
   display: inline-flex;
   width: 36px;
@@ -3158,54 +2776,6 @@ input[type='checkbox'] {
   color: var(--accent-dark, #08745a);
   background: var(--accent-soft, #e9f8f3);
   border-color: var(--accent-border, #a9e5d2);
-}
-
-.drawer-body {
-  flex: 1;
-  padding: 20px 22px;
-  color: var(--text, #172033);
-  overflow-y: auto;
-}
-
-.form-section + .form-section {
-  margin-top: 24px;
-  padding-top: 22px;
-  border-top: 1px solid var(--border, #dfe5ec);
-}
-
-.section-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.section-heading h3 {
-  font-size: 14px;
-}
-
-.section-heading span {
-  color: var(--text-muted);
-  font-size: 12px;
-  text-align: right;
-}
-
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.field-wide {
-  grid-column: 1 / -1;
-}
-
-.drawer-footer {
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 13px 22px;
-  border-top: 1px solid var(--border, #dfe5ec);
 }
 
 .workspace-nav {
@@ -4027,17 +3597,6 @@ input[type='checkbox'] {
   font-style: italic;
 }
 
-.password-input-wrap {
-  position: relative;
-  min-width: 0;
-}
-
-.password-input-wrap input {
-  width: 100%;
-  padding-right: 40px;
-  box-sizing: border-box;
-}
-
 .password-toggle {
   display: inline-flex;
   width: 32px;
@@ -4052,12 +3611,6 @@ input[type='checkbox'] {
   border-radius: 5px;
   cursor: pointer;
   transition: color 0.15s ease, background 0.15s ease;
-}
-
-.password-input-wrap .password-toggle {
-  position: absolute;
-  top: 3px;
-  right: 3px;
 }
 
 .password-toggle:hover {
@@ -4613,19 +4166,5 @@ select:focus-visible,
     margin-bottom: 8px;
   }
 
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .field-wide {
-    grid-column: auto;
-  }
-
-  .drawer-header,
-  .drawer-body,
-  .drawer-footer {
-    padding-right: 16px;
-    padding-left: 16px;
-  }
 }
 </style>
