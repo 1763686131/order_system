@@ -525,85 +525,116 @@
               <span class="card-index">03</span>
             </div>
             <div class="employee-basic-table-wrap">
-              <table class="employee-basic-table">
-                <colgroup>
-                  <col class="basic-label-column">
-                  <col>
-                  <col class="basic-label-column">
-                  <col>
-                </colgroup>
-                <tbody>
-                  <tr>
-                    <th scope="row">性别</th>
-                    <td>{{ selectedEmployee.gender || '—' }}</td>
-                    <th scope="row">民族</th>
-                    <td>{{ selectedEmployee.nation || selectedEmployee.ethnicity || '—' }}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">身体状况</th>
-                    <td colspan="3">{{ selectedEmployee.healthStatus || selectedEmployee.health || '—' }}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">出生日期</th>
-                    <td>{{ selectedEmployee.birthDate || selectedEmployee.birthday || '—' }}</td>
-                    <th scope="row">身份证号码</th>
-                    <td>
-                      <input v-if="inlineEditing" v-model.trim="draft.idCard" class="inline-table-input" type="text" />
-                      <span v-else>{{ selectedEmployee.idCard || '—' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">政治面貌</th>
-                    <td>{{ selectedEmployee.politicalStatus || selectedEmployee.politicalOutlook || '—' }}</td>
-                    <th scope="row">婚姻状况</th>
-                    <td>{{ selectedEmployee.maritalStatus || selectedEmployee.marital || '—' }}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">文化水平</th>
-                    <td>{{ selectedEmployee.educationLevel || selectedEmployee.education || '—' }}</td>
-                    <th scope="row">专业</th>
-                    <td>{{ selectedEmployee.major || '—' }}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">毕业学校</th>
-                    <td colspan="3">{{ selectedEmployee.graduationSchool || selectedEmployee.school || '—' }}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">毕业时间</th>
-                    <td>{{ selectedEmployee.graduationDate || selectedEmployee.graduationTime || '—' }}</td>
-                    <th scope="row">工作年限</th>
-                    <td>{{ selectedEmployee.workYears || '—' }}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">联系电话</th>
-                    <td>
-                      <input v-if="inlineEditing" v-model.trim="draft.phone" class="inline-table-input" type="tel" />
-                      <span v-else>{{ selectedEmployee.phone || '—' }}</span>
-                    </td>
-                    <th scope="row">邮箱</th>
-                    <td>{{ selectedEmployee.email || '—' }}</td>
-                  </tr>
-                  <tr>
-                    <th scope="row">家庭住址</th>
-                    <td colspan="3">
-                      <input v-if="inlineEditing" v-model.trim="draft.currentAddress" class="inline-table-input" type="text" />
-                      <span v-else>{{ selectedEmployee.currentAddress || '—' }}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <th scope="row">紧急联系人</th>
-                    <td>
-                      <input v-if="inlineEditing" v-model.trim="draft.emergencyContact" class="inline-table-input" type="text" />
-                      <span v-else>{{ selectedEmployee.emergencyContact || '—' }}</span>
-                    </td>
-                    <th scope="row">紧急联系电话</th>
-                    <td>
-                      <input v-if="inlineEditing" v-model.trim="draft.emergencyPhone" class="inline-table-input" type="tel" />
-                      <span v-else>{{ selectedEmployee.emergencyPhone || '—' }}</span>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div class="basic-info-section">
+                <h4 class="basic-section-title">基本身份</h4>
+                <table class="employee-basic-table">
+                  <colgroup>
+                    <col class="basic-label-column">
+                    <col>
+                    <col class="basic-label-column">
+                    <col>
+                  </colgroup>
+                  <tbody>
+                    <tr>
+                      <th scope="row">性别</th>
+                      <td>{{ selectedEmployee.gender || '—' }}</td>
+                      <th scope="row">民族</th>
+                      <td>{{ selectedEmployee.nation || selectedEmployee.ethnicity || '—' }}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">出生日期</th>
+                      <td>{{ selectedEmployee.birthDate || selectedEmployee.birthday || '—' }}</td>
+                      <th scope="row">身份证号码</th>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.idCard" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.idCard || '—' }}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <th scope="row">政治面貌</th>
+                      <td>{{ selectedEmployee.politicalStatus || selectedEmployee.politicalOutlook || '—' }}</td>
+                      <th scope="row">婚姻状况</th>
+                      <td>{{ selectedEmployee.maritalStatus || selectedEmployee.marital || '—' }}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">身体状况</th>
+                      <td colspan="3">{{ selectedEmployee.healthStatus || selectedEmployee.health || '—' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="basic-info-section">
+                <h4 class="basic-section-title">教育与背景</h4>
+                <table class="employee-basic-table">
+                  <colgroup>
+                    <col class="basic-label-column">
+                    <col>
+                    <col class="basic-label-column">
+                    <col>
+                  </colgroup>
+                  <tbody>
+                    <tr>
+                      <th scope="row">文化水平</th>
+                      <td>{{ selectedEmployee.educationLevel || selectedEmployee.education || '—' }}</td>
+                      <th scope="row">专业</th>
+                      <td>{{ selectedEmployee.major || '—' }}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">毕业学校</th>
+                      <td colspan="3">{{ selectedEmployee.graduationSchool || selectedEmployee.school || '—' }}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">毕业时间</th>
+                      <td>{{ selectedEmployee.graduationDate || selectedEmployee.graduationTime || '—' }}</td>
+                      <th scope="row">工作年限</th>
+                      <td>{{ selectedEmployee.workYears || '—' }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div class="basic-info-section">
+                <h4 class="basic-section-title">联系与紧急信息</h4>
+                <table class="employee-basic-table">
+                  <colgroup>
+                    <col class="basic-label-column">
+                    <col>
+                    <col class="basic-label-column">
+                    <col>
+                  </colgroup>
+                  <tbody>
+                    <tr>
+                      <th scope="row">联系电话</th>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.phone" class="inline-table-input" type="tel" />
+                        <span v-else>{{ selectedEmployee.phone || '—' }}</span>
+                      </td>
+                      <th scope="row">邮箱</th>
+                      <td>{{ selectedEmployee.email || '—' }}</td>
+                    </tr>
+                    <tr>
+                      <th scope="row">家庭住址</th>
+                      <td colspan="3">
+                        <input v-if="inlineEditing" v-model.trim="draft.currentAddress" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.currentAddress || '—' }}</span>
+                      </td>
+                    </tr>
+                    <tr>
+                      <th scope="row">紧急联系人</th>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.emergencyContact" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.emergencyContact || '—' }}</span>
+                      </td>
+                      <th scope="row">紧急联系电话</th>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.emergencyPhone" class="inline-table-input" type="tel" />
+                        <span v-else>{{ selectedEmployee.emergencyPhone || '—' }}</span>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </div>
           </article>
         </div>
@@ -3324,6 +3355,24 @@ input[type='checkbox'] {
 
 .employee-basic-table-wrap {
   overflow-x: auto;
+}
+
+.basic-info-section {
+  margin-bottom: 20px;
+}
+
+.basic-info-section:last-child {
+  margin-bottom: 0;
+}
+
+.basic-section-title {
+  margin: 0 0 10px 0;
+  padding-bottom: 8px;
+  color: #64748b;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.02em;
 }
 
 .employee-basic-table {
