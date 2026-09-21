@@ -1024,7 +1024,9 @@ def update_order_status_only(order_id, req_data):
                 changed_order.get('completed_date') or '',
                 changed_order.get('completed_by') or '',
                 changed_order.get('shipped_date') or '',
-                changed_order.get('shipping_method') or '',
+                changed_order.get('shipping_method')
+                if changed_order.get('shipping_method') is not None
+                else '',
                 changed_order.get('shipping_custom') or '',
                 changed_order.get('logistics_no') or '',
                 changed_order.get('audit_state', 0),
