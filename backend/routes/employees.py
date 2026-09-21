@@ -1,6 +1,10 @@
 """Employee profile APIs with optional login-account binding."""
 
+import csv
+import io
+
 from flask import Blueprint, jsonify, request, session
+from flask import Response
 from werkzeug.security import generate_password_hash
 
 from utils.auth import get_current_user, require_super_admin, serialize_user
@@ -170,6 +174,19 @@ def _serialize_employee(conn, row):
         "position": row["position"] or "",
         "phone": row["phone"] or "",
         "idCard": row["id_card"] or "",
+        "gender": row["gender"] or "",
+        "nation": row["nation"] or "",
+        "birthDate": row["birth_date"] or "",
+        "politicalStatus": row["political_status"] or "",
+        "maritalStatus": row["marital_status"] or "",
+        "healthStatus": row["health_status"] or "",
+        "nativePlace": row["native_place"] or "",
+        "educationLevel": row["education_level"] or "",
+        "major": row["major"] or "",
+        "graduationSchool": row["graduation_school"] or "",
+        "graduationDate": row["graduation_date"] or "",
+        "workYears": row["work_years"] or "",
+        "email": row["email"] or "",
         "currentAddress": row["current_address"] or "",
         "emergencyContact": row["emergency_contact"] or "",
         "emergencyPhone": row["emergency_phone"] or "",
@@ -261,6 +278,31 @@ def _employee_values(data):
         "position": _text(data.get("position"), 80),
         "phone": _text(data.get("phone"), 30),
         "id_card": _text(data.get("idCard"), 40),
+        "gender": _text(data.get("gender"), 20),
+        "nation": _text(data.get("nation", data.get("ethnicity")), 30),
+        "birth_date": _text(data.get("birthDate", data.get("birthday")), 10) or None,
+        "political_status": _text(
+            data.get("politicalStatus", data.get("politicalOutlook")), 40
+        ),
+        "marital_status": _text(
+            data.get("maritalStatus", data.get("marital")), 30
+        ),
+        "health_status": _text(data.get("healthStatus", data.get("health")), 80),
+        "native_place": _text(
+            data.get("nativePlace", data.get("nativeOrigin")), 120
+        ),
+        "education_level": _text(
+            data.get("educationLevel", data.get("education")), 50
+        ),
+        "major": _text(data.get("major"), 100),
+        "graduation_school": _text(
+            data.get("graduationSchool", data.get("school")), 120
+        ),
+        "graduation_date": _text(
+            data.get("graduationDate", data.get("graduationTime")), 10
+        ) or None,
+        "work_years": _text(data.get("workYears"), 30),
+        "email": _text(data.get("email"), 120),
         "current_address": _text(data.get("currentAddress"), 300),
         "emergency_contact": _text(data.get("emergencyContact"), 80),
         "emergency_phone": _text(data.get("emergencyPhone"), 30),
@@ -388,6 +430,81 @@ def list_employees():
     return jsonify({"success": True, "employees": employees})
 
 
+@employees_bp.route("/export", methods=["GET"])
+@require_super_admin
+def export_employees():
+    """Export the same employee fields used by the management page as CSV."""
+    keyword = _text(request.args.get("keyword"), 80).lower()
+    employment_status = _text(request.args.get("employmentStatus"), 20)
+    account_status = _text(request.args.get("accountStatus"), 20)
+    department_id = request.args.get("departmentId")
+    try:
+        department_id = int(department_id) if department_id else None
+    except (TypeError, ValueError):
+        return jsonify({"success": False, "message": "部门筛选无效"}), 400
+
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM employees
+            ORDER BY CASE employment_status
+                WHEN 'active' THEN 0
+                WHEN 'probation' THEN 1
+                WHEN 'leave' THEN 2
+                ELSE 3
+            END, id DESC
+            """
+        ).fetchall()
+        employees = [_serialize_employee(conn, row) for row in rows]
+
+    def matches(employee):
+        if employment_status and employee["employmentStatus"] != employment_status:
+            return False
+        if account_status and employee["accountStatus"] != account_status:
+            return False
+        if department_id and department_id not in employee["departmentIds"]:
+            return False
+        if keyword:
+            haystack = " ".join(
+                str(employee.get(key) or "")
+                for key in ("displayName", "employeeNo", "username", "phone", "department")
+            ).lower()
+            if keyword not in haystack:
+                return False
+        return True
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow([
+        "姓名", "工号", "登录账号", "部门", "职位", "联系电话", "邮箱",
+        "在职状态", "账号状态", "入职日期", "性别", "民族", "出生日期",
+        "政治面貌", "婚姻状况", "身体状况", "籍贯", "文化水平", "专业", "毕业学校",
+        "毕业时间", "工作年限", "身份证号", "家庭住址", "紧急联系人", "紧急联系电话",
+    ])
+    for employee in filter(matches, employees):
+        writer.writerow([
+            employee.get("displayName", ""), employee.get("employeeNo", ""),
+            employee.get("username", ""), employee.get("department", ""),
+            employee.get("position", ""), employee.get("phone", ""), employee.get("email", ""),
+            employee.get("employmentStatus", ""), employee.get("accountStatus", ""),
+            employee.get("hireDate", ""), employee.get("gender", ""), employee.get("nation", ""),
+            employee.get("birthDate", ""), employee.get("politicalStatus", ""),
+            employee.get("maritalStatus", ""), employee.get("healthStatus", ""),
+            employee.get("nativePlace", ""),
+            employee.get("educationLevel", ""), employee.get("major", ""),
+            employee.get("graduationSchool", ""), employee.get("graduationDate", ""),
+            employee.get("workYears", ""), employee.get("idCard", ""),
+            employee.get("currentAddress", ""), employee.get("emergencyContact", ""),
+            employee.get("emergencyPhone", ""),
+        ])
+    body = "\ufeff" + output.getvalue()
+    return Response(
+        body,
+        mimetype="text/csv; charset=utf-8",
+        headers={"Content-Disposition": "attachment; filename=employees.csv"},
+    )
+
+
 @employees_bp.route("", methods=["POST"])
 @require_super_admin
 def create_employee():
@@ -411,10 +528,14 @@ def create_employee():
                     user_id, employee_no, display_name, avatar_url, department_id,
                     department, position, phone, id_card, current_address,
                     emergency_contact, emergency_phone, employment_status,
-                    employment_type, hire_date, account_status,
+                    employment_type, hire_date, account_status, gender, nation,
+                    birth_date, political_status, marital_status, health_status,
+                    native_place, education_level, major, graduation_school, graduation_date,
+                    work_years, email,
                     created_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """,
@@ -435,6 +556,19 @@ def create_employee():
                     values["employment_type"],
                     values["hire_date"],
                     values["account_status"] if user_id else "pending",
+                    values["gender"],
+                    values["nation"],
+                    values["birth_date"],
+                    values["political_status"],
+                    values["marital_status"],
+                    values["health_status"],
+                    values["native_place"],
+                    values["education_level"],
+                    values["major"],
+                    values["graduation_school"],
+                    values["graduation_date"],
+                    values["work_years"],
+                    values["email"],
                 ),
             )
             _set_employee_departments(conn, cursor.lastrowid, values["department_ids"])
@@ -540,6 +674,10 @@ def update_employee(employee_id):
                     id_card = ?, current_address = ?, emergency_contact = ?,
                     emergency_phone = ?, employment_status = ?,
                     employment_type = ?, hire_date = ?, account_status = ?,
+                    gender = ?, nation = ?, birth_date = ?, political_status = ?,
+                    marital_status = ?, health_status = ?, native_place = ?, education_level = ?,
+                    major = ?, graduation_school = ?, graduation_date = ?,
+                    work_years = ?, email = ?,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE id = ?
                 """,
@@ -560,6 +698,19 @@ def update_employee(employee_id):
                     values["employment_type"],
                     values["hire_date"],
                     values["account_status"] if user_id else "pending",
+                    values["gender"],
+                    values["nation"],
+                    values["birth_date"],
+                    values["political_status"],
+                    values["marital_status"],
+                    values["health_status"],
+                    values["native_place"],
+                    values["education_level"],
+                    values["major"],
+                    values["graduation_school"],
+                    values["graduation_date"],
+                    values["work_years"],
+                    values["email"],
                     employee_id,
                 ),
             )

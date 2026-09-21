@@ -239,6 +239,27 @@ def _ensure_auth_schema(conn):
             cursor.execute(
                 "ALTER TABLE employees ADD COLUMN department_id INTEGER"
             )
+        # 人事档案扩展字段：旧数据库通过启动时迁移自动补齐。
+        employee_profile_columns = {
+            "gender": "TEXT NOT NULL DEFAULT ''",
+            "nation": "TEXT NOT NULL DEFAULT ''",
+            "birth_date": "TEXT",
+            "political_status": "TEXT NOT NULL DEFAULT ''",
+            "marital_status": "TEXT NOT NULL DEFAULT ''",
+            "health_status": "TEXT NOT NULL DEFAULT ''",
+            "native_place": "TEXT NOT NULL DEFAULT ''",
+            "education_level": "TEXT NOT NULL DEFAULT ''",
+            "major": "TEXT NOT NULL DEFAULT ''",
+            "graduation_school": "TEXT NOT NULL DEFAULT ''",
+            "graduation_date": "TEXT",
+            "work_years": "TEXT NOT NULL DEFAULT ''",
+            "email": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in employee_profile_columns.items():
+            if column not in employee_columns:
+                cursor.execute(
+                    f"ALTER TABLE employees ADD COLUMN {column} {definition}"
+                )
 
         cursor.execute(
             """

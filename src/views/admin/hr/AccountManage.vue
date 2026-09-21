@@ -537,28 +537,64 @@
                   <tbody>
                     <tr>
                       <th scope="row">性别</th>
-                      <td>{{ selectedEmployee.gender || '—' }}</td>
+                      <td>
+                        <select v-if="inlineEditing" v-model="draft.gender" class="inline-table-input">
+                          <option value="">未填写</option>
+                          <option value="男">男</option>
+                          <option value="女">女</option>
+                          <option value="其他">其他</option>
+                        </select>
+                        <span v-else>{{ selectedEmployee.gender || '—' }}</span>
+                      </td>
                       <th scope="row">民族</th>
-                      <td>{{ selectedEmployee.nation || selectedEmployee.ethnicity || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.nation" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.nation || selectedEmployee.ethnicity || '—' }}</span>
+                      </td>
                     </tr>
                     <tr>
                       <th scope="row">出生日期</th>
-                      <td>{{ selectedEmployee.birthDate || selectedEmployee.birthday || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model="draft.birthDate" class="inline-table-input tabular" type="date" />
+                        <span v-else>{{ selectedEmployee.birthDate || selectedEmployee.birthday || '—' }}</span>
+                      </td>
                       <th scope="row">身份证号码</th>
                       <td>
-                        <input v-if="inlineEditing" v-model.trim="draft.idCard" class="inline-table-input" type="text" />
+                        <input
+                          v-if="inlineEditing"
+                          v-model.trim="draft.idCard"
+                          class="inline-table-input"
+                          type="text"
+                          inputmode="numeric"
+                          maxlength="18"
+                          @input="syncIdentityFields"
+                        />
                         <span v-else>{{ selectedEmployee.idCard || '—' }}</span>
                       </td>
                     </tr>
                     <tr>
                       <th scope="row">政治面貌</th>
-                      <td>{{ selectedEmployee.politicalStatus || selectedEmployee.politicalOutlook || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.politicalStatus" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.politicalStatus || selectedEmployee.politicalOutlook || '—' }}</span>
+                      </td>
                       <th scope="row">婚姻状况</th>
-                      <td>{{ selectedEmployee.maritalStatus || selectedEmployee.marital || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.maritalStatus" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.maritalStatus || selectedEmployee.marital || '—' }}</span>
+                      </td>
                     </tr>
                     <tr>
                       <th scope="row">身体状况</th>
-                      <td colspan="3">{{ selectedEmployee.healthStatus || selectedEmployee.health || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.healthStatus" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.healthStatus || selectedEmployee.health || '—' }}</span>
+                      </td>
+                      <th scope="row">籍贯</th>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.nativePlace" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.nativePlace || '—' }}</span>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -576,19 +612,34 @@
                   <tbody>
                     <tr>
                       <th scope="row">文化水平</th>
-                      <td>{{ selectedEmployee.educationLevel || selectedEmployee.education || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.educationLevel" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.educationLevel || selectedEmployee.education || '—' }}</span>
+                      </td>
                       <th scope="row">专业</th>
-                      <td>{{ selectedEmployee.major || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.major" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.major || '—' }}</span>
+                      </td>
                     </tr>
                     <tr>
                       <th scope="row">毕业学校</th>
-                      <td colspan="3">{{ selectedEmployee.graduationSchool || selectedEmployee.school || '—' }}</td>
+                      <td colspan="3">
+                        <input v-if="inlineEditing" v-model.trim="draft.graduationSchool" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.graduationSchool || selectedEmployee.school || '—' }}</span>
+                      </td>
                     </tr>
                     <tr>
                       <th scope="row">毕业时间</th>
-                      <td>{{ selectedEmployee.graduationDate || selectedEmployee.graduationTime || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model="draft.graduationDate" class="inline-table-input tabular" type="date" />
+                        <span v-else>{{ selectedEmployee.graduationDate || selectedEmployee.graduationTime || '—' }}</span>
+                      </td>
                       <th scope="row">工作年限</th>
-                      <td>{{ selectedEmployee.workYears || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.workYears" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.workYears || '—' }}</span>
+                      </td>
                     </tr>
                   </tbody>
                 </table>
@@ -611,7 +662,10 @@
                         <span v-else>{{ selectedEmployee.phone || '—' }}</span>
                       </td>
                       <th scope="row">邮箱</th>
-                      <td>{{ selectedEmployee.email || '—' }}</td>
+                      <td>
+                        <input v-if="inlineEditing" v-model.trim="draft.email" class="inline-table-input" type="email" />
+                        <span v-else>{{ selectedEmployee.email || '—' }}</span>
+                      </td>
                     </tr>
                     <tr>
                       <th scope="row">家庭住址</th>
@@ -805,7 +859,48 @@
                 </label>
                 <label class="field">
                   <span>身份证号</span>
-                  <input v-model.trim="draft.idCard" type="text" placeholder="建议后端加密存储" />
+                  <input
+                    v-model.trim="draft.idCard"
+                    type="text"
+                    inputmode="numeric"
+                    maxlength="18"
+                    placeholder="输入后自动识别生日和性别"
+                    @input="syncIdentityFields"
+                  />
+                </label>
+                <label class="field">
+                  <span>性别</span>
+                  <select v-model="draft.gender">
+                    <option value="">未填写</option>
+                    <option value="男">男</option>
+                    <option value="女">女</option>
+                    <option value="其他">其他</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>民族</span>
+                  <input v-model.trim="draft.nation" type="text" placeholder="请输入民族" />
+                </label>
+                <label class="field">
+                  <span>出生日期</span>
+                  <input v-model="draft.birthDate" type="date" />
+                </label>
+                <label class="field">
+                  <span>政治面貌</span>
+                  <input v-model.trim="draft.politicalStatus" type="text" placeholder="请输入政治面貌" />
+                </label>
+                <label class="field">
+                  <span>婚姻状况</span>
+                  <input v-model.trim="draft.maritalStatus" type="text" placeholder="请输入婚姻状况" />
+                </label>
+                <label class="field field-wide">
+                  <span>身体状况</span>
+                  <input v-model.trim="draft.healthStatus" type="text" placeholder="请输入身体状况" />
+                </label>
+                <label class="field field-wide">
+                  <span>籍贯</span>
+                  <input v-model.trim="draft.nativePlace" type="text" placeholder="根据身份证前六位自动填充，可手动修改" />
+                  <small class="field-hint">身份证识别的是户籍地址所在省级区域，仅作为籍贯参考</small>
                 </label>
                 <label class="field">
                   <span>用工类型</span>
@@ -882,6 +977,26 @@
                 <label class="field field-wide">
                   <span>家庭住址</span>
                   <input v-model.trim="draft.currentAddress" type="text" placeholder="请输入现居住地址" />
+                </label>
+                <label class="field">
+                  <span>文化水平</span>
+                  <input v-model.trim="draft.educationLevel" type="text" placeholder="请输入文化水平" />
+                </label>
+                <label class="field">
+                  <span>专业</span>
+                  <input v-model.trim="draft.major" type="text" placeholder="请输入专业" />
+                </label>
+                <label class="field field-wide">
+                  <span>毕业学校</span>
+                  <input v-model.trim="draft.graduationSchool" type="text" placeholder="请输入毕业学校" />
+                </label>
+                <label class="field">
+                  <span>毕业时间</span>
+                  <input v-model="draft.graduationDate" type="date" />
+                </label>
+                <label class="field">
+                  <span>工作年限</span>
+                  <input v-model.trim="draft.workYears" type="text" placeholder="例如 5 年" />
                 </label>
               </div>
             </section>
@@ -974,6 +1089,10 @@
                   <span>紧急联系电话</span>
                   <input v-model.trim="draft.emergencyPhone" type="text" placeholder="联系电话" />
                 </label>
+                <label class="field field-wide">
+                  <span>邮箱</span>
+                  <input v-model.trim="draft.email" type="email" placeholder="请输入邮箱" />
+                </label>
               </div>
             </section>
           </div>
@@ -1039,6 +1158,7 @@ const passwordInput = ref(null)
 const passwordVisible = ref(false)
 const passwordConfirmVisible = ref(false)
 const detailPasswordVisible = ref(false)
+const autoNativePlace = ref('')
 const notice = ref('')
 let noticeTimer
 
@@ -1156,6 +1276,19 @@ function createEmptyEmployee() {
     position: '',
     phone: '',
     idCard: '',
+    gender: '',
+    nation: '',
+    birthDate: '',
+    politicalStatus: '',
+    maritalStatus: '',
+    healthStatus: '',
+    nativePlace: '',
+    educationLevel: '',
+    major: '',
+    graduationSchool: '',
+    graduationDate: '',
+    workYears: '',
+    email: '',
     currentAddress: '',
     emergencyContact: '',
     emergencyPhone: '',
@@ -1168,6 +1301,7 @@ function createEmptyEmployee() {
 
 function openCreate() {
   resetPendingAvatar()
+  autoNativePlace.value = ''
   inlineEditing.value = false
   editingEmployee.value = false
   draft.value = createEmptyEmployee()
@@ -1196,6 +1330,7 @@ function goToList() {
 
 function openEdit(employee) {
   resetPendingAvatar()
+  autoNativePlace.value = ''
   selectedEmployeeId.value = employee.id
   activeDetailTab.value = 'profile'
   editingEmployee.value = true
@@ -1237,6 +1372,74 @@ function setInlineDepartment(event) {
   const departmentId = Number(event.target.value) || null
   draft.value.departmentId = departmentId
   draft.value.departmentIds = departmentId ? [departmentId] : []
+}
+
+function syncIdentityFields() {
+  const identity = String(draft.value.idCard || '').trim()
+  const digits = identity.toUpperCase()
+  let birthDate = ''
+  let genderDigit = ''
+
+  if (/^\d{17}[\dX]$/.test(digits)) {
+    birthDate = `${digits.slice(6, 10)}-${digits.slice(10, 12)}-${digits.slice(12, 14)}`
+    genderDigit = digits[16]
+  } else if (/^\d{15}$/.test(digits)) {
+    birthDate = `19${digits.slice(6, 8)}-${digits.slice(8, 10)}-${digits.slice(10, 12)}`
+    genderDigit = digits[14]
+  } else {
+    return
+  }
+
+  const parsedDate = new Date(`${birthDate}T00:00:00Z`)
+  const validDate = !Number.isNaN(parsedDate.getTime())
+    && parsedDate.toISOString().slice(0, 10) === birthDate
+  if (!validDate) return
+
+  draft.value.birthDate = birthDate
+  draft.value.gender = Number(genderDigit) % 2 === 1 ? '男' : '女'
+  const regionPrefix = digits.slice(0, 2)
+  const regionName = ID_REGION_PREFIXES[regionPrefix]
+  if (regionName && (!draft.value.nativePlace || draft.value.nativePlace === autoNativePlace.value)) {
+    draft.value.nativePlace = regionName
+    autoNativePlace.value = regionName
+  }
+}
+
+const ID_REGION_PREFIXES = {
+  '11': '北京市',
+  '12': '天津市',
+  '13': '河北省',
+  '14': '山西省',
+  '15': '内蒙古自治区',
+  '21': '辽宁省',
+  '22': '吉林省',
+  '23': '黑龙江省',
+  '31': '上海市',
+  '32': '江苏省',
+  '33': '浙江省',
+  '34': '安徽省',
+  '35': '福建省',
+  '36': '江西省',
+  '37': '山东省',
+  '41': '河南省',
+  '42': '湖北省',
+  '43': '湖南省',
+  '44': '广东省',
+  '45': '广西壮族自治区',
+  '46': '海南省',
+  '50': '重庆市',
+  '51': '四川省',
+  '52': '贵州省',
+  '53': '云南省',
+  '54': '西藏自治区',
+  '61': '陕西省',
+  '62': '甘肃省',
+  '63': '青海省',
+  '64': '宁夏回族自治区',
+  '65': '新疆维吾尔自治区',
+  '71': '台湾省',
+  '81': '香港特别行政区',
+  '82': '澳门特别行政区'
 }
 
 const departmentSelectionLabel = computed(() => {
@@ -1481,7 +1684,28 @@ async function refreshList() {
 }
 
 function exportPreview() {
-  showNotice('导出功能将在后端接口接入后启用')
+  const params = new URLSearchParams()
+  if (filters.value.keyword) params.set('keyword', filters.value.keyword)
+  if (filters.value.department) params.set('departmentId', filters.value.department)
+  if (filters.value.employmentStatus) params.set('employmentStatus', filters.value.employmentStatus)
+  if (filters.value.accountStatus) params.set('accountStatus', filters.value.accountStatus)
+  request({
+    url: `/admin/employees/export?${params.toString()}`,
+    method: 'GET',
+    responseType: 'blob'
+  }).then((blob) => {
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = '员工档案.csv'
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    showNotice('员工档案已导出')
+  }).catch((error) => {
+    showNotice(error?.response?.data?.message || '员工档案导出失败')
+  })
 }
 
 function showNotice(message) {

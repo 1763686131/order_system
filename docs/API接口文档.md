@@ -265,6 +265,7 @@
 | Method | URL | 说明 |
 |---|---|---|
 | `GET` | `/api/admin/employees` | 查询员工档案和绑定账号 |
+| `GET` | `/api/admin/employees/export` | 按当前筛选条件导出员工档案 CSV |
 | `POST` | `/api/admin/employees` | 创建员工档案，可同时开通账号 |
 | `PUT` | `/api/admin/employees/<employee_id>` | 修改档案、密码和账号状态 |
 | `POST` | `/api/admin/employees/<employee_id>/avatar` | 上传或替换员工头像 |
@@ -303,6 +304,51 @@
   "accountStatus": "active"
 }
 ```
+
+员工档案还支持页面“员工基本资料”中使用的完整字段。以下字段同时适用于
+`POST` 和 `PUT`（服务端会按字段长度截断，空值保存为空字符串；日期字段使用
+`YYYY-MM-DD`）：
+
+| JSON 字段 | 含义 | 最大长度/格式 |
+| --- | --- | --- |
+| `displayName` | 姓名（必填） | 80 个字符 |
+| `employeeNo` | 工号 | 40 个字符；留空时自动生成 `E-XXXX` |
+| `phone` | 联系电话 | 30 个字符 |
+| `idCard` | 身份证号码 | 40 个字符 |
+| `gender` | 性别 | 20 个字符 |
+| `nation` | 民族 | 30 个字符 |
+| `birthDate` | 出生日期 | `YYYY-MM-DD` |
+| `politicalStatus` | 政治面貌 | 40 个字符 |
+| `maritalStatus` | 婚姻状况 | 30 个字符 |
+| `healthStatus` | 身体状况 | 80 个字符 |
+| `nativePlace` | 籍贯 | 120 个字符 |
+| `educationLevel` | 文化水平 | 50 个字符 |
+| `major` | 专业 | 100 个字符 |
+| `graduationSchool` | 毕业学校 | 120 个字符 |
+| `graduationDate` | 毕业时间 | `YYYY-MM-DD` |
+| `workYears` | 工作年限 | 30 个字符 |
+| `email` | 邮箱 | 120 个字符 |
+| `currentAddress` | 家庭住址 | 300 个字符 |
+| `emergencyContact` | 紧急联系人 | 80 个字符 |
+| `emergencyPhone` | 紧急联系电话 | 30 个字符 |
+| `employmentStatus` | 在职状态 | `active`、`probation`、`leave`、`resigned` |
+| `employmentType` | 用工类型 | 30 个字符，默认“正式” |
+| `hireDate` | 入职日期 | `YYYY-MM-DD` |
+
+响应中的同名字段可直接用于详情页展示。兼容旧客户端时，服务端仍接受
+`ethnicity`、`birthday`、`politicalOutlook`、`marital`、`health`、`education`、
+`school` 和 `graduationTime`，新代码应使用上表中的标准字段名。
+
+员工导出接口示例：
+
+```text
+GET /api/admin/employees/export?keyword=张三&departmentId=2&employmentStatus=active&accountStatus=active
+```
+
+所有查询参数均可省略；`keyword` 匹配姓名、工号、登录账号、手机号和部门名称，
+`departmentId` 按员工任一部门匹配，两个状态参数按精确值筛选。接口返回带 UTF-8
+BOM 的 `text/csv` 文件，列包含页面展示字段以及基本身份、教育背景、联系与紧急信息；
+不会返回密码或密码哈希。
 
 `departmentIds` 是员工部门关系的写入字段，数组第一项为主部门，其余为兼任部门；
 传入空数组表示清空部门归属。响应中的 `departmentId` 是主部门 ID，`departments`
