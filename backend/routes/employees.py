@@ -188,6 +188,7 @@ def _serialize_employee(conn, row):
         "workYears": row["work_years"] or "",
         "email": row["email"] or "",
         "currentAddress": row["current_address"] or "",
+        "residentialAddress": row["residential_address"] or "",
         "emergencyContact": row["emergency_contact"] or "",
         "emergencyPhone": row["emergency_phone"] or "",
         "employmentStatus": row["employment_status"],
@@ -304,6 +305,9 @@ def _employee_values(data):
         "work_years": _text(data.get("workYears"), 30),
         "email": _text(data.get("email"), 120),
         "current_address": _text(data.get("currentAddress"), 300),
+        "residential_address": _text(
+            data.get("residentialAddress", data.get("presentAddress")), 300
+        ),
         "emergency_contact": _text(data.get("emergencyContact"), 80),
         "emergency_phone": _text(data.get("emergencyPhone"), 30),
         "employment_status": _employment_status(data.get("employmentStatus")),
@@ -479,7 +483,7 @@ def export_employees():
         "姓名", "工号", "登录账号", "部门", "职位", "联系电话", "邮箱",
         "在职状态", "账号状态", "入职日期", "性别", "民族", "出生日期",
         "政治面貌", "婚姻状况", "身体状况", "籍贯", "文化水平", "专业", "毕业学校",
-        "毕业时间", "工作年限", "身份证号", "家庭住址", "紧急联系人", "紧急联系电话",
+        "毕业时间", "工作年限", "身份证号", "家庭住址", "现住地址", "紧急联系人", "紧急联系电话",
     ])
     for employee in filter(matches, employees):
         writer.writerow([
@@ -494,7 +498,8 @@ def export_employees():
             employee.get("educationLevel", ""), employee.get("major", ""),
             employee.get("graduationSchool", ""), employee.get("graduationDate", ""),
             employee.get("workYears", ""), employee.get("idCard", ""),
-            employee.get("currentAddress", ""), employee.get("emergencyContact", ""),
+            employee.get("currentAddress", ""), employee.get("residentialAddress", ""),
+            employee.get("emergencyContact", ""),
             employee.get("emergencyPhone", ""),
         ])
     body = "\ufeff" + output.getvalue()
@@ -527,7 +532,7 @@ def create_employee():
                 INSERT INTO employees (
                     user_id, employee_no, display_name, avatar_url, department_id,
                     department, position, phone, id_card, current_address,
-                    emergency_contact, emergency_phone, employment_status,
+                    residential_address, emergency_contact, emergency_phone, employment_status,
                     employment_type, hire_date, account_status, gender, nation,
                     birth_date, political_status, marital_status, health_status,
                     native_place, education_level, major, graduation_school, graduation_date,
@@ -535,7 +540,7 @@ def create_employee():
                     created_at, updated_at
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
                 )
                 """,
@@ -550,6 +555,7 @@ def create_employee():
                     values["phone"],
                     values["id_card"],
                     values["current_address"],
+                    values["residential_address"],
                     values["emergency_contact"],
                     values["emergency_phone"],
                     values["employment_status"],
@@ -671,7 +677,7 @@ def update_employee(employee_id):
                 UPDATE employees SET
                     user_id = ?, employee_no = ?, display_name = ?,
                     avatar_url = ?, department_id = ?, department = ?, position = ?, phone = ?,
-                    id_card = ?, current_address = ?, emergency_contact = ?,
+                    id_card = ?, current_address = ?, residential_address = ?, emergency_contact = ?,
                     emergency_phone = ?, employment_status = ?,
                     employment_type = ?, hire_date = ?, account_status = ?,
                     gender = ?, nation = ?, birth_date = ?, political_status = ?,
@@ -692,6 +698,7 @@ def update_employee(employee_id):
                     values["phone"],
                     values["id_card"],
                     values["current_address"],
+                    values["residential_address"],
                     values["emergency_contact"],
                     values["emergency_phone"],
                     values["employment_status"],

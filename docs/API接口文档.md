@@ -329,6 +329,7 @@
 | `workYears` | 工作年限 | 30 个字符 |
 | `email` | 邮箱 | 120 个字符 |
 | `currentAddress` | 家庭住址 | 300 个字符 |
+| `residentialAddress` | 现住地址 | 300 个字符 |
 | `emergencyContact` | 紧急联系人 | 80 个字符 |
 | `emergencyPhone` | 紧急联系电话 | 30 个字符 |
 | `employmentStatus` | 在职状态 | `active`、`probation`、`leave`、`resigned` |

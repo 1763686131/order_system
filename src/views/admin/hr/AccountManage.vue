@@ -3,7 +3,7 @@
     <nav class="workspace-nav" aria-label="员工管理导航">
       <button
         class="workspace-tab"
-        :class="{ active: !selectedEmployee }"
+        :class="{ active: !selectedEmployee && !creatingEmployee }"
         type="button"
         @click="goToList"
       >
@@ -21,13 +21,13 @@
         type="button"
         @click="activeDetailTab = 'profile'"
       >
-        <span class="tab-avatar" :style="avatarStyle(selectedEmployee)">{{ selectedEmployee.displayName.slice(0, 1) }}</span>
-        {{ selectedEmployee.displayName }}
+        <span class="tab-avatar" :style="avatarStyle(selectedEmployee)">{{ selectedEmployee.displayName.slice(0, 1) || '新' }}</span>
+        {{ selectedEmployee.displayName || '新增员工' }}
         <span class="tab-close" title="返回员工列表" @click.stop="goToList">×</span>
       </button>
     </nav>
 
-    <template v-if="!selectedEmployee">
+    <template v-if="!selectedEmployee && !creatingEmployee">
       <section class="records-panel">
         <div class="records-toolbar">
           <div class="records-heading">
@@ -675,6 +675,13 @@
                       </td>
                     </tr>
                     <tr>
+                      <th scope="row">现住地址</th>
+                      <td colspan="3">
+                        <input v-if="inlineEditing" v-model.trim="draft.residentialAddress" class="inline-table-input" type="text" />
+                        <span v-else>{{ selectedEmployee.residentialAddress || '—' }}</span>
+                      </td>
+                    </tr>
+                    <tr>
                       <th scope="row">紧急联系人</th>
                       <td>
                         <input v-if="inlineEditing" v-model.trim="draft.emergencyContact" class="inline-table-input" type="text" />
@@ -1144,6 +1151,7 @@ const filters = ref({
 const pageSize = ref(20)
 
 const selectedEmployeeId = ref(null)
+const creatingEmployee = ref(false)
 const activeDetailTab = ref('profile')
 const inlineEditing = ref(false)
 const drawerVisible = ref(false)
@@ -1201,6 +1209,7 @@ async function loadEmployeeData() {
 }
 
 const selectedEmployee = computed(() => {
+  if (creatingEmployee.value) return draft.value
   return employees.value.find(employee => employee.id === selectedEmployeeId.value) || null
 })
 
@@ -1290,6 +1299,7 @@ function createEmptyEmployee() {
     workYears: '',
     email: '',
     currentAddress: '',
+    residentialAddress: '',
     emergencyContact: '',
     emergencyPhone: '',
     employmentStatus: 'active',
@@ -1302,7 +1312,9 @@ function createEmptyEmployee() {
 function openCreate() {
   resetPendingAvatar()
   autoNativePlace.value = ''
-  inlineEditing.value = false
+  selectedEmployeeId.value = null
+  creatingEmployee.value = true
+  inlineEditing.value = true
   editingEmployee.value = false
   draft.value = createEmptyEmployee()
   const defaultDepartmentId = departments.value.find(item => item.status === 'active')?.id || null
@@ -1311,11 +1323,12 @@ function openCreate() {
   departmentSelectorOpen.value = false
   passwordVisible.value = false
   passwordConfirmVisible.value = false
-  drawerVisible.value = true
+  drawerVisible.value = false
 }
 
 function openEmployee(employee) {
   if (inlineEditing.value) cancelInlineEdit()
+  creatingEmployee.value = false
   selectedEmployeeId.value = employee.id
   activeDetailTab.value = 'profile'
   detailPasswordVisible.value = false
@@ -1323,6 +1336,7 @@ function openEmployee(employee) {
 
 function goToList() {
   if (inlineEditing.value) cancelInlineEdit()
+  creatingEmployee.value = false
   selectedEmployeeId.value = null
   activeDetailTab.value = 'profile'
   detailPasswordVisible.value = false
@@ -1332,6 +1346,7 @@ function openEdit(employee) {
   resetPendingAvatar()
   autoNativePlace.value = ''
   selectedEmployeeId.value = employee.id
+  creatingEmployee.value = false
   activeDetailTab.value = 'profile'
   editingEmployee.value = true
   draft.value = {
@@ -1361,6 +1376,7 @@ function closeDrawer() {
 
 function cancelInlineEdit() {
   resetPendingAvatar()
+  creatingEmployee.value = false
   inlineEditing.value = false
   editingEmployee.value = false
   passwordVisible.value = false
@@ -1547,7 +1563,14 @@ async function saveEmployee() {
         ? `员工档案已保存，但${avatarError}`
         : response.message || '员工档案已保存'
     )
-    if (inlineEditing.value) {
+    if (creatingEmployee.value) {
+      selectedEmployeeId.value = savedEmployee.id
+      creatingEmployee.value = false
+      inlineEditing.value = false
+      editingEmployee.value = false
+      draft.value = { ...savedEmployee, password: '', passwordConfirm: '', passwordSet: Boolean(savedEmployee.passwordSet) }
+      resetPendingAvatar()
+    } else if (inlineEditing.value) {
       cancelInlineEdit()
     } else {
       closeDrawer()

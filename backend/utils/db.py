@@ -248,6 +248,7 @@ def _ensure_auth_schema(conn):
             "marital_status": "TEXT NOT NULL DEFAULT ''",
             "health_status": "TEXT NOT NULL DEFAULT ''",
             "native_place": "TEXT NOT NULL DEFAULT ''",
+            "residential_address": "TEXT NOT NULL DEFAULT ''",
             "education_level": "TEXT NOT NULL DEFAULT ''",
             "major": "TEXT NOT NULL DEFAULT ''",
             "graduation_school": "TEXT NOT NULL DEFAULT ''",
