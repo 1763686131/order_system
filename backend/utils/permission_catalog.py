@@ -33,6 +33,13 @@ ADMIN_EMPLOYEE_PERMISSIONS = {
     "delete": "admin.employee.delete",
 }
 
+ADMIN_DEPARTMENT_PERMISSIONS = {
+    "read": "admin.department.read",
+    "create": "admin.department.create",
+    "edit": "admin.department.edit",
+    "delete": "admin.department.delete",
+}
+
 PERMISSION_MODULES = [
     {
         "code": "touch_terminal",
@@ -177,6 +184,33 @@ PERMISSION_MODULES = [
                 "code": ADMIN_EMPLOYEE_PERMISSIONS["delete"],
                 "name": "删除员工信息",
                 "description": "删除员工档案及其绑定的登录账号",
+            },
+        ],
+    },
+    {
+        "code": "admin_department_management",
+        "name": "部门管理",
+        "description": "控制部门列表、部门配置和部门删除操作",
+        "permissions": [
+            {
+                "code": ADMIN_DEPARTMENT_PERMISSIONS["read"],
+                "name": "查看部门列表",
+                "description": "查看部门列表、部门状态和员工数量",
+            },
+            {
+                "code": ADMIN_DEPARTMENT_PERMISSIONS["create"],
+                "name": "新增部门",
+                "description": "创建新的部门配置",
+            },
+            {
+                "code": ADMIN_DEPARTMENT_PERMISSIONS["edit"],
+                "name": "编辑部门",
+                "description": "修改部门名称、状态和排序",
+            },
+            {
+                "code": ADMIN_DEPARTMENT_PERMISSIONS["delete"],
+                "name": "删除部门",
+                "description": "删除没有员工和下级部门的部门",
             },
         ],
     },

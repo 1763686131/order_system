@@ -2,9 +2,12 @@
 
 from flask import Blueprint, jsonify, request
 
-from utils.auth import require_admin_permission, require_super_admin
+from utils.auth import require_admin_permission, require_any_admin_permission
 from utils.db import get_db
-from utils.permission_catalog import ADMIN_EMPLOYEE_PERMISSIONS
+from utils.permission_catalog import (
+    ADMIN_DEPARTMENT_PERMISSIONS,
+    ADMIN_EMPLOYEE_PERMISSIONS,
+)
 
 
 departments_bp = Blueprint(
@@ -71,7 +74,10 @@ def _validate_parent(conn, parent_id, department_id=None):
 
 
 @departments_bp.route("", methods=["GET"])
-@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["read"])
+@require_any_admin_permission(
+    ADMIN_DEPARTMENT_PERMISSIONS["read"],
+    ADMIN_EMPLOYEE_PERMISSIONS["read"],
+)
 def list_departments():
     with get_db() as conn:
         rows = conn.execute(
@@ -86,7 +92,7 @@ def list_departments():
 
 
 @departments_bp.route("", methods=["POST"])
-@require_super_admin
+@require_admin_permission(ADMIN_DEPARTMENT_PERMISSIONS["create"])
 def create_department():
     data = request.get_json(silent=True) or {}
     name = _text(data.get("name"), 80)
@@ -120,7 +126,7 @@ def create_department():
 
 
 @departments_bp.route("/<int:department_id>", methods=["PUT"])
-@require_super_admin
+@require_admin_permission(ADMIN_DEPARTMENT_PERMISSIONS["edit"])
 def update_department(department_id):
     data = request.get_json(silent=True) or {}
     name = _text(data.get("name"), 80)
@@ -172,7 +178,7 @@ def update_department(department_id):
 
 
 @departments_bp.route("/<int:department_id>", methods=["DELETE"])
-@require_super_admin
+@require_admin_permission(ADMIN_DEPARTMENT_PERMISSIONS["delete"])
 def delete_department(department_id):
     with get_db() as conn:
         conn.execute("BEGIN IMMEDIATE")

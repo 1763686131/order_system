@@ -9,7 +9,7 @@
           </div>
           <div class="department-header-actions">
             <button
-              v-if="selectedDepartment"
+              v-if="selectedDepartment && canEditDepartments"
               class="icon-button"
               type="button"
               title="编辑当前部门"
@@ -22,6 +22,7 @@
               </svg>
             </button>
             <button
+              v-if="canCreateDepartments"
               class="icon-button"
               type="button"
               title="新增部门"
@@ -101,7 +102,7 @@
               <input v-model.trim="employeeSearch" type="search" placeholder="搜索员工" />
             </label>
             <button
-              v-if="selectedDepartment"
+              v-if="selectedDepartment && canEditEmployees"
               class="button button-primary"
               type="button"
               :disabled="selectedDepartment.status !== 'active'"
@@ -136,7 +137,7 @@
               <tr
                 v-for="employee in filteredEmployees"
                 :key="employee.id"
-                @contextmenu.prevent="openEmployeeContextMenu($event, employee)"
+                @contextmenu.prevent="canEditEmployees && openEmployeeContextMenu($event, employee)"
               >
                 <td>
                   <div class="employee-cell">
@@ -212,7 +213,7 @@
     </section>
 
     <div
-      v-if="contextMenuVisible"
+      v-if="contextMenuVisible && canEditEmployees"
       class="employee-context-menu"
       :style="contextMenuStyle"
       role="menu"
@@ -273,7 +274,7 @@
 
           <div class="modal-footer">
             <button
-              v-if="editingDepartment && departmentDraft.employeeCount === 0"
+              v-if="editingDepartment && departmentDraft.employeeCount === 0 && canDeleteDepartments"
               class="button button-danger"
               type="button"
               :disabled="saving"
@@ -286,7 +287,12 @@
               <button class="button button-secondary" type="button" :disabled="saving" @click="closeDepartmentModal">
                 取消
               </button>
-              <button class="button button-primary" type="button" :disabled="saving" @click="saveDepartment">
+              <button
+                class="button button-primary"
+                type="button"
+                :disabled="saving || (departmentDraft.id ? !canEditDepartments : !canCreateDepartments)"
+                @click="saveDepartment"
+              >
                 {{ saving ? '保存中...' : '保存部门' }}
               </button>
             </div>
@@ -379,8 +385,14 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
+import {
+  ADMIN_DEPARTMENT_PERMISSIONS,
+  ADMIN_EMPLOYEE_PERMISSIONS
+} from '@/utils/accessControl'
 
 const router = useRouter()
+const userStore = useUserStore()
 const ALL_ID = 'all'
 const UNASSIGNED_ID = 'unassigned'
 
@@ -404,6 +416,19 @@ const departmentDraft = ref(createEmptyDepartment())
 const saving = ref(false)
 const notice = ref('')
 let noticeTimer
+
+const canCreateDepartments = computed(() =>
+  userStore.hasPerm(ADMIN_DEPARTMENT_PERMISSIONS.CREATE)
+)
+const canEditDepartments = computed(() =>
+  userStore.hasPerm(ADMIN_DEPARTMENT_PERMISSIONS.EDIT)
+)
+const canDeleteDepartments = computed(() =>
+  userStore.hasPerm(ADMIN_DEPARTMENT_PERMISSIONS.DELETE)
+)
+const canEditEmployees = computed(() =>
+  userStore.hasPerm(ADMIN_EMPLOYEE_PERMISSIONS.EDIT)
+)
 
 const selectedDepartment = computed(() =>
   departments.value.find(item => item.id === selectedDepartmentId.value) || null
@@ -517,6 +542,10 @@ function selectVirtualDepartment(id) {
 
 function openEdit(department) {
   if (!department) return
+  if (!canEditDepartments.value) {
+    showNotice('当前账号没有编辑部门的权限')
+    return
+  }
   departmentModalReturnId.value = department.id
   editingDepartment.value = true
   departmentDraft.value = { ...department }
@@ -524,6 +553,10 @@ function openEdit(department) {
 }
 
 function openCreate() {
+  if (!canCreateDepartments.value) {
+    showNotice('当前账号没有新增部门的权限')
+    return
+  }
   departmentModalReturnId.value = selectedDepartmentId.value
   selectedDepartmentId.value = null
   departmentDraft.value = {
@@ -546,6 +579,13 @@ function closeDepartmentModal() {
 }
 
 async function saveDepartment() {
+  const canSave = departmentDraft.value.id
+    ? canEditDepartments.value
+    : canCreateDepartments.value
+  if (!canSave) {
+    showNotice('当前账号没有保存部门的权限')
+    return
+  }
   if (!departmentDraft.value.name) {
     showNotice('请先填写部门名称')
     return
@@ -574,6 +614,10 @@ async function saveDepartment() {
 }
 
 async function deleteDepartment() {
+  if (!canDeleteDepartments.value) {
+    showNotice('当前账号没有删除部门的权限')
+    return
+  }
   if (!departmentDraft.value.id || departmentDraft.value.employeeCount > 0) return
   if (!window.confirm(`确认删除部门“${departmentDraft.value.name}”吗？`)) return
   try {
@@ -592,6 +636,10 @@ async function deleteDepartment() {
 }
 
 function openAddEmployee() {
+  if (!canEditEmployees.value) {
+    showNotice('添加员工到部门需要编辑员工信息权限')
+    return
+  }
   if (!selectedDepartment.value || selectedDepartment.value.status !== 'active') return
   employeePickerQuery.value = ''
   employeePickerSelectedIds.value = []
@@ -626,6 +674,10 @@ function buildEmployeeUpdatePayload(employee, departmentIds, overrides = {}) {
 }
 
 async function updateEmployee(employee, payload, successMessage) {
+  if (!canEditEmployees.value) {
+    showNotice('当前账号没有编辑员工信息的权限')
+    return null
+  }
   try {
     saving.value = true
     const response = await request.put(`/admin/employees/${employee.id}`, payload)
@@ -642,6 +694,7 @@ async function updateEmployee(employee, payload, successMessage) {
 }
 
 function openEmployeeContextMenu(event, employee) {
+  if (!canEditEmployees.value) return
   contextMenuEmployee.value = employee
   contextMenuPosition.value = { x: event.clientX, y: event.clientY }
   contextMenuVisible.value = true
@@ -653,6 +706,10 @@ function closeEmployeeContextMenu() {
 }
 
 async function removeEmployeeFromDepartment(employee) {
+  if (!canEditEmployees.value) {
+    showNotice('当前账号没有编辑员工信息的权限')
+    return
+  }
   const department = selectedDepartment.value
   if (!department || !employee || saving.value) return
   const nextDepartmentIds = getEmployeeDepartmentIds(employee).filter(
@@ -668,6 +725,10 @@ async function removeEmployeeFromDepartment(employee) {
 }
 
 async function openPositionEditor(employee) {
+  if (!canEditEmployees.value) {
+    showNotice('修改职位需要编辑员工信息权限')
+    return
+  }
   if (!employee) return
   closeEmployeeContextMenu()
   editingPositionEmployeeId.value = employee.id
@@ -683,6 +744,10 @@ function cancelPositionEdit() {
 }
 
 async function savePosition(employee) {
+  if (!canEditEmployees.value) {
+    showNotice('修改职位需要编辑员工信息权限')
+    return
+  }
   if (!employee || editingPositionEmployeeId.value !== employee.id || saving.value) return
   const position = editingPositionValue.value.trim()
   const departmentIds = getEmployeeDepartmentIds(employee)
@@ -701,6 +766,10 @@ function getEmployeeDepartmentIds(employee) {
 }
 
 async function addSelectedEmployees() {
+  if (!canEditEmployees.value) {
+    showNotice('添加员工到部门需要编辑员工信息权限')
+    return
+  }
   if (!selectedDepartment.value || employeePickerSelectedIds.value.length === 0) return
   const targetDepartmentId = selectedDepartment.value.id
   const selectedEmployees = employees.value.filter(employee =>

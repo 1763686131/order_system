@@ -277,7 +277,10 @@ import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import request from '@/api/request'
 import { ADMIN_ROUTE_PERMISSIONS } from '@/utils/adminAccess'
-import { ADMIN_EMPLOYEE_PERMISSIONS } from '@/utils/accessControl'
+import {
+  ADMIN_DEPARTMENT_PERMISSIONS,
+  ADMIN_EMPLOYEE_PERMISSIONS
+} from '@/utils/accessControl'
 import ChatWindow from '@/components/admin/ChatWindow.vue'
 import DirectoryPanel from '@/components/admin/DirectoryPanel.vue'
 import MessageInbox from '@/components/admin/MessageInbox.vue'
@@ -556,6 +559,7 @@ const allMenuItems = [
     icon: icons.briefcase,
     permission: ADMIN_ROUTE_PERMISSIONS.HR,
     additionalPermission: ADMIN_EMPLOYEE_PERMISSIONS.READ,
+    additionalPermissions: [ADMIN_DEPARTMENT_PERMISSIONS.READ],
     children: [
       {
         label: '员工管理',
@@ -565,7 +569,7 @@ const allMenuItems = [
       {
         label: '部门管理',
         path: '/admin/hr/departments',
-        permission: ADMIN_ROUTE_PERMISSIONS.HR
+        permission: ADMIN_DEPARTMENT_PERMISSIONS.READ
       },
       {
         label: '公司资料',
@@ -596,7 +600,8 @@ const menuItems = computed(() =>
   allMenuItems
     .filter(item =>
       userStore.hasPerm(item.permission) ||
-      (item.additionalPermission && userStore.hasPerm(item.additionalPermission))
+      (item.additionalPermission && userStore.hasPerm(item.additionalPermission)) ||
+      item.additionalPermissions?.some(permission => userStore.hasPerm(permission))
     )
     .map(item => {
       if (!item.children) return item

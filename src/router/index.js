@@ -5,6 +5,7 @@ import MainView from '@/views/MainView.vue'
 import Admin from '@/views/Admin.vue'
 import { getAdminRoutePermission, getDefaultAdminPath } from '@/utils/adminAccess'
 import {
+  ADMIN_DEPARTMENT_PERMISSIONS,
   ADMIN_EMPLOYEE_PERMISSIONS,
   ADMIN_SALES_ORDER_PERMISSIONS
 } from '@/utils/accessControl'
@@ -267,7 +268,10 @@ const routes = [
         path: 'hr/departments',
         name: 'admin-hr-departments',
         component: () => import('@/views/admin/hr/DepartmentManage.vue'),
-        meta: { requiresAuth: true }
+        meta: {
+          requiresAuth: true,
+          permission: ADMIN_DEPARTMENT_PERMISSIONS.READ
+        }
       },
       {
         path: 'system/print-template',

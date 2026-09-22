@@ -9,6 +9,7 @@ from werkzeug.security import generate_password_hash
 
 from utils.auth import (
     get_current_user,
+    require_any_admin_permission,
     require_admin_permission,
     serialize_user,
 )
@@ -19,7 +20,10 @@ from utils.avatar_storage import (
     save_avatar_upload,
 )
 from utils.db import get_db
-from utils.permission_catalog import ADMIN_EMPLOYEE_PERMISSIONS
+from utils.permission_catalog import (
+    ADMIN_DEPARTMENT_PERMISSIONS,
+    ADMIN_EMPLOYEE_PERMISSIONS,
+)
 
 
 employees_bp = Blueprint(
@@ -449,7 +453,10 @@ def _set_employee_departments(conn, employee_id, department_ids):
 
 
 @employees_bp.route("", methods=["GET"])
-@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["read"])
+@require_any_admin_permission(
+    ADMIN_EMPLOYEE_PERMISSIONS["read"],
+    ADMIN_DEPARTMENT_PERMISSIONS["read"],
+)
 def list_employees():
     with get_db() as conn:
         rows = conn.execute(

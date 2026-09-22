@@ -29,6 +29,13 @@ export const ADMIN_EMPLOYEE_PERMISSIONS = {
   DELETE: 'admin.employee.delete'
 }
 
+export const ADMIN_DEPARTMENT_PERMISSIONS = {
+  READ: 'admin.department.read',
+  CREATE: 'admin.department.create',
+  EDIT: 'admin.department.edit',
+  DELETE: 'admin.department.delete'
+}
+
 const normalizeIds = (values) => {
   if (!Array.isArray(values)) return []
   return [...new Set(values.map(Number).filter(Number.isInteger))]

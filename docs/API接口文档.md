@@ -404,7 +404,7 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 
 ### 1.6.1 部门配置与员工多部门关系
 
-部门配置和员工部门归属仅允许超级管理员维护。员工可以同时属于多个部门，
+部门配置通过 `admin.department.*` 权限控制。员工可以同时属于多个部门，
 部门关系与角色组关系相互独立；员工是否能访问后台、能看到哪些页面和数据，仍由
 角色组权限及门店/仓库范围决定。
 
@@ -414,6 +414,12 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 | `POST` | `/api/admin/departments` | 新增部门 |
 | `PUT` | `/api/admin/departments/<department_id>` | 修改部门名称、上级、状态和排序 |
 | `DELETE` | `/api/admin/departments/<department_id>` | 删除没有员工且没有下级部门的部门 |
+
+部门接口按 `admin.department.*` 权限控制：查询部门列表使用 `admin.department.read`；
+新增、修改和删除分别使用 `admin.department.create`、`admin.department.edit` 和
+`admin.department.delete`。为兼容员工管理页的部门筛选，拥有 `admin.employee.read`
+的账号也可读取部门列表。部门页中为员工分配部门、移出部门或修改职位仍通过员工接口完成，
+需要 `admin.employee.edit`。
 
 新增或修改部门请求体：
 
@@ -5160,6 +5166,15 @@ ON print_templates(is_default);
 | `admin.employee.create` | 新增员工档案并按需开通账号 |
 | `admin.employee.edit` | 编辑员工档案、账号状态、密码和头像 |
 | `admin.employee.delete` | 删除员工档案、解绑账号和删除头像 |
+
+### 部门管理权限
+
+| 权限编码 | 控制范围 |
+|---|---|
+| `admin.department.read` | 查看部门列表、部门状态和员工数量 |
+| `admin.department.create` | 新增部门配置 |
+| `admin.department.edit` | 编辑部门名称、状态和排序 |
+| `admin.department.delete` | 删除没有员工和下级部门的部门 |
 
 ### 销售订单操作权限
 

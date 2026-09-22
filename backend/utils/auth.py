@@ -503,3 +503,29 @@ def require_admin_permission(permission_code):
         return wrapped
 
     return decorator
+
+
+def require_any_admin_permission(*permission_codes):
+    def decorator(view):
+        @wraps(view)
+        def wrapped(*args, **kwargs):
+            user = get_current_user()
+            if not user:
+                return jsonify({"success": False, "message": "请先登录"}), 401
+            if not user.get("canAccessAdmin"):
+                return jsonify(
+                    {"success": False, "message": "当前账号不能访问后台管理功能"}
+                ), 403
+            if not any(permission_granted(code) for code in permission_codes):
+                return jsonify(
+                    {
+                        "success": False,
+                        "message": "当前账号没有执行此操作的权限",
+                        "permissions": list(permission_codes),
+                    }
+                ), 403
+            return view(*args, **kwargs)
+
+        return wrapped
+
+    return decorator
