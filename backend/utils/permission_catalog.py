@@ -27,6 +27,7 @@ ADMIN_AUDIT_NOTIFICATION_PERMISSIONS = {
 
 ADMIN_EMPLOYEE_PERMISSIONS = {
     "read": "admin.employee.read",
+    "detail": "admin.employee.detail",
     "create": "admin.employee.create",
     "edit": "admin.employee.edit",
     "delete": "admin.employee.delete",
@@ -154,8 +155,13 @@ PERMISSION_MODULES = [
         "permissions": [
             {
                 "code": ADMIN_EMPLOYEE_PERMISSIONS["read"],
-                "name": "查看员工信息",
-                "description": "查看员工档案、账号状态、部门和权限概览",
+                "name": "查看员工列表",
+                "description": "查看员工列表、账号状态、部门和最近活跃概览",
+            },
+            {
+                "code": ADMIN_EMPLOYEE_PERMISSIONS["detail"],
+                "name": "查看员工详情",
+                "description": "打开员工完整档案、登录账号和权限详情",
             },
             {
                 "code": ADMIN_EMPLOYEE_PERMISSIONS["create"],

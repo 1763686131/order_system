@@ -2840,7 +2840,7 @@ textarea:focus {
 
 .permission-category-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 7px;
   padding: 10px;
 }
@@ -3348,6 +3348,10 @@ textarea:focus-visible {
 }
 
 @media (max-width: 780px) {
+  .permission-category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
   .page-root {
     padding: 0;
   }
@@ -3552,7 +3556,7 @@ textarea:focus-visible {
 
 @media (max-width: 520px) {
   .permission-category-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .permission-modal-title p {
@@ -3565,6 +3569,12 @@ textarea:focus-visible {
 
   .permission-row {
     width: 100%;
+  }
+}
+
+@media (max-width: 360px) {
+  .permission-category-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

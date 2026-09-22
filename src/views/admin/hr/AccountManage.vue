@@ -74,7 +74,7 @@
                 </svg>
               </button>
               <button
-                v-if="canReadEmployees"
+                v-if="canViewEmployeeDetail"
                 class="button button-secondary"
                 type="button"
                 @click="exportPreview"
@@ -122,10 +122,13 @@
               v-for="employee in filteredEmployees"
               :key="employee.id"
               class="record-row"
-              :class="{ 'row-resigned': employee.employmentStatus === 'resigned' }"
-              tabindex="0"
-              @click="openEmployee(employee)"
-              @keydown.enter="openEmployee(employee)"
+              :class="{
+                'row-resigned': employee.employmentStatus === 'resigned',
+                'record-row--interactive': canViewEmployeeDetail
+              }"
+              :tabindex="canViewEmployeeDetail ? 0 : -1"
+              @click="canViewEmployeeDetail && openEmployee(employee)"
+              @keydown.enter="canViewEmployeeDetail && openEmployee(employee)"
             >
               <td>
                 <div class="employee-cell">
@@ -190,9 +193,16 @@
               </td>
               <td>
                 <div class="row-actions" @click.stop>
-                  <button class="action-link" type="button" @click="openEmployee(employee)">查看</button>
                   <button
-                    v-if="canEditEmployees"
+                    v-if="canViewEmployeeDetail"
+                    class="action-link"
+                    type="button"
+                    @click="openEmployee(employee)"
+                  >
+                    查看
+                  </button>
+                  <button
+                    v-if="canEditEmployees && canViewEmployeeDetail"
                     class="action-link"
                     type="button"
                     @click="openEdit(employee)"
@@ -200,7 +210,7 @@
                     编辑
                   </button>
                   <div
-                    v-if="canEditEmployees || canDeleteEmployees"
+                    v-if="(canEditEmployees && canViewEmployeeDetail) || canDeleteEmployees"
                     class="action-dropdown"
                   >
                     <button class="action-more" type="button" title="更多操作">
@@ -212,14 +222,14 @@
                     </button>
                     <div class="action-menu">
                       <button
-                        v-if="canEditEmployees"
+                        v-if="canEditEmployees && canViewEmployeeDetail"
                         type="button"
                         @click="openPasswordEditor(employee)"
                       >
                         修改密码
                       </button>
                       <button
-                        v-if="canEditEmployees"
+                        v-if="canEditEmployees && canViewEmployeeDetail"
                         type="button"
                         class="action-danger"
                         @click="confirmToggleAccount(employee)"
@@ -331,7 +341,7 @@
           <template v-else>
             <button class="button button-ghost" type="button" @click="goToList">返回列表</button>
             <button
-              v-if="canEditEmployees"
+              v-if="canEditEmployees && canViewEmployeeDetail"
               class="button button-secondary"
               type="button"
               @click="openEdit(selectedEmployee)"
@@ -958,6 +968,9 @@ let noticeTimer
 const canReadEmployees = computed(() =>
   userStore.hasPerm(ADMIN_EMPLOYEE_PERMISSIONS.READ)
 )
+const canViewEmployeeDetail = computed(() =>
+  userStore.hasPerm(ADMIN_EMPLOYEE_PERMISSIONS.DETAIL)
+)
 const canCreateEmployees = computed(() =>
   userStore.hasPerm(ADMIN_EMPLOYEE_PERMISSIONS.CREATE)
 )
@@ -1134,12 +1147,35 @@ function openCreate() {
   passwordConfirmVisible.value = false
 }
 
-function openEmployee(employee) {
-  if (inlineEditing.value) cancelInlineEdit()
-  creatingEmployee.value = false
-  selectedEmployeeId.value = employee.id
-  activeDetailTab.value = 'profile'
-  detailPasswordVisible.value = false
+function replaceEmployeeInList(employee) {
+  const index = employees.value.findIndex(item => item.id === employee.id)
+  if (index !== -1) {
+    employees.value[index] = { ...employees.value[index], ...employee }
+  }
+}
+
+async function loadEmployeeDetail(employeeId) {
+  const response = await request.get(`/admin/employees/${employeeId}`)
+  const employee = response.employee
+  replaceEmployeeInList(employee)
+  return employee
+}
+
+async function openEmployee(employee) {
+  if (!canViewEmployeeDetail.value) {
+    showNotice('当前账号没有查看员工详情的权限')
+    return
+  }
+  try {
+    const detailedEmployee = await loadEmployeeDetail(employee.id)
+    if (inlineEditing.value) cancelInlineEdit()
+    creatingEmployee.value = false
+    selectedEmployeeId.value = detailedEmployee.id
+    activeDetailTab.value = 'profile'
+    detailPasswordVisible.value = false
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '员工详情加载失败')
+  }
 }
 
 function goToList() {
@@ -1150,31 +1186,46 @@ function goToList() {
   detailPasswordVisible.value = false
 }
 
-function openEdit(employee) {
+async function openEdit(employee) {
   if (!canEditEmployees.value) {
     showNotice('当前账号没有编辑员工信息的权限')
-    return
+    return null
+  }
+  if (!canViewEmployeeDetail.value) {
+    showNotice('编辑员工信息需要查看员工详情权限')
+    return null
+  }
+  let detailedEmployee
+  try {
+    detailedEmployee = await loadEmployeeDetail(employee.id)
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '员工详情加载失败')
+    return null
   }
   resetPendingAvatar()
   autoNativePlace.value = ''
-  selectedEmployeeId.value = employee.id
+  selectedEmployeeId.value = detailedEmployee.id
   creatingEmployee.value = false
   activeDetailTab.value = 'profile'
   editingEmployee.value = true
   draft.value = {
-    ...employee,
+    ...detailedEmployee,
     avatarPreviewUrl: '',
     avatarRemovalRequested: false,
-    departmentIds: [...(employee.departmentIds || (employee.departmentId ? [employee.departmentId] : []))],
-    roleIds: [...employee.roleIds],
+    departmentIds: [
+      ...(detailedEmployee.departmentIds
+        || (detailedEmployee.departmentId ? [detailedEmployee.departmentId] : []))
+    ],
+    roleIds: [...detailedEmployee.roleIds],
     password: '',
     passwordConfirm: '',
-    passwordSet: Boolean(employee.passwordSet || employee.username)
+    passwordSet: Boolean(detailedEmployee.passwordSet || detailedEmployee.username)
   }
   passwordVisible.value = false
   passwordConfirmVisible.value = false
   departmentSelectorOpen.value = false
   inlineEditing.value = true
+  return detailedEmployee
 }
 
 function cancelInlineEdit() {
@@ -1297,12 +1348,16 @@ async function openPasswordEditor(employee = selectedEmployee.value) {
     showNotice('当前账号没有编辑员工信息的权限')
     return
   }
+  if (!canViewEmployeeDetail.value) {
+    showNotice('修改密码需要查看员工详情权限')
+    return
+  }
   if (!employee?.username) {
     showNotice('该员工尚未开通登录账号')
     return
   }
-  selectedEmployeeId.value = employee.id
-  openEdit(employee)
+  const detailedEmployee = await openEdit(employee)
+  if (!detailedEmployee) return
   await nextTick()
   passwordInput.value?.focus()
 }
@@ -1379,12 +1434,21 @@ async function saveEmployee() {
         : response.message || '员工档案已保存'
     )
     if (creatingEmployee.value) {
-      selectedEmployeeId.value = savedEmployee.id
-      creatingEmployee.value = false
-      inlineEditing.value = false
-      editingEmployee.value = false
-      draft.value = { ...savedEmployee, password: '', passwordConfirm: '', passwordSet: Boolean(savedEmployee.passwordSet) }
-      resetPendingAvatar()
+      if (canViewEmployeeDetail.value) {
+        selectedEmployeeId.value = savedEmployee.id
+        creatingEmployee.value = false
+        inlineEditing.value = false
+        editingEmployee.value = false
+        draft.value = {
+          ...savedEmployee,
+          password: '',
+          passwordConfirm: '',
+          passwordSet: Boolean(savedEmployee.passwordSet)
+        }
+        resetPendingAvatar()
+      } else {
+        goToList()
+      }
     } else {
       cancelInlineEdit()
     }
@@ -1461,19 +1525,23 @@ async function toggleAccount(employee) {
     showNotice('当前账号没有编辑员工信息的权限')
     return
   }
+  if (!canViewEmployeeDetail.value) {
+    showNotice('修改账号状态需要查看员工详情权限')
+    return
+  }
   if (!employee.username) {
     showNotice('该员工尚未开通登录账号')
     return
   }
-  const nextStatus = employee.accountStatus === 'disabled' ? 'active' : 'disabled'
   try {
+    const detailedEmployee = await loadEmployeeDetail(employee.id)
+    const nextStatus = detailedEmployee.accountStatus === 'disabled' ? 'active' : 'disabled'
     const response = await request.put(`/admin/employees/${employee.id}`, {
-      ...employee,
+      ...detailedEmployee,
       accountStatus: nextStatus,
       password: ''
     })
-    const index = employees.value.findIndex(item => item.id === employee.id)
-    if (index !== -1) employees.value[index] = response.employee
+    replaceEmployeeInList(response.employee)
     showNotice(nextStatus === 'active' ? '账号已启用' : '账号已停用')
   } catch (error) {
     showNotice(error?.response?.data?.message || '账号状态更新失败')
@@ -1571,8 +1639,8 @@ async function refreshList() {
 }
 
 function exportPreview() {
-  if (!canReadEmployees.value) {
-    showNotice('当前账号没有查看员工信息的权限')
+  if (!canViewEmployeeDetail.value) {
+    showNotice('当前账号没有查看员工详情的权限')
     return
   }
   const params = new URLSearchParams()
@@ -2327,12 +2395,16 @@ input[type='checkbox'] {
 }
 
 .employee-table tbody tr.record-row {
-  cursor: pointer;
+  cursor: default;
   transition: background 0.18s ease;
 }
 
-.employee-table tbody tr.record-row:hover,
-.employee-table tbody tr.record-row:focus-visible {
+.employee-table tbody tr.record-row--interactive {
+  cursor: pointer;
+}
+
+.employee-table tbody tr.record-row--interactive:hover,
+.employee-table tbody tr.record-row--interactive:focus-visible {
   background: rgba(var(--accent-rgb), 0.06);
   outline: none;
 }

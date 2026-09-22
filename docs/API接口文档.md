@@ -264,8 +264,9 @@
 
 | Method | URL | 说明 |
 |---|---|---|
-| `GET` | `/api/admin/employees` | 查询员工档案和绑定账号 |
-| `GET` | `/api/admin/employees/export` | 按当前筛选条件导出员工档案 CSV |
+| `GET` | `/api/admin/employees` | 查询员工列表和基础概览 |
+| `GET` | `/api/admin/employees/<employee_id>` | 查询单个员工的完整档案和账号详情 |
+| `GET` | `/api/admin/employees/export` | 按当前筛选条件导出完整员工档案 CSV |
 | `POST` | `/api/admin/employees` | 创建员工档案，可同时开通账号 |
 | `PUT` | `/api/admin/employees/<employee_id>` | 修改档案、密码和账号状态 |
 | `DELETE` | `/api/admin/employees/<employee_id>` | 删除员工档案、登录账号、角色绑定和头像 |
@@ -273,8 +274,8 @@
 | `DELETE` | `/api/admin/employees/<employee_id>/avatar` | 删除员工头像及物理文件 |
 | `DELETE` | `/api/admin/employees/<employee_id>/account` | 解绑并删除登录账号，保留员工档案 |
 
-员工接口按 `admin.employee.*` 权限控制：查询列表、详情和导出使用 `admin.employee.read`；创建使用
-`admin.employee.create`；修改档案、账号、密码和头像使用 `admin.employee.edit`；删除员工、解绑账号和删除头像使用
+员工接口按 `admin.employee.*` 权限控制：查询员工列表使用 `admin.employee.read`；查询员工完整详情和导出使用
+`admin.employee.detail`；创建使用 `admin.employee.create`；修改档案、账号、密码和头像使用 `admin.employee.edit`；删除员工、解绑账号和删除头像使用
 `admin.employee.delete`。员工抽屉不配置权限组，角色组关系统一在“角色组管理”页面维护。没有填写
 登录账号时只创建员工档案，账号状态为 `pending`。账号是员工档案的可选能力，
 系统会保证每个账号都绑定一条员工档案，但允许员工档案没有账号。
@@ -5154,7 +5155,8 @@ ON print_templates(is_default);
 
 | 权限编码 | 控制范围 |
 |---|---|
-| `admin.employee.read` | 查看员工列表、员工详情和导出员工信息 |
+| `admin.employee.read` | 查看员工列表及基础概览信息 |
+| `admin.employee.detail` | 查看员工完整详情和导出员工信息 |
 | `admin.employee.create` | 新增员工档案并按需开通账号 |
 | `admin.employee.edit` | 编辑员工档案、账号状态、密码和头像 |
 | `admin.employee.delete` | 删除员工档案、解绑账号和删除头像 |

@@ -205,6 +205,34 @@ def _serialize_employee(conn, row):
     }
 
 
+def _serialize_employee_list_item(conn, row):
+    employee = _serialize_employee(conn, row)
+    fields = (
+        "id",
+        "userId",
+        "employeeNo",
+        "displayName",
+        "avatarUrl",
+        "avatarColor",
+        "username",
+        "accountStatus",
+        "lastActiveAt",
+        "lastActiveDevice",
+        "departmentId",
+        "departmentIds",
+        "department",
+        "departmentStatus",
+        "position",
+        "phone",
+        "employmentStatus",
+        "employmentType",
+        "hireDate",
+        "roleIds",
+        "createdAt",
+    )
+    return {field: employee[field] for field in fields}
+
+
 def _employee_row(conn, employee_id):
     return conn.execute(
         "SELECT * FROM employees WHERE id = ?",
@@ -435,12 +463,22 @@ def list_employees():
             END, id DESC
             """
         ).fetchall()
-        employees = [_serialize_employee(conn, row) for row in rows]
+        employees = [_serialize_employee_list_item(conn, row) for row in rows]
     return jsonify({"success": True, "employees": employees})
 
 
+@employees_bp.route("/<int:employee_id>", methods=["GET"])
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["detail"])
+def get_employee(employee_id):
+    with get_db() as conn:
+        employee = _employee_row(conn, employee_id)
+        if not employee:
+            return jsonify({"success": False, "message": "员工档案不存在"}), 404
+        return jsonify({"success": True, "employee": _serialize_employee(conn, employee)})
+
+
 @employees_bp.route("/export", methods=["GET"])
-@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["read"])
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["detail"])
 def export_employees():
     """Export the same employee fields used by the management page as CSV."""
     keyword = _text(request.args.get("keyword"), 80).lower()

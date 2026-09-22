@@ -23,6 +23,7 @@ export const ADMIN_SALES_ORDER_PERMISSIONS = {
 
 export const ADMIN_EMPLOYEE_PERMISSIONS = {
   READ: 'admin.employee.read',
+  DETAIL: 'admin.employee.detail',
   CREATE: 'admin.employee.create',
   EDIT: 'admin.employee.edit',
   DELETE: 'admin.employee.delete'
