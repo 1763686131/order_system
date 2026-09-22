@@ -4,9 +4,13 @@ import re
 
 from flask import Blueprint, jsonify, request, session
 
-from utils.auth import get_current_user, require_super_admin
+from utils.auth import get_current_user, require_admin_permission, require_super_admin
 from utils.db import get_db
-from utils.permission_catalog import ALL_PERMISSION_CODES, PERMISSION_MODULES
+from utils.permission_catalog import (
+    ADMIN_EMPLOYEE_PERMISSIONS,
+    ALL_PERMISSION_CODES,
+    PERMISSION_MODULES,
+)
 
 
 access_bp = Blueprint("access", __name__, url_prefix="/api/admin")
@@ -179,13 +183,13 @@ def _refresh_current_session_version(conn, affected_user_ids):
 
 
 @access_bp.route("/permissions", methods=["GET"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["read"])
 def list_permissions():
     return jsonify({"success": True, "modules": PERMISSION_MODULES})
 
 
 @access_bp.route("/roles", methods=["GET"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["read"])
 def list_roles():
     with get_db() as conn:
         rows = conn.execute(

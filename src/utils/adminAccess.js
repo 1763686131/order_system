@@ -1,3 +1,5 @@
+import { ADMIN_EMPLOYEE_PERMISSIONS } from '@/utils/accessControl'
+
 export const ADMIN_ROUTE_PERMISSIONS = {
   DASHBOARD: 'admin.route.dashboard',
   PRODUCTS: 'admin.route.products',
@@ -16,7 +18,8 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_PERMISSIONS.PURCHASE, path: '/admin/purchase/orders' },
   { permission: ADMIN_ROUTE_PERMISSIONS.INVENTORY, path: '/admin/inventory' },
   { permission: ADMIN_ROUTE_PERMISSIONS.FINANCE, path: '/admin/finance/receivables' },
-  { permission: ADMIN_ROUTE_PERMISSIONS.HR, path: '/admin/hr/employees' },
+  { permission: ADMIN_EMPLOYEE_PERMISSIONS.READ, path: '/admin/hr/employees' },
+  { permission: ADMIN_ROUTE_PERMISSIONS.HR, path: '/admin/hr/reports' },
   { permission: ADMIN_ROUTE_PERMISSIONS.SYSTEM, path: '/admin/settings' }
 ]
 
@@ -38,6 +41,7 @@ export function getAdminRoutePermission(path = '') {
     return ADMIN_ROUTE_PERMISSIONS.INVENTORY
   }
   if (/^\/admin\/finance(\/|$)/.test(path)) return ADMIN_ROUTE_PERMISSIONS.FINANCE
+  if (path === '/admin/hr/employees') return null
   if (/^\/admin\/hr(\/|$)/.test(path)) return ADMIN_ROUTE_PERMISSIONS.HR
   if (/^\/admin\/(stores|settings|roles|users|system)(\/|$)/.test(path)) {
     return ADMIN_ROUTE_PERMISSIONS.SYSTEM

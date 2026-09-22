@@ -2,8 +2,9 @@
 
 from flask import Blueprint, jsonify, request
 
-from utils.auth import require_super_admin
+from utils.auth import require_admin_permission, require_super_admin
 from utils.db import get_db
+from utils.permission_catalog import ADMIN_EMPLOYEE_PERMISSIONS
 
 
 departments_bp = Blueprint(
@@ -70,7 +71,7 @@ def _validate_parent(conn, parent_id, department_id=None):
 
 
 @departments_bp.route("", methods=["GET"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["read"])
 def list_departments():
     with get_db() as conn:
         rows = conn.execute(

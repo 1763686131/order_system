@@ -25,6 +25,13 @@ ADMIN_AUDIT_NOTIFICATION_PERMISSIONS = {
     "return_order": "admin.sales.return.audit",
 }
 
+ADMIN_EMPLOYEE_PERMISSIONS = {
+    "read": "admin.employee.read",
+    "create": "admin.employee.create",
+    "edit": "admin.employee.edit",
+    "delete": "admin.employee.delete",
+}
+
 PERMISSION_MODULES = [
     {
         "code": "touch_terminal",
@@ -137,6 +144,33 @@ PERMISSION_MODULES = [
                 "code": "admin.route.system",
                 "name": "访问设置",
                 "description": "显示并访问门店、系统、角色组和打印模板",
+            },
+        ],
+    },
+    {
+        "code": "admin_employee_management",
+        "name": "员工信息管理",
+        "description": "控制员工档案、登录账号和员工头像的查看与维护",
+        "permissions": [
+            {
+                "code": ADMIN_EMPLOYEE_PERMISSIONS["read"],
+                "name": "查看员工信息",
+                "description": "查看员工档案、账号状态、部门和权限概览",
+            },
+            {
+                "code": ADMIN_EMPLOYEE_PERMISSIONS["create"],
+                "name": "新增员工信息",
+                "description": "创建员工档案并按需开通登录账号",
+            },
+            {
+                "code": ADMIN_EMPLOYEE_PERMISSIONS["edit"],
+                "name": "编辑员工信息",
+                "description": "修改员工档案、账号状态、密码和头像",
+            },
+            {
+                "code": ADMIN_EMPLOYEE_PERMISSIONS["delete"],
+                "name": "删除员工信息",
+                "description": "删除员工档案及其绑定的登录账号",
             },
         ],
     },

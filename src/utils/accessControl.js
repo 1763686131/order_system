@@ -21,6 +21,13 @@ export const ADMIN_SALES_ORDER_PERMISSIONS = {
   REVERSE_AUDIT: 'admin.sales.order.reverse_audit'
 }
 
+export const ADMIN_EMPLOYEE_PERMISSIONS = {
+  READ: 'admin.employee.read',
+  CREATE: 'admin.employee.create',
+  EDIT: 'admin.employee.edit',
+  DELETE: 'admin.employee.delete'
+}
+
 const normalizeIds = (values) => {
   if (!Array.isArray(values)) return []
   return [...new Set(values.map(Number).filter(Number.isInteger))]

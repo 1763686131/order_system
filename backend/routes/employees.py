@@ -7,7 +7,11 @@ from flask import Blueprint, jsonify, request, session
 from flask import Response
 from werkzeug.security import generate_password_hash
 
-from utils.auth import get_current_user, require_super_admin, serialize_user
+from utils.auth import (
+    get_current_user,
+    require_admin_permission,
+    serialize_user,
+)
 from utils.avatar_storage import (
     MAX_AVATAR_BYTES,
     delete_managed_avatar,
@@ -15,6 +19,7 @@ from utils.avatar_storage import (
     save_avatar_upload,
 )
 from utils.db import get_db
+from utils.permission_catalog import ADMIN_EMPLOYEE_PERMISSIONS
 
 
 employees_bp = Blueprint(
@@ -416,7 +421,7 @@ def _set_employee_departments(conn, employee_id, department_ids):
 
 
 @employees_bp.route("", methods=["GET"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["read"])
 def list_employees():
     with get_db() as conn:
         rows = conn.execute(
@@ -435,7 +440,7 @@ def list_employees():
 
 
 @employees_bp.route("/export", methods=["GET"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["read"])
 def export_employees():
     """Export the same employee fields used by the management page as CSV."""
     keyword = _text(request.args.get("keyword"), 80).lower()
@@ -511,7 +516,7 @@ def export_employees():
 
 
 @employees_bp.route("", methods=["POST"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["create"])
 def create_employee():
     data = request.get_json(silent=True) or {}
     try:
@@ -590,7 +595,7 @@ def create_employee():
 
 
 @employees_bp.route("/<int:employee_id>", methods=["PUT"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["edit"])
 def update_employee(employee_id):
     data = request.get_json(silent=True) or {}
     try:
@@ -612,6 +617,15 @@ def update_employee(employee_id):
                 return jsonify({"success": False, "message": "员工工号已存在"}), 409
 
             user_id = existing["user_id"]
+            current_user = get_current_user()
+            if (
+                user_id
+                and _is_active_super_admin(conn, user_id)
+                and not current_user.get("isSuperAdmin")
+            ):
+                return jsonify(
+                    {"success": False, "message": "不能修改超级管理员员工档案"}
+                ), 403
             values["avatar_url"] = existing["avatar_url"] or ""
             password = str(data.get("password") or "")
             existing_department_ids = _employee_department_ids(conn, employee_id)
@@ -662,7 +676,6 @@ def update_employee(employee_id):
                     """,
                     params,
                 )
-                current_user = get_current_user()
                 if current_user and current_user["id"] == user_id:
                     next_version = conn.execute(
                         "SELECT permission_version FROM users WHERE id = ?",
@@ -733,8 +746,46 @@ def update_employee(employee_id):
         return jsonify({"success": False, "message": str(exc)}), 400
 
 
+@employees_bp.route("/<int:employee_id>", methods=["DELETE"])
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["delete"])
+def delete_employee(employee_id):
+    old_avatar_url = ""
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        employee = _employee_row(conn, employee_id)
+        if not employee:
+            return jsonify({"success": False, "message": "员工档案不存在"}), 404
+
+        current_user = get_current_user()
+        user_id = employee["user_id"]
+        if current_user and current_user["id"] == user_id:
+            return jsonify({"success": False, "message": "不能删除当前登录员工"}), 409
+        if (
+            user_id
+            and _is_active_super_admin(conn, user_id)
+            and not current_user.get("isSuperAdmin")
+        ):
+            return jsonify(
+                {"success": False, "message": "不能删除超级管理员员工档案"}
+            ), 403
+        if user_id and _is_active_super_admin(conn, user_id) and _active_super_admin_count(conn) <= 1:
+            return jsonify({"success": False, "message": "不能删除最后一个超级管理员"}), 409
+
+        old_avatar_url = employee["avatar_url"] or ""
+        if user_id:
+            conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.execute("DELETE FROM employees WHERE id = ?", (employee_id,))
+
+    if old_avatar_url:
+        try:
+            delete_managed_avatar(old_avatar_url)
+        except OSError:
+            pass
+    return jsonify({"success": True, "message": "员工档案已删除"})
+
+
 @employees_bp.route("/<int:employee_id>/avatar", methods=["POST"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["edit"])
 def upload_employee_avatar(employee_id):
     if (
         request.content_length
@@ -746,8 +797,15 @@ def upload_employee_avatar(employee_id):
         return jsonify({"success": False, "message": "请选择头像图片"}), 400
 
     with get_db() as conn:
-        if not _employee_row(conn, employee_id):
+        employee = _employee_row(conn, employee_id)
+        if not employee:
             return jsonify({"success": False, "message": "员工档案不存在"}), 404
+        if (
+            employee["user_id"]
+            and _is_active_super_admin(conn, employee["user_id"])
+            and not get_current_user().get("isSuperAdmin")
+        ):
+            return jsonify({"success": False, "message": "不能修改超级管理员头像"}), 403
 
     new_avatar_url = ""
     old_avatar_url = ""
@@ -805,7 +863,7 @@ def upload_employee_avatar(employee_id):
 
 
 @employees_bp.route("/<int:employee_id>/avatar", methods=["DELETE"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["delete"])
 def delete_employee_avatar(employee_id):
     old_avatar_url = ""
     with get_db() as conn:
@@ -813,6 +871,12 @@ def delete_employee_avatar(employee_id):
         employee_row = _employee_row(conn, employee_id)
         if not employee_row:
             return jsonify({"success": False, "message": "员工档案不存在"}), 404
+        if (
+            employee_row["user_id"]
+            and _is_active_super_admin(conn, employee_row["user_id"])
+            and not get_current_user().get("isSuperAdmin")
+        ):
+            return jsonify({"success": False, "message": "不能删除超级管理员头像"}), 403
 
         old_avatar_url = employee_row["avatar_url"] or ""
         conn.execute(
@@ -850,7 +914,7 @@ def delete_employee_avatar(employee_id):
 
 
 @employees_bp.route("/<int:employee_id>/account", methods=["DELETE"])
-@require_super_admin
+@require_admin_permission(ADMIN_EMPLOYEE_PERMISSIONS["delete"])
 def unbind_employee_account(employee_id):
     with get_db() as conn:
         conn.execute("BEGIN IMMEDIATE")
@@ -868,6 +932,10 @@ def unbind_employee_account(employee_id):
                     "message": "不能解绑当前正在使用的登录账号",
                 }
             ), 409
+        if _is_active_super_admin(conn, user_id) and not current_user.get("isSuperAdmin"):
+            return jsonify(
+                {"success": False, "message": "不能解绑超级管理员登录账号"}
+            ), 403
         if _is_active_super_admin(conn, user_id) and _active_super_admin_count(conn) <= 1:
             return jsonify(
                 {

@@ -277,6 +277,7 @@ import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import request from '@/api/request'
 import { ADMIN_ROUTE_PERMISSIONS } from '@/utils/adminAccess'
+import { ADMIN_EMPLOYEE_PERMISSIONS } from '@/utils/accessControl'
 import ChatWindow from '@/components/admin/ChatWindow.vue'
 import DirectoryPanel from '@/components/admin/DirectoryPanel.vue'
 import MessageInbox from '@/components/admin/MessageInbox.vue'
@@ -554,11 +555,28 @@ const allMenuItems = [
     label: '人事行政',
     icon: icons.briefcase,
     permission: ADMIN_ROUTE_PERMISSIONS.HR,
+    additionalPermission: ADMIN_EMPLOYEE_PERMISSIONS.READ,
     children: [
-      { label: '员工管理', path: '/admin/hr/employees' },
-      { label: '部门管理', path: '/admin/hr/departments' },
-      { label: '公司资料', path: '/admin/hr/company' },
-      { label: '检测报告', path: '/admin/hr/reports' }
+      {
+        label: '员工管理',
+        path: '/admin/hr/employees',
+        permission: ADMIN_EMPLOYEE_PERMISSIONS.READ
+      },
+      {
+        label: '部门管理',
+        path: '/admin/hr/departments',
+        permission: ADMIN_ROUTE_PERMISSIONS.HR
+      },
+      {
+        label: '公司资料',
+        path: '/admin/hr/company',
+        permission: ADMIN_ROUTE_PERMISSIONS.HR
+      },
+      {
+        label: '检测报告',
+        path: '/admin/hr/reports',
+        permission: ADMIN_ROUTE_PERMISSIONS.HR
+      }
     ]
   },
   {
@@ -568,14 +586,26 @@ const allMenuItems = [
     children: [
       { label: '门店管理', path: '/admin/stores' },
       { label: '系统设置', path: '/admin/settings' },
-      { label: '角色组管理', path: '/admin/roles' },
+      { label: '权限管理', path: '/admin/roles' },
       { label: '打印模板', path: '/admin/system/print-template' }
     ]
   }
 ]
 
 const menuItems = computed(() =>
-  allMenuItems.filter(item => userStore.hasPerm(item.permission))
+  allMenuItems
+    .filter(item =>
+      userStore.hasPerm(item.permission) ||
+      (item.additionalPermission && userStore.hasPerm(item.additionalPermission))
+    )
+    .map(item => {
+      if (!item.children) return item
+      const children = item.children.filter(child =>
+        !child.permission || userStore.hasPerm(child.permission)
+      )
+      return { ...item, children }
+    })
+    .filter(item => !item.children || item.children.length > 0)
 )
 
 const expandedMenus = ref([])

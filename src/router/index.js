@@ -4,7 +4,10 @@ import LoginView from '@/views/LoginView.vue'
 import MainView from '@/views/MainView.vue'
 import Admin from '@/views/Admin.vue'
 import { getAdminRoutePermission, getDefaultAdminPath } from '@/utils/adminAccess'
-import { ADMIN_SALES_ORDER_PERMISSIONS } from '@/utils/accessControl'
+import {
+  ADMIN_EMPLOYEE_PERMISSIONS,
+  ADMIN_SALES_ORDER_PERMISSIONS
+} from '@/utils/accessControl'
 
 const routes = [
   {
@@ -255,7 +258,10 @@ const routes = [
         path: 'hr/employees',
         name: 'admin-hr-employees',
         component: () => import('@/views/admin/hr/AccountManage.vue'),
-        meta: { requiresAuth: true }
+        meta: {
+          requiresAuth: true,
+          permission: ADMIN_EMPLOYEE_PERMISSIONS.READ
+        }
       },
       {
         path: 'hr/departments',
@@ -301,7 +307,8 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.permission && !userStore.hasPerm(to.meta.permission)) {
-    return '/admin/sales'
+    const fallbackPath = getDefaultAdminPath(userStore)
+    return fallbackPath === to.path ? '/main' : fallbackPath
   }
 
   if (to.path === '/login' && loggedIn) {

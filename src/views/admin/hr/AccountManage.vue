@@ -73,7 +73,12 @@
                   <path d="M21 20v-6h-6"></path>
                 </svg>
               </button>
-              <button class="button button-secondary" type="button" @click="exportPreview">
+              <button
+                v-if="canReadEmployees"
+                class="button button-secondary"
+                type="button"
+                @click="exportPreview"
+              >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 3v12"></path>
                   <path d="m7 10 5 5 5-5"></path>
@@ -81,7 +86,12 @@
                 </svg>
                 导出
               </button>
-              <button class="button button-primary" type="button" @click="openCreate">
+              <button
+                v-if="canCreateEmployees"
+                class="button button-primary"
+                type="button"
+                @click="openCreate"
+              >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="M12 5v14"></path>
                   <path d="M5 12h14"></path>
@@ -181,8 +191,18 @@
               <td>
                 <div class="row-actions" @click.stop>
                   <button class="action-link" type="button" @click="openEmployee(employee)">查看</button>
-                  <button class="action-link" type="button" @click="openEdit(employee)">编辑</button>
-                  <div class="action-dropdown">
+                  <button
+                    v-if="canEditEmployees"
+                    class="action-link"
+                    type="button"
+                    @click="openEdit(employee)"
+                  >
+                    编辑
+                  </button>
+                  <div
+                    v-if="canEditEmployees || canDeleteEmployees"
+                    class="action-dropdown"
+                  >
                     <button class="action-more" type="button" title="更多操作">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <circle cx="12" cy="12" r="1"></circle>
@@ -191,8 +211,15 @@
                       </svg>
                     </button>
                     <div class="action-menu">
-                      <button type="button" @click="openPasswordEditor(employee)">修改密码</button>
                       <button
+                        v-if="canEditEmployees"
+                        type="button"
+                        @click="openPasswordEditor(employee)"
+                      >
+                        修改密码
+                      </button>
+                      <button
+                        v-if="canEditEmployees"
                         type="button"
                         class="action-danger"
                         @click="confirmToggleAccount(employee)"
@@ -200,12 +227,20 @@
                         {{ employee.accountStatus === 'disabled' ? '启用账号' : '停用账号' }}
                       </button>
                       <button
-                        v-if="employee.username"
+                        v-if="employee.username && canDeleteEmployees"
                         type="button"
                         class="action-danger"
                         @click="confirmUnbindAccount(employee)"
                       >
                         解绑账号
+                      </button>
+                      <button
+                        v-if="canDeleteEmployees"
+                        type="button"
+                        class="action-danger"
+                        @click="confirmDeleteEmployee(employee)"
+                      >
+                        删除员工
                       </button>
                     </div>
                   </div>
@@ -284,11 +319,23 @@
         <div class="detail-tab-actions">
           <template v-if="inlineEditing">
             <button class="button button-ghost" type="button" @click="cancelInlineEdit">取消</button>
-            <button class="button button-secondary" type="button" @click="saveEmployee">保存修改</button>
+            <button
+              class="button button-secondary"
+              type="button"
+              :disabled="!canSaveEmployee"
+              @click="saveEmployee"
+            >
+              保存修改
+            </button>
           </template>
           <template v-else>
             <button class="button button-ghost" type="button" @click="goToList">返回列表</button>
-            <button class="button button-secondary" type="button" @click="openEdit(selectedEmployee)">
+            <button
+              v-if="canEditEmployees"
+              class="button button-secondary"
+              type="button"
+              @click="openEdit(selectedEmployee)"
+            >
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <path d="m4 16-.8 4.8L8 20l10.8-10.8a2.1 2.1 0 0 0-3-3L4 16Z"></path>
                 <path d="m14.5 7.5 2 2"></path>
@@ -306,7 +353,7 @@
             <div class="identity-card-layout">
               <div class="identity-card-profile" :class="{ 'is-editing': inlineEditing }">
                 <button
-                  v-if="inlineEditing"
+                  v-if="inlineEditing && canEditEmployees"
                   class="identity-card-avatar inline-avatar-button"
                   type="button"
                   title="选择并裁剪头像"
@@ -320,16 +367,19 @@
                   {{ selectedEmployee.displayName.slice(0, 1) }}
                 </span>
                 <input
-                  v-if="inlineEditing"
+                  v-if="inlineEditing && canEditEmployees"
                   ref="avatarInput"
                   class="avatar-upload-input"
                   type="file"
                   accept="image/jpeg,image/png,image/webp,image/gif"
                   @change="handleAvatarUpload"
                 />
-                <div v-if="inlineEditing" class="inline-avatar-actions">
+                <div v-if="inlineEditing && canEditEmployees" class="inline-avatar-actions">
                   <button
-                    v-if="draft.avatarPreviewUrl || (!draft.avatarRemovalRequested && draft.avatarUrl)"
+                    v-if="
+                      canDeleteEmployees &&
+                      (draft.avatarPreviewUrl || (!draft.avatarRemovalRequested && draft.avatarUrl))
+                    "
                     class="avatar-remove-button"
                     type="button"
                     @click="removeAvatar"
@@ -340,7 +390,7 @@
                 </div>
               </div>
               <dl class="info-grid identity-info-grid">
-                <div>
+                <div v-if="!inlineEditing || canEditEmployees">
                   <dt>姓名</dt>
                   <dd v-if="inlineEditing"><input v-model.trim="draft.displayName" class="inline-detail-input" type="text" /></dd>
                   <dd v-else class="dd-primary">{{ selectedEmployee.displayName }}</dd>
@@ -349,7 +399,7 @@
                   <dt>工号</dt>
                   <dd class="dd-primary tabular">{{ selectedEmployee.employeeNo || '—' }}</dd>
                 </div>
-                <div>
+                <div v-if="!inlineEditing || canEditEmployees">
                   <dt>部门</dt>
                   <dd v-if="inlineEditing" class="department-detail-cell">
                     <div
@@ -404,17 +454,17 @@
                   </dd>
                   <dd v-else class="dd-primary">{{ selectedEmployee.department || '—' }}</dd>
                 </div>
-                <div>
+                <div v-if="!inlineEditing || canEditEmployees">
                   <dt>职位</dt>
                   <dd v-if="inlineEditing"><input v-model.trim="draft.position" class="inline-detail-input" type="text" /></dd>
                   <dd v-else class="dd-primary">{{ selectedEmployee.position || '—' }}</dd>
                 </div>
-                <div>
+                <div v-if="!inlineEditing || canEditEmployees">
                   <dt>入职日期</dt>
                   <dd v-if="inlineEditing"><input v-model="draft.hireDate" class="inline-detail-input tabular" type="date" /></dd>
                   <dd v-else class="dd-primary tabular">{{ selectedEmployee.hireDate || '—' }}</dd>
                 </div>
-                <div>
+                <div v-if="!inlineEditing || canEditEmployees">
                   <dt>当前状态</dt>
                   <dd v-if="inlineEditing">
                     <select v-model="draft.employmentStatus" class="inline-detail-select">
@@ -454,7 +504,7 @@
                 <div>
                   <span class="summary-label">账号</span>
                   <input
-                    v-if="inlineEditing"
+                    v-if="inlineEditing && canEditEmployees"
                     v-model.trim="draft.username"
                     class="inline-account-input"
                     type="text"
@@ -463,7 +513,11 @@
                   />
                   <strong v-else class="account-username">{{ selectedEmployee.username || '暂未开通' }}</strong>
                 </div>
-                <select v-if="inlineEditing" v-model="draft.accountStatus" class="inline-account-status">
+                <select
+                  v-if="inlineEditing && canEditEmployees"
+                  v-model="draft.accountStatus"
+                  class="inline-account-status"
+                >
                   <option value="active">正常</option>
                   <option value="pending">待开通</option>
                   <option value="disabled">已停用</option>
@@ -472,7 +526,7 @@
                   <i></i>{{ accountStatusLabel(selectedEmployee.accountStatus) }}
                 </span>
               </div>
-              <div v-if="inlineEditing" class="inline-password-grid">
+              <div v-if="inlineEditing && canEditEmployees" class="inline-password-grid">
                 <label class="inline-password-field">
                   <span class="summary-label">登录密码</span>
                   <input
@@ -523,7 +577,12 @@
                   <span class="summary-label">最近活跃时间</span>
                   <strong class="tabular">{{ formatDateTime(selectedEmployee.lastActiveAt) }}</strong>
                 </div>
-                <button class="button-link password-edit-button" type="button" @click="openPasswordEditor">
+                <button
+                  v-if="canEditEmployees"
+                  class="button-link password-edit-button"
+                  type="button"
+                  @click="openPasswordEditor"
+                >
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                     <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
@@ -850,7 +909,11 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import AvatarCropper from '@/components/admin/AvatarCropper.vue'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
-import { mergeRolePermissions, mergeRoleScopes } from '@/utils/accessControl'
+import {
+  ADMIN_EMPLOYEE_PERMISSIONS,
+  mergeRolePermissions,
+  mergeRoleScopes
+} from '@/utils/accessControl'
 
 const userStore = useUserStore()
 const departments = ref([])
@@ -892,7 +955,27 @@ const autoNativePlace = ref('')
 const notice = ref('')
 let noticeTimer
 
+const canReadEmployees = computed(() =>
+  userStore.hasPerm(ADMIN_EMPLOYEE_PERMISSIONS.READ)
+)
+const canCreateEmployees = computed(() =>
+  userStore.hasPerm(ADMIN_EMPLOYEE_PERMISSIONS.CREATE)
+)
+const canEditEmployees = computed(() =>
+  userStore.hasPerm(ADMIN_EMPLOYEE_PERMISSIONS.EDIT)
+)
+const canDeleteEmployees = computed(() =>
+  userStore.hasPerm(ADMIN_EMPLOYEE_PERMISSIONS.DELETE)
+)
+const canSaveEmployee = computed(() =>
+  creatingEmployee.value ? canCreateEmployees.value : canEditEmployees.value
+)
+
 async function loadEmployeeData() {
+  if (!canReadEmployees.value) {
+    showNotice('当前账号没有查看员工信息的权限')
+    return
+  }
   try {
     const [
       employeeResponse,
@@ -1032,6 +1115,10 @@ function createEmptyEmployee() {
 }
 
 function openCreate() {
+  if (!canCreateEmployees.value) {
+    showNotice('当前账号没有新增员工信息的权限')
+    return
+  }
   resetPendingAvatar()
   autoNativePlace.value = ''
   selectedEmployeeId.value = null
@@ -1064,6 +1151,10 @@ function goToList() {
 }
 
 function openEdit(employee) {
+  if (!canEditEmployees.value) {
+    showNotice('当前账号没有编辑员工信息的权限')
+    return
+  }
   resetPendingAvatar()
   autoNativePlace.value = ''
   selectedEmployeeId.value = employee.id
@@ -1202,6 +1293,10 @@ function toggleStoredPasswordVisibility() {
 }
 
 async function openPasswordEditor(employee = selectedEmployee.value) {
+  if (!canEditEmployees.value) {
+    showNotice('当前账号没有编辑员工信息的权限')
+    return
+  }
   if (!employee?.username) {
     showNotice('该员工尚未开通登录账号')
     return
@@ -1213,6 +1308,10 @@ async function openPasswordEditor(employee = selectedEmployee.value) {
 }
 
 async function saveEmployee() {
+  if (!canSaveEmployee.value) {
+    showNotice('当前账号没有保存员工信息的权限')
+    return
+  }
   if (!draft.value.displayName) {
     showNotice('请先填写员工姓名')
     return
@@ -1295,6 +1394,10 @@ async function saveEmployee() {
 }
 
 function handleAvatarUpload(event) {
+  if (!canEditEmployees.value) {
+    showNotice('当前账号没有编辑员工信息的权限')
+    return
+  }
   const file = event.target.files?.[0]
   event.target.value = ''
   if (!file) return
@@ -1316,6 +1419,7 @@ function handleAvatarUpload(event) {
 }
 
 function applyCroppedAvatar(file) {
+  if (!canEditEmployees.value) return
   revokeAvatarPreview()
   pendingAvatarFile.value = file
   draft.value.avatarPreviewUrl = URL.createObjectURL(file)
@@ -1329,6 +1433,10 @@ function closeAvatarCropper() {
 }
 
 function removeAvatar() {
+  if (!canDeleteEmployees.value) {
+    showNotice('当前账号没有删除员工信息的权限')
+    return
+  }
   const hasStoredAvatar = Boolean(draft.value.avatarUrl)
   revokeAvatarPreview()
   pendingAvatarFile.value = null
@@ -1349,6 +1457,10 @@ function resetPendingAvatar() {
 }
 
 async function toggleAccount(employee) {
+  if (!canEditEmployees.value) {
+    showNotice('当前账号没有编辑员工信息的权限')
+    return
+  }
   if (!employee.username) {
     showNotice('该员工尚未开通登录账号')
     return
@@ -1369,6 +1481,10 @@ async function toggleAccount(employee) {
 }
 
 function confirmToggleAccount(employee) {
+  if (!canEditEmployees.value) {
+    showNotice('当前账号没有编辑员工信息的权限')
+    return
+  }
   if (!employee.username) {
     showNotice('该员工尚未开通登录账号')
     return
@@ -1380,6 +1496,10 @@ function confirmToggleAccount(employee) {
 }
 
 async function unbindAccount(employee) {
+  if (!canDeleteEmployees.value) {
+    showNotice('当前账号没有删除员工信息的权限')
+    return
+  }
   try {
     const response = await request.delete(`/admin/employees/${employee.id}/account`)
     const index = employees.value.findIndex(item => item.id === employee.id)
@@ -1394,6 +1514,10 @@ async function unbindAccount(employee) {
 }
 
 function confirmUnbindAccount(employee) {
+  if (!canDeleteEmployees.value) {
+    showNotice('当前账号没有删除员工信息的权限')
+    return
+  }
   if (!employee.username) {
     showNotice('该员工尚未开通登录账号')
     return
@@ -1403,6 +1527,32 @@ function confirmUnbindAccount(employee) {
   )
   if (confirmed) {
     unbindAccount(employee)
+  }
+}
+
+async function deleteEmployee(employee) {
+  try {
+    const response = await request.delete(`/admin/employees/${employee.id}`)
+    employees.value = employees.value.filter(item => item.id !== employee.id)
+    if (selectedEmployeeId.value === employee.id) {
+      goToList()
+    }
+    showNotice(response.message || '员工档案已删除')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || '员工档案删除失败')
+  }
+}
+
+function confirmDeleteEmployee(employee) {
+  if (!canDeleteEmployees.value) {
+    showNotice('当前账号没有删除员工信息的权限')
+    return
+  }
+  const confirmed = window.confirm(
+    `确认删除员工 "${employee.displayName}"？\n\n将同时删除其登录账号、角色绑定和头像，且无法恢复。`
+  )
+  if (confirmed) {
+    deleteEmployee(employee)
   }
 }
 
@@ -1421,6 +1571,10 @@ async function refreshList() {
 }
 
 function exportPreview() {
+  if (!canReadEmployees.value) {
+    showNotice('当前账号没有查看员工信息的权限')
+    return
+  }
   const params = new URLSearchParams()
   if (filters.value.keyword) params.set('keyword', filters.value.keyword)
   if (filters.value.department) params.set('departmentId', filters.value.department)
