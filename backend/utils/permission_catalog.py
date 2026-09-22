@@ -40,6 +40,66 @@ ADMIN_DEPARTMENT_PERMISSIONS = {
     "delete": "admin.department.delete",
 }
 
+ADMIN_ROUTE_PERMISSIONS = {
+    "dashboard": "admin.route.dashboard",
+    "products": "admin.route.products",
+    "sales": "admin.route.sales",
+    "purchase": "admin.route.purchase",
+    "inventory": "admin.route.inventory",
+    "finance": "admin.route.finance",
+    "hr": "admin.route.hr",
+    "system": "admin.route.system",
+}
+
+ADMIN_ROUTE_BRANCH_PERMISSIONS = {
+    "products": {
+        "list": "admin.route.products.list",
+        "materials": "admin.route.products.materials",
+    },
+    "sales": {
+        "orders": "admin.route.sales.orders",
+        "logistics": "admin.route.sales.logistics",
+        "returns": "admin.route.sales.returns",
+        "customers": "admin.route.sales.customers",
+    },
+    "purchase": {
+        "orders": "admin.route.purchase.orders",
+        "suppliers": "admin.route.purchase.suppliers",
+        "inbound": "admin.route.purchase.inbound",
+    },
+    "inventory": {
+        "products": "admin.route.inventory.products",
+        "materials": "admin.route.inventory.materials",
+        "material_outbounds": "admin.route.inventory.material_outbounds",
+        "stock_in": "admin.route.inventory.stock_in",
+        "stock_out": "admin.route.inventory.stock_out",
+        "warehouse": "admin.route.inventory.warehouse",
+    },
+    "finance": {
+        "receivables": "admin.route.finance.receivables",
+        "payment_history": "admin.route.finance.payment_history",
+        "bank_accounts": "admin.route.finance.bank_accounts",
+        "logistics_truck": "admin.route.finance.logistics_truck",
+        "express_courier": "admin.route.finance.express_courier",
+    },
+    "hr": {
+        "company": "admin.route.hr.company",
+        "reports": "admin.route.hr.reports",
+    },
+    "system": {
+        "stores": "admin.route.system.stores",
+        "settings": "admin.route.system.settings",
+        "roles": "admin.route.system.roles",
+        "print_template": "admin.route.system.print_template",
+    },
+}
+
+ADMIN_ROUTE_BRANCH_PARENT_MAP = {
+    branch_code: ADMIN_ROUTE_PERMISSIONS[group_code]
+    for group_code, branches in ADMIN_ROUTE_BRANCH_PERMISSIONS.items()
+    for branch_code in branches.values()
+}
+
 PERMISSION_MODULES = [
     {
         "code": "touch_terminal",
@@ -114,44 +174,174 @@ PERMISSION_MODULES = [
         "description": "控制后台管理侧栏大类和对应页面访问",
         "permissions": [
             {
-                "code": "admin.route.dashboard",
+                "code": ADMIN_ROUTE_PERMISSIONS["dashboard"],
                 "name": "访问首页",
                 "description": "显示并访问后台数据看板",
             },
             {
-                "code": "admin.route.products",
+                "code": ADMIN_ROUTE_PERMISSIONS["products"],
                 "name": "访问商品",
                 "description": "显示并访问商品和原材料管理",
             },
             {
-                "code": "admin.route.sales",
+                "code": ADMIN_ROUTE_PERMISSIONS["sales"],
                 "name": "访问销售",
                 "description": "显示并访问销售、物流、退货和客户管理",
             },
             {
-                "code": "admin.route.purchase",
+                "code": ADMIN_ROUTE_PERMISSIONS["purchase"],
                 "name": "访问采购",
                 "description": "显示并访问采购订单、供应商和采购入库",
             },
             {
-                "code": "admin.route.inventory",
+                "code": ADMIN_ROUTE_PERMISSIONS["inventory"],
                 "name": "访问库存",
                 "description": "显示并访问库存、出入库记录和仓库管理",
             },
             {
-                "code": "admin.route.finance",
+                "code": ADMIN_ROUTE_PERMISSIONS["finance"],
                 "name": "访问财务",
                 "description": "显示并访问应收、收款、账户和对账页面",
             },
             {
-                "code": "admin.route.hr",
+                "code": ADMIN_ROUTE_PERMISSIONS["hr"],
                 "name": "访问人事行政",
                 "description": "显示并访问员工、公司资料和检测报告",
             },
             {
-                "code": "admin.route.system",
+                "code": ADMIN_ROUTE_PERMISSIONS["system"],
                 "name": "访问设置",
                 "description": "显示并访问门店、系统、角色组和打印模板",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["products"]["list"],
+                "name": "访问商品列表",
+                "description": "显示并访问成品商品管理",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["products"]["materials"],
+                "name": "访问原材料列表",
+                "description": "显示并访问原材料管理",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["orders"],
+                "name": "访问销售订单",
+                "description": "显示并访问销售订单列表和订单表单",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["logistics"],
+                "name": "访问物流列表",
+                "description": "显示并访问物流对账和物流订单",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["returns"],
+                "name": "访问退货订单",
+                "description": "显示并访问退货订单及退货表单",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["customers"],
+                "name": "访问客户列表",
+                "description": "显示并访问客户档案和客户列表",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["orders"],
+                "name": "访问采购订单",
+                "description": "显示并访问采购订单管理",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["suppliers"],
+                "name": "访问供应商管理",
+                "description": "显示并访问供应商管理",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"],
+                "name": "访问采购入库",
+                "description": "显示并访问采购入库管理",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["products"],
+                "name": "访问成品库存",
+                "description": "显示并访问成品库存",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["materials"],
+                "name": "访问原材料库存",
+                "description": "显示并访问原材料库存",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["material_outbounds"],
+                "name": "访问原材料出库",
+                "description": "显示并访问原材料出库记录",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["stock_in"],
+                "name": "访问入库记录",
+                "description": "显示并访问入库记录",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["stock_out"],
+                "name": "访问出库记录",
+                "description": "显示并访问出库记录",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["warehouse"],
+                "name": "访问仓库管理",
+                "description": "显示并访问仓库管理",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["receivables"],
+                "name": "访问应收欠款",
+                "description": "显示并访问应收欠款和债务详情",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["payment_history"],
+                "name": "访问收款历史",
+                "description": "显示并访问收款历史",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["bank_accounts"],
+                "name": "访问银行账户",
+                "description": "显示并访问银行账户",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["logistics_truck"],
+                "name": "访问物流专车对账",
+                "description": "显示并访问物流和专车对账",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["express_courier"],
+                "name": "访问快运快递对账",
+                "description": "显示并访问快运和快递对账",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["company"],
+                "name": "访问公司资料",
+                "description": "显示并访问公司资料",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["reports"],
+                "name": "访问检测报告",
+                "description": "显示并访问检测报告",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["stores"],
+                "name": "访问门店管理",
+                "description": "显示并访问门店管理",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["settings"],
+                "name": "访问系统设置",
+                "description": "显示并访问系统设置",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["roles"],
+                "name": "访问权限管理",
+                "description": "显示并访问角色组权限管理",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["print_template"],
+                "name": "访问打印模板",
+                "description": "显示并访问打印模板管理",
             },
         ],
     },

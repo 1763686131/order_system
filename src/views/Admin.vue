@@ -276,7 +276,10 @@ import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import request from '@/api/request'
-import { ADMIN_ROUTE_PERMISSIONS } from '@/utils/adminAccess'
+import {
+  ADMIN_ROUTE_BRANCH_PERMISSIONS,
+  ADMIN_ROUTE_PERMISSIONS
+} from '@/utils/adminAccess'
 import {
   ADMIN_DEPARTMENT_PERMISSIONS,
   ADMIN_EMPLOYEE_PERMISSIONS
@@ -504,8 +507,16 @@ const allMenuItems = [
     icon: icons.package,
     permission: ADMIN_ROUTE_PERMISSIONS.PRODUCTS,
     children: [
-      { label: '商品列表', path: '/admin/products' },
-      { label: '原材料列表', path: '/admin/materials' }
+      {
+        label: '商品列表',
+        path: '/admin/products',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST
+      },
+      {
+        label: '原材料列表',
+        path: '/admin/materials',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS
+      }
     ]
   },
   {
@@ -513,10 +524,26 @@ const allMenuItems = [
     icon: icons.cart,
     permission: ADMIN_ROUTE_PERMISSIONS.SALES,
     children: [
-      { label: '销售订单', path: '/admin/sales' },
-      { label: '物流列表', path: '/admin/sales/logistics' },
-      { label: '退货订单', path: '/admin/sales/returns' },
-      { label: '客户列表', path: '/admin/sales/customers' }
+      {
+        label: '销售订单',
+        path: '/admin/sales',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS
+      },
+      {
+        label: '物流列表',
+        path: '/admin/sales/logistics',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.LOGISTICS
+      },
+      {
+        label: '退货订单',
+        path: '/admin/sales/returns',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.RETURNS
+      },
+      {
+        label: '客户列表',
+        path: '/admin/sales/customers',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.CUSTOMERS
+      }
     ]
   },
   {
@@ -524,9 +551,21 @@ const allMenuItems = [
     icon: icons.truck,
     permission: ADMIN_ROUTE_PERMISSIONS.PURCHASE,
     children: [
-      { label: '采购订单', path: '/admin/purchase/orders' },
-      { label: '供应商管理', path: '/admin/purchase/suppliers' },
-      { label: '采购入库', path: '/admin/purchase/inbound' }
+      {
+        label: '采购订单',
+        path: '/admin/purchase/orders',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS
+      },
+      {
+        label: '供应商管理',
+        path: '/admin/purchase/suppliers',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.SUPPLIERS
+      },
+      {
+        label: '采购入库',
+        path: '/admin/purchase/inbound',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND
+      }
     ]
   },
   {
@@ -534,12 +573,36 @@ const allMenuItems = [
     icon: icons.chart,
     permission: ADMIN_ROUTE_PERMISSIONS.INVENTORY,
     children: [
-      { label: '成品库存', path: '/admin/inventory' },
-      { label: '原材料库存', path: '/admin/inventory/materials' },
-      { label: '原材料出库', path: '/admin/inventory/material-outbounds' },
-      { label: '入库记录', path: '/admin/stock/in' },
-      { label: '出库记录', path: '/admin/stock/out' },
-      { label: '仓库管理', path: '/admin/inventory/warehouse' }
+      {
+        label: '成品库存',
+        path: '/admin/inventory',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS
+      },
+      {
+        label: '原材料库存',
+        path: '/admin/inventory/materials',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIALS
+      },
+      {
+        label: '原材料出库',
+        path: '/admin/inventory/material-outbounds',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIAL_OUTBOUNDS
+      },
+      {
+        label: '入库记录',
+        path: '/admin/stock/in',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.STOCK_IN
+      },
+      {
+        label: '出库记录',
+        path: '/admin/stock/out',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.STOCK_OUT
+      },
+      {
+        label: '仓库管理',
+        path: '/admin/inventory/warehouse',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.WAREHOUSE
+      }
     ]
   },
   {
@@ -547,11 +610,31 @@ const allMenuItems = [
     icon: icons.dollar,
     permission: ADMIN_ROUTE_PERMISSIONS.FINANCE,
     children: [
-      { label: '应收欠款', path: '/admin/finance/receivables' },
-      { label: '收款历史', path: '/admin/finance/payment-history' },
-      { label: '银行账户', path: '/admin/finance/bank-accounts' },
-      { label: '物流/专车对账', path: '/admin/finance/logistics-truck' },
-      { label: '快运/快递对账', path: '/admin/finance/express-courier' }
+      {
+        label: '应收欠款',
+        path: '/admin/finance/receivables',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.RECEIVABLES
+      },
+      {
+        label: '收款历史',
+        path: '/admin/finance/payment-history',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYMENT_HISTORY
+      },
+      {
+        label: '银行账户',
+        path: '/admin/finance/bank-accounts',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.BANK_ACCOUNTS
+      },
+      {
+        label: '物流/专车对账',
+        path: '/admin/finance/logistics-truck',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.LOGISTICS_TRUCK
+      },
+      {
+        label: '快运/快递对账',
+        path: '/admin/finance/express-courier',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EXPRESS_COURIER
+      }
     ]
   },
   {
@@ -574,12 +657,12 @@ const allMenuItems = [
       {
         label: '公司资料',
         path: '/admin/hr/company',
-        permission: ADMIN_ROUTE_PERMISSIONS.HR
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.COMPANY
       },
       {
         label: '检测报告',
         path: '/admin/hr/reports',
-        permission: ADMIN_ROUTE_PERMISSIONS.HR
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.REPORTS
       }
     ]
   },
@@ -588,28 +671,50 @@ const allMenuItems = [
     icon: icons.settings,
     permission: ADMIN_ROUTE_PERMISSIONS.SYSTEM,
     children: [
-      { label: '门店管理', path: '/admin/stores' },
-      { label: '系统设置', path: '/admin/settings' },
-      { label: '权限管理', path: '/admin/roles' },
-      { label: '打印模板', path: '/admin/system/print-template' }
+      {
+        label: '门店管理',
+        path: '/admin/stores',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.STORES
+      },
+      {
+        label: '系统设置',
+        path: '/admin/settings',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.SETTINGS
+      },
+      {
+        label: '权限管理',
+        path: '/admin/roles',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.ROLES
+      },
+      {
+        label: '打印模板',
+        path: '/admin/system/print-template',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.PRINT_TEMPLATE
+      }
     ]
   }
 ]
 
 const menuItems = computed(() =>
   allMenuItems
-    .filter(item =>
-      userStore.hasPerm(item.permission) ||
-      (item.additionalPermission && userStore.hasPerm(item.additionalPermission)) ||
-      item.additionalPermissions?.some(permission => userStore.hasPerm(permission))
-    )
     .map(item => {
-      if (!item.children) return item
-      const children = item.children.filter(child =>
+      const children = item.children?.filter(child =>
         !child.permission || userStore.hasPerm(child.permission)
       )
-      return { ...item, children }
+      const visibleByItemPermission =
+        userStore.hasPerm(item.permission) ||
+        (item.additionalPermission && userStore.hasPerm(item.additionalPermission)) ||
+        item.additionalPermissions?.some(permission => userStore.hasPerm(permission))
+      return {
+        ...item,
+        ...(item.children ? { children } : {}),
+        visibleByItemPermission
+      }
     })
+    .filter(item =>
+      item.visibleByItemPermission ||
+      (item.children && item.children.length > 0)
+    )
     .filter(item => !item.children || item.children.length > 0)
 )
 
@@ -637,7 +742,7 @@ const currentPath = computed(() => route.path)
 const showOrderDraftShortcut = computed(() => {
   const isSalesFormRoute = route.name === 'admin-sales-create' || route.name === 'admin-sales-edit'
   return (
-    userStore.hasPerm(ADMIN_ROUTE_PERMISSIONS.SALES) &&
+    userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS) &&
     orderDraftStore.hasDraft &&
     !isSalesFormRoute
   )

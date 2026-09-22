@@ -23,6 +23,7 @@ from utils.db import get_db
 from utils.permission_catalog import (
     ADMIN_DEPARTMENT_PERMISSIONS,
     ADMIN_EMPLOYEE_PERMISSIONS,
+    ADMIN_ROUTE_BRANCH_PERMISSIONS,
 )
 
 
@@ -456,6 +457,7 @@ def _set_employee_departments(conn, employee_id, department_ids):
 @require_any_admin_permission(
     ADMIN_EMPLOYEE_PERMISSIONS["read"],
     ADMIN_DEPARTMENT_PERMISSIONS["read"],
+    ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["roles"],
 )
 def list_employees():
     with get_db() as conn:

@@ -25,6 +25,7 @@
 
 ## 版本历史
 
+- **v4.8** (2026-09-22) - 后台路由权限细分到侧栏分支，按分支控制菜单显示和直接访问
 - **v4.7** (2026-09-20) - 新增局域网 WebRTC 文件直传信令、确认和状态接口
 - **v4.6** (2026-09-20) - 新增后台留言与审核通知 SSE 实时变化事件
 - **v4.5** (2026-09-20) - 新增一对一留言、10MB 私有附件、未读状态和单据审核通知接口
@@ -552,7 +553,7 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 权限能力分为三层：
 
 1. `full_access`：仅内置超级管理员角色使用，拥有全部权限和全部数据范围。
-2. `canAccessAdmin` + `admin.route.*`：前者允许进入后台，后者控制后台侧栏大类和对应路由。
+2. `canAccessAdmin` + `admin.route.*`：前者允许进入后台，后者控制后台侧栏大类及其具体分支路由。
 3. `touch.*`：控制触屏端按钮及对应后端操作接口。
 
 同一员工加入多个启用角色组时：
@@ -5147,15 +5148,45 @@ ON print_templates(is_default);
 | 权限编码 | 控制范围 |
 |---|---|
 | `admin.route.dashboard` | 后台首页 |
-| `admin.route.products` | 商品和原材料 |
-| `admin.route.sales` | 销售、物流、退货和客户 |
-| `admin.route.purchase` | 采购、供应商和采购入库 |
-| `admin.route.inventory` | 库存、出入库记录和仓库 |
-| `admin.route.finance` | 应收、收款、账户和对账 |
-| `admin.route.hr` | 员工、公司资料和检测报告 |
-| `admin.route.system` | 门店、系统、角色组和打印模板 |
+| `admin.route.products` | 商品大类 |
+| `admin.route.products.list` | 商品列表 |
+| `admin.route.products.materials` | 原材料列表 |
+| `admin.route.sales` | 销售大类 |
+| `admin.route.sales.orders` | 销售订单 |
+| `admin.route.sales.logistics` | 物流列表 |
+| `admin.route.sales.returns` | 退货订单 |
+| `admin.route.sales.customers` | 客户列表 |
+| `admin.route.purchase` | 采购大类 |
+| `admin.route.purchase.orders` | 采购订单 |
+| `admin.route.purchase.suppliers` | 供应商管理 |
+| `admin.route.purchase.inbound` | 采购入库 |
+| `admin.route.inventory` | 库存大类 |
+| `admin.route.inventory.products` | 成品库存 |
+| `admin.route.inventory.materials` | 原材料库存 |
+| `admin.route.inventory.material_outbounds` | 原材料出库 |
+| `admin.route.inventory.stock_in` | 入库记录 |
+| `admin.route.inventory.stock_out` | 出库记录 |
+| `admin.route.inventory.warehouse` | 仓库管理 |
+| `admin.route.finance` | 财务大类 |
+| `admin.route.finance.receivables` | 应收欠款和债务详情 |
+| `admin.route.finance.payment_history` | 收款历史 |
+| `admin.route.finance.bank_accounts` | 银行账户 |
+| `admin.route.finance.logistics_truck` | 物流/专车对账 |
+| `admin.route.finance.express_courier` | 快运/快递对账 |
+| `admin.route.hr` | 人事行政大类 |
+| `admin.route.hr.company` | 公司资料 |
+| `admin.route.hr.reports` | 检测报告 |
+| `admin.route.system` | 设置大类 |
+| `admin.route.system.stores` | 门店管理 |
+| `admin.route.system.settings` | 系统设置 |
+| `admin.route.system.roles` | 权限管理 |
+| `admin.route.system.print_template` | 打印模板 |
 
-后台路由权限控制菜单和前端路由访问，不自动代替业务写接口的服务端权限校验。新增敏感接口时仍应使用 `require_super_admin`、`require_admin_access`、`require_admin_permission` 或 `require_permission`。
+后台路由权限控制菜单和前端路由访问，不自动代替业务写接口的服务端权限校验。父级大类权限用于分类和兼容旧角色，
+具体分支是否显示、是否允许直达由对应的分支权限决定。员工管理和部门管理分别使用独立的
+`admin.employee.*`、`admin.department.*` 权限，不重复放入后台路由分支。新增敏感接口时仍应使用
+`require_super_admin`、`require_admin_access`、`require_admin_permission` 或 `require_permission`。
+升级时，已有后台角色会根据原有大类权限自动补齐对应分支权限；之后可在权限组管理中单独移除不需要的分支。
 
 ### 员工信息管理权限
 

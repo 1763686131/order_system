@@ -528,7 +528,10 @@ def _ensure_auth_schema(conn):
         )
         cursor.execute("DELETE FROM user_roles")
 
-        from utils.permission_catalog import PERMISSION_MODULES
+        from utils.permission_catalog import (
+            ADMIN_ROUTE_BRANCH_PARENT_MAP,
+            PERMISSION_MODULES,
+        )
 
         sort_order = 0
         for module in PERMISSION_MODULES:
@@ -581,6 +584,16 @@ def _ensure_auth_schema(conn):
             for permission in module["permissions"]
             if permission["code"].startswith("admin.route.")
         ]
+        if admin_route_permission_codes:
+            placeholders = ",".join("?" for _ in admin_route_permission_codes)
+            cursor.execute(
+                f"""
+                DELETE FROM permissions
+                WHERE code LIKE 'admin.route.%'
+                  AND code NOT IN ({placeholders})
+                """,
+                admin_route_permission_codes,
+            )
         route_permission_migration = cursor.execute(
             """
             SELECT setting_value
@@ -606,6 +619,46 @@ def _ensure_auth_schema(conn):
                 """
                 INSERT INTO system_meta (setting_key, setting_value, updated_at)
                 VALUES ('admin_route_permissions_v1', '1', CURRENT_TIMESTAMP)
+                """
+            )
+
+        route_branch_permission_migration = cursor.execute(
+            """
+            SELECT setting_value
+            FROM system_meta
+            WHERE setting_key = 'admin_route_branch_permissions_v1'
+            """
+        ).fetchone()
+        if not route_branch_permission_migration:
+            for branch_code, parent_code in ADMIN_ROUTE_BRANCH_PARENT_MAP.items():
+                cursor.execute(
+                    """
+                    INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+                    SELECT roles.id, branch_permissions.id
+                    FROM roles
+                    CROSS JOIN permissions AS branch_permissions
+                    WHERE roles.can_access_admin = 1
+                      AND roles.full_access = 0
+                      AND branch_permissions.code = ?
+                      AND EXISTS (
+                          SELECT 1
+                          FROM role_permissions AS parent_links
+                          INNER JOIN permissions AS parent_permissions
+                              ON parent_permissions.id = parent_links.permission_id
+                          WHERE parent_links.role_id = roles.id
+                            AND parent_permissions.code = ?
+                      )
+                    """,
+                    (branch_code, parent_code),
+                )
+            cursor.execute(
+                """
+                INSERT INTO system_meta (setting_key, setting_value, updated_at)
+                VALUES (
+                    'admin_route_branch_permissions_v1',
+                    '1',
+                    CURRENT_TIMESTAMP
+                )
                 """
             )
 
