@@ -7,6 +7,7 @@ import { getAdminRoutePermission, getDefaultAdminPath } from '@/utils/adminAcces
 import {
   ADMIN_DEPARTMENT_PERMISSIONS,
   ADMIN_EMPLOYEE_PERMISSIONS,
+  ADMIN_OPERATION_LOG_PERMISSIONS,
   ADMIN_SALES_ORDER_PERMISSIONS
 } from '@/utils/accessControl'
 
@@ -278,6 +279,15 @@ const routes = [
         name: 'admin-print-template',
         component: () => import('@/views/admin/system/PrintTemplate.vue'),
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'system/operation-logs',
+        name: 'admin-operation-logs',
+        component: () => import('@/views/admin/system/OperationLogs.vue'),
+        meta: {
+          requiresAuth: true,
+          permission: ADMIN_OPERATION_LOG_PERMISSIONS.READ
+        }
       }
     ]
   }

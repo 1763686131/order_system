@@ -37,6 +37,8 @@ _auth_schema_lock = Lock()
 _auth_schema_ready = False
 _messaging_schema_lock = Lock()
 _messaging_schema_ready = False
+_operation_logs_schema_lock = Lock()
+_operation_logs_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 DEFAULT_DEPARTMENT_NAMES = ('仓储部', '财务部', '销售部', '人事行政', '运营部')
@@ -1570,6 +1572,58 @@ def _ensure_print_templates_schema(conn):
         _print_templates_schema_ready = True
 
 
+def _ensure_operation_logs_schema(conn):
+    """Create the append-oriented operation audit log schema."""
+    global _operation_logs_schema_ready
+    if _operation_logs_schema_ready:
+        return
+
+    with _operation_logs_schema_lock:
+        if _operation_logs_schema_ready:
+            return
+
+        conn.executescript(
+            """
+            CREATE TABLE IF NOT EXISTS operation_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                occurred_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                actor_user_id INTEGER,
+                actor_employee_id INTEGER,
+                actor_username TEXT NOT NULL DEFAULT '',
+                actor_display_name TEXT NOT NULL DEFAULT '',
+                actor_role_names TEXT NOT NULL DEFAULT '[]',
+                module_code TEXT NOT NULL,
+                module_name TEXT NOT NULL,
+                action_code TEXT NOT NULL,
+                action_name TEXT NOT NULL,
+                target_type TEXT NOT NULL DEFAULT '',
+                target_id TEXT NOT NULL DEFAULT '',
+                target_label TEXT NOT NULL DEFAULT '',
+                request_method TEXT NOT NULL DEFAULT '',
+                request_path TEXT NOT NULL DEFAULT '',
+                request_id TEXT NOT NULL DEFAULT '',
+                source_surface TEXT NOT NULL DEFAULT 'api',
+                ip_address TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                status_code INTEGER,
+                succeeded INTEGER NOT NULL DEFAULT 1,
+                details_json TEXT NOT NULL DEFAULT '{}'
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_operation_logs_occurred_at
+                ON operation_logs(occurred_at DESC, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_operation_logs_actor
+                ON operation_logs(actor_user_id, occurred_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_operation_logs_module_action
+                ON operation_logs(module_code, action_code, occurred_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_operation_logs_target
+                ON operation_logs(target_type, target_id);
+            """
+        )
+        conn.commit()
+        _operation_logs_schema_ready = True
+
+
 def _ensure_return_schema(conn):
     """Create the reusable sales/raw-material return document tables."""
     global _return_schema_ready
@@ -2083,6 +2137,7 @@ def get_db():
         _ensure_material_outbound_schema(conn)
         _ensure_return_schema(conn)
         _ensure_print_templates_schema(conn)
+        _ensure_operation_logs_schema(conn)
         yield conn
         conn.commit()
     except Exception:

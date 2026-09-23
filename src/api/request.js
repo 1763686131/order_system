@@ -22,6 +22,17 @@ const request = axios.create({
   }
 })
 
+request.interceptors.request.use(config => {
+  const currentPath = window.location.pathname
+  config.headers['X-Client-Surface'] = currentPath.startsWith('/admin')
+    ? 'admin'
+    : currentPath.startsWith('/main')
+      ? 'touch'
+      : 'web'
+  config.headers['X-Client-Page'] = currentPath
+  return config
+})
+
 // 响应拦截器
 request.interceptors.response.use(
   (response) => {

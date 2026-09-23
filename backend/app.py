@@ -67,7 +67,12 @@ CORS(
     resources={
         r"/api/*": {
             "origins": cors_origins,
-            "allow_headers": ["Content-Type"],
+            "allow_headers": [
+                "Content-Type",
+                "X-Client-Surface",
+                "X-Client-Page",
+                "X-Request-ID",
+            ],
         }
     },
     supports_credentials=True,
@@ -110,6 +115,7 @@ from routes.messages import messages_bp
 from routes.notifications import notifications_bp
 from routes.admin_realtime import admin_realtime_bp
 from routes.peer_transfers import peer_transfers_bp
+from routes.operation_logs import operation_logs_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(auth_bp)
@@ -137,6 +143,11 @@ app.register_blueprint(messages_bp)
 app.register_blueprint(notifications_bp)
 app.register_blueprint(admin_realtime_bp)
 app.register_blueprint(peer_transfers_bp)
+app.register_blueprint(operation_logs_bp)
+
+from utils.operation_logs import register_operation_logging
+
+register_operation_logging(app)
 
 # ==========================================
 # 健康检查接口

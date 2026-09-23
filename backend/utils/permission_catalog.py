@@ -40,6 +40,11 @@ ADMIN_DEPARTMENT_PERMISSIONS = {
     "delete": "admin.department.delete",
 }
 
+ADMIN_OPERATION_LOG_PERMISSIONS = {
+    "read": "admin.operation_log.read",
+    "clear": "admin.operation_log.clear",
+}
+
 ADMIN_ROUTE_PERMISSIONS = {
     "dashboard": "admin.route.dashboard",
     "products": "admin.route.products",
@@ -91,6 +96,7 @@ ADMIN_ROUTE_BRANCH_PERMISSIONS = {
         "settings": "admin.route.system.settings",
         "roles": "admin.route.system.roles",
         "print_template": "admin.route.system.print_template",
+        "operation_logs": "admin.route.system.operation_logs",
     },
 }
 
@@ -106,6 +112,11 @@ PERMISSION_MODULES = [
         "name": "触屏端权限",
         "description": "触屏端订单、发货回单和原材料出库操作",
         "permissions": [
+            {
+                "code": "touch.operation_log.read",
+                "name": "查看本人操作日志",
+                "description": "查询当前账号在触屏端产生的操作记录",
+            },
             {
                 "code": "touch.order.read",
                 "name": "查看订单",
@@ -343,6 +354,11 @@ PERMISSION_MODULES = [
                 "name": "访问打印模板",
                 "description": "显示并访问打印模板管理",
             },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["operation_logs"],
+                "name": "访问操作日志",
+                "description": "显示并访问系统操作日志",
+            },
         ],
     },
     {
@@ -523,6 +539,27 @@ _sales_order_module = next(
 _sales_order_module["permissions"].insert(
     0,
     _route_permissions[ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["orders"]],
+)
+
+PERMISSION_MODULES.append(
+    {
+        "code": "admin_operation_logs",
+        "name": "操作日志",
+        "description": "查看、筛选和清空系统操作日志",
+        "permissions": [
+            _route_permissions[ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["operation_logs"]],
+            {
+                "code": ADMIN_OPERATION_LOG_PERMISSIONS["read"],
+                "name": "查看操作日志",
+                "description": "查看和筛选账号安全、角色权限及业务操作记录",
+            },
+            {
+                "code": ADMIN_OPERATION_LOG_PERMISSIONS["clear"],
+                "name": "清空操作日志",
+                "description": "清空历史操作日志并保留本次清空记录",
+            },
+        ],
+    }
 )
 
 _ROUTE_PERMISSION_MODULES = [

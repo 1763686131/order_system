@@ -681,6 +681,11 @@ const allMenuItems = [
         label: '打印模板',
         path: '/admin/system/print-template',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.PRINT_TEMPLATE
+      },
+      {
+        label: '操作日志',
+        path: '/admin/system/operation-logs',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.OPERATION_LOGS
       }
     ]
   }

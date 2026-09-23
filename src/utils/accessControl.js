@@ -36,6 +36,11 @@ export const ADMIN_DEPARTMENT_PERMISSIONS = {
   DELETE: 'admin.department.delete'
 }
 
+export const ADMIN_OPERATION_LOG_PERMISSIONS = {
+  READ: 'admin.operation_log.read',
+  CLEAR: 'admin.operation_log.clear'
+}
+
 const normalizeIds = (values) => {
   if (!Array.isArray(values)) return []
   return [...new Set(values.map(Number).filter(Number.isInteger))]

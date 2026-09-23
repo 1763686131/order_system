@@ -48,7 +48,8 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
     STORES: 'admin.route.system.stores',
     SETTINGS: 'admin.route.system.settings',
     ROLES: 'admin.route.system.roles',
-    PRINT_TEMPLATE: 'admin.route.system.print_template'
+    PRINT_TEMPLATE: 'admin.route.system.print_template',
+    OPERATION_LOGS: 'admin.route.system.operation_logs'
   }
 }
 
@@ -81,7 +82,8 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.STORES, path: '/admin/stores' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.SETTINGS, path: '/admin/settings' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.ROLES, path: '/admin/roles' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.PRINT_TEMPLATE, path: '/admin/system/print-template' }
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.PRINT_TEMPLATE, path: '/admin/system/print-template' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.OPERATION_LOGS, path: '/admin/system/operation-logs' }
 ]
 
 export function getDefaultAdminPath(userStore) {
@@ -169,6 +171,9 @@ export function getAdminRoutePermission(path = '') {
   }
   if (/^\/admin\/system\/print-template(\/|$)/.test(path)) {
     return ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.PRINT_TEMPLATE
+  }
+  if (/^\/admin\/system\/operation-logs(\/|$)/.test(path)) {
+    return ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.OPERATION_LOGS
   }
   return null
 }
