@@ -529,6 +529,7 @@ def _ensure_auth_schema(conn):
         cursor.execute("DELETE FROM user_roles")
 
         from utils.permission_catalog import (
+            ADMIN_ROUTE_BRANCH_PERMISSIONS,
             ADMIN_ROUTE_BRANCH_PARENT_MAP,
             PERMISSION_MODULES,
         )
@@ -584,16 +585,6 @@ def _ensure_auth_schema(conn):
             for permission in module["permissions"]
             if permission["code"].startswith("admin.route.")
         ]
-        if admin_route_permission_codes:
-            placeholders = ",".join("?" for _ in admin_route_permission_codes)
-            cursor.execute(
-                f"""
-                DELETE FROM permissions
-                WHERE code LIKE 'admin.route.%'
-                  AND code NOT IN ({placeholders})
-                """,
-                admin_route_permission_codes,
-            )
         route_permission_migration = cursor.execute(
             """
             SELECT setting_value
@@ -622,14 +613,14 @@ def _ensure_auth_schema(conn):
                 """
             )
 
-        route_branch_permission_migration = cursor.execute(
+        route_business_module_migration = cursor.execute(
             """
             SELECT setting_value
             FROM system_meta
-            WHERE setting_key = 'admin_route_branch_permissions_v1'
+            WHERE setting_key = 'admin_route_business_modules_v1'
             """
         ).fetchone()
-        if not route_branch_permission_migration:
+        if not route_business_module_migration:
             for branch_code, parent_code in ADMIN_ROUTE_BRANCH_PARENT_MAP.items():
                 cursor.execute(
                     """
@@ -655,7 +646,7 @@ def _ensure_auth_schema(conn):
                 """
                 INSERT INTO system_meta (setting_key, setting_value, updated_at)
                 VALUES (
-                    'admin_route_branch_permissions_v1',
+                    'admin_route_business_modules_v1',
                     '1',
                     CURRENT_TIMESTAMP
                 )
@@ -710,10 +701,13 @@ def _ensure_auth_schema(conn):
                       INNER JOIN permissions AS route_permissions
                           ON route_permissions.id = route_links.permission_id
                       WHERE route_links.role_id = roles.id
-                        AND route_permissions.code = 'admin.route.sales'
+                        AND route_permissions.code = ?
                   )
                 """,
-                admin_sales_order_permission_codes,
+                (
+                    *admin_sales_order_permission_codes,
+                    ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["orders"],
+                ),
             )
             cursor.execute(
                 """
@@ -724,6 +718,17 @@ def _ensure_auth_schema(conn):
                     CURRENT_TIMESTAMP
                 )
                 """
+            )
+
+        if admin_route_permission_codes:
+            placeholders = ",".join("?" for _ in admin_route_permission_codes)
+            cursor.execute(
+                f"""
+                DELETE FROM permissions
+                WHERE code LIKE 'admin.route.%'
+                  AND code NOT IN ({placeholders})
+                """,
+                admin_route_permission_codes,
             )
 
         cursor.execute(
@@ -916,6 +921,7 @@ def _ensure_messaging_schema(conn):
         from utils.permission_catalog import (
             ADMIN_AUDIT_NOTIFICATION_PERMISSIONS,
             ADMIN_MESSAGE_PERMISSIONS,
+            ADMIN_ROUTE_BRANCH_PERMISSIONS,
         )
 
         messaging_codes = list(ADMIN_MESSAGE_PERMISSIONS.values())
@@ -945,10 +951,14 @@ def _ensure_messaging_schema(conn):
             )
 
         route_mappings = {
-            "admin.route.purchase": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["stock_inbound"],
-            "admin.route.inventory": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["material_outbound"],
-            "admin.route.finance": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["payment_receipt"],
-            "admin.route.sales": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["return_order"],
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"]:
+                ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["stock_inbound"],
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["material_outbounds"]:
+                ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["material_outbound"],
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["payment_history"]:
+                ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["payment_receipt"],
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["returns"]:
+                ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["return_order"],
         }
         audit_migration = cursor.execute(
             """

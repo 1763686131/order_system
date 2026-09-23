@@ -225,12 +225,12 @@ PERMISSION_MODULES = [
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["orders"],
-                "name": "访问销售订单",
+                "name": "访问销售订单列表",
                 "description": "显示并访问销售订单列表和订单表单",
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["logistics"],
-                "name": "访问物流列表",
+                "name": "访问物流操作列表",
                 "description": "显示并访问物流对账和物流订单",
             },
             {
@@ -407,7 +407,7 @@ PERMISSION_MODULES = [
     {
         "code": "admin_sales_orders",
         "name": "销售订单操作",
-        "description": "控制后台销售订单列表中的新增、修改和状态操作",
+        "description": "控制后台销售订单列表访问、新增、修改和状态操作",
         "permissions": [
             {
                 "code": ADMIN_SALES_ORDER_PERMISSIONS["create"],
@@ -506,6 +506,192 @@ PERMISSION_MODULES = [
         ],
     },
 ]
+
+# Route entry permissions live beside the business operations they expose.
+_route_module = next(
+    module for module in PERMISSION_MODULES if module["code"] == "admin_routes"
+)
+_route_permissions = {
+    permission["code"]: permission for permission in _route_module["permissions"]
+}
+PERMISSION_MODULES.remove(_route_module)
+
+_sales_order_module = next(
+    module for module in PERMISSION_MODULES
+    if module["code"] == "admin_sales_orders"
+)
+_sales_order_module["permissions"].insert(
+    0,
+    _route_permissions[ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["orders"]],
+)
+
+_ROUTE_PERMISSION_MODULES = [
+    (
+        "admin_home",
+        "后台首页",
+        "控制后台数据看板页面访问",
+        [ADMIN_ROUTE_PERMISSIONS["dashboard"]],
+    ),
+    (
+        "admin_products",
+        "商品管理",
+        "控制商品和原材料档案页面访问",
+        [
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["products"]["list"],
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["products"]["materials"],
+        ],
+    ),
+    (
+        "admin_logistics",
+        "物流管理",
+        "控制物流操作列表页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["logistics"]],
+    ),
+    (
+        "admin_returns",
+        "退货管理",
+        "控制退货订单页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["returns"]],
+    ),
+    (
+        "admin_customers",
+        "客户管理",
+        "控制客户列表页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["customers"]],
+    ),
+    (
+        "admin_purchase_orders",
+        "采购订单",
+        "控制采购订单页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["orders"]],
+    ),
+    (
+        "admin_suppliers",
+        "供应商管理",
+        "控制供应商管理页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["suppliers"]],
+    ),
+    (
+        "admin_purchase_inbound",
+        "采购入库",
+        "控制采购入库页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"]],
+    ),
+    (
+        "admin_product_inventory",
+        "成品库存",
+        "控制成品库存页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["products"]],
+    ),
+    (
+        "admin_material_inventory",
+        "原材料库存",
+        "控制原材料库存页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["materials"]],
+    ),
+    (
+        "admin_material_outbounds",
+        "原材料出库",
+        "控制原材料出库列表页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["material_outbounds"]],
+    ),
+    (
+        "admin_stock_records",
+        "库存流水",
+        "控制入库和出库记录页面访问",
+        [
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["stock_in"],
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["stock_out"],
+        ],
+    ),
+    (
+        "admin_warehouses",
+        "仓库管理",
+        "控制仓库管理页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["warehouse"]],
+    ),
+    (
+        "admin_receivables",
+        "应收管理",
+        "控制应收欠款和债务详情页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["receivables"]],
+    ),
+    (
+        "admin_payment_history",
+        "收款历史",
+        "控制收款历史页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["payment_history"]],
+    ),
+    (
+        "admin_bank_accounts",
+        "银行账户",
+        "控制银行账户页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["bank_accounts"]],
+    ),
+    (
+        "admin_logistics_reconciliation",
+        "物流专车对账",
+        "控制物流和专车对账页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["logistics_truck"]],
+    ),
+    (
+        "admin_courier_reconciliation",
+        "快运快递对账",
+        "控制快运和快递对账页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["express_courier"]],
+    ),
+    (
+        "admin_company_profile",
+        "公司资料",
+        "控制公司资料页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["company"]],
+    ),
+    (
+        "admin_inspection_reports",
+        "检测报告",
+        "控制检测报告页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["reports"]],
+    ),
+    (
+        "admin_stores",
+        "门店管理",
+        "控制门店管理页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["stores"]],
+    ),
+    (
+        "admin_settings",
+        "系统设置",
+        "控制系统设置页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["settings"]],
+    ),
+    (
+        "admin_role_management",
+        "权限管理",
+        "控制角色组权限管理页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["roles"]],
+    ),
+    (
+        "admin_print_templates",
+        "打印模板",
+        "控制打印模板管理页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["print_template"]],
+    ),
+]
+
+for (
+    module_code,
+    module_name,
+    description,
+    permission_codes,
+) in _ROUTE_PERMISSION_MODULES:
+    PERMISSION_MODULES.append(
+        {
+            "code": module_code,
+            "name": module_name,
+            "description": description,
+            "permissions": [_route_permissions[code] for code in permission_codes],
+        }
+    )
 
 ALL_PERMISSION_CODES = [
     permission["code"]

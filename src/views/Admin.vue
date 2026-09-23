@@ -505,7 +505,6 @@ const allMenuItems = [
   {
     label: '商品',
     icon: icons.package,
-    permission: ADMIN_ROUTE_PERMISSIONS.PRODUCTS,
     children: [
       {
         label: '商品列表',
@@ -522,7 +521,6 @@ const allMenuItems = [
   {
     label: '销售',
     icon: icons.cart,
-    permission: ADMIN_ROUTE_PERMISSIONS.SALES,
     children: [
       {
         label: '销售订单',
@@ -549,7 +547,6 @@ const allMenuItems = [
   {
     label: '采购',
     icon: icons.truck,
-    permission: ADMIN_ROUTE_PERMISSIONS.PURCHASE,
     children: [
       {
         label: '采购订单',
@@ -571,7 +568,6 @@ const allMenuItems = [
   {
     label: '库存',
     icon: icons.chart,
-    permission: ADMIN_ROUTE_PERMISSIONS.INVENTORY,
     children: [
       {
         label: '成品库存',
@@ -608,7 +604,6 @@ const allMenuItems = [
   {
     label: '财务',
     icon: icons.dollar,
-    permission: ADMIN_ROUTE_PERMISSIONS.FINANCE,
     children: [
       {
         label: '应收欠款',
@@ -640,9 +635,6 @@ const allMenuItems = [
   {
     label: '人事行政',
     icon: icons.briefcase,
-    permission: ADMIN_ROUTE_PERMISSIONS.HR,
-    additionalPermission: ADMIN_EMPLOYEE_PERMISSIONS.READ,
-    additionalPermissions: [ADMIN_DEPARTMENT_PERMISSIONS.READ],
     children: [
       {
         label: '员工管理',
@@ -669,7 +661,6 @@ const allMenuItems = [
   {
     label: '设置',
     icon: icons.settings,
-    permission: ADMIN_ROUTE_PERMISSIONS.SYSTEM,
     children: [
       {
         label: '门店管理',
@@ -701,21 +692,16 @@ const menuItems = computed(() =>
       const children = item.children?.filter(child =>
         !child.permission || userStore.hasPerm(child.permission)
       )
-      const visibleByItemPermission =
-        userStore.hasPerm(item.permission) ||
-        (item.additionalPermission && userStore.hasPerm(item.additionalPermission)) ||
-        item.additionalPermissions?.some(permission => userStore.hasPerm(permission))
       return {
         ...item,
-        ...(item.children ? { children } : {}),
-        visibleByItemPermission
+        ...(item.children ? { children } : {})
       }
     })
     .filter(item =>
-      item.visibleByItemPermission ||
-      (item.children && item.children.length > 0)
+      item.children
+        ? item.children.length > 0
+        : userStore.hasPerm(item.permission)
     )
-    .filter(item => !item.children || item.children.length > 0)
 )
 
 const expandedMenus = ref([])

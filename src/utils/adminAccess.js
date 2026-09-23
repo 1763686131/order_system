@@ -4,14 +4,7 @@ import {
 } from '@/utils/accessControl'
 
 export const ADMIN_ROUTE_PERMISSIONS = {
-  DASHBOARD: 'admin.route.dashboard',
-  PRODUCTS: 'admin.route.products',
-  SALES: 'admin.route.sales',
-  PURCHASE: 'admin.route.purchase',
-  INVENTORY: 'admin.route.inventory',
-  FINANCE: 'admin.route.finance',
-  HR: 'admin.route.hr',
-  SYSTEM: 'admin.route.system'
+  DASHBOARD: 'admin.route.dashboard'
 }
 
 export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
