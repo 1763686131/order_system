@@ -332,6 +332,8 @@ const templateSearch = ref('')
 const settingsVisible = ref(false)
 const printConfig = ref(getPrintClientConfig())
 
+const PRINT_TEMPLATE_SELECTION_STORAGE_PREFIX = 'order-system-print-template-selection'
+
 const businessTypeLabels = {
   sale: '销售',
   purchase: '采购',
@@ -447,6 +449,54 @@ const getPaperLabel = (template) => {
   return `${template?.paperType || '自定义纸张'} · ${width}×${height}mm`
 }
 
+const getTemplateSelectionStorageKey = () => (
+  `${PRINT_TEMPLATE_SELECTION_STORAGE_PREFIX}:${props.businessType}`
+)
+
+const getStoredTemplateId = () => {
+  if (typeof window === 'undefined') return null
+
+  try {
+    const stored = window.localStorage.getItem(getTemplateSelectionStorageKey())
+    if (!stored) return null
+
+    const parsed = JSON.parse(stored)
+    return parsed?.templateId ?? parsed?.id ?? null
+  } catch {
+    return null
+  }
+}
+
+const saveStoredTemplate = (template) => {
+  const templateId = template?.id
+  if (templateId === undefined || templateId === null) return
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(
+      getTemplateSelectionStorageKey(),
+      JSON.stringify({
+        version: 1,
+        businessType: props.businessType,
+        templateId,
+        savedAt: new Date().toISOString()
+      })
+    )
+  } catch {
+    // Keep the selected template usable when localStorage is unavailable.
+  }
+}
+
+const clearStoredTemplate = () => {
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.removeItem(getTemplateSelectionStorageKey())
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
+
 const loadTemplates = async () => {
   loading.value = true
   errorMessage.value = ''
@@ -471,11 +521,20 @@ const loadTemplates = async () => {
       ))
       .sort((left, right) => Number(right.isDefault) - Number(left.isDefault))
 
-    selectedTemplateId.value = (
-      templates.value.find(template => template.isDefault) ||
-      templates.value[0] ||
-      {}
-    ).id ?? null
+    const storedTemplateId = getStoredTemplateId()
+    const storedTemplate = templates.value.find(template => (
+      String(template.id) === String(storedTemplateId)
+    ))
+    const serverDefaultTemplate = templates.value.find(template => template.isDefault)
+      || templates.value[0]
+      || null
+    const preferredTemplate = storedTemplate || serverDefaultTemplate
+
+    selectedTemplateId.value = preferredTemplate?.id ?? null
+
+    if (storedTemplateId && !storedTemplate) {
+      clearStoredTemplate()
+    }
   } catch (error) {
     console.error(`加载${businessTypeLabel.value}打印模板失败:`, error)
     templates.value = []
@@ -505,6 +564,7 @@ const closeTemplateDropdown = () => {
 
 const selectTemplate = (template) => {
   selectedTemplateId.value = template.id
+  saveStoredTemplate(template)
   closeTemplateDropdown()
 }
 
