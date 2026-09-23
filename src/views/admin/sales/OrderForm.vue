@@ -197,17 +197,45 @@
     <!-- 底部信息区 -->
     <div class="bottom-info-bar">
       <div class="finance-row-full">
-        <div class="info-group">
+        <div v-if="salesPeople.length || formData.salesPerson" class="info-group">
           <label>业务员</label>
           <select v-model="formData.salesPerson">
-            <option value="柯晓">柯晓</option>
+            <option value="">请选择业务员</option>
+            <option
+              v-if="formData.salesPerson && !salesPeople.some(employee => employee.displayName === formData.salesPerson)"
+              :value="formData.salesPerson"
+              disabled
+            >
+              {{ formData.salesPerson }}（历史记录）
+            </option>
+            <option
+              v-for="employee in salesPeople"
+              :key="employee.id"
+              :value="employee.displayName"
+            >
+              {{ employee.displayName }}
+            </option>
           </select>
         </div>
 
-        <div class="info-group">
+        <div v-if="creators.length || formData.creator" class="info-group">
           <label>制单人</label>
           <select v-model="formData.creator">
-            <option value="下单员">下单员</option>
+            <option value="">请选择制单人</option>
+            <option
+              v-if="formData.creator && !creators.some(employee => employee.displayName === formData.creator)"
+              :value="formData.creator"
+              disabled
+            >
+              {{ formData.creator }}（历史记录）
+            </option>
+            <option
+              v-for="employee in creators"
+              :key="employee.id"
+              :value="employee.displayName"
+            >
+              {{ employee.displayName }}
+            </option>
           </select>
         </div>
 
@@ -279,83 +307,51 @@
       </div>
 
       <div class="action-row">
-        <label class="checkbox-label">
-          <input type="checkbox" v-model="formData.printAfterSave" />
-          保存后打印
-        </label>
         <button
           type="button"
-          class="btn-print-template"
-          @click="openPrintTemplateSelector"
+          class="btn-save-and-print"
+          @click="handleSaveAndPrint"
           :disabled="saving"
         >
-          🖨️ 打印
-        </button>
-        <button class="btn-save-and-print" @click="handleSaveAndPrint" :disabled="saving">
           {{ saving ? '⏳ 保存中...' : '💾 保存并打印' }}
         </button>
-        <button class="btn-save-final" @click="handleSaveFinal" :disabled="saving">
-          {{ saving ? '⏳ 保存中...' : '保存(ctrl+Q)' }}
-        </button>
       </div>
     </div>
 
-    <!-- 打印模板选择弹窗 -->
-    <div
-      v-if="showPrintTemplateModal"
-      class="custom-modal-overlay"
-      @click.self="closePrintTemplateSelector"
-    >
-      <div class="custom-modal print-template-selector-modal">
-        <div class="modal-header">
-          <div class="modal-icon print">🖨</div>
-          <h3>选择打印模板</h3>
+    <Teleport to="body">
+      <Transition name="notice">
+        <div
+          v-if="saveToast.visible"
+          class="page-notice notice-success"
+          role="status"
+          aria-live="polite"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path d="m8 12 2.7 2.7L16.5 9"></path>
+          </svg>
+          <span>{{ saveToast.message }}</span>
         </div>
-        <div class="modal-body print-template-selector-body">
-          <p class="print-template-selector-hint">
-            请选择一个销售模板预览当前订单数据，暂不提交打印任务。
-          </p>
-          <div v-if="printTemplateLoading" class="print-template-empty">
-            正在加载模板...
-          </div>
-          <div v-else-if="!printTemplates.length" class="print-template-empty">
-            暂无可用销售模板，请先在“打印模板”中设计并保存模板。
-          </div>
-          <div v-else class="print-template-list">
-            <div
-              v-for="template in printTemplates"
-              :key="template.id"
-              class="print-template-option"
-            >
-              <div class="print-template-option-info">
-                <strong>{{ template.name }}</strong>
-                <span>
-                  {{ getPrintTemplatePaperLabel(template) }}
-                  <em v-if="template.isDefault">默认</em>
-                </span>
-              </div>
-              <button
-                type="button"
-                class="btn-template-preview"
-                @click="previewOrderWithTemplate(template)"
-              >
-                预览
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn-modal-cancel" @click="closePrintTemplateSelector">
-            关闭
-          </button>
-        </div>
-      </div>
-    </div>
+      </Transition>
+    </Teleport>
+
+    <PrintTemplateSelector
+      :visible="printTemplateDialogOpen"
+      business-type="sale"
+      title="打印订单"
+      :document-number="formData.orderNumber"
+      description="选择销售模板和打印方式。"
+      @close="closePrintTemplateDialog"
+      @preview="previewSelectedPrintTemplate"
+      @print="printSelectedPrintTemplate"
+    />
 
     <OrderPrintPreview
-      :visible="showOrderPrintPreview"
+      :visible="printPreviewVisible"
       :template="selectedPrintTemplate"
       :variables="orderPrintVariables"
+      :printer="selectedPrintPrinter"
+      :auto-print="printPreviewAutoPrint"
       @close="closeOrderPrintPreview"
     />
 
@@ -420,6 +416,7 @@ import request from '@/api/request'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { toChineseMoney } from '@/utils/chineseMoney'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
+import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -436,13 +433,14 @@ const showCloseConfirmModal = ref(false)
 // 清空确认弹窗
 const showClearConfirmModal = ref(false)
 
-// 打印模板预览
-const printTemplateStorageKey = 'order-system-print-templates'
-const showPrintTemplateModal = ref(false)
-const printTemplateLoading = ref(false)
-const printTemplates = ref([])
-const showOrderPrintPreview = ref(false)
+// 打印模板选择与预览
+const printTemplateDialogOpen = ref(false)
+const printPreviewVisible = ref(false)
 const selectedPrintTemplate = ref(null)
+const selectedPrintPrinter = ref(null)
+const printPreviewAutoPrint = ref(false)
+const saveToast = ref({ visible: false, message: '' })
+let saveToastTimer = null
 
 // Props 定义
 const props = defineProps({
@@ -478,11 +476,18 @@ const modalType = ref('success') // success 或 error
 const modalTitle = ref('')
 const modalMessage = ref('')
 
-const showSuccessModal = (message) => {
-  modalType.value = 'success'
-  modalTitle.value = '操作成功'
-  modalMessage.value = message
-  showModal.value = true
+const dismissSaveToast = () => {
+  saveToast.value.visible = false
+  clearTimeout(saveToastTimer)
+}
+
+const showSuccessToast = (message) => {
+  saveToast.value = {
+    visible: true,
+    message: String(message || '').replace(/\s*\n\s*/g, ' · ')
+  }
+  clearTimeout(saveToastTimer)
+  saveToastTimer = setTimeout(dismissSaveToast, 3000)
 }
 
 const showErrorModal = (message) => {
@@ -494,11 +499,6 @@ const showErrorModal = (message) => {
 
 const closeModal = () => {
   showModal.value = false
-  // 如果是成功提示，关闭弹窗后返回列表
-  if (modalType.value === 'success') {
-    discardDraft()
-    router.back()
-  }
 }
 
 // 基础数据
@@ -509,6 +509,8 @@ const products = ref([])
 const units = ref([])
 const packagingUnits = ref([])
 const bankAccounts = ref([])
+const employees = ref([])
+const departments = ref([])
 
 const DEFAULT_PACKAGING_OPTIONS = ['无', '桶装', '纸箱', '托盘', '袋装']
 const ADD_PACKAGING_VALUE = '__add_packaging__'
@@ -531,18 +533,42 @@ const formData = ref({
   contactPhone: '',
   contactAddress: '',
   projectName: '',
-  packaging: '无',
+  packaging: '桶装',
   logisticsService: '送货上门+回单拍照回传',
-  salesPerson: '柯晓',
-  creator: '下单员',
+  salesPerson: '',
+  creator: '',
   orderRemark: '',
   taxRate: 0,
   discountAmount: null,
   otherFees: null,
   settlementAccount: '',
   currentPayment: 0,
-  printAfterSave: false,
   items: []
+})
+
+const salesPeople = computed(() => {
+  const salesDepartmentIds = new Set(
+    departments.value
+      .filter(department => department.name === '销售部')
+      .map(department => String(department.id))
+  )
+  return employees.value.filter(employee =>
+    employee.displayName &&
+    (employee.departmentIds || []).some(id => salesDepartmentIds.has(String(id)))
+  )
+})
+
+const creators = computed(() => {
+  const creatorDepartmentIds = new Set(
+    departments.value
+      .filter(department => ['财务部', '仓储部'].includes(department.name))
+      .map(department => String(department.id))
+  )
+  const matchingEmployees = employees.value.filter(employee =>
+    employee.displayName &&
+    (employee.departmentIds || []).some(id => creatorDepartmentIds.has(String(id)))
+  )
+  return [...new Map(matchingEmployees.map(employee => [employee.id, employee])).values()]
 })
 
 const packagingOptions = computed(() => {
@@ -764,65 +790,41 @@ const orderPrintVariables = computed(() => {
   }
 })
 
-const getPrintTemplatePaperLabel = (template) => {
-  const width = template.pageWidth || 210
-  const height = template.pageHeight || 140
-  return `${template.paperType || '自定义'} · ${width}×${height}mm`
-}
-
-const loadPrintTemplates = () => {
-  printTemplateLoading.value = true
-  try {
-    const raw = localStorage.getItem(printTemplateStorageKey)
-    const parsed = raw ? JSON.parse(raw) : []
-    const source = Array.isArray(parsed)
-      ? parsed
-      : (Array.isArray(parsed?.templates) ? parsed.templates : [])
-
-    printTemplates.value = source
-      .filter(template => (
-        template &&
-        template.enabled !== false &&
-        (!template.businessType || template.businessType === 'sale')
-      ))
-      .sort((left, right) => Number(right.isDefault) - Number(left.isDefault))
-  } catch (error) {
-    console.warn('读取打印模板失败:', error)
-    printTemplates.value = []
-  } finally {
-    printTemplateLoading.value = false
+const closePrintTemplateDialog = () => {
+  printTemplateDialogOpen.value = false
+  if (!printPreviewVisible.value) {
+    selectedPrintTemplate.value = null
+    selectedPrintPrinter.value = null
+    printPreviewAutoPrint.value = false
   }
 }
 
-const openPrintTemplateSelector = () => {
-  loadPrintTemplates()
-  showPrintTemplateModal.value = true
-}
-
-const closePrintTemplateSelector = () => {
-  showPrintTemplateModal.value = false
-}
-
-const previewOrderWithTemplate = (template) => {
-  if (!template?.design && !template?.data) {
-    showErrorModal('该模板还没有保存设计内容，请先在打印模板页面完成设计。')
-    return
-  }
+const openSelectedPrintTemplate = (template, printer, autoPrint) => {
   selectedPrintTemplate.value = template
-  showPrintTemplateModal.value = false
-  showOrderPrintPreview.value = true
+  selectedPrintPrinter.value = printer
+  printPreviewAutoPrint.value = autoPrint
+  printTemplateDialogOpen.value = false
+  printPreviewVisible.value = true
+}
+
+const previewSelectedPrintTemplate = (template, printer) => {
+  openSelectedPrintTemplate(template, printer, false)
+}
+
+const printSelectedPrintTemplate = (template, printer) => {
+  openSelectedPrintTemplate(template, printer, true)
 }
 
 const closeOrderPrintPreview = () => {
-  showOrderPrintPreview.value = false
+  printPreviewVisible.value = false
   selectedPrintTemplate.value = null
+  selectedPrintPrinter.value = null
+  printPreviewAutoPrint.value = false
 }
 
-const handlePrintTemplatesUpdated = () => {
-  if (showPrintTemplateModal.value) {
-    loadPrintTemplates()
-  }
-}
+const getSaveSuccessMessage = () => (
+  `${isEditMode.value ? '订单修改成功' : '订单保存成功'} · 订单编号：${formData.value.orderNumber}`
+)
 
 // 过滤商品（根据当前选择的门店和仓库）
 const filteredProducts = computed(() => {
@@ -966,6 +968,27 @@ const loadBankAccounts = async () => {
   }
 }
 
+const loadOrderDirectory = async () => {
+  try {
+    const response = await request.get('/admin/directory')
+    departments.value = Array.isArray(response?.departments)
+      ? response.departments
+      : []
+    employees.value = Array.isArray(response?.employees)
+      ? response.employees.map(employee => ({
+          ...employee,
+          departmentIds: Array.isArray(employee.departmentIds)
+            ? employee.departmentIds.map(Number).filter(Number.isFinite)
+            : []
+        }))
+      : []
+  } catch (error) {
+    console.warn('加载员工目录失败:', error)
+    departments.value = []
+    employees.value = []
+  }
+}
+
 // 加载订单数据（编辑模式）
 const loadOrderData = async (orderId) => {
   console.log('loadOrderData 被调用，订单ID:', orderId)
@@ -1002,7 +1025,7 @@ const loadOrderData = async (orderId) => {
       formData.value.contactPhone = response.contact_phone || response.receiver_phone || ''
       formData.value.contactAddress = response.contact_address || response.receiver_address || ''
       formData.value.projectName = response.project_name || ''
-      formData.value.packaging = response.goods_packaging || '无'
+      formData.value.packaging = response.goods_packaging || '桶装'
       formData.value.logisticsService = normalizeLogisticsService(response.logistics_service)
       formData.value.salesPerson = response.sales_person || ''
       formData.value.creator = response.creator || ''
@@ -1123,7 +1146,7 @@ const handlePackagingChange = async () => {
   }
 
   const packagingName = window.prompt('请输入新的包装名称')
-  formData.value.packaging = '无'
+  formData.value.packaging = '桶装'
 
   if (!packagingName || !packagingName.trim()) {
     return
@@ -1653,7 +1676,7 @@ const validateForm = () => {
 // 保存订单
 const saving = ref(false)
 
-const handleSave = async (printAfterSave = false) => {
+const handleSave = async () => {
   // 1. 校验表单
   if (!validateForm()) return
 
@@ -1739,20 +1762,18 @@ const handleSave = async (printAfterSave = false) => {
 
     // 6. 处理结果
     if (response && response.success) {
-      // 新增模式：用后端返回的真实订单编号更新
-      if (!isEditMode.value && response.orderNumber) {
-        formData.value.orderNumber = response.orderNumber
+      const savedOrderNumber = response.orderNumber ||
+        response.data?.order_number ||
+        response.data?.orderNumber
+      if (savedOrderNumber) {
+        formData.value.orderNumber = savedOrderNumber
       }
 
-      showSuccessModal(isEditMode.value
-        ? `订单修改成功！\n订单编号：${formData.value.orderNumber}`
-        : `订单保存成功！\n订单编号：${formData.value.orderNumber}`
-      )
-
-      if (printAfterSave) {
-        // TODO: 打印逻辑
-        console.log('执行打印操作...')
-      }
+      showSuccessToast(getSaveSuccessMessage())
+      selectedPrintTemplate.value = null
+      selectedPrintPrinter.value = null
+      printPreviewAutoPrint.value = false
+      printTemplateDialogOpen.value = true
     } else {
       showErrorModal('订单保存失败：' + (response?.message || '未知错误'))
     }
@@ -1774,12 +1795,7 @@ const handleSave = async (printAfterSave = false) => {
 
 // 保存并打印
 const handleSaveAndPrint = () => {
-  handleSave(true)
-}
-
-// 最终保存
-const handleSaveFinal = () => {
-  handleSave(false)
+  handleSave()
 }
 
 // 关闭
@@ -1819,10 +1835,10 @@ const confirmClear = () => {
   formData.value.contactAddress = ''
   formData.value.settlementAccount = ''
   formData.value.projectName = ''
-  formData.value.packaging = '无'
+  formData.value.packaging = '桶装'
   formData.value.logisticsService = logisticsServiceOptions[0]
-  formData.value.salesPerson = '柯晓'
-  formData.value.creator = '下单员'
+  formData.value.salesPerson = ''
+  formData.value.creator = ''
   formData.value.orderRemark = ''
   formData.value.taxRate = 0
   formData.value.discountAmount = null
@@ -1844,8 +1860,6 @@ watch(
 
 // 初始化
 onMounted(async () => {
-  window.addEventListener('order-system-print-templates-updated', handlePrintTemplatesUpdated)
-  window.addEventListener('storage', handlePrintTemplatesUpdated)
   console.log('OrderForm mounted, props.orderId:', props.orderId)
   console.log('isEditMode:', isEditMode.value)
 
@@ -1859,7 +1873,8 @@ onMounted(async () => {
     loadWarehouses(),
     loadProducts(),
     loadUnits(),
-    loadBankAccounts()
+    loadBankAccounts(),
+    loadOrderDirectory()
   ])
 
   let savedDraft = orderDraftStore.draft
@@ -1907,9 +1922,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('order-system-print-templates-updated', handlePrintTemplatesUpdated)
-  window.removeEventListener('storage', handlePrintTemplatesUpdated)
   clearTimeout(draftSaveTimer)
+  clearTimeout(saveToastTimer)
   persistDraft()
 })
 
@@ -2469,131 +2483,59 @@ input:checked + .slider:before {
   justify-content: flex-end;
 }
 
-.btn-print-template {
-  height: 38px;
-  padding: 0 18px;
-  background: #fff;
-  color: var(--accent-dark);
-  border: 1px solid var(--accent-border);
-  border-radius: 5px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.18s ease;
-  white-space: nowrap;
-}
-
-.btn-print-template:hover {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-}
-
-.btn-print-template:disabled {
-  color: var(--text-muted);
-  background: #f8fafc;
-  border-color: var(--border-strong);
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.print-template-selector-modal {
-  width: 560px;
-  max-width: 92vw;
-}
-
-.modal-icon.print {
-  background: var(--accent-soft);
-  color: var(--accent-dark);
-  font-size: 26px;
-}
-
-.print-template-selector-body {
-  padding-top: 18px;
-  padding-bottom: 18px;
-}
-
-.print-template-selector-hint {
-  margin: 0 0 14px;
-  color: var(--text-secondary);
-  font-size: 13px;
-  line-height: 1.6;
-  text-align: left;
-}
-
-.print-template-list {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  max-height: 360px;
-  overflow-y: auto;
-}
-
-.print-template-option {
+.page-notice {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 2147483000;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 13px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: #fff;
-  text-align: left;
-}
-
-.print-template-option:hover {
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-}
-
-.print-template-option-info {
+  gap: 9px;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-.print-template-option-info strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 14px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.print-template-option-info span {
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
-.print-template-option-info em {
-  margin-left: 8px;
-  color: var(--accent-dark);
-  font-style: normal;
-}
-
-.btn-template-preview {
-  flex: 0 0 auto;
-  height: 32px;
-  padding: 0 16px;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.btn-template-preview:hover {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
-}
-
-.print-template-empty {
-  padding: 28px 12px;
-  color: var(--text-muted);
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 44px;
+  padding: 10px 16px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transform: translateX(-50%);
+  box-sizing: border-box;
   font-size: 13px;
-  text-align: center;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.page-notice svg {
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.notice-success svg {
+  color: #0f9f78;
+}
+
+.notice-error svg {
+  color: #dc3545;
+}
+
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
 }
 
 .finance-item {
@@ -2658,25 +2600,7 @@ input:checked + .slider:before {
   color: #ef4444;
 }
 
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  cursor: pointer;
-}
-
-.checkbox-label input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
-  accent-color: var(--accent);
-}
-
-.btn-save-and-print,
-.btn-save-final {
+.btn-save-and-print {
   height: 38px;
   padding: 0 20px;
   background: var(--accent);
@@ -2690,36 +2614,23 @@ input:checked + .slider:before {
   white-space: nowrap;
 }
 
-.btn-save-and-print:hover,
-.btn-save-final:hover {
+.btn-save-and-print:hover {
   background: var(--accent-dark);
   border-color: var(--accent-dark);
   box-shadow: 0 2px 4px rgba(var(--accent-rgb), 0.2);
 }
 
-.btn-save-and-print:focus-visible,
-.btn-save-final:focus-visible {
+.btn-save-and-print:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
-.btn-save-and-print:disabled,
-.btn-save-final:disabled {
+.btn-save-and-print:disabled {
   background: var(--border-strong);
   border-color: var(--border-strong);
   color: var(--text-muted);
   cursor: not-allowed;
   opacity: 0.6;
-}
-
-.btn-save-final {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
-}
-
-.btn-save-final:hover {
-  background: #06634a;
-  border-color: #06634a;
 }
 
 /* 隐藏数字输入框的上下箭头 */
@@ -2921,6 +2832,12 @@ input[type="number"] {
 }
 
 @media (max-width: 780px) {
+  .page-notice {
+    top: 12px;
+    min-width: 0;
+    max-width: calc(100vw - 32px);
+  }
+
   .top-info-bar,
   .contact-info-bar {
     flex-direction: column;
@@ -2942,6 +2859,13 @@ input[type="number"] {
     height: 100vh;
     max-height: 100vh;
     border-radius: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-enter-active,
+  .notice-leave-active {
+    transition: none;
   }
 }
 </style>
