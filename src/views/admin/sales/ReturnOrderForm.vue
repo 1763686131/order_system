@@ -1,6 +1,6 @@
 <template>
   <div class="return-order-form-page">
-    <form class="return-form" @submit.prevent="save(false)">
+    <form class="return-form" @submit.prevent="save">
       <div class="top-info-bar">
         <div class="info-group">
           <label>门店</label>
@@ -185,13 +185,45 @@
 
       <div class="bottom-info-bar">
         <div class="finance-row-full">
-          <div class="info-group">
+          <div v-if="salesPeople.length || form.salesPerson" class="info-group">
             <label>业务员</label>
-            <input v-model.trim="form.salesPerson" type="text" placeholder="请输入业务员" />
+            <select v-model="form.salesPerson">
+              <option value="">请选择业务员</option>
+              <option
+                v-if="form.salesPerson && !salesPeople.some(employee => employee.displayName === form.salesPerson)"
+                :value="form.salesPerson"
+                disabled
+              >
+                {{ form.salesPerson }}（历史记录）
+              </option>
+              <option
+                v-for="employee in salesPeople"
+                :key="employee.id"
+                :value="employee.displayName"
+              >
+                {{ employee.displayName }}
+              </option>
+            </select>
           </div>
-          <div class="info-group">
+          <div v-if="creators.length || form.creator" class="info-group">
             <label>制单人</label>
-            <input v-model.trim="form.creator" type="text" placeholder="请输入制单人" />
+            <select v-model="form.creator">
+              <option value="">请选择制单人</option>
+              <option
+                v-if="form.creator && !creators.some(employee => employee.displayName === form.creator)"
+                :value="form.creator"
+                disabled
+              >
+                {{ form.creator }}（历史记录）
+              </option>
+              <option
+                v-for="employee in creators"
+                :key="employee.id"
+                :value="employee.displayName"
+              >
+                {{ employee.displayName }}
+              </option>
+            </select>
           </div>
           <div class="info-group wide">
             <label>备注信息</label>
@@ -199,7 +231,15 @@
           </div>
           <div class="info-group">
             <label>包装</label>
-            <input v-model.trim="form.packaging" type="text" placeholder="无" />
+            <select v-model="form.packaging">
+              <option
+                v-for="packaging in packagingOptions"
+                :key="packaging"
+                :value="packaging"
+              >
+                {{ packaging }}
+              </option>
+            </select>
           </div>
           <div class="finance-item">
             <label>应退金额</label>
@@ -245,19 +285,64 @@
           </div>
           <div class="account-tip">应退金额扣除本次退款后，差额用于核销客户应收；本次退款会从结算账户实际付出。</div>
           <div class="action-row">
-            <button class="btn-save-and-print" type="button" :disabled="saving" @click="save(true)">保存后打印</button>
-            <button class="btn-save-final" type="submit" :disabled="saving">{{ saving ? '保存中...' : '保存 (Ctrl+Q)' }}</button>
+            <button class="btn-save-and-print" type="submit" :disabled="saving">
+              {{ saving ? '保存中...' : '保存并打印' }}
+            </button>
           </div>
         </div>
       </div>
     </form>
+
+    <Teleport to="body">
+      <Transition name="notice">
+        <div
+          v-if="notice.visible"
+          :class="['page-notice', `notice-${notice.type}`]"
+          :role="notice.type === 'error' ? 'alert' : 'status'"
+          :aria-live="notice.type === 'error' ? 'assertive' : 'polite'"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="9"></circle>
+            <path
+              v-if="notice.type === 'success'"
+              d="m8 12 2.7 2.7L16.5 9"
+            ></path>
+            <path v-else d="M12 8v5M12 17h.01"></path>
+          </svg>
+          <span>{{ notice.message }}</span>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <PrintTemplateSelector
+      :visible="printTemplateDialogOpen"
+      business-type="return"
+      :title="productType === 'raw-material' ? '原材料退货单打印' : '销售退货单打印'"
+      :document-number="form.returnNumber"
+      description="选择退货模板和打印方式。"
+      @close="closePrintTemplateDialog"
+      @preview="previewSelectedPrintTemplate"
+      @print="printSelectedPrintTemplate"
+    />
+
+    <OrderPrintPreview
+      :visible="printPreviewVisible"
+      :template="selectedPrintTemplate"
+      :variables="returnPrintVariables"
+      :printer="selectedPrintPrinter"
+      :auto-print="printPreviewAutoPrint"
+      preview-label="当前退货单数据预览"
+      @close="closePrintPreview"
+    />
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
+import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
+import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 
 const props = defineProps({
   productType: {
@@ -272,6 +357,7 @@ const props = defineProps({
 
 const router = useRouter()
 const saving = ref(false)
+const savedReturnId = ref(props.returnId)
 const stores = ref([])
 const customers = ref([])
 const warehouses = ref([])
@@ -279,7 +365,17 @@ const products = ref([])
 const units = ref([])
 const stockBalances = ref([])
 const bankAccounts = ref([])
+const packagingUnits = ref([])
+const employees = ref([])
+const departments = ref([])
 const focusedRow = ref(-1)
+const printTemplateDialogOpen = ref(false)
+const printPreviewVisible = ref(false)
+const selectedPrintTemplate = ref(null)
+const selectedPrintPrinter = ref(null)
+const printPreviewAutoPrint = ref(false)
+const notice = ref({ visible: false, type: 'success', message: '' })
+let noticeTimer = null
 let rowKey = 0
 
 const today = () => new Date().toISOString().slice(0, 10)
@@ -313,6 +409,7 @@ const form = ref({
   warehouseId: '',
   returnDate: today(),
   originalOrderNumber: '',
+  returnNumber: '',
   taxEnabled: false,
   items: Array.from({ length: 8 }, blankItem),
   returnAmount: 0,
@@ -320,7 +417,7 @@ const form = ref({
   settlementAccount: '',
   salesPerson: '',
   creator: '',
-  packaging: '无',
+  packaging: '桶装',
   remark: ''
 })
 
@@ -352,6 +449,49 @@ const storeBankAccounts = computed(() => bankAccounts.value
   .filter(account => idEquals(account.storeId, form.value.storeId))
   .slice()
   .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault))))
+
+const salesPeople = computed(() => {
+  const salesDepartmentIds = new Set(
+    departments.value
+      .filter(department => department.name === '销售部')
+      .map(department => String(department.id))
+  )
+
+  return employees.value.filter(employee =>
+    employee.displayName &&
+    (employee.departmentIds || []).some(id => salesDepartmentIds.has(String(id)))
+  )
+})
+
+const creators = computed(() => {
+  const creatorDepartmentIds = new Set(
+    departments.value
+      .filter(department => ['财务部', '仓储部'].includes(department.name))
+      .map(department => String(department.id))
+  )
+  const matchingEmployees = employees.value.filter(employee =>
+    employee.displayName &&
+    (employee.departmentIds || []).some(id => creatorDepartmentIds.has(String(id)))
+  )
+
+  return [...new Map(matchingEmployees.map(employee => [employee.id, employee])).values()]
+})
+
+const packagingOptions = computed(() => {
+  const customPackaging = packagingUnits.value
+    .map(unit => unit.name)
+    .filter(Boolean)
+
+  return [...new Set([
+    '无',
+    '桶装',
+    '纸箱',
+    '托盘',
+    '袋装',
+    ...customPackaging,
+    ...(form.value.packaging ? [form.value.packaging] : [])
+  ])]
+})
 
 const productsForItem = item => {
   if (!form.value.storeId) return []
@@ -394,6 +534,125 @@ const getProductStock = (product, item = {}) => {
       (!item.warehouseId || idEquals(balance.warehouseId, item.warehouseId))
     )
     .reduce((sum, balance) => sum + (Number(balance.quantity) || 0), 0)
+}
+
+const selectedStoreName = computed(() => {
+  const store = stores.value.find(item => idEquals(item.id, form.value.storeId))
+  return store?.name || ''
+})
+
+const selectedCustomerName = computed(() => {
+  const customer = customers.value.find(item => idEquals(item.id, form.value.customerId))
+  return customer?.customerName || customer?.name || ''
+})
+
+const selectedWarehouseName = computed(() => {
+  const warehouse = warehouses.value.find(item => idEquals(item.id, form.value.warehouseId))
+  return warehouse?.name || ''
+})
+
+const returnPrintVariables = computed(() => {
+  const taxEnabled = Boolean(form.value.taxEnabled)
+  const validItems = form.value.items
+    .filter(item => item.productId || item.goodsName)
+    .map((item, index) => ({
+      index: index + 1,
+      productId: item.productId || '',
+      productCode: item.productCode || '',
+      goodsName: item.goodsName || '',
+      spec: item.specification || '',
+      specification: item.specification || '',
+      unit: item.unit || '',
+      warehouseId: item.warehouseId || '',
+      warehouseName: selectedWarehouseName.value,
+      currentStock: Number(item.currentStock) || 0,
+      conversionRate: Number(item.conversionRate) || 0,
+      unitConversions: Array.isArray(item.unitConversions) ? item.unitConversions : [],
+      packages: Number(item.packages) || 0,
+      quantity: Number(item.quantity) || 0,
+      price: Number(item.price) || 0,
+      taxRate: taxEnabled ? (Number(item.taxRate) || 0) : 0,
+      taxIncludedPrice: taxEnabled ? (Number(item.taxIncludedPrice) || 0) : 0,
+      amount: Number(item.amount) || 0,
+      taxAmount: taxEnabled ? (Number(item.taxAmount) || 0) : 0,
+      taxIncludedAmount: taxEnabled ? (Number(item.taxIncludedAmount) || 0) : 0,
+      remark: item.remark || ''
+    }))
+  const firstItem = validItems[0] || {}
+  const returnAmount = Number(form.value.returnAmount) || 0
+  const refundAmount = Number(form.value.refundAmount) || 0
+
+  return {
+    ...firstItem,
+    storeId: form.value.storeId || '',
+    storeName: selectedStoreName.value,
+    customerId: form.value.customerId || '',
+    customerName: selectedCustomerName.value,
+    warehouseId: form.value.warehouseId || '',
+    warehouseName: selectedWarehouseName.value,
+    returnNumber: form.value.returnNumber || '',
+    returnNo: form.value.returnNumber || '',
+    returnDate: form.value.returnDate || '',
+    originalOrderNumber: form.value.originalOrderNumber || '',
+    originalOrderNo: form.value.originalOrderNumber || '',
+    taxEnabled,
+    totalPackages: Number(totalPackages.value) || 0,
+    totalQuantity: Number(totalQuantity.value) || 0,
+    totalAmount: Number(totalAmount.value) || 0,
+    totalTaxAmount: Number(totalTaxAmount.value) || 0,
+    totalTaxIncludedAmount: Number(totalTaxIncludedAmount.value) || 0,
+    returnAmount,
+    refundAmount,
+    writeoffAmount: Math.max(0, returnAmount - refundAmount),
+    settlementAccount: form.value.settlementAccount || '',
+    salesPerson: form.value.salesPerson || '',
+    creator: form.value.creator || '',
+    packaging: form.value.packaging || '',
+    goodsPackaging: form.value.packaging || '',
+    remark: form.value.remark || '',
+    items: validItems
+  }
+})
+
+const showNotice = (message, type = 'success') => {
+  window.clearTimeout(noticeTimer)
+  notice.value = { visible: true, type, message: String(message || '') }
+  noticeTimer = window.setTimeout(() => {
+    notice.value.visible = false
+    noticeTimer = null
+  }, type === 'error' ? 5000 : 3200)
+}
+
+const closePrintTemplateDialog = () => {
+  printTemplateDialogOpen.value = false
+  if (!printPreviewVisible.value) {
+    selectedPrintTemplate.value = null
+    selectedPrintPrinter.value = null
+    printPreviewAutoPrint.value = false
+  }
+}
+
+const openSelectedPrintTemplate = (template, printer, autoPrint) => {
+  selectedPrintTemplate.value = template
+  selectedPrintPrinter.value = printer
+  printPreviewAutoPrint.value = autoPrint
+  printTemplateDialogOpen.value = false
+  printPreviewVisible.value = true
+}
+
+const previewSelectedPrintTemplate = (template, printer) => {
+  openSelectedPrintTemplate(template, printer, false)
+}
+
+const printSelectedPrintTemplate = (template, printer) => {
+  openSelectedPrintTemplate(template, printer, true)
+}
+
+const closePrintPreview = () => {
+  printPreviewVisible.value = false
+  selectedPrintTemplate.value = null
+  selectedPrintPrinter.value = null
+  printPreviewAutoPrint.value = false
 }
 
 const calculateRow = item => {
@@ -536,8 +795,12 @@ const clearForm = () => {
   form.value.settlementAccount = ''
   form.value.salesPerson = ''
   form.value.creator = ''
-  form.value.packaging = '无'
+  form.value.packaging = '桶装'
   form.value.remark = ''
+  if (!props.returnId) {
+    savedReturnId.value = null
+    form.value.returnNumber = ''
+  }
   resetItems()
 }
 
@@ -555,7 +818,17 @@ const loadData = async () => {
     const productUrl = props.productType === 'raw-material'
       ? '/raw-material-products'
       : '/products/inventory'
-    const [storeData, customerData, warehouseData, productData, unitData, stockData, bankAccountData] = await Promise.all([
+    const [
+      storeData,
+      customerData,
+      warehouseData,
+      productData,
+      unitData,
+      stockData,
+      bankAccountData,
+      packagingData,
+      directoryData
+    ] = await Promise.all([
       request({ url: '/stores', method: 'GET' }),
       request({ url: '/customers', method: 'GET' }),
       request({ url: '/warehouses', method: 'GET' }),
@@ -564,7 +837,15 @@ const loadData = async () => {
       props.productType === 'raw-material'
         ? request({ url: '/stock-balances', method: 'GET', params: { type: 'raw-material' } })
         : Promise.resolve([]),
-      request({ url: '/bank-accounts/options', method: 'GET' })
+      request({ url: '/bank-accounts/options', method: 'GET' }),
+      request({ url: '/products/units/packagings', method: 'GET' }).catch(error => {
+        console.warn('加载包装单位失败:', error)
+        return []
+      }),
+      request.get('/admin/directory').catch(error => {
+        console.warn('加载员工目录失败:', error)
+        return { departments: [], employees: [] }
+      })
     ])
     stores.value = Array.isArray(storeData) ? storeData.filter(item => item.status !== 'inactive') : []
     customers.value = Array.isArray(customerData) ? customerData.filter(item => item.status !== 'inactive') : []
@@ -575,16 +856,29 @@ const loadData = async () => {
     bankAccounts.value = Array.isArray(bankAccountData?.data)
       ? bankAccountData.data
       : (Array.isArray(bankAccountData?.items) ? bankAccountData.items : [])
+    packagingUnits.value = Array.isArray(packagingData) ? packagingData : []
+    departments.value = Array.isArray(directoryData?.departments)
+      ? directoryData.departments
+      : []
+    employees.value = Array.isArray(directoryData?.employees)
+      ? directoryData.employees.map(employee => ({
+          ...employee,
+          departmentIds: Array.isArray(employee.departmentIds)
+            ? employee.departmentIds.map(Number).filter(Number.isFinite)
+            : []
+        }))
+      : []
   } catch (error) {
     console.error('加载退货单基础数据失败:', error)
-    window.alert(error?.response?.data?.message || '加载退货单基础数据失败')
+    showNotice(error?.response?.data?.message || '加载退货单基础数据失败', 'error')
   }
 }
 
 const loadExistingReturn = async () => {
-  if (!props.returnId) return
+  if (!savedReturnId.value) return
   try {
-    const data = await request({ url: `/returns/${props.returnId}`, method: 'GET' })
+    const data = await request({ url: `/returns/${savedReturnId.value}`, method: 'GET' })
+    form.value.returnNumber = data.returnNumber || ''
     form.value.storeId = data.storeId ? String(data.storeId) : ''
     form.value.customerId = data.customerId ? String(data.customerId) : ''
     form.value.warehouseId = data.items?.[0]?.warehouseId ? String(data.items[0].warehouseId) : ''
@@ -595,7 +889,7 @@ const loadExistingReturn = async () => {
     form.value.settlementAccount = data.settlementAccount || ''
     form.value.salesPerson = data.salesPerson || ''
     form.value.creator = data.creator || ''
-    form.value.packaging = data.packaging || '无'
+    form.value.packaging = data.packaging || '桶装'
     form.value.remark = data.remark || ''
     const rows = (data.items || []).map(item => {
       const product = products.value.find(candidate => idEquals(candidate.id, item.productId)) || {}
@@ -624,35 +918,36 @@ const loadExistingReturn = async () => {
     form.value.items = rows.concat(Array.from({ length: Math.max(8 - rows.length, 0) }, blankItem))
     form.value.returnAmount = Number(data.totalAmount || 0)
   } catch (error) {
-    window.alert(error?.response?.data?.message || '加载退货单失败')
+    showNotice(error?.response?.data?.message || '加载退货单失败', 'error')
   }
 }
 
-const save = async printAfterSave => {
+const save = async () => {
   if (saving.value) return
   const validItems = form.value.items.filter(item => item.productId && Number(item.quantity) > 0)
   if (!form.value.storeId || !form.value.customerId) {
-    window.alert('请选择门店和客户')
+    showNotice('请选择门店和客户', 'error')
     return
   }
   if (!form.value.originalOrderNumber) {
-    window.alert('请输入原订单编号')
+    showNotice('请输入原订单编号', 'error')
     return
   }
   if (!validItems.length) {
-    window.alert('请至少选择一条商品并填写数量')
+    showNotice('请至少选择一条商品并填写数量', 'error')
     return
   }
   if (Number(form.value.refundAmount) > Number(form.value.returnAmount)) {
-    window.alert('本次退款不能超过应退金额')
+    showNotice('本次退款不能超过应退金额', 'error')
     return
   }
 
   saving.value = true
   try {
+    const returnId = savedReturnId.value
     const response = await request({
-      url: props.returnId ? `/returns/${props.returnId}` : '/returns',
-      method: props.returnId ? 'PUT' : 'POST',
+      url: returnId ? `/returns/${returnId}` : '/returns',
+      method: returnId ? 'PUT' : 'POST',
       data: {
         productType: props.productType,
         storeId: Number(form.value.storeId),
@@ -685,12 +980,18 @@ const save = async printAfterSave => {
       }
     })
     if (!response?.success) throw new Error(response?.message || '保存失败')
-    if (printAfterSave) window.print()
-    window.alert(response?.message || `退货单保存成功：${response?.returnNumber || ''}`)
-    await router.push({ name: 'admin-sales-returns' })
+    const savedReturn = response.returnOrder || response.data?.returnOrder || {}
+    savedReturnId.value = response.returnId || savedReturn.id || returnId
+    form.value.returnNumber = response.returnNumber || savedReturn.returnNumber || form.value.returnNumber
+    const actionLabel = returnId ? '退货单修改成功' : '退货单保存成功'
+    showNotice(`${actionLabel}${form.value.returnNumber ? ` · 单号：${form.value.returnNumber}` : ''}`)
+    selectedPrintTemplate.value = null
+    selectedPrintPrinter.value = null
+    printPreviewAutoPrint.value = false
+    printTemplateDialogOpen.value = true
   } catch (error) {
     console.error('保存退货单失败:', error)
-    window.alert(error?.response?.data?.message || error.message || '保存退货单失败')
+    showNotice(error?.response?.data?.message || error.message || '保存退货单失败', 'error')
   } finally {
     saving.value = false
   }
@@ -699,6 +1000,10 @@ const save = async printAfterSave => {
 onMounted(async () => {
   await loadData()
   await loadExistingReturn()
+})
+
+onBeforeUnmount(() => {
+  window.clearTimeout(noticeTimer)
 })
 </script>
 
@@ -1260,8 +1565,7 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
   justify-content: flex-end;
 }
 
-.btn-save-and-print,
-.btn-save-final {
+.btn-save-and-print {
   height: 38px;
   padding: 0 20px;
   color: #fff;
@@ -1274,15 +1578,63 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
   white-space: nowrap;
 }
 
-.btn-save-final {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
-}
-
-.btn-save-and-print:disabled,
-.btn-save-final:disabled {
+.btn-save-and-print:disabled {
   cursor: not-allowed;
   opacity: .6;
+}
+
+.page-notice {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 2147483000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 48px;
+  padding: 12px 18px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.page-notice svg {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.notice-success svg {
+  color: #0f9f78;
+}
+
+.notice-error svg {
+  color: #dc3545;
+}
+
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
 }
 
 @media (max-width: 1280px) {
@@ -1297,6 +1649,12 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 }
 
 @media (max-width: 780px) {
+  .page-notice {
+    top: 12px;
+    max-width: calc(100vw - 32px);
+    padding: 11px 14px;
+  }
+
   .top-info-bar,
   .finance-row-full,
   .finance-row {
@@ -1320,6 +1678,13 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 
   .account-tip {
     white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-enter-active,
+  .notice-leave-active {
+    transition: none;
   }
 }
 </style>
