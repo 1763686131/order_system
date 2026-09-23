@@ -14,17 +14,21 @@
 |---|---|---|
 | `Content-Type: application/json` | 是（JSON 请求） | 请求体编码 |
 | `Cookie` | 浏览器自动携带 | 登录成功后由服务端 session 设置，前端不得自行构造身份 |
+| `X-Client-Surface` | 否 | 客户端来源提示，如 `admin`、`touch`、`web`；仅用于操作日志归类 |
+| `X-Client-Page` | 否 | 发起请求的前端页面路径；仅用于日志来源归类 |
+| `X-Request-ID` | 否 | 调用方提供的请求关联编号；未提供时由服务端生成 |
 
 `Username`、`Role` 请求头已停用，不能再作为身份或权限依据。业务单据中的
 审核人、操作人和上传人统一从服务端 session 解析。前端请求需开启
 `withCredentials`，同源部署无需额外配置；开发跨域来源通过 `CORS_ORIGINS`
-环境变量声明。
+环境变量声明。上述来源和关联请求头不是身份凭据，不参与登录认证或权限判断。
 
 除文件上传接口外，请求和响应均使用 JSON。常见错误响应包含 `message` 或
 `error` 字段，前端应优先显示服务端返回的信息。
 
 ## 版本历史
 
+- **v5.0** (2026-09-23) - 新增操作日志 API、筛选与清空权限；记录账号安全、角色权限及指定业务写操作，销售单日志使用单据编号
 - **v4.9** (2026-09-23) - 页面访问权限归入对应业务权限栏目，销售订单访问并入订单操作，新增物流管理权限栏目
 - **v4.8** (2026-09-22) - 后台路由权限细分到侧栏分支，按分支控制菜单显示和直接访问
 - **v4.7** (2026-09-20) - 新增局域网 WebRTC 文件直传信令、确认和状态接口
@@ -71,6 +75,8 @@
 14. [银行账户与结算账户](#14-银行账户与结算账户)
 15. [系统设置与服务器路径](#15-系统设置与服务器路径)
 16. [打印模板管理](#16-打印模板管理)
+17. [留言、附件与审核通知](#17-留言附件与审核通知)
+18. [操作日志](#18-操作日志)
 
 ---
 
@@ -214,7 +220,7 @@
 
 | Method | URL | 说明 |
 |---|---|---|
-| `GET` | `/api/admin/permissions` | 获取触屏端、后台路由和销售订单操作权限目录 |
+| `GET` | `/api/admin/permissions` | 获取触屏端、后台路由、业务操作和操作日志权限目录 |
 | `GET` | `/api/admin/roles` | 获取权限组、成员数和权限编码 |
 | `POST` | `/api/admin/roles` | 创建权限组 |
 | `PUT` | `/api/admin/roles/<role_id>` | 修改权限组、数据范围和权限 |
@@ -4979,6 +4985,123 @@ offered -> accepted -> transferring -> completed
 
 ---
 
+## 18. 操作日志
+
+操作日志记录账号安全事件、角色权限变更、员工与部门管理，以及指定高价值业务模块的写操作。日志不记录普通 `GET` 查询，因此列表加载、查看详情和筛选日志不会持续生成“查询”记录。
+
+### 18.1 记录范围与规则
+
+| 模块 | 记录内容 |
+|---|---|
+| 账号安全 | 登录成功/失败、退出、修改个人资料/密码、账号创建/修改/密码重置 |
+| 角色权限 | 创建或修改角色组、权限、成员关系 |
+| 员工与部门 | 员工档案、头像、账号绑定及部门新增/修改/删除 |
+| 销售订单 | 销售订单新增、状态/内容修改、删除；物流列表触发的订单写操作归入物流模块 |
+| 物流 | 运费/备用金和物流标签写操作 |
+| 商品与库存 | 商品、单位、属性、仓库、供应商、入库、原材料出库及库存相关写操作 |
+| 财务 | 收款历史与银行账户写操作 |
+| 打印模板 | 模板新增、修改、删除、设为默认和迁移写操作 |
+
+匹配范围内的写请求按 HTTP 状态码记录成功或失败。动作类型统一为新增、修改、删除；登录、退出、密码变更和清空日志使用对应的账号安全动作名称。没有匹配审计规则的接口不会自动写入操作日志。
+
+日志保存操作人及当时角色名称快照、模块和动作、目标类型/编号、请求方法与路径、来源端、IP、User-Agent、状态码、结果和请求 ID。请求详情只保存非敏感字段名称和筛选参数名称，不保存请求值、密码、附件或图片内容。
+
+销售订单的 `targetId` 使用单据编号而非数据库内部 ID；订单写操作前会取得已有订单编号，新增操作优先读取响应或请求中的单据编号。后台物流页面产生的订单写操作根据 `X-Client-Page` 归到“物流管理”。历史日志若仍能关联到订单记录，读取时会把数字 ID 映射为订单编号；已删除订单无法再从订单表映射。
+
+来源端由前端请求头 `X-Client-Surface` 和页面路径提示，或请求 `Referer` 推断，仅用于日志归类，不用于身份认证或权限判断。API 调用方可传 `X-Request-ID` 以便关联请求；未传时由服务端生成。
+
+### 18.2 权限
+
+| 权限码 | 用途 |
+|---|---|
+| `admin.route.system.operation_logs` | 显示操作日志菜单并允许访问对应后台路由 |
+| `admin.operation_log.read` | 读取和筛选后台操作日志 |
+| `admin.operation_log.clear` | 清空日志；清空记录本身仍会保留 |
+| `touch.operation_log.read` | 触屏端权限目录中的“查看本人操作日志”权限项 |
+
+读取和清空 API 分别校验 `admin.operation_log.read`、`admin.operation_log.clear`。后台路由和侧栏另由 `admin.route.system.operation_logs` 控制。当前触屏写操作可以记录来源为 `touch`；`touch.operation_log.read` 已列入权限目录，但目前尚未提供触屏端个人日志读取接口。
+
+### 18.3 查询日志
+
+- **URL**: `/api/admin/operation-logs`
+- **Method**: `GET`
+- **权限**: `admin.operation_log.read`
+
+| 查询参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `startDate` | `YYYY-MM-DD` | 不限 | 起始日期，按当天 `00:00:00` 纳入 |
+| `endDate` | `YYYY-MM-DD` | 不限 | 结束日期，按当天 `23:59:59` 纳入 |
+| `actor` | string | 不限 | 匹配操作人账号、姓名或角色名称 |
+| `module` | string | 不限 | 模块编码，见下表 |
+| `action` | string | 不限 | 动作编码，见下表 |
+| `outcome` | `success` / `failure` | 不限 | 操作结果 |
+| `keyword` | string | 不限 | 匹配目标编号、目标名称、请求路径或 IP |
+| `page` | integer | `1` | 页码，小于 1 时按 1 处理 |
+| `pageSize` | integer | `50` | 每页条数，服务端限制为 `1` 至 `200` |
+
+日期格式错误时返回 HTTP `400`。模块编码包括 `account_security`、`role_permissions`、`employees`、`departments`、`sales_orders`、`logistics`、`raw_materials`、`inventory`、`payment_history`、`bank_accounts`、`print_templates` 和 `operation_logs`。动作编码包括 `create`、`update`、`delete`、`login_success`、`login_failure`、`logout`、`password_change`、`password_reset` 和 `clear`。
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "items": [
+    {
+      "id": 128,
+      "occurredAt": "2026-09-23 10:20:30",
+      "actorUsername": "zhangsan",
+      "actorDisplayName": "张三",
+      "actorRoleNames": ["销售内勤"],
+      "moduleCode": "sales_orders",
+      "moduleName": "销售订单",
+      "actionCode": "update",
+      "actionName": "修改",
+      "targetType": "sales_order",
+      "targetId": "ZG20260923001",
+      "targetLabel": "销售订单",
+      "requestMethod": "PUT",
+      "requestPath": "/api/orders/17",
+      "sourceSurface": "admin",
+      "ipAddress": "192.168.1.20",
+      "statusCode": 200,
+      "succeeded": true,
+      "details": {
+        "fields": ["orderRemark"],
+        "filters": []
+      }
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "pageSize": 50
+}
+```
+
+`items` 另包含员工 ID、目标编号/名称、请求 ID、User-Agent 等详情字段。`details.fields` 和 `details.filters` 仅为字段名数组，不包含提交值。
+
+### 18.4 清空日志
+
+- **URL**: `/api/admin/operation-logs`
+- **Method**: `DELETE`
+- **权限**: `admin.operation_log.clear`
+
+请求成功后删除已有日志，并在同一事务中保留一条本次清空操作记录；`details.clearedCount` 保存本次清除前的日志条数。
+
+```json
+{
+  "success": true,
+  "message": "已清空 120 条操作日志",
+  "clearedCount": 120
+}
+```
+
+### 18.5 数据表与索引
+
+`operation_logs` 在数据库初始化时自动创建，主要保存 `occurred_at`、操作人快照、`module_code`、`action_code`、目标、请求来源与元数据、HTTP 状态和 `details_json`。日志读取按编号倒序分页。数据库维护了时间、操作人、模块/动作和目标索引。
+
+---
+
 ## 错误响应格式
 
 多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
@@ -5023,6 +5146,7 @@ offered -> accepted -> transferring -> completed
 - `role_stores` - 角色组门店范围
 - `role_warehouses` - 角色组仓库范围
 - `auth_sessions` - 登录设备、Session 哈希、IP、活动时间和撤销状态
+- `operation_logs` - 操作人快照、模块/动作、目标单据、来源、请求元数据和结果
 - `suppliers` - 供应商基础资料表
 - `stock_inbounds` - 入库单头与状态、汇总信息表
 - `stock_inbound_items` - 入库单明细表
@@ -5131,6 +5255,7 @@ ON print_templates(is_default);
 
 | 权限编码 | 中文名称 |
 |---|---|
+| `touch.operation_log.read` | 查看本人操作日志（已加入权限目录；当前尚未提供触屏端日志读取接口） |
 | `touch.order.read` | 查看订单 |
 | `touch.order.reopen` | 恢复订单 |
 | `touch.order.copy` | 复制订单 |
@@ -5178,6 +5303,7 @@ ON print_templates(is_default);
 | `admin.route.system.settings` | 系统设置 | 系统设置 |
 | `admin.route.system.roles` | 权限管理 | 角色组权限管理 |
 | `admin.route.system.print_template` | 打印模板 | 打印模板管理 |
+| `admin.route.system.operation_logs` | 操作日志 | 操作日志页面 |
 
 这些权限控制菜单和前端路由访问，不自动代替业务接口的服务端权限校验。员工管理和部门管理分别使用独立的
 `admin.employee.*`、`admin.department.*` 权限。升级时，旧的大类路由权限会一次性转换成对应的分支访问权限，
@@ -5218,6 +5344,15 @@ ON print_templates(is_default);
 | `admin.sales.order.reverse_audit` | 反审核销售订单 |
 
 这些权限只对启用了 `canAccessAdmin` 的后台账号生效。超级管理员自动拥有全部权限。升级时，已经拥有 `admin.route.sales.orders` 的非超级管理员角色会一次性继承全部销售订单操作权限，以保持原有操作能力，后续可在角色组管理中逐项移除。
+
+### 操作日志权限
+
+| 权限编码 | 控制范围 |
+|---|---|
+| `admin.operation_log.read` | 读取、筛选和分页查看操作日志 |
+| `admin.operation_log.clear` | 清空操作日志并保留清空审计记录 |
+
+后台页面入口另由 `admin.route.system.operation_logs` 控制。日志接口不记录自身的 `GET` 查询请求。
 
 ---
 
@@ -5318,6 +5453,12 @@ SQLite 支持**多读一写**模式：
 ---
 
 ## 更新日志
+
+### v5.0.0 (2026-09-23)
+- 新增操作日志列表、筛选、分页、详情和授权清空 API
+- 自动记录账号安全、角色权限、员工部门及指定业务写操作；普通 GET 查询不记日志
+- 销售订单操作对象使用单据编号，历史记录在订单仍存在时提供编号映射
+- 新增操作日志页面访问、读取和清空权限，并补充 `operation_logs` 表及索引说明
 
 ### v4.7.0 (2026-09-20)
 - 新增 WebRTC 局域网文件直传创建、查询、同意/拒绝和状态更新接口

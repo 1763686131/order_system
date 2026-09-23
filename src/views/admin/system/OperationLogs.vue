@@ -144,7 +144,9 @@
                 <td>{{ log.actionName }}</td>
                 <td class="target-cell">
                   <span>{{ log.targetLabel || log.targetType || '-' }}</span>
-                  <small v-if="log.targetId">#{{ log.targetId }}</small>
+                  <small v-if="log.targetId">
+                    {{ targetIdentifier(log) }}
+                  </small>
                 </td>
                 <td>
                   <span :class="['result-label', log.succeeded ? 'is-success' : 'is-failure']">
@@ -238,7 +240,13 @@
               <div><dt>角色组</dt><dd>{{ selectedLog.actorRoleNames.join('、') || '-' }}</dd></div>
               <div><dt>来源</dt><dd>{{ sourceName(selectedLog.sourceSurface) }}</dd></div>
               <div><dt>请求</dt><dd><code>{{ selectedLog.requestMethod }} {{ selectedLog.requestPath }}</code></dd></div>
-              <div><dt>目标</dt><dd>{{ selectedLog.targetType || '-' }} {{ selectedLog.targetId ? `#${selectedLog.targetId}` : '' }}</dd></div>
+              <div>
+                <dt>目标</dt>
+                <dd>
+                  {{ selectedLog.targetLabel || selectedLog.targetType || '-' }}
+                  <small v-if="selectedLog.targetId">{{ targetIdentifier(selectedLog) }}</small>
+                </dd>
+              </div>
               <div><dt>结果</dt><dd>{{ selectedLog.succeeded ? '成功' : `失败（HTTP ${selectedLog.statusCode || '-'}）` }}</dd></div>
               <div><dt>IP 地址</dt><dd>{{ selectedLog.ipAddress || '-' }}</dd></div>
               <div class="detail-wide"><dt>请求字段</dt><dd>{{ selectedLog.details.fields?.join('、') || '无' }}</dd></div>
@@ -316,6 +324,12 @@ function formatDateTime(value) {
 
 function sourceName(value) {
   return ({ admin: '后台', touch: '触屏端', web: '网页', api: 'API' })[value] || 'API'
+}
+
+function targetIdentifier(log) {
+  return ['sales_order', 'logistics_order'].includes(log.targetType)
+    ? `单号：${log.targetId}`
+    : `#${log.targetId}`
 }
 
 async function loadLogs() {

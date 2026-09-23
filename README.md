@@ -9,8 +9,8 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `4.7` |
-| 文档更新 | `2026-09-20` |
+| 权限/API 文档版本 | `5.0` |
+| 文档更新 | `2026-09-23` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -38,7 +38,20 @@
 - 部门配置、员工多部门归属、部门员工维护和职位内联编辑
 - 后台顶栏通讯录，支持部门折叠、员工搜索、头像、职位、电话和在线状态
 - 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
+- 操作日志：记录账号安全、角色权限、员工部门及指定业务写操作，支持筛选和清空
 - 原材料触屏出库、审核和库存流水
+
+## 2026-09-23 更新
+
+### 操作日志与审计
+
+- 新增后台操作日志页 `/admin/system/operation-logs`，支持按日期、操作人、模块、操作类型、结果和关键字筛选，并支持分页和详情查看。
+- 日志记录登录成功/失败、退出、密码与账号安全变更、角色权限变更，以及销售订单、物流、商品/原材料、库存、员工部门、收款历史、银行账户和打印模板的写操作。
+- 普通列表加载、详情读取和日志筛选均为 `GET`，不会记成业务操作；新增、修改、删除及账号安全事件才写入日志。
+- 清空日志需要独立权限，清空后保留本次清空记录及清除条数。
+- 销售订单日志以单据编号作为操作对象；日志仅保存请求字段名，不保存请求字段值。
+- 触屏来源的写操作会记录来源类型；`touch.operation_log.read` 已加入触屏端权限目录，当前尚无触屏端个人日志查询接口。
+- 相关 API、权限和数据库表说明见 [操作日志 API 文档](docs/API接口文档.md#18-操作日志)。
 
 ## 2026-09-20 更新
 
@@ -302,6 +315,7 @@ order_system/
 │  │  ├─ notifications.py            # 当前员工的审核与系统通知
 │  │  ├─ admin_realtime.py           # 留言和通知变化的 SSE 长连接
 │  │  ├─ peer_transfers.py            # WebRTC 文件直传信令与状态机
+│  │  ├─ operation_logs.py           # 操作日志筛选、分页读取与授权清空
 │  │  ├─ users.py                    # 账号维护和管理员重置密码
 │  │  ├─ orders.py                   # 销售订单和物流状态接口
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
@@ -321,6 +335,7 @@ order_system/
 │  │  ├─ avatar_storage.py            # 员工头像校验、保存、删除和历史 Base64 迁移
 │  │  ├─ access_scope.py             # 角色门店/仓库范围合并与数据过滤
 │  │  ├─ permission_catalog.py       # 触屏、后台路由和销售订单操作权限目录
+│  │  ├─ operation_logs.py           # 写操作审计规则、日志脱敏与自动记录
 │  │  ├─ notifications.py            # 审核通知收件人匹配与完成处理
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
 │  │  └─ db_helper.py                # 历史数据兼容读写
@@ -388,10 +403,11 @@ order_system/
 │  │     │  ├─ BankAccounts.vue       # 银行账户管理（卡片展示、翻转查看余额）
 │  │     │  ├─ DebtDetails.vue        # 欠款详情页面（应收/应付通用，显示期初欠款和储值记录）
 │  │     │  └─ ...                   # 物流、快递运费对账
-│  │     ├─ system/                  # 角色组、门店、打印模板和系统配置
+│  │     ├─ system/                  # 角色组、门店、打印模板、操作日志和系统配置
 │  │     │  ├─ RoleGroupManage.vue   # 权限、成员、会话策略和数据范围
 │  │     │  ├─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
-│  │     │  └─ PrintTemplate.vue     # 打印模板管理
+│  │     │  ├─ PrintTemplate.vue     # 打印模板管理
+│  │     │  └─ OperationLogs.vue     # 操作日志筛选、分页、详情和清空
 │  │     └─ hr/
 │  │        ├─ AccountManage.vue     # 员工档案、可选登录账号和头像上传
 │  │        ├─ DepartmentManage.vue  # 部门配置、员工归属和职位维护
@@ -399,7 +415,7 @@ order_system/
 │  ├─ router/index.js                # 前端路由和登录守卫
 │  ├─ utils/
 │  │  ├─ accessControl.js            # 权限、角色并集和数据范围过滤
-│  │  ├─ adminAccess.js              # 后台大类路由权限映射
+│  │  ├─ adminAccess.js              # 后台菜单分支和路由权限映射
 │  │  ├─ adminRealtime.js            # 后台组件共享的 EventSource 客户端
 │  │  ├─ peerFileTransfer.js          # WebRTC DataChannel 分块收发
 │  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
@@ -411,7 +427,7 @@ order_system/
 │  ├─ order_system.db                # 当前 SQLite 业务数据库
 │  └─ backup_before_cleanup/         # 历史 JSON 备份
 ├─ docs/
-│  ├─ API接口文档.md                 # 完整 API 参数、响应和业务规则
+│  ├─ API接口文档.md                 # 完整 API 参数、响应、权限和业务规则
 │  ├─ 工作进度.md                    # 留言、附件与审核通知阶段进度
 │  ├─ 打印机项目实现.md              # 打印模板、预览、浏览器打印和 C-Lodop 实现
 │  ├─ 组件样式规范.md                 # 后台页面视觉和组件复用规范
@@ -607,6 +623,7 @@ import {
 | `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
 | `/admin/finance/debt-details/:type/:targetId` | 欠款详情 | 前端模拟数据（待接入后端 API） |
 | `/admin/system/print-template` | 打印模板管理和设计器 | `/api/print-templates` |
+| `/admin/system/operation-logs` | 操作日志查询、筛选和清空 | `/api/admin/operation-logs` |
 | `/admin/hr/employees` | 员工档案、登录账号和头像维护 | `/api/admin/employees`、`/api/admin/employees/:id/avatar` |
 | `/admin/hr/departments` | 部门配置和部门员工管理 | `/api/admin/departments`、`/api/admin/employees` |
 
@@ -626,6 +643,17 @@ import {
 `AccountManage.vue` 保存员工成功后才调用头像接口。取消裁剪、关闭员工抽屉或未点击保存
 都不会上传文件。完整请求和响应见
 [API 接口文档](docs/API接口文档.md#16-员工档案和可选登录账号)。
+
+## 操作日志关键接口
+
+| 方法 | 地址 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/admin/operation-logs` | 按日期、操作人、模块、动作、结果和关键字读取日志 |
+| `DELETE` | `/api/admin/operation-logs` | 清空历史日志并保留本次清空记录 |
+
+日志页只读取写操作和账号安全事件；其自身的列表读取、筛选和详情查看不会生成日志。
+销售单操作对象显示单据编号。完整参数、权限码和响应字段见
+[API 接口文档](docs/API接口文档.md#18-操作日志)。
 
 ## 通讯录关键接口
 
@@ -818,6 +846,7 @@ order-system-print-client-config
 - `employee_roles`：员工与角色组关系
 - `role_stores`、`role_warehouses`：角色组门店和仓库范围
 - `auth_sessions`：设备会话、IP、活动时间、到期时间和撤销状态
+- `operation_logs`：操作人快照、模块/动作、目标单据、来源、请求元数据和结果
 
 退货单审核会在 `stock_balances`、`stock_movements` 中留下可追溯的库存返还记录；反审核按退货单号删除对应库存流水并恢复审核前库存。
 
@@ -985,6 +1014,13 @@ C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localSt
 - [留言与审核通知工作进度](docs/工作进度.md)
 
 ## 更新日志
+
+### 2026-09-23 - 操作日志与 API 文档
+
+- 新增后台操作日志列表、筛选、分页、详情和授权清空功能。
+- 接入登录与账号安全、角色权限、员工部门及指定业务写操作记录；GET 查询不记业务日志。
+- 销售单日志改用单据编号展示，并为旧日志提供可用订单的编号映射。
+- 更新 API 权限、筛选参数、日志表结构和项目文件结构说明。
 
 ### 2026-09-20 - 通讯录留言与审核通知第一、二阶段
 

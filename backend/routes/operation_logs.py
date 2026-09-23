@@ -46,6 +46,35 @@ def _actor_snapshot(user):
     }
 
 
+def _sales_order_number_map(conn, rows):
+    ids = []
+    for row in rows:
+        if row["target_type"] not in {"sales_order", "logistics_order"}:
+            continue
+        if row["target_label"] or not str(row["target_id"] or "").isdigit():
+            continue
+        ids.append(int(row["target_id"]))
+    ids = sorted(set(ids))
+    if not ids:
+        return {}
+
+    placeholders = ",".join("?" for _ in ids)
+    order_rows = conn.execute(
+        f"""
+        SELECT id, order_number
+        FROM orders
+        WHERE id IN ({placeholders})
+          AND COALESCE(order_number, '') != ''
+        """,
+        ids,
+    ).fetchall()
+    return {
+        str(row["id"]): row["order_number"]
+        for row in order_rows
+        if row["order_number"]
+    }
+
+
 @operation_logs_bp.route("", methods=["GET"])
 @require_admin_permission(ADMIN_OPERATION_LOG_PERMISSIONS["read"])
 def list_operation_logs():
@@ -109,6 +138,7 @@ def list_operation_logs():
             """,
             (*params, page_size, (page - 1) * page_size),
         ).fetchall()
+        sales_order_numbers = _sales_order_number_map(conn, rows)
 
     items = []
     for row in rows:
@@ -120,6 +150,15 @@ def list_operation_logs():
             role_names = json.loads(row["actor_role_names"] or "[]")
         except (TypeError, ValueError):
             role_names = []
+        target_id = row["target_id"]
+        target_label = row["target_label"]
+        if (
+            row["target_type"] in {"sales_order", "logistics_order"}
+            and not target_label
+            and str(target_id or "") in sales_order_numbers
+        ):
+            target_id = sales_order_numbers[str(target_id)]
+            target_label = "销售订单"
         items.append(
             {
                 "id": row["id"],
@@ -134,8 +173,8 @@ def list_operation_logs():
                 "actionCode": row["action_code"],
                 "actionName": row["action_name"],
                 "targetType": row["target_type"],
-                "targetId": row["target_id"],
-                "targetLabel": row["target_label"],
+                "targetId": target_id,
+                "targetLabel": target_label,
                 "requestMethod": row["request_method"],
                 "requestPath": row["request_path"],
                 "requestId": row["request_id"],

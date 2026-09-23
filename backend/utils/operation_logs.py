@@ -308,6 +308,48 @@ def _target_from_response(response):
     return ""
 
 
+def _order_number_from_mapping(values):
+    if not isinstance(values, dict):
+        return ""
+    for key in ("orderNumber", "order_number", "documentNo", "document_no"):
+        if values.get(key):
+            return _safe_text(values[key], 100)
+    for key in ("data", "order"):
+        value = values.get(key)
+        result = _order_number_from_mapping(value)
+        if result:
+            return result
+    return ""
+
+
+def _order_number_from_response(response):
+    if response.is_streamed or not response.is_json:
+        return ""
+    try:
+        payload = response.get_json(silent=True)
+    except (TypeError, ValueError):
+        return ""
+    return _order_number_from_mapping(payload)
+
+
+def _order_number_from_request():
+    return _order_number_from_mapping(request.get_json(silent=True) or {})
+
+
+def _order_number_from_db(conn, order_id):
+    try:
+        order_id = int(order_id)
+    except (TypeError, ValueError):
+        return ""
+    row = conn.execute(
+        "SELECT order_number FROM orders WHERE id = ?",
+        (order_id,),
+    ).fetchone()
+    if not row:
+        return ""
+    return _safe_text(row["order_number"], 100)
+
+
 def _source_surface():
     requested = _safe_text(request.headers.get("X-Client-Surface"), 20).lower()
     if requested in {"admin", "touch", "web"}:
@@ -419,6 +461,19 @@ def register_operation_logging(app):
             g.operation_log_actor = None
             g.operation_log_can_access_admin = True
             current_app.logger.exception("Failed to snapshot operation-log actor")
+        if request.path.startswith("/api/orders/"):
+            target_id = _target_id()
+            if target_id:
+                try:
+                    with get_db() as conn:
+                        g.operation_log_order_number = _order_number_from_db(
+                            conn, target_id
+                        )
+                except Exception:
+                    g.operation_log_order_number = ""
+                    current_app.logger.exception(
+                        "Failed to snapshot sales order number for operation log"
+                    )
 
     @app.after_request
     def write_operation_log(response):
@@ -443,6 +498,16 @@ def register_operation_logging(app):
                 target_label = attempted_username
         elif action_code == "create" and not target_id:
             target_id = _target_from_response(response)
+
+        if request.path.startswith("/api/orders"):
+            order_number = (
+                _order_number_from_request()
+                or _order_number_from_response(response)
+                or getattr(g, "operation_log_order_number", "")
+            )
+            if order_number:
+                target_id = order_number
+                target_label = "销售订单"
 
         module_code = rule["module_code"]
         page_hint = _safe_text(
