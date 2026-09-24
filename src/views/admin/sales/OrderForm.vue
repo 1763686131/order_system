@@ -529,6 +529,51 @@ const logisticsServiceOptions = [
   '无'
 ]
 
+const ORDER_FORM_DEFAULTS_STORAGE_KEY = 'admin_order_form_default_selections'
+const SERVER_ORDER_DEFAULTS = Object.freeze({
+  logisticsService: logisticsServiceOptions[0],
+  packaging: '桶装',
+  salesPerson: '',
+  creator: ''
+})
+
+const readOrderFormDefaults = () => {
+  const fallback = {
+    ...SERVER_ORDER_DEFAULTS,
+    settlementAccountsByStore: {}
+  }
+
+  if (typeof window === 'undefined') {
+    return fallback
+  }
+
+  try {
+    const stored = window.localStorage.getItem(ORDER_FORM_DEFAULTS_STORAGE_KEY)
+    if (!stored) {
+      return fallback
+    }
+
+    const parsed = JSON.parse(stored)
+    const settlementAccountsByStore = parsed?.settlementAccountsByStore &&
+      typeof parsed.settlementAccountsByStore === 'object'
+      ? parsed.settlementAccountsByStore
+      : {}
+
+    return {
+      logisticsService: String(parsed?.logisticsService || fallback.logisticsService),
+      packaging: String(parsed?.packaging || fallback.packaging),
+      salesPerson: String(parsed?.salesPerson || ''),
+      creator: String(parsed?.creator || ''),
+      settlementAccountsByStore
+    }
+  } catch (error) {
+    console.warn('读取订单默认选项失败:', error)
+    return fallback
+  }
+}
+
+const orderFormDefaults = ref(readOrderFormDefaults())
+
 const getCurrentOrderDate = () => {
   const now = new Date()
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -605,6 +650,85 @@ const normalizeLogisticsService = (value) => {
     return value[0] || logisticsServiceOptions[0]
   }
   return String(value || logisticsServiceOptions[0])
+}
+
+const getServerDefaultSettlementAccount = (storeId) => {
+  if (!storeId) {
+    return ''
+  }
+
+  const accounts = bankAccounts.value.filter(account =>
+    String(account.storeId) === String(storeId)
+  )
+  const defaultAccount = accounts.find(account => account.isDefault) || accounts[0]
+  return defaultAccount?.value || defaultAccount?.accountName || ''
+}
+
+const getPreferredSettlementAccount = (storeId) => {
+  if (!storeId) {
+    return ''
+  }
+
+  const accountDefaults = orderFormDefaults.value.settlementAccountsByStore || {}
+  const storeKey = String(storeId)
+  if (Object.prototype.hasOwnProperty.call(accountDefaults, storeKey)) {
+    const savedAccount = accountDefaults[storeKey] || ''
+    if (!savedAccount || bankAccounts.value.some(account =>
+      String(account.storeId) === storeKey &&
+      (account.value || account.accountName) === savedAccount
+    )) {
+      return savedAccount
+    }
+  }
+
+  return getServerDefaultSettlementAccount(storeId)
+}
+
+const applyNewOrderDefaults = () => {
+  const defaults = orderFormDefaults.value
+  formData.value.logisticsService = logisticsServiceOptions.includes(defaults.logisticsService)
+    ? defaults.logisticsService
+    : SERVER_ORDER_DEFAULTS.logisticsService
+  formData.value.packaging = defaults.packaging || SERVER_ORDER_DEFAULTS.packaging
+  formData.value.salesPerson = salesPeople.value.some(employee =>
+    employee.displayName === defaults.salesPerson
+  ) ? defaults.salesPerson : ''
+  formData.value.creator = creators.value.some(employee =>
+    employee.displayName === defaults.creator
+  ) ? defaults.creator : ''
+  formData.value.settlementAccount = getPreferredSettlementAccount(formData.value.storeId)
+}
+
+const persistOrderFormDefaults = () => {
+  const nextDefaults = {
+    logisticsService: formData.value.logisticsService || SERVER_ORDER_DEFAULTS.logisticsService,
+    packaging: formData.value.packaging || SERVER_ORDER_DEFAULTS.packaging,
+    salesPerson: formData.value.salesPerson || '',
+    creator: formData.value.creator || '',
+    settlementAccountsByStore: {
+      ...(orderFormDefaults.value.settlementAccountsByStore || {})
+    }
+  }
+
+  if (formData.value.storeId) {
+    nextDefaults.settlementAccountsByStore[String(formData.value.storeId)] =
+      formData.value.settlementAccount || ''
+  }
+
+  orderFormDefaults.value = nextDefaults
+
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  try {
+    window.localStorage.setItem(
+      ORDER_FORM_DEFAULTS_STORAGE_KEY,
+      JSON.stringify(nextDefaults)
+    )
+  } catch (error) {
+    console.warn('保存订单默认选项失败:', error)
+  }
 }
 
 const draftReady = ref(false)
@@ -1200,10 +1324,7 @@ const onStoreChange = () => {
   formData.value.contactPerson = ''
   formData.value.contactPhone = ''
   formData.value.contactAddress = ''
-  const defaultAccount = storeBankAccounts.value.find(account => account.isDefault)
-    || storeBankAccounts.value[0]
-  formData.value.settlementAccount = defaultAccount?.value ||
-    defaultAccount?.accountName || ''
+  formData.value.settlementAccount = getPreferredSettlementAccount(formData.value.storeId)
 
   // 清空商品列表
   clearProductItems()
@@ -1848,6 +1969,7 @@ const handleSave = async () => {
 
     // 6. 处理结果
     if (response && response.success) {
+      persistOrderFormDefaults()
       const savedOrderNumber = response.orderNumber ||
         response.data?.order_number ||
         response.data?.orderNumber
@@ -1947,6 +2069,9 @@ const resetOrderFields = () => {
   // 清空商品列表
   initEmptyRows()
   showTaxColumns.value = false
+  if (!isEditMode.value) {
+    applyNewOrderDefaults()
+  }
 }
 
 const confirmClear = () => {
@@ -2014,6 +2139,8 @@ onMounted(async () => {
         await loadOrderData(copySourceId.value)
         // 复制后清空日期，使用当前日期
         formData.value.date = new Date().toISOString().split('T')[0]
+      } else {
+        applyNewOrderDefaults()
       }
 
       // 从订单列表中获取最大ID+1，生成正式订单编号
