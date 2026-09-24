@@ -129,6 +129,70 @@ def get_orders():
     return jsonify(orders)
 
 
+@orders_bp.route('/history-price', methods=['GET'])
+@require_permission('touch.order.read')
+def get_history_price():
+    """获取客户购买指定商品的最近一次成交单价。"""
+    customer_id = request.args.get('customerId', type=int)
+    product_id = request.args.get('productId', type=int)
+    if customer_id is None or product_id is None:
+        return jsonify({
+            'success': False,
+            'message': 'customerId 和 productId 为必填参数'
+        }), 400
+
+    with get_db() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, order_number, date, order_goods
+            FROM orders
+            WHERE customer_id = ?
+              AND type = 1
+              AND COALESCE(audit_state, 0) <> 2
+            ORDER BY date DESC, id DESC
+            """,
+            (customer_id,),
+        ).fetchall()
+
+    for row in rows:
+        try:
+            order_goods = json.loads(row['order_goods'] or '[]')
+        except (TypeError, ValueError, json.JSONDecodeError):
+            order_goods = []
+        if not isinstance(order_goods, list):
+            continue
+
+        for item in order_goods:
+            try:
+                item_product_id = int(item.get('product_id', item.get('productId')))
+            except (TypeError, ValueError):
+                continue
+            if item_product_id != product_id:
+                continue
+
+            raw_price = item.get('price')
+            try:
+                price = Decimal(str(raw_price))
+            except (InvalidOperation, TypeError, ValueError):
+                continue
+            if price < 0:
+                continue
+
+            return jsonify({
+                'success': True,
+                'price': float(price.quantize(MONEY_QUANT, rounding=ROUND_HALF_UP)),
+                'orderNumber': row['order_number'] or '',
+                'orderDate': row['date'] or '',
+            })
+
+    return jsonify({
+        'success': True,
+        'price': None,
+        'orderNumber': '',
+        'orderDate': '',
+    })
+
+
 @orders_bp.route('/events', methods=['GET'])
 @require_permission('touch.order.read')
 def order_events():

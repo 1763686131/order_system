@@ -886,7 +886,9 @@ function initEmptyRows() {
     showDropdown: false,
     filteredProducts: [],
     unitConversions: [],
-    conversionRate: null
+    conversionRate: null,
+    historyPriceLoading: false,
+    historyPriceRequestKey: ''
   }))
   // 新建订单首次显示按明细计算的合计，此时未手动修改
   totalPackages.value = totalPackagesCalculated.value
@@ -1350,7 +1352,58 @@ const selectProduct = (index, product) => {
   item.currentStock = product.stock || 0
 
   item.showDropdown = false
+  item.historyPriceLoading = false
+  item.historyPriceRequestKey = ''
   calculateRowAmount(index)
+  loadHistoryPrice(index, product.id)
+}
+
+const loadHistoryPrice = async (index, productId) => {
+  const customerId = formData.value.customerId
+  if (!customerId || !productId) return
+
+  const item = formData.value.items[index]
+  if (!item) return
+  const requestKey = `${customerId}:${productId}`
+  item.historyPriceLoading = true
+  item.historyPriceRequestKey = requestKey
+
+  try {
+    const response = await request({
+      url: '/orders/history-price',
+      method: 'GET',
+      params: { customerId, productId }
+    })
+    if (
+      formData.value.items[index] !== item ||
+      item.historyPriceRequestKey !== requestKey
+    ) {
+      return
+    }
+
+    const historyPrice = Number(response?.price)
+    if (
+      response?.success &&
+      Number.isFinite(historyPrice) &&
+      historyPrice >= 0 &&
+      String(formData.value.customerId) === String(customerId) &&
+      String(item.productId) === String(productId)
+    ) {
+      item.price = historyPrice
+      if (showTaxColumns.value) {
+        item.taxIncludedPrice = parseFloat(
+          (historyPrice * (1 + (Number(item.taxRate) || DEFAULT_TAX_RATE) / 100)).toFixed(2)
+        )
+      }
+      calculateRowAmount(index)
+    }
+  } catch (error) {
+    console.warn('加载客户商品历史单价失败:', error)
+  } finally {
+    if (formData.value.items[index] === item && item.historyPriceRequestKey === requestKey) {
+      item.historyPriceLoading = false
+    }
+  }
 }
 
 // 更新商品库存信息（编辑模式使用）

@@ -1489,6 +1489,44 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 
 ## 5. 订单管理
 
+### 5.0 获取客户商品最近成交价
+
+- **URL**: `/api/orders/history-price`
+- **Method**: `GET`
+- **权限**: `touch.order.read`
+- **说明**: 按客户和商品查询销售订单中最近一次有效成交单价。接口按订单日期、订单 ID 倒序检查订单明细；没有历史成交价时返回 `price: null`。
+
+**Query 参数**:
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `customerId` | integer | 是 | 客户 ID |
+| `productId` | integer | 是 | 商品 ID |
+
+**成功响应（找到历史价格）**:
+
+```json
+{
+  "success": true,
+  "price": 12.5,
+  "orderNumber": "ZG20260923001",
+  "orderDate": "2026-09-23 10:30"
+}
+```
+
+**成功响应（没有历史价格）**:
+
+```json
+{
+  "success": true,
+  "price": null,
+  "orderNumber": "",
+  "orderDate": ""
+}
+```
+
+销售订单录入组件选择商品后会自动调用此接口。若没有历史成交价，继续使用商品档案中的默认价格，不阻止录单。
+
 ### 5.1 获取所有订单
 - **URL**: `/api/orders`
 - **Method**: `GET`
