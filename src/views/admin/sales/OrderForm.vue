@@ -345,7 +345,7 @@
       :visible="printTemplateDialogOpen"
       business-type="sale"
       title="打印订单"
-      :document-number="formData.orderNumber"
+      :document-number="printOrderVariables?.orderNumber || formData.orderNumber"
       description="选择销售模板和打印方式。"
       @close="closePrintTemplateDialog"
       @preview="previewSelectedPrintTemplate"
@@ -355,7 +355,7 @@
     <OrderPrintPreview
       :visible="printPreviewVisible"
       :template="selectedPrintTemplate"
-      :variables="orderPrintVariables"
+      :variables="printOrderVariables || orderPrintVariables"
       :printer="selectedPrintPrinter"
       :auto-print="printPreviewAutoPrint"
       @close="closeOrderPrintPreview"
@@ -445,6 +445,7 @@ const printPreviewVisible = ref(false)
 const selectedPrintTemplate = ref(null)
 const selectedPrintPrinter = ref(null)
 const printPreviewAutoPrint = ref(false)
+const printOrderVariables = ref(null)
 const saveToast = ref({ visible: false, message: '' })
 let saveToastTimer = null
 
@@ -528,12 +529,17 @@ const logisticsServiceOptions = [
   '无'
 ]
 
+const getCurrentOrderDate = () => {
+  const now = new Date()
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+}
+
 // 表单数据
 const formData = ref({
   storeId: '',
   customerId: '',
   warehouseId: '',
-  orderDate: new Date().toISOString().split('T')[0],
+  orderDate: getCurrentOrderDate(),
   orderNumber: '',
   contactPerson: '',
   contactPhone: '',
@@ -802,6 +808,7 @@ const closePrintTemplateDialog = () => {
     selectedPrintTemplate.value = null
     selectedPrintPrinter.value = null
     printPreviewAutoPrint.value = false
+    printOrderVariables.value = null
   }
 }
 
@@ -826,6 +833,7 @@ const closeOrderPrintPreview = () => {
   selectedPrintTemplate.value = null
   selectedPrintPrinter.value = null
   printPreviewAutoPrint.value = false
+  printOrderVariables.value = null
 }
 
 const getSaveSuccessMessage = () => (
@@ -1247,12 +1255,15 @@ const loadCustomerDebt = async (customerId) => {
       method: 'GET'
     })
 
-    if (response && response.receivable !== undefined) {
+    if (String(formData.value.customerId) === String(customerId) &&
+        response && response.receivable !== undefined) {
       customerReceivable.value = response.receivable || 0
     }
   } catch (error) {
     console.error('加载客户欠款失败:', error)
-    customerReceivable.value = 0
+    if (String(formData.value.customerId) === String(customerId)) {
+      customerReceivable.value = 0
+    }
   }
 }
 
@@ -1844,11 +1855,26 @@ const handleSave = async () => {
         formData.value.orderNumber = savedOrderNumber
       }
 
-      showSuccessToast(getSaveSuccessMessage())
+      const successMessage = getSaveSuccessMessage()
+      printOrderVariables.value = cloneDraftValue(orderPrintVariables.value)
+      showSuccessToast(successMessage)
       selectedPrintTemplate.value = null
       selectedPrintPrinter.value = null
       printPreviewAutoPrint.value = false
+
+      if (!isEditMode.value) {
+        discardDraft()
+        resetOrderFields()
+        formData.value.orderNumber = ''
+      }
+
       printTemplateDialogOpen.value = true
+
+      if (!isEditMode.value) {
+        await generateNewOrderNumber()
+        draftReady.value = true
+        persistDraft()
+      }
     } else {
       showErrorModal('订单保存失败：' + (response?.message || '未知错误'))
     }
@@ -1897,14 +1923,12 @@ const cancelClear = () => {
   showClearConfirmModal.value = false
 }
 
-const confirmClear = () => {
-  showClearConfirmModal.value = false
-
-  // 重置基础信息
+const resetOrderFields = () => {
   formData.value.storeId = ''
   formData.value.customerId = ''
+  customerReceivable.value = 0
   formData.value.warehouseId = ''
-  formData.value.orderDate = new Date().toISOString().split('T')[0]
+  formData.value.orderDate = getCurrentOrderDate()
   formData.value.contactPerson = ''
   formData.value.contactPhone = ''
   formData.value.contactAddress = ''
@@ -1923,6 +1947,11 @@ const confirmClear = () => {
   // 清空商品列表
   initEmptyRows()
   showTaxColumns.value = false
+}
+
+const confirmClear = () => {
+  showClearConfirmModal.value = false
+  resetOrderFields()
 }
 
 watch(
@@ -2029,8 +2058,8 @@ async function generateNewOrderNumber() {
     }
   } catch (error) {
     console.error('获取订单列表失败:', error)
-    // 出错时使用临时编号
-    formData.value.orderNumber = generateOrderNumber('TEMP')
+    // 不复用固定的临时编号；提交时由后端按新订单 ID 生成正式编号。
+    formData.value.orderNumber = ''
   }
 }
 
