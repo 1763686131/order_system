@@ -483,46 +483,16 @@
                     </svg>
                   </button>
                   <button
-                    v-if="
-                      mode === 'finance' &&
-                      canEditSalesOrders &&
-                      isSalesOrder(order) &&
-                      !isOrderAudited(order)
-                    "
+                    v-if="hasRowMenuActions(order)"
+                    class="row-menu-trigger"
                     type="button"
-                    title="编辑订单"
-                    @click="handleEditOrder(order)"
+                    title="更多操作"
+                    :aria-label="`订单 ${order.order_number || order.id} 更多操作`"
+                    aria-haspopup="menu"
+                    :aria-expanded="openActionMenuOrderId === order.id"
+                    @click="toggleActionMenu(order, $event)"
                   >
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
-                  </button>
-                  <button
-                    v-if="
-                      mode === 'finance' &&
-                      canReopenSalesOrders &&
-                      order.status === 'completed'
-                    "
-                    type="button"
-                    title="撤销已完成"
-                    @click="handleUncompleteOrder(order)"
-                  >
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <path d="M3 12a9 9 0 1 0 3-6.7"></path>
-                      <path d="M3 4v6h6"></path>
-                    </svg>
-                  </button>
-                  <button
-                    v-if="mode === 'logistics'"
-                    type="button"
-                    :title="hasLogistics(order) ? '修改物流信息' : '录入物流信息'"
-                    @click="handleLogisticsAction(order)"
-                  >
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                    </svg>
+                    <span aria-hidden="true">⋮</span>
                   </button>
                 </div>
               </td>
@@ -575,6 +545,55 @@
         </div>
       </footer>
     </section>
+
+    <Teleport to="body">
+      <div
+        v-if="actionMenuOrder"
+        ref="actionMenuElement"
+        class="row-action-menu"
+        role="menu"
+        :aria-label="`订单 ${actionMenuOrder.order_number || actionMenuOrder.id} 操作`"
+        :style="actionMenuStyle"
+        @keydown.esc.prevent="closeActionMenu(true)"
+        @keydown.down.prevent="moveActionMenuFocus(1)"
+        @keydown.up.prevent="moveActionMenuFocus(-1)"
+        @keydown.home.prevent="focusActionMenuItem(0)"
+        @keydown.end.prevent="focusActionMenuItem(-1)"
+      >
+        <button
+          v-if="mode === 'finance' && canEditSalesOrders && isSalesOrder(actionMenuOrder) && !isOrderAudited(actionMenuOrder)"
+          type="button"
+          role="menuitem"
+          @click="runActionMenuAction('edit', actionMenuOrder)"
+        >
+          修改订单
+        </button>
+        <button
+          v-if="mode === 'finance' && canReopenSalesOrders && actionMenuOrder.status === 'completed'"
+          type="button"
+          role="menuitem"
+          @click="runActionMenuAction('reopen', actionMenuOrder)"
+        >
+          撤销已完成
+        </button>
+        <button
+          v-if="mode === 'finance' && canAuditOrder(actionMenuOrder)"
+          type="button"
+          role="menuitem"
+          @click="runActionMenuAction('audit', actionMenuOrder)"
+        >
+          审核
+        </button>
+        <button
+          v-if="mode === 'logistics'"
+          type="button"
+          role="menuitem"
+          @click="runActionMenuAction('logistics', actionMenuOrder)"
+        >
+          {{ hasLogistics(actionMenuOrder) ? '修改物流信息' : '录入物流信息' }}
+        </button>
+      </div>
+    </Teleport>
 
     <!-- 订单详情居中弹窗 -->
     <Teleport to="body">
@@ -1192,6 +1211,10 @@ const orderActionLoading = ref('')
 const auditSlideVisible = ref(false)
 const auditSlideValue = ref(0)
 const auditSlideInput = ref(null)
+const openActionMenuOrderId = ref(null)
+const actionMenuElement = ref(null)
+const actionMenuStyle = ref({})
+let actionMenuTrigger = null
 
 // 顶部通知
 const notice = ref({
@@ -1299,6 +1322,8 @@ onMounted(() => {
 
   // 添加点击外部关闭下拉框的监听
   document.addEventListener('click', handleClickOutside)
+  document.addEventListener('scroll', handleActionMenuScroll, true)
+  window.addEventListener('resize', handleActionMenuScroll)
 
   fetchOrdersData()
 })
@@ -1306,6 +1331,8 @@ onMounted(() => {
 onUnmounted(() => {
   // 清理事件监听
   document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('scroll', handleActionMenuScroll, true)
+  window.removeEventListener('resize', handleActionMenuScroll)
   if (noticeTimer) {
     clearTimeout(noticeTimer)
   }
@@ -1320,6 +1347,7 @@ onUnmounted(() => {
 
 // 监听 mode 变化，重新获取数据
 watch(() => props.mode, () => {
+  closeActionMenu()
   fetchOrdersData()
 })
 
@@ -1677,6 +1705,11 @@ const paginatedOrders = computed(() => {
 })
 
 const pagedRecords = computed(() => paginatedOrders.value)
+const actionMenuOrder = computed(() =>
+  paginatedOrders.value.find(order => order.id === openActionMenuOrderId.value) || null
+)
+
+watch(paginatedOrders, () => closeActionMenu())
 
 const pageStart = computed(() => filteredOrders.value.length ? (currentPage.value - 1) * pageSize.value + 1 : 0)
 const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredOrders.value.length))
@@ -2372,6 +2405,18 @@ const canAuditOrder = (order) => {
     !isOrderAudited(order)
 }
 
+const hasRowMenuActions = (order) => (
+  props.mode === 'logistics' ||
+  (
+    props.mode === 'finance' &&
+    (
+      (canEditSalesOrders.value && isSalesOrder(order) && !isOrderAudited(order)) ||
+      (canReopenSalesOrders.value && order.status === 'completed') ||
+      canAuditOrder(order)
+    )
+  )
+)
+
 const canReverseAuditOrder = (order) => {
   return canReverseAuditSalesOrders.value &&
     isSalesOrder(order) &&
@@ -2544,6 +2589,67 @@ const handleClickOutside = (event) => {
   if (!target.closest('.shipping-method-filter')) {
     shippingDropdownOpen.value = false
   }
+  if (!target.closest('.row-action-menu, .row-menu-trigger')) {
+    closeActionMenu()
+  }
+}
+
+const closeActionMenu = (restoreFocus = false) => {
+  const trigger = actionMenuTrigger
+  openActionMenuOrderId.value = null
+  actionMenuTrigger = null
+  if (restoreFocus && trigger?.isConnected) {
+    nextTick(() => trigger.focus())
+  }
+}
+
+const handleActionMenuScroll = () => closeActionMenu()
+
+const toggleActionMenu = (order, event) => {
+  if (openActionMenuOrderId.value === order.id) {
+    closeActionMenu()
+    return
+  }
+
+  const trigger = event.currentTarget
+  const rect = trigger.getBoundingClientRect()
+  const menuWidth = 164
+  const menuItemCount = props.mode === 'logistics'
+    ? 1
+    : Number(canEditSalesOrders.value && isSalesOrder(order) && !isOrderAudited(order)) +
+      Number(canReopenSalesOrders.value && order.status === 'completed') +
+      Number(canAuditOrder(order))
+  const menuHeight = menuItemCount * 36 + 12
+  actionMenuTrigger = trigger
+  actionMenuStyle.value = {
+    left: `${Math.max(8, Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8))}px`,
+    top: `${rect.bottom + menuHeight + 8 > window.innerHeight
+      ? Math.max(8, rect.top - menuHeight - 6)
+      : rect.bottom + 6}px`
+  }
+  openActionMenuOrderId.value = order.id
+  nextTick(() => focusActionMenuItem(0))
+}
+
+const focusActionMenuItem = (index) => {
+  const items = actionMenuElement.value?.querySelectorAll('[role="menuitem"]')
+  if (!items?.length) return
+  items[index < 0 ? items.length - 1 : index]?.focus({ preventScroll: true })
+}
+
+const moveActionMenuFocus = (direction) => {
+  const items = actionMenuElement.value?.querySelectorAll('[role="menuitem"]')
+  if (!items?.length) return
+  const current = Array.from(items).indexOf(document.activeElement)
+  items[(current + direction + items.length) % items.length]?.focus({ preventScroll: true })
+}
+
+const runActionMenuAction = (action, order) => {
+  closeActionMenu()
+  if (action === 'edit') handleEditOrder(order)
+  if (action === 'reopen') handleUncompleteOrder(order)
+  if (action === 'audit') openOrderDetail(order)
+  if (action === 'logistics') handleLogisticsAction(order)
 }
 
 const handleUncompleteOrder = async (order) => {
@@ -3560,7 +3666,7 @@ svg {
 .material-column { width: 150px; }
 .number-column { width: 100px; text-align: right !important; }
 .money-column { width: 120px; text-align: right !important; }
-.operation-column { width: 100px; text-align: center; }
+.operation-column { width: 136px; text-align: center; }
 
 .numeric,
 .money-value {
@@ -3787,6 +3893,49 @@ svg {
 .row-actions svg {
   width: 14px;
   height: 14px;
+}
+
+.row-actions .row-menu-trigger {
+  font-size: 23px;
+  line-height: 1;
+}
+
+.row-actions .row-menu-trigger[aria-expanded="true"] {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.row-action-menu {
+  position: fixed;
+  z-index: 2147481800;
+  display: grid;
+  width: 164px;
+  padding: 5px;
+  background: #fff;
+  border: 1px solid #d9e0e8;
+  border-radius: 5px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+  box-sizing: border-box;
+}
+
+.row-action-menu button {
+  min-height: 36px;
+  padding: 7px 10px;
+  color: #344054;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 13px;
+  text-align: left;
+}
+
+.row-action-menu button:hover,
+.row-action-menu button:focus-visible {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  outline: none;
 }
 
 .empty-cell {
