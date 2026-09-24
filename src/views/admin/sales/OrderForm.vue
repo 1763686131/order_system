@@ -164,8 +164,14 @@
             <td><input type="number" v-model.number="item.packages" @input="onPackagesChange(index)" min="0" /></td>
             <td><input type="number" v-model.number="item.quantity" @input="onQuantityChange(index)" min="0" step="0.01" /></td>
             <td><input type="number" v-model.number="item.price" @input="onPriceChange(index)" min="0" step="0.01" /></td>
-            <td v-if="showTaxColumns"><input type="number" v-model.number="item.taxRate" @input="onItemTaxRateChange(index)" min="0" max="100" step="0.01" /></td>
-            <td v-if="showTaxColumns"><input type="number" v-model.number="item.taxIncludedPrice" @input="onTaxIncludedPriceChange(index)" min="0" step="0.01" /></td>
+            <td v-if="showTaxColumns">
+              <input v-if="item.productId" type="number" v-model.number="item.taxRate" @input="onItemTaxRateChange(index)" min="0" max="100" step="0.01" />
+              <input v-else type="text" value="" readonly class="readonly-input" />
+            </td>
+            <td v-if="showTaxColumns">
+              <input v-if="item.productId" type="number" v-model.number="item.taxIncludedPrice" @input="onTaxIncludedPriceChange(index)" min="0" step="0.01" />
+              <input v-else type="text" value="" readonly class="readonly-input" />
+            </td>
             <td class="right"><input type="text" :value="item.amount ? item.amount.toFixed(2) : ''" readonly class="readonly-input" /></td>
             <td v-if="showTaxColumns" class="right"><input type="text" :value="item.totalAmount ? item.totalAmount.toFixed(2) : ''" readonly class="readonly-input" /></td>
             <td><input type="text" v-model="item.remark" /></td>
@@ -1091,8 +1097,8 @@ const loadOrderData = async (orderId) => {
             packages: null,
             quantity: null,
             price: null,
-            taxRate: taxEnabled ? DEFAULT_TAX_RATE : 0,
-            taxIncludedPrice: 0,
+            taxRate: null,
+            taxIncludedPrice: null,
             amount: null,
             totalAmount: 0,
             remark: '',
@@ -1530,6 +1536,14 @@ const normalizeTaxRows = (taxEnabled, preserveExisting = false) => {
     : 0
 
   formData.value.items.forEach((item, index) => {
+    if (!item.productId) {
+      item.taxRate = null
+      item.taxIncludedPrice = null
+      item.totalAmount = 0
+      calculateRowAmount(index)
+      return
+    }
+
     if (!taxEnabled) {
       item.taxRate = 0
       item.taxIncludedPrice = 0
