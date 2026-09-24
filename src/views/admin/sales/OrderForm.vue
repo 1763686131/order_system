@@ -2053,7 +2053,6 @@ async function generateNewOrderNumber() {
 
   padding: 0;
   background: var(--page-bg);
-  min-height: 100vh;
   color: var(--text);
   font-size: 14px;
 }
