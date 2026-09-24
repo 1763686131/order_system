@@ -1022,8 +1022,8 @@ def update_order_status_only(order_id, req_data):
             x['status'] = ns
 
             if ns == 'completed':
-                x['completed_date'] = req_data.get('completed_date') or datetime.now().strftime('%Y-%m-%d %H:%M')
-                x['completed_by'] = req_data.get('completed_by') or current_identity()
+                x['completed_date'] = datetime.now().strftime('%Y-%m-%d %H:%M')
+                x['completed_by'] = current_identity()
                 x['shipped_date'] = ""
                 x['shipping_method'] = ""
                 x['shipping_custom'] = ""

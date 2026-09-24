@@ -2702,18 +2702,10 @@ const handleForceComplete = async (order) => {
 
   orderActionLoading.value = 'force-complete'
   try {
-    // Get current user info (you may need to adjust this based on your auth system)
-    const currentUser = localStorage.getItem('username') || 'system'
-    const currentDate = new Date().toISOString()
-
     await request({
       url: `/orders/${order.id}`,
       method: 'PUT',
-      data: {
-        status: 'completed',
-        completed_by: currentUser,
-        completed_date: currentDate
-      }
+      data: { status: 'completed' }
     })
 
     closeDetailModal()
