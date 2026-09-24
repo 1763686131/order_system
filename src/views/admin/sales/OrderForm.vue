@@ -660,11 +660,11 @@ const restoreDraft = async (draft) => {
   showTaxColumns.value = Boolean(draft.showTaxColumns)
   normalizeTaxRows(showTaxColumns.value, true)
 
-  // 恢复总件数：兼容旧草稿字段 manualTotalPackages
+  // 恢复总件数：保留手动值，直到下一次明细件数变化。
   const restoredTotalPackages = draft.totalPackages ?? draft.manualTotalPackages
   if (restoredTotalPackages !== undefined && restoredTotalPackages !== null) {
     totalPackages.value = restoredTotalPackages
-    totalPackagesManuallyEdited.value = true // 草稿中有值说明用户已操作过
+    totalPackagesManuallyEdited.value = true
   } else {
     // 草稿中没有总件数，自动计算
     totalPackages.value = totalPackagesCalculated.value
@@ -1119,11 +1119,10 @@ const loadOrderData = async (orderId) => {
         normalizeTaxRows(taxEnabled, true)
       }
 
-      // 从后端加载总件数（用户手动修改后的值）
-      // 旧数据没有 total_packages 时才回退到明细计算值
+      // 保留数据库总件数，直到下一次明细件数变化。
       if (response.total_packages !== undefined && response.total_packages !== null) {
         totalPackages.value = Number(response.total_packages)
-        totalPackagesManuallyEdited.value = true // 数据库中有值说明用户已操作过
+        totalPackagesManuallyEdited.value = true
       } else {
         totalPackages.value = totalPackagesCalculated.value
         totalPackagesManuallyEdited.value = false
@@ -1506,6 +1505,7 @@ const onPackagesChange = (index) => {
     item.quantity = item.packages * item.conversionRate
   }
 
+  syncTotalPackagesFromItems()
   calculateRowAmount(index)
 }
 
@@ -1516,6 +1516,7 @@ const onQuantityChange = (index) => {
   // 如果有换算比例，自动计算件数
   if (item.conversionRate && item.quantity) {
     item.packages = item.quantity / item.conversionRate
+    syncTotalPackagesFromItems()
   }
 
   calculateRowAmount(index)
@@ -1597,7 +1598,10 @@ const addRow = (index) => {
 // 删除行
 const removeRow = (index) => {
   if (formData.value.items.length > 1) {
-    formData.value.items.splice(index, 1)
+    const [removed] = formData.value.items.splice(index, 1)
+    if (Number(removed?.packages)) {
+      syncTotalPackagesFromItems()
+    }
   }
 }
 
@@ -1608,10 +1612,14 @@ const totalPackagesCalculated = computed(() => {
 
 // 总件数：稳定的数据源
 // - 首次根据明细自动初始化
-// - 用户手动编辑后，标记为已手动修改，明细变化不再覆盖
-// - 从数据库/草稿加载时，使用保存的值
+// - 手动输入优先，下一次明细件数变化后恢复自动汇总
+// - 从数据库/草稿加载时，先保留保存的值
 const totalPackages = ref(0)
 const totalPackagesManuallyEdited = ref(false) // 标记用户是否手动修改过
+const syncTotalPackagesFromItems = () => {
+  totalPackagesManuallyEdited.value = false
+  totalPackages.value = totalPackagesCalculated.value
+}
 
 const totalQuantity = computed(() => {
   return formData.value.items.reduce((sum, item) => sum + (item.quantity || 0), 0)
@@ -1630,7 +1638,7 @@ watch(showTaxColumns, (taxEnabled) => {
   normalizeTaxRows(taxEnabled)
 })
 
-// 监听明细件数变化，只在未手动修改时自动更新总件数
+// 自动模式下同步明细件数；手动模式由件数输入事件解除。
 watch(
   totalPackagesCalculated,
   (newCalculated) => {
