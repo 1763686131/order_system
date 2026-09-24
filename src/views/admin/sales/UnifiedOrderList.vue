@@ -1137,7 +1137,7 @@ import {
   filterRecordsByScope,
   hasMultipleScopeOptions
 } from '@/utils/accessControl'
-import { formatOrderForCopy } from '@/utils/tools'
+import { formatLogisticsOrderForCopy } from '@/utils/logisticsCopy'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
@@ -2324,8 +2324,9 @@ const hasLogistics = (order) => {
 // 复制物流极简信息
 const handleCopyOrderInfo = async (order) => {
   try {
-    const textToCopy = formatOrderForCopy(order, false, {
-      storeName: getStoreName(order)
+    const textToCopy = formatLogisticsOrderForCopy(order, {
+      storeName: getStoreName(order),
+      printVariables: getOrderPrintVariables(order)
     })
 
     // 优先使用 Clipboard API

@@ -122,6 +122,19 @@
               @open-change="handleNotificationInboxOpenChange"
               @open-notification="openNotification"
             />
+            <button
+              class="icon-btn"
+              type="button"
+              title="物流复制字段设置"
+              aria-label="打开物流复制字段设置"
+              @click="openLogisticsCopySettings"
+            >
+              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path>
+                <circle cx="16" cy="7" r="2"></circle>
+                <circle cx="8" cy="17" r="2"></circle>
+              </svg>
+            </button>
             <MessageInbox
               ref="messageInboxRef"
               mode="messages"
@@ -261,6 +274,10 @@
     <!-- 弹窗组件 -->
     <ShippedOrderActionModal ref="shippedActionModal" @refresh="handleRefresh" />
     <StockInOrderModal ref="stockRecordModal" @saved="handleStockRecordSaved" />
+    <LogisticsCopySettingsDialog
+      :visible="logisticsCopySettingsVisible"
+      @close="closeLogisticsCopySettings"
+    />
     <ChatWindow
       v-model="chatWindowOpen"
       :contact="activeChatContact"
@@ -289,6 +306,7 @@ import DirectoryPanel from '@/components/admin/DirectoryPanel.vue'
 import MessageInbox from '@/components/admin/MessageInbox.vue'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
+import LogisticsCopySettingsDialog from '@/components/admin/LogisticsCopySettingsDialog.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -306,6 +324,7 @@ const messageInboxRef = ref(null)
 const notificationInboxRef = ref(null)
 const chatWindowOpen = ref(false)
 const activeChatContact = ref(null)
+const logisticsCopySettingsVisible = ref(false)
 
 const userDisplayName = computed(() => {
   return userStore.name || userStore.username || '用户'
@@ -329,6 +348,18 @@ const permissionSummary = computed(() => {
 
 const handleAvatarError = () => {
   avatarLoadFailed.value = true
+}
+
+const openLogisticsCopySettings = () => {
+  closeAccountMenu()
+  directoryPanelRef.value?.close()
+  messageInboxRef.value?.close()
+  notificationInboxRef.value?.close()
+  logisticsCopySettingsVisible.value = true
+}
+
+const closeLogisticsCopySettings = () => {
+  logisticsCopySettingsVisible.value = false
 }
 
 const openChat = contact => {
