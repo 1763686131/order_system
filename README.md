@@ -10,7 +10,7 @@
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
 | 权限/API 文档版本 | `5.0` |
-| 文档更新 | `2026-09-23` |
+| 文档更新 | `2026-09-24` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -39,7 +39,25 @@
 - 后台顶栏通讯录，支持部门折叠、员工搜索、头像、职位、电话和在线状态
 - 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
 - 操作日志：记录账号安全、角色权限、员工部门及指定业务写操作，支持筛选和清空
+- 物流复制字段设置：支持字段启停、删除、新增、排序、变量拖拽/点击插入和复制预览
 - 原材料触屏出库、审核和库存流水
+
+## 2026-09-24 更新
+
+### 物流复制字段设置
+
+- 后台顶栏通知区域旁新增“物流复制字段设置”入口，打开
+  `LogisticsCopySettingsDialog.vue` 配置弹窗。
+- 物流列表的“复制物流信息”不再依赖写死的文本结构，统一通过
+  `src/utils/logisticsCopy.js` 生成复制内容。
+- 复制字段支持启用/隐藏、删除、新增自定义行、上下调整顺序和直接编辑模板。
+- 变量字段按“订单信息、收货信息、联系人信息、商品信息、物流信息、其他”分类展示，
+  所有分类默认展开；变量按钮既可以点击插入，也可以拖动到模板编辑框。
+- 模板支持 `@variableName` 变量语法，同时兼容历史配置中的 `{variableName}` 语法。
+- 右侧实时预览使用示例物流单据渲染，保存前即可确认最终复制格式。
+- 当前配置只保存在当前浏览器的 `localStorage`，不会上传服务器，也不会写入 SQLite；
+  更换浏览器或设备后需要重新设置。
+- 删除字段后不会在加载配置时自动补回；点击“恢复默认”可以恢复全部内置字段。
 
 ## 2026-09-23 更新
 
@@ -366,6 +384,7 @@ order_system/
 │  │  │  ├─ DirectoryPanel.vue       # 后台通讯录搜索、部门折叠和员工状态
 │  │  │  ├─ MessageInbox.vue         # 留言会话与审核通知双模式面板
 │  │  │  ├─ ChatWindow.vue           # 可拖动的一对一留言和附件窗口
+│  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制字段、变量和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  └─ StoreFormModal.vue       # 门店维护弹窗
 │  │  ├─ print/
@@ -375,7 +394,7 @@ order_system/
 │  │  │  └─ OrderPrintPreview.vue    # 业务变量渲染、预览和打印
 │  │  └─ front/                      # 前台订单、发货和原材料弹窗
 │  ├─ views/
-│  │  ├─ Admin.vue                   # 后台布局、菜单和入库弹窗注册
+│  │  ├─ Admin.vue                   # 后台布局、菜单、入库弹窗和物流复制设置注册
 │  │  ├─ MainView.vue                # 前台业务容器
 │  │  ├─ front/                      # 订单、已出库和原材料流水页面
 │  │  └─ admin/
@@ -418,6 +437,7 @@ order_system/
 │  │  ├─ adminAccess.js              # 后台菜单分支和路由权限映射
 │  │  ├─ adminRealtime.js            # 后台组件共享的 EventSource 客户端
 │  │  ├─ peerFileTransfer.js          # WebRTC DataChannel 分块收发
+│  │  ├─ logisticsCopy.js             # 物流复制字段、变量映射和本地配置
 │  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
 │  │  ├─ printClientConfig.js        # 本地打印配置和默认端口
 │  │  ├─ chineseMoney.js             # 金额中文大写
@@ -811,6 +831,93 @@ order-system-print-client-config
 
 首次使用默认采用 C-Lodop，主机为 `localhost`。HTTP 页面默认端口 `8000`，HTTPS 页面默认端口 `8443`，打印机名称需要检测后选择。
 
+## 物流复制字段设置
+
+物流复制字段设置是物流列表复制功能的前端配置模块，不新增后端接口，也不写入 SQLite。
+后台用户可以在顶栏通知区域旁打开设置弹窗，配置物流列表复制文本的字段、名称、模板和顺序。
+
+### 组件职责
+
+| 文件 | 职责 |
+| --- | --- |
+| `src/components/admin/LogisticsCopySettingsDialog.vue` | 配置弹窗、字段编辑、变量插入、拖拽、排序、删除和实时预览 |
+| `src/utils/logisticsCopy.js` | 默认字段、变量目录、本地存储、订单变量映射和复制文本格式化 |
+| `src/views/Admin.vue` | 注册顶栏入口和弹窗组件 |
+| `src/views/admin/sales/UnifiedOrderList.vue` | 在物流列表调用统一格式化方法并执行复制 |
+
+### 配置保存
+
+配置保存在当前浏览器的 `localStorage`：
+
+```text
+admin_logistics_copy_fields
+```
+
+每个字段至少包含以下结构：
+
+```json
+{
+  "key": "receiver_name",
+  "name": "姓名",
+  "template": "姓名：@receiverName",
+  "enabled": true
+}
+```
+
+字段属性说明：
+
+| 属性 | 说明 |
+| --- | --- |
+| `key` | 字段唯一标识，内置字段不能重复；自定义行使用 `custom_` 前缀 |
+| `name` | 设置面板中显示的字段名称 |
+| `template` | 实际复制的文本模板，可以包含普通文字和变量 |
+| `enabled` | 是否输出到复制结果 |
+| `custom` | 是否为用户新增的自定义行 |
+
+保存设置时会进行字段规范化：清理无效字段和重复字段、补齐必要的字段结构，
+并按照当前编辑顺序保存。删除的内置字段不会在下次打开时自动恢复；点击“恢复默认”
+才会重新加载全部内置字段。
+
+### 变量模板
+
+变量可以通过点击插入，也可以从变量字段区域拖动到左侧模板编辑框。当前变量目录如下：
+
+| 分类 | 变量 |
+| --- | --- |
+| 订单信息 | `storeName`、`orderNumber`、`orderDate`、`customerName`、`warehouseName`、`projectName` |
+| 收货信息 | `receiverName`、`receiverPhone`、`receiverAddress` |
+| 联系人信息 | `contactPerson`、`contactPhone`、`contactAddress` |
+| 商品信息 | `goodsName`、`spec`、`unit`、`goodsWeight`、`goodsQuantity`、`totalQuantity`、`totalPackages`、`goodsPackaging` |
+| 物流信息 | `logisticsService`、`shippingMethod`、`logisticsNo`、`shippedDate`、`freightTotal` |
+| 其他 | `salesPerson`、`creator`、`orderRemark`、`discountAmount`、`otherFees`、`totalAmount`、`totalTaxAmount`、`currentPayment`、`currentDebt`、`settlementAccount`、`shouldReceive`、`amountInWords` |
+
+推荐使用 `@变量名` 语法，例如：
+
+```text
+姓名：@receiverName
+电话：@receiverPhone
+商品：@goodsName
+```
+
+格式化器同时兼容旧配置中的 `{变量名}` 语法。变量没有值时会替换为空字符串；
+如果一个模板只包含变量且所有变量都为空，该行会被跳过。纯文字模板不会因为没有变量
+而被过滤。最终复制结果按字段顺序换行，并在有内容时追加结尾换行。
+
+### 默认数据映射
+
+物流列表复制时由 `formatLogisticsOrderForCopy()` 统一生成变量：
+
+- 标题使用门店名称生成 `【门店订单】`。
+- 收货人、电话和地址优先读取物流信息，缺失时回退到订单联系人信息。
+- 商品名称优先读取第一条商品明细，并组合规格。
+- 重量、件数、包装、物流服务、发货方式、物流单号和发货日期从订单及物流字段转换。
+- 运费从运费明细合计生成，金额变量来自订单打印变量。
+- 同时保留历史下划线变量别名，兼容早期保存的模板。
+
+复制按钮只负责调用统一格式化结果并写入系统剪贴板，不应在业务列表组件中重新拼接
+姓名、电话、地址等固定文本。新增变量时，应同时更新 `LOGISTICS_COPY_VARIABLE_GROUPS`
+和 `getLogisticsCopyValues()`。
+
 ## 数据存储
 
 系统当前以 SQLite 为业务数据源，本地和 Docker 默认都使用 `data/order_system.db`。
@@ -1014,6 +1121,14 @@ C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localSt
 - [留言与审核通知工作进度](docs/工作进度.md)
 
 ## 更新日志
+
+### 2026-09-24 - 物流复制字段设置
+
+- 新增后台顶栏物流复制字段设置入口和 `LogisticsCopySettingsDialog.vue`。
+- 新增物流复制字段本地配置、字段启停、删除、新增、自定义模板和顺序调整。
+- 新增变量字段点击插入、拖拽插入、实时预览以及 `@变量名`/`{变量名}` 双语法兼容。
+- `UnifiedOrderList.vue` 改为调用 `logisticsCopy.js` 统一生成物流复制文本。
+- 更新 README 项目结构、前端组件职责和本地配置说明。
 
 ### 2026-09-23 - 操作日志与 API 文档
 
