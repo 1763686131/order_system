@@ -87,19 +87,68 @@
                   </div>
                 </div>
               </div>
-              <div v-else class="saved-template-list" role="tabpanel">
-                <article
-                  v-for="template in savedTemplates"
-                  :key="template.id"
-                  class="saved-template-item"
-                >
-                  <div class="saved-template-item-header">
-                    <strong>{{ template.name }}</strong>
-                    <span>{{ template.status }}</span>
+              <div v-else class="saved-template-panel" role="tabpanel">
+                <div class="saved-template-list">
+                  <div v-if="!savedTemplates.length" class="saved-template-empty">
+                    暂无保存模板，点击下方“新增模板”创建。
                   </div>
-                  <p>{{ template.description }}</p>
-                  <small>{{ template.updatedAt }}</small>
-                </article>
+                  <article
+                    v-for="template in savedTemplates"
+                    :key="template.id"
+                    class="saved-template-item"
+                    :class="{ active: selectedTemplateId === template.id }"
+                    tabindex="0"
+                    @click="selectTemplate(template)"
+                    @keydown.enter.prevent="selectTemplate(template)"
+                    @keydown.space.prevent="selectTemplate(template)"
+                  >
+                    <div class="saved-template-item-header">
+                      <strong>{{ template.name }}</strong>
+                      <span>{{ template.status }}</span>
+                    </div>
+                    <p>{{ template.description || '自定义物流复制模板' }}</p>
+                    <small>{{ template.updatedAt }}</small>
+                  </article>
+                </div>
+                <div v-if="creatingTemplate" class="template-create-form">
+                  <input
+                    ref="newTemplateNameInput"
+                    v-model="newTemplateName"
+                    type="text"
+                    maxlength="80"
+                    placeholder="输入模板名称"
+                    @keydown.enter.prevent="confirmAddTemplate"
+                    @keydown.esc.prevent="cancelAddTemplate"
+                  >
+                  <div class="template-create-actions">
+                    <button type="button" class="template-confirm-button" @click="confirmAddTemplate">确定</button>
+                    <button type="button" class="template-cancel-button" @click="cancelAddTemplate">取消</button>
+                  </div>
+                  <span v-if="templateError" class="template-error">{{ templateError }}</span>
+                </div>
+                <div class="template-actions">
+                  <button
+                    type="button"
+                    class="template-action-button"
+                    @click="startAddTemplate"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M12 5v14M5 12h14"></path>
+                    </svg>
+                    新增模板
+                  </button>
+                  <button
+                    type="button"
+                    class="template-action-button template-delete-button"
+                    :disabled="!selectedTemplateId"
+                    @click="removeSelectedTemplate"
+                  >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path d="M5 7h14M10 11v6M14 11v6M8 7l1-3h6l1 3M7 7l1 14h8l1-14"></path>
+                    </svg>
+                    删除模板
+                  </button>
+                </div>
               </div>
             </aside>
 
@@ -224,11 +273,27 @@
         </section>
       </div>
     </Transition>
+
+    <Transition name="notice">
+      <div
+        v-if="notice.visible"
+        :class="['page-notice', `notice-${notice.type}`]"
+        :role="notice.type === 'error' ? 'alert' : 'status'"
+        aria-live="polite"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path v-if="notice.type === 'success'" d="m8 12 2.7 2.7L16.5 9"></path>
+          <path v-else d="M12 8v5M12 17h.01"></path>
+        </svg>
+        <span>{{ notice.message }}</span>
+      </div>
+    </Transition>
   </Teleport>
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { getLogisticsCopySettings, putLogisticsCopySettings } from '@/api/logisticsCopy'
 import {
   formatLogisticsOrderForCopy,
@@ -251,37 +316,101 @@ const loadingSettings = ref(false)
 const loadFailed = ref(false)
 const savingSettings = ref(false)
 const settingsError = ref('')
+const notice = ref({
+  visible: false,
+  type: 'success',
+  message: ''
+})
+let noticeTimer = null
 let loadRequestId = 0
 const variableGroups = LOGISTICS_COPY_VARIABLE_GROUPS
 const activeVariablePanelTab = ref('variables')
-const savedTemplates = [
+const savedTemplates = ref([])
+const selectedTemplateId = ref('')
+const creatingTemplate = ref(false)
+const newTemplateName = ref('')
+const newTemplateNameInput = ref(null)
+const templateError = ref('')
+
+const getDefaultSavedTemplates = () => [
   {
     id: 'standard-logistics',
     name: '物流标准模板',
     description: '姓名、电话、地址、商品、重量、件数和服务',
     status: '示例模板',
-    updatedAt: '最后更新：系统默认'
+    updatedAt: '最后更新：前端默认',
+    fields: getDefaultLogisticsCopyFields()
   },
   {
     id: 'customer-delivery',
     name: '客户送货模板',
     description: '突出收货信息、配送服务和订单备注',
     status: '示例模板',
-    updatedAt: '最后更新：待接入'
+    updatedAt: '最后更新：前端默认',
+    fields: getDefaultLogisticsCopyFields()
   },
   {
     id: 'warehouse-pickup',
     name: '仓库提货模板',
     description: '突出商品信息、包装、件数和发货方式',
     status: '示例模板',
-    updatedAt: '最后更新：待接入'
+    updatedAt: '最后更新：前端默认',
+    fields: getDefaultLogisticsCopyFields()
   }
 ]
+
+const normalizeSavedTemplates = templates => (
+  Array.isArray(templates)
+    ? templates
+      .filter(template => template && template.id && template.name)
+      .map(template => ({
+        id: String(template.id),
+        name: String(template.name).trim(),
+        description: String(template.description || '').trim(),
+        status: template.status || '已保存',
+        updatedAt: template.updatedAt || '最后更新：服务器',
+        fields: normalizeLogisticsCopyFields(template.fields)
+      }))
+    : []
+)
 const activeTemplateFieldKey = ref('')
 const activeTemplateElement = ref(null)
 const activeSelectionStart = ref(0)
 const activeSelectionEnd = ref(0)
 const draggedVariableKey = ref('')
+
+const hideNotice = () => {
+  if (noticeTimer) {
+    clearTimeout(noticeTimer)
+    noticeTimer = null
+  }
+  notice.value = {
+    ...notice.value,
+    visible: false
+  }
+}
+
+const showNotice = (type, message) => {
+  if (noticeTimer) {
+    clearTimeout(noticeTimer)
+  }
+
+  notice.value = {
+    visible: true,
+    type,
+    message
+  }
+
+  noticeTimer = setTimeout(() => {
+    notice.value = {
+      ...notice.value,
+      visible: false
+    }
+    noticeTimer = null
+  }, type === 'error' ? 5000 : 3000)
+}
+
+onBeforeUnmount(hideNotice)
 
 const enabledFieldCount = computed(() =>
   draftFields.value.filter(field => field.enabled).length
@@ -323,6 +452,7 @@ const loadDraft = async () => {
   loadingSettings.value = true
   loadFailed.value = false
   settingsError.value = ''
+  hideNotice()
   activeVariablePanelTab.value = 'variables'
   try {
     const response = await getLogisticsCopySettings()
@@ -334,6 +464,13 @@ const loadDraft = async () => {
     draftFields.value = response.data?.fields === null
       ? getDefaultLogisticsCopyFields()
       : normalizeLogisticsCopyFields(response.data?.fields)
+    savedTemplates.value = response.data?.templates === null
+      ? getDefaultSavedTemplates()
+      : normalizeSavedTemplates(response.data?.templates)
+    selectedTemplateId.value = ''
+    creatingTemplate.value = false
+    newTemplateName.value = ''
+    templateError.value = ''
   } catch (error) {
     if (requestId === loadRequestId && props.visible) {
       loadFailed.value = true
@@ -369,6 +506,63 @@ const moveField = (index, offset) => {
 
 const resetFields = () => {
   draftFields.value = getDefaultLogisticsCopyFields()
+}
+
+const selectTemplate = template => {
+  if (loadingSettings.value || savingSettings.value || creatingTemplate.value) return
+  selectedTemplateId.value = template.id
+  draftFields.value = normalizeLogisticsCopyFields(template.fields)
+  activeTemplateFieldKey.value = ''
+  activeTemplateElement.value = null
+}
+
+const startAddTemplate = async () => {
+  if (loadingSettings.value || savingSettings.value) return
+  creatingTemplate.value = true
+  newTemplateName.value = ''
+  templateError.value = ''
+  await nextTick()
+  newTemplateNameInput.value?.focus()
+}
+
+const cancelAddTemplate = () => {
+  creatingTemplate.value = false
+  newTemplateName.value = ''
+  templateError.value = ''
+}
+
+const confirmAddTemplate = () => {
+  const name = newTemplateName.value.trim()
+  if (!name) {
+    templateError.value = '请输入模板名称'
+    return
+  }
+
+  const template = {
+    id: `template_${Date.now()}`,
+    name,
+    description: '自定义物流复制模板',
+    status: '待保存',
+    updatedAt: '保存设置后写入服务器',
+    fields: normalizeLogisticsCopyFields(draftFields.value)
+  }
+  savedTemplates.value.push(template)
+  selectedTemplateId.value = template.id
+  creatingTemplate.value = false
+  newTemplateName.value = ''
+  templateError.value = ''
+}
+
+const removeSelectedTemplate = () => {
+  if (!selectedTemplateId.value || savingSettings.value) return
+  const index = savedTemplates.value.findIndex(
+    template => template.id === selectedTemplateId.value
+  )
+  if (index < 0) return
+
+  savedTemplates.value.splice(index, 1)
+  selectedTemplateId.value = ''
+  templateError.value = ''
 }
 
 const getFieldByKey = key => draftFields.value.find(field => field.key === key)
@@ -479,13 +673,31 @@ const handleSave = async () => {
   settingsError.value = ''
   savingSettings.value = true
   try {
-    const response = await putLogisticsCopySettings(normalizeLogisticsCopyFields(draftFields.value))
+    const normalizedFields = normalizeLogisticsCopyFields(draftFields.value)
+    const templates = savedTemplates.value.map(template => ({
+      id: template.id,
+      name: template.name,
+      description: template.description,
+      fields: normalizeLogisticsCopyFields(
+        template.id === selectedTemplateId.value
+          ? normalizedFields
+          : template.fields
+      )
+    }))
+    const response = await putLogisticsCopySettings(normalizedFields, templates)
     if (!response?.success) throw new Error(response?.message || '保存复制字段设置失败')
-    draftFields.value = normalizeLogisticsCopyFields(response.data.fields)
-    emit('saved', draftFields.value)
+    draftFields.value = normalizeLogisticsCopyFields(response.data?.fields)
+    savedTemplates.value = normalizeSavedTemplates(response.data?.templates)
+    emit('saved', {
+      fields: draftFields.value,
+      templates: savedTemplates.value
+    })
+    showNotice('success', '复制字段设置保存成功')
     emit('close')
   } catch (error) {
-    settingsError.value = error.response?.data?.message || error.message || '保存复制字段设置失败'
+    const message = error.response?.data?.message || error.message || '保存复制字段设置失败'
+    settingsError.value = message
+    showNotice('error', `保存失败：${message}`)
   } finally {
     savingSettings.value = false
   }
@@ -867,11 +1079,26 @@ const handleSave = async () => {
   overflow: auto;
 }
 
+.saved-template-panel {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
 .saved-template-list {
   min-height: 0;
   flex: 1;
   padding: 14px 16px;
   overflow: auto;
+}
+
+.saved-template-empty {
+  padding: 18px 10px;
+  color: #8a96a6;
+  font-size: 12px;
+  line-height: 1.6;
+  text-align: center;
 }
 
 .saved-template-item {
@@ -881,6 +1108,20 @@ const handleSave = async () => {
   background: #fbfdfe;
   border: 1px solid #dfe8ef;
   border-radius: 5px;
+  cursor: pointer;
+  outline: none;
+}
+
+.saved-template-item:hover,
+.saved-template-item:focus-visible {
+  border-color: #9bdcc8;
+  background: #f5fcf9;
+}
+
+.saved-template-item.active {
+  border-color: #0f9f78;
+  background: #effaf6;
+  box-shadow: inset 3px 0 0 #0f9f78;
 }
 
 .saved-template-item:last-child {
@@ -916,6 +1157,105 @@ const handleSave = async () => {
 .saved-template-item small {
   color: #94a3b8;
   font-size: 11px;
+}
+
+.template-create-form {
+  display: grid;
+  gap: 8px;
+  margin: 0 16px 10px;
+  padding: 10px;
+  background: #f7fafb;
+  border: 1px solid #dfe8ef;
+  border-radius: 5px;
+}
+
+.template-create-form input {
+  width: 100%;
+  height: 32px;
+  padding: 0 9px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  outline: none;
+  font-size: 12px;
+}
+
+.template-create-form input:focus {
+  border-color: #0f9f78;
+  box-shadow: 0 0 0 2px rgba(15, 159, 120, 0.12);
+}
+
+.template-create-actions,
+.template-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.template-create-actions button,
+.template-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 9px;
+  color: #08745a;
+  background: #fff;
+  border: 1px solid #b8ead8;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.template-create-actions button:hover,
+.template-action-button:hover:not(:disabled) {
+  background: #effaf6;
+  border-color: #79d6ba;
+}
+
+.template-cancel-button {
+  color: #64748b !important;
+  border-color: #cbd5e1 !important;
+}
+
+.template-error {
+  color: #b42318;
+  font-size: 11px;
+}
+
+.template-actions {
+  flex: 0 0 auto;
+  padding: 10px 16px 14px;
+  border-top: 1px solid #e8eef3;
+}
+
+.template-action-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.template-delete-button {
+  color: #c94f4f;
+  border-color: #f3b4b4;
+}
+
+.template-delete-button:hover:not(:disabled) {
+  color: #b42318;
+  background: #fff5f5;
+  border-color: #e38d8d;
+}
+
+.template-action-button:disabled {
+  color: #cbd5e1;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
 }
 
 .variable-library-heading {
@@ -1038,6 +1378,61 @@ const handleSave = async () => {
   border-color: #08745a;
 }
 
+.page-notice {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  z-index: 100001;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  max-width: min(520px, calc(100vw - 32px));
+  min-height: 44px;
+  padding: 10px 16px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #dfe5ec;
+  border-radius: 6px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.16);
+  transform: translateX(-50%);
+  box-sizing: border-box;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.page-notice svg {
+  flex: 0 0 19px;
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.notice-success svg {
+  color: #0f9f78;
+}
+
+.notice-error svg {
+  color: #dc3545;
+}
+
+.notice-enter-active,
+.notice-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.notice-enter-from,
+.notice-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -8px);
+}
+
 @media (max-width: 1060px) {
   .settings-body {
     grid-template-columns: minmax(320px, 0.9fr) minmax(240px, 1fr);
@@ -1097,6 +1492,18 @@ const handleSave = async () => {
   .settings-header,
   .settings-footer {
     padding: 16px;
+  }
+
+  .page-notice {
+    top: 12px;
+    max-width: calc(100vw - 32px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notice-enter-active,
+  .notice-leave-active {
+    transition: none;
   }
 }
 </style>

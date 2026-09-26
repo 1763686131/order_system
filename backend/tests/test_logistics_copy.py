@@ -36,18 +36,33 @@ class LogisticsCopySettingsTest(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_round_trip_and_empty_configuration(self):
-        self.assertIsNone(self.client.get('/api/settings/logistics-copy').json['data']['fields'])
+        initial = self.client.get('/api/settings/logistics-copy').json['data']
+        self.assertIsNone(initial['fields'])
+        self.assertIsNone(initial['templates'])
         fields = [
             {"key": "receiver_name", "name": "姓名", "template": "姓名：@receiverName", "enabled": True},
             {"key": "custom_1", "name": "自定义字段", "template": "@allGoods", "enabled": False},
         ]
-        response = self.client.put('/api/settings/logistics-copy', json={"fields": fields})
+        templates = [
+            {
+                "id": "template_1",
+                "name": "送货模板",
+                "description": "客户送货使用",
+                "fields": fields,
+            }
+        ]
+        response = self.client.put(
+            '/api/settings/logistics-copy',
+            json={"fields": fields, "templates": templates},
+        )
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(self.client.get('/api/settings/logistics-copy').json['data']['fields'], [
-            fields[0], {**fields[1], "custom": True}
-        ])
+        saved = self.client.get('/api/settings/logistics-copy').json['data']
+        self.assertEqual(saved['fields'], [fields[0], {**fields[1], "custom": True}])
+        self.assertEqual(saved['templates'][0]['fields'], saved['fields'])
         self.client.put('/api/settings/logistics-copy', json={"fields": []})
-        self.assertEqual(self.client.get('/api/settings/logistics-copy').json['data']['fields'], [])
+        saved_without_templates = self.client.get('/api/settings/logistics-copy').json['data']
+        self.assertEqual(saved_without_templates['fields'], [])
+        self.assertEqual(len(saved_without_templates['templates']), 1)
 
     def test_invalid_fields_do_not_overwrite(self):
         fields = [{"key": "title", "name": "标题", "template": "@storeName", "enabled": True}]
@@ -55,6 +70,37 @@ class LogisticsCopySettingsTest(unittest.TestCase):
         response = self.client.put('/api/settings/logistics-copy', json={"fields": fields * 2})
         self.assertEqual(response.status_code, 400)
         self.assertEqual(self.client.get('/api/settings/logistics-copy').json['data']['fields'], fields)
+
+    def test_invalid_templates_do_not_overwrite(self):
+        fields = [{"key": "title", "name": "标题", "template": "@storeName", "enabled": True}]
+        templates = [{
+            "id": "template_1",
+            "name": "默认模板",
+            "description": "",
+            "fields": fields,
+        }]
+        self.client.put(
+            '/api/settings/logistics-copy',
+            json={"fields": fields, "templates": templates},
+        )
+        response = self.client.put(
+            '/api/settings/logistics-copy',
+            json={
+                "fields": fields,
+                "templates": [{
+                    **templates[0],
+                    "fields": [{
+                        "key": "invalid",
+                        "name": "非法",
+                        "template": "@storeName",
+                        "enabled": True,
+                    }],
+                }],
+            },
+        )
+        self.assertEqual(response.status_code, 400)
+        saved = self.client.get('/api/settings/logistics-copy').json['data']
+        self.assertEqual(saved['templates'][0]['fields'], fields)
 
     def test_requires_admin_session(self):
         with patch("utils.auth.get_current_user", return_value=None):

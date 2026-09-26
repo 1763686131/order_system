@@ -1138,10 +1138,20 @@ def _ensure_logistics_copy_schema(conn):
             CREATE TABLE IF NOT EXISTS logistics_copy_settings (
                 id INTEGER PRIMARY KEY CHECK (id = 1),
                 fields_json TEXT NOT NULL,
+                templates_json TEXT,
                 updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
             """
         )
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(logistics_copy_settings)").fetchall()
+        }
+        if "templates_json" not in columns:
+            conn.execute(
+                "ALTER TABLE logistics_copy_settings "
+                "ADD COLUMN templates_json TEXT"
+            )
         conn.commit()
         _logistics_copy_schema_ready = True
 

@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `5.1` |
+| 权限/API 文档版本 | `5.2` |
 | 文档更新 | `2026-09-26` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
@@ -653,7 +653,9 @@ order-system-print-client-config
 
 ### 配置保存
 
-设置面板通过 `GET /api/settings/logistics-copy` 读取，点击保存时调用 `PUT /api/settings/logistics-copy`，后端在 `logistics_copy_settings.fields_json` 中保存有序字段数组。首次无配置时使用内置默认值；每次物流列表点击复制均从服务器读取最新配置。读写需要后台访问权限，读取失败不会复制旧缓存。旧版 `admin_logistics_copy_fields` 本地数据不再使用或自动迁移。
+设置面板通过 `GET /api/settings/logistics-copy` 读取，点击“保存设置”时调用 `PUT /api/settings/logistics-copy`，后端在 `logistics_copy_settings.fields_json` 和 `templates_json` 中保存当前复制字段及模板数据。数据库初始不插入模板；首次无配置时前端临时展示当前默认字段和默认模板，新增、删除、选择模板和字段修改都只停留在弹窗草稿，只有点击“保存设置”才写入服务器。已保存空模板列表时不恢复默认模板。每次物流列表点击复制均从服务器读取最新字段配置。读写需要后台访问权限，读取失败不会复制旧缓存。旧版 `admin_logistics_copy_fields` 本地数据不再使用或自动迁移。
+
+“保存模板”模块支持选择模板加载字段、新增模板和删除模板。新增和删除不会立即请求接口，保存时与当前字段配置一起提交；当前选中的模板会同步保存最新字段内容。
 
 每个字段至少包含以下结构：
 
