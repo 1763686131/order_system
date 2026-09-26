@@ -98,16 +98,24 @@
                     class="saved-template-item"
                     :class="{ active: selectedTemplateId === template.id }"
                     tabindex="0"
-                    @click="selectTemplate(template)"
+                    @pointerdown="handleTemplatePointerDown($event, template)"
                     @keydown.enter.prevent="selectTemplate(template)"
                     @keydown.space.prevent="selectTemplate(template)"
                   >
-                    <div class="saved-template-item-header">
-                      <strong>{{ template.name }}</strong>
-                      <span>{{ template.status }}</span>
-                    </div>
-                    <small>{{ template.updatedAt }}</small>
-                    <div class="template-binding-field" @click.stop>
+                    <button
+                      type="button"
+                      class="template-select-button"
+                      :aria-pressed="selectedTemplateId === template.id"
+                      @pointerdown.stop="selectTemplate(template)"
+                      @click.stop="selectTemplate(template)"
+                    >
+                      <span class="saved-template-item-header">
+                        <strong>{{ template.name }}</strong>
+                        <span>{{ template.status }}</span>
+                      </span>
+                      <small>{{ template.updatedAt }}</small>
+                    </button>
+                    <div class="template-binding-field" @click.stop @mousedown.stop @pointerdown.stop>
                       <span>绑定复制按钮</span>
                       <select :value="template.bindingTarget" :disabled="savingSettings" @change="updateTemplateBindingTarget(template, $event.target.value)">
                         <option value="">暂不绑定</option>
@@ -115,42 +123,57 @@
                         <option value="order-info">订单信息复制</option>
                       </select>
                     </div>
-                    <div class="template-binding-users" @click.stop>
+                    <div class="template-binding-users" @click.stop @mousedown.stop @pointerdown.stop>
                       <span class="template-binding-label">绑定人</span>
-                      <input
-                        v-model="templateBindingSearch[template.id]"
-                        class="template-user-search"
-                        type="search"
-                        placeholder="搜索姓名或账号后添加"
+                      <button
+                        type="button"
+                        class="template-bind-user-button"
+                        :class="{ active: templateBindingSearchOpen[template.id] }"
                         :disabled="savingSettings || !template.bindingTarget"
-                        @keydown.stop
+                        @click.stop="toggleBindingUserSearch(template)"
                       >
-                      <div
-                        v-if="template.bindingTarget && templateBindingSearch[template.id]?.trim()"
-                        class="template-user-search-results"
-                      >
-                        <button
-                          v-for="user in getFilteredBindingUsers(template)"
-                          :key="user.id"
-                          type="button"
-                          class="template-user-search-result"
-                          :title="`添加${user.name}`"
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path v-if="!templateBindingSearchOpen[template.id]" d="M12 5v14M5 12h14"></path>
+                          <path v-else d="M6 6l12 12M18 6 6 18"></path>
+                        </svg>
+                        {{ templateBindingSearchOpen[template.id] ? '收起搜索' : '绑定用户' }}
+                      </button>
+                      <div v-if="templateBindingSearchOpen[template.id]" class="template-user-picker">
+                        <input
+                          v-model="templateBindingSearch[template.id]"
+                          class="template-user-search"
+                          type="search"
+                          placeholder="搜索姓名或账号后添加"
                           :disabled="savingSettings"
-                          @click="addTemplateBindingUser(template, user.id)"
+                          @keydown.stop
                         >
-                          <span class="template-user-avatar">
-                            <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="">
-                            <span v-else>{{ user.name.slice(0, 1) || '人' }}</span>
+                        <div
+                          v-if="templateBindingSearch[template.id]?.trim()"
+                          class="template-user-search-results"
+                        >
+                          <button
+                            v-for="user in getFilteredBindingUsers(template)"
+                            :key="user.id"
+                            type="button"
+                            class="template-user-search-result"
+                            :title="`添加${user.name}`"
+                            :disabled="savingSettings"
+                            @click="addTemplateBindingUser(template, user.id)"
+                          >
+                            <span class="template-user-avatar">
+                              <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="">
+                              <span v-else>{{ user.name.slice(0, 1) || '人' }}</span>
+                            </span>
+                            <span class="template-user-search-name">
+                              {{ user.name }}
+                              <small v-if="user.username">{{ user.username }}</small>
+                            </span>
+                            <span class="template-user-search-add" aria-hidden="true">+</span>
+                          </button>
+                          <span v-if="!getFilteredBindingUsers(template).length" class="template-users-empty">
+                            没有找到匹配账号
                           </span>
-                          <span class="template-user-search-name">
-                            {{ user.name }}
-                            <small v-if="user.username">{{ user.username }}</small>
-                          </span>
-                          <span class="template-user-search-add" aria-hidden="true">+</span>
-                        </button>
-                        <span v-if="!getFilteredBindingUsers(template).length" class="template-users-empty">
-                          没有找到匹配账号
-                        </span>
+                        </div>
                       </div>
                       <div class="template-selected-users">
                         <span v-if="!template.boundUserIds.length" class="template-users-empty">
@@ -225,7 +248,7 @@
                 <strong>{{ enabledFieldCount }}/{{ draftFields.length }}</strong>
               </div>
 
-              <div class="field-list">
+              <div :key="selectedTemplateId || 'shared-fields'" class="field-list">
                 <div
                   v-for="(field, index) in draftFields"
                   :key="field.key"
@@ -392,6 +415,7 @@ const activeVariablePanelTab = ref('variables')
 const savedTemplates = ref([])
 const bindingUsers = ref([])
 const templateBindingSearch = reactive({})
+const templateBindingSearchOpen = reactive({})
 const selectedTemplateId = ref('')
 const creatingTemplate = ref(false)
 const newTemplateName = ref('')
@@ -590,8 +614,25 @@ const resetFields = () => {
   draftFields.value = getDefaultLogisticsCopyFields()
 }
 
+const saveActiveTemplateDraft = () => {
+  if (!selectedTemplateId.value) return
+  const activeTemplate = savedTemplates.value.find(
+    item => item.id === selectedTemplateId.value
+  )
+  if (activeTemplate) {
+    activeTemplate.fields = normalizeLogisticsCopyFields(draftFields.value)
+  }
+}
+
+const handleTemplatePointerDown = (event, template) => {
+  if (event.button !== undefined && event.button !== 0) return
+  selectTemplate(template)
+}
+
 const selectTemplate = template => {
   if (loadingSettings.value || savingSettings.value || creatingTemplate.value) return
+  if (selectedTemplateId.value === template.id) return
+  saveActiveTemplateDraft()
   selectedTemplateId.value = template.id
   draftFields.value = normalizeLogisticsCopyFields(template.fields)
   activeTemplateFieldKey.value = ''
@@ -603,6 +644,15 @@ const updateTemplateBindingTarget = (template, target) => {
   template.bindingTarget = target
   template.boundUserIds = []
   templateBindingSearch[template.id] = ''
+  templateBindingSearchOpen[template.id] = false
+}
+
+const toggleBindingUserSearch = template => {
+  if (!template.bindingTarget || savingSettings.value) return
+  templateBindingSearchOpen[template.id] = !templateBindingSearchOpen[template.id]
+  if (!templateBindingSearchOpen[template.id]) {
+    templateBindingSearch[template.id] = ''
+  }
 }
 
 const getFilteredBindingUsers = template => {
@@ -1240,7 +1290,6 @@ const handleSave = async () => {
   background: #fbfdfe;
   border: 1px solid #dfe8ef;
   border-radius: 5px;
-  cursor: pointer;
   outline: none;
 }
 
@@ -1265,6 +1314,28 @@ const handleSave = async () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.template-select-button {
+  display: block;
+  width: 100%;
+  padding: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.template-select-button:focus-visible {
+  outline: 2px solid #0f9f78;
+  outline-offset: 3px;
+  border-radius: 3px;
+}
+
+.template-select-button small {
+  display: block;
+  margin-top: 5px;
 }
 
 .saved-template-item-header strong {
@@ -1324,6 +1395,48 @@ const handleSave = async () => {
 .template-binding-label {
   display: block;
   margin-bottom: 6px;
+}
+
+.template-bind-user-button {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  color: #08745a;
+  background: #effaf6;
+  border: 1px solid #b8ead8;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.template-bind-user-button:hover:not(:disabled),
+.template-bind-user-button.active {
+  background: #e0f6ed;
+  border-color: #79d6ba;
+}
+
+.template-bind-user-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.template-bind-user-button:disabled {
+  color: #aab6c3;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  cursor: not-allowed;
+}
+
+.template-user-picker {
+  margin-top: 6px;
 }
 
 .template-user-search {
