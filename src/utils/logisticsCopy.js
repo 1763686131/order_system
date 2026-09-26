@@ -1,3 +1,5 @@
+export const LOGISTICS_COPY_EDITOR_KEY = 'custom_editor_content'
+
 export const DEFAULT_LOGISTICS_COPY_FIELDS = [
   {
     key: 'title',
@@ -177,7 +179,9 @@ export const normalizeLogisticsCopyFields = fields => {
       normalized.push({
         key: String(field.key),
         name: String(field.name || '自定义字段'),
-        template: String(field.template || '').trim(),
+        template: field.key === LOGISTICS_COPY_EDITOR_KEY
+          ? String(field.template || '')
+          : String(field.template || '').trim(),
         enabled: field.enabled !== false,
         custom: true
       })
@@ -455,18 +459,46 @@ const getTemplateVariables = template => [...String(template || '').matchAll(
 )].map(match => match[1] || match[2])
 
 const applyTemplate = (template, values) => String(template || '')
-  .replace(/\{([^{}]+)\}|@([A-Za-z][A-Za-z0-9_]*)/g, (_match, braceKey, atKey) => {
+  .replace(/(?:\{([^{}]+)\}|@([A-Za-z][A-Za-z0-9_]*))(?:[ \t]*～[ \t]*)?/g, (_match, braceKey, atKey) => {
     const key = braceKey || atKey
     return Object.prototype.hasOwnProperty.call(values, key)
       ? String(values[key] ?? '')
       : ''
   })
 
+const renderEditorTemplate = (template, order, values) => String(template || '')
+  .split('\n')
+  .map(line => {
+    if (!line.includes('|') || !/@(?:allGoods|allSpecs|allQuantity)\b/.test(line)) {
+      return applyTemplate(line, values)
+    }
+
+    const rowTemplate = line.split(/\s*\|\s*/).join('  ')
+    const goods = getGoodsItems(order)
+    if (!goods.length) {
+      return applyTemplate(rowTemplate, values)
+    }
+
+    return goods.map(item => applyTemplate(rowTemplate, {
+      ...values,
+      allGoods: getGoodsItemName(item),
+      allSpecs: getGoodsItemSpec(item),
+      allQuantity: getGoodsItemQuantity(item)
+    })).join('\n')
+  })
+  .join('\n')
+
 export const formatLogisticsOrderForCopy = (order, options = {}) => {
   const fields = normalizeLogisticsCopyFields(
     options.fields ?? getDefaultLogisticsCopyFields()
   )
   const values = getLogisticsCopyValues(order, options)
+
+  if (fields.length === 1 && fields[0].key === LOGISTICS_COPY_EDITOR_KEY) {
+    return fields[0].enabled
+      ? renderEditorTemplate(fields[0].template, order, values)
+      : ''
+  }
 
   const lines = fields
     .filter(field => field.enabled)
@@ -506,6 +538,9 @@ export const getLogisticsCopyPreviewOrder = () => ({
   logistics_no: 'YT123456789',
   shipped_date: '2026-09-24',
   freight_costs: [{ amount: 15 }],
-  order_goods: [],
+  order_goods: [
+    { goods_name: '棒棒糖', spec: '30支/袋', quantity: 50 },
+    { goods_name: '植筋胶', spec: '40kg/组', quantity: 22 }
+  ],
   remark: ''
 })

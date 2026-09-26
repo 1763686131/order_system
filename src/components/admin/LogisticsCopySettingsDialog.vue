@@ -17,7 +17,7 @@
             <div>
               <span class="settings-eyebrow">物流工具</span>
               <h2 id="logistics-copy-settings-title">复制字段设置</h2>
-              <p>自定义物流列表复制内容的字段、名称和排列顺序。</p>
+              <p>自定义物流列表复制内容和变量排版。</p>
             </div>
             <button
               type="button"
@@ -54,7 +54,7 @@
                   :aria-selected="activeVariablePanelTab === 'templates'"
                   @click="activeVariablePanelTab = 'templates'"
                 >
-                  保存模板
+                  历史模板
                 </button>
               </div>
               <div
@@ -84,6 +84,24 @@
                     >
                       {{ variable.label }}
                     </button>
+                    <button
+                      v-if="group.id === 'goods'"
+                      type="button"
+                      class="variable-chip row-separator-chip"
+                      title="放在全部商品、全部规格、全部数量之间；同一行按商品逐件换行"
+                      @click="insertVariable(' | ', true)"
+                    >
+                      逐件分列 |
+                    </button>
+                    <button
+                      v-if="group.id === 'goods'"
+                      type="button"
+                      class="variable-chip row-separator-chip"
+                      title="在变量后插入 ～ 连接文字，如 @allQuantity～kg"
+                      @click="insertVariable('～', true)"
+                    >
+                      变量拼接 ～
+                    </button>
                   </div>
                 </div>
               </div>
@@ -102,43 +120,65 @@
                     @keydown.enter.prevent="selectTemplate(template)"
                     @keydown.space.prevent="selectTemplate(template)"
                   >
-                    <button
-                      type="button"
-                      class="template-select-button"
-                      :aria-pressed="selectedTemplateId === template.id"
-                      @pointerdown.stop="selectTemplate(template)"
-                      @click.stop="selectTemplate(template)"
-                    >
-                      <span class="saved-template-item-header">
+                    <div class="saved-template-item-header">
+                      <button
+                        type="button"
+                        class="template-select-button"
+                        :title="template.name"
+                        :aria-pressed="selectedTemplateId === template.id"
+                        @pointerdown.stop="selectTemplate(template)"
+                        @click.stop="selectTemplate(template)"
+                      >
                         <strong>{{ template.name }}</strong>
-                        <span>{{ template.status }}</span>
-                      </span>
-                      <small>{{ template.updatedAt }}</small>
-                    </button>
-                    <div class="template-binding-field" @click.stop @mousedown.stop @pointerdown.stop>
-                      <span>绑定复制按钮</span>
-                      <select :value="template.bindingTarget" :disabled="savingSettings" @change="updateTemplateBindingTarget(template, $event.target.value)">
+                      </button>
+                      <select
+                        class="template-binding-select"
+                        :value="template.bindingTarget"
+                        :aria-label="`${template.name}绑定的复制按钮`"
+                        :disabled="savingSettings"
+                        @click.stop
+                        @mousedown.stop
+                        @pointerdown.stop
+                        @keydown.enter.stop
+                        @keydown.space.stop
+                        @change="updateTemplateBindingTarget(template, $event.target.value)"
+                      >
                         <option value="">暂不绑定</option>
                         <option value="logistics-info">物流信息</option>
                         <option value="order-info">订单信息复制</option>
                       </select>
                     </div>
-                    <div class="template-binding-users" @click.stop @mousedown.stop @pointerdown.stop>
+                    <div class="template-binding-users" @click.stop @mousedown.stop @pointerdown.stop @keydown.enter.stop @keydown.space.stop>
                       <span class="template-binding-label">绑定人</span>
-                      <button
-                        type="button"
-                        class="template-bind-user-button"
-                        :class="{ active: templateBindingSearchOpen[template.id] }"
-                        :disabled="savingSettings || !template.bindingTarget"
-                        @click.stop="toggleBindingUserSearch(template)"
-                      >
-                        <svg viewBox="0 0 24 24" aria-hidden="true">
-                          <path v-if="!templateBindingSearchOpen[template.id]" d="M12 5v14M5 12h14"></path>
-                          <path v-else d="M6 6l12 12M18 6 6 18"></path>
-                        </svg>
-                        {{ templateBindingSearchOpen[template.id] ? '收起搜索' : '绑定用户' }}
-                      </button>
-                      <div v-if="templateBindingSearchOpen[template.id]" class="template-user-picker">
+                      <div class="template-selected-users">
+                        <button
+                          v-for="user in getSelectedBindingUsers(template)"
+                          :key="user.id"
+                          type="button"
+                          class="template-user-avatar active"
+                          :title="user.name"
+                          :aria-label="`取消绑定${user.name}`"
+                          :disabled="savingSettings"
+                          @click="toggleTemplateBindingUser(template, user.id)"
+                        >
+                          <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="">
+                          <span v-else>{{ user.name.slice(0, 1) || '人' }}</span>
+                        </button>
+                        <button
+                          type="button"
+                          class="template-user-avatar template-add-user-button"
+                          :class="{ open: templateBindingSearchOpen[template.id] }"
+                          :title="!template.bindingTarget ? '请先选择绑定的复制按钮' : templateBindingSearchOpen[template.id] ? '收起搜索' : '绑定用户'"
+                          :aria-label="templateBindingSearchOpen[template.id] ? `收起${template.name}的绑定用户搜索` : `为${template.name}绑定用户`"
+                          :aria-expanded="!!templateBindingSearchOpen[template.id]"
+                          :aria-controls="`template-user-picker-${template.id}`"
+                          :disabled="savingSettings || !template.bindingTarget"
+                          @click="toggleBindingUserSearch(template)"
+                        >
+                          <span aria-hidden="true">＋</span>
+                        </button>
+                      </div>
+                      <div v-if="templateBindingSearchOpen[template.id]" :id="`template-user-picker-${template.id}`" class="template-user-picker">
                         <input
                           v-model="templateBindingSearch[template.id]"
                           class="template-user-search"
@@ -174,25 +214,6 @@
                             没有找到匹配账号
                           </span>
                         </div>
-                      </div>
-                      <div class="template-selected-users">
-                        <span v-if="!template.boundUserIds.length" class="template-users-empty">
-                          暂未添加绑定人
-                        </span>
-                        <button
-                          v-for="user in getSelectedBindingUsers(template)"
-                          :key="user.id"
-                          type="button"
-                          class="template-user-avatar"
-                          :class="{ active: true }"
-                          :title="user.name"
-                          :aria-label="`取消绑定${user.name}`"
-                          :disabled="savingSettings"
-                          @click="toggleTemplateBindingUser(template, user.id)"
-                        >
-                          <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="">
-                          <span v-else>{{ user.name.slice(0, 1) || '人' }}</span>
-                        </button>
                       </div>
                     </div>
                   </article>
@@ -242,102 +263,39 @@
             <section class="field-editor" aria-labelledby="copy-field-list-title">
               <div class="section-heading">
                 <div>
-                  <h3 id="copy-field-list-title">复制字段</h3>
-                  <span>可关闭字段，也可以调整字段顺序。</span>
+                  <h3 id="copy-field-list-title">
+                    编辑内容
+                    <span class="current-template-name">{{ selectedTemplateName }}</span>
+                  </h3>
+                  <span>直接编辑复制内容，也可以拖入变量。</span>
                 </div>
-                <strong>{{ enabledFieldCount }}/{{ draftFields.length }}</strong>
+                <strong>{{ editorLineCount }} 行</strong>
               </div>
 
               <div :key="selectedTemplateId || 'shared-fields'" class="field-list">
-                <div
-                  v-for="(field, index) in draftFields"
-                  :key="field.key"
-                  class="field-row"
-                  :class="{ disabled: !field.enabled }"
-                >
-                  <label class="field-toggle" :title="field.enabled ? '隐藏字段' : '显示字段'">
-                    <input v-model="field.enabled" type="checkbox" :disabled="loadingSettings || savingSettings">
-                    <span class="toggle-box" aria-hidden="true"></span>
-                  </label>
-
-                  <div class="field-content">
-                    <div class="field-title-row">
-                      <strong>{{ field.name }}</strong>
-                      <span v-if="field.custom" class="field-hint">自定义行</span>
-                      <span v-else class="field-hint">内容模板</span>
-                      <div class="field-order-actions">
-                        <button
-                          type="button"
-                          title="上移"
-                          aria-label="上移字段"
-                          :disabled="index === 0"
-                          @click="moveField(index, -1)"
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="m6 15 6-6 6 6"></path>
-                          </svg>
-                        </button>
-                        <button
-                          type="button"
-                          title="下移"
-                          aria-label="下移字段"
-                          :disabled="index === draftFields.length - 1"
-                          @click="moveField(index, 1)"
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="m6 9 6 6 6-6"></path>
-                          </svg>
-                        </button>
-                        <button
-                          class="field-delete-button"
-                          type="button"
-                          title="删除字段"
-                          aria-label="删除字段"
-                          @click="removeField(index)"
-                        >
-                          <svg viewBox="0 0 24 24" aria-hidden="true">
-                            <path d="M5 7h14M10 11v6M14 11v6M8 7l1-3h6l1 3M7 7l1 14h8l1-14"></path>
-                          </svg>
-                        </button>
-                      </div>
-                    </div>
-                    <textarea
-                      :value="field.template"
-                      class="field-input field-template-input"
-                      rows="2"
-                      :disabled="!field.enabled"
-                      placeholder="输入文字，或把左侧变量拖到这里"
-                      @focus="rememberTemplateTarget($event, field)"
-                      @click="rememberTemplateTarget($event, field)"
-                      @keyup="rememberTemplateTarget($event, field)"
-                      @input="field.template = $event.target.value"
-                      @dragover.prevent
-                      @drop.prevent="handleTemplateDrop($event, field)"
-                    ></textarea>
-                  </div>
-
-                </div>
+                <textarea
+                  ref="editorElement"
+                  :value="draftText"
+                  class="copy-editor-input"
+                  :disabled="loadingSettings || loadFailed || savingSettings"
+                  maxlength="4000"
+                  placeholder="在这里编辑复制内容，或把左侧变量拖进来"
+                  @focus="rememberEditorTarget"
+                  @click="rememberEditorTarget"
+                  @keyup="rememberEditorTarget"
+                  @select="rememberEditorTarget"
+                  @input="handleEditorInput"
+                  @dragover.prevent
+                  @drop.prevent="handleEditorDrop"
+                ></textarea>
               </div>
-
-              <button
-                type="button"
-                class="add-field-button"
-                @click="addCustomField()"
-                @dragover.prevent
-                @drop.prevent="handleNewFieldDrop"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M12 5v14M5 12h14"></path>
-                </svg>
-                添加自定义行
-              </button>
             </section>
 
             <aside class="copy-preview" aria-labelledby="copy-preview-title">
               <div class="section-heading">
                 <div>
                   <h3 id="copy-preview-title">复制预览</h3>
-                  <span>物流列表点击复制时将使用此格式。</span>
+                  <span>输入内容和变量后会实时生成复制结果。</span>
                 </div>
               </div>
               <pre>{{ previewText }}</pre>
@@ -386,6 +344,7 @@ import {
   formatLogisticsOrderForCopy,
   getDefaultLogisticsCopyFields,
   getLogisticsCopyPreviewOrder,
+  LOGISTICS_COPY_EDITOR_KEY,
   LOGISTICS_COPY_VARIABLE_GROUPS,
   normalizeLogisticsCopyFields
 } from '@/utils/logisticsCopy'
@@ -398,7 +357,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'saved'])
-const draftFields = ref(getDefaultLogisticsCopyFields())
+const draftText = ref(
+  getDefaultLogisticsCopyFields()
+    .filter(field => field.enabled)
+    .map(field => field.template)
+    .join('\n')
+)
+const editorElement = ref(null)
 const loadingSettings = ref(false)
 const loadFailed = ref(false)
 const savingSettings = ref(false)
@@ -411,7 +376,7 @@ const notice = ref({
 let noticeTimer = null
 let loadRequestId = 0
 const variableGroups = LOGISTICS_COPY_VARIABLE_GROUPS
-const activeVariablePanelTab = ref('variables')
+const activeVariablePanelTab = ref('templates')
 const savedTemplates = ref([])
 const bindingUsers = ref([])
 const templateBindingSearch = reactive({})
@@ -422,13 +387,24 @@ const newTemplateName = ref('')
 const newTemplateNameInput = ref(null)
 const templateError = ref('')
 
+const fieldsToEditorText = fields => normalizeLogisticsCopyFields(fields)
+  .filter(field => field.enabled)
+  .map(field => String(field.template || ''))
+  .join('\n')
+
+const editorTextToFields = text => [{
+  key: LOGISTICS_COPY_EDITOR_KEY,
+  name: '复制内容',
+  template: String(text || ''),
+  enabled: true,
+  custom: true
+}]
+
 const getDefaultSavedTemplates = () => [
   {
     id: 'standard-logistics',
     name: '物流标准模板',
     description: '姓名、电话、地址、商品、重量、件数和服务',
-    status: '示例模板',
-    updatedAt: '最后更新：前端默认',
     bindingTarget: '',
     boundUserIds: [],
     fields: getDefaultLogisticsCopyFields()
@@ -437,8 +413,6 @@ const getDefaultSavedTemplates = () => [
     id: 'customer-delivery',
     name: '客户送货模板',
     description: '突出收货信息、配送服务和订单备注',
-    status: '示例模板',
-    updatedAt: '最后更新：前端默认',
     bindingTarget: '',
     boundUserIds: [],
     fields: getDefaultLogisticsCopyFields()
@@ -447,8 +421,6 @@ const getDefaultSavedTemplates = () => [
     id: 'warehouse-pickup',
     name: '仓库提货模板',
     description: '突出商品信息、包装、件数和发货方式',
-    status: '示例模板',
-    updatedAt: '最后更新：前端默认',
     bindingTarget: '',
     boundUserIds: [],
     fields: getDefaultLogisticsCopyFields()
@@ -463,8 +435,6 @@ const normalizeSavedTemplates = templates => (
         id: String(template.id),
         name: String(template.name).trim(),
         description: String(template.description || '').trim(),
-        status: template.status || '已保存',
-        updatedAt: template.updatedAt || '最后更新：服务器',
         bindingTarget: ['logistics-info', 'order-info'].includes(template.bindingTarget)
           ? template.bindingTarget : '',
         boundUserIds: Array.isArray(template.boundUserIds)
@@ -474,10 +444,8 @@ const normalizeSavedTemplates = templates => (
       }))
     : []
 )
-const activeTemplateFieldKey = ref('')
-const activeTemplateElement = ref(null)
-const activeSelectionStart = ref(0)
-const activeSelectionEnd = ref(0)
+const activeSelectionStart = ref(draftText.value.length)
+const activeSelectionEnd = ref(draftText.value.length)
 const draggedVariableKey = ref('')
 
 const hideNotice = () => {
@@ -513,15 +481,18 @@ const showNotice = (type, message) => {
 
 onBeforeUnmount(hideNotice)
 
-const enabledFieldCount = computed(() =>
-  draftFields.value.filter(field => field.enabled).length
+const editorLineCount = computed(() =>
+  draftText.value ? draftText.value.split('\n').length : 0
+)
+const selectedTemplateName = computed(() =>
+  savedTemplates.value.find(template => template.id === selectedTemplateId.value)?.name || '默认配置'
 )
 
 const previewText = computed(() => formatLogisticsOrderForCopy(
   getLogisticsCopyPreviewOrder(),
   {
     storeName: '伟杰',
-    fields: draftFields.value,
+    fields: editorTextToFields(draftText.value),
     printVariables: {
       orderDate: '2026-09-24',
       warehouseName: '中国车间',
@@ -554,7 +525,7 @@ const loadDraft = async () => {
   loadFailed.value = false
   settingsError.value = ''
   hideNotice()
-  activeVariablePanelTab.value = 'variables'
+  activeVariablePanelTab.value = 'templates'
   try {
     const response = await getLogisticsCopySettings()
     if (!response?.success) throw new Error(response?.message || '读取复制字段设置失败')
@@ -562,9 +533,13 @@ const loadDraft = async () => {
       throw new Error('复制字段设置数据格式不正确')
     }
     if (requestId !== loadRequestId || !props.visible) return
-    draftFields.value = response.data?.fields === null
-      ? getDefaultLogisticsCopyFields()
-      : normalizeLogisticsCopyFields(response.data?.fields)
+    draftText.value = fieldsToEditorText(
+      response.data?.fields === null
+        ? getDefaultLogisticsCopyFields()
+        : response.data?.fields
+    )
+    activeSelectionStart.value = draftText.value.length
+    activeSelectionEnd.value = draftText.value.length
     savedTemplates.value = response.data?.templates === null
       ? getDefaultSavedTemplates()
       : normalizeSavedTemplates(response.data?.templates)
@@ -598,20 +573,10 @@ watch(
   }
 )
 
-const moveField = (index, offset) => {
-  const targetIndex = index + offset
-  if (targetIndex < 0 || targetIndex >= draftFields.value.length) {
-    return
-  }
-
-  const nextFields = [...draftFields.value]
-  const [field] = nextFields.splice(index, 1)
-  nextFields.splice(targetIndex, 0, field)
-  draftFields.value = nextFields
-}
-
 const resetFields = () => {
-  draftFields.value = getDefaultLogisticsCopyFields()
+  draftText.value = fieldsToEditorText(getDefaultLogisticsCopyFields())
+  activeSelectionStart.value = draftText.value.length
+  activeSelectionEnd.value = draftText.value.length
 }
 
 const saveActiveTemplateDraft = () => {
@@ -620,7 +585,7 @@ const saveActiveTemplateDraft = () => {
     item => item.id === selectedTemplateId.value
   )
   if (activeTemplate) {
-    activeTemplate.fields = normalizeLogisticsCopyFields(draftFields.value)
+    activeTemplate.fields = editorTextToFields(draftText.value)
   }
 }
 
@@ -634,9 +599,9 @@ const selectTemplate = template => {
   if (selectedTemplateId.value === template.id) return
   saveActiveTemplateDraft()
   selectedTemplateId.value = template.id
-  draftFields.value = normalizeLogisticsCopyFields(template.fields)
-  activeTemplateFieldKey.value = ''
-  activeTemplateElement.value = null
+  draftText.value = fieldsToEditorText(template.fields)
+  activeSelectionStart.value = draftText.value.length
+  activeSelectionEnd.value = draftText.value.length
 }
 
 const updateTemplateBindingTarget = (template, target) => {
@@ -720,11 +685,9 @@ const confirmAddTemplate = () => {
     id: `template_${Date.now()}`,
     name,
     description: '自定义物流复制模板',
-    status: '待保存',
-    updatedAt: '保存设置后写入服务器',
     bindingTarget: '',
     boundUserIds: [],
-    fields: normalizeLogisticsCopyFields(draftFields.value)
+    fields: editorTextToFields(draftText.value)
   }
   savedTemplates.value.push(template)
   selectedTemplateId.value = template.id
@@ -745,46 +708,32 @@ const removeSelectedTemplate = () => {
   templateError.value = ''
 }
 
-const getFieldByKey = key => draftFields.value.find(field => field.key === key)
-
-const rememberTemplateTarget = (event, field) => {
-  activeTemplateFieldKey.value = field.key
-  activeTemplateElement.value = event.target
-  activeSelectionStart.value = event.target.selectionStart ?? field.template.length
+const rememberEditorTarget = event => {
+  editorElement.value = event.target
+  activeSelectionStart.value = event.target.selectionStart ?? draftText.value.length
   activeSelectionEnd.value = event.target.selectionEnd ?? activeSelectionStart.value
 }
 
-const insertVariableIntoField = (field, variableKey, element = null) => {
-  const token = `@${variableKey}`
-  const targetElement = element || activeTemplateElement.value
-  const isActiveField = activeTemplateFieldKey.value === field.key
-  const template = String(field.template || '')
-  const start = isActiveField
-    ? activeSelectionStart.value
-    : template.length
-  const end = isActiveField
-    ? activeSelectionEnd.value
-    : template.length
+const insertVariableIntoEditor = (token, element = editorElement.value) => {
+  const text = draftText.value
+  const start = Math.min(activeSelectionStart.value, text.length)
+  const end = Math.min(activeSelectionEnd.value, text.length)
+  if (text.length - (end - start) + token.length > 4000) return
+  draftText.value = `${text.slice(0, start)}${token}${text.slice(end)}`
 
-  field.template = `${template.slice(0, start)}${token}${template.slice(end)}`
-
-  if (targetElement && isActiveField) {
+  if (element) {
     window.requestAnimationFrame(() => {
       const nextPosition = start + token.length
-      targetElement.focus()
-      targetElement.setSelectionRange(nextPosition, nextPosition)
+      element.focus()
+      element.setSelectionRange(nextPosition, nextPosition)
       activeSelectionStart.value = nextPosition
       activeSelectionEnd.value = nextPosition
     })
   }
 }
 
-const insertVariable = variableKey => {
-  const field = getFieldByKey(activeTemplateFieldKey.value) ||
-    draftFields.value.find(item => item.enabled)
-  if (field) {
-    insertVariableIntoField(field, variableKey)
-  }
+const insertVariable = (variableKey, isLiteral = false) => {
+  insertVariableIntoEditor(isLiteral ? variableKey : `@${variableKey}`)
 }
 
 const handleVariableDragStart = (event, variableKey) => {
@@ -797,50 +746,21 @@ const handleVariableDragEnd = () => {
   draggedVariableKey.value = ''
 }
 
-const handleTemplateDrop = (event, field) => {
+const handleEditorInput = event => {
+  draftText.value = event.target.value
+  rememberEditorTarget(event)
+}
+
+const handleEditorDrop = event => {
   const variableKey = event.dataTransfer.getData('text/plain') || draggedVariableKey.value
   if (!variableKey) {
     return
   }
 
-  activeTemplateFieldKey.value = field.key
-  activeTemplateElement.value = event.target
-  activeSelectionStart.value = event.target.selectionStart ?? field.template.length
+  activeSelectionStart.value = event.target.selectionStart ?? draftText.value.length
   activeSelectionEnd.value = event.target.selectionEnd ?? activeSelectionStart.value
-  insertVariableIntoField(field, variableKey, event.target)
+  insertVariableIntoEditor(`@${variableKey}`, event.target)
   draggedVariableKey.value = ''
-}
-
-const addCustomField = (template = '') => {
-  const field = {
-    key: `custom_${Date.now()}`,
-    name: '自定义字段',
-    template,
-    enabled: true,
-    custom: true
-  }
-  draftFields.value.push(field)
-  activeTemplateFieldKey.value = field.key
-}
-
-const handleNewFieldDrop = event => {
-  const variableKey = event.dataTransfer.getData('text/plain') || draggedVariableKey.value
-  if (variableKey) {
-    addCustomField(`@${variableKey}`)
-  }
-  draggedVariableKey.value = ''
-}
-
-const removeField = index => {
-  const [removedField] = draftFields.value.splice(index, 1)
-  if (removedField?.key === activeTemplateFieldKey.value) {
-    activeTemplateFieldKey.value = ''
-    activeTemplateElement.value = null
-  }
-  if (!draftFields.value.some(field => field.key === activeTemplateFieldKey.value)) {
-    activeTemplateFieldKey.value = ''
-    activeTemplateElement.value = null
-  }
 }
 
 const handleClose = () => {
@@ -853,25 +773,23 @@ const handleSave = async () => {
   settingsError.value = ''
   savingSettings.value = true
   try {
-    const normalizedFields = normalizeLogisticsCopyFields(draftFields.value)
+    const normalizedFields = editorTextToFields(draftText.value)
     const templates = savedTemplates.value.map(template => ({
       id: template.id,
       name: template.name,
       description: template.description,
       bindingTarget: template.bindingTarget,
       boundUserIds: template.boundUserIds,
-      fields: normalizeLogisticsCopyFields(
-        template.id === selectedTemplateId.value
-          ? normalizedFields
-          : template.fields
-      )
+      fields: template.id === selectedTemplateId.value
+        ? normalizedFields
+        : normalizeLogisticsCopyFields(template.fields)
     }))
     const response = await putLogisticsCopySettings(normalizedFields, templates)
     if (!response?.success) throw new Error(response?.message || '保存复制字段设置失败')
-    draftFields.value = normalizeLogisticsCopyFields(response.data?.fields)
+    draftText.value = fieldsToEditorText(response.data?.fields)
     savedTemplates.value = normalizeSavedTemplates(response.data?.templates)
     emit('saved', {
-      fields: draftFields.value,
+      fields: editorTextToFields(draftText.value),
       templates: savedTemplates.value
     })
     showNotice('success', '复制字段设置保存成功')
@@ -966,8 +884,7 @@ const handleSave = async () => {
   font-size: 12px;
 }
 
-.icon-close,
-.field-order-actions button {
+.icon-close {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -981,8 +898,7 @@ const handleSave = async () => {
   cursor: pointer;
 }
 
-.icon-close:hover,
-.field-order-actions button:hover:not(:disabled) {
+.icon-close:hover {
   color: #08745a;
   border-color: #9bdcc8;
   background: #effaf6;
@@ -1029,9 +945,20 @@ const handleSave = async () => {
 }
 
 .section-heading h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
   margin: 0 0 4px;
   color: #1f2937;
   font-size: 15px;
+}
+
+.section-heading .current-template-name {
+  color: #d44b51;
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
 }
 
 .section-heading strong {
@@ -1043,176 +970,35 @@ const handleSave = async () => {
 .field-list {
   min-height: 0;
   flex: 1;
-  padding: 8px 12px 12px;
+  display: flex;
+  padding: 14px;
+  overflow: hidden;
+}
+
+.copy-editor-input {
+  width: 100%;
+  min-height: 420px;
+  flex: 1;
+  padding: 16px;
+  color: #243244;
+  background: #fbfdfe;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  outline: none;
+  resize: none;
+  font: 14px/1.8 Consolas, 'Microsoft YaHei', sans-serif;
+  white-space: pre-wrap;
   overflow: auto;
 }
 
-.field-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 4px;
-  border-bottom: 1px solid #eef2f5;
-}
-
-.field-row:last-child {
-  border-bottom: 0;
-}
-
-.field-row.disabled {
-  opacity: 0.56;
-}
-
-.field-toggle {
-  flex: 0 0 auto;
-  position: relative;
-  display: inline-flex;
-  width: 20px;
-  height: 20px;
-  cursor: pointer;
-}
-
-.field-toggle input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.toggle-box {
-  width: 18px;
-  height: 18px;
-  border: 1px solid #b8c6d2;
-  border-radius: 4px;
-  background: #fff;
-}
-
-.field-toggle input:checked + .toggle-box {
+.copy-editor-input:focus {
   border-color: #0f9f78;
-  background: #0f9f78;
-  box-shadow: inset 0 0 0 3px #fff;
+  box-shadow: 0 0 0 3px rgba(15, 159, 120, 0.12);
 }
 
-.field-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.field-title-row,
-.field-label-input {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.field-title-row {
-  margin-bottom: 6px;
-}
-
-.field-title-row strong {
-  color: #334155;
-  font-size: 13px;
-}
-
-.field-hint {
-  color: #0f9f78;
-  font-size: 11px;
-}
-
-.field-label-input span {
-  flex: 0 0 auto;
-  color: #8a96a6;
-  font-size: 12px;
-}
-
-.field-input {
-  width: 100%;
-  min-width: 0;
-  height: 32px;
-  padding: 0 9px;
-  color: #334155;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  outline: none;
-  font-size: 13px;
-}
-
-.field-template-input {
-  height: auto;
-  min-height: 48px;
-  resize: vertical;
-  line-height: 1.55;
-  font-family: Consolas, 'Microsoft YaHei', sans-serif;
-}
-
-.field-input:focus {
-  border-color: #0f9f78;
-  box-shadow: 0 0 0 2px rgba(15, 159, 120, 0.12);
-}
-
-.field-order-actions {
-  display: flex;
-  flex: 0 0 auto;
-  margin-left: auto;
-  gap: 4px;
-}
-
-.field-order-actions .field-delete-button {
-  color: #dc6b6b;
-}
-
-.field-order-actions .field-delete-button:hover:not(:disabled) {
-  color: #b42318;
-  border-color: #f3b4b4;
-  background: #fff5f5;
-}
-
-.field-order-actions button {
-  width: 26px;
-  height: 24px;
-}
-
-.field-order-actions svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.field-order-actions button:disabled {
-  color: #cbd5e1;
+.copy-editor-input:disabled {
+  background: #f8fafc;
   cursor: not-allowed;
-}
-
-.add-field-button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 16px 16px;
-  padding: 0;
-  color: #08745a;
-  background: transparent;
-  border: 0;
-  font-size: 12px;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.add-field-button:hover {
-  color: #0f9f78;
-}
-
-.add-field-button svg {
-  width: 15px;
-  height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 2;
-  stroke-linecap: round;
 }
 
 .copy-preview {
@@ -1317,8 +1103,10 @@ const handleSave = async () => {
 }
 
 .template-select-button {
-  display: block;
-  width: 100%;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
   padding: 0;
   color: inherit;
   text-align: left;
@@ -1333,21 +1121,13 @@ const handleSave = async () => {
   border-radius: 3px;
 }
 
-.template-select-button small {
-  display: block;
-  margin-top: 5px;
-}
-
 .saved-template-item-header strong {
   min-width: 0;
   color: #334155;
   font-size: 13px;
-}
-
-.saved-template-item-header span {
-  flex: 0 0 auto;
-  color: #0f9f78;
-  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .saved-template-item p {
@@ -1357,24 +1137,9 @@ const handleSave = async () => {
   line-height: 1.55;
 }
 
-.saved-template-item small {
-  color: #94a3b8;
-  font-size: 11px;
-}
-
-.template-binding-field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  margin-top: 10px;
-  color: #596579;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.template-binding-field select {
-  width: 150px;
+.template-binding-select {
+  flex: 0 1 150px;
+  width: min(150px, 50%);
   min-width: 0;
   height: 32px;
   padding: 0 8px;
@@ -1386,7 +1151,7 @@ const handleSave = async () => {
 }
 
 .template-binding-users {
-  margin-top: 10px;
+  margin-top: 8px;
   color: #596579;
   font-size: 11px;
   font-weight: 600;
@@ -1395,44 +1160,6 @@ const handleSave = async () => {
 .template-binding-label {
   display: block;
   margin-bottom: 6px;
-}
-
-.template-bind-user-button {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 0 9px;
-  color: #08745a;
-  background: #effaf6;
-  border: 1px solid #b8ead8;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.template-bind-user-button:hover:not(:disabled),
-.template-bind-user-button.active {
-  background: #e0f6ed;
-  border-color: #79d6ba;
-}
-
-.template-bind-user-button svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-width: 2;
-}
-
-.template-bind-user-button:disabled {
-  color: #aab6c3;
-  background: #f8fafc;
-  border-color: #e2e8f0;
-  cursor: not-allowed;
 }
 
 .template-user-picker {
@@ -1526,7 +1253,6 @@ const handleSave = async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 6px;
   min-height: 30px;
   align-items: center;
 }
@@ -1559,8 +1285,31 @@ const handleSave = async () => {
   box-shadow: 0 0 0 2px #b8ead8;
 }
 
+.template-add-user-button {
+  color: #08745a;
+  background: #fff;
+  border: 1px dashed #79d6ba;
+  font-size: 19px;
+  font-weight: 400;
+}
+
+.template-add-user-button:hover:not(:disabled),
+.template-add-user-button.open {
+  background: #e0f6ed;
+  border-color: #0f9f78;
+}
+
+.template-add-user-button span {
+  line-height: 1;
+  transition: transform 0.15s ease;
+}
+
+.template-add-user-button.open span {
+  transform: rotate(45deg);
+}
+
 .template-user-avatar:focus-visible,
-.template-binding-field select:focus-visible {
+.template-binding-select:focus-visible {
   outline: 2px solid #0f9f78;
   outline-offset: 2px;
 }
@@ -1735,6 +1484,18 @@ const handleSave = async () => {
   cursor: grabbing;
 }
 
+.row-separator-chip {
+  color: #8a5a03;
+  background: #fffaf0;
+  border-color: #e9cf92;
+  cursor: pointer;
+}
+
+.row-separator-chip:hover {
+  background: #fff2d5;
+  border-color: #d9b45c;
+}
+
 .copy-preview pre {
   flex: 1;
   min-height: 0;
@@ -1899,6 +1660,10 @@ const handleSave = async () => {
   .variable-panel,
   .copy-preview {
     min-height: 220px;
+  }
+
+  .copy-editor-input {
+    min-height: 260px;
   }
 
   .copy-preview pre {
