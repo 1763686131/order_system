@@ -33,6 +33,75 @@
           </header>
 
           <div class="settings-body">
+            <aside class="variable-panel" aria-label="变量工具">
+              <div class="variable-panel-tabs" role="tablist" aria-label="变量工具">
+                <button
+                  type="button"
+                  class="variable-panel-tab"
+                  :class="{ active: activeVariablePanelTab === 'variables' }"
+                  role="tab"
+                  :aria-selected="activeVariablePanelTab === 'variables'"
+                  @click="activeVariablePanelTab = 'variables'"
+                >
+                  变量字段
+                </button>
+                <button
+                  type="button"
+                  class="variable-panel-tab"
+                  :class="{ active: activeVariablePanelTab === 'templates' }"
+                  role="tab"
+                  :aria-selected="activeVariablePanelTab === 'templates'"
+                  @click="activeVariablePanelTab = 'templates'"
+                >
+                  保存模板
+                </button>
+              </div>
+              <div
+                v-if="activeVariablePanelTab === 'variables'"
+                class="variable-library"
+                role="tabpanel"
+              >
+                <div
+                  v-for="group in variableGroups"
+                  :key="group.id"
+                  class="variable-group"
+                >
+                  <div class="variable-group-title">
+                    <span class="variable-group-label">{{ group.label }}</span>
+                  </div>
+                  <div class="variable-chips">
+                    <button
+                      v-for="variable in group.variables"
+                      :key="variable.key"
+                      type="button"
+                      class="variable-chip"
+                      draggable="true"
+                      :title="`插入 @${variable.key}`"
+                      @dragstart="handleVariableDragStart($event, variable.key)"
+                      @dragend="handleVariableDragEnd"
+                      @click="insertVariable(variable.key)"
+                    >
+                      {{ variable.label }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="saved-template-list" role="tabpanel">
+                <article
+                  v-for="template in savedTemplates"
+                  :key="template.id"
+                  class="saved-template-item"
+                >
+                  <div class="saved-template-item-header">
+                    <strong>{{ template.name }}</strong>
+                    <span>{{ template.status }}</span>
+                  </div>
+                  <p>{{ template.description }}</p>
+                  <small>{{ template.updatedAt }}</small>
+                </article>
+              </div>
+            </aside>
+
             <section class="field-editor" aria-labelledby="copy-field-list-title">
               <div class="section-heading">
                 <div>
@@ -100,7 +169,7 @@
                       class="field-input field-template-input"
                       rows="2"
                       :disabled="!field.enabled"
-                      placeholder="输入文字，或把右侧变量拖到这里"
+                      placeholder="输入文字，或把左侧变量拖到这里"
                       @focus="rememberTemplateTarget($event, field)"
                       @click="rememberTemplateTarget($event, field)"
                       @keyup="rememberTemplateTarget($event, field)"
@@ -126,41 +195,6 @@
                 添加自定义行
               </button>
             </section>
-
-            <aside class="variable-panel" aria-labelledby="variable-library-title">
-              <div class="section-heading">
-                <div>
-                  <h3 id="variable-library-title">变量字段</h3>
-                  <span>拖动或点击插入模板。</span>
-                </div>
-              </div>
-              <div class="variable-library">
-                <div
-                  v-for="group in variableGroups"
-                  :key="group.id"
-                  class="variable-group"
-                >
-                  <div class="variable-group-title">
-                    <span class="variable-group-label">{{ group.label }}</span>
-                  </div>
-                  <div class="variable-chips">
-                    <button
-                      v-for="variable in group.variables"
-                      :key="variable.key"
-                      type="button"
-                      class="variable-chip"
-                      draggable="true"
-                      :title="`插入 @${variable.key}`"
-                      @dragstart="handleVariableDragStart($event, variable.key)"
-                      @dragend="handleVariableDragEnd"
-                      @click="insertVariable(variable.key)"
-                    >
-                      {{ variable.label }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </aside>
 
             <aside class="copy-preview" aria-labelledby="copy-preview-title">
               <div class="section-heading">
@@ -213,6 +247,30 @@ const props = defineProps({
 const emit = defineEmits(['close', 'saved'])
 const draftFields = ref(loadLogisticsCopyFields())
 const variableGroups = LOGISTICS_COPY_VARIABLE_GROUPS
+const activeVariablePanelTab = ref('variables')
+const savedTemplates = [
+  {
+    id: 'standard-logistics',
+    name: '物流标准模板',
+    description: '姓名、电话、地址、商品、重量、件数和服务',
+    status: '示例模板',
+    updatedAt: '最后更新：系统默认'
+  },
+  {
+    id: 'customer-delivery',
+    name: '客户送货模板',
+    description: '突出收货信息、配送服务和订单备注',
+    status: '示例模板',
+    updatedAt: '最后更新：待接入'
+  },
+  {
+    id: 'warehouse-pickup',
+    name: '仓库提货模板',
+    description: '突出商品信息、包装、件数和发货方式',
+    status: '示例模板',
+    updatedAt: '最后更新：待接入'
+  }
+]
 const activeTemplateFieldKey = ref('')
 const activeTemplateElement = ref(null)
 const activeSelectionStart = ref(0)
@@ -256,6 +314,7 @@ const previewText = computed(() => formatLogisticsOrderForCopy(
 
 const loadDraft = () => {
   draftFields.value = loadLogisticsCopyFields()
+  activeVariablePanelTab.value = 'variables'
 }
 
 watch(
@@ -705,12 +764,96 @@ const handleSave = () => {
   flex-direction: column;
 }
 
+.variable-panel-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin: 12px 16px 0;
+  padding: 4px;
+  background: #f4f7f9;
+  border: 1px solid #e1e9ee;
+  border-radius: 5px;
+}
+
+.variable-panel-tab {
+  min-height: 32px;
+  padding: 0 10px;
+  color: #64748b;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.variable-panel-tab:hover:not(.active) {
+  color: #08745a;
+}
+
+.variable-panel-tab.active {
+  color: #08745a;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+}
+
 .variable-library {
   min-height: 0;
   flex: 1;
   padding: 14px 16px 4px;
   border-bottom: 1px solid #e8eef3;
   overflow: auto;
+}
+
+.saved-template-list {
+  min-height: 0;
+  flex: 1;
+  padding: 14px 16px;
+  overflow: auto;
+}
+
+.saved-template-item {
+  margin: 0 0 10px;
+  padding: 12px;
+  color: #334155;
+  background: #fbfdfe;
+  border: 1px solid #dfe8ef;
+  border-radius: 5px;
+}
+
+.saved-template-item:last-child {
+  margin-bottom: 0;
+}
+
+.saved-template-item-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.saved-template-item-header strong {
+  min-width: 0;
+  color: #334155;
+  font-size: 13px;
+}
+
+.saved-template-item-header span {
+  flex: 0 0 auto;
+  color: #0f9f78;
+  font-size: 11px;
+}
+
+.saved-template-item p {
+  margin: 6px 0 8px;
+  color: #7b8798;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.saved-template-item small {
+  color: #94a3b8;
+  font-size: 11px;
 }
 
 .variable-library-heading {
@@ -839,17 +982,18 @@ const handleSave = () => {
     overflow: auto;
   }
 
-  .field-editor {
-    grid-row: 1 / span 2;
-  }
-
   .variable-panel {
-    grid-column: 2;
+    grid-column: 1;
     grid-row: 1;
   }
 
-  .copy-preview {
+  .field-editor {
     grid-column: 2;
+    grid-row: 1 / span 2;
+  }
+
+  .copy-preview {
+    grid-column: 1;
     grid-row: 2;
     min-height: 280px;
   }
