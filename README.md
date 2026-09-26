@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `5.2` |
+| 权限/API 文档版本 | `5.3` |
 | 文档更新 | `2026-09-26` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
@@ -39,7 +39,7 @@
 - 后台顶栏通讯录，支持部门折叠、员工搜索、头像、职位、电话和在线状态
 - 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
 - 操作日志：记录账号安全、角色权限、员工部门及指定业务写操作，支持筛选和清空
-- 物流复制字段设置：支持字段启停、删除、新增、排序、变量拖拽/点击插入和复制预览
+- 物流复制模板：支持服务器保存、历史模板、复制入口和绑定用户、变量拖拽/点击插入、逐件换行、变量拼接及实时预览
 - 原材料触屏出库、审核和库存流水
 
 ## 快速开始
@@ -135,7 +135,7 @@ order_system/
 │  │  ├─ admin_realtime.py           # 留言和通知变化的 SSE 长连接
 │  │  ├─ peer_transfers.py            # WebRTC 文件直传信令与状态机
 │  │  ├─ operation_logs.py           # 操作日志筛选、分页读取与授权清空
-│  │  ├─ logistics_copy.py          # 物流复制字段共享配置的读写接口
+│  │  ├─ logistics_copy.py           # 物流复制模板管理及按账号解析接口
 │  │  ├─ users.py                    # 账号维护和管理员重置密码
 │  │  ├─ orders.py                   # 销售订单和物流状态接口
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
@@ -154,7 +154,7 @@ order_system/
 │  │  ├─ auth.py                     # Session、权限装饰器和当前用户序列化
 │  │  ├─ avatar_storage.py            # 员工头像校验、保存、删除和历史 Base64 迁移
 │  │  ├─ access_scope.py             # 角色门店/仓库范围合并与数据过滤
-│  │  ├─ permission_catalog.py       # 触屏、后台路由和销售订单操作权限目录
+│  │  ├─ permission_catalog.py       # 触屏、后台路由、销售订单和复制模板权限目录
 │  │  ├─ operation_logs.py           # 写操作审计规则、日志脱敏与自动记录
 │  │  ├─ notifications.py            # 审核通知收件人匹配与完成处理
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
@@ -167,7 +167,7 @@ order_system/
 │  ├─ api/
 │  │  ├─ request.js                  # Axios 实例、Cookie 会话和统一响应处理
 │  │  ├─ printTemplate.js            # 打印模板接口与字段标准化
-│  │  └─ logisticsCopy.js            # 物流复制字段配置接口
+│  │  └─ logisticsCopy.js            # 物流复制模板管理和解析接口
 │  ├─ stores/
 │  │  ├─ user.js                     # 登录、用户和权限状态
 │  │  ├─ order.js                    # 销售订单状态
@@ -187,7 +187,7 @@ order_system/
 │  │  │  ├─ DirectoryPanel.vue       # 后台通讯录搜索、部门折叠和员工状态
 │  │  │  ├─ MessageInbox.vue         # 留言会话与审核通知双模式面板
 │  │  │  ├─ ChatWindow.vue           # 可拖动的一对一留言和附件窗口
-│  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制字段、变量和预览设置
+│  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制模板、变量、绑定和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  └─ StoreFormModal.vue       # 门店维护弹窗
 │  │  ├─ print/
@@ -197,7 +197,7 @@ order_system/
 │  │  │  └─ OrderPrintPreview.vue    # 业务变量渲染、预览和打印
 │  │  └─ front/                      # 前台订单、发货和原材料弹窗
 │  ├─ views/
-│  │  ├─ Admin.vue                   # 后台布局、菜单、入库弹窗和物流复制设置注册
+│  │  ├─ Admin.vue                   # 后台布局、菜单、入库弹窗和带权限的复制模板入口
 │  │  ├─ MainView.vue                # 前台业务容器
 │  │  ├─ front/                      # 订单、已出库和原材料流水页面
 │  │  └─ admin/
@@ -240,7 +240,7 @@ order_system/
 │  │  ├─ adminAccess.js              # 后台菜单分支和路由权限映射
 │  │  ├─ adminRealtime.js            # 后台组件共享的 EventSource 客户端
 │  │  ├─ peerFileTransfer.js          # WebRTC DataChannel 分块收发
-│  │  ├─ logisticsCopy.js             # 物流复制字段、变量映射和格式化
+│  │  ├─ logisticsCopy.js             # 物流复制模板、变量映射和格式化
 │  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
 │  │  ├─ printClientConfig.js        # 本地打印配置和默认端口
 │  │  ├─ chineseMoney.js             # 金额中文大写
@@ -635,56 +635,84 @@ order-system-print-client-config
 
 首次使用默认采用 C-Lodop，主机为 `localhost`。HTTP 页面默认端口 `8000`，HTTPS 页面默认端口 `8443`，打印机名称需要检测后选择。
 
-## 物流复制字段设置
+## 物流复制模板设置
 
-物流复制字段设置保存在 SQLite，所有后台账号读取同一份配置。
-后台用户可以在顶栏通知区域旁打开设置弹窗，配置物流列表复制文本的字段、名称、模板和顺序。
+物流复制模板保存在 SQLite，所有后台账号读取同一份服务器配置。
+设置入口位于后台顶部通知铃铛左侧；入口显示和模板管理受权限控制，没有入口权限的账号不会看到图标。
+物流列表和订单详情的复制按钮会根据复制入口及当前登录账号解析适用模板，不在业务组件中写死复制文本。
 
 ### 组件职责
 
 | 文件 | 职责 |
 | --- | --- |
-| `src/components/admin/LogisticsCopySettingsDialog.vue` | 配置弹窗、字段编辑、变量插入、拖拽、排序、删除和实时预览 |
-| `src/utils/logisticsCopy.js` | 默认字段、变量目录、订单变量映射和复制文本格式化 |
-| `src/api/logisticsCopy.js` | 配置读取和保存 API |
-| `backend/routes/logistics_copy.py` | 后台鉴权、字段校验和配置读写 |
-| `src/views/Admin.vue` | 注册顶栏入口和弹窗组件 |
-| `src/views/admin/sales/UnifiedOrderList.vue` | 在物流列表调用统一格式化方法并执行复制 |
+| `src/components/admin/LogisticsCopySettingsDialog.vue` | 历史模板、复制内容编辑、变量插入、绑定用户和实时预览 |
+| `src/utils/logisticsCopy.js` | 默认模板、变量目录、订单变量映射、逐件排版和复制文本格式化 |
+| `src/api/logisticsCopy.js` | 模板管理读取、保存和按复制入口解析 API |
+| `backend/routes/logistics_copy.py` | 模板鉴权、数据校验、共享配置读写和当前账号解析 |
+| `src/views/Admin.vue` | 注册带权限控制的顶部入口和弹窗组件 |
+| `src/views/admin/sales/UnifiedOrderList.vue` | 调用当前账号适用的物流信息/订单信息复制模板 |
 
-### 配置保存
+### 配置保存与模板绑定
 
-设置面板通过 `GET /api/settings/logistics-copy` 读取，点击“保存设置”时调用 `PUT /api/settings/logistics-copy`，后端在 `logistics_copy_settings.fields_json` 和 `templates_json` 中保存当前复制字段及模板数据。数据库初始不插入模板；首次无配置时前端临时展示当前默认字段和默认模板，新增、删除、选择模板和字段修改都只停留在弹窗草稿，只有点击“保存设置”才写入服务器。已保存空模板列表时不恢复默认模板。每次物流列表点击复制均从服务器读取最新字段配置。读写需要后台访问权限，读取失败不会复制旧缓存。旧版 `admin_logistics_copy_fields` 本地数据不再使用或自动迁移。
+管理面板使用以下接口：
 
-“保存模板”模块支持选择模板加载字段、新增模板和删除模板。新增和删除不会立即请求接口，保存时与当前字段配置一起提交；当前选中的模板会同步保存最新字段内容。
+| 方法 | 地址 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/settings/logistics-copy` | 读取管理配置、历史模板和可绑定账号 |
+| `PUT` | `/api/settings/logistics-copy` | 保存复制内容、模板、复制入口绑定和绑定用户 |
+| `GET` | `/api/settings/logistics-copy/resolve?target=logistics-info` | 解析物流列表复制按钮适用的模板 |
+| `GET` | `/api/settings/logistics-copy/resolve?target=order-info` | 解析订单详情复制按钮适用的模板 |
 
-每个字段至少包含以下结构：
+数据库初始不插入默认模板。服务端没有模板数据时，前端只展示默认模板草稿；
+新增、删除、绑定入口、绑定用户和内容编辑都停留在当前弹窗，点击“保存设置”后才写入服务器。
+已保存的空模板列表不会自动恢复默认模板。物流复制模板不再使用或写入浏览器 `localStorage`，
+旧版 `admin_logistics_copy_fields` 数据也不会自动导入。
+
+一个模板包含以下主要结构：
 
 ```json
 {
-  "key": "receiver_name",
-  "name": "姓名",
-  "template": "姓名：@receiverName",
-  "enabled": true
+  "id": "standard-logistics",
+  "name": "物流标准模板",
+  "description": "姓名、电话、地址和商品信息",
+  "bindingTarget": "logistics-info",
+  "boundUserIds": [2, 8],
+  "fields": [
+    {
+      "key": "custom_editor_content",
+      "name": "复制内容",
+      "template": "姓名：@receiverName\n商品：@goodsName",
+      "enabled": true,
+      "custom": true
+    }
+  ]
 }
 ```
 
-字段属性说明：
+`bindingTarget` 支持 `logistics-info`（物流信息）和 `order-info`（订单信息复制）。
+同一个账号在同一个复制入口只能绑定一个模板，不同账号可以绑定不同模板。
+绑定用户在设置面板中以头像展示，点击头像行末的 `＋` 后搜索并添加；
+点击已绑定头像即可取消绑定，鼠标悬浮头像可以查看员工名称。
+
+### 模板编辑规则
+
+复制内容使用一个大编辑区直接编辑，不再维护每行独立输入框、上下移动按钮或自定义行列表。
+变量可以从变量面板点击插入，也可以拖拽到编辑区；编辑区中的空格和换行会保留，右侧预览实时刷新。
+模板名称会显示在“编辑内容”标题旁，历史模板卡片的整块区域都可以点击切换。
+
+字段数组通常只保存一个 `custom_editor_content` 编辑字段：
 
 | 属性 | 说明 |
 | --- | --- |
-| `key` | 字段唯一标识，内置字段不能重复；自定义行使用 `custom_` 前缀 |
-| `name` | 设置面板中显示的字段名称 |
-| `template` | 实际复制的文本模板，可以包含普通文字和变量 |
-| `enabled` | 是否输出到复制结果 |
-| `custom` | 是否为用户新增的自定义行 |
-
-保存设置时会进行字段规范化：清理无效字段和重复字段、补齐必要的字段结构，
-并按照当前编辑顺序保存。删除的内置字段不会在下次打开时自动恢复；点击“恢复默认”
-才会重新加载全部内置字段。
+| `key` | 编辑字段唯一标识，当前大编辑区使用 `custom_editor_content` |
+| `name` | 编辑字段名称，通常为“复制内容” |
+| `template` | 完整复制内容，可包含普通文字、变量、换行和排版规则 |
+| `enabled` | 是否输出该编辑内容 |
+| `custom` | 是否为自定义编辑字段 |
 
 ### 变量模板
 
-变量可以通过点击插入，也可以从变量字段区域拖动到左侧模板编辑框。当前变量目录如下：
+变量可以通过点击插入，也可以从变量字段区域拖动到复制内容编辑框。当前变量目录如下：
 
 | 分类 | 变量 |
 | --- | --- |
@@ -705,7 +733,14 @@ order-system-print-client-config
 
 格式化器同时兼容旧配置中的 `{变量名}` 语法。变量没有值时会替换为空字符串；
 如果一个模板只包含变量且所有变量都为空，该行会被跳过。纯文字模板不会因为没有变量
-而被过滤。最终复制结果按字段顺序换行，并在有内容时追加结尾换行。
+而被过滤。最终复制结果保留编辑区中的换行，并在有内容时追加结尾换行。
+
+商品信息支持两种排版规则：
+
+- `|`：在 `@allGoods`、`@allSpecs`、`@allQuantity` 等明细变量之间使用，
+  例如 `@allGoods | @allSpecs | @allQuantity`，会按照商品明细逐行输出。
+- `～`：将变量值与后面的单位或普通文字拼接，例如 `@allQuantity～kg` 输出 `50kg`；
+  该符号不会破坏变量解析。
 
 ### 默认数据映射
 
@@ -714,6 +749,8 @@ order-system-print-client-config
 - 标题使用门店名称生成 `【门店订单】`。
 - 收货人、电话和地址优先读取物流信息，缺失时回退到订单联系人信息。
 - 商品名称优先读取第一条商品明细，并组合规格。
+- `allGoods`、`allSpecs`、`allQuantity` 用于输出全部商品、全部规格和全部数量，
+  配合 `|` 规则按商品明细逐行排列。
 - 重量、件数、包装、物流服务、发货方式、物流单号和发货日期从订单及物流字段转换。
 - 运费从运费明细合计生成，金额变量来自订单打印变量。
 - 同时保留历史下划线变量别名，兼容早期保存的模板。
@@ -721,6 +758,22 @@ order-system-print-client-config
 复制按钮只负责调用统一格式化结果并写入系统剪贴板，不应在业务列表组件中重新拼接
 姓名、电话、地址等固定文本。新增变量时，应同时更新 `LOGISTICS_COPY_VARIABLE_GROUPS`
 和 `getLogisticsCopyValues()`。
+
+### 复制模板权限
+
+复制模板管理权限位于角色组管理的“复制模板管理”分类：
+
+| 权限 | 作用 |
+| --- | --- |
+| `admin.logistics_copy.entry` | 显示并打开顶部复制模板设置入口 |
+| `admin.logistics_copy.read` | 查看模板、复制内容、预览和可绑定账号 |
+| `admin.logistics_copy.create` | 新增模板或首次保存模板配置 |
+| `admin.logistics_copy.edit` | 修改复制内容、绑定入口或绑定用户 |
+| `admin.logistics_copy.delete` | 删除已保存模板 |
+
+管理接口需要 `entry` 和 `read`；保存时服务端会根据实际变化再次校验
+`create`、`edit`、`delete`。普通用户使用物流列表或订单详情复制时，不需要模板管理权限，
+但必须拥有后台访问权限和对应的销售路由分支权限；复制接口只返回当前账号适用的字段配置。
 
 ## 数据存储
 
