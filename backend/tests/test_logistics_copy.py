@@ -21,6 +21,8 @@ class LogisticsCopySettingsTest(unittest.TestCase):
         self.db_path.start()
         self.schema_ready = patch.object(db, "_logistics_copy_schema_ready", False)
         self.schema_ready.start()
+        self.auth_schema_ready = patch.object(db, "_auth_schema_ready", False)
+        self.auth_schema_ready.start()
         self.user = patch("utils.auth.get_current_user", return_value={
             "id": 1, "canAccessAdmin": True
         })
@@ -31,6 +33,7 @@ class LogisticsCopySettingsTest(unittest.TestCase):
 
     def tearDown(self):
         self.user.stop()
+        self.auth_schema_ready.stop()
         self.schema_ready.stop()
         self.db_path.stop()
         self.temp_dir.cleanup()
@@ -101,6 +104,51 @@ class LogisticsCopySettingsTest(unittest.TestCase):
         self.assertEqual(response.status_code, 400)
         saved = self.client.get('/api/settings/logistics-copy').json['data']
         self.assertEqual(saved['templates'][0]['fields'], fields)
+
+    def test_template_binding_and_duplicate_binding_validation(self):
+        fields = [{"key": "title", "name": "标题", "template": "@storeName", "enabled": True}]
+        templates = [
+            {
+                "id": "logistics_template",
+                "name": "物流模板",
+                "description": "",
+                "bindingTarget": "logistics-info",
+                "boundUserIds": [1, 2],
+                "fields": fields,
+            },
+            {
+                "id": "order_template",
+                "name": "订单模板",
+                "description": "",
+                "bindingTarget": "order-info",
+                "boundUserIds": [1],
+                "fields": fields,
+            },
+        ]
+        response = self.client.put(
+            '/api/settings/logistics-copy',
+            json={"fields": fields, "templates": templates},
+        )
+        self.assertEqual(response.status_code, 200)
+        saved = self.client.get('/api/settings/logistics-copy').json['data']['templates']
+        self.assertEqual(saved[0]['bindingTarget'], 'logistics-info')
+        self.assertEqual(saved[0]['boundUserIds'], [1, 2])
+
+        duplicate = self.client.put(
+            '/api/settings/logistics-copy',
+            json={
+                "fields": fields,
+                "templates": templates + [{
+                    "id": "duplicate_template",
+                    "name": "重复模板",
+                    "description": "",
+                    "bindingTarget": "logistics-info",
+                    "boundUserIds": [2],
+                    "fields": fields,
+                }],
+            },
+        )
+        self.assertEqual(duplicate.status_code, 400)
 
     def test_requires_admin_session(self):
         with patch("utils.auth.get_current_user", return_value=None):

@@ -28,6 +28,7 @@
 
 ## 版本历史
 
+- **v5.3** (2026-09-26) - 物流复制模板新增复制入口和账号头像绑定，订单详情新增订单信息复制入口
 - **v5.2** (2026-09-26) - 物流复制字段配置新增服务器模板列表、模板新增/删除草稿和统一保存接口
 - **v5.1** (2026-09-26) - 物流复制字段配置迁移到 SQLite，新增后台鉴权的配置读取和保存接口
 - **v5.0** (2026-09-23) - 新增操作日志 API、筛选与清空权限；记录账号安全、角色权限及指定业务写操作，销售单日志使用单据编号
@@ -5145,7 +5146,9 @@ offered -> accepted -> transferring -> completed
 
 ## 19. 物流复制字段配置
 
-后台物流列表的“复制”内容使用一份服务器共享配置，不再读写浏览器 `localStorage`。读取和保存接口均要求有效登录且 `canAccessAdmin=true`，否则分别返回 `401` 或 `403`。此配置对所有后台账号生效。“保存模板”标签首次没有服务端数据时展示前端默认模板；新增、删除和字段调整只修改当前弹窗草稿，点击“保存设置”后才写入数据库。
+后台物流列表的“复制”内容使用一份服务器共享配置，不再读写浏览器 `localStorage`。读取和保存接口均要求有效登录且 `canAccessAdmin=true`，否则分别返回 `401` 或 `403`。此配置对所有后台账号生效。“保存模板”标签首次没有服务端数据时展示前端默认模板；新增、删除、绑定入口、绑定人和字段调整只修改当前弹窗草稿，点击“保存设置”后才写入数据库。
+
+模板可以绑定复制入口和多个账号。当前复制入口包括 `logistics-info`（物流信息）和 `order-info`（订单信息复制）。同一个复制入口可以被不同账号分别绑定不同模板；同一个账号在同一个复制入口上只能绑定一个模板。复制时前端按当前登录账号 ID 查找匹配模板；未找到绑定时回退到共享 `fields` 配置。绑定人列表由接口返回账号头像和名称，前端只展示头像，鼠标悬浮显示姓名。
 
 ### 19.1 读取配置
 
@@ -5166,10 +5169,15 @@ offered -> accepted -> transferring -> completed
         "id": "standard-logistics",
         "name": "物流标准模板",
         "description": "姓名、电话、地址、商品、重量、件数和服务",
+        "bindingTarget": "logistics-info",
+        "boundUserIds": [1, 2],
         "fields": [
           { "key": "receiver_name", "name": "姓名", "template": "姓名：@receiverName", "enabled": true }
         ]
       }
+    ],
+    "bindingUsers": [
+      { "id": 1, "name": "张三", "username": "zhangsan", "avatarUrl": "/uploads/employee-avatars/1.webp" }
     ],
     "updatedAt": "2026-09-26 10:00:00"
   }
@@ -5196,6 +5204,8 @@ offered -> accepted -> transferring -> completed
       "id": "standard-logistics",
       "name": "物流标准模板",
       "description": "姓名、电话、地址、商品、重量、件数和服务",
+      "bindingTarget": "logistics-info",
+      "boundUserIds": [1, 2],
       "fields": [
         { "key": "receiver_name", "name": "姓名", "template": "姓名：@receiverName", "enabled": true }
       ]
@@ -5204,7 +5214,7 @@ offered -> accepted -> transferring -> completed
 }
 ```
 
-成功响应为 `{ "success": true, "message": "复制字段设置已保存", "data": { "fields": [...], "templates": [...], "updatedAt": "2026-09-26 10:00:00" } }`。服务端使用事务覆盖整份共享配置：`fields` 必须为数组、最多 100 项；`key` 只能是已知内置字段或不超过 80 字符的 `custom_` 字母数字下划线标识，不能重复；`name` 必须为不超过 80 字符的字符串，`template` 必须为不超过 4000 字符的字符串，`enabled` 必须为布尔值。`templates` 必须为数组、最多 100 项；模板 `id` 必须为不超过 80 字符的 ASCII 字母数字、下划线或短横线，模板名称不能为空且不超过 80 字符，说明不超过 240 字符，每个模板的 `fields` 使用同一套字段校验。请求不合法返回 `400`，失败不会修改旧配置。兼容只提交 `fields` 的旧客户端，此时服务端保留已有模板列表。
+成功响应为 `{ "success": true, "message": "复制字段设置已保存", "data": { "fields": [...], "templates": [...], "updatedAt": "2026-09-26 10:00:00" } }`。服务端使用事务覆盖整份共享配置：`fields` 必须为数组、最多 100 项；`key` 只能是已知内置字段或不超过 80 字符的 `custom_` 字母数字下划线标识，不能重复；`name` 必须为不超过 80 字符的字符串，`template` 必须为不超过 4000 字符的字符串，`enabled` 必须为布尔值。`templates` 必须为数组、最多 100 项；模板 `id` 必须为不超过 80 字符的 ASCII 字母数字、下划线或短横线，模板名称不能为空且不超过 80 字符，说明不超过 240 字符，`bindingTarget` 只能为空、`logistics-info` 或 `order-info`，`boundUserIds` 必须为正整数账号 ID 数组。每个模板的 `fields` 使用同一套字段校验；同一账号不能在同一复制入口绑定多个模板。请求不合法返回 `400`，失败不会修改旧配置。兼容只提交 `fields` 的旧客户端，此时服务端保留已有模板列表。
 
 商品信息变量中，`@goodsName` 为首件商品及规格；`@allGoods`、`@allSpecs`、`@allQuantity` 分别输出全部商品名、全部规格和全部明细数量，以 `、` 分隔。已保存的字段顺序、启停和模板会保留；未保存时沿用内置默认配置。
 
@@ -5219,7 +5229,7 @@ CREATE TABLE logistics_copy_settings (
 );
 ```
 
-数据库连接初始化时自动创建表；旧表启动时自动补充 `templates_json` 字段；`id=1` 保证只有一份共享配置。`fields_json` 保存当前复制字段，`templates_json` 保存模板名称、说明和模板字段数组，保存时通过 upsert 更新，无需手动迁移表结构。数据库初始不插入默认模板，未初始化时 `templates_json` 为 `NULL`，默认模板只由前端在 `templates: null` 时临时展示；点击“保存设置”后才写入 `[]` 或实际模板数组。旧浏览器 `admin_logistics_copy_fields` 不会自动导入服务器，也不再被前端读取或写入。
+数据库连接初始化时自动创建表；旧表启动时自动补充 `templates_json` 字段；`id=1` 保证只有一份共享配置。`fields_json` 保存当前复制字段，`templates_json` 保存模板名称、说明、复制入口、绑定账号和模板字段数组，保存时通过 upsert 更新，无需手动迁移表结构。数据库初始不插入默认模板，未初始化时 `templates_json` 为 `NULL`，默认模板只由前端在 `templates: null` 时临时展示；点击“保存设置”后才写入 `[]` 或实际模板数组。读取接口同时返回 `bindingUsers`，仅包含活动账号的 ID、展示名、用户名和头像地址。旧浏览器 `admin_logistics_copy_fields` 不会自动导入服务器，也不再被前端读取或写入。
 
 ---
 

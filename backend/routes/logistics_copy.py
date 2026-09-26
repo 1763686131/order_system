@@ -17,6 +17,10 @@ BUILTIN_KEYS = {
     "goods_name", "goods_weight", "goods_quantity", "goods_packaging",
     "logistics_service", "remark",
 }
+COPY_BINDING_TARGETS = {
+    "logistics-info",
+    "order-info",
+}
 
 
 def _parse_json_array(value, fallback=None):
@@ -76,7 +80,19 @@ def _normalize_templates(templates):
         template_id = template.get("id")
         name = template.get("name")
         description = template.get("description", "")
+        binding_target = template.get("bindingTarget", "")
+        bound_user_ids = template.get("boundUserIds", [])
         fields, error = _normalize_fields(template.get("fields"))
+        normalized_user_ids = []
+        if isinstance(bound_user_ids, list) and len(bound_user_ids) <= 100:
+            for user_id in bound_user_ids:
+                if isinstance(user_id, bool) or not isinstance(user_id, int) or user_id <= 0:
+                    error = "模板绑定人信息不正确"
+                    break
+                if user_id not in normalized_user_ids:
+                    normalized_user_ids.append(user_id)
+        else:
+            error = "模板绑定人信息不正确"
         if (
             not isinstance(template_id, str)
             or not template_id
@@ -91,6 +107,7 @@ def _normalize_templates(templates):
             or len(name) > 80
             or not isinstance(description, str)
             or len(description) > 240
+            or binding_target not in ("", *COPY_BINDING_TARGETS)
             or error
         ):
             return None, error or "模板内容不正确或存在重复编号"
@@ -99,8 +116,20 @@ def _normalize_templates(templates):
             "id": template_id,
             "name": name.strip(),
             "description": description.strip(),
+            "bindingTarget": binding_target,
+            "boundUserIds": normalized_user_ids,
             "fields": fields,
         })
+
+    binding_pairs = set()
+    for template in normalized:
+        for user_id in template["boundUserIds"]:
+            pair = (template["bindingTarget"], user_id)
+            if not template["bindingTarget"] or pair in binding_pairs:
+                if pair in binding_pairs:
+                    return None, "同一个账号在同一个复制按钮上只能绑定一个模板"
+                continue
+            binding_pairs.add(pair)
     return normalized, None
 
 
@@ -115,6 +144,16 @@ def get_logistics_copy_settings():
             WHERE id = 1
             """
         ).fetchone()
+        binding_users = conn.execute(
+            """
+            SELECT users.id, users.display_name, users.username, users.avatar_url,
+                   employees.display_name AS employee_name
+            FROM users
+            LEFT JOIN employees ON employees.user_id = users.id
+            WHERE users.status = 'active'
+            ORDER BY COALESCE(NULLIF(employees.display_name, ''), users.display_name), users.id
+            """
+        ).fetchall()
     return jsonify({
         "success": True,
         "data": {
@@ -125,6 +164,15 @@ def get_logistics_copy_settings():
                 else None
             ),
             "updatedAt": row["updated_at"] if row else None,
+            "bindingUsers": [
+                {
+                    "id": user["id"],
+                    "name": user["employee_name"] or user["display_name"] or user["username"],
+                    "username": user["username"],
+                    "avatarUrl": user["avatar_url"] or "",
+                }
+                for user in binding_users
+            ],
         },
     })
 

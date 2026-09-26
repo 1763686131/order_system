@@ -462,7 +462,7 @@
                   <button
                     v-if="mode === 'logistics'"
                     type="button"
-                    title="复制物流信息"
+                    title="物流信息"
                     @click="handleCopyOrderInfo(order)"
                   >
                     <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -636,7 +636,22 @@
                     <i aria-hidden="true"></i>
                     {{ getStatusText(selectedOrder) }}
                   </span>
-                  <span>{{ getCategoryText(selectedOrder) }}</span>
+                  <div class="overview-head-actions">
+                    <span>{{ getCategoryText(selectedOrder) }}</span>
+                    <button
+                      v-if="mode === 'finance'"
+                      class="detail-copy-button"
+                      type="button"
+                      title="复制订单信息"
+                      @click="handleCopyOrderInfo(selectedOrder, 'order-info')"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+                      </svg>
+                      订单信息复制
+                    </button>
+                  </div>
                 </div>
                 <dl class="meta-grid">
                   <div>
@@ -1138,7 +1153,12 @@ import {
   filterRecordsByScope,
   hasMultipleScopeOptions
 } from '@/utils/accessControl'
-import { formatLogisticsOrderForCopy, getDefaultLogisticsCopyFields, normalizeLogisticsCopyFields } from '@/utils/logisticsCopy'
+import {
+  formatLogisticsOrderForCopy,
+  getDefaultLogisticsCopyFields,
+  normalizeLogisticsCopyFields,
+  resolveLogisticsCopyFields
+} from '@/utils/logisticsCopy'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
@@ -2323,16 +2343,22 @@ const hasLogistics = (order) => {
 }
 
 // 复制物流极简信息
-const handleCopyOrderInfo = async (order) => {
+const handleCopyOrderInfo = async (order, bindingTarget = 'logistics-info') => {
   try {
     const settings = await getLogisticsCopySettings()
     if (!settings?.success) throw new Error(settings?.message || '读取复制字段设置失败')
     if (settings.data?.fields !== null && !Array.isArray(settings.data?.fields)) {
       throw new Error('复制字段设置数据格式不正确')
     }
-    const fields = settings.data?.fields === null
+    const defaultFields = settings.data?.fields === null
       ? getDefaultLogisticsCopyFields()
       : normalizeLogisticsCopyFields(settings.data?.fields)
+    const fields = resolveLogisticsCopyFields(
+      settings.data?.templates,
+      bindingTarget,
+      userStore.id,
+      defaultFields
+    )
     const textToCopy = formatLogisticsOrderForCopy(order, {
       storeName: getStoreName(order),
       printVariables: getOrderPrintVariables(order),
@@ -4212,6 +4238,51 @@ svg {
   color: #5e6a7e;
   font-size: 12px;
   font-weight: 600;
+}
+
+.overview-head-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.overview-head-actions > span {
+  color: #5e6a7e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.detail-copy-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 10px;
+  color: #08745a;
+  background: #effaf6;
+  border: 1px solid #a9e5d2;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.detail-copy-button:hover {
+  background: #e0f6ed;
+  border-color: #79d6ba;
+}
+
+.detail-copy-button svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 .meta-grid {

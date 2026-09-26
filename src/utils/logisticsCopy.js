@@ -204,6 +204,26 @@ export const normalizeLogisticsCopyFields = fields => {
   return normalized
 }
 
+export const resolveLogisticsCopyFields = (
+  templates,
+  bindingTarget,
+  userId,
+  fallbackFields = getDefaultLogisticsCopyFields()
+) => {
+  const normalizedUserId = Number(userId)
+  const matchedTemplate = Array.isArray(templates)
+    ? templates.find(template => (
+      template?.bindingTarget === bindingTarget &&
+      Array.isArray(template.boundUserIds) &&
+      template.boundUserIds.some(id => Number(id) === normalizedUserId)
+    ))
+    : null
+
+  return matchedTemplate
+    ? normalizeLogisticsCopyFields(matchedTemplate.fields)
+    : normalizeLogisticsCopyFields(fallbackFields)
+}
+
 const getFirstGoods = order => (
   Array.isArray(order?.order_goods) && order.order_goods.length > 0
     ? order.order_goods[0]

@@ -106,8 +106,72 @@
                       <strong>{{ template.name }}</strong>
                       <span>{{ template.status }}</span>
                     </div>
-                    <p>{{ template.description || '自定义物流复制模板' }}</p>
                     <small>{{ template.updatedAt }}</small>
+                    <div class="template-binding-field" @click.stop>
+                      <span>绑定复制按钮</span>
+                      <select :value="template.bindingTarget" :disabled="savingSettings" @change="updateTemplateBindingTarget(template, $event.target.value)">
+                        <option value="">暂不绑定</option>
+                        <option value="logistics-info">物流信息</option>
+                        <option value="order-info">订单信息复制</option>
+                      </select>
+                    </div>
+                    <div class="template-binding-users" @click.stop>
+                      <span class="template-binding-label">绑定人</span>
+                      <input
+                        v-model="templateBindingSearch[template.id]"
+                        class="template-user-search"
+                        type="search"
+                        placeholder="搜索姓名或账号后添加"
+                        :disabled="savingSettings || !template.bindingTarget"
+                        @keydown.stop
+                      >
+                      <div
+                        v-if="template.bindingTarget && templateBindingSearch[template.id]?.trim()"
+                        class="template-user-search-results"
+                      >
+                        <button
+                          v-for="user in getFilteredBindingUsers(template)"
+                          :key="user.id"
+                          type="button"
+                          class="template-user-search-result"
+                          :title="`添加${user.name}`"
+                          :disabled="savingSettings"
+                          @click="addTemplateBindingUser(template, user.id)"
+                        >
+                          <span class="template-user-avatar">
+                            <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="">
+                            <span v-else>{{ user.name.slice(0, 1) || '人' }}</span>
+                          </span>
+                          <span class="template-user-search-name">
+                            {{ user.name }}
+                            <small v-if="user.username">{{ user.username }}</small>
+                          </span>
+                          <span class="template-user-search-add" aria-hidden="true">+</span>
+                        </button>
+                        <span v-if="!getFilteredBindingUsers(template).length" class="template-users-empty">
+                          没有找到匹配账号
+                        </span>
+                      </div>
+                      <div class="template-selected-users">
+                        <span v-if="!template.boundUserIds.length" class="template-users-empty">
+                          暂未添加绑定人
+                        </span>
+                        <button
+                          v-for="user in getSelectedBindingUsers(template)"
+                          :key="user.id"
+                          type="button"
+                          class="template-user-avatar"
+                          :class="{ active: true }"
+                          :title="user.name"
+                          :aria-label="`取消绑定${user.name}`"
+                          :disabled="savingSettings"
+                          @click="toggleTemplateBindingUser(template, user.id)"
+                        >
+                          <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="">
+                          <span v-else>{{ user.name.slice(0, 1) || '人' }}</span>
+                        </button>
+                      </div>
+                    </div>
                   </article>
                 </div>
                 <div v-if="creatingTemplate" class="template-create-form">
@@ -279,7 +343,7 @@
         v-if="notice.visible"
         :class="['page-notice', `notice-${notice.type}`]"
         :role="notice.type === 'error' ? 'alert' : 'status'"
-        aria-live="polite"
+        :aria-live="notice.type === 'error' ? 'assertive' : 'polite'"
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle cx="12" cy="12" r="9"></circle>
@@ -293,7 +357,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { getLogisticsCopySettings, putLogisticsCopySettings } from '@/api/logisticsCopy'
 import {
   formatLogisticsOrderForCopy,
@@ -326,6 +390,8 @@ let loadRequestId = 0
 const variableGroups = LOGISTICS_COPY_VARIABLE_GROUPS
 const activeVariablePanelTab = ref('variables')
 const savedTemplates = ref([])
+const bindingUsers = ref([])
+const templateBindingSearch = reactive({})
 const selectedTemplateId = ref('')
 const creatingTemplate = ref(false)
 const newTemplateName = ref('')
@@ -339,6 +405,8 @@ const getDefaultSavedTemplates = () => [
     description: '姓名、电话、地址、商品、重量、件数和服务',
     status: '示例模板',
     updatedAt: '最后更新：前端默认',
+    bindingTarget: '',
+    boundUserIds: [],
     fields: getDefaultLogisticsCopyFields()
   },
   {
@@ -347,6 +415,8 @@ const getDefaultSavedTemplates = () => [
     description: '突出收货信息、配送服务和订单备注',
     status: '示例模板',
     updatedAt: '最后更新：前端默认',
+    bindingTarget: '',
+    boundUserIds: [],
     fields: getDefaultLogisticsCopyFields()
   },
   {
@@ -355,6 +425,8 @@ const getDefaultSavedTemplates = () => [
     description: '突出商品信息、包装、件数和发货方式',
     status: '示例模板',
     updatedAt: '最后更新：前端默认',
+    bindingTarget: '',
+    boundUserIds: [],
     fields: getDefaultLogisticsCopyFields()
   }
 ]
@@ -369,6 +441,11 @@ const normalizeSavedTemplates = templates => (
         description: String(template.description || '').trim(),
         status: template.status || '已保存',
         updatedAt: template.updatedAt || '最后更新：服务器',
+        bindingTarget: ['logistics-info', 'order-info'].includes(template.bindingTarget)
+          ? template.bindingTarget : '',
+        boundUserIds: Array.isArray(template.boundUserIds)
+          ? [...new Set(template.boundUserIds.map(Number).filter(id => Number.isInteger(id) && id > 0))]
+          : [],
         fields: normalizeLogisticsCopyFields(template.fields)
       }))
     : []
@@ -467,6 +544,11 @@ const loadDraft = async () => {
     savedTemplates.value = response.data?.templates === null
       ? getDefaultSavedTemplates()
       : normalizeSavedTemplates(response.data?.templates)
+    bindingUsers.value = (response.data?.bindingUsers || []).map(user => ({
+      id: Number(user.id),
+      name: user.name || user.username || '用户',
+      avatarUrl: user.avatarUrl || ''
+    }))
     selectedTemplateId.value = ''
     creatingTemplate.value = false
     newTemplateName.value = ''
@@ -516,6 +598,52 @@ const selectTemplate = template => {
   activeTemplateElement.value = null
 }
 
+const updateTemplateBindingTarget = (template, target) => {
+  if (template.bindingTarget === target) return
+  template.bindingTarget = target
+  template.boundUserIds = []
+  templateBindingSearch[template.id] = ''
+}
+
+const getFilteredBindingUsers = template => {
+  const keyword = String(templateBindingSearch[template.id] || '').trim().toLowerCase()
+  if (!keyword || !template.bindingTarget) return []
+
+  return bindingUsers.value
+    .filter(user => !template.boundUserIds.includes(user.id))
+    .filter(user => [
+      user.name,
+      user.username,
+      user.id
+    ].some(value => String(value || '').toLowerCase().includes(keyword)))
+    .slice(0, 8)
+}
+
+const getSelectedBindingUsers = template => (
+  template.boundUserIds
+    .map(userId => bindingUsers.value.find(user => user.id === userId))
+    .filter(Boolean)
+)
+
+const addTemplateBindingUser = (template, userId) => {
+  toggleTemplateBindingUser(template, userId)
+  templateBindingSearch[template.id] = ''
+}
+
+const toggleTemplateBindingUser = (template, userId) => {
+  if (!template.bindingTarget) return
+  if (template.boundUserIds.includes(userId)) {
+    template.boundUserIds = template.boundUserIds.filter(id => id !== userId)
+    return
+  }
+  savedTemplates.value.forEach(item => {
+    if (item.bindingTarget === template.bindingTarget) {
+      item.boundUserIds = item.boundUserIds.filter(id => id !== userId)
+    }
+  })
+  template.boundUserIds.push(userId)
+}
+
 const startAddTemplate = async () => {
   if (loadingSettings.value || savingSettings.value) return
   creatingTemplate.value = true
@@ -544,6 +672,8 @@ const confirmAddTemplate = () => {
     description: '自定义物流复制模板',
     status: '待保存',
     updatedAt: '保存设置后写入服务器',
+    bindingTarget: '',
+    boundUserIds: [],
     fields: normalizeLogisticsCopyFields(draftFields.value)
   }
   savedTemplates.value.push(template)
@@ -678,6 +808,8 @@ const handleSave = async () => {
       id: template.id,
       name: template.name,
       description: template.description,
+      bindingTarget: template.bindingTarget,
+      boundUserIds: template.boundUserIds,
       fields: normalizeLogisticsCopyFields(
         template.id === selectedTemplateId.value
           ? normalizedFields
@@ -1157,6 +1289,177 @@ const handleSave = async () => {
 .saved-template-item small {
   color: #94a3b8;
   font-size: 11px;
+}
+
+.template-binding-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  color: #596579;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.template-binding-field select {
+  width: 150px;
+  min-width: 0;
+  height: 32px;
+  padding: 0 8px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.template-binding-users {
+  margin-top: 10px;
+  color: #596579;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.template-binding-label {
+  display: block;
+  margin-bottom: 6px;
+}
+
+.template-user-search {
+  width: 100%;
+  height: 32px;
+  padding: 0 9px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  outline: none;
+  font-size: 12px;
+}
+
+.template-user-search:focus {
+  border-color: #0f9f78;
+  box-shadow: 0 0 0 2px rgba(15, 159, 120, 0.12);
+}
+
+.template-user-search:disabled {
+  background: #f8fafc;
+  cursor: not-allowed;
+}
+
+.template-user-search-results {
+  display: grid;
+  max-height: 168px;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 5px;
+  overflow-y: auto;
+  background: #fbfdfe;
+  border: 1px solid #dfe8ef;
+  border-radius: 4px;
+}
+
+.template-user-search-result {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 3px 5px;
+  color: #334155;
+  background: #fff;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.template-user-search-result:hover:not(:disabled) {
+  background: #effaf6;
+  border-color: #b8ead8;
+}
+
+.template-user-search-result:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.template-user-search-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.template-user-search-name small {
+  margin-left: 6px;
+  color: #8a96a6;
+  font-size: 10px;
+  font-weight: 400;
+}
+
+.template-user-search-add {
+  margin-left: auto;
+  color: #0f9f78;
+  font-size: 18px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.template-selected-users {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  min-height: 30px;
+  align-items: center;
+}
+
+.template-user-avatar {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  color: #08745a;
+  background: #e9f8f3;
+  border: 2px solid #dfe8ef;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.template-user-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.template-user-avatar.active {
+  border-color: #0f9f78;
+  box-shadow: 0 0 0 2px #b8ead8;
+}
+
+.template-user-avatar:focus-visible,
+.template-binding-field select:focus-visible {
+  outline: 2px solid #0f9f78;
+  outline-offset: 2px;
+}
+
+.template-user-avatar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.template-users-empty {
+  color: #8a96a6;
+  font-weight: 400;
 }
 
 .template-create-form {
