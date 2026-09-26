@@ -32,7 +32,8 @@
             </button>
           </header>
 
-          <div class="settings-body">
+          <div v-if="settingsError" class="settings-error" role="alert">{{ settingsError }}</div>
+          <div class="settings-body" :class="{ 'settings-body-disabled': loadingSettings || loadFailed || savingSettings }" :inert="loadingSettings || loadFailed || savingSettings">
             <aside class="variable-panel" aria-label="变量工具">
               <div class="variable-panel-tabs" role="tablist" aria-label="变量工具">
                 <button
@@ -119,7 +120,7 @@
                   :class="{ disabled: !field.enabled }"
                 >
                   <label class="field-toggle" :title="field.enabled ? '隐藏字段' : '显示字段'">
-                    <input v-model="field.enabled" type="checkbox">
+                    <input v-model="field.enabled" type="checkbox" :disabled="loadingSettings || savingSettings">
                     <span class="toggle-box" aria-hidden="true"></span>
                   </label>
 
@@ -208,15 +209,15 @@
           </div>
 
           <footer class="settings-footer">
-            <button type="button" class="reset-button" @click="resetFields">
+            <button type="button" class="reset-button" :disabled="loadingSettings || loadFailed || savingSettings" @click="resetFields">
               恢复默认
             </button>
             <div class="footer-actions">
               <button type="button" class="cancel-button" @click="handleClose">
                 取消
               </button>
-              <button type="button" class="save-button" @click="handleSave">
-                保存设置
+              <button type="button" class="save-button" :disabled="loadingSettings || loadFailed || savingSettings" @click="handleSave">
+                {{ savingSettings ? '保存中...' : '保存设置' }}
               </button>
             </div>
           </footer>
@@ -228,13 +229,13 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
+import { getLogisticsCopySettings, putLogisticsCopySettings } from '@/api/logisticsCopy'
 import {
   formatLogisticsOrderForCopy,
   getDefaultLogisticsCopyFields,
   getLogisticsCopyPreviewOrder,
   LOGISTICS_COPY_VARIABLE_GROUPS,
-  loadLogisticsCopyFields,
-  saveLogisticsCopyFields
+  normalizeLogisticsCopyFields
 } from '@/utils/logisticsCopy'
 
 const props = defineProps({
@@ -245,7 +246,12 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'saved'])
-const draftFields = ref(loadLogisticsCopyFields())
+const draftFields = ref(getDefaultLogisticsCopyFields())
+const loadingSettings = ref(false)
+const loadFailed = ref(false)
+const savingSettings = ref(false)
+const settingsError = ref('')
+let loadRequestId = 0
 const variableGroups = LOGISTICS_COPY_VARIABLE_GROUPS
 const activeVariablePanelTab = ref('variables')
 const savedTemplates = [
@@ -312,9 +318,30 @@ const previewText = computed(() => formatLogisticsOrderForCopy(
   }
 ))
 
-const loadDraft = () => {
-  draftFields.value = loadLogisticsCopyFields()
+const loadDraft = async () => {
+  const requestId = ++loadRequestId
+  loadingSettings.value = true
+  loadFailed.value = false
+  settingsError.value = ''
   activeVariablePanelTab.value = 'variables'
+  try {
+    const response = await getLogisticsCopySettings()
+    if (!response?.success) throw new Error(response?.message || '读取复制字段设置失败')
+    if (response.data?.fields !== null && !Array.isArray(response.data?.fields)) {
+      throw new Error('复制字段设置数据格式不正确')
+    }
+    if (requestId !== loadRequestId || !props.visible) return
+    draftFields.value = response.data?.fields === null
+      ? getDefaultLogisticsCopyFields()
+      : normalizeLogisticsCopyFields(response.data?.fields)
+  } catch (error) {
+    if (requestId === loadRequestId && props.visible) {
+      loadFailed.value = true
+      settingsError.value = error.response?.data?.message || error.message || '读取复制字段设置失败'
+    }
+  } finally {
+    if (requestId === loadRequestId) loadingSettings.value = false
+  }
 }
 
 watch(
@@ -322,6 +349,8 @@ watch(
   visible => {
     if (visible) {
       loadDraft()
+    } else {
+      loadRequestId++
     }
   }
 )
@@ -441,14 +470,25 @@ const removeField = index => {
 }
 
 const handleClose = () => {
+  if (savingSettings.value) return
   emit('close')
 }
 
-const handleSave = () => {
-  const savedFields = saveLogisticsCopyFields(draftFields.value)
-  draftFields.value = savedFields
-  emit('saved', savedFields)
-  emit('close')
+const handleSave = async () => {
+  if (loadingSettings.value || loadFailed.value || savingSettings.value) return
+  settingsError.value = ''
+  savingSettings.value = true
+  try {
+    const response = await putLogisticsCopySettings(normalizeLogisticsCopyFields(draftFields.value))
+    if (!response?.success) throw new Error(response?.message || '保存复制字段设置失败')
+    draftFields.value = normalizeLogisticsCopyFields(response.data.fields)
+    emit('saved', draftFields.value)
+    emit('close')
+  } catch (error) {
+    settingsError.value = error.response?.data?.message || error.message || '保存复制字段设置失败'
+  } finally {
+    savingSettings.value = false
+  }
 }
 </script>
 
@@ -489,6 +529,28 @@ const handleSave = () => {
 
 .settings-header {
   border-bottom: 1px solid #e4ebf1;
+}
+
+.settings-error {
+  padding: 10px 24px;
+  color: #b42318;
+  background: #fff5f5;
+  border-bottom: 1px solid #f3b4b4;
+  font-size: 13px;
+}
+
+.settings-body-disabled {
+  opacity: 0.55;
+}
+
+.reset-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.save-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .settings-eyebrow {

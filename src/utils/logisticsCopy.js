@@ -1,5 +1,3 @@
-export const LOGISTICS_COPY_STORAGE_KEY = 'admin_logistics_copy_fields'
-
 export const DEFAULT_LOGISTICS_COPY_FIELDS = [
   {
     key: 'title',
@@ -107,9 +105,12 @@ export const LOGISTICS_COPY_VARIABLE_GROUPS = [
     id: 'goods',
     label: '商品信息',
     variables: [
-      { key: 'goodsName', label: '商品' },
+      { key: 'goodsName', label: '首件商品' },
       { key: 'spec', label: '首件规格' },
       { key: 'unit', label: '首件单位' },
+      { key: 'allGoods', label: '全部商品' },
+      { key: 'allSpecs', label: '全部规格' },
+      { key: 'allQuantity', label: '全部数量' },
       { key: 'goodsWeight', label: '重量' },
       { key: 'goodsQuantity', label: '件数' },
       { key: 'totalQuantity', label: '合计数量' },
@@ -203,49 +204,61 @@ export const normalizeLogisticsCopyFields = fields => {
   return normalized
 }
 
-export const loadLogisticsCopyFields = () => {
-  if (typeof window === 'undefined') {
-    return getDefaultLogisticsCopyFields()
-  }
-
-  try {
-    const stored = window.localStorage.getItem(LOGISTICS_COPY_STORAGE_KEY)
-    return stored
-      ? normalizeLogisticsCopyFields(JSON.parse(stored))
-      : getDefaultLogisticsCopyFields()
-  } catch (error) {
-    console.warn('读取物流复制字段配置失败:', error)
-    return getDefaultLogisticsCopyFields()
-  }
-}
-
-export const saveLogisticsCopyFields = fields => {
-  const normalized = normalizeLogisticsCopyFields(fields)
-
-  if (typeof window !== 'undefined') {
-    try {
-      window.localStorage.setItem(
-        LOGISTICS_COPY_STORAGE_KEY,
-        JSON.stringify(normalized)
-      )
-    } catch (error) {
-      console.warn('保存物流复制字段配置失败:', error)
-    }
-  }
-
-  return normalized
-}
-
 const getFirstGoods = order => (
   Array.isArray(order?.order_goods) && order.order_goods.length > 0
     ? order.order_goods[0]
     : null
 )
 
+const getGoodsItemName = item => String(
+  item?.goods_name ||
+  item?.goodsName ||
+  item?.product_name ||
+  item?.name ||
+  ''
+).trim()
+
+const getGoodsItemSpec = item => String(
+  item?.spec ||
+  item?.specification ||
+  item?.goods_spec ||
+  ''
+).trim()
+
+const getGoodsItemQuantity = item => {
+  if (item?.quantity === undefined || item?.quantity === null || item.quantity === '') {
+    return ''
+  }
+
+  const quantity = String(item.quantity).trim()
+  return quantity
+}
+
+const getGoodsItems = order => (
+  Array.isArray(order?.order_goods)
+    ? order.order_goods.filter(Boolean)
+    : []
+)
+
+const getAllGoods = order => getGoodsItems(order)
+  .map(getGoodsItemName)
+  .filter(Boolean)
+  .join('、')
+
+const getAllSpecs = order => getGoodsItems(order)
+  .map(getGoodsItemSpec)
+  .filter(Boolean)
+  .join('、')
+
+const getAllQuantity = order => getGoodsItems(order)
+  .map(getGoodsItemQuantity)
+  .filter(Boolean)
+  .join('、')
+
 const getGoodsName = order => {
   const firstGoods = getFirstGoods(order)
   if (firstGoods) {
-    return [firstGoods.goods_name, firstGoods.spec]
+    return [getGoodsItemName(firstGoods), getGoodsItemSpec(firstGoods)]
       .filter(Boolean)
       .join(' ')
       .trim()
@@ -341,6 +354,22 @@ export const getLogisticsCopyValues = (order, options = {}) => {
     printVariables.contactAddress ||
     ''
   const goodsName = getGoodsName(order) || printVariables.goodsName || ''
+  const allGoods = getAllGoods(order) ||
+    printVariables.allGoods ||
+    order?.goods_name ||
+    printVariables.goodsName ||
+    ''
+  const allSpecs = getAllSpecs(order) ||
+    printVariables.allSpecs ||
+    order?.goods_spec ||
+    printVariables.spec ||
+    ''
+  const allQuantity = getAllQuantity(order) ||
+    printVariables.allQuantity ||
+    order?.total_quantity ||
+    order?.goods_quantity ||
+    printVariables.totalQuantity ||
+    ''
   const goodsWeight = getGoodsWeight(order) || printVariables.totalQuantity || ''
   const goodsQuantity = getGoodsQuantity(order) ||
     (printVariables.totalPackages !== undefined
@@ -369,6 +398,12 @@ export const getLogisticsCopyValues = (order, options = {}) => {
     receiverPhone,
     receiverAddress,
     goodsName,
+    allGoods,
+    allGoodsName: allGoods,
+    allSpecs,
+    allGoodsSpec: allSpecs,
+    allQuantity,
+    allGoodsQuantity: allQuantity,
     goodsWeight,
     goodsQuantity,
     goodsPackaging,
@@ -409,7 +444,7 @@ const applyTemplate = (template, values) => String(template || '')
 
 export const formatLogisticsOrderForCopy = (order, options = {}) => {
   const fields = normalizeLogisticsCopyFields(
-    options.fields || loadLogisticsCopyFields()
+    options.fields ?? getDefaultLogisticsCopyFields()
   )
   const values = getLogisticsCopyValues(order, options)
 

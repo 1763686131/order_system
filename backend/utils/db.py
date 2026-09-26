@@ -29,6 +29,8 @@ _return_schema_lock = Lock()
 _return_schema_ready = False
 _system_settings_schema_lock = Lock()
 _system_settings_schema_ready = False
+_logistics_copy_schema_lock = Lock()
+_logistics_copy_schema_ready = False
 _bank_accounts_schema_lock = Lock()
 _bank_accounts_schema_ready = False
 _print_templates_schema_lock = Lock()
@@ -1122,6 +1124,28 @@ def _ensure_system_settings_schema(conn):
         _system_settings_schema_ready = True
 
 
+def _ensure_logistics_copy_schema(conn):
+    """Store the shared logistics copy layout as one JSON document."""
+    global _logistics_copy_schema_ready
+    if _logistics_copy_schema_ready:
+        return
+
+    with _logistics_copy_schema_lock:
+        if _logistics_copy_schema_ready:
+            return
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS logistics_copy_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                fields_json TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.commit()
+        _logistics_copy_schema_ready = True
+
+
 def _ensure_bank_accounts_schema(conn):
     """Create the bank account table used by settlement-account selectors."""
     global _bank_accounts_schema_ready
@@ -2131,6 +2155,7 @@ def get_db():
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)
         _ensure_system_settings_schema(conn)
+        _ensure_logistics_copy_schema(conn)
         _ensure_bank_accounts_schema(conn)
         _ensure_raw_material_products_schema(conn)
         _ensure_stock_inbound_schema(conn)

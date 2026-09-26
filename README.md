@@ -9,7 +9,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `5.0` |
+| 权限/API 文档版本 | `5.1` |
 | 文档更新 | `2026-09-26` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
@@ -135,6 +135,7 @@ order_system/
 │  │  ├─ admin_realtime.py           # 留言和通知变化的 SSE 长连接
 │  │  ├─ peer_transfers.py            # WebRTC 文件直传信令与状态机
 │  │  ├─ operation_logs.py           # 操作日志筛选、分页读取与授权清空
+│  │  ├─ logistics_copy.py          # 物流复制字段共享配置的读写接口
 │  │  ├─ users.py                    # 账号维护和管理员重置密码
 │  │  ├─ orders.py                   # 销售订单和物流状态接口
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
@@ -165,7 +166,8 @@ order_system/
 ├─ src/
 │  ├─ api/
 │  │  ├─ request.js                  # Axios 实例、Cookie 会话和统一响应处理
-│  │  └─ printTemplate.js            # 打印模板接口与字段标准化
+│  │  ├─ printTemplate.js            # 打印模板接口与字段标准化
+│  │  └─ logisticsCopy.js            # 物流复制字段配置接口
 │  ├─ stores/
 │  │  ├─ user.js                     # 登录、用户和权限状态
 │  │  ├─ order.js                    # 销售订单状态
@@ -238,7 +240,7 @@ order_system/
 │  │  ├─ adminAccess.js              # 后台菜单分支和路由权限映射
 │  │  ├─ adminRealtime.js            # 后台组件共享的 EventSource 客户端
 │  │  ├─ peerFileTransfer.js          # WebRTC DataChannel 分块收发
-│  │  ├─ logisticsCopy.js             # 物流复制字段、变量映射和本地配置
+│  │  ├─ logisticsCopy.js             # 物流复制字段、变量映射和格式化
 │  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
 │  │  ├─ printClientConfig.js        # 本地打印配置和默认端口
 │  │  ├─ chineseMoney.js             # 金额中文大写
@@ -635,7 +637,7 @@ order-system-print-client-config
 
 ## 物流复制字段设置
 
-物流复制字段设置是物流列表复制功能的前端配置模块，不新增后端接口，也不写入 SQLite。
+物流复制字段设置保存在 SQLite，所有后台账号读取同一份配置。
 后台用户可以在顶栏通知区域旁打开设置弹窗，配置物流列表复制文本的字段、名称、模板和顺序。
 
 ### 组件职责
@@ -643,17 +645,15 @@ order-system-print-client-config
 | 文件 | 职责 |
 | --- | --- |
 | `src/components/admin/LogisticsCopySettingsDialog.vue` | 配置弹窗、字段编辑、变量插入、拖拽、排序、删除和实时预览 |
-| `src/utils/logisticsCopy.js` | 默认字段、变量目录、本地存储、订单变量映射和复制文本格式化 |
+| `src/utils/logisticsCopy.js` | 默认字段、变量目录、订单变量映射和复制文本格式化 |
+| `src/api/logisticsCopy.js` | 配置读取和保存 API |
+| `backend/routes/logistics_copy.py` | 后台鉴权、字段校验和配置读写 |
 | `src/views/Admin.vue` | 注册顶栏入口和弹窗组件 |
 | `src/views/admin/sales/UnifiedOrderList.vue` | 在物流列表调用统一格式化方法并执行复制 |
 
 ### 配置保存
 
-配置保存在当前浏览器的 `localStorage`：
-
-```text
-admin_logistics_copy_fields
-```
+设置面板通过 `GET /api/settings/logistics-copy` 读取，点击保存时调用 `PUT /api/settings/logistics-copy`，后端在 `logistics_copy_settings.fields_json` 中保存有序字段数组。首次无配置时使用内置默认值；每次物流列表点击复制均从服务器读取最新配置。读写需要后台访问权限，读取失败不会复制旧缓存。旧版 `admin_logistics_copy_fields` 本地数据不再使用或自动迁移。
 
 每个字段至少包含以下结构：
 
@@ -689,7 +689,7 @@ admin_logistics_copy_fields
 | 订单信息 | `storeName`、`orderNumber`、`orderDate`、`customerName`、`warehouseName`、`projectName` |
 | 收货信息 | `receiverName`、`receiverPhone`、`receiverAddress` |
 | 联系人信息 | `contactPerson`、`contactPhone`、`contactAddress` |
-| 商品信息 | `goodsName`、`spec`、`unit`、`goodsWeight`、`goodsQuantity`、`totalQuantity`、`totalPackages`、`goodsPackaging` |
+| 商品信息 | `goodsName`、`spec`、`unit`、`allGoods`、`allSpecs`、`allQuantity`、`goodsWeight`、`goodsQuantity`、`totalQuantity`、`totalPackages`、`goodsPackaging` |
 | 物流信息 | `logisticsService`、`shippingMethod`、`logisticsNo`、`shippedDate`、`freightTotal` |
 | 其他 | `salesPerson`、`creator`、`orderRemark`、`discountAmount`、`otherFees`、`totalAmount`、`totalTaxAmount`、`currentPayment`、`currentDebt`、`settlementAccount`、`shouldReceive`、`amountInWords` |
 

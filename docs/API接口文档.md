@@ -28,6 +28,7 @@
 
 ## 版本历史
 
+- **v5.1** (2026-09-26) - 物流复制字段配置迁移到 SQLite，新增后台鉴权的配置读取和保存接口
 - **v5.0** (2026-09-23) - 新增操作日志 API、筛选与清空权限；记录账号安全、角色权限及指定业务写操作，销售单日志使用单据编号
 - **v4.9** (2026-09-23) - 页面访问权限归入对应业务权限栏目，销售订单访问并入订单操作，新增物流管理权限栏目
 - **v4.8** (2026-09-22) - 后台路由权限细分到侧栏分支，按分支控制菜单显示和直接访问
@@ -77,6 +78,7 @@
 16. [打印模板管理](#16-打印模板管理)
 17. [留言、附件与审核通知](#17-留言附件与审核通知)
 18. [操作日志](#18-操作日志)
+19. [物流复制字段配置](#19-物流复制字段配置)
 
 ---
 
@@ -5140,6 +5142,65 @@ offered -> accepted -> transferring -> completed
 
 ---
 
+## 19. 物流复制字段配置
+
+后台物流列表的“复制”内容使用一份服务器共享配置，不再读写浏览器 `localStorage`。读取和保存接口均要求有效登录且 `canAccessAdmin=true`，否则分别返回 `401` 或 `403`。此配置对所有后台账号生效；“保存模板”标签中展示的示例列表目前不参与保存。
+
+### 19.1 读取配置
+
+- **URL**: `/api/settings/logistics-copy`
+- **Method**: `GET`
+- **权限**: 后台访问权限
+
+```json
+{
+  "success": true,
+  "data": {
+    "fields": [
+      { "key": "receiver_name", "name": "姓名", "template": "姓名：@receiverName", "enabled": true },
+      { "key": "custom_1", "name": "自定义字段", "template": "商品：@allGoods", "enabled": true, "custom": true }
+    ],
+    "updatedAt": "2026-09-26 10:00:00"
+  }
+}
+```
+
+首次配置未保存时返回 `fields: null`、`updatedAt: null`，前端使用内置默认字段；已保存空列表时返回 `fields: []`，复制结果为空，不会恢复默认。打开设置面板会重新读取；物流列表每次点击复制也会读取最新配置。接口读取失败时不使用旧缓存进行复制。
+
+### 19.2 保存配置
+
+- **URL**: `/api/settings/logistics-copy`
+- **Method**: `PUT`
+- **权限**: 后台访问权限
+- **Content-Type**: `application/json`
+
+```json
+{
+  "fields": [
+    { "key": "receiver_name", "name": "姓名", "template": "姓名：@receiverName", "enabled": true },
+    { "key": "custom_1", "name": "自定义字段", "template": "商品：@allGoods", "enabled": true, "custom": true }
+  ]
+}
+```
+
+成功响应为 `{ "success": true, "message": "复制字段设置已保存", "data": { "fields": [...], "updatedAt": "2026-09-26 10:00:00" } }`。服务端使用事务覆盖整份共享配置：`fields` 必须为数组、最多 100 项；`key` 只能是已知内置字段或不超过 80 字符的 `custom_` 字母数字下划线标识，不能重复；`name` 必须为不超过 80 字符的字符串，`template` 必须为不超过 4000 字符的字符串，`enabled` 必须为布尔值。请求不合法返回 `400`，失败不会修改旧配置。
+
+商品信息变量中，`@goodsName` 为首件商品及规格；`@allGoods`、`@allSpecs`、`@allQuantity` 分别输出全部商品名、全部规格和全部明细数量，以 `、` 分隔。已保存的字段顺序、启停和模板会保留；未保存时沿用内置默认配置。
+
+### 19.3 数据库结构
+
+```sql
+CREATE TABLE logistics_copy_settings (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    fields_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+数据库连接初始化时自动创建表；`id=1` 保证只有一份共享配置。`fields_json` 保存有序字段数组的 JSON，保存时通过 upsert 更新，无需手动迁移表结构。旧浏览器 `admin_logistics_copy_fields` 不会自动导入服务器，也不再被前端读取或写入。
+
+---
+
 ## 错误响应格式
 
 多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
@@ -5185,6 +5246,7 @@ offered -> accepted -> transferring -> completed
 - `role_warehouses` - 角色组仓库范围
 - `auth_sessions` - 登录设备、Session 哈希、IP、活动时间和撤销状态
 - `operation_logs` - 操作人快照、模块/动作、目标单据、来源、请求元数据和结果
+- `logistics_copy_settings` - 物流列表复制字段的共享配置 JSON 和更新时间
 - `suppliers` - 供应商基础资料表
 - `stock_inbounds` - 入库单头与状态、汇总信息表
 - `stock_inbound_items` - 入库单明细表

@@ -1128,6 +1128,7 @@
 import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
+import { getLogisticsCopySettings } from '@/api/logisticsCopy'
 import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { useUserStore } from '@/stores/user'
@@ -1137,7 +1138,7 @@ import {
   filterRecordsByScope,
   hasMultipleScopeOptions
 } from '@/utils/accessControl'
-import { formatLogisticsOrderForCopy } from '@/utils/logisticsCopy'
+import { formatLogisticsOrderForCopy, getDefaultLogisticsCopyFields, normalizeLogisticsCopyFields } from '@/utils/logisticsCopy'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
@@ -2324,9 +2325,18 @@ const hasLogistics = (order) => {
 // 复制物流极简信息
 const handleCopyOrderInfo = async (order) => {
   try {
+    const settings = await getLogisticsCopySettings()
+    if (!settings?.success) throw new Error(settings?.message || '读取复制字段设置失败')
+    if (settings.data?.fields !== null && !Array.isArray(settings.data?.fields)) {
+      throw new Error('复制字段设置数据格式不正确')
+    }
+    const fields = settings.data?.fields === null
+      ? getDefaultLogisticsCopyFields()
+      : normalizeLogisticsCopyFields(settings.data?.fields)
     const textToCopy = formatLogisticsOrderForCopy(order, {
       storeName: getStoreName(order),
-      printVariables: getOrderPrintVariables(order)
+      printVariables: getOrderPrintVariables(order),
+      fields
     })
 
     // 优先使用 Clipboard API
@@ -2361,7 +2371,7 @@ const handleCopyOrderInfo = async (order) => {
     }
   } catch (error) {
     console.error('复制失败:', error)
-    showNotice('复制失败，请手动复制', 'error')
+    showNotice(error.response?.data?.message || error.message || '复制失败，请重试', 'error')
   }
 }
 
