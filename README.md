@@ -719,7 +719,7 @@ order-system-print-client-config
 | 订单信息 | `storeName`、`orderNumber`、`orderDate`、`customerName`、`warehouseName`、`projectName` |
 | 收货信息 | `receiverName`、`receiverPhone`、`receiverAddress` |
 | 联系人信息 | `contactPerson`、`contactPhone`、`contactAddress` |
-| 商品信息 | `goodsName`、`spec`、`unit`、`allGoods`、`allSpecs`、`allQuantity`、`goodsWeight`、`goodsQuantity`、`totalQuantity`、`totalPackages`、`goodsPackaging` |
+| 商品信息 | `goodsName`、`spec`、`unit`、`allGoods`、`allSpecs`、`allQuantity`、`allUnits`、`goodsWeight`、`goodsQuantity`、`totalQuantity`、`totalPackages`、`goodsPackaging` |
 | 物流信息 | `logisticsService`、`shippingMethod`、`logisticsNo`、`shippedDate`、`freightTotal` |
 | 其他 | `salesPerson`、`creator`、`orderRemark`、`discountAmount`、`otherFees`、`totalAmount`、`totalTaxAmount`、`currentPayment`、`currentDebt`、`settlementAccount`、`shouldReceive`、`amountInWords` |
 
@@ -737,8 +737,8 @@ order-system-print-client-config
 
 商品信息支持两种排版规则：
 
-- `|`：在 `@allGoods`、`@allSpecs`、`@allQuantity` 等明细变量之间使用，
-  例如 `@allGoods | @allSpecs | @allQuantity`，会按照商品明细逐行输出。
+- `|`：在 `@allGoods`、`@allSpecs`、`@allQuantity`、`@allUnits` 等明细变量之间使用，
+  例如 `@allGoods | @allSpecs | @allQuantity | @allUnits`，会按照商品明细逐行输出，每行使用自己的单位。
 - `～`：将变量值与后面的单位或普通文字拼接，例如 `@allQuantity～kg` 输出 `50kg`；
   该符号不会破坏变量解析。
 
@@ -748,8 +748,8 @@ order-system-print-client-config
 
 - 标题使用门店名称生成 `【门店订单】`。
 - 收货人、电话和地址优先读取物流信息，缺失时回退到订单联系人信息。
-- 商品名称优先读取第一条商品明细，并组合规格。
-- `allGoods`、`allSpecs`、`allQuantity` 用于输出全部商品、全部规格和全部数量，
+- `goodsName` 优先读取第一条商品明细的名称，不拼接规格；`spec` 和 `unit` 分别表示首件规格与单位。
+- `allGoods`、`allSpecs`、`allQuantity`、`allUnits` 用于输出全部商品、全部规格、全部数量和对应单位，
   配合 `|` 规则按商品明细逐行排列。
 - 重量、件数、包装、物流服务、发货方式、物流单号和发货日期从订单及物流字段转换。
 - 运费从运费明细合计生成，金额变量来自订单打印变量。

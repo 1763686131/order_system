@@ -107,12 +107,13 @@ export const LOGISTICS_COPY_VARIABLE_GROUPS = [
     id: 'goods',
     label: '商品信息',
     variables: [
-      { key: 'goodsName', label: '首件商品' },
+      { key: 'goodsName', label: '首件商品名称' },
       { key: 'spec', label: '首件规格' },
       { key: 'unit', label: '首件单位' },
       { key: 'allGoods', label: '全部商品' },
       { key: 'allSpecs', label: '全部规格' },
       { key: 'allQuantity', label: '全部数量' },
+      { key: 'allUnits', label: '合计单位' },
       { key: 'goodsWeight', label: '重量' },
       { key: 'goodsQuantity', label: '件数' },
       { key: 'totalQuantity', label: '合计数量' },
@@ -258,6 +259,12 @@ const getGoodsItemQuantity = item => {
   return quantity
 }
 
+const getGoodsItemUnit = item => String(
+  item?.unit ||
+  item?.goods_unit ||
+  ''
+).trim()
+
 const getGoodsItems = order => (
   Array.isArray(order?.order_goods)
     ? order.order_goods.filter(Boolean)
@@ -279,13 +286,15 @@ const getAllQuantity = order => getGoodsItems(order)
   .filter(Boolean)
   .join('、')
 
+const getAllUnits = order => getGoodsItems(order)
+  .map(getGoodsItemUnit)
+  .filter(Boolean)
+  .join('、')
+
 const getGoodsName = order => {
   const firstGoods = getFirstGoods(order)
   if (firstGoods) {
-    return [getGoodsItemName(firstGoods), getGoodsItemSpec(firstGoods)]
-      .filter(Boolean)
-      .join(' ')
-      .trim()
+    return getGoodsItemName(firstGoods)
   }
   return String(order?.goods_name || '').replace(/\n/g, ' ').trim()
 }
@@ -378,6 +387,12 @@ export const getLogisticsCopyValues = (order, options = {}) => {
     printVariables.contactAddress ||
     ''
   const goodsName = getGoodsName(order) || printVariables.goodsName || ''
+  const firstGoods = getFirstGoods(order)
+  const spec = getGoodsItemSpec(firstGoods) ||
+    printVariables.spec ||
+    order?.goods_spec ||
+    ''
+  const unit = getGoodsItemUnit(firstGoods) || printVariables.unit || ''
   const allGoods = getAllGoods(order) ||
     printVariables.allGoods ||
     order?.goods_name ||
@@ -393,6 +408,10 @@ export const getLogisticsCopyValues = (order, options = {}) => {
     order?.total_quantity ||
     order?.goods_quantity ||
     printVariables.totalQuantity ||
+    ''
+  const allUnits = getAllUnits(order) ||
+    printVariables.allUnits ||
+    unit ||
     ''
   const goodsWeight = getGoodsWeight(order) || printVariables.totalQuantity || ''
   const goodsQuantity = getGoodsQuantity(order) ||
@@ -422,12 +441,16 @@ export const getLogisticsCopyValues = (order, options = {}) => {
     receiverPhone,
     receiverAddress,
     goodsName,
+    spec,
+    unit,
     allGoods,
     allGoodsName: allGoods,
     allSpecs,
     allGoodsSpec: allSpecs,
     allQuantity,
     allGoodsQuantity: allQuantity,
+    allUnits,
+    allGoodsUnit: allUnits,
     goodsWeight,
     goodsQuantity,
     goodsPackaging,
@@ -469,7 +492,7 @@ const applyTemplate = (template, values) => String(template || '')
 const renderEditorTemplate = (template, order, values) => String(template || '')
   .split('\n')
   .map(line => {
-    if (!line.includes('|') || !/@(?:allGoods|allSpecs|allQuantity)\b/.test(line)) {
+    if (!line.includes('|') || !/@(?:allGoods|allSpecs|allQuantity|allUnits)\b/.test(line)) {
       return applyTemplate(line, values)
     }
 
@@ -483,7 +506,8 @@ const renderEditorTemplate = (template, order, values) => String(template || '')
       ...values,
       allGoods: getGoodsItemName(item),
       allSpecs: getGoodsItemSpec(item),
-      allQuantity: getGoodsItemQuantity(item)
+      allQuantity: getGoodsItemQuantity(item),
+      allUnits: getGoodsItemUnit(item)
     })).join('\n')
   })
   .join('\n')
@@ -539,8 +563,8 @@ export const getLogisticsCopyPreviewOrder = () => ({
   shipped_date: '2026-09-24',
   freight_costs: [{ amount: 15 }],
   order_goods: [
-    { goods_name: '棒棒糖', spec: '30支/袋', quantity: 50 },
-    { goods_name: '植筋胶', spec: '40kg/组', quantity: 22 }
+    { goods_name: '棒棒糖', spec: '30支/袋', quantity: 50, unit: '袋' },
+    { goods_name: '植筋胶', spec: '40kg/组', quantity: 22, unit: '组' }
   ],
   remark: ''
 })

@@ -90,7 +90,7 @@
                       type="button"
                       class="variable-chip row-separator-chip"
                       :disabled="!canEditContent"
-                      title="放在全部商品、全部规格、全部数量之间；同一行按商品逐件换行"
+                      title="放在全部商品、全部规格、全部数量和合计单位之间；同一行按商品逐件换行"
                       @click="insertVariable(' | ', true)"
                     >
                       逐件分列 |
@@ -118,18 +118,16 @@
                     :key="template.id"
                     class="saved-template-item"
                     :class="{ active: selectedTemplateId === template.id }"
+                    role="button"
+                    tabindex="0"
+                    :aria-label="`选择模板：${template.name}`"
+                    :aria-pressed="selectedTemplateId === template.id"
                     @click="selectTemplate(template)"
+                    @keydown.enter.self.prevent="selectTemplate(template)"
+                    @keydown.space.self.prevent="selectTemplate(template)"
                   >
-                    <div class="saved-template-item-header" @click.stop="selectTemplate(template)">
-                      <button
-                        type="button"
-                        class="template-select-button"
-                        :title="template.name"
-                        :aria-pressed="selectedTemplateId === template.id"
-                        @click.stop="selectTemplate(template)"
-                      >
-                        <strong>{{ template.name }}</strong>
-                      </button>
+                    <div class="saved-template-item-header">
+                      <strong :title="template.name">{{ template.name }}</strong>
                       <select
                         class="template-binding-select"
                         :value="template.bindingTarget"
@@ -147,7 +145,7 @@
                         <option value="order-info">订单信息复制</option>
                       </select>
                     </div>
-                    <div class="template-binding-users" @click.stop @mousedown.stop @pointerdown.stop @keydown.enter.stop @keydown.space.stop>
+                    <div class="template-binding-users">
                       <span class="template-binding-label">绑定人</span>
                       <div class="template-selected-users">
                         <button
@@ -158,7 +156,7 @@
                           :title="user.name"
                           :aria-label="`取消绑定${user.name}`"
                           :disabled="savingSettings || !canEditTemplate(template)"
-                          @click="toggleTemplateBindingUser(template, user.id)"
+                          @click.stop="toggleTemplateBindingUser(template, user.id)"
                         >
                           <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="">
                           <span v-else>{{ user.name.slice(0, 1) || '人' }}</span>
@@ -173,12 +171,12 @@
                           :aria-expanded="!!templateBindingSearchOpen[template.id]"
                           :aria-controls="`template-user-picker-${template.id}`"
                           :disabled="savingSettings || !template.bindingTarget"
-                          @click="toggleBindingUserSearch(template)"
+                          @click.stop="toggleBindingUserSearch(template)"
                         >
                           <span aria-hidden="true">＋</span>
                         </button>
                       </div>
-                      <div v-if="templateBindingSearchOpen[template.id]" :id="`template-user-picker-${template.id}`" class="template-user-picker">
+                      <div v-if="templateBindingSearchOpen[template.id]" :id="`template-user-picker-${template.id}`" class="template-user-picker" @click.stop>
                         <input
                           v-model="templateBindingSearch[template.id]"
                           class="template-user-search"
@@ -1156,25 +1154,47 @@ const handleSave = async () => {
 }
 
 .saved-template-item {
+  position: relative;
   margin: 0 0 10px;
-  padding: 12px;
-  color: #334155;
-  background: #fbfdfe;
-  border: 1px solid #dfe8ef;
-  border-radius: 5px;
+  padding: 12px 12px 12px 16px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
   outline: none;
+  cursor: pointer;
+  transition: background .18s ease, border-color .18s ease, box-shadow .18s ease;
 }
 
-.saved-template-item:hover,
-.saved-template-item:focus-visible {
-  border-color: #9bdcc8;
+.saved-template-item::before {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+  content: '';
+}
+
+.saved-template-item:hover {
+  border-color: #a9e5d2;
   background: #f5fcf9;
+}
+
+.saved-template-item:focus-visible {
+  outline: 2px solid #0f9f78;
+  outline-offset: 2px;
 }
 
 .saved-template-item.active {
   border-color: #0f9f78;
-  background: #effaf6;
-  box-shadow: inset 3px 0 0 #0f9f78;
+  background: #e9f8f3;
+  box-shadow: 0 0 0 2px rgba(15, 159, 120, .12);
+}
+
+.saved-template-item.active::before {
+  background: #0f9f78;
 }
 
 .saved-template-item:last-child {
@@ -1187,37 +1207,24 @@ const handleSave = async () => {
   justify-content: space-between;
   gap: 8px;
   min-height: 36px;
-  cursor: pointer;
-}
-
-.template-select-button {
-  display: flex;
-  align-items: center;
-  flex: 1;
-  min-width: 0;
-  min-height: 36px;
-  align-self: stretch;
-  padding: 4px 0;
-  color: inherit;
-  text-align: left;
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-}
-
-.template-select-button:focus-visible {
-  outline: 2px solid #0f9f78;
-  outline-offset: 3px;
-  border-radius: 3px;
 }
 
 .saved-template-item-header strong {
   min-width: 0;
-  color: #334155;
+  color: #172033;
   font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.saved-template-item.active .saved-template-item-header strong {
+  color: #08745a;
+}
+
+.saved-template-item.active .saved-template-item-header strong::before {
+  margin-right: 6px;
+  content: '✓';
 }
 
 .saved-template-item p {

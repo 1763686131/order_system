@@ -5197,7 +5197,7 @@ offered -> accepted -> transferring -> completed
   "success": true,
   "data": {
     "fields": [
-      { "key": "custom_editor_content", "name": "复制内容", "template": "商品：@allGoods | @allSpecs | @allQuantity～kg", "enabled": true, "custom": true }
+      { "key": "custom_editor_content", "name": "复制内容", "template": "商品：@allGoods | @allSpecs | @allQuantity | @allUnits", "enabled": true, "custom": true }
     ],
     "updatedAt": "2026-09-26 10:00:00"
   }
@@ -5236,7 +5236,7 @@ offered -> accepted -> transferring -> completed
 
 成功响应为 `{ "success": true, "message": "复制字段设置已保存", "data": { "fields": [...], "templates": [...], "updatedAt": "2026-09-26 10:00:00" } }`。请求至少提供 `fields` 或 `templates` 之一，省略的部分保持现有值（首次没有共享配置时为 `null`）；仅新增模板的客户端可只提交 `templates`。服务端在同一事务中对比已存模板：新增 ID 要求 `create`，删除已有 ID 要求 `delete`，修改已有模板内容、绑定关系或共享 `fields` 要求 `edit`。一次请求包含多种变更时，必须同时具备所有对应权限；否则返回带 `permission` 编码的 `403`，整次保存不会生效。`fields` 必须为数组、最多 100 项；`key` 只能是已知内置字段或不超过 80 字符的 `custom_` 字母数字下划线标识，不能重复；`name` 必须为不超过 80 字符的字符串，`template` 必须为不超过 4000 字符的字符串，`enabled` 必须为布尔值。`templates` 必须为数组、最多 100 项；模板 `id` 必须为不超过 80 字符的 ASCII 字母数字、下划线或短横线，模板名称不能为空且不超过 80 字符，说明不超过 240 字符，`bindingTarget` 只能为空、`logistics-info` 或 `order-info`，`boundUserIds` 必须为正整数账号 ID 数组。每个模板的 `fields` 使用同一套字段校验；同一账号不能在同一复制入口绑定多个模板。请求不合法返回 `400`，失败不会修改旧配置。
 
-商品信息变量中，`@goodsName` 为首件商品及规格；`@allGoods`、`@allSpecs`、`@allQuantity` 分别输出全部商品名、全部规格和全部明细数量，以 `、` 分隔。已保存的字段顺序、启停和模板会保留；未保存时沿用内置默认配置。
+商品信息变量中，`@goodsName` 仅输出首件商品名称，`@spec` 和 `@unit` 分别为首件规格与单位；`@allGoods`、`@allSpecs`、`@allQuantity`、`@allUnits` 分别输出全部商品名、全部规格、全部明细数量和各明细的单位，非逐行模式下以 `、` 分隔；用 `|` 分列时，各变量按商品明细逐行对齐，因此不同商品可显示各自的单位。已保存的字段顺序、启停和模板会保留；未保存时沿用内置默认配置。
 
 ### 19.4 数据库结构
 
