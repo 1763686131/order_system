@@ -4,8 +4,12 @@ import json
 
 from flask import Blueprint, jsonify, request
 
-from utils.auth import require_admin_access
+from utils import auth
 from utils.db import get_db
+from utils.permission_catalog import (
+    ADMIN_LOGISTICS_COPY_PERMISSIONS as COPY_PERMISSIONS,
+    ADMIN_ROUTE_BRANCH_PERMISSIONS,
+)
 
 
 logistics_copy_bp = Blueprint(
@@ -133,8 +137,19 @@ def _normalize_templates(templates):
     return normalized, None
 
 
+def _stored_fields(row):
+    if not row or row["fields_json"] == "null":
+        return None
+    return _parse_json_array(row["fields_json"])
+
+
+def _template_content(template):
+    return {**template, "boundUserIds": sorted(template["boundUserIds"])}
+
+
 @logistics_copy_bp.route("", methods=["GET"])
-@require_admin_access
+@auth.require_admin_permission(COPY_PERMISSIONS["entry"])
+@auth.require_admin_permission(COPY_PERMISSIONS["read"])
 def get_logistics_copy_settings():
     with get_db() as conn:
         row = conn.execute(
@@ -157,7 +172,7 @@ def get_logistics_copy_settings():
     return jsonify({
         "success": True,
         "data": {
-            "fields": _parse_json_array(row["fields_json"]) if row else None,
+            "fields": _stored_fields(row),
             "templates": (
                 _parse_json_array(row["templates_json"])
                 if row and row["templates_json"] is not None
@@ -177,16 +192,64 @@ def get_logistics_copy_settings():
     })
 
 
+@logistics_copy_bp.route("/resolve", methods=["GET"])
+@auth.require_admin_access
+def resolve_logistics_copy_settings():
+    target = request.args.get("target")
+    if target not in COPY_BINDING_TARGETS:
+        return jsonify({"success": False, "message": "复制入口不正确"}), 400
+
+    route_code = ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"][
+        "orders" if target == "order-info" else "logistics"
+    ]
+    if not auth.admin_permission_granted(route_code):
+        return jsonify({
+            "success": False,
+            "message": "当前账号没有执行此操作的权限",
+            "permission": route_code,
+        }), 403
+
+    user_id = auth.get_current_user()["id"]
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT fields_json, templates_json, updated_at FROM logistics_copy_settings WHERE id = 1"
+        ).fetchone()
+    fields = _stored_fields(row)
+    templates = _parse_json_array(row["templates_json"]) if row else []
+    for template in templates:
+        if (
+            template.get("bindingTarget") == target
+            and user_id in template.get("boundUserIds", [])
+        ):
+            fields = template["fields"]
+            break
+    return jsonify({
+        "success": True,
+        "data": {
+            "fields": fields,
+            "updatedAt": row["updated_at"] if row else None,
+        },
+    })
+
+
 @logistics_copy_bp.route("", methods=["PUT"])
-@require_admin_access
+@auth.require_admin_permission(COPY_PERMISSIONS["entry"])
+@auth.require_admin_permission(COPY_PERMISSIONS["read"])
+@auth.require_any_admin_permission(
+    COPY_PERMISSIONS["create"], COPY_PERMISSIONS["edit"], COPY_PERMISSIONS["delete"]
+)
 def save_logistics_copy_settings():
     body = request.get_json(silent=True)
-    fields = body.get("fields") if isinstance(body, dict) else None
-    normalized, error = _normalize_fields(fields)
-    if error:
-        return jsonify({"success": False, "message": error}), 400
+    if not isinstance(body, dict) or not ({"fields", "templates"} & body.keys()):
+        return jsonify({"success": False, "message": "请提交字段配置或模板列表"}), 400
+    fields_provided = "fields" in body
+    normalized = None
+    if fields_provided:
+        normalized, error = _normalize_fields(body["fields"])
+        if error:
+            return jsonify({"success": False, "message": error}), 400
 
-    templates_provided = isinstance(body, dict) and "templates" in body
+    templates_provided = "templates" in body
     normalized_templates = None
     if templates_provided:
         normalized_templates, error = _normalize_templates(body.get("templates"))
@@ -194,14 +257,43 @@ def save_logistics_copy_settings():
             return jsonify({"success": False, "message": error}), 400
 
     with get_db() as conn:
+        # Check changes and save under the same lock so permissions use the latest state.
+        conn.execute("BEGIN IMMEDIATE")
         existing = conn.execute(
-            "SELECT templates_json FROM logistics_copy_settings WHERE id = 1"
+            "SELECT fields_json, templates_json FROM logistics_copy_settings WHERE id = 1"
         ).fetchone()
+        existing_fields = _stored_fields(existing)
+        existing_templates, error = _normalize_templates(
+            _parse_json_array(existing["templates_json"]) if existing else []
+        )
+        if error:
+            return jsonify({"success": False, "message": "已存模板格式错误，请联系管理员"}), 500
+        if not fields_provided:
+            normalized = existing_fields
         if normalized_templates is None:
-            normalized_templates = _parse_json_array(
-                existing["templates_json"] if existing and existing["templates_json"] is not None else None,
-                [],
-            )
+            normalized_templates = existing_templates
+
+        old_templates = {item["id"]: item for item in existing_templates}
+        new_templates = {item["id"]: item for item in normalized_templates}
+        required_actions = []
+        if new_templates.keys() - old_templates.keys():
+            required_actions.append("create")
+        if old_templates.keys() - new_templates.keys():
+            required_actions.append("delete")
+        if normalized != existing_fields or any(
+            _template_content(new_templates[key]) != _template_content(old_templates[key])
+            for key in old_templates.keys() & new_templates.keys()
+        ):
+            required_actions.append("edit")
+        for action in required_actions:
+            permission = COPY_PERMISSIONS[action]
+            if not auth.admin_permission_granted(permission):
+                return jsonify({
+                    "success": False,
+                    "message": "当前账号没有执行此操作的权限",
+                    "permission": permission,
+                }), 403
+
         conn.execute(
             """
             INSERT INTO logistics_copy_settings (
@@ -229,7 +321,7 @@ def save_logistics_copy_settings():
         "success": True,
         "message": "复制字段设置已保存",
         "data": {
-            "fields": _parse_json_array(row["fields_json"]),
+            "fields": _stored_fields(row),
             "templates": _parse_json_array(row["templates_json"]),
             "updatedAt": row["updated_at"],
         },

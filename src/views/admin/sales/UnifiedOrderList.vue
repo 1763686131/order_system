@@ -1143,7 +1143,7 @@
 import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
-import { getLogisticsCopySettings } from '@/api/logisticsCopy'
+import { resolveLogisticsCopySettings } from '@/api/logisticsCopy'
 import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { useUserStore } from '@/stores/user'
@@ -1156,8 +1156,7 @@ import {
 import {
   formatLogisticsOrderForCopy,
   getDefaultLogisticsCopyFields,
-  normalizeLogisticsCopyFields,
-  resolveLogisticsCopyFields
+  normalizeLogisticsCopyFields
 } from '@/utils/logisticsCopy'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
@@ -2345,20 +2344,14 @@ const hasLogistics = (order) => {
 // 复制物流极简信息
 const handleCopyOrderInfo = async (order, bindingTarget = 'logistics-info') => {
   try {
-    const settings = await getLogisticsCopySettings()
+    const settings = await resolveLogisticsCopySettings(bindingTarget)
     if (!settings?.success) throw new Error(settings?.message || '读取复制字段设置失败')
     if (settings.data?.fields !== null && !Array.isArray(settings.data?.fields)) {
       throw new Error('复制字段设置数据格式不正确')
     }
-    const defaultFields = settings.data?.fields === null
+    const fields = settings.data?.fields === null
       ? getDefaultLogisticsCopyFields()
       : normalizeLogisticsCopyFields(settings.data?.fields)
-    const fields = resolveLogisticsCopyFields(
-      settings.data?.templates,
-      bindingTarget,
-      userStore.id,
-      defaultFields
-    )
     const textToCopy = formatLogisticsOrderForCopy(order, {
       storeName: getStoreName(order),
       printVariables: getOrderPrintVariables(order),

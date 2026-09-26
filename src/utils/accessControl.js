@@ -41,6 +41,14 @@ export const ADMIN_OPERATION_LOG_PERMISSIONS = {
   CLEAR: 'admin.operation_log.clear'
 }
 
+export const ADMIN_LOGISTICS_COPY_PERMISSIONS = {
+  ENTRY: 'admin.logistics_copy.entry',
+  READ: 'admin.logistics_copy.read',
+  CREATE: 'admin.logistics_copy.create',
+  EDIT: 'admin.logistics_copy.edit',
+  DELETE: 'admin.logistics_copy.delete'
+}
+
 const normalizeIds = (values) => {
   if (!Array.isArray(values)) return []
   return [...new Set(values.map(Number).filter(Number.isInteger))]

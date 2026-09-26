@@ -116,13 +116,8 @@
                 <path d="M2 12l10 5 10-5"/>
               </svg>
             </button>
-            <MessageInbox
-              ref="notificationInboxRef"
-              mode="notifications"
-              @open-change="handleNotificationInboxOpenChange"
-              @open-notification="openNotification"
-            />
             <button
+              v-if="canOpenLogisticsCopySettings"
               class="icon-btn"
               type="button"
               title="物流复制字段设置"
@@ -135,6 +130,12 @@
                 <circle cx="8" cy="17" r="2"></circle>
               </svg>
             </button>
+            <MessageInbox
+              ref="notificationInboxRef"
+              mode="notifications"
+              @open-change="handleNotificationInboxOpenChange"
+              @open-notification="openNotification"
+            />
             <MessageInbox
               ref="messageInboxRef"
               mode="messages"
@@ -275,6 +276,7 @@
     <ShippedOrderActionModal ref="shippedActionModal" @refresh="handleRefresh" />
     <StockInOrderModal ref="stockRecordModal" @saved="handleStockRecordSaved" />
     <LogisticsCopySettingsDialog
+      v-if="canOpenLogisticsCopySettings"
       :visible="logisticsCopySettingsVisible"
       @close="closeLogisticsCopySettings"
     />
@@ -288,7 +290,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
@@ -299,7 +301,8 @@ import {
 } from '@/utils/adminAccess'
 import {
   ADMIN_DEPARTMENT_PERMISSIONS,
-  ADMIN_EMPLOYEE_PERMISSIONS
+  ADMIN_EMPLOYEE_PERMISSIONS,
+  ADMIN_LOGISTICS_COPY_PERMISSIONS
 } from '@/utils/accessControl'
 import ChatWindow from '@/components/admin/ChatWindow.vue'
 import DirectoryPanel from '@/components/admin/DirectoryPanel.vue'
@@ -325,6 +328,15 @@ const notificationInboxRef = ref(null)
 const chatWindowOpen = ref(false)
 const activeChatContact = ref(null)
 const logisticsCopySettingsVisible = ref(false)
+const canOpenLogisticsCopySettings = computed(() =>
+  userStore.canAccessAdmin &&
+  userStore.hasPerm(ADMIN_LOGISTICS_COPY_PERMISSIONS.ENTRY) &&
+  userStore.hasPerm(ADMIN_LOGISTICS_COPY_PERMISSIONS.READ)
+)
+
+watch(canOpenLogisticsCopySettings, allowed => {
+  if (!allowed) logisticsCopySettingsVisible.value = false
+})
 
 const userDisplayName = computed(() => {
   return userStore.name || userStore.username || '用户'
@@ -351,6 +363,7 @@ const handleAvatarError = () => {
 }
 
 const openLogisticsCopySettings = () => {
+  if (!canOpenLogisticsCopySettings.value) return
   closeAccountMenu()
   directoryPanelRef.value?.close()
   messageInboxRef.value?.close()

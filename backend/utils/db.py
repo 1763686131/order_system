@@ -533,6 +533,7 @@ def _ensure_auth_schema(conn):
         cursor.execute("DELETE FROM user_roles")
 
         from utils.permission_catalog import (
+            ADMIN_LOGISTICS_COPY_PERMISSIONS,
             ADMIN_ROUTE_BRANCH_PERMISSIONS,
             ADMIN_ROUTE_BRANCH_PARENT_MAP,
             PERMISSION_MODULES,
@@ -654,6 +655,33 @@ def _ensure_auth_schema(conn):
                     '1',
                     CURRENT_TIMESTAMP
                 )
+                """
+            )
+
+        copy_permissions_migration = cursor.execute(
+            """
+            SELECT setting_value FROM system_meta
+            WHERE setting_key = 'admin_logistics_copy_permissions_v1'
+            """
+        ).fetchone()
+        if not copy_permissions_migration:
+            permission_codes = list(ADMIN_LOGISTICS_COPY_PERMISSIONS.values())
+            placeholders = ",".join("?" for _ in permission_codes)
+            cursor.execute(
+                f"""
+                INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+                SELECT roles.id, permissions.id
+                FROM roles CROSS JOIN permissions
+                WHERE roles.can_access_admin = 1
+                  AND roles.full_access = 0
+                  AND permissions.code IN ({placeholders})
+                """,
+                permission_codes,
+            )
+            cursor.execute(
+                """
+                INSERT INTO system_meta (setting_key, setting_value, updated_at)
+                VALUES ('admin_logistics_copy_permissions_v1', '1', CURRENT_TIMESTAMP)
                 """
             )
 

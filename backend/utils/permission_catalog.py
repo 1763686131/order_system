@@ -45,6 +45,14 @@ ADMIN_OPERATION_LOG_PERMISSIONS = {
     "clear": "admin.operation_log.clear",
 }
 
+ADMIN_LOGISTICS_COPY_PERMISSIONS = {
+    "entry": "admin.logistics_copy.entry",
+    "read": "admin.logistics_copy.read",
+    "create": "admin.logistics_copy.create",
+    "edit": "admin.logistics_copy.edit",
+    "delete": "admin.logistics_copy.delete",
+}
+
 ADMIN_ROUTE_PERMISSIONS = {
     "dashboard": "admin.route.dashboard",
     "products": "admin.route.products",
@@ -358,6 +366,38 @@ PERMISSION_MODULES = [
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["system"]["operation_logs"],
                 "name": "访问操作日志",
                 "description": "显示并访问系统操作日志",
+            },
+        ],
+    },
+    {
+        "code": "admin_logistics_copy",
+        "name": "复制模板管理",
+        "description": "控制顶部复制设置入口、模板查看、创建、修改和删除",
+        "permissions": [
+            {
+                "code": ADMIN_LOGISTICS_COPY_PERMISSIONS["entry"],
+                "name": "显示复制设置入口",
+                "description": "与查看权限一起授予时显示顶部复制设置图标",
+            },
+            {
+                "code": ADMIN_LOGISTICS_COPY_PERMISSIONS["read"],
+                "name": "查看复制模板",
+                "description": "查看共享配置、历史模板、预览和绑定人",
+            },
+            {
+                "code": ADMIN_LOGISTICS_COPY_PERMISSIONS["create"],
+                "name": "新增复制模板",
+                "description": "创建并保存新的复制模板",
+            },
+            {
+                "code": ADMIN_LOGISTICS_COPY_PERMISSIONS["edit"],
+                "name": "修改复制模板",
+                "description": "编辑共享配置、已有模板内容和复制按钮及账号绑定",
+            },
+            {
+                "code": ADMIN_LOGISTICS_COPY_PERMISSIONS["delete"],
+                "name": "删除复制模板",
+                "description": "删除已有复制模板及其绑定",
             },
         ],
     },

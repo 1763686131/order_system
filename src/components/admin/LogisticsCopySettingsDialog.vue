@@ -2,7 +2,7 @@
   <Teleport to="body">
     <Transition name="logistics-copy-settings">
       <div
-        v-if="visible"
+        v-if="visible && canViewSettings"
         class="logistics-copy-settings-overlay"
         @click.self="handleClose"
         @keydown.esc.prevent="handleClose"
@@ -76,7 +76,8 @@
                       :key="variable.key"
                       type="button"
                       class="variable-chip"
-                      draggable="true"
+                      :disabled="!canEditContent"
+                      :draggable="canEditContent"
                       :title="`插入 @${variable.key}`"
                       @dragstart="handleVariableDragStart($event, variable.key)"
                       @dragend="handleVariableDragEnd"
@@ -88,6 +89,7 @@
                       v-if="group.id === 'goods'"
                       type="button"
                       class="variable-chip row-separator-chip"
+                      :disabled="!canEditContent"
                       title="放在全部商品、全部规格、全部数量之间；同一行按商品逐件换行"
                       @click="insertVariable(' | ', true)"
                     >
@@ -97,6 +99,7 @@
                       v-if="group.id === 'goods'"
                       type="button"
                       class="variable-chip row-separator-chip"
+                      :disabled="!canEditContent"
                       title="在变量后插入 ～ 连接文字，如 @allQuantity～kg"
                       @click="insertVariable('～', true)"
                     >
@@ -108,25 +111,21 @@
               <div v-else class="saved-template-panel" role="tabpanel">
                 <div class="saved-template-list">
                   <div v-if="!savedTemplates.length" class="saved-template-empty">
-                    暂无保存模板，点击下方“新增模板”创建。
+                    暂无历史模板
                   </div>
                   <article
                     v-for="template in savedTemplates"
                     :key="template.id"
                     class="saved-template-item"
                     :class="{ active: selectedTemplateId === template.id }"
-                    tabindex="0"
-                    @pointerdown="handleTemplatePointerDown($event, template)"
-                    @keydown.enter.prevent="selectTemplate(template)"
-                    @keydown.space.prevent="selectTemplate(template)"
+                    @click="selectTemplate(template)"
                   >
-                    <div class="saved-template-item-header">
+                    <div class="saved-template-item-header" @click.stop="selectTemplate(template)">
                       <button
                         type="button"
                         class="template-select-button"
                         :title="template.name"
                         :aria-pressed="selectedTemplateId === template.id"
-                        @pointerdown.stop="selectTemplate(template)"
                         @click.stop="selectTemplate(template)"
                       >
                         <strong>{{ template.name }}</strong>
@@ -135,7 +134,7 @@
                         class="template-binding-select"
                         :value="template.bindingTarget"
                         :aria-label="`${template.name}绑定的复制按钮`"
-                        :disabled="savingSettings"
+                        :disabled="savingSettings || !canEditTemplate(template)"
                         @click.stop
                         @mousedown.stop
                         @pointerdown.stop
@@ -158,13 +157,14 @@
                           class="template-user-avatar active"
                           :title="user.name"
                           :aria-label="`取消绑定${user.name}`"
-                          :disabled="savingSettings"
+                          :disabled="savingSettings || !canEditTemplate(template)"
                           @click="toggleTemplateBindingUser(template, user.id)"
                         >
                           <img v-if="user.avatarUrl" :src="user.avatarUrl" alt="">
                           <span v-else>{{ user.name.slice(0, 1) || '人' }}</span>
                         </button>
                         <button
+                          v-if="canEditTemplate(template)"
                           type="button"
                           class="template-user-avatar template-add-user-button"
                           :class="{ open: templateBindingSearchOpen[template.id] }"
@@ -184,7 +184,7 @@
                           class="template-user-search"
                           type="search"
                           placeholder="搜索姓名或账号后添加"
-                          :disabled="savingSettings"
+                          :disabled="savingSettings || !canEditTemplate(template)"
                           @keydown.stop
                         >
                         <div
@@ -197,7 +197,7 @@
                             type="button"
                             class="template-user-search-result"
                             :title="`添加${user.name}`"
-                            :disabled="savingSettings"
+                            :disabled="savingSettings || !canEditTemplate(template)"
                             @click="addTemplateBindingUser(template, user.id)"
                           >
                             <span class="template-user-avatar">
@@ -218,7 +218,7 @@
                     </div>
                   </article>
                 </div>
-                <div v-if="creatingTemplate" class="template-create-form">
+                <div v-if="creatingTemplate && canCreateTemplate" class="template-create-form">
                   <input
                     ref="newTemplateNameInput"
                     v-model="newTemplateName"
@@ -234,8 +234,9 @@
                   </div>
                   <span v-if="templateError" class="template-error">{{ templateError }}</span>
                 </div>
-                <div class="template-actions">
+                <div v-if="canCreateTemplate || canDeleteTemplate" class="template-actions">
                   <button
+                    v-if="canCreateTemplate"
                     type="button"
                     class="template-action-button"
                     @click="startAddTemplate"
@@ -246,9 +247,10 @@
                     新增模板
                   </button>
                   <button
+                    v-if="canDeleteTemplate || canDiscardNewTemplate"
                     type="button"
                     class="template-action-button template-delete-button"
-                    :disabled="!selectedTemplateId"
+                    :disabled="!canRemoveSelectedTemplate"
                     @click="removeSelectedTemplate"
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -278,6 +280,8 @@
                   :value="draftText"
                   class="copy-editor-input"
                   :disabled="loadingSettings || loadFailed || savingSettings"
+                  :readonly="!canEditContent"
+                  aria-label="编辑模板内容"
                   maxlength="4000"
                   placeholder="在这里编辑复制内容，或把左侧变量拖进来"
                   @focus="rememberEditorTarget"
@@ -303,14 +307,14 @@
           </div>
 
           <footer class="settings-footer">
-            <button type="button" class="reset-button" :disabled="loadingSettings || loadFailed || savingSettings" @click="resetFields">
+            <button v-if="canEditContent" type="button" class="reset-button" :disabled="loadingSettings || loadFailed || savingSettings" @click="resetFields">
               恢复默认
             </button>
             <div class="footer-actions">
               <button type="button" class="cancel-button" @click="handleClose">
                 取消
               </button>
-              <button type="button" class="save-button" :disabled="loadingSettings || loadFailed || savingSettings" @click="handleSave">
+              <button v-if="canSaveSettings" type="button" class="save-button" :disabled="loadingSettings || loadFailed || savingSettings" @click="handleSave">
                 {{ savingSettings ? '保存中...' : '保存设置' }}
               </button>
             </div>
@@ -340,6 +344,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { getLogisticsCopySettings, putLogisticsCopySettings } from '@/api/logisticsCopy'
+import { useUserStore } from '@/stores/user'
+import { ADMIN_LOGISTICS_COPY_PERMISSIONS } from '@/utils/accessControl'
 import {
   formatLogisticsOrderForCopy,
   getDefaultLogisticsCopyFields,
@@ -357,6 +363,24 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'saved'])
+const userStore = useUserStore()
+const canViewSettings = computed(() =>
+  userStore.canAccessAdmin &&
+  userStore.hasPerm(ADMIN_LOGISTICS_COPY_PERMISSIONS.ENTRY) &&
+  userStore.hasPerm(ADMIN_LOGISTICS_COPY_PERMISSIONS.READ)
+)
+const canCreateTemplate = computed(() =>
+  canViewSettings.value && userStore.hasPerm(ADMIN_LOGISTICS_COPY_PERMISSIONS.CREATE)
+)
+const canEditSettings = computed(() =>
+  canViewSettings.value && userStore.hasPerm(ADMIN_LOGISTICS_COPY_PERMISSIONS.EDIT)
+)
+const canDeleteTemplate = computed(() =>
+  canViewSettings.value && userStore.hasPerm(ADMIN_LOGISTICS_COPY_PERMISSIONS.DELETE)
+)
+const canSaveSettings = computed(() =>
+  canCreateTemplate.value || canEditSettings.value || canDeleteTemplate.value
+)
 const draftText = ref(
   getDefaultLogisticsCopyFields()
     .filter(field => field.enabled)
@@ -382,6 +406,9 @@ const bindingUsers = ref([])
 const templateBindingSearch = reactive({})
 const templateBindingSearchOpen = reactive({})
 const selectedTemplateId = ref('')
+const persistedTemplateIds = ref(new Set())
+const sharedDraftText = ref('')
+const initialSharedText = ref('')
 const creatingTemplate = ref(false)
 const newTemplateName = ref('')
 const newTemplateNameInput = ref(null)
@@ -440,7 +467,9 @@ const normalizeSavedTemplates = templates => (
         boundUserIds: Array.isArray(template.boundUserIds)
           ? [...new Set(template.boundUserIds.map(Number).filter(id => Number.isInteger(id) && id > 0))]
           : [],
-        fields: normalizeLogisticsCopyFields(template.fields)
+        fields: Array.isArray(template.fields)
+          ? template.fields.map(field => ({ ...field }))
+          : getDefaultLogisticsCopyFields()
       }))
     : []
 )
@@ -487,6 +516,23 @@ const editorLineCount = computed(() =>
 const selectedTemplateName = computed(() =>
   savedTemplates.value.find(template => template.id === selectedTemplateId.value)?.name || '默认配置'
 )
+const canEditTemplate = template => persistedTemplateIds.value.has(template.id)
+  ? canEditSettings.value
+  : canCreateTemplate.value
+const canEditContent = computed(() => {
+  const template = savedTemplates.value.find(item => item.id === selectedTemplateId.value)
+  return template ? canEditTemplate(template) : canEditSettings.value
+})
+const canDiscardNewTemplate = computed(() =>
+  Boolean(selectedTemplateId.value) &&
+  !persistedTemplateIds.value.has(selectedTemplateId.value) &&
+  canCreateTemplate.value
+)
+const canRemoveSelectedTemplate = computed(() =>
+  Boolean(selectedTemplateId.value) &&
+  (persistedTemplateIds.value.has(selectedTemplateId.value)
+    ? canDeleteTemplate.value : canDiscardNewTemplate.value)
+)
 
 const previewText = computed(() => formatLogisticsOrderForCopy(
   getLogisticsCopyPreviewOrder(),
@@ -520,6 +566,7 @@ const previewText = computed(() => formatLogisticsOrderForCopy(
 ))
 
 const loadDraft = async () => {
+  if (!canViewSettings.value) return
   const requestId = ++loadRequestId
   loadingSettings.value = true
   loadFailed.value = false
@@ -540,12 +587,19 @@ const loadDraft = async () => {
     )
     activeSelectionStart.value = draftText.value.length
     activeSelectionEnd.value = draftText.value.length
-    savedTemplates.value = response.data?.templates === null
-      ? getDefaultSavedTemplates()
-      : normalizeSavedTemplates(response.data?.templates)
+    sharedDraftText.value = draftText.value
+    initialSharedText.value = draftText.value
+    const hasSavedTemplates = response.data?.templates !== null
+    savedTemplates.value = hasSavedTemplates
+      ? normalizeSavedTemplates(response.data?.templates)
+      : getDefaultSavedTemplates()
+    persistedTemplateIds.value = hasSavedTemplates
+      ? new Set(savedTemplates.value.map(template => template.id))
+      : new Set()
     bindingUsers.value = (response.data?.bindingUsers || []).map(user => ({
       id: Number(user.id),
       name: user.name || user.username || '用户',
+      username: user.username || '',
       avatarUrl: user.avatarUrl || ''
     }))
     selectedTemplateId.value = ''
@@ -563,41 +617,43 @@ const loadDraft = async () => {
 }
 
 watch(
-  () => props.visible,
-  visible => {
-    if (visible) {
+  [() => props.visible, canViewSettings],
+  ([visible, allowed]) => {
+    if (visible && allowed) {
       loadDraft()
     } else {
       loadRequestId++
     }
-  }
+  },
+  { immediate: true }
 )
 
 const resetFields = () => {
+  if (!canEditContent.value) return
   draftText.value = fieldsToEditorText(getDefaultLogisticsCopyFields())
   activeSelectionStart.value = draftText.value.length
   activeSelectionEnd.value = draftText.value.length
 }
 
 const saveActiveTemplateDraft = () => {
-  if (!selectedTemplateId.value) return
+  if (!canEditContent.value) return
+  if (!selectedTemplateId.value) {
+    sharedDraftText.value = draftText.value
+    return
+  }
   const activeTemplate = savedTemplates.value.find(
     item => item.id === selectedTemplateId.value
   )
-  if (activeTemplate) {
+  if (activeTemplate && fieldsToEditorText(activeTemplate.fields) !== draftText.value) {
     activeTemplate.fields = editorTextToFields(draftText.value)
   }
 }
 
-const handleTemplatePointerDown = (event, template) => {
-  if (event.button !== undefined && event.button !== 0) return
-  selectTemplate(template)
-}
-
 const selectTemplate = template => {
-  if (loadingSettings.value || savingSettings.value || creatingTemplate.value) return
+  if (!canViewSettings.value || loadingSettings.value || savingSettings.value) return
   if (selectedTemplateId.value === template.id) return
   saveActiveTemplateDraft()
+  cancelAddTemplate()
   selectedTemplateId.value = template.id
   draftText.value = fieldsToEditorText(template.fields)
   activeSelectionStart.value = draftText.value.length
@@ -605,6 +661,7 @@ const selectTemplate = template => {
 }
 
 const updateTemplateBindingTarget = (template, target) => {
+  if (!canEditTemplate(template) || savingSettings.value) return
   if (template.bindingTarget === target) return
   template.bindingTarget = target
   template.boundUserIds = []
@@ -613,7 +670,7 @@ const updateTemplateBindingTarget = (template, target) => {
 }
 
 const toggleBindingUserSearch = template => {
-  if (!template.bindingTarget || savingSettings.value) return
+  if (!canEditTemplate(template) || !template.bindingTarget || savingSettings.value) return
   templateBindingSearchOpen[template.id] = !templateBindingSearchOpen[template.id]
   if (!templateBindingSearchOpen[template.id]) {
     templateBindingSearch[template.id] = ''
@@ -646,9 +703,19 @@ const addTemplateBindingUser = (template, userId) => {
 }
 
 const toggleTemplateBindingUser = (template, userId) => {
-  if (!template.bindingTarget) return
+  if (!canEditTemplate(template) || !template.bindingTarget || savingSettings.value) return
   if (template.boundUserIds.includes(userId)) {
     template.boundUserIds = template.boundUserIds.filter(id => id !== userId)
+    return
+  }
+  const conflictingTemplate = savedTemplates.value.find(item =>
+    item.id !== template.id &&
+    item.bindingTarget === template.bindingTarget &&
+    item.boundUserIds.includes(userId) &&
+    !canEditTemplate(item)
+  )
+  if (conflictingTemplate) {
+    showNotice('error', '此用户已绑定其他模板，需要修改权限才能更换绑定')
     return
   }
   savedTemplates.value.forEach(item => {
@@ -660,7 +727,7 @@ const toggleTemplateBindingUser = (template, userId) => {
 }
 
 const startAddTemplate = async () => {
-  if (loadingSettings.value || savingSettings.value) return
+  if (!canCreateTemplate.value || loadingSettings.value || savingSettings.value) return
   creatingTemplate.value = true
   newTemplateName.value = ''
   templateError.value = ''
@@ -675,12 +742,14 @@ const cancelAddTemplate = () => {
 }
 
 const confirmAddTemplate = () => {
+  if (!canCreateTemplate.value || savingSettings.value) return
   const name = newTemplateName.value.trim()
   if (!name) {
     templateError.value = '请输入模板名称'
     return
   }
 
+  saveActiveTemplateDraft()
   const template = {
     id: `template_${Date.now()}`,
     name,
@@ -697,7 +766,7 @@ const confirmAddTemplate = () => {
 }
 
 const removeSelectedTemplate = () => {
-  if (!selectedTemplateId.value || savingSettings.value) return
+  if (!canRemoveSelectedTemplate.value || savingSettings.value) return
   const index = savedTemplates.value.findIndex(
     template => template.id === selectedTemplateId.value
   )
@@ -705,6 +774,9 @@ const removeSelectedTemplate = () => {
 
   savedTemplates.value.splice(index, 1)
   selectedTemplateId.value = ''
+  draftText.value = sharedDraftText.value
+  activeSelectionStart.value = draftText.value.length
+  activeSelectionEnd.value = draftText.value.length
   templateError.value = ''
 }
 
@@ -715,6 +787,7 @@ const rememberEditorTarget = event => {
 }
 
 const insertVariableIntoEditor = (token, element = editorElement.value) => {
+  if (!canEditContent.value || savingSettings.value) return
   const text = draftText.value
   const start = Math.min(activeSelectionStart.value, text.length)
   const end = Math.min(activeSelectionEnd.value, text.length)
@@ -737,6 +810,10 @@ const insertVariable = (variableKey, isLiteral = false) => {
 }
 
 const handleVariableDragStart = (event, variableKey) => {
+  if (!canEditContent.value) {
+    event.preventDefault()
+    return
+  }
   draggedVariableKey.value = variableKey
   event.dataTransfer.effectAllowed = 'copy'
   event.dataTransfer.setData('text/plain', variableKey)
@@ -747,11 +824,13 @@ const handleVariableDragEnd = () => {
 }
 
 const handleEditorInput = event => {
+  if (!canEditContent.value) return
   draftText.value = event.target.value
   rememberEditorTarget(event)
 }
 
 const handleEditorDrop = event => {
+  if (!canEditContent.value || savingSettings.value) return
   const variableKey = event.dataTransfer.getData('text/plain') || draggedVariableKey.value
   if (!variableKey) {
     return
@@ -769,27 +848,32 @@ const handleClose = () => {
 }
 
 const handleSave = async () => {
-  if (loadingSettings.value || loadFailed.value || savingSettings.value) return
+  if (!canSaveSettings.value || loadingSettings.value || loadFailed.value || savingSettings.value) return
   settingsError.value = ''
   savingSettings.value = true
   try {
-    const normalizedFields = editorTextToFields(draftText.value)
+    saveActiveTemplateDraft()
+    const normalizedFields = sharedDraftText.value !== initialSharedText.value
+      ? editorTextToFields(sharedDraftText.value)
+      : undefined
     const templates = savedTemplates.value.map(template => ({
       id: template.id,
       name: template.name,
       description: template.description,
       bindingTarget: template.bindingTarget,
       boundUserIds: template.boundUserIds,
-      fields: template.id === selectedTemplateId.value
-        ? normalizedFields
-        : normalizeLogisticsCopyFields(template.fields)
+      fields: template.fields
     }))
     const response = await putLogisticsCopySettings(normalizedFields, templates)
     if (!response?.success) throw new Error(response?.message || '保存复制字段设置失败')
     draftText.value = fieldsToEditorText(response.data?.fields)
+    sharedDraftText.value = draftText.value
+    initialSharedText.value = draftText.value
     savedTemplates.value = normalizeSavedTemplates(response.data?.templates)
+    persistedTemplateIds.value = new Set(savedTemplates.value.map(template => template.id))
+    selectedTemplateId.value = ''
     emit('saved', {
-      fields: editorTextToFields(draftText.value),
+      fields: response.data?.fields,
       templates: savedTemplates.value
     })
     showNotice('success', '复制字段设置保存成功')
@@ -819,6 +903,7 @@ const handleSave = async () => {
 
 .logistics-copy-settings-dialog {
   width: min(1440px, calc(100vw - 32px));
+  height: min(820px, calc(100dvh - 32px));
   max-height: min(900px, calc(100vh - 32px));
   display: flex;
   flex-direction: column;
@@ -914,6 +999,7 @@ const handleSave = async () => {
 }
 
 .settings-body {
+  flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: minmax(340px, 0.75fr) minmax(330px, 1.1fr) minmax(280px, 0.65fr);
@@ -977,7 +1063,7 @@ const handleSave = async () => {
 
 .copy-editor-input {
   width: 100%;
-  min-height: 420px;
+  min-height: 0;
   flex: 1;
   padding: 16px;
   color: #243244;
@@ -1100,6 +1186,8 @@ const handleSave = async () => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-height: 36px;
+  cursor: pointer;
 }
 
 .template-select-button {
@@ -1107,7 +1195,9 @@ const handleSave = async () => {
   align-items: center;
   flex: 1;
   min-width: 0;
-  padding: 0;
+  min-height: 36px;
+  align-self: stretch;
+  padding: 4px 0;
   color: inherit;
   text-align: left;
   background: transparent;
@@ -1148,6 +1238,11 @@ const handleSave = async () => {
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   font-size: 12px;
+}
+
+.template-binding-select:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
 }
 
 .template-binding-users {
@@ -1484,6 +1579,11 @@ const handleSave = async () => {
   cursor: grabbing;
 }
 
+.variable-chip:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .row-separator-chip {
   color: #8a5a03;
   background: #fffaf0;
@@ -1517,6 +1617,7 @@ const handleSave = async () => {
   display: flex;
   align-items: center;
   gap: 10px;
+  margin-left: auto;
 }
 
 .reset-button,
@@ -1619,6 +1720,7 @@ const handleSave = async () => {
   .variable-panel {
     grid-column: 1;
     grid-row: 1;
+    height: clamp(300px, 55dvh, 520px);
   }
 
   .field-editor {
@@ -1640,6 +1742,7 @@ const handleSave = async () => {
   }
 
   .logistics-copy-settings-dialog {
+    height: min(820px, calc(100dvh - 24px));
     max-height: calc(100vh - 24px);
   }
 
@@ -1660,6 +1763,10 @@ const handleSave = async () => {
   .variable-panel,
   .copy-preview {
     min-height: 220px;
+  }
+
+  .variable-panel {
+    height: clamp(240px, 55dvh, 480px);
   }
 
   .copy-editor-input {
