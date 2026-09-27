@@ -52,6 +52,7 @@
 
     <print-designer
       ref="designerRef"
+      :key="designerInstanceKey"
       class="preview-driver"
       @ready="handleDesignerReady"
     ></print-designer>
@@ -92,6 +93,8 @@ const printErrorMessage = ref('')
 const autoPrintConsumed = ref(false)
 const activePrintConfig = ref(getPrintClientConfig())
 const renderedTemplateId = ref(null)
+const designerInstanceKey = ref(0)
+let renderRequestId = 0
 
 const getTemplateIdentity = (template) => {
   const templateId = template?.id
@@ -519,7 +522,15 @@ const clonePreviewDesign = (
 
 const loadPreview = async () => {
   const designer = designerRef.value
-  if (!designer || !props.template) return
+  const template = props.template
+  const requestId = ++renderRequestId
+  if (!designer || !template) return
+
+  const isCurrentRequest = () => (
+    requestId === renderRequestId &&
+    props.visible &&
+    props.template === template
+  )
 
   loading.value = true
   errorMessage.value = ''
@@ -529,7 +540,7 @@ const loadPreview = async () => {
   printErrorMessage.value = ''
 
   try {
-    const design = props.template.content || props.template.design || props.template.data
+    const design = template.content || template.design || template.data
     if (!design) {
       throw new Error('该模板还没有保存设计内容，请先在模板管理中完成设计并保存。')
     }
@@ -549,13 +560,16 @@ const loadPreview = async () => {
       await designer.getPreviewHtml(),
       previewRuntime.design
     )
+    if (!isCurrentRequest()) return
+
     renderedHtml.value = html
     previewHtml.value = wrapPreviewHtml(html)
-    renderedTemplateId.value = getTemplateIdentity(props.template)
+    renderedTemplateId.value = getTemplateIdentity(template)
   } catch (error) {
+    if (!isCurrentRequest()) return
     errorMessage.value = error?.message || '模板预览生成失败'
   } finally {
-    loading.value = false
+    if (isCurrentRequest()) loading.value = false
   }
 }
 
@@ -566,17 +580,16 @@ const handleDesignerReady = async () => {
 
 const openPreview = async () => {
   activePrintConfig.value = getPrintClientConfig()
+  autoPrintConsumed.value = false
   designerReady.value = false
   loading.value = true
   errorMessage.value = ''
   previewHtml.value = ''
   renderedHtml.value = ''
+  renderedTemplateId.value = null
   printErrorMessage.value = ''
-  await nextTick()
-  if (designerRef.value?.getTemplateData?.()) {
-    designerReady.value = true
-    await loadPreview()
-  }
+  renderRequestId += 1
+  designerInstanceKey.value += 1
 }
 
 watch(
@@ -584,6 +597,9 @@ watch(
   (visible) => {
     if (!visible) {
       autoPrintConsumed.value = false
+      renderRequestId += 1
+      designerReady.value = false
+      loading.value = false
       renderedTemplateId.value = null
       renderedHtml.value = ''
       previewHtml.value = ''
@@ -597,8 +613,7 @@ watch(
   () => props.variables,
   () => {
     if (props.visible && designerReady.value) {
-      renderedTemplateId.value = null
-      loadPreview()
+      openPreview()
     }
   },
   { deep: true }
@@ -608,8 +623,7 @@ watch(
   () => props.template,
   () => {
     if (props.visible && designerReady.value) {
-      renderedTemplateId.value = null
-      loadPreview()
+      openPreview()
     }
   },
   { deep: true }
@@ -618,19 +632,28 @@ watch(
 watch(
   () => props.trailingBlankRows,
   () => {
-    if (props.visible && designerReady.value) loadPreview()
+    if (props.visible && designerReady.value) openPreview()
   }
 )
 
 watch(
   () => props.hideZeroValues,
   () => {
-    if (props.visible && designerReady.value) loadPreview()
+    if (props.visible && designerReady.value) openPreview()
   }
 )
 
 const handlePrint = async () => {
-  if (!renderedHtml.value || printing.value) return
+  const currentTemplateId = getTemplateIdentity(props.template)
+  if (
+    !renderedHtml.value ||
+    !currentTemplateId ||
+    renderedTemplateId.value !== currentTemplateId ||
+    loading.value ||
+    printing.value
+  ) {
+    return
+  }
 
   printing.value = true
   printErrorMessage.value = ''
@@ -658,7 +681,7 @@ const handlePrint = async () => {
 }
 
 watch(
-  [() => props.visible, () => props.autoPrint, renderedHtml],
+  [() => props.visible, () => props.autoPrint, renderedHtml, renderedTemplateId, loading],
   async ([visible, autoPrint, html]) => {
     if (!visible) {
       autoPrintConsumed.value = false
