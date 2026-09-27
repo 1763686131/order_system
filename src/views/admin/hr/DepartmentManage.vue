@@ -129,6 +129,8 @@
                 <th>工号</th>
                 <th>职位</th>
                 <th>联系电话</th>
+                <th>生日</th>
+                <th>年龄</th>
                 <th>账号状态</th>
                 <th>在职状态</th>
               </tr>
@@ -187,6 +189,8 @@
                   <span v-else>{{ employee.position || '暂无职位' }}</span>
                 </td>
                 <td class="tabular">{{ employee.phone || '—' }}</td>
+                <td class="tabular">{{ employee.birthDate || employee.birthday || '—' }}</td>
+                <td class="tabular">{{ employeeAge(employee) }}</td>
                 <td>
                   <span :class="['status-badge', employee.accountStatus]">
                     {{ accountStatusLabel(employee.accountStatus) }}
@@ -199,7 +203,7 @@
                 </td>
               </tr>
               <tr v-if="filteredEmployees.length === 0">
-                <td colspan="6">
+                <td colspan="8">
                   <div class="empty-state">
                     <strong>暂无匹配员工</strong>
                     <span>调整部门或搜索条件后再试</span>
@@ -763,6 +767,31 @@ function getEmployeeDepartmentIds(employee) {
   return (employee?.departmentIds || (employee?.departmentId ? [employee.departmentId] : []))
     .map(Number)
     .filter(Boolean)
+}
+
+function employeeAge(employee) {
+  const birthDate = String(employee?.birthDate || employee?.birthday || '').trim()
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(birthDate)
+  if (!match) return '—'
+
+  const birthYear = Number(match[1])
+  const birthMonth = Number(match[2])
+  const birthDay = Number(match[3])
+  const today = new Date()
+  const birth = new Date(birthYear, birthMonth - 1, birthDay)
+  const isValidDate =
+    birth.getFullYear() === birthYear
+    && birth.getMonth() === birthMonth - 1
+    && birth.getDate() === birthDay
+  if (!isValidDate || birth > today) return '—'
+
+  let age = today.getFullYear() - birthYear
+  const birthdayPassed =
+    today.getMonth() > birthMonth - 1
+    || (today.getMonth() === birthMonth - 1 && today.getDate() >= birthDay)
+  if (!birthdayPassed) age -= 1
+
+  return `${age}岁`
 }
 
 async function addSelectedEmployees() {
@@ -1399,8 +1428,10 @@ onBeforeUnmount(() => {
 .employee-table th:nth-child(2) { width: 100px; }
 .employee-table th:nth-child(3) { width: 140px; }
 .employee-table th:nth-child(4) { width: 135px; }
-.employee-table th:nth-child(5),
-.employee-table th:nth-child(6) { width: 100px; }
+.employee-table th:nth-child(5) { width: 120px; }
+.employee-table th:nth-child(6) { width: 72px; }
+.employee-table th:nth-child(7),
+.employee-table th:nth-child(8) { width: 100px; }
 
 .position-cell {
   min-width: 160px;

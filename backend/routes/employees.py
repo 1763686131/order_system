@@ -229,6 +229,7 @@ def _serialize_employee_list_item(conn, row):
         "departmentStatus",
         "position",
         "phone",
+        "birthDate",
         "employmentStatus",
         "employmentType",
         "hireDate",

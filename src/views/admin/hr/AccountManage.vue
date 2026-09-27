@@ -110,6 +110,8 @@
               <th class="col-account">登录账号</th>
               <th class="col-job">部门 / 职位</th>
               <th class="col-phone">联系电话</th>
+              <th class="col-birthday">生日</th>
+              <th class="col-age">年龄</th>
               <th class="col-status">状态</th>
               <th class="col-role">权限组</th>
               <th class="col-device">设备信息</th>
@@ -154,6 +156,8 @@
                 </div>
               </td>
               <td class="tabular cell-muted">{{ employee.phone || '—' }}</td>
+              <td class="tabular cell-muted">{{ employee.birthDate || employee.birthday || '—' }}</td>
+              <td class="tabular cell-muted">{{ employeeAge(employee) }}</td>
               <td>
                 <span :class="['mini-badge', employmentStatusClass(employee.employmentStatus)]">
                   <i></i>{{ employmentStatusLabel(employee.employmentStatus) }}
@@ -258,7 +262,7 @@
               </td>
             </tr>
             <tr v-if="filteredEmployees.length === 0">
-              <td colspan="9">
+              <td colspan="11">
                 <div class="empty-state">
                   <span class="empty-icon">—</span>
                   <strong>没有匹配的员工</strong>
@@ -1277,6 +1281,31 @@ function syncIdentityFields() {
     draft.value.nativePlace = regionName
     autoNativePlace.value = regionName
   }
+}
+
+function employeeAge(employee) {
+  const birthDate = String(employee?.birthDate || employee?.birthday || '').trim()
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(birthDate)
+  if (!match) return '—'
+
+  const birthYear = Number(match[1])
+  const birthMonth = Number(match[2])
+  const birthDay = Number(match[3])
+  const today = new Date()
+  const birth = new Date(birthYear, birthMonth - 1, birthDay)
+  const isValidDate =
+    birth.getFullYear() === birthYear
+    && birth.getMonth() === birthMonth - 1
+    && birth.getDate() === birthDay
+  if (!isValidDate || birth > today) return '—'
+
+  let age = today.getFullYear() - birthYear
+  const birthdayPassed =
+    today.getMonth() > birthMonth - 1
+    || (today.getMonth() === birthMonth - 1 && today.getDate() >= birthDay)
+  if (!birthdayPassed) age -= 1
+
+  return `${age}岁`
 }
 
 const ID_REGION_PREFIXES = {
@@ -2365,7 +2394,7 @@ input[type='checkbox'] {
 
 .employee-table {
   width: 100%;
-  min-width: 1470px;
+  min-width: 1662px;
   table-layout: fixed;
   border-collapse: collapse;
 }
@@ -2427,6 +2456,14 @@ input[type='checkbox'] {
 
 .col-phone {
   width: 120px;
+}
+
+.col-birthday {
+  width: 120px;
+}
+
+.col-age {
+  width: 72px;
 }
 
 .col-status {
