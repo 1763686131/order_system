@@ -91,6 +91,14 @@ const printing = ref(false)
 const printErrorMessage = ref('')
 const autoPrintConsumed = ref(false)
 const activePrintConfig = ref(getPrintClientConfig())
+const renderedTemplateId = ref(null)
+
+const getTemplateIdentity = (template) => {
+  const templateId = template?.id
+  return templateId === undefined || templateId === null
+    ? ''
+    : String(templateId)
+}
 
 const resolvedPrinterName = computed(() => (
   activePrintConfig.value.mode === 'browser'
@@ -517,6 +525,7 @@ const loadPreview = async () => {
   errorMessage.value = ''
   previewHtml.value = ''
   renderedHtml.value = ''
+  renderedTemplateId.value = null
   printErrorMessage.value = ''
 
   try {
@@ -542,6 +551,7 @@ const loadPreview = async () => {
     )
     renderedHtml.value = html
     previewHtml.value = wrapPreviewHtml(html)
+    renderedTemplateId.value = getTemplateIdentity(props.template)
   } catch (error) {
     errorMessage.value = error?.message || '模板预览生成失败'
   } finally {
@@ -572,14 +582,24 @@ const openPreview = async () => {
 watch(
   () => props.visible,
   (visible) => {
-    if (visible) openPreview()
+    if (!visible) {
+      autoPrintConsumed.value = false
+      renderedTemplateId.value = null
+      renderedHtml.value = ''
+      previewHtml.value = ''
+      return
+    }
+    openPreview()
   }
 )
 
 watch(
   () => props.variables,
   () => {
-    if (props.visible && designerReady.value) loadPreview()
+    if (props.visible && designerReady.value) {
+      renderedTemplateId.value = null
+      loadPreview()
+    }
   },
   { deep: true }
 )
@@ -587,7 +607,10 @@ watch(
 watch(
   () => props.template,
   () => {
-    if (props.visible && designerReady.value) loadPreview()
+    if (props.visible && designerReady.value) {
+      renderedTemplateId.value = null
+      loadPreview()
+    }
   },
   { deep: true }
 )
@@ -641,7 +664,18 @@ watch(
       autoPrintConsumed.value = false
       return
     }
-    if (!autoPrint || !html || autoPrintConsumed.value || printing.value) return
+    const currentTemplateId = getTemplateIdentity(props.template)
+    if (
+      !autoPrint ||
+      !html ||
+      !currentTemplateId ||
+      renderedTemplateId.value !== currentTemplateId ||
+      loading.value ||
+      autoPrintConsumed.value ||
+      printing.value
+    ) {
+      return
+    }
 
     autoPrintConsumed.value = true
     await nextTick()
