@@ -2,34 +2,94 @@
   <div class="order-form-page">
     <!-- 顶部信息区 -->
     <div class="top-info-bar">
-      <div class="info-group">
+      <div
+        class="info-group validation-anchor"
+        :class="{ 'has-validation-error': validationHint.key === 'storeId' }"
+      >
         <label>门店</label>
-        <select v-model="formData.storeId" @change="onStoreChange">
+        <select
+          v-model="formData.storeId"
+          :ref="element => setValidationFieldRef('storeId', element)"
+          @change="onStoreChange(); dismissValidationHint('storeId')"
+        >
           <option value="">请选择门店</option>
           <option v-for="store in stores" :key="store.id" :value="store.id">
             {{ store.name }}
           </option>
         </select>
+        <Transition name="field-validation">
+          <div
+            v-if="validationHint.key === 'storeId'"
+            class="field-validation-popover"
+            :class="{ 'is-above': validationHintPlacement === 'above' }"
+            :style="validationHintStyle"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span class="field-validation-icon" aria-hidden="true">!</span>
+            <span class="field-validation-text">{{ validationHint.message }}</span>
+          </div>
+        </Transition>
       </div>
 
-      <div class="info-group">
+      <div
+        class="info-group validation-anchor"
+        :class="{ 'has-validation-error': validationHint.key === 'customerId' }"
+      >
         <label>客户</label>
-        <select v-model="formData.customerId" @change="onCustomerChange">
+        <select
+          v-model="formData.customerId"
+          :ref="element => setValidationFieldRef('customerId', element)"
+          @change="onCustomerChange(); dismissValidationHint('customerId')"
+        >
           <option value="">请选择客户</option>
           <option v-for="customer in filteredCustomers" :key="customer.id" :value="customer.id">
             {{ customer.customerName }}
           </option>
         </select>
+        <Transition name="field-validation">
+          <div
+            v-if="validationHint.key === 'customerId'"
+            class="field-validation-popover"
+            :class="{ 'is-above': validationHintPlacement === 'above' }"
+            :style="validationHintStyle"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span class="field-validation-icon" aria-hidden="true">!</span>
+            <span class="field-validation-text">{{ validationHint.message }}</span>
+          </div>
+        </Transition>
       </div>
 
-      <div class="info-group">
+      <div
+        class="info-group validation-anchor"
+        :class="{ 'has-validation-error': validationHint.key === 'warehouseId' }"
+      >
         <label>仓库</label>
-        <select v-model="formData.warehouseId" @change="onWarehouseChange">
+        <select
+          v-model="formData.warehouseId"
+          :ref="element => setValidationFieldRef('warehouseId', element)"
+          @change="onWarehouseChange(); dismissValidationHint('warehouseId')"
+        >
           <option value="">请选择仓库</option>
           <option v-for="warehouse in filteredWarehouses" :key="warehouse.id" :value="warehouse.id">
             {{ warehouse.name }}
           </option>
         </select>
+        <Transition name="field-validation">
+          <div
+            v-if="validationHint.key === 'warehouseId'"
+            class="field-validation-popover"
+            :class="{ 'is-above': validationHintPlacement === 'above' }"
+            :style="validationHintStyle"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span class="field-validation-icon" aria-hidden="true">!</span>
+            <span class="field-validation-text">{{ validationHint.message }}</span>
+          </div>
+        </Transition>
       </div>
 
       <div class="info-group">
@@ -57,14 +117,58 @@
 
     <!-- 联系人信息区 -->
     <div class="contact-info-bar">
-      <div class="info-group">
+      <div
+        class="info-group validation-anchor"
+        :class="{ 'has-validation-error': validationHint.key === 'contactPerson' }"
+      >
         <label>联系人:</label>
-        <input type="text" v-model="formData.contactPerson" placeholder="请输入联系人" />
+        <input
+          type="text"
+          v-model="formData.contactPerson"
+          placeholder="请输入联系人"
+          :ref="element => setValidationFieldRef('contactPerson', element)"
+          @input="dismissValidationHint('contactPerson')"
+        />
+        <Transition name="field-validation">
+          <div
+            v-if="validationHint.key === 'contactPerson'"
+            class="field-validation-popover"
+            :class="{ 'is-above': validationHintPlacement === 'above' }"
+            :style="validationHintStyle"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span class="field-validation-icon" aria-hidden="true">!</span>
+            <span class="field-validation-text">{{ validationHint.message }}</span>
+          </div>
+        </Transition>
       </div>
 
-      <div class="info-group">
+      <div
+        class="info-group validation-anchor"
+        :class="{ 'has-validation-error': validationHint.key === 'contactPhone' }"
+      >
         <label>联系方式:</label>
-        <input type="tel" v-model="formData.contactPhone" placeholder="请输入联系方式" />
+        <input
+          type="tel"
+          v-model="formData.contactPhone"
+          placeholder="请输入联系方式"
+          :ref="element => setValidationFieldRef('contactPhone', element)"
+          @input="dismissValidationHint('contactPhone')"
+        />
+        <Transition name="field-validation">
+          <div
+            v-if="validationHint.key === 'contactPhone'"
+            class="field-validation-popover"
+            :class="{ 'is-above': validationHintPlacement === 'above' }"
+            :style="validationHintStyle"
+            role="alert"
+            aria-live="assertive"
+          >
+            <span class="field-validation-icon" aria-hidden="true">!</span>
+            <span class="field-validation-text">{{ validationHint.message }}</span>
+          </div>
+        </Transition>
       </div>
 
       <div class="info-group wide">
@@ -120,7 +224,10 @@
               <button class="btn-icon btn-add" @click="addRow(index)" title="在下方插入一行">+</button>
               <button class="btn-icon btn-remove" @click="removeRow(index)" title="删除此行">×</button>
             </td>
-            <td class="product-col">
+            <td
+              class="product-col validation-anchor-cell"
+              :class="{ 'has-validation-error': validationHint.key === `item-product-${index}` }"
+            >
               <div class="product-select-wrapper">
                 <input
                   type="text"
@@ -132,13 +239,51 @@
                   class="product-input"
                 />
               </div>
+              <Transition name="field-validation">
+                <div
+                  v-if="validationHint.key === `item-product-${index}`"
+                  class="field-validation-popover"
+                  :class="{ 'is-above': validationHintPlacement === 'above' }"
+                  :style="validationHintStyle"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  <span class="field-validation-icon" aria-hidden="true">!</span>
+                  <span class="field-validation-text">{{ validationHint.message }}</span>
+                </div>
+              </Transition>
             </td>
             <td><input type="text" v-model="item.spec" readonly class="readonly-input" /></td>
             <td><input type="text" v-model="item.unit" readonly class="readonly-input" /></td>
             <td><input type="text" v-model="item.warehouseName" readonly class="readonly-input" /></td>
             <td class="right"><input type="text" :value="item.currentStock || ''" readonly class="readonly-input" /></td>
             <td><input type="number" v-model.number="item.packages" @input="onPackagesChange(index)" min="0" /></td>
-            <td><input type="number" v-model.number="item.quantity" @input="onQuantityChange(index)" min="0" step="0.01" /></td>
+            <td
+              class="validation-anchor-cell"
+              :class="{ 'has-validation-error': validationHint.key === `item-quantity-${index}` }"
+            >
+              <input
+                type="number"
+                v-model.number="item.quantity"
+                :ref="element => setValidationFieldRef(`item-quantity-${index}`, element)"
+                @input="onQuantityChange(index); dismissValidationHint(`item-quantity-${index}`)"
+                min="0"
+                step="0.01"
+              />
+              <Transition name="field-validation">
+                <div
+                  v-if="validationHint.key === `item-quantity-${index}`"
+                  class="field-validation-popover"
+                  :class="{ 'is-above': validationHintPlacement === 'above' }"
+                  :style="validationHintStyle"
+                  role="alert"
+                  aria-live="assertive"
+                >
+                  <span class="field-validation-icon" aria-hidden="true">!</span>
+                  <span class="field-validation-text">{{ validationHint.message }}</span>
+                </div>
+              </Transition>
+            </td>
             <td><input type="number" v-model.number="item.price" @input="onPriceChange(index)" min="0" step="0.01" /></td>
             <td v-if="showTaxColumns">
               <input v-if="item.productId" type="number" v-model.number="item.taxRate" @input="onItemTaxRateChange(index)" min="0" max="100" step="0.01" />
@@ -487,6 +632,79 @@ const showModal = ref(false)
 const modalType = ref('success') // success 或 error
 const modalTitle = ref('')
 const modalMessage = ref('')
+const validationHint = ref({ key: '', message: '' })
+const validationHintStyle = ref({})
+const validationHintPlacement = ref('below')
+const validationFieldRefs = new Map()
+let validationHintTimer = null
+
+const setValidationFieldRef = (key, element) => {
+  if (element) {
+    validationFieldRefs.set(key, element)
+  } else {
+    validationFieldRefs.delete(key)
+  }
+}
+
+const dismissValidationHint = (key = '') => {
+  if (key && validationHint.value.key !== key) return
+
+  clearTimeout(validationHintTimer)
+  validationHint.value = { key: '', message: '' }
+  validationHintStyle.value = {}
+}
+
+const updateValidationHintPosition = () => {
+  const target = validationFieldRefs.get(validationHint.value.key)
+  if (!target || !validationHint.value.key) {
+    validationHintStyle.value = {}
+    return
+  }
+
+  const rect = target.getBoundingClientRect()
+  const viewportPadding = 16
+  const gap = 10
+  const estimatedHeight = 48
+  const popoverWidth = Math.min(320, window.innerWidth - viewportPadding * 2)
+  const spaceBelow = window.innerHeight - rect.bottom - viewportPadding
+  const spaceAbove = rect.top - viewportPadding
+  const shouldPlaceAbove =
+    (validationHint.value.key.startsWith('item-') || spaceBelow < estimatedHeight + gap) &&
+    spaceAbove >= estimatedHeight + gap
+
+  validationHintPlacement.value = shouldPlaceAbove ? 'above' : 'below'
+  const top = shouldPlaceAbove
+    ? Math.max(viewportPadding, rect.top - estimatedHeight - gap)
+    : Math.min(window.innerHeight - estimatedHeight - viewportPadding, rect.bottom + gap)
+  const left = Math.min(
+    Math.max(viewportPadding, rect.left),
+    Math.max(viewportPadding, window.innerWidth - popoverWidth - viewportPadding)
+  )
+
+  validationHintStyle.value = {
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    maxWidth: `${Math.round(popoverWidth)}px`
+  }
+}
+
+const showValidationHint = (key, message) => {
+  clearTimeout(validationHintTimer)
+
+  const target = validationFieldRefs.get(key)
+  if (target && typeof target.focus === 'function' && !key.startsWith('item-product-')) {
+    target.focus({ preventScroll: true })
+  }
+
+  validationHint.value = { key, message }
+  nextTick(updateValidationHintPosition)
+  validationHintTimer = setTimeout(() => {
+    if (validationHint.value.key === key) {
+      validationHint.value = { key: '', message: '' }
+      validationHintStyle.value = {}
+    }
+  }, 4000)
+}
 
 const dismissSaveToast = () => {
   saveToast.value.visible = false
@@ -996,8 +1214,10 @@ const productDropdownStyle = ref({})
 const setProductInputRef = (index, element) => {
   if (element) {
     productInputRefs.set(index, element)
+    setValidationFieldRef(`item-product-${index}`, element)
   } else {
     productInputRefs.delete(index)
+    setValidationFieldRef(`item-product-${index}`, null)
   }
 }
 
@@ -1536,6 +1756,7 @@ const handleProductInput = (index) => {
   const item = formData.value.items[index]
   if (!item) return
 
+  dismissValidationHint(`item-product-${index}`)
   const searchText = item.goodsName
   if (item.productId) {
     clearProductRowData(index, searchText)
@@ -1930,32 +2151,34 @@ watch(() => formData.value.customerId, (newCustomerId) => {
 
 // 表单校验
 const validateForm = () => {
+  dismissValidationHint()
+
   // 1. 检查门店
   if (!formData.value.storeId) {
-    showErrorModal('请选择门店')
+    showValidationHint('storeId', '请选择门店。')
     return false
   }
 
   // 2. 检查客户
   if (!formData.value.customerId) {
-    showErrorModal('请选择客户')
+    showValidationHint('customerId', '请选择客户。')
     return false
   }
 
   // 3. 检查仓库
   if (!formData.value.warehouseId) {
-    showErrorModal('请选择仓库')
+    showValidationHint('warehouseId', '请选择仓库。')
     return false
   }
 
   // 4. 检查联系人信息
   if (!formData.value.contactPerson) {
-    showErrorModal('请填写联系人')
+    showValidationHint('contactPerson', '请填写联系人。')
     return false
   }
 
   if (!formData.value.contactPhone) {
-    showErrorModal('请填写联系方式')
+    showValidationHint('contactPhone', '请填写联系方式。')
     return false
   }
 
@@ -1964,18 +2187,25 @@ const validateForm = () => {
     item.productId && item.quantity && item.quantity > 0
   )
 
-  if (validItems.length === 0) {
-    showErrorModal('请至少添加一条商品明细，并填写数量')
-    return false
-  }
-
   // 检查是否有填了商品但没填数量的行
-  const hasInvalidItems = formData.value.items.some(item =>
+  const invalidItemIndex = formData.value.items.findIndex(item =>
     item.productId && (!item.quantity || item.quantity <= 0)
   )
 
-  if (hasInvalidItems) {
-    showErrorModal('已选择商品的行必须填写数量')
+  if (invalidItemIndex !== -1) {
+    showValidationHint(`item-quantity-${invalidItemIndex}`, '请填写商品数量。')
+    return false
+  }
+
+  if (validItems.length === 0) {
+    const productIndexWithText = formData.value.items.findIndex(item =>
+      item.goodsName && !item.productId
+    )
+    const firstEmptyProductIndex = formData.value.items.findIndex(item => !item.productId)
+    const productIndex = productIndexWithText !== -1
+      ? productIndexWithText
+      : (firstEmptyProductIndex === -1 ? 0 : firstEmptyProductIndex)
+    showValidationHint(`item-product-${productIndex}`, '请至少添加一条商品明细。')
     return false
   }
 
@@ -2148,6 +2378,7 @@ const cancelClear = () => {
 }
 
 const resetOrderFields = () => {
+  dismissValidationHint()
   formData.value.storeId = ''
   formData.value.customerId = ''
   customerReceivable.value = 0
@@ -2193,6 +2424,8 @@ watch(
 onMounted(async () => {
   window.addEventListener('resize', updateProductDropdownPosition)
   window.addEventListener('scroll', updateProductDropdownPosition, true)
+  window.addEventListener('resize', updateValidationHintPosition)
+  window.addEventListener('scroll', updateValidationHintPosition, true)
 
   console.log('OrderForm mounted, props.orderId:', props.orderId)
   console.log('isEditMode:', isEditMode.value)
@@ -2260,7 +2493,11 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateProductDropdownPosition)
   window.removeEventListener('scroll', updateProductDropdownPosition, true)
+  window.removeEventListener('resize', updateValidationHintPosition)
+  window.removeEventListener('scroll', updateValidationHintPosition, true)
   productInputRefs.clear()
+  validationFieldRefs.clear()
+  clearTimeout(validationHintTimer)
   clearTimeout(draftSaveTimer)
   clearTimeout(saveToastTimer)
   persistDraft()
@@ -2337,6 +2574,109 @@ async function generateNewOrderNumber() {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.validation-anchor,
+.validation-anchor-cell {
+  position: relative;
+}
+
+.has-validation-error input,
+.has-validation-error select {
+  border-color: #f26b21 !important;
+  box-shadow: 0 0 0 2px rgba(242, 107, 33, 0.12) !important;
+}
+
+.field-validation-popover {
+  position: fixed;
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 188px;
+  min-height: 42px;
+  padding: 8px 12px 8px 9px;
+  color: #172033;
+  background: #fff;
+  border: 1px solid #8b8f96;
+  border-radius: 4px;
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.2);
+  box-sizing: border-box;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.field-validation-popover::before,
+.field-validation-popover::after {
+  position: absolute;
+  left: 18px;
+  width: 0;
+  height: 0;
+  content: "";
+  pointer-events: none;
+}
+
+.field-validation-popover::before {
+  top: -7px;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid #8b8f96;
+  border-left: 7px solid transparent;
+}
+
+.field-validation-popover::after {
+  top: -6px;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #fff;
+  border-left: 6px solid transparent;
+}
+
+.field-validation-popover.is-above::before {
+  top: auto;
+  bottom: -7px;
+  border-top: 7px solid #8b8f96;
+  border-right: 7px solid transparent;
+  border-bottom: none;
+  border-left: 7px solid transparent;
+}
+
+.field-validation-popover.is-above::after {
+  top: auto;
+  bottom: -6px;
+  border-top: 6px solid #fff;
+  border-right: 6px solid transparent;
+  border-bottom: none;
+  border-left: 6px solid transparent;
+}
+
+.field-validation-icon {
+  display: inline-flex;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: #f26b21;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.field-validation-text {
+  color: #30343b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.field-validation-enter-active,
+.field-validation-leave-active {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.field-validation-enter-from,
+.field-validation-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
 }
 
 .info-group label {
