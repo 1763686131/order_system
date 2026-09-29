@@ -37,16 +37,20 @@
         :class="{ 'has-validation-error': validationHint.key === 'customerId' }"
       >
         <label>客户</label>
-        <select
-          v-model="formData.customerId"
-          :ref="element => setValidationFieldRef('customerId', element)"
-          @change="onCustomerChange(); dismissValidationHint('customerId')"
-        >
-          <option value="">请选择客户</option>
-          <option v-for="customer in filteredCustomers" :key="customer.id" :value="customer.id">
-            {{ customer.customerName }}
-          </option>
-        </select>
+        <div class="customer-picker">
+          <input
+            type="text"
+            class="customer-search-input"
+            :value="customerDropdownOpen ? customerSearch : selectedCustomerName"
+            placeholder="请选择客户"
+            autocomplete="off"
+            :ref="setCustomerInputRef"
+            @focus="openCustomerDropdown"
+            @input="handleCustomerSearchInput"
+            @keydown.escape.prevent="closeCustomerDropdown"
+          />
+          <span class="customer-picker-arrow" aria-hidden="true"></span>
+        </div>
         <Transition name="field-validation">
           <div
             v-if="validationHint.key === 'customerId'"
@@ -354,6 +358,60 @@
           >
             {{ product.notes || product.productNotes || product.remark || '-' }}
           </span>
+        </div>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="customerDropdownOpen"
+        ref="customerDropdownRef"
+        class="customer-dropdown"
+        :style="customerDropdownStyle"
+        @mousedown.prevent
+      >
+        <div v-if="paginatedCustomers.length" class="customer-option-list">
+          <button
+            v-for="customer in paginatedCustomers"
+            :key="customer.id"
+            type="button"
+            class="customer-option"
+            :class="{ selected: String(customer.id) === String(formData.customerId) }"
+            @click="selectCustomer(customer)"
+          >
+            <span class="customer-option-name">
+              {{ customer.customerName || customer.name || '未命名客户' }}
+            </span>
+            <span class="customer-option-contact">
+              {{ customer.contactPerson || '未填写联系人' }}
+            </span>
+            <span class="customer-option-phone">
+              {{ customer.phone || '未填写电话' }}
+            </span>
+          </button>
+        </div>
+        <div v-else class="customer-empty">没有匹配的客户</div>
+
+        <div v-if="customerTotalPages > 1" class="customer-pagination">
+          <button
+            type="button"
+            class="customer-page-button"
+            title="上一页"
+            :disabled="customerPage <= 1"
+            @click="changeCustomerPage(customerPage - 1)"
+          >
+            ‹
+          </button>
+          <span>{{ customerPage }} / {{ customerTotalPages }}</span>
+          <button
+            type="button"
+            class="customer-page-button"
+            title="下一页"
+            :disabled="customerPage >= customerTotalPages"
+            @click="changeCustomerPage(customerPage + 1)"
+          >
+            ›
+          </button>
         </div>
       </div>
     </Teleport>
@@ -1047,7 +1105,168 @@ const filteredCustomers = computed(() => {
   if (!formData.value.storeId) {
     return customers.value
   }
-  return customers.value.filter(c => c.storeId === formData.value.storeId)
+  return customers.value.filter(c =>
+    String(c.storeId) === String(formData.value.storeId)
+  )
+})
+
+const CUSTOMER_PAGE_SIZE = 15
+const customerSearch = ref('')
+const customerPage = ref(1)
+const customerDropdownOpen = ref(false)
+const customerInputRef = ref(null)
+const customerDropdownRef = ref(null)
+const customerDropdownStyle = ref({})
+
+const setCustomerInputRef = (element) => {
+  customerInputRef.value = element
+  setValidationFieldRef('customerId', element)
+}
+
+const customerSearchResults = computed(() => {
+  const keyword = String(customerSearch.value || '').trim().toLowerCase()
+  if (!keyword) {
+    return filteredCustomers.value
+  }
+
+  return filteredCustomers.value.filter(customer => {
+    const searchableValues = [
+      customer.customerName,
+      customer.name,
+      customer.customerCode,
+      customer.code,
+      customer.contactPerson,
+      customer.phone
+    ]
+
+    return searchableValues.some(value =>
+      String(value || '').toLowerCase().includes(keyword)
+    )
+  })
+})
+
+const customerTotalPages = computed(() => Math.max(
+  1,
+  Math.ceil(customerSearchResults.value.length / CUSTOMER_PAGE_SIZE)
+))
+
+const paginatedCustomers = computed(() => {
+  const start = (customerPage.value - 1) * CUSTOMER_PAGE_SIZE
+  return customerSearchResults.value.slice(start, start + CUSTOMER_PAGE_SIZE)
+})
+
+const updateCustomerDropdownPosition = () => {
+  const input = customerInputRef.value
+  if (!input || !customerDropdownOpen.value) {
+    customerDropdownStyle.value = {}
+    return
+  }
+
+  const rect = input.getBoundingClientRect()
+  const viewportPadding = 12
+  const gap = 4
+  const dropdownWidth = Math.min(
+    420,
+    Math.max(280, window.innerWidth - viewportPadding * 2)
+  )
+  const rowHeight = 38
+  const paginationHeight = customerTotalPages.value > 1 ? 44 : 0
+  const desiredHeight = Math.min(
+    620,
+    Math.max(44, paginatedCustomers.value.length * rowHeight + paginationHeight)
+  )
+  const spaceBelow = Math.max(120, window.innerHeight - rect.bottom - viewportPadding)
+  const spaceAbove = Math.max(120, rect.top - viewportPadding)
+  const shouldOpenAbove = desiredHeight > spaceBelow && spaceAbove > spaceBelow
+  const availableHeight = shouldOpenAbove ? spaceAbove : spaceBelow
+  const height = Math.min(desiredHeight, availableHeight)
+  const top = shouldOpenAbove
+    ? Math.max(viewportPadding, rect.top - height - gap)
+    : Math.min(
+        window.innerHeight - height - viewportPadding,
+        rect.bottom + gap
+      )
+  const left = Math.min(
+    Math.max(viewportPadding, rect.left),
+    Math.max(viewportPadding, window.innerWidth - dropdownWidth - viewportPadding)
+  )
+
+  customerDropdownStyle.value = {
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    width: `${Math.round(dropdownWidth)}px`,
+    height: `${Math.round(height)}px`
+  }
+}
+
+const openCustomerDropdown = () => {
+  customerDropdownOpen.value = true
+  customerSearch.value = ''
+  customerPage.value = 1
+  nextTick(updateCustomerDropdownPosition)
+}
+
+const closeCustomerDropdown = () => {
+  customerDropdownOpen.value = false
+  customerSearch.value = ''
+  customerPage.value = 1
+  customerDropdownStyle.value = {}
+}
+
+const handleCustomerSearchInput = (event) => {
+  customerDropdownOpen.value = true
+  customerSearch.value = event.target.value
+  customerPage.value = 1
+  nextTick(updateCustomerDropdownPosition)
+}
+
+const selectCustomer = (customer) => {
+  formData.value.customerId = customer.id
+  customerSearch.value = ''
+  customerPage.value = 1
+  customerDropdownOpen.value = false
+  customerDropdownStyle.value = {}
+  customerInputRef.value?.blur()
+  onCustomerChange()
+  dismissValidationHint('customerId')
+}
+
+const changeCustomerPage = (page) => {
+  customerPage.value = Math.min(
+    Math.max(1, page),
+    customerTotalPages.value
+  )
+  nextTick(updateCustomerDropdownPosition)
+}
+
+const handleCustomerDocumentPointerdown = (event) => {
+  if (!customerDropdownOpen.value) {
+    return
+  }
+
+  const input = customerInputRef.value
+  const dropdown = customerDropdownRef.value
+  if (input?.contains(event.target) || dropdown?.contains(event.target)) {
+    return
+  }
+
+  closeCustomerDropdown()
+}
+
+watch(
+  [() => formData.value.storeId, customerSearch],
+  () => {
+    customerPage.value = 1
+    if (customerDropdownOpen.value) {
+      nextTick(updateCustomerDropdownPosition)
+    }
+  }
+)
+
+watch(customerTotalPages, (totalPages) => {
+  if (customerPage.value > totalPages) {
+    customerPage.value = totalPages
+  }
 })
 
 // 过滤后的仓库（根据门店）
@@ -1599,6 +1818,8 @@ const handlePackagingChange = async () => {
 
 // 门店改变
 const onStoreChange = () => {
+  closeCustomerDropdown()
+
   // 重置客户和仓库选择
   formData.value.customerId = ''
   formData.value.warehouseId = ''
@@ -1671,7 +1892,9 @@ const loadCustomerDebt = async (customerId) => {
 
 // 客户改变
 const onCustomerChange = () => {
-  const customer = customers.value.find(c => c.id === formData.value.customerId)
+  const customer = customers.value.find(c =>
+    String(c.id) === String(formData.value.customerId)
+  )
   if (customer) {
     formData.value.contactPerson = customer.contactPerson || ''
     formData.value.contactPhone = customer.phone || ''
@@ -2386,6 +2609,7 @@ const cancelClear = () => {
 
 const resetOrderFields = () => {
   dismissValidationHint()
+  closeCustomerDropdown()
   formData.value.storeId = ''
   formData.value.customerId = ''
   customerReceivable.value = 0
@@ -2431,8 +2655,11 @@ watch(
 onMounted(async () => {
   window.addEventListener('resize', updateProductDropdownPosition)
   window.addEventListener('scroll', updateProductDropdownPosition, true)
+  window.addEventListener('resize', updateCustomerDropdownPosition)
+  window.addEventListener('scroll', updateCustomerDropdownPosition, true)
   window.addEventListener('resize', updateValidationHintPosition)
   window.addEventListener('scroll', updateValidationHintPosition, true)
+  document.addEventListener('pointerdown', handleCustomerDocumentPointerdown)
 
   console.log('OrderForm mounted, props.orderId:', props.orderId)
   console.log('isEditMode:', isEditMode.value)
@@ -2500,8 +2727,11 @@ onMounted(async () => {
 onBeforeUnmount(() => {
   window.removeEventListener('resize', updateProductDropdownPosition)
   window.removeEventListener('scroll', updateProductDropdownPosition, true)
+  window.removeEventListener('resize', updateCustomerDropdownPosition)
+  window.removeEventListener('scroll', updateCustomerDropdownPosition, true)
   window.removeEventListener('resize', updateValidationHintPosition)
   window.removeEventListener('scroll', updateValidationHintPosition, true)
+  document.removeEventListener('pointerdown', handleCustomerDocumentPointerdown)
   productInputRefs.clear()
   validationFieldRefs.clear()
   clearTimeout(validationHintTimer)
@@ -2717,6 +2947,31 @@ async function generateNewOrderNumber() {
 
 .info-group.wide input {
   min-width: 300px;
+}
+
+.customer-picker {
+  position: relative;
+  flex: 0 0 180px;
+  min-width: 180px;
+}
+
+.customer-search-input {
+  width: 180px !important;
+  min-width: 180px !important;
+  padding-right: 30px !important;
+}
+
+.customer-picker-arrow {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid var(--text);
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+  pointer-events: none;
+  transform: translateY(-35%);
 }
 
 .info-group.right-actions {
@@ -2970,6 +3225,133 @@ input:checked + .slider:before {
   margin: 0;
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.customer-dropdown {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-soft: #e9f8f3;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --panel-bg: #ffffff;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  position: fixed;
+  z-index: 2147482000;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--panel-bg, #ffffff);
+  border: 1px solid var(--border-strong, #cbd5e1);
+  border-radius: 5px;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.14);
+}
+
+.customer-option-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.customer-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: none;
+  border-bottom: 1px solid #f1f5f9;
+  color: var(--text, #172033);
+  background: var(--panel-bg, #ffffff);
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.customer-option:last-child {
+  border-bottom: none;
+}
+
+.customer-option:hover,
+.customer-option.selected {
+  color: var(--accent-dark, #08745a);
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.customer-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-option-name {
+  font-weight: 650;
+}
+
+.customer-option-contact,
+.customer-option-phone {
+  color: var(--text-secondary, #596579);
+  font-size: 12px;
+}
+
+.customer-empty {
+  display: flex;
+  min-height: 80px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted, #8a96a8);
+  font-size: 13px;
+}
+
+.customer-pagination {
+  display: flex;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-secondary, #596579);
+  background: #f8fafc;
+  border-top: 1px solid var(--border, #e2e8f0);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.customer-page-button {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-strong, #cbd5e1);
+  border-radius: 4px;
+  color: var(--text-secondary, #596579);
+  background: var(--panel-bg, #ffffff);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.customer-page-button:hover:not(:disabled) {
+  color: var(--accent-dark, #08745a);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.customer-page-button:disabled {
+  color: var(--text-muted, #8a96a8);
+  background: #f1f5f9;
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .product-dropdown-header {
@@ -3533,6 +3915,16 @@ input[type="number"] {
 
   .info-group {
     width: 100%;
+  }
+
+  .customer-picker {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .customer-search-input {
+    width: 100% !important;
+    min-width: 0 !important;
   }
 
   .info-group select,
