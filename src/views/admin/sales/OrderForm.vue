@@ -128,33 +128,9 @@
                   @focus="showProductDropdown(index)"
                   @blur="hideProductDropdown(index)"
                   @input="filterProducts(index)"
+                  :ref="element => setProductInputRef(index, element)"
                   class="product-input"
                 />
-                <div
-                  v-if="item.showDropdown && item.filteredProducts && item.filteredProducts.length > 0"
-                  class="product-dropdown"
-                  @mousedown.prevent
-                >
-                  <div class="product-dropdown-header">
-                    <span class="col-code">编号</span>
-                    <span class="col-name">名称</span>
-                    <span class="col-spec">规格</span>
-                    <span class="col-unit">单位</span>
-                    <span class="col-stock">库存</span>
-                  </div>
-                  <div
-                    v-for="product in item.filteredProducts"
-                    :key="product.id"
-                    class="product-option"
-                    @click="selectProduct(index, product)"
-                  >
-                    <span class="col-code">{{ product.code || '-' }}</span>
-                    <span class="col-name">{{ product.name }}</span>
-                    <span class="col-spec">{{ product.specification || '-' }}</span>
-                    <span class="col-unit">{{ getUnitName(product.unitId) || '-' }}</span>
-                    <span class="col-stock">{{ product.stock || 0 }}</span>
-                  </div>
-                </div>
               </div>
             </td>
             <td><input type="text" v-model="item.spec" readonly class="readonly-input" /></td>
@@ -201,6 +177,35 @@
     </div>
 
     <!-- 底部信息区 -->
+    <Teleport to="body">
+      <div
+        v-if="activeProductRow"
+        class="product-dropdown product-dropdown-floating"
+        :style="productDropdownStyle"
+        @mousedown.prevent
+      >
+        <div class="product-dropdown-header">
+          <span class="col-code">编号</span>
+          <span class="col-name">名称</span>
+          <span class="col-spec">规格</span>
+          <span class="col-unit">单位</span>
+          <span class="col-stock">库存</span>
+        </div>
+        <div
+          v-for="product in activeProductRow.filteredProducts"
+          :key="product.id"
+          class="product-option"
+          @click="selectProduct(focusedRow, product)"
+        >
+          <span class="col-code">{{ product.code || '-' }}</span>
+          <span class="col-name">{{ product.name }}</span>
+          <span class="col-spec">{{ product.specification || '-' }}</span>
+          <span class="col-unit">{{ getUnitName(product.unitId) || '-' }}</span>
+          <span class="col-stock">{{ product.stock || 0 }}</span>
+        </div>
+      </div>
+    </Teleport>
+
     <div class="bottom-info-bar">
       <div class="finance-row-full">
         <div v-if="salesPeople.length || formData.salesPerson" class="info-group">
@@ -985,6 +990,55 @@ const filteredProducts = computed(() => {
 
 // 焦点行
 const focusedRow = ref(-1)
+const productInputRefs = new Map()
+const productDropdownStyle = ref({})
+
+const setProductInputRef = (index, element) => {
+  if (element) {
+    productInputRefs.set(index, element)
+  } else {
+    productInputRefs.delete(index)
+  }
+}
+
+const activeProductRow = computed(() => {
+  const item = formData.value.items[focusedRow.value]
+  return item?.showDropdown && item.filteredProducts?.length ? item : null
+})
+
+const updateProductDropdownPosition = () => {
+  const input = productInputRefs.get(focusedRow.value)
+  const item = activeProductRow.value
+
+  if (!input || !item) {
+    productDropdownStyle.value = {}
+    return
+  }
+
+  const rect = input.getBoundingClientRect()
+  const viewportPadding = 12
+  const gap = 4
+  const dropdownWidth = Math.min(600, Math.max(280, window.innerWidth - viewportPadding * 2))
+  const availableBelow = Math.max(80, window.innerHeight - rect.bottom - viewportPadding)
+  const availableAbove = Math.max(80, rect.top - viewportPadding)
+  const estimatedHeight = Math.min(300, item.filteredProducts.length * 42 + 42)
+  const shouldOpenAbove = availableBelow < Math.min(estimatedHeight, 220) && availableAbove > availableBelow
+  const maxHeight = Math.min(300, shouldOpenAbove ? availableAbove : availableBelow)
+  const top = shouldOpenAbove
+    ? Math.max(viewportPadding, rect.top - maxHeight - gap)
+    : rect.bottom + gap
+  const left = Math.min(
+    Math.max(viewportPadding, rect.left),
+    Math.max(viewportPadding, window.innerWidth - dropdownWidth - viewportPadding)
+  )
+
+  productDropdownStyle.value = {
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    width: `${Math.round(dropdownWidth)}px`,
+    maxHeight: `${Math.round(maxHeight)}px`
+  }
+}
 
 // 生成订单编号
 function generateOrderNumber(orderId) {
@@ -1421,6 +1475,8 @@ const showProductDropdown = (index) => {
   } else {
     formData.value.items[index].filteredProducts = filteredProducts.value
   }
+
+  nextTick(updateProductDropdownPosition)
 }
 
 // 隐藏商品下拉框
@@ -1440,6 +1496,8 @@ const filterProducts = (index) => {
   } else {
     formData.value.items[index].filteredProducts = filteredProducts.value
   }
+
+  nextTick(updateProductDropdownPosition)
 }
 
 // 选择商品
@@ -2089,6 +2147,9 @@ watch(
 
 // 初始化
 onMounted(async () => {
+  window.addEventListener('resize', updateProductDropdownPosition)
+  window.addEventListener('scroll', updateProductDropdownPosition, true)
+
   console.log('OrderForm mounted, props.orderId:', props.orderId)
   console.log('isEditMode:', isEditMode.value)
 
@@ -2153,6 +2214,9 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateProductDropdownPosition)
+  window.removeEventListener('scroll', updateProductDropdownPosition, true)
+  productInputRefs.clear()
   clearTimeout(draftSaveTimer)
   clearTimeout(saveToastTimer)
   persistDraft()
@@ -2494,18 +2558,25 @@ input:checked + .slider:before {
 }
 
 .product-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  min-width: 600px;
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --panel-bg: #ffffff;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  position: fixed;
+  box-sizing: border-box;
   max-height: 300px;
-  overflow-y: auto;
-  background: var(--panel-bg);
+  overflow: auto;
+  background: #ffffff;
   border: 1px solid var(--border-strong);
   border-radius: 5px;
   box-shadow: 0 4px 8px rgba(15, 23, 42, 0.12);
-  z-index: 1000;
-  margin-top: 4px;
+  z-index: 2147482000;
+  margin: 0;
 }
 
 .product-dropdown-header {
