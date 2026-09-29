@@ -335,6 +335,7 @@
           <span class="col-spec">规格</span>
           <span class="col-unit">单位</span>
           <span class="col-stock">库存</span>
+          <span class="col-remark">备注</span>
         </div>
         <div
           v-for="product in activeProductRow.filteredProducts"
@@ -347,6 +348,12 @@
           <span class="col-spec">{{ product.specification || '-' }}</span>
           <span class="col-unit">{{ getUnitName(product.unitId) || '-' }}</span>
           <span class="col-stock">{{ product.stock || 0 }}</span>
+          <span
+            class="col-remark"
+            :title="product.notes || product.productNotes || product.remark || ''"
+          >
+            {{ product.notes || product.productNotes || product.remark || '-' }}
+          </span>
         </div>
       </div>
     </Teleport>
@@ -1238,7 +1245,7 @@ const updateProductDropdownPosition = () => {
   const rect = input.getBoundingClientRect()
   const viewportPadding = 12
   const gap = 4
-  const dropdownWidth = Math.min(600, Math.max(280, window.innerWidth - viewportPadding * 2))
+  const dropdownWidth = Math.min(720, Math.max(280, window.innerWidth - viewportPadding * 2))
   const availableBelow = Math.max(80, window.innerHeight - rect.bottom - viewportPadding)
   const availableAbove = Math.max(80, rect.top - viewportPadding)
   const estimatedHeight = Math.min(300, item.filteredProducts.length * 42 + 42)
@@ -2961,10 +2968,14 @@ input:checked + .slider:before {
   box-shadow: 0 4px 8px rgba(15, 23, 42, 0.12);
   z-index: 2147482000;
   margin: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .product-dropdown-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 12% 22% 20% 10% 10% 26%;
+  align-items: center;
   padding: 10px 12px;
   background: #f8fafc;
   font-size: 11px;
@@ -2974,79 +2985,70 @@ input:checked + .slider:before {
   position: sticky;
   top: 0;
   z-index: 1;
-}
-
-.product-dropdown-header .col-code {
-  width: 100px;
-  flex-shrink: 0;
-}
-
-.product-dropdown-header .col-name {
-  width: 180px;
-  flex-shrink: 0;
-}
-
-.product-dropdown-header .col-spec {
-  width: 150px;
-  flex-shrink: 0;
-}
-
-.product-dropdown-header .col-unit {
-  width: 80px;
-  flex-shrink: 0;
-}
-
-.product-dropdown-header .col-stock {
-  width: 90px;
-  flex-shrink: 0;
-  text-align: right;
+  box-sizing: border-box;
+  column-gap: 0;
 }
 
 .product-option {
-  display: flex;
+  display: grid;
+  grid-template-columns: 12% 22% 20% 10% 10% 26%;
+  align-items: center;
   padding: 10px 12px;
   font-size: 13px;
   cursor: pointer;
   transition: background 0.18s ease;
   border-bottom: 1px solid #f8fafc;
+  box-sizing: border-box;
+  column-gap: 0;
 }
 
 .product-option:last-child {
   border-bottom: none;
 }
 
+.product-dropdown .col-code,
+.product-dropdown .col-name,
+.product-dropdown .col-spec,
+.product-dropdown .col-unit,
+.product-dropdown .col-stock,
+.product-dropdown .col-remark {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-dropdown-header .col-stock {
+  text-align: right;
+}
+
 .product-option .col-code {
-  width: 100px;
-  flex-shrink: 0;
   color: var(--text-muted);
 }
 
 .product-option .col-name {
-  width: 180px;
-  flex-shrink: 0;
   font-weight: 600;
   color: var(--text);
 }
 
 .product-option .col-spec {
-  width: 150px;
-  flex-shrink: 0;
   color: var(--text-secondary);
 }
 
 .product-option .col-unit {
-  width: 80px;
-  flex-shrink: 0;
   color: var(--text-secondary);
 }
 
 .product-option .col-stock {
-  width: 90px;
-  flex-shrink: 0;
   text-align: right;
   color: var(--accent-dark);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+}
+
+.product-option .col-remark {
+  padding-left: 8px;
+  color: var(--text-secondary);
 }
 
 .product-option:hover {
