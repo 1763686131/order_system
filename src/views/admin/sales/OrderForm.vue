@@ -439,25 +439,14 @@
           </select>
         </div>
 
-        <div v-if="creators.length || formData.creator" class="info-group">
+        <div class="info-group">
           <label>制单人</label>
-          <select v-model="formData.creator">
-            <option value="">请选择制单人</option>
-            <option
-              v-if="formData.creator && !creators.some(employee => employee.displayName === formData.creator)"
-              :value="formData.creator"
-              disabled
-            >
-              {{ formData.creator }}（历史记录）
-            </option>
-            <option
-              v-for="employee in creators"
-              :key="employee.id"
-              :value="employee.displayName"
-            >
-              {{ employee.displayName }}
-            </option>
-          </select>
+          <input
+            class="creator-name-display"
+            :value="currentCreatorName"
+            type="text"
+            readonly
+          />
         </div>
 
         <div class="info-group wide">
@@ -635,6 +624,7 @@ import { ref, computed, inject, nextTick, onBeforeUnmount, onMounted, watch } fr
 import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useOrderDraftStore } from '@/stores/orderDraft'
+import { useUserStore } from '@/stores/user'
 import { toChineseMoney } from '@/utils/chineseMoney'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
@@ -642,6 +632,10 @@ import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 const router = useRouter()
 const route = useRoute()
 const orderDraftStore = useOrderDraftStore()
+const userStore = useUserStore()
+const currentCreatorName = computed(() =>
+  String(userStore.name || userStore.username || '').trim()
+)
 const setHeaderActions = inject('setHeaderActions', null)
 
 // 含税开关状态
@@ -821,8 +815,7 @@ const ORDER_FORM_DEFAULTS_STORAGE_KEY = 'admin_order_form_default_selections'
 const SERVER_ORDER_DEFAULTS = Object.freeze({
   logisticsService: logisticsServiceOptions[0],
   packaging: '桶装',
-  salesPerson: '',
-  creator: ''
+  salesPerson: ''
 })
 
 const readOrderFormDefaults = () => {
@@ -851,7 +844,6 @@ const readOrderFormDefaults = () => {
       logisticsService: String(parsed?.logisticsService || fallback.logisticsService),
       packaging: String(parsed?.packaging || fallback.packaging),
       salesPerson: String(parsed?.salesPerson || ''),
-      creator: String(parsed?.creator || ''),
       settlementAccountsByStore
     }
   } catch (error) {
@@ -891,6 +883,10 @@ const formData = ref({
   items: []
 })
 
+watch(currentCreatorName, creator => {
+  formData.value.creator = creator
+}, { immediate: true })
+
 const salesPeople = computed(() => {
   const salesDepartmentIds = new Set(
     departments.value
@@ -901,19 +897,6 @@ const salesPeople = computed(() => {
     employee.displayName &&
     (employee.departmentIds || []).some(id => salesDepartmentIds.has(String(id)))
   )
-})
-
-const creators = computed(() => {
-  const creatorDepartmentIds = new Set(
-    departments.value
-      .filter(department => ['财务部', '仓储部'].includes(department.name))
-      .map(department => String(department.id))
-  )
-  const matchingEmployees = employees.value.filter(employee =>
-    employee.displayName &&
-    (employee.departmentIds || []).some(id => creatorDepartmentIds.has(String(id)))
-  )
-  return [...new Map(matchingEmployees.map(employee => [employee.id, employee])).values()]
 })
 
 const packagingOptions = computed(() => {
@@ -981,9 +964,7 @@ const applyNewOrderDefaults = () => {
   formData.value.salesPerson = salesPeople.value.some(employee =>
     employee.displayName === defaults.salesPerson
   ) ? defaults.salesPerson : ''
-  formData.value.creator = creators.value.some(employee =>
-    employee.displayName === defaults.creator
-  ) ? defaults.creator : ''
+  formData.value.creator = currentCreatorName.value
   formData.value.settlementAccount = getPreferredSettlementAccount(formData.value.storeId)
 }
 
@@ -992,7 +973,6 @@ const persistOrderFormDefaults = () => {
     logisticsService: formData.value.logisticsService || SERVER_ORDER_DEFAULTS.logisticsService,
     packaging: formData.value.packaging || SERVER_ORDER_DEFAULTS.packaging,
     salesPerson: formData.value.salesPerson || '',
-    creator: formData.value.creator || '',
     settlementAccountsByStore: {
       ...(orderFormDefaults.value.settlementAccountsByStore || {})
     }
@@ -1070,6 +1050,7 @@ const restoreDraft = async (draft) => {
     ...formData.value,
     ...restoredFormData
   }
+  formData.value.creator = currentCreatorName.value
   formData.value.items = (formData.value.items || []).map(item => ({
     ...item,
     showDropdown: false,
@@ -1355,7 +1336,7 @@ const orderPrintVariables = computed(() => {
     goodsPackaging: formData.value.packaging || '',
     packaging: formData.value.packaging || '',
     salesPerson: formData.value.salesPerson || '',
-    creator: formData.value.creator || '',
+    creator: currentCreatorName.value,
     orderRemark: formData.value.orderRemark || '',
     taxEnabled,
     taxRate: taxEnabled ? (Number(formData.value.taxRate) || DEFAULT_TAX_RATE) : 0,
@@ -1668,7 +1649,7 @@ const loadOrderData = async (orderId) => {
       formData.value.packaging = response.goods_packaging || '桶装'
       formData.value.logisticsService = normalizeLogisticsService(response.logistics_service)
       formData.value.salesPerson = response.sales_person || ''
-      formData.value.creator = response.creator || ''
+      formData.value.creator = currentCreatorName.value
       formData.value.orderRemark = response.remark || ''
       formData.value.discountAmount = response.discount_amount || null
       formData.value.otherFees = response.other_fees || null
@@ -2478,7 +2459,7 @@ const handleSave = async () => {
       goodsPackaging: formData.value.packaging,
       logisticsService: formData.value.logisticsService,
       salesPerson: formData.value.salesPerson,
-      creator: formData.value.creator,
+      creator: currentCreatorName.value,
       orderRemark: formData.value.orderRemark,
       taxEnabled,
       taxRate: taxEnabled
@@ -2623,7 +2604,7 @@ const resetOrderFields = () => {
   formData.value.packaging = '桶装'
   formData.value.logisticsService = logisticsServiceOptions[0]
   formData.value.salesPerson = ''
-  formData.value.creator = ''
+  formData.value.creator = currentCreatorName.value
   formData.value.orderRemark = ''
   formData.value.taxRate = 0
   formData.value.discountAmount = null
@@ -2953,6 +2934,14 @@ async function generateNewOrderNumber() {
 .info-group input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+}
+
+.creator-name-display {
+  color: var(--text) !important;
+  background: #f8fafc !important;
+  font-weight: 600;
+  cursor: default;
+  user-select: text;
 }
 
 .info-group.wide input {

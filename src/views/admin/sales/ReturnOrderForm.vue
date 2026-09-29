@@ -188,25 +188,14 @@
               </option>
             </select>
           </div>
-          <div v-if="creators.length || form.creator" class="info-group">
+          <div class="info-group">
             <label>制单人</label>
-            <select v-model="form.creator">
-              <option value="">请选择制单人</option>
-              <option
-                v-if="form.creator && !creators.some(employee => employee.displayName === form.creator)"
-                :value="form.creator"
-                disabled
-              >
-                {{ form.creator }}（历史记录）
-              </option>
-              <option
-                v-for="employee in creators"
-                :key="employee.id"
-                :value="employee.displayName"
-              >
-                {{ employee.displayName }}
-              </option>
-            </select>
+            <input
+              class="creator-name-display"
+              :value="currentCreatorName"
+              type="text"
+              readonly
+            />
           </div>
           <div class="info-group wide">
             <label>备注信息</label>
@@ -416,6 +405,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 
@@ -431,6 +421,10 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const userStore = useUserStore()
+const currentCreatorName = computed(() =>
+  String(userStore.name || userStore.username || '').trim()
+)
 const saving = ref(false)
 const savedReturnId = ref(props.returnId)
 const stores = ref([])
@@ -475,8 +469,11 @@ const readOrderFormDefaults = () => {
       return { settlementAccountsByStore: {} }
     }
 
+    const defaults = { ...parsed }
+    delete defaults.creator
+
     return {
-      ...parsed,
+      ...defaults,
       settlementAccountsByStore: parsed.settlementAccountsByStore &&
         typeof parsed.settlementAccountsByStore === 'object' &&
         !Array.isArray(parsed.settlementAccountsByStore)
@@ -531,6 +528,10 @@ const form = ref({
   packaging: '桶装',
   remark: ''
 })
+
+watch(currentCreatorName, creator => {
+  form.value.creator = creator
+}, { immediate: true })
 
 const idEquals = (a, b) => String(a ?? '') === String(b ?? '')
 const asIds = value => {
@@ -610,9 +611,7 @@ const applyOrderFormDefaults = () => {
   form.value.salesPerson = salesPeople.value.some(employee =>
     employee.displayName === defaults.salesPerson
   ) ? defaults.salesPerson : ''
-  form.value.creator = creators.value.some(employee =>
-    employee.displayName === defaults.creator
-  ) ? defaults.creator : ''
+  form.value.creator = currentCreatorName.value
   form.value.settlementAccount = getPreferredSettlementAccount()
 }
 
@@ -622,7 +621,6 @@ const persistOrderFormDefaults = () => {
     ...defaults,
     packaging: form.value.packaging || '桶装',
     salesPerson: form.value.salesPerson || '',
-    creator: form.value.creator || '',
     settlementAccountsByStore: {
       ...(defaults.settlementAccountsByStore || {})
     }
@@ -651,20 +649,6 @@ const salesPeople = computed(() => {
     employee.displayName &&
     (employee.departmentIds || []).some(id => salesDepartmentIds.has(String(id)))
   )
-})
-
-const creators = computed(() => {
-  const creatorDepartmentIds = new Set(
-    departments.value
-      .filter(department => ['财务部', '仓储部'].includes(department.name))
-      .map(department => String(department.id))
-  )
-  const matchingEmployees = employees.value.filter(employee =>
-    employee.displayName &&
-    (employee.departmentIds || []).some(id => creatorDepartmentIds.has(String(id)))
-  )
-
-  return [...new Map(matchingEmployees.map(employee => [employee.id, employee])).values()]
 })
 
 const packagingOptions = computed(() => {
@@ -801,7 +785,7 @@ const returnPrintVariables = computed(() => {
     writeoffAmount: Math.max(0, returnAmount - refundAmount),
     settlementAccount: form.value.settlementAccount || '',
     salesPerson: form.value.salesPerson || '',
-    creator: form.value.creator || '',
+    creator: currentCreatorName.value,
     packaging: form.value.packaging || '',
     goodsPackaging: form.value.packaging || '',
     remark: form.value.remark || '',
@@ -1147,7 +1131,7 @@ const clearForm = () => {
   form.value.refundAmount = 0
   form.value.settlementAccount = ''
   form.value.salesPerson = ''
-  form.value.creator = ''
+  form.value.creator = currentCreatorName.value
   form.value.packaging = '桶装'
   form.value.remark = ''
   if (!props.returnId) {
@@ -1260,7 +1244,7 @@ const loadExistingReturn = async () => {
     form.value.refundAmount = Number(data.refundAmount || 0)
     form.value.settlementAccount = data.settlementAccount || ''
     form.value.salesPerson = data.salesPerson || ''
-    form.value.creator = data.creator || ''
+    form.value.creator = currentCreatorName.value
     form.value.packaging = data.packaging || '桶装'
     form.value.remark = data.remark || ''
     const rows = (data.items || []).map(item => {
@@ -1331,7 +1315,7 @@ const save = async () => {
         refundAmount: Number(form.value.refundAmount) || 0,
         settlementAccount: form.value.settlementAccount,
         salesPerson: form.value.salesPerson,
-        creator: form.value.creator,
+        creator: currentCreatorName.value,
         packaging: form.value.packaging,
         remark: form.value.remark,
         items: validItems.map(item => ({
@@ -1545,6 +1529,14 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 .finance-item input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .1);
+}
+
+.creator-name-display {
+  color: var(--text) !important;
+  background: #f8fafc !important;
+  font-weight: 600;
+  cursor: default;
+  user-select: text;
 }
 
 .customer-picker {
