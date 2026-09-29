@@ -2939,6 +2939,16 @@ async function generateNewOrderNumber() {
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
+.info-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23172033'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+}
+
 .info-group select:focus,
 .info-group input:focus {
   border-color: var(--accent);
@@ -3163,6 +3173,16 @@ input:checked + .slider:before {
   outline: none;
   transition: border-color 0.18s ease, background 0.18s ease;
   font-variant-numeric: tabular-nums;
+}
+
+.products-table select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 24px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23172033'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px 6px;
 }
 
 .products-table input:focus,
@@ -3633,6 +3653,16 @@ input:checked + .slider:before {
   width: 120px;
   transition: border-color 0.18s ease, box-shadow 0.18s ease;
   font-variant-numeric: tabular-nums;
+}
+
+.finance-item select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23172033'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
 }
 
 .finance-item input:focus,
