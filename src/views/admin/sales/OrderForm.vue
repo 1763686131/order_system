@@ -444,6 +444,7 @@
           <input
             class="creator-name-display"
             :value="currentCreatorName"
+            :style="creatorNameStyle"
             type="text"
             readonly
           />
@@ -636,6 +637,14 @@ const userStore = useUserStore()
 const currentCreatorName = computed(() =>
   String(userStore.name || userStore.username || '').trim()
 )
+const creatorNameStyle = computed(() => {
+  const nameLength = Array.from(currentCreatorName.value).length
+  const width = Math.min(220, Math.max(78, nameLength * 16 + 24))
+  return {
+    width: `${width}px`,
+    minWidth: `${width}px`
+  }
+})
 const setHeaderActions = inject('setHeaderActions', null)
 
 // 含税开关状态
@@ -2937,11 +2946,15 @@ async function generateNewOrderNumber() {
 }
 
 .creator-name-display {
+  flex: 0 0 auto;
   color: var(--text) !important;
   background: #f8fafc !important;
   font-weight: 600;
   cursor: default;
   user-select: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .info-group.wide input {
@@ -3950,6 +3963,11 @@ input[type="number"] {
   .info-group input {
     width: 100%;
     min-width: 100%;
+  }
+
+  .creator-name-display {
+    width: 100% !important;
+    min-width: 0 !important;
   }
 
   .custom-modal {

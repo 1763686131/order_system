@@ -193,6 +193,7 @@
             <input
               class="creator-name-display"
               :value="currentCreatorName"
+              :style="creatorNameStyle"
               type="text"
               readonly
             />
@@ -425,6 +426,14 @@ const userStore = useUserStore()
 const currentCreatorName = computed(() =>
   String(userStore.name || userStore.username || '').trim()
 )
+const creatorNameStyle = computed(() => {
+  const nameLength = Array.from(currentCreatorName.value).length
+  const width = Math.min(220, Math.max(78, nameLength * 16 + 24))
+  return {
+    width: `${width}px`,
+    minWidth: `${width}px`
+  }
+})
 const saving = ref(false)
 const savedReturnId = ref(props.returnId)
 const stores = ref([])
@@ -1532,11 +1541,15 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 }
 
 .creator-name-display {
+  flex: 0 0 auto;
   color: var(--text) !important;
   background: #f8fafc !important;
   font-weight: 600;
   cursor: default;
   user-select: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .customer-picker {
@@ -2297,6 +2310,11 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
   .settlement-account-field {
     flex: none;
     min-width: 0;
+  }
+
+  .creator-name-display {
+    width: 100% !important;
+    min-width: 0 !important;
   }
 
   .right-actions,
