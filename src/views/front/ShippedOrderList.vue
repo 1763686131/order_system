@@ -179,7 +179,7 @@ const emptyMessage = computed(() => {
   if (props.filterStart) {
     return `没有找到 ${props.filterStart} 到 ${props.filterEnd} 的出库记录`
   }
-  return '最近 3 天内暂无任何已出库的物流记录'
+  return '暂无最近 30 条已出库的物流记录'
 })
 
 // 按日期分组并排序

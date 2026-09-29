@@ -19,7 +19,7 @@ export const useNomiStore = defineStore('nomi', () => {
   const isMenuActive = ref(false)
   const speechBubbleContent = ref('')
   const showSpeechBubble = ref(false)
-  const speechBubbleType = ref('text') // 'text' | 'filter'
+  const speechBubbleType = ref('text') // 'text' | 'filter-prompt' | 'filter'
   const filterType = ref('shipped') // 'shipped' | 'material'
   const currentTab = ref(0) // 0: 未完成订单, 1: 已完成订单, 2: 已出库订单, 3: 原材料数据
 
@@ -74,8 +74,17 @@ export const useNomiStore = defineStore('nomi', () => {
 
   // 显示日期筛选气泡
   const showDateFilterBubble = (type = 'shipped') => {
+    hideSpeechBubble()
     filterType.value = type
     speechBubbleType.value = 'filter'
+    showSpeechBubble.value = true
+    startFilterTimer()
+  }
+
+  const showFilterPrompt = (type = 'shipped') => {
+    hideSpeechBubble()
+    filterType.value = type
+    speechBubbleType.value = 'filter-prompt'
     showSpeechBubble.value = true
     startFilterTimer()
   }
@@ -115,6 +124,7 @@ export const useNomiStore = defineStore('nomi', () => {
     showWelcomeMessage,
     hideSpeechBubble,
     showDateFilterBubble,
+    showFilterPrompt,
     startFilterTimer,
     stopFilterTimer,
     getRandomPhrase

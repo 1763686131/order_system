@@ -94,7 +94,7 @@
     <NomiFloatingAI
       :user-role="userStore.role"
       @create-material="handleCreateMaterial"
-      @search="handleSearchOrder"
+      @date-filter="handleDateFilter"
     />
   </div>
 </template>
@@ -180,16 +180,15 @@ const shippedOrders = computed(() => {
       return t >= startT && t <= endT
     })
   } else {
-    // 默认显示最近3天
-    const now = new Date()
-    const threeDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 2).getTime()
-
-    orders = orders.filter(o => {
-      const dateStr = o.shipped_date || o.completed_date || ''
-      if (!dateStr) return false
-      const t = new Date(dateStr.substring(0, 10).replace(/-/g, '/')).getTime()
-      return t >= threeDaysAgo
-    })
+    // 默认显示按发货/完成时间倒序排列的最近 30 条
+    orders = orders
+      .filter(o => o.shipped_date || o.completed_date)
+      .sort((a, b) => {
+        const timeA = a.shipped_date || a.completed_date || ''
+        const timeB = b.shipped_date || b.completed_date || ''
+        return timeB.localeCompare(timeA)
+      })
+      .slice(0, 30)
   }
 
   return orders
@@ -206,15 +205,10 @@ const switchTab = (index) => {
     fetchMaterialStocks()
   }
 
-  // 自动触发日期筛选气泡
-  if (index === 2) {
-    setTimeout(() => {
-      window.triggerDateFilterSpeech?.('shipped')
-    }, 100)
-  } else if (index === 3) {
-    setTimeout(() => {
-      window.triggerDateFilterSpeech?.('material')
-    }, 100)
+  if (index === 2 || index === 3) {
+    nomiStore.showFilterPrompt(index === 2 ? 'shipped' : 'material')
+  } else if (nomiStore.speechBubbleType !== 'text') {
+    nomiStore.hideSpeechBubble()
   }
 }
 
@@ -288,16 +282,14 @@ const handleCreateMaterial = () => {
   uploadMaterialModal.value?.open()
 }
 
-// 小圆组件：搜索订单
-const handleSearchOrder = () => {
-  console.log('搜索订单功能已移除')
-}
-
 // 小圆组件：日期筛选
 const handleDateFilter = ({ type, startDate, endDate }) => {
   if (type === 'shipped') {
-    orderStore.nomiActiveFilterStart = startDate
-    orderStore.nomiActiveFilterEnd = endDate
+    if (startDate && endDate) {
+      orderStore.setDateFilter(startDate, endDate)
+    } else {
+      orderStore.clearDateFilter()
+    }
   } else if (type === 'material') {
     // 触发原材料日期筛选事件
     window.dispatchEvent(new CustomEvent('filter-material-date', {
@@ -427,12 +419,6 @@ onMounted(() => {
   }
   window.openUploadMaterialModal = () => {
     uploadMaterialModal.value?.open()
-  }
-
-  // 日期筛选气泡触发
-  window.triggerDateFilterSpeech = (filterType) => {
-    const nomiStore = useNomiStore()
-    nomiStore.showDateFilterBubble(filterType)
   }
 
   // 复制订单信息到剪贴板

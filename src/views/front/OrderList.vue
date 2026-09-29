@@ -17,13 +17,19 @@
               :key="idx"
               class="product-item product-row"
             >
-              <div class="product-info-box">
-                <span v-if="item.goodsName" class="goods-name">{{ item.goodsName }}</span>
-                <span v-if="item.spec" class="goods-spec">{{ item.spec }}</span>
+              <div class="product-main-row">
+                <div class="product-info-box">
+                  <span v-if="item.goodsName" class="goods-name">{{ item.goodsName }}</span>
+                  <span v-if="item.spec" class="goods-spec">{{ item.spec }}</span>
+                </div>
+                <div class="product-quantity-box">
+                  <span v-if="item.quantity !== ''" class="goods-quantity">{{ item.quantity }}</span>
+                  <span v-if="item.unit" class="goods-unit">{{ item.unit }}</span>
+                </div>
               </div>
-              <div class="product-quantity-box">
-                <span v-if="item.quantity !== ''" class="goods-quantity">{{ item.quantity }}</span>
-                <span v-if="item.unit" class="goods-unit">{{ item.unit }}</span>
+              <div v-if="item.remark" class="product-remark">
+                <span class="product-remark-label">注意：</span>
+                <span class="product-remark-text">{{ item.remark }}</span>
               </div>
             </div>
             <div v-if="order.indicatorHtml" class="card-part-indicator" v-html="order.partLetter"></div>
@@ -72,12 +78,13 @@
             </div>
             <div class="info-row">收货地址：{{ order.receiver_address || '未填' }}</div>
             <div class="info-row info-label" style="margin-top: 12px;">货物全量信息：</div>
-            <div
-              v-for="(line, idx) in order.allGoodsLines"
-              :key="idx"
-              class="info-row text-red text-bold"
-              v-html="line"
-            ></div>
+            <div v-for="(line, idx) in order.allGoodsLines" :key="idx" class="goods-detail">
+              <div class="info-row text-red text-bold" v-html="line"></div>
+              <div v-if="order.allGoodsRows[idx].remark" class="product-remark">
+                <span class="product-remark-label">注意：</span>
+                <span class="product-remark-text">{{ order.allGoodsRows[idx].remark }}</span>
+              </div>
+            </div>
             <div style="display: flex; gap: 24px; margin-top: 16px;">
               <div class="info-row"><span class="info-label">包装：</span>{{ order.goods_packaging || '无' }}</div>
               <div class="info-row"><span class="info-label">数量：</span><span class="text-red text-bold">{{ order.goods_weight || '无' }}</span></div>
@@ -137,12 +144,12 @@
           <div class="info-row info-label" style="margin-top: 6px;">货物信息：</div>
         </template>
 
-        <div
-          v-for="(line, idx) in order.chunkLines"
-          :key="idx"
-          class="info-row text-red text-bold"
-          v-html="line"
-        >
+        <div v-for="(line, idx) in order.chunkLines" :key="idx" class="goods-detail">
+          <div class="info-row text-red text-bold" v-html="line"></div>
+          <div v-if="order.chunkGoodsRows[idx].remark" class="product-remark">
+            <span class="product-remark-label">商品备注</span>
+            <span class="product-remark-text">{{ order.chunkGoodsRows[idx].remark }}</span>
+          </div>
         </div>
 
         <div v-if="order.indicatorHtml && !order.isMobile" class="card-part-indicator" style="font-size:70px;">{{ order.partLetter }}</div>
@@ -268,7 +275,8 @@ const processedOrders = computed(() => {
       goodsName: item.goods_name || '',
       spec: item.spec || '',
       quantity: item.quantity ?? '',
-      unit: item.unit || ''
+      unit: item.unit || '',
+      remark: typeof item.remark === 'string' ? item.remark.trim() : ''
     })).filter(item => item.goodsName || item.spec || item.quantity !== '' || item.unit)
 
     // 生成背面和已完成订单继续使用的商品 HTML
@@ -308,17 +316,28 @@ const processedOrders = computed(() => {
     if (isMobile) {
       chunks = [goodsRows]
     } else {
-      // 每9行一组
-      for (let i = 0; i < goodsRows.length; i += 9) {
-        chunks.push(goodsRows.slice(i, i + 9))
+      let chunk = []
+      let lineCount = 0
+      for (const item of goodsRows) {
+        const itemLines = item.remark ? 2 : 1
+        if (chunk.length && lineCount + itemLines > 9) {
+          chunks.push(chunk)
+          chunk = []
+          lineCount = 0
+        }
+        chunk.push(item)
+        lineCount += itemLines
       }
+      if (chunk.length) chunks.push(chunk)
     }
 
     chunks.forEach((chunkGoodsRows, chunkIndex) => {
       const isFirstCard = chunkIndex === 0
       const isSplit = chunks.length > 1
       const partLetter = String.fromCharCode(65 + chunkIndex)
-      const compactClass = (!isMobile && chunkGoodsRows.length >= 8) ? 'compact' : ''
+      const compactClass = (!isMobile && chunkGoodsRows.reduce(
+        (count, item) => count + (item.remark ? 2 : 1), 0
+      ) >= 8) ? 'compact' : ''
       const typeClass = getStoreClass(order)
       const storeColor = getStoreColor(order)
       const storeTextColor = getStoreTextColor(order)
@@ -390,6 +409,7 @@ const processedOrders = computed(() => {
         chunkLines,
         chunkGoodsRows,
         allGoodsLines: goodsLines,
+        allGoodsRows: goodsRows,
         isFirstCard,
         isSplit,
         partLetter,
@@ -432,14 +452,77 @@ const toggleCard = (event) => {
 </script>
 
 <style scoped>
-/* 未完成订单正面：商品信息与数量分成两个固定结构的盒子 */
+/* 商品主行保留名称/型号和数量两列，备注独占下一行。 */
 .product-row {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
+  width: 100%;
+}
+
+.front .product-list:not(.compact) {
+  gap: 20px;
+}
+
+.front .product-list.compact {
+  gap: 12px;
+}
+
+.product-main-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   column-gap: 12px;
   row-gap: 8px;
   width: 100%;
+}
+
+.goods-detail {
+  min-width: 0;
+}
+
+.goods-detail .product-remark {
+  margin-top: 4px;
+}
+
+.product-remark {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid #e4e7eb;
+  border-radius: 4px;
+  background: #f2f4f6;
+  color: #b4232f;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.product-remark-label {
+  flex: 0 0 auto;
+  color: #b4232f;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.product-remark-text {
+  min-width: 0;
+  font-weight: 600;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (min-width: 769px) {
+  .front .product-list,
+  .back .product-list,
+  .completed-card .product-list {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
 }
 
 .product-info-box,

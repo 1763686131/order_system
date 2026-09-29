@@ -31,10 +31,11 @@
       </div>
 
       <div
+        v-if="canFilter"
         class="fab-item"
-        @click="handleSearch"
+        @click="openDateFilter"
       >
-        搜索订单
+        筛选
       </div>
 
       <div
@@ -52,12 +53,19 @@
       id="aiSpeechBubble"
       ref="speechBubble"
       class="ai-speech-bubble show"
+      :class="{ 'filter-prompt-bubble': nomiStore.speechBubbleType === 'filter-prompt' }"
       @mouseenter="nomiStore.stopFilterTimer"
-      @mouseleave="nomiStore.startFilterTimer"
+      @mouseleave="handleBubbleMouseLeave"
+      @focusin="nomiStore.stopFilterTimer"
+      @focusout="handleBubbleFocusOut"
     >
       <!-- 文字气泡 -->
       <div v-if="nomiStore.speechBubbleType === 'text'">
         {{ nomiStore.speechBubbleContent }}
+      </div>
+
+      <div v-else-if="nomiStore.speechBubbleType === 'filter-prompt'" class="filter-prompt">
+        主人我可以帮你<button type="button" class="filter-prompt-action" @click="openDateFilter">筛选</button>哦
       </div>
 
       <!-- 日期筛选气泡 -->
@@ -79,8 +87,9 @@
         </div>
 
         <div class="nomi-btn-group">
-          <button class="nomi-btn-secondary" @click="handlePastWeek">最近一周</button>
-          <button class="nomi-btn-confirm" @click="handleConfirmFilter">开始筛选</button>
+          <button type="button" class="nomi-btn-secondary" @click="handlePastWeek">最近一周</button>
+          <button type="button" class="nomi-btn-secondary" @click="handleResetFilter">恢复默认</button>
+          <button type="button" class="nomi-btn-confirm" @click="handleConfirmFilter">开始筛选</button>
         </div>
       </div>
     </div>
@@ -88,7 +97,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useNomiStore } from '@/stores/nomi'
 import { useUserStore } from '@/stores/user'
@@ -106,7 +115,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'create-material',
-  'search'
+  'date-filter'
 ])
 
 const router = useRouter()
@@ -123,6 +132,8 @@ const showAddMaterial = computed(() => {
   return userStore.hasPerm('touch.material.create')
 })
 
+const canFilter = computed(() => nomiStore.currentTab === 2 || nomiStore.currentTab === 3)
+
 // 拖拽相关状态
 const fabContainer = ref(null)
 const fabMain = ref(null)
@@ -137,6 +148,23 @@ const initialPos = ref({ x: 0, y: 0 })
 // 日期筛选
 const filterStartDate = ref('')
 const filterEndDate = ref('')
+
+watch(() => nomiStore.filterType, () => {
+  filterStartDate.value = ''
+  filterEndDate.value = ''
+})
+
+const handleBubbleMouseLeave = () => {
+  if (nomiStore.speechBubbleType !== 'text' && !speechBubble.value?.contains(document.activeElement)) {
+    nomiStore.startFilterTimer()
+  }
+}
+
+const handleBubbleFocusOut = (event) => {
+  if (nomiStore.speechBubbleType !== 'text' && !speechBubble.value?.contains(event.relatedTarget)) {
+    nomiStore.startFilterTimer()
+  }
+}
 
 // 拖拽开始
 const handleDragStart = (e) => {
@@ -222,10 +250,10 @@ const handleCreateMaterial = () => {
   emit('create-material')
 }
 
-// 搜索
-const handleSearch = () => {
+const openDateFilter = () => {
+  if (!canFilter.value) return
   nomiStore.closeMenu()
-  emit('search')
+  nomiStore.showDateFilterBubble(nomiStore.currentTab === 2 ? 'shipped' : 'material')
 }
 
 // 退出登录
@@ -272,15 +300,19 @@ const handleConfirmFilter = () => {
   executeFilter()
 }
 
+const handleResetFilter = () => {
+  filterStartDate.value = ''
+  filterEndDate.value = ''
+  executeFilter()
+}
+
 // 执行筛选
 const executeFilter = () => {
-  window.dispatchEvent(new CustomEvent('date-filter', {
-    detail: {
-      type: nomiStore.filterType,
-      startDate: filterStartDate.value,
-      endDate: filterEndDate.value
-    }
-  }))
+  emit('date-filter', {
+    type: nomiStore.filterType,
+    startDate: filterStartDate.value,
+    endDate: filterEndDate.value
+  })
   nomiStore.hideSpeechBubble()
 }
 
@@ -416,6 +448,46 @@ onUnmounted(() => {
   visibility: visible;
   transform: translateX(0);
   pointer-events: auto;
+}
+
+#aiSpeechBubble.filter-prompt-bubble {
+  box-sizing: border-box;
+  width: max-content !important;
+  min-width: 0;
+  max-width: calc(100vw - 24px);
+}
+
+#aiSpeechBubble .filter-prompt-action {
+  display: inline !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  line-height: inherit !important;
+  font-size: inherit !important;
+  font-weight: 800 !important;
+  color: #1677ff !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  vertical-align: baseline;
+  cursor: pointer;
+}
+
+#aiSpeechBubble .filter-prompt-action:first-of-type {
+  margin-top: 0 !important;
+}
+
+#aiSpeechBubble .filter-prompt-action:hover {
+  color: #0958d9 !important;
+  background: transparent !important;
+}
+
+#aiSpeechBubble .filter-prompt-action:focus-visible {
+  outline: 2px solid #1677ff !important;
+  outline-offset: 2px;
 }
 
 .ai-face {
@@ -597,11 +669,23 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.nomi-btn-group button {
-  margin: 0;
+#aiSpeechBubble .nomi-btn-group button {
+  display: flex !important;
+  flex: 1 1 0;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 0 !important;
+  min-width: 0;
+  margin: 0 !important;
   height: 36px;
-  line-height: 36px;
+  line-height: 1 !important;
   padding: 0;
+  white-space: nowrap;
+}
+
+#aiSpeechBubble .nomi-btn-group button:first-of-type {
+  margin-top: 0 !important;
 }
 
 .nomi-btn-secondary {
@@ -643,5 +727,31 @@ onUnmounted(() => {
 .nomi-btn-confirm:hover {
   background: #bee5d3;
   transform: scale(1.02);
+}
+
+@media (max-width: 768px) {
+  #aiSpeechBubble {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: clamp(96px, 24vh, 210px);
+    box-sizing: border-box;
+    width: auto !important;
+    min-width: 0;
+  }
+
+  #aiSpeechBubble.filter-prompt-bubble {
+    left: auto;
+    right: 12px;
+    width: max-content !important;
+  }
+
+  .ai-speech-bubble::after {
+    display: none;
+  }
+
+  .nomi-filter-area {
+    max-width: none;
+  }
 }
 </style>
