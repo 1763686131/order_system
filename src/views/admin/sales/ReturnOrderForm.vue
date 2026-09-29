@@ -13,12 +13,20 @@
         </div>
         <div class="info-group">
           <label>客户</label>
-          <select v-model="form.customerId" required>
-            <option value="">请选择客户</option>
-            <option v-for="customer in filteredCustomers" :key="customer.id" :value="String(customer.id)">
-              {{ customer.customerName }}
-            </option>
-          </select>
+          <div class="customer-picker">
+            <input
+              type="text"
+              class="customer-search-input"
+              :value="customerDropdownOpen ? customerSearch : selectedCustomerName"
+              placeholder="请选择客户"
+              autocomplete="off"
+              ref="customerInputRef"
+              @focus="openCustomerDropdown"
+              @input="handleCustomerSearchInput"
+              @keydown.escape.prevent="closeCustomerDropdown"
+            />
+            <span class="customer-picker-arrow" aria-hidden="true"></span>
+          </div>
         </div>
         <div class="info-group">
           <label>仓库</label>
@@ -94,36 +102,11 @@
                     v-model="item.goodsName"
                     class="product-input"
                     type="text"
+                    :ref="element => setProductInputRef(index, element)"
                     @focus="showProductDropdown(index)"
                     @blur="hideProductDropdown(index)"
                     @input="filterProducts(index)"
                   />
-                  <div
-                    v-if="item.showDropdown && item.filteredProducts.length"
-                    class="product-dropdown"
-                    @mousedown.prevent
-                  >
-                    <div class="product-dropdown-header">
-                      <span class="col-code">编号</span>
-                      <span class="col-name">名称</span>
-                      <span class="col-spec">规格</span>
-                      <span class="col-unit">单位</span>
-                      <span class="col-stock">库存</span>
-                    </div>
-                    <button
-                      v-for="product in item.filteredProducts"
-                      :key="product.id"
-                      class="product-option"
-                      type="button"
-                      @click="selectProduct(index, product)"
-                    >
-                      <span class="col-code">{{ product.code || '-' }}</span>
-                      <span class="col-name">{{ product.name }}</span>
-                      <span class="col-spec">{{ product.specification || '-' }}</span>
-                      <span class="col-unit">{{ getUnitName(product.unitId) || '-' }}</span>
-                      <span class="col-stock">{{ number(product.stock) }}</span>
-                    </button>
-                  </div>
                 </div>
               </td>
               <td><input v-model="item.specification" type="text" readonly class="readonly-input" /></td>
@@ -249,9 +232,9 @@
             <label>本次退款</label>
             <input v-model.number="form.refundAmount" type="number" min="0" step="0.01" />
           </div>
-          <div class="finance-item">
+          <div class="finance-item settlement-account-field">
             <label>结算账户</label>
-            <select v-model="form.settlementAccount">
+            <select v-model="form.settlementAccount" :title="form.settlementAccount || '请选择结算账户'">
               <option value="">请选择结算账户</option>
               <option
                 v-if="form.settlementAccount && !storeBankAccounts.some(account => (account.value || account.accountName) === form.settlementAccount)"
@@ -292,6 +275,98 @@
         </div>
       </div>
     </form>
+
+    <Teleport to="body">
+      <div
+        v-if="activeProductItem && activeProductItem.filteredProducts.length"
+        ref="productDropdownRef"
+        class="product-dropdown product-dropdown-floating"
+        :style="productDropdownStyle"
+        @mousedown.prevent
+      >
+        <div class="product-dropdown-header">
+          <span class="col-code">编号</span>
+          <span class="col-name">名称</span>
+          <span class="col-spec">规格</span>
+          <span class="col-unit">单位</span>
+          <span class="col-stock">库存</span>
+          <span class="col-remark">备注</span>
+        </div>
+        <button
+          v-for="product in activeProductItem.filteredProducts"
+          :key="product.id"
+          class="product-option"
+          type="button"
+          @click="selectProduct(focusedRow, product)"
+        >
+          <span class="col-code">{{ product.code || '-' }}</span>
+          <span class="col-name">{{ product.name || '-' }}</span>
+          <span class="col-spec">{{ product.specification || '-' }}</span>
+          <span class="col-unit">{{ getUnitName(product.unitId) || product.unit || '-' }}</span>
+          <span class="col-stock">{{ number(getProductStock(product, activeProductItem)) }}</span>
+          <span
+            class="col-remark"
+            :title="product.notes || product.productNotes || product.remark || ''"
+          >
+            {{ product.notes || product.productNotes || product.remark || '-' }}
+          </span>
+        </button>
+      </div>
+    </Teleport>
+
+    <Teleport to="body">
+      <div
+        v-if="customerDropdownOpen"
+        ref="customerDropdownRef"
+        class="customer-dropdown"
+        :style="customerDropdownStyle"
+        @mousedown.prevent
+      >
+        <div v-if="paginatedCustomers.length" class="customer-option-list">
+          <button
+            v-for="customer in paginatedCustomers"
+            :key="customer.id"
+            type="button"
+            class="customer-option"
+            :class="{ selected: String(customer.id) === String(form.customerId) }"
+            @click="selectCustomer(customer)"
+          >
+            <span class="customer-option-name">
+              {{ customer.customerName || customer.name || '未命名客户' }}
+            </span>
+            <span class="customer-option-contact">
+              {{ customer.contactPerson || '未填写联系人' }}
+            </span>
+            <span class="customer-option-phone">
+              {{ customer.phone || '未填写电话' }}
+            </span>
+          </button>
+        </div>
+        <div v-else class="customer-empty">没有匹配的客户</div>
+
+        <div v-if="customerTotalPages > 1" class="customer-pagination">
+          <button
+            type="button"
+            class="customer-page-button"
+            title="上一页"
+            :disabled="customerPage <= 1"
+            @click="changeCustomerPage(customerPage - 1)"
+          >
+            ‹
+          </button>
+          <span>{{ customerPage }} / {{ customerTotalPages }}</span>
+          <button
+            type="button"
+            class="customer-page-button"
+            title="下一页"
+            :disabled="customerPage >= customerTotalPages"
+            @click="changeCustomerPage(customerPage + 1)"
+          >
+            ›
+          </button>
+        </div>
+      </div>
+    </Teleport>
 
     <Teleport to="body">
       <Transition name="notice">
@@ -338,7 +413,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
@@ -369,6 +444,16 @@ const packagingUnits = ref([])
 const employees = ref([])
 const departments = ref([])
 const focusedRow = ref(-1)
+const productInputRefs = new Map()
+const productDropdownRef = ref(null)
+const productDropdownStyle = ref({})
+const customerSearch = ref('')
+const customerPage = ref(1)
+const customerDropdownOpen = ref(false)
+const customerInputRef = ref(null)
+const customerDropdownRef = ref(null)
+const customerDropdownStyle = ref({})
+const CUSTOMER_PAGE_SIZE = 15
 const printTemplateDialogOpen = ref(false)
 const printPreviewVisible = ref(false)
 const selectedPrintTemplate = ref(null)
@@ -377,6 +462,32 @@ const printPreviewAutoPrint = ref(false)
 const notice = ref({ visible: false, type: 'success', message: '' })
 let noticeTimer = null
 let rowKey = 0
+const ORDER_FORM_DEFAULTS_STORAGE_KEY = 'admin_order_form_default_selections'
+
+const readOrderFormDefaults = () => {
+  if (typeof window === 'undefined') {
+    return { settlementAccountsByStore: {} }
+  }
+
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(ORDER_FORM_DEFAULTS_STORAGE_KEY) || '{}')
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { settlementAccountsByStore: {} }
+    }
+
+    return {
+      ...parsed,
+      settlementAccountsByStore: parsed.settlementAccountsByStore &&
+        typeof parsed.settlementAccountsByStore === 'object' &&
+        !Array.isArray(parsed.settlementAccountsByStore)
+        ? parsed.settlementAccountsByStore
+        : {}
+    }
+  } catch (error) {
+    console.warn('读取订单默认选项失败:', error)
+    return { settlementAccountsByStore: {} }
+  }
+}
 
 const today = () => new Date().toISOString().slice(0, 10)
 const blankItem = () => ({
@@ -440,6 +551,30 @@ const filteredCustomers = computed(() => {
   return customers.value.filter(item => idEquals(item.storeId ?? item.store_id, form.value.storeId))
 })
 
+const customerSearchResults = computed(() => {
+  const keyword = String(customerSearch.value || '').trim().toLowerCase()
+  if (!keyword) return filteredCustomers.value
+
+  return filteredCustomers.value.filter(customer => [
+    customer.customerName,
+    customer.name,
+    customer.customerCode,
+    customer.code,
+    customer.contactPerson,
+    customer.phone
+  ].some(value => String(value || '').toLowerCase().includes(keyword)))
+})
+
+const customerTotalPages = computed(() => Math.max(
+  1,
+  Math.ceil(customerSearchResults.value.length / CUSTOMER_PAGE_SIZE)
+))
+
+const paginatedCustomers = computed(() => {
+  const start = (customerPage.value - 1) * CUSTOMER_PAGE_SIZE
+  return customerSearchResults.value.slice(start, start + CUSTOMER_PAGE_SIZE)
+})
+
 const filteredWarehouses = computed(() => {
   if (!form.value.storeId) return []
   return warehouses.value.filter(item => idEquals(item.storeId ?? item.store_id, form.value.storeId))
@@ -449,6 +584,61 @@ const storeBankAccounts = computed(() => bankAccounts.value
   .filter(account => idEquals(account.storeId, form.value.storeId))
   .slice()
   .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault))))
+
+const getPreferredSettlementAccount = () => {
+  if (!form.value.storeId) return ''
+  const defaults = readOrderFormDefaults()
+  const storeKey = String(form.value.storeId)
+  const accountDefaults = defaults.settlementAccountsByStore
+  if (Object.prototype.hasOwnProperty.call(accountDefaults, storeKey)) {
+    const savedAccount = accountDefaults[storeKey] || ''
+    if (!savedAccount || storeBankAccounts.value.some(account =>
+      (account.value || account.accountName) === savedAccount
+    )) {
+      return savedAccount
+    }
+  }
+
+  const defaultAccount = storeBankAccounts.value.find(account => account.isDefault) ||
+    storeBankAccounts.value[0]
+  return defaultAccount?.value || defaultAccount?.accountName || ''
+}
+
+const applyOrderFormDefaults = () => {
+  const defaults = readOrderFormDefaults()
+  form.value.packaging = defaults.packaging || '桶装'
+  form.value.salesPerson = salesPeople.value.some(employee =>
+    employee.displayName === defaults.salesPerson
+  ) ? defaults.salesPerson : ''
+  form.value.creator = creators.value.some(employee =>
+    employee.displayName === defaults.creator
+  ) ? defaults.creator : ''
+  form.value.settlementAccount = getPreferredSettlementAccount()
+}
+
+const persistOrderFormDefaults = () => {
+  const defaults = readOrderFormDefaults()
+  const nextDefaults = {
+    ...defaults,
+    packaging: form.value.packaging || '桶装',
+    salesPerson: form.value.salesPerson || '',
+    creator: form.value.creator || '',
+    settlementAccountsByStore: {
+      ...(defaults.settlementAccountsByStore || {})
+    }
+  }
+  if (form.value.storeId) {
+    nextDefaults.settlementAccountsByStore[String(form.value.storeId)] =
+      form.value.settlementAccount || ''
+  }
+  if (typeof window === 'undefined') return
+
+  try {
+    window.localStorage.setItem(ORDER_FORM_DEFAULTS_STORAGE_KEY, JSON.stringify(nextDefaults))
+  } catch (error) {
+    console.warn('保存订单默认选项失败:', error)
+  }
+}
 
 const salesPeople = computed(() => {
   const salesDepartmentIds = new Set(
@@ -549,6 +739,11 @@ const selectedCustomerName = computed(() => {
 const selectedWarehouseName = computed(() => {
   const warehouse = warehouses.value.find(item => idEquals(item.id, form.value.warehouseId))
   return warehouse?.name || ''
+})
+
+const activeProductItem = computed(() => {
+  const item = form.value.items[focusedRow.value]
+  return item?.showDropdown ? item : null
 })
 
 const returnPrintVariables = computed(() => {
@@ -695,16 +890,15 @@ const resetItems = () => {
 }
 
 const onStoreChange = () => {
+  closeCustomerDropdown()
   form.value.customerId = ''
   form.value.warehouseId = ''
-  const defaultAccount = storeBankAccounts.value.find(account => account.isDefault) ||
-    storeBankAccounts.value[0]
-  form.value.settlementAccount = defaultAccount?.value ||
-    defaultAccount?.accountName || ''
+  form.value.settlementAccount = getPreferredSettlementAccount()
   resetItems()
 }
 
 const onWarehouseChange = () => {
+  closeProductDropdown()
   form.value.items.forEach(item => {
     item.productId = ''
     item.productCode = ''
@@ -725,17 +919,73 @@ const onItemWarehouseChange = item => {
   if (product) item.currentStock = getProductStock(product, item)
 }
 
+const setProductInputRef = (index, element) => {
+  if (element) {
+    productInputRefs.set(index, element)
+  } else {
+    productInputRefs.delete(index)
+  }
+}
+
+const updateProductDropdownPosition = () => {
+  const input = productInputRefs.get(focusedRow.value)
+  const item = activeProductItem.value
+  if (!input || !item || !item.filteredProducts.length) {
+    productDropdownStyle.value = {}
+    return
+  }
+
+  const rect = input.getBoundingClientRect()
+  const viewportPadding = 12
+  const gap = 4
+  const dropdownWidth = Math.min(
+    720,
+    Math.max(360, window.innerWidth - viewportPadding * 2)
+  )
+  const rowHeight = 38
+  const headerHeight = 38
+  const desiredHeight = Math.min(
+    360,
+    headerHeight + item.filteredProducts.length * rowHeight
+  )
+  const spaceBelow = Math.max(120, window.innerHeight - rect.bottom - viewportPadding)
+  const spaceAbove = Math.max(120, rect.top - viewportPadding)
+  const shouldOpenAbove = desiredHeight > spaceBelow && spaceAbove > spaceBelow
+  const availableHeight = shouldOpenAbove ? spaceAbove : spaceBelow
+  const height = Math.min(desiredHeight, availableHeight)
+  const top = shouldOpenAbove
+    ? Math.max(viewportPadding, rect.top - height - gap)
+    : Math.min(window.innerHeight - height - viewportPadding, rect.bottom + gap)
+  const left = Math.min(
+    Math.max(viewportPadding, rect.left),
+    Math.max(viewportPadding, window.innerWidth - dropdownWidth - viewportPadding)
+  )
+
+  productDropdownStyle.value = {
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    width: `${Math.round(dropdownWidth)}px`,
+    height: `${Math.round(height)}px`
+  }
+}
+
 const showProductDropdown = index => {
   if (!form.value.storeId) return
   focusedRow.value = index
   const item = form.value.items[index]
   item.showDropdown = true
   filterProducts(index)
+  nextTick(updateProductDropdownPosition)
 }
 
 const hideProductDropdown = index => {
   window.setTimeout(() => {
-    if (form.value.items[index]) form.value.items[index].showDropdown = false
+    if (form.value.items[index]) {
+      form.value.items[index].showDropdown = false
+      if (focusedRow.value === index) {
+        productDropdownStyle.value = {}
+      }
+    }
   }, 180)
 }
 
@@ -751,6 +1001,8 @@ const filterProducts = index => {
       .some(value => String(value).toLowerCase().includes(keyword))
   }).slice(0, 80)
   item.showDropdown = true
+  focusedRow.value = index
+  nextTick(updateProductDropdownPosition)
 }
 
 const selectProduct = (index, product) => {
@@ -769,21 +1021,122 @@ const selectProduct = (index, product) => {
   item.packages = item.packages || null
   item.quantity = item.quantity || null
   item.showDropdown = false
+  if (focusedRow.value === index) {
+    productDropdownStyle.value = {}
+  }
   calculateRow(item)
 }
 
+const closeProductDropdown = () => {
+  form.value.items.forEach(item => {
+    item.showDropdown = false
+  })
+  focusedRow.value = -1
+  productDropdownStyle.value = {}
+}
+
+const updateCustomerDropdownPosition = () => {
+  const input = customerInputRef.value
+  if (!input || !customerDropdownOpen.value) {
+    customerDropdownStyle.value = {}
+    return
+  }
+
+  const rect = input.getBoundingClientRect()
+  const viewportPadding = 12
+  const gap = 4
+  const dropdownWidth = Math.min(
+    420,
+    Math.max(280, window.innerWidth - viewportPadding * 2)
+  )
+  const rowHeight = 38
+  const paginationHeight = customerTotalPages.value > 1 ? 42 : 0
+  const desiredHeight = Math.min(
+    620,
+    Math.max(80, paginatedCustomers.value.length * rowHeight + paginationHeight)
+  )
+  const spaceBelow = Math.max(120, window.innerHeight - rect.bottom - viewportPadding)
+  const spaceAbove = Math.max(120, rect.top - viewportPadding)
+  const shouldOpenAbove = desiredHeight > spaceBelow && spaceAbove > spaceBelow
+  const availableHeight = shouldOpenAbove ? spaceAbove : spaceBelow
+  const height = Math.min(desiredHeight, availableHeight)
+  const top = shouldOpenAbove
+    ? Math.max(viewportPadding, rect.top - height - gap)
+    : Math.min(window.innerHeight - height - viewportPadding, rect.bottom + gap)
+  const left = Math.min(
+    Math.max(viewportPadding, rect.left),
+    Math.max(viewportPadding, window.innerWidth - dropdownWidth - viewportPadding)
+  )
+
+  customerDropdownStyle.value = {
+    top: `${Math.round(top)}px`,
+    left: `${Math.round(left)}px`,
+    width: `${Math.round(dropdownWidth)}px`,
+    height: `${Math.round(height)}px`
+  }
+}
+
+const openCustomerDropdown = () => {
+  customerDropdownOpen.value = true
+  customerSearch.value = ''
+  customerPage.value = 1
+  nextTick(updateCustomerDropdownPosition)
+}
+
+const closeCustomerDropdown = () => {
+  customerDropdownOpen.value = false
+  customerSearch.value = ''
+  customerPage.value = 1
+  customerDropdownStyle.value = {}
+}
+
+const handleCustomerSearchInput = event => {
+  customerDropdownOpen.value = true
+  customerSearch.value = event.target.value
+  customerPage.value = 1
+  nextTick(updateCustomerDropdownPosition)
+}
+
+const selectCustomer = customer => {
+  form.value.customerId = String(customer.id)
+  closeCustomerDropdown()
+  customerInputRef.value?.blur()
+}
+
+const changeCustomerPage = page => {
+  customerPage.value = Math.min(
+    Math.max(1, page),
+    customerTotalPages.value
+  )
+  nextTick(updateCustomerDropdownPosition)
+}
+
+const handleCustomerDocumentPointerdown = event => {
+  if (!customerDropdownOpen.value) return
+
+  const input = customerInputRef.value
+  const dropdown = customerDropdownRef.value
+  if (input?.contains(event.target) || dropdown?.contains(event.target)) return
+
+  closeCustomerDropdown()
+}
+
 const addRow = index => {
+  closeProductDropdown()
   const position = Math.max(0, Math.min(Number(index) + 1, form.value.items.length))
   form.value.items.splice(position, 0, blankItem())
 }
 
 const removeRow = index => {
   if (form.value.items.length <= 1) return
+  closeProductDropdown()
   form.value.items.splice(index, 1)
   syncReturnAmount()
 }
 
 const clearForm = () => {
+  closeCustomerDropdown()
+  closeProductDropdown()
   form.value.storeId = ''
   form.value.customerId = ''
   form.value.warehouseId = ''
@@ -802,6 +1155,9 @@ const clearForm = () => {
     form.value.returnNumber = ''
   }
   resetItems()
+  if (!props.returnId) {
+    applyOrderFormDefaults()
+  }
 }
 
 const close = () => router.push({ name: 'admin-sales-returns' })
@@ -811,6 +1167,22 @@ watch(() => form.value.taxEnabled, enabled => {
     item.taxRate = enabled ? (Number(item.taxRate) || 13) : 0
     calculateRow(item)
   })
+})
+
+watch(
+  [() => form.value.storeId, customerSearch],
+  () => {
+    customerPage.value = 1
+    if (customerDropdownOpen.value) {
+      nextTick(updateCustomerDropdownPosition)
+    }
+  }
+)
+
+watch(customerTotalPages, totalPages => {
+  if (customerPage.value > totalPages) {
+    customerPage.value = totalPages
+  }
 })
 
 const loadData = async () => {
@@ -980,6 +1352,7 @@ const save = async () => {
       }
     })
     if (!response?.success) throw new Error(response?.message || '保存失败')
+    persistOrderFormDefaults()
     const savedReturn = response.returnOrder || response.data?.returnOrder || {}
     savedReturnId.value = response.returnId || savedReturn.id || returnId
     form.value.returnNumber = response.returnNumber || savedReturn.returnNumber || form.value.returnNumber
@@ -998,11 +1371,25 @@ const save = async () => {
 }
 
 onMounted(async () => {
+  window.addEventListener('resize', updateProductDropdownPosition)
+  window.addEventListener('scroll', updateProductDropdownPosition, true)
+  window.addEventListener('resize', updateCustomerDropdownPosition)
+  window.addEventListener('scroll', updateCustomerDropdownPosition, true)
+  document.addEventListener('pointerdown', handleCustomerDocumentPointerdown)
   await loadData()
+  if (!savedReturnId.value) {
+    applyOrderFormDefaults()
+  }
   await loadExistingReturn()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateProductDropdownPosition)
+  window.removeEventListener('scroll', updateProductDropdownPosition, true)
+  window.removeEventListener('resize', updateCustomerDropdownPosition)
+  window.removeEventListener('scroll', updateCustomerDropdownPosition, true)
+  document.removeEventListener('pointerdown', handleCustomerDocumentPointerdown)
+  productInputRefs.clear()
   window.clearTimeout(noticeTimer)
 })
 </script>
@@ -1082,6 +1469,7 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
   --text: #172033;
   --text-secondary: #596579;
   --text-muted: #8a96a8;
+  --select-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23172033'/%3E%3C/svg%3E");
 
   min-height: 100vh;
   padding: 0;
@@ -1137,6 +1525,17 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
   font-size: 14px;
 }
 
+.info-group select,
+.finance-item select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+}
+
 .info-group.wide input {
   min-width: 260px;
 }
@@ -1146,6 +1545,31 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 .finance-item input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .1);
+}
+
+.customer-picker {
+  position: relative;
+  flex: 0 0 180px;
+  min-width: 180px;
+}
+
+.customer-search-input {
+  width: 180px !important;
+  min-width: 180px !important;
+  padding-right: 30px !important;
+}
+
+.customer-picker-arrow {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  width: 0;
+  height: 0;
+  border-top: 6px solid var(--text);
+  border-right: 5px solid transparent;
+  border-left: 5px solid transparent;
+  pointer-events: none;
+  transform: translateY(-35%);
 }
 
 .right-actions {
@@ -1326,6 +1750,16 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
   font-variant-numeric: tabular-nums;
 }
 
+.products-table select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 24px;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 10px 6px;
+}
+
 .products-table input:focus,
 .products-table select:focus {
   background: var(--panel-bg);
@@ -1362,65 +1796,221 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 }
 
 .product-dropdown {
-  position: absolute;
-  z-index: 1000;
-  top: 100%;
-  left: 0;
-  min-width: 600px;
-  max-height: 300px;
-  margin-top: 4px;
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --panel-bg: #ffffff;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  position: fixed;
+  z-index: 2147482000;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow-x: hidden;
   overflow-y: auto;
-  background: var(--panel-bg);
-  border: 1px solid var(--border-strong);
+  background: var(--panel-bg, #ffffff);
+  border: 1px solid var(--border-strong, #cbd5e1);
   border-radius: 5px;
-  box-shadow: 0 4px 8px rgba(15, 23, 42, .12);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, .14);
 }
 
 .product-dropdown-header,
 .product-option {
-  display: flex;
+  display: grid;
+  grid-template-columns:
+    minmax(0, .9fr)
+    minmax(0, 1.5fr)
+    minmax(0, 1.2fr)
+    minmax(0, .7fr)
+    minmax(0, .8fr)
+    minmax(0, 1.7fr);
   align-items: center;
-  padding: 9px 12px;
+  gap: 8px;
+  padding: 0 12px;
+  box-sizing: border-box;
   font-size: 11px;
 }
 
 .product-dropdown-header {
+  flex: 0 0 38px;
   position: sticky;
   z-index: 1;
   top: 0;
-  color: var(--text-secondary);
+  color: var(--text-secondary, #596579);
   background: #f8fafc;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border, #e2e8f0);
   font-weight: 650;
 }
 
 .product-option {
+  min-height: 38px;
   width: 100%;
-  color: var(--text-secondary);
-  background: var(--panel-bg);
+  color: var(--text-secondary, #596579);
+  background: var(--panel-bg, #ffffff);
   border: 0;
   border-bottom: 1px solid #f8fafc;
   cursor: pointer;
+  font-family: inherit;
   text-align: left;
   font-size: 13px;
 }
 
 .product-option:hover {
+  background: rgba(var(--accent-rgb, 15, 159, 120), .08);
+}
+
+.product-dropdown .col-code,
+.product-dropdown .col-name,
+.product-dropdown .col-spec,
+.product-dropdown .col-unit,
+.product-dropdown .col-stock,
+.product-dropdown .col-remark {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-dropdown .col-stock {
+  text-align: right;
+}
+
+.product-option .col-name { color: var(--text, #172033); font-weight: 600; }
+.product-option .col-stock { color: var(--accent-dark, #08745a); font-weight: 600; }
+.product-option .col-remark {
+  color: var(--text-muted, #8a96a8);
+  font-size: 12px;
+}
+
+.customer-dropdown {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --panel-bg: #ffffff;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  position: fixed;
+  z-index: 2147482000;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, .14);
+}
+
+.customer-option-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.customer-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  min-height: 38px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--panel-bg);
+  border: 0;
+  border-bottom: 1px solid #f1f5f9;
+  box-sizing: border-box;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  transition: background .16s ease, color .16s ease;
+}
+
+.customer-option:last-child {
+  border-bottom: 0;
+}
+
+.customer-option:hover,
+.customer-option.selected {
+  color: var(--accent-dark);
   background: rgba(var(--accent-rgb), .08);
 }
 
-.product-dropdown-header .col-code,
-.product-option .col-code { width: 100px; flex-shrink: 0; }
-.product-dropdown-header .col-name,
-.product-option .col-name { width: 180px; flex-shrink: 0; }
-.product-dropdown-header .col-spec,
-.product-option .col-spec { width: 150px; flex-shrink: 0; }
-.product-dropdown-header .col-unit,
-.product-option .col-unit { width: 80px; flex-shrink: 0; }
-.product-dropdown-header .col-stock,
-.product-option .col-stock { width: 90px; flex-shrink: 0; text-align: right; }
-.product-option .col-name { color: var(--text); font-weight: 600; }
-.product-option .col-stock { color: var(--accent-dark); font-weight: 600; }
+.customer-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.customer-option-name {
+  font-weight: 650;
+}
+
+.customer-option-contact,
+.customer-option-phone {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.customer-empty {
+  display: flex;
+  min-height: 80px;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+.customer-pagination {
+  display: flex;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-secondary);
+  background: #f8fafc;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.customer-page-button {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.customer-page-button:hover:not(:disabled) {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.customer-page-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+}
 
 .unit-cell small {
   display: block;
@@ -1515,7 +2105,7 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 }
 
 .finance-row-full {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 
 .finance-item {
@@ -1526,6 +2116,39 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
 
 .finance-item input {
   width: 120px;
+}
+
+.settlement-account-field {
+  flex: 0 1 280px;
+  min-width: 235px;
+}
+
+.settlement-account-field label {
+  flex: none;
+  white-space: nowrap;
+}
+
+.settlement-account-field select {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 32px 0 11px;
+  box-sizing: border-box;
+  color: var(--text);
+  background-color: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  outline: none;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+
+.settlement-account-field select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .1);
 }
 
 .finance-label {
@@ -1665,10 +2288,23 @@ h1 { margin: 5px 0 4px; font-size: 21px; }
   .info-group,
   .info-group select,
   .info-group input,
+  .customer-picker,
+  .customer-search-input,
   .finance-item,
-  .finance-item input {
+  .finance-item input,
+  .finance-item select {
     width: 100%;
     min-width: 100%;
+  }
+
+  .settlement-account-field select {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .settlement-account-field {
+    flex: none;
+    min-width: 0;
   }
 
   .right-actions,
