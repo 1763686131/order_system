@@ -3821,7 +3821,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 }
 ```
 
-`productType` 只能是 `finished-product` 或 `raw-material`。`returnAmount` 为实退货金额，未传或小于等于零时按明细金额合计；`refundAmount` 为本次实际退款，必须满足 `0 <= refundAmount <= returnAmount`。保存成功后返回 `returnId`、`returnNumber` 和 `returnOrder`，状态为 `draft`。此时不会写入客户账户流水，也不会增加库存。
+`productType` 只能是 `finished-product` 或 `raw-material`。`returnAmount` 为实退货金额，未传或为空时按明细金额合计，显式传入 `0` 会保留；`returnAmount` 不能小于 `0`。`refundAmount` 为本次实际退款，必须满足 `0 <= refundAmount <= returnAmount`。保存成功后返回 `returnId`、`returnNumber` 和 `returnOrder`，状态为 `draft`。此时不会写入客户账户流水，也不会增加库存。
 
 **成功响应示例**:
 

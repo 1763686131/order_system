@@ -1302,7 +1302,17 @@ const save = async () => {
     showNotice('请至少选择一条商品并填写数量', 'error')
     return
   }
-  if (Number(form.value.refundAmount) > Number(form.value.returnAmount)) {
+  const returnAmount = Number(form.value.returnAmount || 0)
+  const refundAmount = Number(form.value.refundAmount || 0)
+  if (!Number.isFinite(returnAmount) || returnAmount < 0) {
+    showNotice('应退金额不能小于0', 'error')
+    return
+  }
+  if (!Number.isFinite(refundAmount) || refundAmount < 0) {
+    showNotice('本次退款不能小于0', 'error')
+    return
+  }
+  if (refundAmount > returnAmount) {
     showNotice('本次退款不能超过应退金额', 'error')
     return
   }

@@ -381,6 +381,21 @@ def _return_totals(items):
     }
 
 
+def _resolve_return_amount(data, fallback_amount):
+    raw_value = (
+        data.get('returnAmount')
+        if 'returnAmount' in data
+        else data.get('totalAmount')
+    )
+    if raw_value in (None, ''):
+        return fallback_amount.quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+
+    return_amount = _money(raw_value, '应退金额')
+    if return_amount < 0:
+        raise ValueError('应退金额不能小于0')
+    return return_amount
+
+
 def _insert_return_items(conn, return_id, items, post_inventory=False,
                          return_number=None, store_id=None):
     for line_no, item in enumerate(items, start=1):
@@ -559,16 +574,10 @@ def create_return():
                     raise ValueError('客户与门店不匹配')
 
                 items = _normalize_items(conn, data, product_type)
-                return_amount = _money(
-                    data.get('returnAmount', data.get('totalAmount')),
-                    '应退金额',
+                return_amount = _resolve_return_amount(
+                    data,
+                    sum((item['amount'] for item in items), Decimal('0.00')),
                 )
-                if return_amount <= 0:
-                    return_amount = sum(
-                        (item['amount'] for item in items), Decimal('0.00')
-                    ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
-                if return_amount <= 0:
-                    raise ValueError('应退金额必须大于0')
                 debt_before = max(
                     _money(customer['receivable'], '客户欠款'),
                     Decimal('0.00'),
@@ -756,11 +765,10 @@ def create_return_draft():
                 store, _customer = _validate_store_customer(conn, store_id, customer_id)
                 items = _normalize_items(conn, data, product_type)
                 totals = _return_totals(items)
-                return_amount = _money(data.get('returnAmount', data.get('totalAmount')), '应退金额')
-                if return_amount <= 0:
-                    return_amount = totals['item_amount'].quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
-                if return_amount <= 0:
-                    raise ValueError('应退金额必须大于0')
+                return_amount = _resolve_return_amount(
+                    data,
+                    totals['item_amount'],
+                )
                 if refund_amount > return_amount:
                     raise ValueError('本次退款不能超过应退金额')
                 now = _now()
@@ -834,12 +842,11 @@ def update_return_draft(return_id):
                 store, _customer = _validate_store_customer(conn, store_id, customer_id)
                 items = _normalize_items(conn, data, product_type)
                 totals = _return_totals(items)
-                return_amount = _money(data.get('returnAmount', data.get('totalAmount')), '应退金额')
-                if return_amount <= 0:
-                    return_amount = totals['item_amount'].quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+                return_amount = _resolve_return_amount(
+                    data,
+                    totals['item_amount'],
+                )
                 refund_amount = _money(data.get('refundAmount'), '本次退款')
-                if return_amount <= 0:
-                    raise ValueError('应退金额必须大于0')
                 if refund_amount < 0 or refund_amount > return_amount:
                     raise ValueError('本次退款不能超过应退金额')
                 now = _now()
@@ -891,8 +898,10 @@ def audit_return(return_id):
                 store, customer = _validate_store_customer(conn, row['store_id'], row['customer_id'])
                 return_amount = _money(row['total_amount'], '应退金额')
                 refund_amount = _money(row['refund_amount'], '本次退款')
-                if return_amount <= 0:
-                    raise ValueError('应退金额必须大于0')
+                if return_amount < 0:
+                    raise ValueError('应退金额不能小于0')
+                if refund_amount < 0:
+                    raise ValueError('本次退款不能小于0')
                 items = conn.execute('SELECT * FROM return_order_items WHERE return_id = ? ORDER BY line_no, id', (return_id,)).fetchall()
                 if not items:
                     raise ValueError('退货单没有商品明细')
