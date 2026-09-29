@@ -13,41 +13,49 @@
       <div class="timeline-date">{{ group.date }}</div>
       <div class="timeline-items">
         <article v-for="record in group.records" :key="record.id" class="material-card">
+          <span class="card-document-no" :title="record.documentNo || '-'">
+            {{ record.documentNo || '-' }}
+          </span>
+
           <div class="card-main">
             <div class="material-name">
-              <span>{{ record.primaryItem?.productCode || '原材料' }}</span>
+              <span class="column-label">{{ record.primaryItem?.productCode || '原材料' }}</span>
               <strong>{{ record.primaryItem?.productName || '-' }}</strong>
-              <small>{{ record.primaryItem?.specification || record.warehouseName || '-' }}</small>
             </div>
 
             <div class="quantity-block used">
-              <span>出库数量</span>
+              <span class="column-label">出库数量</span>
               <strong>
                 {{ formatNumber(record.totalQuantity) }}
                 <small>{{ record.primaryItem?.unit || '' }}</small>
               </strong>
             </div>
 
+            <div class="finished-name">
+              <span class="column-label">成品名称</span>
+              <strong>{{ record.remark || '-' }}</strong>
+            </div>
+
             <div class="quantity-block produced">
-              <span>成品数量</span>
+              <span class="column-label">成品数量</span>
               <strong>{{ formatNumber(record.producedQuantity) }} <small>kg</small></strong>
             </div>
 
-            <div class="record-note">
-              <span>备注</span>
-              <strong>{{ record.remark || '无' }}</strong>
+            <div class="record-creator">
+              <span class="column-label">制单人</span>
+              <div class="creator-value">
+                <strong>{{ record.createdBy || '员工' }}</strong>
+                <small>{{ formatTime(record.createdAt) }}</small>
+              </div>
+            </div>
+
+            <div class="record-status">
+              <span class="column-label">审核状态</span>
+              <span :class="['status-badge', `status-${record.status}`]">
+                {{ statusLabel(record.status) }}
+              </span>
             </div>
           </div>
-
-          <footer>
-            <div>
-              <span>{{ record.documentNo }}</span>
-              <small>{{ formatTime(record.createdAt) }} · {{ record.createdBy || '员工' }}</small>
-            </div>
-            <span :class="['status-badge', `status-${record.status}`]">
-              {{ statusLabel(record.status) }}
-            </span>
-          </footer>
         </article>
       </div>
     </section>
@@ -275,23 +283,40 @@ defineExpose({ refresh: fetchRecords })
 
 .timeline-items {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
 }
 
 .material-card {
+  position: relative;
+  display: block;
   overflow: hidden;
+  padding: 0 !important;
   background: #fff;
   border: 1px solid #dfe7ef;
-  border-radius: 18px;
+  border-radius: 8px !important;
   box-shadow: 0 5px 18px rgba(15, 23, 42, 0.04);
+}
+
+.card-document-no {
+  position: absolute;
+  top: 16px;
+  left: 24px;
+  max-width: calc(100% - 48px);
+  overflow: hidden;
+  color: #2459a4;
+  font-size: 14px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .card-main {
   display: grid;
-  grid-template-columns: minmax(150px, 1.2fr) repeat(2, minmax(115px, 0.75fr)) minmax(120px, 0.8fr);
-  gap: 0;
-  padding: 22px 24px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.8fr) minmax(0, 1fr) minmax(0, 0.8fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  min-height: 160px;
+  align-items: center;
+  padding: 38px 24px;
 }
 
 .card-main > div {
@@ -300,7 +325,7 @@ defineExpose({ refresh: fetchRecords })
   flex-direction: column;
   justify-content: center;
   gap: 6px;
-  padding: 0 18px;
+  padding: 0 12px;
   border-right: 1px solid #edf1f5;
 }
 
@@ -313,40 +338,23 @@ defineExpose({ refresh: fetchRecords })
   border-right: 0;
 }
 
-.material-name span,
-.quantity-block span,
-.record-note span {
-  color: #526074;
-  font-size: 16px;
-  font-weight: 750;
-  line-height: 1.35;
-}
-
-.quantity-block span {
+.card-main .column-label {
   color: #344054;
   font-size: 17px;
   font-weight: 800;
+  line-height: 1.35;
 }
 
 .material-name strong {
-  overflow: hidden;
   color: #172033;
   font-size: 18px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.material-name small {
-  overflow: hidden;
-  color: #64748b;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .quantity-block strong {
   color: #e5487b;
   font-size: 22px;
+  overflow-wrap: anywhere;
 }
 
 .quantity-block.produced strong {
@@ -357,41 +365,33 @@ defineExpose({ refresh: fetchRecords })
   font-size: 12px;
 }
 
-.record-note strong {
-  overflow: hidden;
+.finished-name strong {
   color: #344054;
-  font-size: 15px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 16px;
+  overflow-wrap: anywhere;
 }
 
-.material-card footer {
-  display: flex;
-  min-height: 54px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 24px;
-  background: #f8fafc;
-  border-top: 1px solid #edf1f5;
-}
-
-.material-card footer > div {
+.creator-value {
   display: flex;
   min-width: 0;
-  flex-direction: column;
-  gap: 3px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 3px 8px;
 }
 
-.material-card footer > div span {
-  color: #475569;
-  font-size: 12px;
-  font-weight: 700;
+.creator-value strong {
+  color: #172033;
+  font-size: 15px;
+  overflow-wrap: anywhere;
 }
 
-.material-card footer small {
+.creator-value small {
   color: #94a3b8;
-  font-size: 11px;
+  font-size: 12px;
+}
+
+.record-status .status-badge {
+  align-self: flex-start;
 }
 
 .status-badge {
@@ -420,20 +420,45 @@ defineExpose({ refresh: fetchRecords })
   background: #f1f2f4;
 }
 
-@media (max-width: 1200px) {
-  .timeline-items {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 720px) {
+@media (max-width: 980px) {
   .card-main {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 18px 0;
+    min-height: 0;
+    gap: 22px 0;
+    padding: 40px 24px;
   }
 
-  .card-main > div:nth-child(2) {
+  .card-main > div:nth-child(even) {
     border-right: 0;
+  }
+
+  .card-main > div:nth-child(odd) {
+    padding-left: 0;
+  }
+
+}
+
+@media (max-width: 480px) {
+  .card-document-no {
+    top: 14px;
+    left: 18px;
+    max-width: calc(100% - 36px);
+  }
+
+  .card-main {
+    padding: 40px 18px;
+  }
+
+  .card-main > div {
+    padding-right: 10px;
+  }
+
+  .quantity-block strong {
+    font-size: 19px;
+  }
+
+  .card-main .column-label {
+    font-size: 15px;
   }
 }
 </style>

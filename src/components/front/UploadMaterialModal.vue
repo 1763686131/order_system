@@ -108,7 +108,7 @@
               <button v-for="n in 9" :key="n" type="button" @click="pressKey(String(n))">{{ n }}</button>
               <button type="button" @click="pressKey('.')">.</button>
               <button type="button" @click="pressKey('0')">0</button>
-              <button type="button" class="key-backspace" @click="pressKey('backspace')">⌫</button>
+              <button type="button" class="key-backspace" @click="pressKey('backspace')">删除</button>
               <button type="button" class="key-clear" @click="pressKey('clear')">清空重输</button>
             </div>
 
@@ -579,6 +579,7 @@ defineExpose({ open })
 
 .touch-keyboard-panel .key-backspace {
   color: #dc2626;
+  font-size: 16px;
 }
 
 .touch-keyboard-panel .key-clear {
