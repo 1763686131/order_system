@@ -127,7 +127,7 @@
                   v-model="item.goodsName"
                   @focus="showProductDropdown(index)"
                   @blur="hideProductDropdown(index)"
-                  @input="filterProducts(index)"
+                  @input="handleProductInput(index)"
                   :ref="element => setProductInputRef(index, element)"
                   class="product-input"
                 />
@@ -1499,6 +1499,49 @@ const filterProducts = (index) => {
   )
 
   nextTick(updateProductDropdownPosition)
+}
+
+// 修改已选商品时，清空当前行的商品相关数据，保留用户正在输入的搜索内容
+const clearProductRowData = (index, goodsName = '') => {
+  const item = formData.value.items[index]
+  if (!item) return
+
+  Object.assign(item, {
+    productId: '',
+    goodsName,
+    spec: '',
+    unit: '',
+    warehouseId: '',
+    warehouseName: '',
+    currentStock: null,
+    packages: null,
+    quantity: null,
+    price: null,
+    taxRate: null,
+    taxIncludedPrice: null,
+    amount: null,
+    totalAmount: null,
+    remark: '',
+    unitConversions: [],
+    baseUnitId: '',
+    conversionRate: null,
+    historyPriceLoading: false,
+    historyPriceRequestKey: ''
+  })
+
+  syncTotalPackagesFromItems()
+}
+
+const handleProductInput = (index) => {
+  const item = formData.value.items[index]
+  if (!item) return
+
+  const searchText = item.goodsName
+  if (item.productId) {
+    clearProductRowData(index, searchText)
+  }
+
+  filterProducts(index)
 }
 
 // 选择商品
