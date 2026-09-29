@@ -322,8 +322,10 @@ let speechInterval = null
 onMounted(() => {
   // 设置初始位置
   if (position.value.x === null) {
+    const fabWidth = fabContainer.value?.offsetWidth || 70
+    const rightGap = 40
     position.value = {
-      x: window.innerWidth - 80,
+      x: Math.max(12, window.innerWidth - fabWidth - rightGap),
       y: window.innerHeight - 200
     }
   }
