@@ -535,7 +535,7 @@ const icons = {
   users: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
   dollar: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
   briefcase: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>',
-  settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 6v6M5.64 5.64l4.24 4.24m4.24 4.24l4.24 4.24M1 12h6m6 0h6M5.64 18.36l4.24-4.24m4.24-4.24l4.24-4.24"/></svg>',
+  settings: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M10 2h4l.5 2.5 1.8.75 2.1-1.4 2.8 2.8-1.4 2.1.75 1.8L22 10v4l-2.5.5-.75 1.8 1.4 2.1-2.8 2.8-2.1-1.4-1.8.75L14 22h-4l-.5-2.5-1.8-.75-2.1 1.4-2.8-2.8 1.4-2.1-.75-1.8L2 14v-4l2.5-.5.75-1.8-1.4-2.1 2.8-2.8 2.1 1.4 1.8-.75z"/><circle cx="12" cy="12" r="3"/></svg>',
   truck: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>'
 }
 
@@ -564,7 +564,7 @@ const allMenuItems = [
   },
   {
     label: '销售',
-    icon: icons.cart,
+    icon: icons.truck,
     children: [
       {
         label: '销售订单',
@@ -590,7 +590,7 @@ const allMenuItems = [
   },
   {
     label: '采购',
-    icon: icons.truck,
+    icon: icons.cart,
     children: [
       {
         label: '采购订单',
@@ -678,7 +678,7 @@ const allMenuItems = [
   },
   {
     label: '人事行政',
-    icon: icons.briefcase,
+    icon: icons.users,
     children: [
       {
         label: '员工管理',
