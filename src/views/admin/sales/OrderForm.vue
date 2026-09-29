@@ -1456,6 +1456,16 @@ const onCustomerChange = () => {
 }
 
 // 显示商品下拉框
+const productMatchesSearch = (product, searchText) => {
+  const keyword = String(searchText || '').trim().toLowerCase()
+  if (!keyword) return true
+
+  const productName = String(product.name || '').toLowerCase()
+  const specification = String(product.specification || product.spec || '').toLowerCase()
+
+  return productName.includes(keyword) || specification.includes(keyword)
+}
+
 const showProductDropdown = (index) => {
   // 如果没有选择门店和仓库，直接返回，不显示下拉框
   if (!formData.value.storeId || !formData.value.warehouseId) {
@@ -1465,16 +1475,11 @@ const showProductDropdown = (index) => {
   focusedRow.value = index
   formData.value.items[index].showDropdown = true
 
-  // 获取相同名称的商品，按规格型号分组
-  const currentName = formData.value.items[index].goodsName
-  if (currentName) {
-    const sameNameProducts = filteredProducts.value.filter(p =>
-      p.name.toLowerCase().includes(currentName.toLowerCase())
-    )
-    formData.value.items[index].filteredProducts = sameNameProducts
-  } else {
-    formData.value.items[index].filteredProducts = filteredProducts.value
-  }
+  // 商品名称和规格型号都支持搜索
+  const searchText = formData.value.items[index].goodsName
+  formData.value.items[index].filteredProducts = filteredProducts.value.filter(product =>
+    productMatchesSearch(product, searchText)
+  )
 
   nextTick(updateProductDropdownPosition)
 }
@@ -1488,14 +1493,10 @@ const hideProductDropdown = (index) => {
 
 // 过滤商品
 const filterProducts = (index) => {
-  const searchText = formData.value.items[index].goodsName.toLowerCase()
-  if (searchText) {
-    formData.value.items[index].filteredProducts = filteredProducts.value.filter(p =>
-      p.name.toLowerCase().includes(searchText)
-    )
-  } else {
-    formData.value.items[index].filteredProducts = filteredProducts.value
-  }
+  const searchText = formData.value.items[index].goodsName
+  formData.value.items[index].filteredProducts = filteredProducts.value.filter(product =>
+    productMatchesSearch(product, searchText)
+  )
 
   nextTick(updateProductDropdownPosition)
 }
