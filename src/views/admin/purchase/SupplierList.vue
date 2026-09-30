@@ -1,195 +1,150 @@
 <template>
   <div class="supplier-page" @click="closeFilterMenu">
-    <header class="page-header">
-      <div>
-        <p class="eyebrow">采购协同</p>
-        <h1>供应商管理</h1>
-        <p class="page-description">维护供应商基础资料，统一用于采购入库和对账。</p>
-      </div>
-      <button class="btn btn-primary" type="button" @click="openCreate">
-        <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17">
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-        新增供应商
-      </button>
-    </header>
-
-    <section class="filter-panel" aria-label="供应商筛选">
-      <div class="filter-heading">
-        <div>
-          <h2>筛选条件</h2>
-          <span>支持按供应商信息快速定位</span>
-        </div>
-        <span class="result-count">共 {{ filteredSuppliers.length }} 条</span>
-      </div>
-      <div class="filter-grid">
-        <label class="field">
-          <span>供应商名称</span>
-          <input
-            v-model.trim="filters.supplierName"
-            type="search"
-            placeholder="搜索供应商名称"
-            @keyup.enter="handleSearch"
-          />
-        </label>
-        <label class="field">
-          <span>供应商编号</span>
-          <input
-            v-model.trim="filters.supplierCode"
-            type="search"
-            placeholder="如 SUP-001"
-            @keyup.enter="handleSearch"
-          />
-        </label>
-        <label class="field">
-          <span>联系人</span>
-          <input
-            v-model.trim="filters.contactPerson"
-            type="search"
-            placeholder="搜索联系人"
-            @keyup.enter="handleSearch"
-          />
-        </label>
-        <label class="field">
-          <span>联系电话</span>
-          <input
-            v-model.trim="filters.phone"
-            type="search"
-            placeholder="搜索联系电话"
-            @keyup.enter="handleSearch"
-          />
-        </label>
-        <div class="field">
-          <span>所属门店</span>
-          <div class="filter-combobox" @click.stop>
-            <input
-              v-model="storeQuery"
-              type="search"
-              role="combobox"
-              aria-label="所属门店"
-              :aria-expanded="activeFilterMenu === 'store'"
-              aria-autocomplete="list"
-              placeholder="全部门店"
-              @focus="openFilterMenu('store')"
-              @keydown="handleFilterKeydown($event, 'store')"
-            />
-            <button
-              class="combobox-toggle"
-              type="button"
-              title="选择所属门店"
-              aria-label="选择所属门店"
-              @mousedown.prevent
-              @click="toggleFilterMenu('store')"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </button>
-            <div v-if="activeFilterMenu === 'store'" class="combobox-options" role="listbox">
-              <button
-                v-for="(option, index) in filteredStoreOptions"
-                :key="option.value || 'all-stores'"
-                class="combobox-option"
-                :class="{ selected: filters.storeId === option.value, highlighted: highlightedFilterIndex === index }"
-                type="button"
-                role="option"
-                :aria-selected="filters.storeId === option.value"
-                @mouseenter="highlightedFilterIndex = index"
-                @click="selectFilterOption('store', option)"
-              >
-                <span>{{ option.label }}</span>
-                <small v-if="option.meta">{{ option.meta }}</small>
-                <svg v-if="filters.storeId === option.value" aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
-                  <path d="m5 12 4 4L19 6" />
-                </svg>
-              </button>
-              <span v-if="filteredStoreOptions.length === 0" class="combobox-empty">未找到匹配门店</span>
-            </div>
-          </div>
-        </div>
-        <div class="field">
-          <span>供应商状态</span>
-          <div class="filter-combobox" @click.stop>
-            <input
-              v-model="statusQuery"
-              type="search"
-              role="combobox"
-              aria-label="供应商状态"
-              :aria-expanded="activeFilterMenu === 'status'"
-              aria-autocomplete="list"
-              placeholder="全部状态"
-              @focus="openFilterMenu('status')"
-              @keydown="handleFilterKeydown($event, 'status')"
-            />
-            <button
-              class="combobox-toggle"
-              type="button"
-              title="选择供应商状态"
-              aria-label="选择供应商状态"
-              @mousedown.prevent
-              @click="toggleFilterMenu('status')"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
-                <path d="m6 9 6 6 6-6" />
-              </svg>
-            </button>
-            <div v-if="activeFilterMenu === 'status'" class="combobox-options" role="listbox">
-              <button
-                v-for="(option, index) in filteredStatusOptions"
-                :key="option.value || 'all-statuses'"
-                class="combobox-option"
-                :class="{ selected: filters.status === option.value, highlighted: highlightedFilterIndex === index }"
-                type="button"
-                role="option"
-                :aria-selected="filters.status === option.value"
-                @mouseenter="highlightedFilterIndex = index"
-                @click="selectFilterOption('status', option)"
-              >
-                <span class="status-option-label">
-                  <i class="status-option-dot" :class="option.value || 'all'"></i>
-                  {{ option.label }}
-                </span>
-                <svg v-if="filters.status === option.value" aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
-                  <path d="m5 12 4 4L19 6" />
-                </svg>
-              </button>
-              <span v-if="filteredStatusOptions.length === 0" class="combobox-empty">未找到匹配状态</span>
-            </div>
-          </div>
-        </div>
-        <div class="filter-actions">
-          <button class="btn btn-primary btn-search" type="button" @click="handleSearch">
-            <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
-              <circle cx="10.8" cy="10.8" r="6.8" />
-              <path d="m16 16 5 5" />
-            </svg>
-            查询
-          </button>
-          <button class="btn btn-ghost" type="button" @click="resetFilters">
-            <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
-              <path d="M4 12a8 8 0 1 0 2.3-5.7" />
-              <path d="M4 4v5h5" />
-            </svg>
-            重置
-          </button>
-        </div>
-      </div>
-    </section>
-
     <section class="table-card">
       <div class="table-toolbar">
-        <div>
-          <h2>供应商档案</h2>
-          <span class="toolbar-note">最后同步：{{ lastLoadedAt || '尚未同步' }}</span>
+        <h2 class="toolbar-title">供应商档案</h2>
+        <div class="filter-grid" role="search" aria-label="供应商筛选">
+          <div class="field">
+            <span>所属门店</span>
+            <div class="filter-combobox" @click.stop>
+              <input
+                v-model="storeQuery"
+                type="search"
+                role="combobox"
+                aria-label="所属门店"
+                :aria-expanded="activeFilterMenu === 'store'"
+                aria-autocomplete="list"
+                placeholder="全部门店"
+                @focus="openFilterMenu('store')"
+                @keydown="handleFilterKeydown($event, 'store')"
+              />
+              <button
+                class="combobox-toggle"
+                type="button"
+                title="选择所属门店"
+                aria-label="选择所属门店"
+                @mousedown.prevent
+                @click="toggleFilterMenu('store')"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              <div v-if="activeFilterMenu === 'store'" class="combobox-options" role="listbox">
+                <button
+                  v-for="(option, index) in filteredStoreOptions"
+                  :key="option.value || 'all-stores'"
+                  class="combobox-option"
+                  :class="{ selected: filters.storeId === option.value, highlighted: highlightedFilterIndex === index }"
+                  type="button"
+                  role="option"
+                  :aria-selected="filters.storeId === option.value"
+                  @mouseenter="highlightedFilterIndex = index"
+                  @click="selectFilterOption('store', option)"
+                >
+                  <span>{{ option.label }}</span>
+                  <small v-if="option.meta">{{ option.meta }}</small>
+                  <svg v-if="filters.storeId === option.value" aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+                    <path d="m5 12 4 4L19 6" />
+                  </svg>
+                </button>
+                <span v-if="filteredStoreOptions.length === 0" class="combobox-empty">未找到匹配门店</span>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <span>供应商状态</span>
+            <div class="filter-combobox" @click.stop>
+              <input
+                v-model="statusQuery"
+                type="search"
+                role="combobox"
+                aria-label="供应商状态"
+                :aria-expanded="activeFilterMenu === 'status'"
+                aria-autocomplete="list"
+                placeholder="全部状态"
+                @focus="openFilterMenu('status')"
+                @keydown="handleFilterKeydown($event, 'status')"
+              />
+              <button
+                class="combobox-toggle"
+                type="button"
+                title="选择供应商状态"
+                aria-label="选择供应商状态"
+                @mousedown.prevent
+                @click="toggleFilterMenu('status')"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+                  <path d="m6 9 6 6 6-6" />
+                </svg>
+              </button>
+              <div v-if="activeFilterMenu === 'status'" class="combobox-options" role="listbox">
+                <button
+                  v-for="(option, index) in filteredStatusOptions"
+                  :key="option.value || 'all-statuses'"
+                  class="combobox-option"
+                  :class="{ selected: filters.status === option.value, highlighted: highlightedFilterIndex === index }"
+                  type="button"
+                  role="option"
+                  :aria-selected="filters.status === option.value"
+                  @mouseenter="highlightedFilterIndex = index"
+                  @click="selectFilterOption('status', option)"
+                >
+                  <span class="status-option-label">
+                    <i class="status-option-dot" :class="option.value || 'all'"></i>
+                    {{ option.label }}
+                  </span>
+                  <svg v-if="filters.status === option.value" aria-hidden="true" viewBox="0 0 24 24" width="15" height="15">
+                    <path d="m5 12 4 4L19 6" />
+                  </svg>
+                </button>
+                <span v-if="filteredStatusOptions.length === 0" class="combobox-empty">未找到匹配状态</span>
+              </div>
+            </div>
+          </div>
+          <label class="field search-field">
+            <span>供应商信息</span>
+            <input
+              v-model.trim="filters.keyword"
+              type="search"
+              placeholder="搜索名称、编号、联系人或联系电话"
+              @keyup.enter="handleSearch"
+            />
+          </label>
+          <div class="filter-actions">
+            <button class="btn btn-primary btn-search" type="button" @click="handleSearch">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+                <circle cx="10.8" cy="10.8" r="6.8" />
+                <path d="m16 16 5 5" />
+              </svg>
+              查询
+            </button>
+            <button class="btn btn-ghost" type="button" @click="resetFilters">
+              <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16">
+                <path d="M4 12a8 8 0 1 0 2.3-5.7" />
+                <path d="M4 4v5h5" />
+              </svg>
+              重置
+            </button>
+          </div>
         </div>
-        <button class="icon-button" type="button" title="刷新供应商列表" aria-label="刷新供应商列表" :disabled="loading" @click="loadSuppliers">
-          <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" :class="{ spinning: loading }">
-            <path d="M20 11a8 8 0 0 0-14.9-4L3 9" />
-            <path d="M3 4v5h5" />
-            <path d="M4 13a8 8 0 0 0 14.9 4L21 15" />
-            <path d="M21 20v-5h-5" />
-          </svg>
-        </button>
+        <div class="toolbar-actions">
+          <span class="result-count">共 {{ filteredSuppliers.length }} 条</span>
+          <button class="icon-button" type="button" title="刷新供应商列表" aria-label="刷新供应商列表" :disabled="loading" @click="loadSuppliers">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17" :class="{ spinning: loading }">
+              <path d="M20 11a8 8 0 0 0-14.9-4L3 9" />
+              <path d="M3 4v5h5" />
+              <path d="M4 13a8 8 0 0 0 14.9 4L21 15" />
+              <path d="M21 20v-5h-5" />
+            </svg>
+          </button>
+          <button class="btn btn-primary" type="button" @click="openCreate">
+            <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+            新增供应商
+          </button>
+        </div>
       </div>
 
       <div class="table-wrap">
@@ -456,7 +411,6 @@ const stores = ref([])
 const loading = ref(false)
 const saving = ref(false)
 const errorMessage = ref('')
-const lastLoadedAt = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const showForm = ref(false)
@@ -467,10 +421,7 @@ const notice = reactive({ type: 'success', message: '' })
 let noticeTimer = null
 
 const filters = reactive({
-  supplierName: '',
-  supplierCode: '',
-  contactPerson: '',
-  phone: '',
+  keyword: '',
   storeId: '',
   status: ''
 })
@@ -534,18 +485,13 @@ const filteredStatusOptions = computed(() => {
 })
 
 const filteredSuppliers = computed(() => {
-  const name = filters.supplierName.toLowerCase()
-  const code = filters.supplierCode.toLowerCase()
-  const contact = filters.contactPerson.toLowerCase()
-  const phone = filters.phone.toLowerCase()
+  const keyword = filters.keyword.toLowerCase()
   return suppliers.value.filter(supplier => {
-    const matchesName = !name || supplier.supplierName.toLowerCase().includes(name)
-    const matchesCode = !code || supplier.supplierCode.toLowerCase().includes(code)
-    const matchesContact = !contact || supplier.contactPerson.toLowerCase().includes(contact)
-    const matchesPhone = !phone || supplier.phone.toLowerCase().includes(phone)
+    const matchesKeyword = !keyword || [supplier.supplierName, supplier.supplierCode, supplier.contactPerson, supplier.phone]
+      .some(value => value.toLowerCase().includes(keyword))
     const matchesStore = !filters.storeId || String(supplier.storeId ?? '') === String(filters.storeId)
     const matchesStatus = !filters.status || supplier.status === filters.status
-    return matchesName && matchesCode && matchesContact && matchesPhone && matchesStore && matchesStatus
+    return matchesKeyword && matchesStore && matchesStatus
   })
 })
 
@@ -558,7 +504,7 @@ const paginationStart = computed(() => filteredSuppliers.value.length ? (current
 const paginationEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredSuppliers.value.length))
 
 watch(
-  () => [filters.supplierName, filters.supplierCode, filters.contactPerson, filters.phone, filters.storeId, filters.status, pageSize.value],
+  () => [filters.keyword, filters.storeId, filters.status, pageSize.value],
   () => {
     currentPage.value = 1
   }
@@ -644,7 +590,6 @@ const loadSuppliers = async () => {
   try {
     const response = await request({ url: '/suppliers', method: 'GET' })
     suppliers.value = extractList(response).map(normalizeSupplier)
-    lastLoadedAt.value = formatDateTime(new Date())
   } catch (error) {
     suppliers.value = []
     errorMessage.value = extractError(error, '请检查后端服务后重试')
@@ -716,10 +661,7 @@ const handleFilterKeydown = (event, type) => {
 
 const resetFilters = () => {
   Object.assign(filters, {
-    supplierName: '',
-    supplierCode: '',
-    contactPerson: '',
-    phone: '',
+    keyword: '',
     storeId: '',
     status: ''
   })
@@ -857,11 +799,6 @@ const formatDate = value => {
   return date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0')
 }
 
-const formatDateTime = value => {
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) return ''
-  return formatDate(value) + ' ' + String(value.getHours()).padStart(2, '0') + ':' + String(value.getMinutes()).padStart(2, '0')
-}
-
 defineExpose({ loadSuppliers, openCreate, openEdit })
 
 onMounted(async () => {
@@ -885,14 +822,11 @@ onMounted(async () => {
   --accent: #159a7c;
   --accent-dark: #08755e;
   min-height: 100%;
-  padding: 28px 32px 42px;
+  padding: 0;
   color: var(--ink);
   background: var(--canvas);
 }
 
-.page-header,
-.table-toolbar,
-.filter-heading,
 .table-footer,
 .modal-header,
 .detail-footer,
@@ -903,11 +837,6 @@ onMounted(async () => {
   gap: 16px;
 }
 
-.page-header {
-  margin: 0 auto 24px;
-  max-width: 1600px;
-}
-
 .eyebrow {
   margin: 0 0 6px;
   color: var(--accent-dark);
@@ -916,24 +845,10 @@ onMounted(async () => {
   letter-spacing: .14em;
 }
 
-h1,
 h2,
 h3,
 p {
   margin-top: 0;
-}
-
-h1 {
-  margin-bottom: 8px;
-  font-size: 30px;
-  line-height: 1.2;
-  letter-spacing: 0;
-}
-
-.page-description {
-  margin-bottom: 0;
-  color: var(--muted);
-  font-size: 13px;
 }
 
 h2 {
@@ -941,24 +856,12 @@ h2 {
   font-size: 17px;
 }
 
-.filter-panel,
 .table-card {
-  max-width: 1600px;
-  margin: 0 auto 18px;
+  width: 100%;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   box-shadow: 0 5px 18px rgba(23, 33, 43, .04);
-}
-
-.filter-panel {
-  padding: 20px 22px 22px;
-}
-
-.filter-heading span,
-.toolbar-note {
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .result-count {
@@ -971,9 +874,12 @@ h2 {
 
 .filter-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(130px, 1fr));
-  gap: 14px;
-  margin-top: 18px;
+  grid-template-columns: minmax(120px, 150px) minmax(120px, 150px) minmax(180px, 1fr) auto;
+  align-items: end;
+  flex: 1 1 650px;
+  gap: 10px;
+  max-width: 850px;
+  min-width: 0;
 }
 
 .field,
@@ -1145,7 +1051,7 @@ textarea::placeholder {
   display: flex;
   align-items: flex-end;
   gap: 8px;
-  grid-column: span 2;
+  white-space: nowrap;
 }
 
 .btn {
@@ -1211,8 +1117,26 @@ svg {
 }
 
 .table-toolbar {
-  padding: 19px 22px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--line);
+}
+
+.toolbar-title {
+  flex: 0 0 auto;
+  margin: 0;
+  white-space: nowrap;
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  white-space: nowrap;
 }
 
 .icon-button,
@@ -1759,32 +1683,22 @@ tbody tr:last-child td {
   border: 0;
 }
 
-@media (max-width: 1120px) {
+@media (max-width: 1260px) {
   .filter-grid {
-    grid-template-columns: repeat(3, minmax(150px, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    flex-basis: 100%;
+    max-width: none;
+    order: 2;
   }
 
-  .filter-actions {
-    grid-column: auto;
+  .toolbar-actions {
+    order: 1;
   }
 }
 
 @media (max-width: 700px) {
   .supplier-page {
-    padding: 20px 14px 30px;
-  }
-
-  h1 {
-    font-size: 26px;
-  }
-
-  .page-header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .filter-panel {
-    padding: 16px;
+    padding: 0;
   }
 
   .filter-grid,
@@ -1792,28 +1706,24 @@ tbody tr:last-child td {
     grid-template-columns: 1fr;
   }
 
-  .filter-actions,
   .full-field {
     grid-column: auto;
   }
 
   .filter-actions {
     align-items: stretch;
+    justify-content: flex-end;
   }
 
-  .filter-actions .btn {
-    flex: 1;
-  }
-
-  .table-toolbar,
   .table-footer {
     align-items: flex-start;
     flex-direction: column;
     padding: 16px;
+    gap: 12px;
   }
 
-  .table-footer {
-    gap: 12px;
+  .table-toolbar {
+    padding: 12px;
   }
 
   .pagination-controls {

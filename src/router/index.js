@@ -210,7 +210,8 @@ const routes = [
       {
         path: 'purchase/orders',
         name: 'admin-purchase-orders',
-        component: () => import('@/views/admin/purchase/PurchaseOrders.vue'),
+        component: () => import('@/views/admin/purchase/PurchaseList.vue'),
+        props: { mode: 'orders' },
         meta: { requiresAuth: true }
       },
       {
@@ -222,7 +223,8 @@ const routes = [
       {
         path: 'purchase/inbound',
         name: 'admin-purchase-inbound',
-        component: () => import('@/views/admin/purchase/PurchaseInbound.vue'),
+        component: () => import('@/views/admin/purchase/PurchaseList.vue'),
+        props: { mode: 'inbound' },
         meta: { requiresAuth: true }
       },
       {

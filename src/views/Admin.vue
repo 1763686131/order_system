@@ -254,7 +254,7 @@
       </header>
 
       <!-- 主内容区 -->
-      <main class="main-content">
+      <main class="main-content" :class="{ 'purchase-list-content': ['/admin/purchase/suppliers', '/admin/purchase/orders', '/admin/purchase/inbound'].includes(route.path) }">
         <router-view v-slot="{ Component }">
           <component
             :is="Component"
@@ -1594,6 +1594,10 @@ const logout = async () => {
   padding: 20px;
   overflow-y: auto;
   background: var(--page-bg);
+}
+
+.main-content.purchase-list-content {
+  padding: 4px;
 }
 
 /* 响应式 */

@@ -215,8 +215,7 @@ order_system/
 │  │     │  ├─ ReturnOrderForm.vue   # 退货单录入和编辑表单
 │  │     │  └─ CustomerList.vue      # 客户列表、编辑弹窗（支持期初欠款和储值管理）
 │  │     ├─ purchase/                # 采购管理
-│  │     │  ├─ PurchaseOrders.vue    # 采购订单
-│  │     │  ├─ PurchaseInbound.vue   # 采购入库
+│  │     │  ├─ PurchaseList.vue      # 采购订单/采购入库共用列表；按路由 mode 显示字段
 │  │     │  └─ SupplierList.vue      # 供应商管理
 │  │     ├─ inventory/               # 仓库管理
 │  │     ├─ finance/
@@ -428,9 +427,9 @@ import {
 | --- | --- | --- |
 | `/admin/products` | 成品档案 | `/api/products` |
 | `/admin/materials` | 原材料档案 | `/api/raw-material-products`、`/api/stock-balances` |
-| `/admin/purchase/orders` | 采购订单 | 采购订单接口 |
+| `/admin/purchase/orders` | 采购订单（`PurchaseList.vue`，`mode: orders`） | 当前仅空列表占位，未接入采购订单接口 |
 | `/admin/purchase/suppliers` | 供应商管理 | `/api/suppliers` |
-| `/admin/purchase/inbound` | 采购入库 | 入库接口 |
+| `/admin/purchase/inbound` | 采购入库（`PurchaseList.vue`，`mode: inbound`） | 当前仅空列表占位，未接入采购入库接口 |
 | `/admin/inventory` | 成品库存 | `/api/products/inventory` |
 | `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances`、`/api/stock-movements` |
 | `/admin/inventory/material-outbounds` | 原材料出库审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbound-settings` |
@@ -450,6 +449,10 @@ import {
 | `/admin/system/operation-logs` | 操作日志查询、筛选和清空 | `/api/admin/operation-logs` |
 | `/admin/hr/employees` | 员工档案、登录账号和头像维护 | `/api/admin/employees`、`/api/admin/employees/:id/avatar` |
 | `/admin/hr/departments` | 部门配置和部门员工管理 | `/api/admin/departments`、`/api/admin/employees` |
+
+采购订单和采购入库保留独立路由及菜单权限，但共用 `src/views/admin/purchase/PurchaseList.vue`。
+路由通过 `mode: 'orders'` 或 `mode: 'inbound'` 切换标题、筛选条件、表格列和操作；页面样式写在组件内的 `<style scoped>`，切换路由会重置筛选。
+这两个页面目前没有接入列表数据，新增、查看、编辑目标子路由及入库单打印仍沿用原有占位逻辑，不能作为已完成的采购业务流程使用。
 
 ## 员工与头像关键接口
 
