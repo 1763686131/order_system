@@ -3,9 +3,10 @@ import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { DOCUMENT_TYPES, inboundAmounts, isLockedInbound, localDate, money, purchasePayload, validatePurchase } from './documentModels'
+import { useDocumentValidation } from './useDocumentValidation'
 
 const blankItem = () => ({
-  productId: '', productCode: '', goodsName: '', specification: '', unit: '', expectedQty: '',
+  productId: '', productCode: '', goodsName: '', specification: '', unit: '', warehouseId: '', warehouseName: '', expectedQty: '',
   quantity: '', price: '', taxRate: 0, amount: 0, taxAmount: 0, taxIncludedAmount: 0,
   batchNo: '', binCode: '', remark: ''
 })
@@ -13,6 +14,7 @@ const blankItem = () => ({
 export function usePurchaseDocument(props) {
   const router = useRouter()
   const userStore = useUserStore()
+  const validation = useDocumentValidation()
   const stores = ref([])
   const suppliers = ref([])
   const warehouses = ref([])
@@ -37,9 +39,9 @@ export function usePurchaseDocument(props) {
     return products.value.filter(product => {
       const storeIds = product.storeIds || product.store_ids || []
       return product.enabled !== false && Array.isArray(storeIds) && storeIds.some(id => String(id) === String(form.value.storeId))
-        && (!product.warehouseId || String(product.warehouseId) === String(form.value.warehouseId))
     })
   })
+  const productsForItem = item => productOptions.value.filter(product => !product.warehouseId || String(product.warehouseId) === String(item?.warehouseId || form.value.warehouseId))
   const selectedStore = computed(() => stores.value.find(item => String(item.id) === String(form.value.storeId)))
   const selectedSupplier = computed(() => suppliers.value.find(item => String(item.id) === String(form.value.supplierId)))
   const selectedWarehouse = computed(() => warehouses.value.find(item => String(item.id) === String(form.value.warehouseId)))
@@ -57,16 +59,26 @@ export function usePurchaseDocument(props) {
   const calculateRow = item => Object.assign(item, inboundAmounts(item, form.value.taxEnabled))
   const onStoreChange = () => { form.value.supplierId = ''; form.value.warehouseId = ''; form.value.items = [blankItem(), blankItem()] }
   const onWarehouseChange = () => { form.value.items = [blankItem(), blankItem()] }
-  const getProductStock = product => stockBalances.value.filter(balance => String(balance.productId) === String(product.id) && String(balance.storeId) === String(form.value.storeId) && String(balance.warehouseId) === String(form.value.warehouseId)).reduce((sum, balance) => sum + Number(balance.quantity || 0), 0)
-  const onProductChange = item => {
+  const getProductStock = (product, item = {}) => stockBalances.value.filter(balance => String(balance.productId) === String(product.id) && String(balance.storeId) === String(form.value.storeId) && String(balance.warehouseId) === String(item.warehouseId || form.value.warehouseId)).reduce((sum, balance) => sum + Number(balance.quantity || 0), 0)
+  const onItemWarehouseChange = item => {
+    item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
     const product = productOptions.value.find(candidate => String(candidate.id) === String(item.productId))
-    if (!product) return
+    if (product) item.currentStock = getProductStock(product, item)
+  }
+  const onProductChange = item => {
+    const product = productsForItem(item).find(candidate => String(candidate.id) === String(item.productId))
+    if (!product) {
+      Object.assign(item, blankItem())
+      return
+    }
     item.productCode = product.code || ''
     item.goodsName = product.name || ''
     item.specification = product.specification || ''
     item.unit = units.value.find(unit => String(unit.id) === String(product.unitId))?.name || product.unit || ''
+    item.warehouseId = item.warehouseId || form.value.warehouseId || ''
+    item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
     item.price = Number(product.price || 0)
-    item.currentStock = getProductStock(product)
+    item.currentStock = getProductStock(product, item)
     item.taxRate = form.value.taxEnabled ? 13 : 0
     calculateRow(item)
   }
@@ -100,7 +112,7 @@ export function usePurchaseDocument(props) {
       taxEnabled: (data.items || []).some(item => Number(item.taxRate) > 0),
       attachments: data.attachments || [],
       items: (data.items || []).map(item => ({
-        ...blankItem(), productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
+        ...blankItem(), productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '', warehouseId: String(item.warehouseId || data.warehouseId || ''), warehouseName: warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId || data.warehouseId))?.name || '',
         goodsName: item.productName || item.goodsName || '', specification: item.specification || '', unit: item.unit || '',
         expectedQty: item.expectedQty ?? '', quantity: item.receivedQty ?? '', price: item.unitPrice ?? '',
         taxRate: Number(item.taxRate || 0), amount: Number(item.totalAmount || 0) - Number(item.taxAmount || 0),
@@ -108,6 +120,7 @@ export function usePurchaseDocument(props) {
         binCode: item.binCode || '', remark: item.remark || ''
       })).concat([blankItem(), blankItem()]).slice(0, Math.max(2, (data.items || []).length + 1))
     }
+    form.value.items.filter(item => item.productId).forEach(onItemWarehouseChange)
   }
   const loadExisting = async () => {
     if (!props.documentId) return
@@ -131,10 +144,13 @@ export function usePurchaseDocument(props) {
   }
   const closePrintPreview = () => { printPreviewVisible.value = false; selectedPrintTemplate.value = null; selectedPrintPrinter.value = null; printPreviewAutoPrint.value = false }
   const openPrint = () => { printTemplateDialogOpen.value = true }
+  const validateForm = () => {
+    validation.dismissValidationHint()
+    return !validatePurchase(form.value, validation.showValidationHint)
+  }
   const save = async () => {
     if (readOnly.value || saving.value || loading.value || loadFailed.value) return
-    const message = validatePurchase(form.value)
-    if (message) return showNotice(message, 'error')
+    if (!validateForm()) return
     saving.value = true
     try {
       const id = savedDocumentId.value
@@ -161,18 +177,19 @@ export function usePurchaseDocument(props) {
   onBeforeUnmount(() => window.clearTimeout(showNotice.timer))
 
   return {
-    config: DOCUMENT_TYPES.purchase, form, stores, suppliers: filteredSuppliers, filteredWarehouses, products: productOptions, units,
-    currentCreatorName, selectedStore, selectedSupplier, selectedWarehouse, saving, loading, loadFailed, readOnly, notice,
+    ...validation, validateForm,
+    config: DOCUMENT_TYPES.purchase, form, stores, suppliers: filteredSuppliers, filteredWarehouses, products: productOptions, productsForItem, units, getProductStock,
+    currentCreatorName, selectedStore, selectedSupplier, selectedWarehouse, savedDocumentId, saving, loading, loadFailed, readOnly, notice,
     taxEnabled: computed({ get: () => form.value.taxEnabled, set: value => { form.value.taxEnabled = value; form.value.items.forEach(item => { item.taxRate = value ? Number(item.taxRate) || 13 : 0; calculateRow(item) }) } }),
     totalPackages, totalQuantity, totalAmount, totalTaxAmount, totalIncludedAmount, money,
-    addRow, removeRow, calculateRow, onProductChange, onStoreChange, onWarehouseChange, save, clearForm, close, showNotice,
+    addRow, removeRow, calculateRow, onProductChange, onStoreChange, onWarehouseChange, onItemWarehouseChange, save, clearForm, close, showNotice,
     onQuantityInput: index => calculateRow(form.value.items[index]), onPriceInput: index => calculateRow(form.value.items[index]), onTaxRateInput: index => calculateRow(form.value.items[index]),
     onIncludedPriceInput: index => { const item = form.value.items[index]; item.price = Number((Number(item.taxIncludedPrice || 0) / (1 + Number(item.taxRate || 0) / 100)).toFixed(4)); calculateRow(item) },
     printTemplateDialogOpen, printPreviewVisible, selectedPrintTemplate, selectedPrintPrinter, printPreviewAutoPrint,
     closePrintTemplateDialog, closePrintPreview, openPrint,
     previewSelectedPrintTemplate: (template, printer) => openPrintTemplate(template, printer, false),
     printSelectedPrintTemplate: (template, printer) => openPrintTemplate(template, printer, true),
-    printVariables: computed(() => ({ ...form.value, orderNumber: form.value.documentNo, orderDate: form.value.documentDate, purchaseNumber: form.value.documentNo, purchaseDate: form.value.documentDate, storeName: selectedStore.value?.name || '', supplierName: selectedSupplier.value?.supplierName || selectedSupplier.value?.name || '', warehouseName: selectedWarehouse.value?.name || '', totalQuantity: totalQuantity.value, totalAmount: totalIncludedAmount.value, totalTaxAmount: totalTaxAmount.value, totalTaxIncludedAmount: totalIncludedAmount.value, items: form.value.items.filter(item => item.productId).map((item, index) => ({ ...item, index: index + 1, spec: item.specification, name: item.goodsName, receivedQty: item.quantity, unitPrice: item.price, warehouseName: selectedWarehouse.value?.name || '' })) })),
+    printVariables: computed(() => ({ ...form.value, orderNumber: form.value.documentNo, orderDate: form.value.documentDate, purchaseNumber: form.value.documentNo, purchaseDate: form.value.documentDate, storeName: selectedStore.value?.name || '', supplierName: selectedSupplier.value?.supplierName || selectedSupplier.value?.name || '', warehouseName: selectedWarehouse.value?.name || '', totalQuantity: totalQuantity.value, totalAmount: totalIncludedAmount.value, totalTaxAmount: totalTaxAmount.value, totalTaxIncludedAmount: totalIncludedAmount.value, items: form.value.items.filter(item => item.productId).map((item, index) => ({ ...item, index: index + 1, spec: item.specification, name: item.goodsName, receivedQty: item.quantity, unitPrice: item.price, warehouseName: item.warehouseName || selectedWarehouse.value?.name || '' })) })),
     printNumber: computed(() => form.value.documentNo)
   }
 }

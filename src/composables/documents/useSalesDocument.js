@@ -4,6 +4,8 @@ import request from '@/api/request'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { useUserStore } from '@/stores/user'
 import { toChineseMoney } from '@/utils/chineseMoney'
+import { useDocumentValidation } from './useDocumentValidation'
+import { captureDocumentViewport, restoreDocumentViewport } from './useDocumentDraft'
 
 export function useSalesDocument(props) {
   const router = useRouter()
@@ -74,79 +76,8 @@ export function useSalesDocument(props) {
   const modalType = ref('success') // success 或 error
   const modalTitle = ref('')
   const modalMessage = ref('')
-  const validationHint = ref({ key: '', message: '' })
-  const validationHintStyle = ref({})
-  const validationHintPlacement = ref('below')
-  const validationFieldRefs = new Map()
-  let validationHintTimer = null
-  
-  const setValidationFieldRef = (key, element) => {
-    if (element) {
-      validationFieldRefs.set(key, element)
-    } else {
-      validationFieldRefs.delete(key)
-    }
-  }
-  
-  const dismissValidationHint = (key = '') => {
-    if (key && validationHint.value.key !== key) return
-  
-    clearTimeout(validationHintTimer)
-    validationHint.value = { key: '', message: '' }
-    validationHintStyle.value = {}
-  }
-  
-  const updateValidationHintPosition = () => {
-    const target = validationFieldRefs.get(validationHint.value.key)
-    if (!target || !validationHint.value.key) {
-      validationHintStyle.value = {}
-      return
-    }
-  
-    const rect = target.getBoundingClientRect()
-    const viewportPadding = 16
-    const gap = 10
-    const estimatedHeight = 48
-    const popoverWidth = Math.min(320, window.innerWidth - viewportPadding * 2)
-    const spaceBelow = window.innerHeight - rect.bottom - viewportPadding
-    const spaceAbove = rect.top - viewportPadding
-    const shouldPlaceAbove =
-      (validationHint.value.key.startsWith('item-') || spaceBelow < estimatedHeight + gap) &&
-      spaceAbove >= estimatedHeight + gap
-  
-    validationHintPlacement.value = shouldPlaceAbove ? 'above' : 'below'
-    const top = shouldPlaceAbove
-      ? Math.max(viewportPadding, rect.top - estimatedHeight - gap)
-      : Math.min(window.innerHeight - estimatedHeight - viewportPadding, rect.bottom + gap)
-    const left = Math.min(
-      Math.max(viewportPadding, rect.left),
-      Math.max(viewportPadding, window.innerWidth - popoverWidth - viewportPadding)
-    )
-  
-    validationHintStyle.value = {
-      top: `${Math.round(top)}px`,
-      left: `${Math.round(left)}px`,
-      maxWidth: `${Math.round(popoverWidth)}px`
-    }
-  }
-  
-  const showValidationHint = (key, message) => {
-    clearTimeout(validationHintTimer)
-  
-    const target = validationFieldRefs.get(key)
-    if (target && typeof target.focus === 'function' && !key.startsWith('item-product-')) {
-      target.focus({ preventScroll: true })
-    }
-  
-    validationHint.value = { key, message }
-    nextTick(updateValidationHintPosition)
-    validationHintTimer = setTimeout(() => {
-      if (validationHint.value.key === key) {
-        validationHint.value = { key: '', message: '' }
-        validationHintStyle.value = {}
-      }
-    }, 4000)
-  }
+  const validation = useDocumentValidation()
+  const { setValidationFieldRef, dismissValidationHint, showValidationHint } = validation
   
   const dismissSaveToast = () => {
     saveToast.value.visible = false
@@ -408,6 +339,7 @@ export function useSalesDocument(props) {
       mode: isEditMode.value ? 'edit' : 'create',
       orderId: props.orderId,
       formData: getDraftFormData(),
+      viewport: captureDocumentViewport(),
       showTaxColumns: showTaxColumns.value,
       totalPackages: totalPackages.value,
       path: orderFormRoute.path,
@@ -457,6 +389,7 @@ export function useSalesDocument(props) {
     // 金额联动的 watcher 会在恢复商品行后执行，下一帧再还原用户手工输入值。
     await nextTick()
     formData.value.discountAmount = restoredFormData.discountAmount ?? null
+    await restoreDocumentViewport(draft.viewport)
   }
   
   const discardDraft = () => {
@@ -639,7 +572,7 @@ export function useSalesDocument(props) {
     if (!formData.value.storeId) {
       return warehouses.value
     }
-    return warehouses.value.filter(w => w.storeId === formData.value.storeId)
+    return warehouses.value.filter(w => String(w.storeId ?? w.store_id) === String(formData.value.storeId))
   })
   
   // 选中的门店名称（用于结算账户显示）
@@ -779,23 +712,26 @@ export function useSalesDocument(props) {
   )
   
   // 过滤商品（根据当前选择的门店和仓库）
-  const filteredProducts = computed(() => {
+  const productsForItem = item => {
     let result = products.value
   
     // 根据门店筛选
     if (formData.value.storeId) {
       result = result.filter(p =>
-        p.storeIds && Array.isArray(p.storeIds) && p.storeIds.includes(formData.value.storeId)
+        p.storeIds && Array.isArray(p.storeIds) &&
+        p.storeIds.some(storeId => String(storeId) === String(formData.value.storeId))
       )
     }
   
     // 根据仓库筛选
-    if (formData.value.warehouseId) {
-      result = result.filter(p => p.warehouseId === formData.value.warehouseId)
+    const warehouseId = item?.warehouseId || formData.value.warehouseId
+    if (warehouseId) {
+      result = result.filter(product => !product.warehouseId || String(product.warehouseId) === String(warehouseId))
     }
   
     return result
-  })
+  }
+  const filteredProducts = computed(() => productsForItem())
   
   // 焦点行
   const focusedRow = ref(-1)
@@ -1205,6 +1141,11 @@ export function useSalesDocument(props) {
     // 清空商品列表
     clearProductItems()
   }
+
+  const onItemWarehouseChange = item => {
+    item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
+    if (item.productId) updateStockInfo(item)
+  }
   
   // 清空商品列表
   const clearProductItems = () => {
@@ -1294,7 +1235,7 @@ export function useSalesDocument(props) {
   
     // 商品名称和规格型号都支持搜索
     const searchText = formData.value.items[index].goodsName
-    formData.value.items[index].filteredProducts = filteredProducts.value.filter(product =>
+    formData.value.items[index].filteredProducts = productsForItem(formData.value.items[index]).filter(product =>
       productMatchesSearch(product, searchText)
     )
   
@@ -1311,7 +1252,7 @@ export function useSalesDocument(props) {
   // 过滤商品
   const filterProducts = (index) => {
     const searchText = formData.value.items[index].goodsName
-    formData.value.items[index].filteredProducts = filteredProducts.value.filter(product =>
+    formData.value.items[index].filteredProducts = productsForItem(formData.value.items[index]).filter(product =>
       productMatchesSearch(product, searchText)
     )
   
@@ -1328,8 +1269,8 @@ export function useSalesDocument(props) {
       goodsName,
       spec: '',
       unit: '',
-      warehouseId: '',
-      warehouseName: '',
+      warehouseId: item.warehouseId,
+      warehouseName: item.warehouseName,
       currentStock: null,
       packages: null,
       quantity: null,
@@ -1394,16 +1335,8 @@ export function useSalesDocument(props) {
       item.conversionRate = null
     }
   
-    // 自动设置仓库（使用顶部选择的仓库或商品默认仓库）
-    if (formData.value.warehouseId) {
-      item.warehouseId = formData.value.warehouseId
-      const warehouse = warehouses.value.find(w => w.id === formData.value.warehouseId)
-      item.warehouseName = warehouse ? warehouse.name : ''
-    } else if (product.warehouseId) {
-      item.warehouseId = product.warehouseId
-      const warehouse = warehouses.value.find(w => w.id === product.warehouseId)
-      item.warehouseName = warehouse ? warehouse.name : ''
-    }
+    item.warehouseId = item.warehouseId || formData.value.warehouseId || product.warehouseId || ''
+    item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
   
     // 获取当前库存
     item.currentStock = product.stock || 0
@@ -1474,7 +1407,7 @@ export function useSalesDocument(props) {
   
         // 更新仓库名称
         if (item.warehouseId) {
-          const warehouse = warehouses.value.find(w => w.id === item.warehouseId)
+          const warehouse = warehouses.value.find(w => String(w.id) === String(item.warehouseId))
           item.warehouseName = warehouse ? warehouse.name : ''
         }
   
@@ -1861,7 +1794,7 @@ export function useSalesDocument(props) {
           goodsName: item.goodsName || '',
           spec: item.spec || '',
           unit: item.unit || '',
-          warehouseId: item.warehouseId || null,
+          warehouseId: item.warehouseId || formData.value.warehouseId || null,
           packages: Number(item.packages) || 0,
           quantity: Number(item.quantity) || 0,
           price: Number(item.price) || 0,
@@ -2026,8 +1959,6 @@ export function useSalesDocument(props) {
     window.addEventListener('scroll', updateProductDropdownPosition, true)
     window.addEventListener('resize', updateCustomerDropdownPosition)
     window.addEventListener('scroll', updateCustomerDropdownPosition, true)
-    window.addEventListener('resize', updateValidationHintPosition)
-    window.addEventListener('scroll', updateValidationHintPosition, true)
     document.addEventListener('pointerdown', handleCustomerDocumentPointerdown)
   
     console.log('OrderForm mounted, props.orderId:', props.orderId)
@@ -2104,12 +2035,8 @@ export function useSalesDocument(props) {
     window.removeEventListener('scroll', updateProductDropdownPosition, true)
     window.removeEventListener('resize', updateCustomerDropdownPosition)
     window.removeEventListener('scroll', updateCustomerDropdownPosition, true)
-    window.removeEventListener('resize', updateValidationHintPosition)
-    window.removeEventListener('scroll', updateValidationHintPosition, true)
     document.removeEventListener('pointerdown', handleCustomerDocumentPointerdown)
     productInputRefs.clear()
-    validationFieldRefs.clear()
-    clearTimeout(validationHintTimer)
     clearTimeout(draftSaveTimer)
     clearTimeout(saveToastTimer)
     persistDraft()
@@ -2179,15 +2106,7 @@ export function useSalesDocument(props) {
     modalType,
     modalTitle,
     modalMessage,
-    validationHint,
-    validationHintStyle,
-    validationHintPlacement,
-    validationFieldRefs,
-    validationHintTimer,
-    setValidationFieldRef,
-    dismissValidationHint,
-    updateValidationHintPosition,
-    showValidationHint,
+    ...validation,
     dismissSaveToast,
     showSuccessToast,
     showErrorModal,
@@ -2257,6 +2176,7 @@ export function useSalesDocument(props) {
     closeOrderPrintPreview,
     getSaveSuccessMessage,
     filteredProducts,
+    productsForItem,
     focusedRow,
     productInputRefs,
     productDropdownStyle,
@@ -2277,6 +2197,7 @@ export function useSalesDocument(props) {
     handlePackagingChange,
     onStoreChange,
     onWarehouseChange,
+    onItemWarehouseChange,
     clearProductItems,
     customerReceivable,
     loadCustomerDebt,

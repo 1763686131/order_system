@@ -28,6 +28,7 @@ export function purchasePayload(form) {
     status: 'draft',
     items: form.items.filter(item => item.productId).map(item => ({
       productId: Number(item.productId),
+      warehouseId: Number(item.warehouseId || form.warehouseId),
       code: item.productCode,
       name: item.goodsName,
       specification: item.specification,
@@ -43,19 +44,24 @@ export function purchasePayload(form) {
   }
 }
 
-export function validatePurchase(form) {
-  if (!form.storeId || !form.supplierId || !form.warehouseId) return '请选择门店、供应商和仓库'
-  if (!form.documentDate) return '请选择单据日期'
+export function validatePurchase(form, onInvalid = () => {}) {
+  const invalid = (key, message) => { onInvalid(key, message); return message }
+  if (!form.storeId) return invalid('storeId', '请选择门店。')
+  if (!form.supplierId) return invalid('supplierId', '请选择供应商。')
+  if (!form.warehouseId) return invalid('warehouseId', '请选择仓库。')
+  if (!form.documentDate) return invalid('documentDate', '请选择单据日期。')
   const items = form.items.filter(item => item.productId)
-  if (!items.length) return '请至少选择一条物料'
-  for (const item of items) {
-    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return '实收数量必须大于 0'
-    if (!item.batchNo?.trim()) return '请填写每条物料的批次号'
-    if (!Number.isFinite(Number(item.price)) || Number(item.price) < 0) return '单价必须为非负数'
-    if (!Number.isFinite(Number(item.expectedQty || 0)) || Number(item.expectedQty || 0) < 0) return '应收数量必须为非负数'
-    if (form.taxEnabled && (!Number.isFinite(Number(item.taxRate)) || Number(item.taxRate) < 0 || Number(item.taxRate) > 100)) return '税率必须在 0 到 100 之间'
+  if (!items.length) return invalid('item-product-0', '请至少选择一条物料。')
+  for (const [index, item] of form.items.entries()) {
+    if (!item.productId) continue
+    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return invalid(`item-quantity-${index}`, '实收数量必须大于 0。')
+    if (!item.batchNo?.trim()) return invalid(`item-batch-${index}`, '请填写物料的批次号。')
+    if (!Number.isFinite(Number(item.price)) || Number(item.price) < 0) return invalid(`item-price-${index}`, '单价必须为非负数。')
+    if (!Number.isFinite(Number(item.expectedQty || 0)) || Number(item.expectedQty || 0) < 0) return invalid(`item-expected-${index}`, '应收数量必须为非负数。')
+    if (form.taxEnabled && (!Number.isFinite(Number(item.taxRate)) || Number(item.taxRate) < 0 || Number(item.taxRate) > 100)) return invalid(`item-tax-${index}`, '税率必须在 0 到 100 之间。')
   }
-  if (form.items.some(item => item.goodsName && !item.productId)) return '请从物料列表选择有效物料'
+  const unmatchedIndex = form.items.findIndex(item => item.goodsName && !item.productId)
+  if (unmatchedIndex !== -1) return invalid(`item-product-${unmatchedIndex}`, '请从物料列表选择有效物料。')
   return ''
 }
 

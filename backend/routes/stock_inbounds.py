@@ -232,7 +232,7 @@ def _product_exists(conn, receipt_type, product_id):
     return conn.execute(f'SELECT 1 FROM {table} WHERE id = ?', (product_id,)).fetchone() is not None
 
 
-def _normalize_items(conn, receipt_type, raw_items, require_valid=False):
+def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default_warehouse_id=None):
     if raw_items is None:
         raw_items = []
     if not isinstance(raw_items, list):
@@ -269,8 +269,17 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False):
         if require_valid and not batch_no:
             raise ValueError('批次号不能为空')
 
+        warehouse_value = raw.get('warehouseId', raw.get('warehouse_id'))
+        warehouse_id = _required_int(
+            default_warehouse_id if warehouse_value in (None, '') else warehouse_value,
+            '明细仓库',
+        )
+        if not conn.execute('SELECT 1 FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone():
+            raise ValueError('明细仓库不存在')
+
         normalized.append({
             'product_id': product_id,
+            'warehouse_id': warehouse_id,
             'product_code': _clean_text(raw.get('code', raw.get('productCode', raw.get('product_code', ''))), 80),
             'product_name': name,
             'specification': _clean_text(raw.get('specification', raw.get('spec', '')), 180),
@@ -311,7 +320,7 @@ def _document_values(conn, data, existing=None, for_post=False):
             raise ValueError('供应商不存在或已停用')
     if not conn.execute('SELECT 1 FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone():
         raise ValueError('目标仓库不存在')
-    items = _normalize_items(conn, receipt_type, data.get('items', existing.get('_items', [])), require_valid)
+    items = _normalize_items(conn, receipt_type, data.get('items', existing.get('_items', [])), require_valid, default_warehouse_id=warehouse_id)
     if require_valid and not any(item['received_qty'] > 0 for item in items):
         raise ValueError('审核至少需要 1 条有效物料明细')
     total_quantity = sum(Decimal(str(item['received_qty'])) for item in items)
@@ -337,9 +346,10 @@ def _document_values(conn, data, existing=None, for_post=False):
     }
 
 
-def _serialize_item(row):
+def _serialize_item(row, default_warehouse_id=None):
     item = dict(row)
     item['productId'] = item.pop('product_id', None)
+    item['warehouseId'] = item.pop('warehouse_id', None) or default_warehouse_id
     item['productCode'] = item.pop('product_code', '') or ''
     item['productName'] = item.pop('product_name', '') or ''
     item['expectedQty'] = item.pop('expected_qty', None)
@@ -377,7 +387,7 @@ def _serialize_document(conn, row, include_items=True):
             'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id',
             (row['id'],),
         ).fetchall()
-        document['items'] = [_serialize_item(item) for item in items]
+        document['items'] = [_serialize_item(item, document['warehouseId']) for item in items]
     return document
 
 
@@ -390,7 +400,7 @@ def _post_items(conn, document_row, item_rows):
         if qty <= 0 or item['product_id'] is None:
             continue
         product_id = int(item['product_id'])
-        warehouse_id = int(document_row['warehouse_id'] or 0)
+        warehouse_id = int(item.get('warehouse_id') or document_row['warehouse_id'] or 0)
         store_id = int(document_row['store_id'] or 0)
         bin_code = item['bin_code'] or ''
         batch_no = item['batch_no'] or ''
@@ -493,14 +503,14 @@ def _insert_items(conn, inbound_id, receipt_type, items):
         cursor = conn.execute(
             '''
             INSERT INTO stock_inbound_items (
-                inbound_id, line_no, product_type, product_id, product_code,
+                inbound_id, line_no, product_type, product_id, warehouse_id, product_code,
                 product_name, specification, unit, expected_qty, received_qty,
                 bin_code, batch_no, unit_price, tax_rate, tax_amount,
                 total_amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
-                inbound_id, line_no, receipt_type, item['product_id'], item['product_code'],
+                inbound_id, line_no, receipt_type, item['product_id'], item['warehouse_id'], item['product_code'],
                 item['product_name'], item['specification'], item['unit'], item['expected_qty'],
                 item['received_qty'], item['bin_code'], item['batch_no'], item['unit_price'],
                 item['tax_rate'], item['tax_amount'], item['total_amount'], item['remark'],

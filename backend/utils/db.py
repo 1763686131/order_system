@@ -1389,6 +1389,7 @@ def _ensure_stock_inbound_schema(conn):
                 line_no INTEGER NOT NULL,
                 product_type TEXT NOT NULL,
                 product_id INTEGER,
+                warehouse_id INTEGER,
                 product_code TEXT,
                 product_name TEXT,
                 specification TEXT,
@@ -1406,6 +1407,11 @@ def _ensure_stock_inbound_schema(conn):
             )
             """
         )
+        inbound_item_columns = {
+            row['name'] for row in cursor.execute('PRAGMA table_info(stock_inbound_items)')
+        }
+        if 'warehouse_id' not in inbound_item_columns:
+            cursor.execute('ALTER TABLE stock_inbound_items ADD COLUMN warehouse_id INTEGER')
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_stock_inbound_items_inbound "
             "ON stock_inbound_items(inbound_id, line_no)"

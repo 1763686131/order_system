@@ -3386,7 +3386,7 @@ volumes:
 | `documentDate` | string | 是 | 是 | 单据日期，建议使用 `YYYY-MM-DD` |
 | `type` | string | 是 | 是 | `raw-material` 或 `finished-product` |
 | `storeId` | integer | 否 | 否 | 门店 ID |
-| `warehouseId` | integer | 是 | 是 | 目标仓库 ID，必须存在 |
+| `warehouseId` | integer | 是 | 是 | 默认目标仓库 ID，必须存在；未指定明细仓库时使用此仓库 |
 | `supplierId` | integer | 否 | 原材料必填 | 供应商 ID，原材料审核时必须有效且为 `active` |
 | `workshop` | string | 否 | 否 | 成品生产车间/班组，当前为选填 |
 | `inspector` | string | 否 | 否 | 检验员 |
@@ -3403,6 +3403,7 @@ volumes:
 | `productId` | integer | 业务必填 | 物料 ID；按入库类型关联 `products` 或 `raw_material_products` |
 | `productCode` | string | 否 | 物料编码；请求也兼容 `code` |
 | `productName` | string | 否 | 物料名称快照；请求也兼容 `name`，前端选择物料后自动填充 |
+| `warehouseId` | integer | 否 | 该行目标仓库 ID，必须存在；省略时继承单据的 `warehouseId`，响应也返回此字段；审核按各行仓库写入库存和流水 |
 | `specification` | string | 否 | 规格型号 |
 | `unit` | string | 否 | 基本计量单位文本 |
 | `expectedQty` | number | 否 | 应收数量 |

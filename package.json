@@ -12,6 +12,7 @@
     "fix-orders": "node scripts/fix_orders_db.js"
   },
   "dependencies": {
+    "@lucide/vue": "^1.49.0",
     "axios": "^1.6.0",
     "body-parser": "^1.20.2",
     "cors": "^2.8.5",

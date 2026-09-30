@@ -3,17 +3,20 @@ import { DOCUMENT_TYPES } from './documentModels'
 import { useSalesDocument } from './useSalesDocument'
 import { useReturnDocument } from './useReturnDocument'
 import { usePurchaseDocument } from './usePurchaseDocument'
+import { useDocumentDraft } from './useDocumentDraft'
 
 export function useBusinessDocument(props) {
   const config = DOCUMENT_TYPES[props.documentType]
   if (!config) throw new Error(`Unknown document type: ${props.documentType}`)
-  if (props.documentType === 'purchase') return reactive({ ...usePurchaseDocument(props), config })
+  if (props.documentType === 'purchase') {
+    return withDocumentDraft(props, reactive({ ...usePurchaseDocument(props), config }))
+  }
   const sale = props.documentType === 'sale'
   const state = sale
     ? useSalesDocument({ orderId: ['edit', 'view'].includes(props.action) ? props.documentId : null, action: props.action })
     : useReturnDocument({ returnId: props.documentId, productType: props.productType, action: props.action })
   const form = sale ? state.formData : state.form
-  return reactive({
+  const ui = reactive({
     ...state,
     config: computed(() => ({ ...config, title: !sale && state.productType.value === 'raw-material' ? '原材料退货单' : config.title })),
     form,
@@ -41,4 +44,16 @@ export function useBusinessDocument(props) {
     printNumber: sale ? computed(() => state.printOrderVariables.value?.orderNumber || form.value.orderNumber) : computed(() => form.value.returnNumber),
     closePrintPreview: sale ? state.closeOrderPrintPreview : state.closePrintPreview
   })
+  return sale ? ui : withDocumentDraft(props, ui)
+}
+
+function withDocumentDraft(props, ui) {
+  const { discardDraft } = useDocumentDraft(props, ui)
+  ui.discardDraft = discardDraft
+  const close = ui.close
+  ui.close = () => {
+    if (!ui.readOnly && !ui.loadFailed) discardDraft()
+    close()
+  }
+  return ui
 }

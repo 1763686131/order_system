@@ -84,27 +84,12 @@
 
         <div class="header-right">
           <div class="header-actions">
-            <button
-              v-if="showOrderDraftShortcut"
-              :class="['order-draft-shortcut', `is-${orderDraftStore.draftMode}`]"
-              type="button"
-              :title="`返回${orderDraftStore.draftTitle}`"
-              :aria-label="`返回${orderDraftStore.draftTitle}`"
-              @click="restoreOrderDraft"
-            >
-              <svg class="draft-icon" viewBox="0 0 24 24" aria-hidden="true">
-                <path v-if="orderDraftStore.draftMode === 'create'" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline v-if="orderDraftStore.draftMode === 'create'" points="14 2 14 8 20 8"/>
-                <line v-if="orderDraftStore.draftMode === 'create'" x1="12" y1="18" x2="12" y2="12"/>
-                <line v-if="orderDraftStore.draftMode === 'create'" x1="9" y1="15" x2="15" y2="15"/>
-
-                <path v-if="orderDraftStore.draftMode === 'edit'" d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path v-if="orderDraftStore.draftMode === 'edit'" d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
-              <span class="order-draft-shortcut-label">
-                {{ orderDraftStore.draftShortLabel }}
-              </span>
-              <span class="pulse-dot" aria-hidden="true"></span>
+            <button v-for="draft in dockedDocuments" :key="draft.type" :data-dock-type="draft.type" :class="['document-dock-shortcut', `is-${draft.type}`]" type="button" :title="`返回${draft.title}`" :aria-label="`返回${draft.title}`" @click="restoreDockedDocument(draft)">
+              <FilePenLine v-if="draft.type === 'edit'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
+              <FilePlus2 v-else-if="draft.type === 'sale'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
+              <RotateCcw v-else-if="draft.type === 'sale-return'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
+              <PackageCheck v-else class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
+              <span class="document-dock-dot" aria-hidden="true"></span>
             </button>
           </div>
 
@@ -260,6 +245,7 @@
             :is="Component"
             :key="route.meta.documentForm ? route.fullPath : undefined"
             ref="activeContentRef"
+            @close="handleDocumentClose"
             @create="handleStockRecordCreate"
             @view-detail="handleStockRecordViewDetail"
             @red-flush="handleStockRecordRedFlush"
@@ -291,10 +277,13 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { FilePenLine, FilePlus2, PackageCheck, RotateCcw } from '@lucide/vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
+import { useDocumentDraftStore } from '@/stores/documentDraft'
+import { animateDocumentDock, cancelDocumentDockAnimations, waitForDocumentReady } from '@/utils/documentDockAnimation'
 import request from '@/api/request'
 import {
   ADMIN_ROUTE_BRANCH_PERMISSIONS,
@@ -316,6 +305,8 @@ const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
 const orderDraftStore = useOrderDraftStore()
+const documentDraftStore = useDocumentDraftStore()
+let removeDocumentDockGuard = () => {}
 
 const shippedActionModal = ref(null)
 const stockRecordModal = ref(null)
@@ -466,6 +457,8 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('pointerdown', handleAccountMenuClickOutside)
+  removeDocumentDockGuard()
+  cancelDocumentDockAnimations()
 })
 
 // 处理刷新事件
@@ -775,13 +768,29 @@ const isChildActive = (children) => {
 }
 
 const currentPath = computed(() => route.path)
-const showOrderDraftShortcut = computed(() => {
-  const isSalesFormRoute = route.name === 'admin-sales-create' || route.name === 'admin-sales-edit'
-  return (
-    userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS) &&
-    orderDraftStore.hasDraft &&
-    !isSalesFormRoute
-  )
+const dockedDocuments = computed(() => {
+  const documents = []
+  const currentFullPath = route.fullPath
+  const add = (document) => {
+    if (document.path && document.path !== currentFullPath) documents.push(document)
+  }
+
+  if (userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS) && orderDraftStore.hasDraft) {
+    add({
+      type: orderDraftStore.draftMode === 'edit' ? 'edit' : 'sale',
+      title: orderDraftStore.draftTitle,
+      path: orderDraftStore.draftPath
+    })
+  }
+  if (userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.RETURNS)) {
+    const draft = documentDraftStore.drafts['sale-return']
+    add({ type: 'sale-return', title: '销售退货单', path: draft?.path })
+  }
+  if (userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND)) {
+    const draft = documentDraftStore.drafts.purchase
+    add({ type: 'purchase', title: '采购入库单', path: draft?.path })
+  }
+  return documents
 })
 
 const currentMenuLabel = computed(() => {
@@ -818,13 +827,63 @@ const currentMenuLabel = computed(() => {
   return item ? item.label : '数据看板'
 })
 
-const navigateTo = (path) => {
-  router.push(path)
+const getDockTargetRect = (form) => {
+  const type = form?.dataset.documentType === 'sale'
+    ? (form.dataset.documentAction === 'edit' ? 'edit' : 'sale')
+    : form?.dataset.documentType
+  const order = ['sale', 'edit', 'sale-return', 'purchase']
+  const availableTypes = dockedDocuments.value.map(item => item.type)
+  if (type && !availableTypes.includes(type)) availableTypes.push(type)
+  availableTypes.sort((left, right) => order.indexOf(left) - order.indexOf(right))
+  const slot = Math.max(0, availableTypes.indexOf(type))
+  const headerActions = document.querySelector('.header-actions')
+  const headerIcons = document.querySelector('.header-icons')
+  const anchor = headerIcons?.getBoundingClientRect() || headerActions?.getBoundingClientRect()
+  if (!anchor) return null
+  const size = 36
+  const left = headerActions?.getBoundingClientRect().left ?? anchor.left - 46
+  return { left: left + slot * 46, top: anchor.top, width: size, height: size }
 }
 
-const restoreOrderDraft = () => {
-  if (orderDraftStore.draftPath) {
-    router.push(orderDraftStore.draftPath)
+removeDocumentDockGuard = router.beforeEach(async (to, from) => {
+  const sameDocumentComponent = to.meta.documentForm && to.name === from.name &&
+    String(to.params.id || 'new') === String(from.params.id || 'new')
+  if (!from.meta.documentForm || sameDocumentComponent || to.fullPath === from.fullPath) return true
+  const form = document.querySelector('.business-document-form')
+  if (form) await animateDocumentDock(form, getDockTargetRect(form), false)
+  return true
+})
+
+const navigateTo = (path) => router.push(path)
+
+const documentListPath = (type) => {
+  if (type === 'purchase') return '/admin/purchase/inbound'
+  if (type === 'sale-return') return '/admin/sales/returns'
+  return '/admin/sales'
+}
+
+const handleDocumentClose = () => {
+  const type = document.querySelector('.business-document-form')?.dataset.documentType
+  return router.push(documentListPath(type))
+}
+
+const restoreDockedDocument = async (draft) => {
+  if (!draft?.path || draft.path === route.fullPath) return
+  const shortcut = document.querySelector(`.document-dock-shortcut[data-dock-type="${draft.type}"]`)
+  const sourceRect = shortcut?.getBoundingClientRect()
+  cancelDocumentDockAnimations()
+  await router.push(draft.path)
+  await nextTick()
+  const form = document.querySelector('.business-document-form')
+  if (!form) return
+  await waitForDocumentReady(form)
+  if (!sourceRect) return
+  const previousVisibility = form.style.visibility
+  form.style.visibility = 'hidden'
+  try {
+    await animateDocumentDock(form, sourceRect, true)
+  } finally {
+    form.style.visibility = previousVisibility
   }
 }
 
@@ -1129,113 +1188,72 @@ const logout = async () => {
   gap: 10px;
 }
 
-.order-draft-shortcut {
+.document-dock-shortcut {
+  position: relative;
+  width: 36px;
   height: 36px;
-  padding: 0 13px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 7px;
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
+  padding: 0;
+  color: #0f766e;
+  background: #f0fdfa;
+  border: 1px solid #99f6e4;
   border-radius: 5px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  transition: all 0.18s ease;
-  position: relative;
-  animation: pulseButton 2s ease-in-out infinite;
+  transition: color .18s ease, background .18s ease, border-color .18s ease, transform .18s ease;
 }
 
-@keyframes pulseButton {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 4px rgba(220, 38, 38, 0);
-  }
+.document-dock-shortcut:hover {
+  color: #115e59;
+  background: #ccfbf1;
+  border-color: #5eead4;
+  transform: translateY(-1px);
 }
 
-.order-draft-shortcut:hover {
-  background: #fee2e2;
-  border-color: #fca5a5;
-  color: #b91c1c;
-  animation: none;
-}
-
-.order-draft-shortcut:focus-visible {
-  outline: 2px solid #dc2626;
+.document-dock-shortcut:focus-visible {
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
-  animation: none;
 }
 
-.order-draft-shortcut.is-edit {
+.document-dock-shortcut.is-sale,
+.document-dock-shortcut.is-edit {
+  color: #2563eb;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.document-dock-shortcut.is-sale-return {
+  color: #c2410c;
   background: #fff7ed;
-  color: #d97706;
-  border: 1px solid #fdba74;
-  animation: pulseButtonEdit 2s ease-in-out infinite;
+  border-color: #fed7aa;
 }
 
-@keyframes pulseButtonEdit {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(217, 119, 6, 0.4);
-  }
-  50% {
-    box-shadow: 0 0 0 4px rgba(217, 119, 6, 0);
-  }
+.document-dock-shortcut.is-purchase {
+  color: #0f766e;
+  background: #f0fdfa;
+  border-color: #99f6e4;
 }
 
-.order-draft-shortcut.is-edit:hover {
-  background: #ffedd5;
-  border-color: #fbbf24;
-  color: #b45309;
-  animation: none;
-}
-
-.draft-icon {
-  width: 16px;
-  height: 16px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+.document-dock-icon {
   flex-shrink: 0;
 }
 
-.order-draft-shortcut-mark {
-  display: none;
-}
-
-.order-draft-shortcut-label {
-  white-space: nowrap;
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-}
-
-.pulse-dot {
+.document-dock-dot {
   position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 10px;
-  height: 10px;
+  top: -3px;
+  right: -3px;
+  width: 8px;
+  height: 8px;
   background: #ef4444;
+  border: 2px solid var(--panel-bg);
   border-radius: 50%;
-  border: 2px solid #fff;
-  animation: pulseDot 1.5s ease-in-out infinite;
+  animation: dockDotPulse 1.8s ease-in-out infinite;
 }
 
-@keyframes pulseDot {
-  0%, 100% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.3);
-    opacity: 0.8;
-  }
+@keyframes dockDotPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.25); opacity: .72; }
 }
 
 .header-icons {

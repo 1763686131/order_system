@@ -3,10 +3,12 @@ import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { localDate } from './documentModels'
+import { useDocumentValidation } from './useDocumentValidation'
 
 export function useReturnDocument(props) {
   const router = useRouter()
   const userStore = useUserStore()
+  const validation = useDocumentValidation()
   const loading = ref(true)
   const loadFailed = ref(false)
   const readOnly = ref(props.action === 'view')
@@ -340,7 +342,7 @@ export function useReturnDocument(props) {
         specification: item.specification || '',
         unit: item.unit || '',
         warehouseId: item.warehouseId || '',
-        warehouseName: selectedWarehouseName.value,
+        warehouseName: warehouses.value.find(warehouse => idEquals(warehouse.id, item.warehouseId || form.value.warehouseId))?.name || selectedWarehouseName.value,
         currentStock: Number(item.currentStock) || 0,
         conversionRate: Number(item.conversionRate) || 0,
         unitConversions: Array.isArray(item.unitConversions) ? item.unitConversions : [],
@@ -576,7 +578,15 @@ export function useReturnDocument(props) {
     nextTick(updateProductDropdownPosition)
   }
 
-  const handleProductInput = index => filterProducts(index)
+  const handleProductInput = index => {
+    const item = form.value.items[index]
+    if (item.productId) {
+      const { key, goodsName, warehouseId, showDropdown } = item
+      Object.assign(item, blankItem(), { key, goodsName, warehouseId, showDropdown })
+      syncReturnAmount()
+    }
+    filterProducts(index)
+  }
   
   const selectProduct = (index, product) => {
     const item = form.value.items[index]
@@ -587,7 +597,7 @@ export function useReturnDocument(props) {
     item.unit = getUnitName(product.unitId) || product.unit || ''
     item.unitConversions = Array.isArray(product.unitConversions) ? product.unitConversions : []
     item.conversionRate = Number(item.unitConversions[0]?.value || 0) || null
-    item.warehouseId = form.value.warehouseId || (product.warehouseId ? String(product.warehouseId) : '')
+    item.warehouseId = item.warehouseId || form.value.warehouseId || (product.warehouseId ? String(product.warehouseId) : '')
     item.currentStock = getProductStock(product, item)
     item.price = Number(product.price || 0)
     item.taxRate = form.value.taxEnabled ? 13 : 0
@@ -868,39 +878,40 @@ export function useReturnDocument(props) {
     }
   }
   
-  const save = async () => {
-    if (saving.value || loading.value || readOnly.value || loadFailed.value) return
-    if (form.value.items.some(item => item.goodsName && !item.productId)) {
-      showNotice('请从商品列表选择有效商品', 'error')
-      return
-    }
-    const validItems = form.value.items.filter(item => item.productId && Number(item.quantity) > 0)
-    if (!form.value.storeId || !form.value.customerId) {
-      showNotice('请选择门店和客户', 'error')
-      return
-    }
+  const validateForm = () => {
+    validation.dismissValidationHint()
+    const invalid = (key, message) => { validation.showValidationHint(key, message); return false }
+    if (!form.value.storeId) return invalid('storeId', '请选择门店。')
+    if (!form.value.customerId) return invalid('customerId', '请选择客户。')
     if (!form.value.originalOrderNumber) {
-      showNotice('请输入原订单编号', 'error')
-      return
+      return invalid('originalOrderNumber', '请输入原订单编号。')
     }
-    if (!validItems.length) {
-      showNotice('请至少选择一条商品并填写数量', 'error')
-      return
+    const unmatchedIndex = form.value.items.findIndex(item => item.goodsName && !item.productId)
+    if (unmatchedIndex !== -1) return invalid(`item-product-${unmatchedIndex}`, '请从商品列表选择有效商品。')
+    if (!form.value.items.some(item => item.productId)) return invalid('item-product-0', '请至少选择一条商品。')
+    for (const [index, item] of form.value.items.entries()) {
+      if (!item.productId) continue
+      if (!item.warehouseId && !form.value.warehouseId) return invalid(`item-warehouse-${index}`, '请选择商品的所属仓库。')
+      if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return invalid(`item-quantity-${index}`, '商品数量必须大于 0。')
     }
     const returnAmount = Number(form.value.returnAmount || 0)
     const refundAmount = Number(form.value.refundAmount || 0)
     if (!Number.isFinite(returnAmount) || returnAmount < 0) {
-      showNotice('应退金额不能小于0', 'error')
-      return
+      return invalid('returnAmount', '应退金额不能小于 0。')
     }
     if (!Number.isFinite(refundAmount) || refundAmount < 0) {
-      showNotice('本次退款不能小于0', 'error')
-      return
+      return invalid('refundAmount', '本次退款不能小于 0。')
     }
     if (refundAmount > returnAmount) {
-      showNotice('本次退款不能超过应退金额', 'error')
-      return
+      return invalid('refundAmount', '本次退款不能超过应退金额。')
     }
+    return true
+  }
+
+  const save = async () => {
+    if (saving.value || loading.value || readOnly.value || loadFailed.value) return
+    if (!validateForm()) return
+    const validItems = form.value.items.filter(item => item.productId && Number(item.quantity) > 0)
   
     saving.value = true
     try {
@@ -928,7 +939,7 @@ export function useReturnDocument(props) {
             goodsName: item.goodsName,
             specification: item.specification,
             unit: item.unit,
-            warehouseId: item.warehouseId ? Number(item.warehouseId) : null,
+            warehouseId: Number(item.warehouseId || form.value.warehouseId) || null,
             packages: Number(item.packages) || 0,
             quantity: Number(item.quantity) || 0,
             price: Number(item.price) || 0,
@@ -992,6 +1003,7 @@ export function useReturnDocument(props) {
   })
 
   return {
+    ...validation, validateForm,
     loading,
     loadFailed,
     readOnly,
