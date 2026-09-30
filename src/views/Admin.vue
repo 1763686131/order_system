@@ -551,48 +551,6 @@ const allMenuItems = [
     permission: ADMIN_ROUTE_PERMISSIONS.DASHBOARD
   },
   {
-    label: '商品',
-    icon: icons.package,
-    children: [
-      {
-        label: '商品列表',
-        path: '/admin/products',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST
-      },
-      {
-        label: '原材料列表',
-        path: '/admin/materials',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS
-      }
-    ]
-  },
-  {
-    label: '销售',
-    icon: icons.truck,
-    children: [
-      {
-        label: '销售订单',
-        path: '/admin/sales',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS
-      },
-      {
-        label: '物流列表',
-        path: '/admin/sales/logistics',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.LOGISTICS
-      },
-      {
-        label: '退货订单',
-        path: '/admin/sales/returns',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.RETURNS
-      },
-      {
-        label: '客户列表',
-        path: '/admin/sales/customers',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.CUSTOMERS
-      }
-    ]
-  },
-  {
     label: '采购',
     icon: icons.cart,
     children: [
@@ -610,6 +568,22 @@ const allMenuItems = [
         label: '采购入库',
         path: '/admin/purchase/inbound',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND
+      }
+    ]
+  },
+  {
+    label: '商品',
+    icon: icons.package,
+    children: [
+      {
+        label: '商品列表',
+        path: '/admin/products',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST
+      },
+      {
+        label: '原材料列表',
+        path: '/admin/materials',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS
       }
     ]
   },
@@ -646,6 +620,32 @@ const allMenuItems = [
         label: '仓库管理',
         path: '/admin/inventory/warehouse',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.WAREHOUSE
+      }
+    ]
+  },
+  {
+    label: '销售',
+    icon: icons.truck,
+    children: [
+      {
+        label: '销售订单',
+        path: '/admin/sales',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS
+      },
+      {
+        label: '物流列表',
+        path: '/admin/sales/logistics',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.LOGISTICS
+      },
+      {
+        label: '退货订单',
+        path: '/admin/sales/returns',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.RETURNS
+      },
+      {
+        label: '客户列表',
+        path: '/admin/sales/customers',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.CUSTOMERS
       }
     ]
   },
