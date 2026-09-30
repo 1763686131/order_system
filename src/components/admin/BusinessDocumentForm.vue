@@ -1,6 +1,6 @@
 <template>
   <section class="business-document-form" :data-document-type="documentType" :data-document-action="action" :aria-label="ui.config.title" :aria-busy="ui.loading">
-    <form novalidate @submit.prevent="submitDocument" @wheel="handleNumberWheel" @input="dismissHint()" @change="dismissHint()">
+    <form novalidate @submit.prevent="submitDocument" @wheel="handleNumberWheel">
       <div class="top-info-bar">
         <fieldset class="header-fields" :disabled="fieldsDisabled">
           <h2>{{ ui.config.title }}</h2>
@@ -13,7 +13,7 @@
           </label>
           <label class="info-group">
             <span>{{ ui.config.partyLabel }}</span>
-            <select v-if="isPurchase" v-model="ui.form.supplierId" :ref="element => setFieldRef('supplierId', element)" @change="syncFormSelect($event, 'supplierId')">
+            <select v-if="isPurchase" v-model="ui.form.supplierId" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
               <option value="">请选择供应商</option>
               <option v-for="supplier in ui.suppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName || supplier.name }}</option>
             </select>
@@ -43,7 +43,7 @@
             <label class="info-group"><span>联系电话</span><input v-model="ui.form.contactPhone" :ref="element => setFieldRef('contactPhone', element)" type="tel" @input="dismissHint('contactPhone')" /></label>
             <label class="info-group address-field"><span>联系地址</span><input v-model="ui.form.contactAddress" type="text" /></label>
             <label class="info-group"><span>工程项目</span><input v-model="ui.form.projectName" type="text" /></label>
-            <label class="info-group logistics-field"><span>物流服务</span><select v-model="ui.form.logisticsService"><option v-for="service in ui.logisticsServiceOptions" :key="service" :value="service">{{ service }}</option></select></label>
+            <label class="info-group logistics-field"><span>物流服务</span><select v-model="ui.form.logisticsService" @change="dismissHint('logisticsService')"><option v-for="service in ui.logisticsServiceOptions" :key="service" :value="service">{{ service }}</option></select></label>
           </template>
           <template v-else>
             <label class="info-group"><span>检验员</span><input v-model="ui.form.inspector" type="text" /></label>
@@ -111,7 +111,7 @@
               <span>业务员</span>
               <span class="salesperson-control">
                 <span class="salesperson-sizer" aria-hidden="true">{{ salespersonLabel }}</span>
-                <select v-model="ui.form.salesPerson" @change="syncFormSelect($event, 'salesPerson')">
+                <select v-model="ui.form.salesPerson" @change="dismissHint('salesPerson')">
                   <option value="">请选择业务员</option>
                   <option v-if="ui.form.salesPerson && !ui.salesPeople.some(employee => employee.displayName === ui.form.salesPerson)" :value="ui.form.salesPerson">{{ ui.form.salesPerson }}（历史记录）</option>
                   <option v-for="employee in ui.salesPeople" :key="employee.id" :value="employee.displayName">{{ employee.displayName }}</option>
@@ -161,7 +161,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { TriangleAlert, X } from '@lucide/vue'
 import CustomModal from '@/components/CustomModal.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
@@ -197,24 +197,13 @@ const handleNumberWheel = event => {
     event.preventDefault()
   }
 }
-const getNativeSelectValue = event => event?.target?.selectedOptions?.[0]?._value ?? event?.target?.value ?? ''
-const syncFormSelect = (event, field) => {
-  ui.form[field] = getNativeSelectValue(event)
+const handleStoreChange = () => {
+  ui.onStoreChange?.()
+  dismissHint('storeId')
 }
-const handleStoreChange = event => {
-  // Keep the model in sync even when a browser reports the change before Vue flushes v-model.
-  ui.form.storeId = getNativeSelectValue(event)
-  nextTick(() => {
-    ui.onStoreChange?.()
-    dismissHint('storeId')
-  })
-}
-const handleHeaderWarehouseChange = event => {
-  ui.form.warehouseId = getNativeSelectValue(event)
-  nextTick(() => {
-    ui.onWarehouseChange?.()
-    dismissHint('warehouseId')
-  })
+const handleHeaderWarehouseChange = () => {
+  ui.onWarehouseChange?.()
+  dismissHint('warehouseId')
 }
 const validationMessageParts = computed(() => (ui.validationHint?.message || '').split(/(实收数量|应收数量|商品数量|原订单编号|单据日期|所属仓库|应退金额|本次退款|总件数|联系(?:人|方式|电话)|供应商|门店|仓库|客户|商品明细|商品|物料|批次号|数量|单价|税率|金额|件数|有效数值|整数|非负数|\d+(?:\.\d+)?)/g).map((text, index) => ({ text, important: index % 2 === 1 })))
 const submitDocument = event => {
