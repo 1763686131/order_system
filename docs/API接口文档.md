@@ -26,8 +26,27 @@
 除文件上传接口外，请求和响应均使用 JSON。常见错误响应包含 `message` 或
 `error` 字段，前端应优先显示服务端返回的信息。
 
+### 公共单据表单调用约定
+
+销售订单、销售退货和原材料进货页面统一使用 `src/components/admin/BusinessDocumentForm.vue`，由 `src/composables/documents/useBusinessDocument.js` 选择业务模块。界面复用不改变各单据的后端接口契约。
+
+| `documentType` | 业务模块 | 新增/修改接口 | 主体与金额字段 | 打印模板业务类型 |
+| --- | --- | --- | --- | --- |
+| `sale` | `useSalesDocument.js` | `POST /api/orders`、`PUT /api/orders/{id}` | 客户；`discountAmount` 为折扣后金额，另有 `otherFees`、`currentPayment` | `sale` |
+| `sale-return` | `useReturnDocument.js` | `POST /api/returns`、`PUT /api/returns/{id}` | 客户；`returnAmount`、`refundAmount`，核销金额为两者差额 | `return` |
+| `purchase` | `usePurchaseDocument.js` | `POST /api/stock-inbounds`、`PUT /api/stock-inbounds/{id}` | 供应商；原材料入库数量、单价、税额、价税合计 | `purchase` |
+
+公共组件的 `action`（`create`、`edit`、`copy`、`view`）和 `documentId` 是前端路由参数，不是提交给三个接口的通用字段。销售复制使用 `/admin/sales/create?copyFrom=<id>`，读取源订单后按新增接口保存；新增/编辑/复制/查看不能代替服务端的审核状态或权限校验。
+
+原材料进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?type=raw-material`，并关联供应商和仓库名称；采购订单页面当前没有对应业务 API，不能用入库接口替代采购订单接口。
+
+`documentModels.js` 的 `purchasePayload()` 固定提交 `type: 'raw-material'`、`status: 'draft'`，将界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。商品来源为 `/api/raw-material-products`，库存来源为 `/api/stock-balances?type=raw-material`；成品生产入库仍由库存入库弹窗处理。
+
+当前入库接口没有本次付款、结算账户扣款、供应商应付余额或付款流水字段。前端进货表单显示入库金额和价税合计；保存单据、选择打印模板均不会产生供应商付款。销售/退货的结算字段不能直接映射到入库请求。金额最终由各接口重新校验与计算。
+
 ## 版本历史
 
+- **v5.4** (2026-09-30，文档修订) - 补充公共录入组件与业务适配器的 API 对应关系；按当前实现修正入库草稿/审核、红冲、退货退款核销规则，无新增业务接口
 - **v5.3** (2026-09-26) - 物流复制模板新增复制入口和账号头像绑定，订单详情新增订单信息复制入口
 - **v5.2** (2026-09-26) - 物流复制字段配置新增服务器模板列表、模板新增/删除草稿和统一保存接口
 - **v5.1** (2026-09-26) - 物流复制字段配置迁移到 SQLite，新增后台鉴权的配置读取和保存接口
@@ -3091,14 +3110,17 @@ volumes:
 
 入库单有以下两种类型：
 
-- `raw-material`：原材料采购入库，提交过账时必须关联有效供应商
+- `raw-material`：原材料采购入库，审核时必须关联有效供应商
 - `finished-product`：成品生产完工入库，生产车间/班组为选填字段
 
-入库单有以下三种状态：
+入库单状态由保存草稿、审核和红冲等动作决定：
 
-- `draft`：草稿，只保存单据头与明细，不改变库存
-- `posted`：已过账，写入库存余额与库存流水
-- `cancelled`：已作废，未过账单据执行删除操作后进入此状态
+- `draft`：待审核草稿，只保存单据头与明细，不改变库存
+- `reviewed`：已审核，写入库存余额与库存流水
+- `posted`：历史兼容状态，按已审核处理
+- `cancelled`：已红冲/作废，未审核单据可红冲，已红冲单据可重新启用
+
+当前进货表单使用 `draft` 保存。新建和修改接口拒绝直接传入 `reviewed` 或 `posted`；写入库存必须调用 `POST /api/stock-inbounds/{id}/audit`，反审核调用同路径的 `DELETE`。供应商付款、供应商应付余额和付款流水不属于当前入库接口字段。
 
 ### 11.1 获取供应商列表
 
@@ -3251,7 +3273,7 @@ volumes:
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `type` | string | 否 | `raw-material` 或 `finished-product` |
-| `status` | string | 否 | `draft`、`posted` 或 `cancelled` |
+| `status` | string | 否 | `draft`、`reviewed`、历史兼容 `posted` 或 `cancelled` |
 
 **响应示例**:
 
@@ -3266,7 +3288,7 @@ volumes:
     "warehouseId": 2,
     "supplierId": 1,
     "workshop": "",
-    "status": "posted",
+    "status": "reviewed",
     "totalQuantity": 98.5,
     "totalTax": 158.09,
     "totalAmount": 1374.13,
@@ -3313,7 +3335,7 @@ volumes:
 
 - **URL**: `/api/stock-inbounds`
 - **Method**: `POST`
-- **说明**: 使用 `status: "draft"` 保存草稿，或使用 `status: "posted"` 直接提交过账
+- **说明**: 使用 `status: "draft"` 保存待审核草稿；审核必须另行调用 `POST /api/stock-inbounds/{id}/audit`
 
 **请求参数**:
 
@@ -3336,7 +3358,7 @@ volumes:
       "type": "application/pdf"
     }
   ],
-  "status": "posted",
+  "status": "draft",
   "items": [
     {
       "productId": 3,
@@ -3358,25 +3380,25 @@ volumes:
 
 **表头字段**:
 
-| 参数 | 类型 | 草稿 | 过账 | 说明 |
+| 参数 | 类型 | 草稿必填 | 审核必填 | 说明 |
 |------|------|------|------|------|
 | `documentNo` | string | 否 | 否 | 为空时由后端生成 `RK + YYYYMMDD + 至少三位ID` |
 | `documentDate` | string | 是 | 是 | 单据日期，建议使用 `YYYY-MM-DD` |
 | `type` | string | 是 | 是 | `raw-material` 或 `finished-product` |
 | `storeId` | integer | 否 | 否 | 门店 ID |
 | `warehouseId` | integer | 是 | 是 | 目标仓库 ID，必须存在 |
-| `supplierId` | integer | 否 | 原材料必填 | 供应商 ID，原材料过账时必须有效且为 `active` |
+| `supplierId` | integer | 否 | 原材料必填 | 供应商 ID，原材料审核时必须有效且为 `active` |
 | `workshop` | string | 否 | 否 | 成品生产车间/班组，当前为选填 |
 | `inspector` | string | 否 | 否 | 检验员 |
 | `qualityNo` | string | 否 | 否 | 质检单号 |
 | `remark` | string | 否 | 否 | 备注，最多保存 200 字符 |
 | `attachments` | array | 否 | 否 | 附件元数据数组，见下方说明 |
-| `status` | string | 否 | 是 | 默认 `draft`；提交过账传 `posted` |
-| `items` | array | 否 | 是 | 草稿允许空数组；过账至少一条有效明细 |
+| `status` | string | 否 | 否 | 默认 `draft`；审核接口自动设为 `reviewed`，新建/修改不能直接传 `reviewed` 或 `posted` |
+| `items` | array | 否 | 是 | 草稿允许空数组；审核时必须至少一条有效明细 |
 
 **明细字段**:
 
-| 参数 | 类型 | 过账必填 | 说明 |
+| 参数 | 类型 | 审核必填 | 说明 |
 |------|------|----------|------|
 | `productId` | integer | 业务必填 | 物料 ID；按入库类型关联 `products` 或 `raw_material_products` |
 | `productCode` | string | 否 | 物料编码；请求也兼容 `code` |
@@ -3391,7 +3413,7 @@ volumes:
 | `taxRate` | number | 否 | 百分数，例如 `13` 代表 13%，不是 `0.13` |
 | `remark` | string | 否 | 行备注 |
 
-> 调用方过账时必须提供 `productId`。当前接口兼容只带 `productName` 的历史明细，但没有 `productId` 的明细不会更新库存余额，也不会生成库存流水。
+> 审核时必须提供 `productId`。当前接口兼容只带 `productName` 的历史草稿明细，但没有 `productId` 的明细不能通过审核，不会更新库存余额，也不会生成库存流水。
 
 金额字段由服务端重新计算，不信任客户端传入值：
 
@@ -3414,11 +3436,11 @@ totalAmount = receivedQty × unitPrice + taxAmount
     "documentNo": "RK20260908012",
     "documentDate": "2026-09-08",
     "type": "raw-material",
-    "status": "posted",
+    "status": "draft",
     "totalQuantity": 98.5,
     "totalTax": 158.09,
     "totalAmount": 1374.13,
-    "postedAt": "2026-09-08 14:30:00",
+    "postedAt": null,
     "items": [
       {
         "id": 28,
@@ -3442,11 +3464,13 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 > `attachments` 当前只把文件名、大小、MIME 类型等 JSON 元数据写入入库单，尚未提供附件二进制上传接口。
 
-### 11.8 修改草稿或提交过账
+上方“审核必填”列表示审核已保存单据时的校验条件，不表示 `POST /stock-inbounds` 可以直接过账。新建请求传入 `reviewed` 或 `posted` 返回 HTTP `400`，消息为“请先保存待审核单据，再调用审核接口”。当前公共进货表单保存前已校验门店、供应商、仓库、日期、物料、正数实收数量和批次号，前端要求比后端草稿接口更严格。
+
+### 11.8 修改入库草稿
 
 - **URL**: `/api/stock-inbounds/<int:inbound_id>`
 - **Method**: `PUT`
-- **说明**: 修改现有未过账单据；传入 `status: "posted"` 时提交过账
+- **说明**: 修改现有未审核单据；当前表单提交 `status: "draft"`，审核使用 11.12 的审核接口
 
 请求字段与“新建入库单”相同。保存时会替换该单据的全部明细，不是局部合并明细。
 
@@ -3459,17 +3483,17 @@ totalAmount = receivedQty × unitPrice + taxAmount
   "stockIn": {
     "id": 12,
     "documentNo": "RK20260908012",
-    "status": "posted"
+    "status": "draft"
   }
 }
 ```
 
-已过账单据不可再次修改或重复过账，返回 HTTP `409`：
+请求直接传入 `reviewed` 或 `posted` 返回 HTTP `400`，消息为“请通过审核接口变更审核状态”。已审核单据不可再次修改，返回 HTTP `409`：
 
 ```json
 {
   "success": false,
-  "message": "已过账单据不可修改"
+  "message": "已审核单据不可修改"
 }
 ```
 
@@ -3477,7 +3501,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 - **URL**: `/api/stock-inbounds/<int:inbound_id>`
 - **Method**: `DELETE`
-- **说明**: 逻辑作废未过账单据，把状态更新为 `cancelled`，不物理删除记录
+- **说明**: 未审核单据调用后变为 `cancelled`，不物理删除记录；对已红冲单据再次调用，会物理删除单据头及明细
 
 **成功响应**:
 
@@ -3488,7 +3512,9 @@ totalAmount = receivedQty × unitPrice + taxAmount
 }
 ```
 
-已过账单据不能直接作废，返回 HTTP `409`；入库单不存在时返回 HTTP `404`。
+已审核单据不能直接红冲，返回 HTTP `409`，消息为“已审核单据不能直接删除，请先反审核”；入库单不存在时返回 HTTP `404`。
+
+再次删除已红冲单据时，成功响应增加 `deleted: true`，消息为“已红冲入库单已删除”。重新启用使用 `POST /api/stock-inbounds/{id}/restart`，将 `cancelled` 恢复为 `draft`，返回更新后的 `stockIn`；其他状态返回 HTTP `409`。
 
 ### 11.10 获取库存余额
 
@@ -3610,15 +3636,19 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 ### 11.12 审核规则与数据写入
 
-调用 `POST /api/stock-inbounds/{id}/audit` 审核入库单后，后端在同一个 SQLite 事务中执行：
+单据头和明细先由新建/修改接口保存。调用 `POST /api/stock-inbounds/{id}/audit` 审核已有入库单时，后端在同一个 SQLite 事务中执行：
 
-1. 写入或更新 `stock_inbounds` 单据头。
-2. 写入 `stock_inbound_items` 入库明细。
+1. 检查单据存在、状态为 `draft` 且没有已写入的库存流水。
+2. 重新校验供应商、物料、正数实收数量和批次，更新 `stock_inbounds.status` 为 `reviewed`，记录 `postedAt`。
 3. 按物料、仓库、门店、货位和批次增量更新 `stock_balances`。
 4. 为每条有效明细写入一条 `stock_movements` 库存流水。
 5. 成品入库额外增量同步旧版 `inventory` 表，保证现有成品库存页面兼容。
 
-原材料库存使用独立 `stock_balances` 余额，不写入旧的成品 `inventory` 表。待审核单据不会执行第 3 至第 5 步。
+成功响应为 `{ "success": true, "message": "入库单审核成功，库存已更新", "stockIn": { ... } }`。重复审核或非 `draft` 状态返回 HTTP `409`；审核校验失败返回 HTTP `400`。
+
+反审核调用 `DELETE /api/stock-inbounds/{id}/audit`，按本单入库流水回退库存，删除本单流水，将状态恢复为 `draft` 并清空 `postedAt`。当前库存不足以回退时返回 HTTP `409`，不会提交部分变更。
+
+审核和反审核均需后台入库审核权限 `admin.inventory.stock_inbound.audit`。原材料库存使用独立 `stock_balances` 余额，不写入旧的成品 `inventory` 表。待审核单据不会执行第 3 至第 5 步；进货表单的保存和打印不会自动调用审核接口。
 
 ---
 
@@ -3862,13 +3892,15 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 审核在一个数据库事务中完成：
 
-1. 校验门店、客户归属和实退金额；实退金额不能超过客户当前应收欠款。
+1. 校验门店、客户归属、应退金额和本次退款，要求 `0 <= refundAmount <= returnAmount`；核销金额 `returnAmount - refundAmount` 不能超过客户当前应收欠款。
 2. 按每条明细的门店、仓库、商品和数量增加 `stock_balances`，并写入 `stock_movements` 入库流水；成品同时兼容更新旧版 `inventory` 表。
-3. 客户 `receivable` 减少 `returnAmount`；`refundAmount` 作为实际退款，差额写入 `writeoffAmount`。
+3. 客户 `receivable` 减少 `writeoffAmount = returnAmount - refundAmount`；`refundAmount` 作为实际退款，从结算账户扣减并记录银行账户流水。
 4. 写入一条 `customer_return` 客户账户流水，并把流水 ID 写回退货单。
 5. 单据状态更新为 `audited`，记录 `debtBefore` 和 `debtAfter`。
 
 例如客户当前应收 5000 元，实退金额 500 元、本次退款 0 元：审核后客户应收为 4500 元，500 元全部作为核销金额；不会产生现金退款。
+
+如果同样应退 500 元、实际退款 200 元，则核销金额为 300 元，客户应收变为 4700 元，结算账户实际支出 200 元。
 
 ### 13.7 反审核退货单
 
@@ -5528,12 +5560,13 @@ ON print_templates(is_default);
 - `finished-product` - 成品生产完工入库
 
 ### 入库单状态说明
-- `draft` - 草稿，未改变库存
-- `posted` - 已过账，已经写入库存余额和流水
-- `cancelled` - 已作废
+- `draft` - 待审核草稿，未改变库存
+- `reviewed` - 已审核，已经写入库存余额和流水
+- `posted` - 历史兼容的已审核状态
+- `cancelled` - 已红冲/作废，可重新启用；再次删除时物理删除单据
 
 ### 供应商状态说明
-- `active` - 启用，可用于原材料入库过账
+- `active` - 启用，可用于原材料入库审核
 - `inactive` - 停用，仅保留历史关联
 
 ### 备用金类型

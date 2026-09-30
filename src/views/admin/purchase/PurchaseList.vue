@@ -30,7 +30,7 @@
             <input
               v-model.trim="searchQuery"
               type="search"
-              :placeholder="isInbound ? '搜索入库单号、采购单号' : '搜索采购单号、供应商'"
+              :placeholder="isInbound ? '搜索入库单号、供应商' : '搜索采购单号、供应商'"
             />
           </label>
           <div class="filter-actions">
@@ -46,7 +46,8 @@
         </form>
         <div class="toolbar-actions">
           <span class="result-count">共 {{ filteredRecords.length }} 条</span>
-          <button class="btn btn-primary" type="button" @click="createRecord">
+          <button v-if="isInbound" class="row-action" type="button" title="刷新" aria-label="刷新入库列表" :disabled="loading" @click="loadInbounds">↻</button>
+          <button class="btn btn-primary" type="button" :disabled="!isInbound" :title="!isInbound ? '采购订单接口尚未提供' : ''" @click="createRecord">
             <svg aria-hidden="true" viewBox="0 0 24 24" width="17" height="17"><path d="M12 5v14M5 12h14" /></svg>
             {{ isInbound ? '新增入库单' : '新增采购订单' }}
           </button>
@@ -58,11 +59,11 @@
           <thead>
             <tr v-if="isInbound">
               <th>入库单号</th>
-              <th>采购单号</th>
+              <th>状态</th>
               <th>供应商</th>
               <th>入库日期</th>
               <th>入库仓库</th>
-              <th>操作人</th>
+              <th>入库金额</th>
               <th class="actions">操作</th>
             </tr>
             <tr v-else>
@@ -77,17 +78,17 @@
           <tbody>
             <tr v-if="filteredRecords.length === 0">
               <td :colspan="isInbound ? 7 : 6" class="empty-state">
-                {{ records.length ? (isInbound ? '暂无匹配的入库记录' : '暂无匹配的采购订单') : (isInbound ? '暂无入库记录' : '暂无采购订单') }}
+                {{ loading ? '加载中...' : loadError || (records.length ? (isInbound ? '暂无匹配的入库记录' : '暂无匹配的采购订单') : (isInbound ? '暂无入库记录' : '暂无采购订单')) }}
               </td>
             </tr>
             <tr v-for="record in filteredRecords" :key="record.id">
               <template v-if="isInbound">
                 <td class="record-no">{{ record.inboundNo }}</td>
-                <td>{{ record.purchaseOrderNo }}</td>
+                <td>{{ inboundStatusLabel(record.status) }}</td>
                 <td>{{ record.supplierName }}</td>
                 <td>{{ formatDate(record.inboundDate) }}</td>
                 <td>{{ record.warehouseName }}</td>
-                <td>{{ record.operator }}</td>
+                <td>{{ Number(record.totalAmount || 0).toFixed(2) }}</td>
               </template>
               <template v-else>
                 <td class="record-no">{{ record.orderNo }}</td>
@@ -103,6 +104,7 @@
                 <button v-if="isInbound" class="row-action" type="button" title="打印入库单" aria-label="打印入库单" @click="printRecord(record.id)">
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="M6 9V3h12v6M6 17H4V9h16v8h-2M6 14h12v7H6z" /></svg>
                 </button>
+                <button v-if="isInbound && !isLockedInbound(record.status)" class="row-action" type="button" title="编辑入库草稿" aria-label="编辑入库草稿" @click="editRecord(record.id)">✎</button>
                 <button v-else class="row-action" type="button" title="编辑采购订单" aria-label="编辑采购订单" @click="editRecord(record.id)">
                   <svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16"><path d="m4 16-.8 4.8L8 20l11.5-11.5a2.8 2.8 0 0 0-4-4Z" /><path d="m13.5 6.5 4 4" /></svg>
                 </button>
@@ -118,6 +120,8 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import request from '@/api/request'
+import { isLockedInbound } from '@/composables/documents/documentModels'
 
 const props = defineProps({
   mode: {
@@ -131,6 +135,8 @@ const router = useRouter()
 const isInbound = computed(() => props.mode === 'inbound')
 const orders = ref([])
 const inbounds = ref([])
+const loading = ref(false)
+const loadError = ref('')
 const records = computed(() => isInbound.value ? inbounds.value : orders.value)
 const searchQuery = ref('')
 const statusFilter = ref('')
@@ -142,7 +148,7 @@ const filteredRecords = computed(() => {
   const keyword = search.toLowerCase()
   return records.value.filter(record => {
     if (isInbound.value) {
-      const matchesSearch = !keyword || [record.inboundNo, record.purchaseOrderNo]
+      const matchesSearch = !keyword || [record.inboundNo, record.supplierName]
         .some(value => String(value ?? '').toLowerCase().includes(keyword))
       const recordDate = new Date(record.inboundDate)
       return matchesSearch
@@ -166,7 +172,30 @@ const resetFilters = () => {
   applyFilters()
 }
 
-watch(() => props.mode, resetFilters)
+const loadInbounds = async () => {
+  loading.value = true
+  loadError.value = ''
+  try {
+    const [data, suppliers, warehouses] = await Promise.all([
+      request({ url: '/stock-inbounds', method: 'GET', params: { type: 'raw-material' } }),
+      request({ url: '/suppliers', method: 'GET' }),
+      request({ url: '/warehouses', method: 'GET' })
+    ])
+    inbounds.value = (Array.isArray(data) ? data : []).map(item => ({
+      ...item,
+      inboundNo: item.documentNo,
+      inboundDate: item.documentDate,
+      supplierName: (Array.isArray(suppliers) ? suppliers : []).find(supplier => String(supplier.id) === String(item.supplierId))?.supplierName || '-',
+      warehouseName: (Array.isArray(warehouses) ? warehouses : []).find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || '-'
+    }))
+  } catch (error) {
+    loadError.value = error?.response?.data?.message || '加载入库列表失败'
+  } finally { loading.value = false }
+}
+
+watch(() => props.mode, () => { resetFilters(); if (isInbound.value) loadInbounds() }, { immediate: true })
+
+const inboundStatusLabel = status => ({ draft: '待审核', reviewed: '已审核', posted: '已审核', cancelled: '已红冲', 'red-flushed': '已红冲' })[status] || status
 
 const formatDate = date => new Date(date).toLocaleDateString('zh-CN')
 
@@ -180,10 +209,10 @@ const statusLabel = status => ({
 
 const createRecord = () => router.push(`/admin/purchase/${isInbound.value ? 'inbound' : 'orders'}/create`)
 const viewRecord = id => router.push(`/admin/purchase/${isInbound.value ? 'inbound' : 'orders'}/${id}`)
-const editRecord = id => router.push(`/admin/purchase/orders/edit/${id}`)
+const editRecord = id => router.push(`/admin/purchase/${isInbound.value ? 'inbound' : 'orders'}/edit/${id}`)
 
 const printRecord = id => {
-  console.log('打印入库单:', id)
+  router.push({ path: `/admin/purchase/inbound/${id}`, query: { print: '1' } })
 }
 </script>
 
@@ -322,6 +351,8 @@ const printRecord = id => {
   border-color: #08755e;
   background: #08755e;
 }
+
+.btn:disabled, .row-action:disabled { opacity: .5; cursor: default; }
 
 .btn-ghost {
   border-color: #d8dfe4;

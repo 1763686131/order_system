@@ -191,8 +191,10 @@ const routes = [
       {
         path: 'sales/create',
         name: 'admin-sales-create',
-        component: () => import('@/views/admin/sales/OrderForm.vue'),
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'sale', action: route.query.copyFrom ? 'copy' : 'create' }),
         meta: {
+          documentForm: true,
           requiresAuth: true,
           permission: ADMIN_SALES_ORDER_PERMISSIONS.CREATE
         }
@@ -200,9 +202,10 @@ const routes = [
       {
         path: 'sales/edit/:id',
         name: 'admin-sales-edit',
-        component: () => import('@/views/admin/sales/OrderForm.vue'),
-        props: route => ({ orderId: Number(route.params.id) }),
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'sale', action: 'edit', documentId: Number(route.params.id) }),
         meta: {
+          documentForm: true,
           requiresAuth: true,
           permission: ADMIN_SALES_ORDER_PERMISSIONS.EDIT
         }
@@ -234,23 +237,45 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'purchase/inbound/create',
+        name: 'admin-purchase-inbound-create',
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: { documentType: 'purchase', action: 'create' },
+        meta: { requiresAuth: true, documentForm: true }
+      },
+      {
+        path: 'purchase/inbound/edit/:id',
+        name: 'admin-purchase-inbound-edit',
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'purchase', action: 'edit', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true, documentForm: true }
+      },
+      {
+        path: 'purchase/inbound/:id',
+        name: 'admin-purchase-inbound-view',
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'purchase', action: 'view', documentId: Number(route.params.id), printOnOpen: route.query.print === '1' }),
+        meta: { requiresAuth: true, documentForm: true }
+      },
+      {
         path: 'sales/returns/create',
         name: 'admin-sales-return-create',
-        component: () => import('@/views/admin/sales/ReturnOrderForm.vue'),
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
         props: route => ({
+          documentType: 'sale-return', action: 'create',
           productType: route.query.productType || 'finished-product'
         }),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, documentForm: true }
       },
       {
         path: 'sales/returns/edit/:id',
         name: 'admin-sales-return-edit',
-        component: () => import('@/views/admin/sales/ReturnOrderForm.vue'),
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
         props: route => ({
-          returnId: Number(route.params.id),
+          documentType: 'sale-return', action: 'edit', documentId: Number(route.params.id),
           productType: route.query.productType || 'finished-product'
         }),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, documentForm: true }
       },
       {
         path: 'hr/reports',

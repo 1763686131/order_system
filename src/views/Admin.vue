@@ -254,10 +254,11 @@
       </header>
 
       <!-- 主内容区 -->
-      <main class="main-content" :class="{ 'purchase-list-content': ['/admin/purchase/suppliers', '/admin/purchase/orders', '/admin/purchase/inbound'].includes(route.path) }">
+      <main class="main-content" :class="{ 'purchase-list-content': route.meta.documentForm || ['/admin/purchase/suppliers', '/admin/purchase/orders', '/admin/purchase/inbound'].includes(route.path) }">
         <router-view v-slot="{ Component }">
           <component
             :is="Component"
+            :key="route.meta.documentForm ? route.fullPath : undefined"
             ref="activeContentRef"
             @create="handleStockRecordCreate"
             @view-detail="handleStockRecordViewDetail"
@@ -784,6 +785,9 @@ const showOrderDraftShortcut = computed(() => {
 })
 
 const currentMenuLabel = computed(() => {
+  if (currentPath.value.startsWith('/admin/purchase/inbound/')) {
+    return `采购/${route.name === 'admin-purchase-inbound-create' ? '新增' : route.name === 'admin-purchase-inbound-edit' ? '修改' : '查看'}进货单`
+  }
   if (currentPath.value.startsWith('/admin/sales/returns/edit/')) {
     return route.query.productType === 'raw-material'
       ? '销售/修改原材料退货单'
