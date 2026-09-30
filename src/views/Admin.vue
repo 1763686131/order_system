@@ -69,7 +69,7 @@
     <!-- 右侧主体区域 -->
     <div class="main-wrapper">
       <!-- 顶部栏 -->
-      <header class="top-header">
+      <header class="top-header" :class="{ 'is-document-docking': Boolean(dockingDocument) }">
         <div class="header-left">
           <button class="sidebar-toggle-btn" @click="toggleSidebar" :title="isSidebarCollapsed ? '展开菜单' : '收起菜单'">
             <span v-if="!isSidebarCollapsed" class="hamburger-icon">
@@ -83,15 +83,16 @@
         </div>
 
         <div class="header-right">
-          <div class="header-actions">
-            <button v-for="draft in dockedDocuments" :key="draft.type" :data-dock-type="draft.type" :class="['document-dock-shortcut', `is-${draft.type}`]" type="button" :title="`返回${draft.title}`" :aria-label="`返回${draft.title}`" @click="restoreDockedDocument(draft)">
+          <TransitionGroup name="document-dock" tag="div" class="header-actions">
+            <button v-for="draft in dockedDocuments" :key="draft.type" :data-dock-type="draft.type" :class="['document-dock-shortcut', `is-${draft.type}`, { 'is-docking': dockingDocument?.type === draft.type, 'is-arriving': receivedDockType === draft.type }]" type="button" :disabled="Boolean(dockingDocument)" :title="`返回${draft.title}`" :aria-label="`返回${draft.title}`" @click="restoreDockedDocument(draft)">
               <FilePenLine v-if="draft.type === 'edit'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <FilePlus2 v-else-if="draft.type === 'sale'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <RotateCcw v-else-if="draft.type === 'sale-return'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <PackageCheck v-else class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <span class="document-dock-dot" aria-hidden="true"></span>
+              <span v-if="dockingDocument?.type === draft.type || receivedDockType === draft.type" class="document-dock-feedback" role="status">{{ dockingDocument?.type === draft.type ? '收起到这里' : '已收起 · 点击继续' }}</span>
             </button>
-          </div>
+          </TransitionGroup>
 
           <div class="header-icons">
             <button class="icon-btn" title="系统公告">
@@ -307,6 +308,13 @@ const userStore = useUserStore()
 const orderDraftStore = useOrderDraftStore()
 const documentDraftStore = useDocumentDraftStore()
 let removeDocumentDockGuard = () => {}
+let removeDocumentDockAfterHook = () => {}
+let releaseDockedForm = null
+let dockTransitionId = 0
+let dockFeedbackTimer
+const dockingDocument = ref(null)
+const dockDestinationPath = ref('')
+const receivedDockType = ref('')
 
 const shippedActionModal = ref(null)
 const stockRecordModal = ref(null)
@@ -458,6 +466,8 @@ onMounted(() => {
 onUnmounted(() => {
   document.removeEventListener('pointerdown', handleAccountMenuClickOutside)
   removeDocumentDockGuard()
+  removeDocumentDockAfterHook()
+  clearTimeout(dockFeedbackTimer)
   cancelDocumentDockAnimations()
 })
 
@@ -772,7 +782,7 @@ const dockedDocuments = computed(() => {
   const documents = []
   const currentFullPath = route.fullPath
   const add = (document) => {
-    if (document.path && document.path !== currentFullPath) documents.push(document)
+    if (document.path && document.path !== currentFullPath && document.path !== dockDestinationPath.value) documents.push(document)
   }
 
   if (userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS) && orderDraftStore.hasDraft) {
@@ -790,7 +800,13 @@ const dockedDocuments = computed(() => {
     const draft = documentDraftStore.drafts.purchase
     add({ type: 'purchase', title: '采购入库单', path: draft?.path })
   }
-  return documents
+  if (dockingDocument.value) {
+    const existingIndex = documents.findIndex(document => document.type === dockingDocument.value.type)
+    if (existingIndex !== -1) documents.splice(existingIndex, 1)
+    documents.push(dockingDocument.value)
+  }
+  const order = ['sale', 'edit', 'sale-return', 'purchase']
+  return documents.sort((left, right) => order.indexOf(left.type) - order.indexOf(right.type))
 })
 
 const currentMenuLabel = computed(() => {
@@ -827,31 +843,57 @@ const currentMenuLabel = computed(() => {
   return item ? item.label : '数据看板'
 })
 
-const getDockTargetRect = (form) => {
-  const type = form?.dataset.documentType === 'sale'
+const getDockDocument = (form, path) => {
+  const type = form.dataset.documentType === 'sale'
     ? (form.dataset.documentAction === 'edit' ? 'edit' : 'sale')
-    : form?.dataset.documentType
-  const order = ['sale', 'edit', 'sale-return', 'purchase']
-  const availableTypes = dockedDocuments.value.map(item => item.type)
-  if (type && !availableTypes.includes(type)) availableTypes.push(type)
-  availableTypes.sort((left, right) => order.indexOf(left) - order.indexOf(right))
-  const slot = Math.max(0, availableTypes.indexOf(type))
-  const headerActions = document.querySelector('.header-actions')
-  const headerIcons = document.querySelector('.header-icons')
-  const anchor = headerIcons?.getBoundingClientRect() || headerActions?.getBoundingClientRect()
-  if (!anchor) return null
-  const size = 36
-  const left = headerActions?.getBoundingClientRect().left ?? anchor.left - 46
-  return { left: left + slot * 46, top: anchor.top, width: size, height: size }
+    : form.dataset.documentType
+  const draftPath = ['sale', 'edit'].includes(type)
+    ? orderDraftStore.draftPath
+    : documentDraftStore.drafts[type]?.path
+  // Explicitly closed/discarded and read-only documents have no dock destination.
+  if (draftPath !== path || activeContentRef.value?.ui?.readOnly) return null
+  return { type, path, title: form.querySelector('h2')?.textContent || '单据' }
 }
 
 removeDocumentDockGuard = router.beforeEach(async (to, from) => {
+  const transitionId = ++dockTransitionId
+  cancelDocumentDockAnimations()
+  releaseDockedForm = null
+  dockingDocument.value = null
+  dockDestinationPath.value = ''
+  receivedDockType.value = ''
+  clearTimeout(dockFeedbackTimer)
   const sameDocumentComponent = to.meta.documentForm && to.name === from.name &&
     String(to.params.id || 'new') === String(from.params.id || 'new')
   if (!from.meta.documentForm || sameDocumentComponent || to.fullPath === from.fullPath) return true
   const form = document.querySelector('.business-document-form')
-  if (form) await animateDocumentDock(form, getDockTargetRect(form), false)
+  if (!form) return true
+  const dockDocument = getDockDocument(form, from.fullPath)
+  if (!dockDocument) return true
+  dockingDocument.value = dockDocument
+  dockDestinationPath.value = to.fullPath
+  await nextTick()
+  if (transitionId !== dockTransitionId) return true
+  // Reserve and measure the real destination, including the final flex layout.
+  const shortcut = document.querySelector(`.document-dock-shortcut[data-dock-type="${dockDocument.type}"]`)
+  const release = await animateDocumentDock(form, shortcut?.getBoundingClientRect(), false)
+  if (transitionId === dockTransitionId) releaseDockedForm = release
+  else release?.()
   return true
+})
+
+removeDocumentDockAfterHook = router.afterEach(async (to, from, failure) => {
+  if (dockDestinationPath.value && dockDestinationPath.value !== to.fullPath) return
+  const release = releaseDockedForm
+  releaseDockedForm = null
+  if (!failure && release && dockingDocument.value) {
+    receivedDockType.value = dockingDocument.value.type
+    dockFeedbackTimer = setTimeout(() => { receivedDockType.value = '' }, 1500)
+  }
+  dockingDocument.value = null
+  dockDestinationPath.value = ''
+  await nextTick()
+  release?.()
 })
 
 const navigateTo = (path) => router.push(path)
@@ -868,22 +910,24 @@ const handleDocumentClose = () => {
 }
 
 const restoreDockedDocument = async (draft) => {
-  if (!draft?.path || draft.path === route.fullPath) return
+  if (!draft?.path || draft.path === route.fullPath || dockingDocument.value) return
   const shortcut = document.querySelector(`.document-dock-shortcut[data-dock-type="${draft.type}"]`)
   const sourceRect = shortcut?.getBoundingClientRect()
   cancelDocumentDockAnimations()
   await router.push(draft.path)
+  if (route.fullPath !== draft.path) return
   await nextTick()
   const form = document.querySelector('.business-document-form')
   if (!form) return
-  await waitForDocumentReady(form)
   if (!sourceRect) return
   const previousVisibility = form.style.visibility
   form.style.visibility = 'hidden'
   try {
+    await waitForDocumentReady(form)
+    if (!form.isConnected || route.fullPath !== draft.path) return
     await animateDocumentDock(form, sourceRect, true)
   } finally {
-    form.style.visibility = previousVisibility
+    if (form.isConnected) form.style.visibility = previousVisibility
   }
 }
 
@@ -1115,6 +1159,10 @@ const logout = async () => {
   box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
+.top-header.is-document-docking {
+  z-index: 3100;
+}
+
 .header-left {
   display: flex;
   align-items: center;
@@ -1183,6 +1231,7 @@ const logout = async () => {
 }
 
 .header-actions {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1192,6 +1241,7 @@ const logout = async () => {
   position: relative;
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1214,6 +1264,93 @@ const logout = async () => {
 .document-dock-shortcut:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+.document-dock-shortcut.is-docking {
+  cursor: default;
+}
+
+.document-dock-shortcut.is-docking .document-dock-dot {
+  opacity: 0;
+  animation: none;
+}
+
+.document-dock-shortcut.is-docking::after,
+.document-dock-shortcut.is-arriving::after {
+  content: '';
+  position: absolute;
+  inset: -5px;
+  border: 2px solid currentColor;
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.document-dock-shortcut.is-docking::after {
+  animation: dockTargetPulse .65s ease-in-out infinite;
+}
+
+.document-dock-shortcut.is-arriving {
+  animation: dockReceive .46s ease-out both;
+}
+
+.document-dock-shortcut.is-arriving::after {
+  animation: dockReceiveRing .6s ease-out forwards;
+}
+
+.document-dock-feedback {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 1;
+  padding: 6px 9px;
+  border: 1px solid currentColor;
+  border-radius: 5px;
+  color: inherit;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, .1);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.document-dock-enter-active,
+.document-dock-leave-active,
+.document-dock-move {
+  transition: opacity .24s ease, transform .3s ease;
+}
+
+.document-dock-enter-from,
+.document-dock-leave-to {
+  opacity: 0;
+  transform: translateY(-6px) scale(.8);
+}
+
+.document-dock-leave-active {
+  position: absolute;
+}
+
+/* A reserved receiving slot must stay at its measured, full-size coordinates. */
+.document-dock-shortcut.is-docking.document-dock-enter-from {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes dockTargetPulse {
+  0%, 100% { opacity: .35; transform: scale(1); }
+  50% { opacity: .8; transform: scale(1.1); }
+}
+
+@keyframes dockReceive {
+  0% { transform: scale(1); }
+  28% { transform: translateY(3px) scale(.9); }
+  62% { transform: translateY(-2px) scale(1.12); }
+  100% { transform: scale(1); }
+}
+
+@keyframes dockReceiveRing {
+  0% { opacity: .7; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.65); }
 }
 
 .document-dock-shortcut.is-sale,
@@ -1691,6 +1828,20 @@ const logout = async () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .document-dock-shortcut.is-docking::after,
+  .document-dock-shortcut.is-arriving,
+  .document-dock-shortcut.is-arriving::after,
+  .document-dock-dot {
+    animation: none;
+  }
+  .document-dock-enter-active,
+  .document-dock-leave-active,
+  .document-dock-move {
+    transition: none;
+  }
+  .document-dock-shortcut.is-arriving::after {
+    opacity: 0;
+  }
   .user-detail-card,
   .account-menu-enter-active,
   .account-menu-leave-active {
