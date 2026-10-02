@@ -1524,14 +1524,49 @@ def _ensure_material_outbound_schema(conn):
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 audited_by TEXT,
                 audited_at TEXT,
+                finished_inbound_id INTEGER,
+                finished_product_id INTEGER,
+                finished_product_code TEXT NOT NULL DEFAULT '',
+                finished_product_name TEXT NOT NULL DEFAULT '',
+                finished_product_specification TEXT NOT NULL DEFAULT '',
+                finished_product_unit TEXT NOT NULL DEFAULT '',
+                finished_warehouse_id INTEGER,
+                finished_warehouse_name TEXT NOT NULL DEFAULT '',
+                finished_remark TEXT NOT NULL DEFAULT '',
                 updated_at TEXT
             )
             """
         )
+        outbound_columns = {
+            row["name"]
+            for row in cursor.execute("PRAGMA table_info(material_outbounds)")
+        }
+        outbound_columns_to_add = {
+            "finished_inbound_id": "INTEGER",
+            "finished_product_id": "INTEGER",
+            "finished_product_code": "TEXT NOT NULL DEFAULT ''",
+            "finished_product_name": "TEXT NOT NULL DEFAULT ''",
+            "finished_product_specification": "TEXT NOT NULL DEFAULT ''",
+            "finished_product_unit": "TEXT NOT NULL DEFAULT ''",
+            "finished_warehouse_id": "INTEGER",
+            "finished_warehouse_name": "TEXT NOT NULL DEFAULT ''",
+            "finished_remark": "TEXT NOT NULL DEFAULT ''",
+        }
+        for column, definition in outbound_columns_to_add.items():
+            if column not in outbound_columns:
+                cursor.execute(
+                    f"ALTER TABLE material_outbounds ADD COLUMN {column} {definition}"
+                )
         cursor.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_material_outbounds_filter
             ON material_outbounds(status, document_date DESC, id DESC)
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_material_outbounds_finished_inbound
+            ON material_outbounds(finished_inbound_id)
             """
         )
         cursor.execute(

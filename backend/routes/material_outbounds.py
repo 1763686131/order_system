@@ -121,6 +121,106 @@ def _product_row(conn, product_id):
     ).fetchone()
 
 
+def _finished_product_row(conn, product_id):
+    return conn.execute(
+        """
+        SELECT product.*, unit.name AS unit_name
+        FROM products AS product
+        LEFT JOIN units AS unit ON unit.id = product.unit_id
+        WHERE product.id = ? AND COALESCE(product.enabled, 1) = 1
+        """,
+        (product_id,),
+    ).fetchone()
+
+
+def _warehouse_row(conn, warehouse_id):
+    return conn.execute(
+        """
+        SELECT id, name, store_id, status
+        FROM warehouses
+        WHERE id = ?
+        """,
+        (warehouse_id,),
+    ).fetchone()
+
+
+def _present_value(data, keys, fallback=None):
+    for key in keys:
+        if key in data:
+            return data[key]
+    return fallback
+
+
+def _resolve_finished_audit_values(conn, document, data):
+    document_values = dict(document)
+    store_id = int(document_values["store_id"])
+    warehouse_id = _optional_int(
+        _present_value(
+            data,
+            ("finishedWarehouseId", "finished_warehouse_id"),
+            document_values.get("finished_warehouse_id"),
+        ),
+        "成品入库仓库",
+    )
+    product_id = _optional_int(
+        _present_value(
+            data,
+            ("finishedProductId", "finished_product_id"),
+            document_values.get("finished_product_id"),
+        ),
+        "成品商品",
+    )
+    quantity_value = _present_value(
+        data,
+        ("finishedQuantity", "producedQuantity", "finished_quantity"),
+        document_values.get("produced_quantity"),
+    )
+    remark = _text(
+        _present_value(
+            data,
+            ("finishedRemark", "finished_remark"),
+            document_values.get("finished_remark") or document_values.get("remark"),
+        ),
+        200,
+    )
+
+    if not warehouse_id:
+        raise ValueError("请选择成品入库仓库")
+    if not product_id:
+        raise ValueError("请选择成品商品")
+    quantity = _positive_number(quantity_value, "成品入库数量")
+
+    warehouse = _warehouse_row(conn, warehouse_id)
+    if not warehouse or (warehouse["status"] or "active") != "active":
+        raise ValueError("成品入库仓库不存在或已停用")
+    if int(warehouse["store_id"] or 0) not in (0, store_id):
+        raise ValueError("成品入库仓库不属于当前门店")
+
+    product = _finished_product_row(conn, product_id)
+    if not product:
+        raise ValueError("成品商品不存在或已停用")
+
+    product_warehouse_id = product["warehouse_id"]
+    if product_warehouse_id not in (None, "") and int(product_warehouse_id) != warehouse_id:
+        raise ValueError("成品商品不属于所选成品仓库")
+
+    product_store_ids = _decode_ids(product["store_ids"])
+    if product_store_ids and store_id not in product_store_ids:
+        raise ValueError("成品商品不属于当前门店")
+
+    return {
+        "warehouse_id": warehouse_id,
+        "warehouse_name": warehouse["name"] or "",
+        "product_id": product_id,
+        "product_code": product["code"] or "",
+        "product_name": product["name"] or "",
+        "product_specification": product["specification"] or "",
+        "product_unit": product["unit_name"] or "",
+        "quantity": quantity,
+        "remark": remark,
+    }
+
+
 def _location_rows(conn):
     stores = [
         dict(row)
@@ -278,6 +378,17 @@ def _serialize_document(conn, row, include_items=True):
     document["createdAt"] = document.pop("created_at", "") or ""
     document["auditedBy"] = document.pop("audited_by", "") or ""
     document["auditedAt"] = document.pop("audited_at", None)
+    document["finishedInboundId"] = document.pop("finished_inbound_id", None)
+    document["finishedProductId"] = document.pop("finished_product_id", None)
+    document["finishedProductCode"] = document.pop("finished_product_code", "") or ""
+    document["finishedProductName"] = document.pop("finished_product_name", "") or ""
+    document["finishedProductSpecification"] = (
+        document.pop("finished_product_specification", "") or ""
+    )
+    document["finishedProductUnit"] = document.pop("finished_product_unit", "") or ""
+    document["finishedWarehouseId"] = document.pop("finished_warehouse_id", None)
+    document["finishedWarehouseName"] = document.pop("finished_warehouse_name", "") or ""
+    document["finishedRemark"] = document.pop("finished_remark", "") or ""
     document["updatedAt"] = document.pop("updated_at", None)
     if include_items:
         items = conn.execute(
@@ -349,12 +460,10 @@ def _resolve_draft_values(conn, data, existing=None):
         "producedQuantity",
         data.get("produced", existing.get("produced_quantity")),
     )
-    if produced_value in (None, ""):
-        raise ValueError("请输入成品数量")
-    produced_quantity = _positive_number(
-        produced_value,
-        "成品数量",
-        allow_zero=True,
+    produced_quantity = (
+        0
+        if produced_value in (None, "")
+        else _positive_number(produced_value, "成品数量", allow_zero=True)
     )
     available = conn.execute(
         """
@@ -584,6 +693,226 @@ def _reverse_inventory(conn, document):
           AND source_document_no = ?
         """,
         (document["id"], document["document_no"]),
+    )
+
+
+def _post_finished_inventory(conn, inbound, item, quantity, store_id, warehouse_id):
+    now = _now()
+    conn.execute(
+        """
+        INSERT INTO stock_balances (
+            product_type, product_id, warehouse_id, store_id,
+            bin_code, batch_no, quantity, updated_at
+        ) VALUES ('finished-product', ?, ?, ?, '', '', ?, ?)
+        ON CONFLICT(product_type, product_id, warehouse_id, store_id, bin_code, batch_no)
+        DO UPDATE SET quantity = stock_balances.quantity + excluded.quantity,
+                      updated_at = excluded.updated_at
+        """,
+        (item["product_id"], warehouse_id, store_id, quantity, now),
+    )
+    conn.execute(
+        """
+        INSERT INTO stock_movements (
+            movement_type, receipt_type, source_document_id,
+            source_document_no, source_item_id, product_type,
+            product_id, warehouse_id, store_id, bin_code, batch_no,
+            quantity, unit_price, tax_rate, total_amount, created_at
+        ) VALUES (
+            'in', 'finished-product', ?, ?, ?, 'finished-product',
+            ?, ?, ?, '', '', ?, NULL, 0, 0, ?
+        )
+        """,
+        (
+            inbound["id"],
+            inbound["document_no"],
+            item["id"],
+            item["product_id"],
+            warehouse_id,
+            store_id,
+            quantity,
+            now,
+        ),
+    )
+    conn.execute(
+        """
+        INSERT INTO inventory (product_id, stock, min_stock, max_stock, updated_at)
+        VALUES (?, ?, 0, 0, ?)
+        ON CONFLICT(product_id) DO UPDATE SET
+            stock = COALESCE(inventory.stock, 0) + excluded.stock,
+            updated_at = excluded.updated_at
+        """,
+        (item["product_id"], quantity, now),
+    )
+
+
+def _create_finished_inbound(conn, document, values):
+    now = _now()
+    temporary_no = (
+        f"TEMP-FINISHED-{document['id']}-"
+        f"{now.replace('-', '').replace(':', '').replace(' ', '')}"
+    )
+    cursor = conn.execute(
+        """
+        INSERT INTO stock_inbounds (
+            document_no, document_date, receipt_type, store_id, warehouse_id,
+            supplier_id, workshop, inspector, quality_no, remark, attachments,
+            status, total_quantity, total_tax, total_amount, posted_at,
+            created_at, updated_at
+        ) VALUES (?, ?, 'finished-product', ?, ?, NULL, '', ?, '', ?, '[]',
+                  'reviewed', ?, 0, 0, ?, ?, ?)
+        """,
+        (
+            temporary_no,
+            document["document_date"],
+            document["store_id"],
+            values["warehouse_id"],
+            _operator(conn),
+            values["remark"],
+            values["quantity"],
+            now,
+            now,
+            now,
+        ),
+    )
+    inbound_id = cursor.lastrowid
+    document_no = (
+        f"SCRK{str(document['document_date']).replace('-', '')[:8]}"
+        f"{inbound_id:04d}"
+    )
+    conn.execute(
+        "UPDATE stock_inbounds SET document_no = ? WHERE id = ?",
+        (document_no, inbound_id),
+    )
+    item_cursor = conn.execute(
+        """
+        INSERT INTO stock_inbound_items (
+            inbound_id, line_no, product_type, product_id, warehouse_id,
+            product_code, product_name, specification, unit, expected_qty,
+            received_qty, bin_code, batch_no, unit_price, tax_rate,
+            tax_amount, total_amount, remark
+        ) VALUES (?, 1, 'finished-product', ?, ?, ?, ?, ?, ?, NULL, ?,
+                   '', '', NULL, 0, 0, 0, ?)
+        """,
+        (
+            inbound_id,
+            values["product_id"],
+            values["warehouse_id"],
+            values["product_code"],
+            values["product_name"],
+            values["product_specification"],
+            values["product_unit"],
+            values["quantity"],
+            values["remark"],
+        ),
+    )
+    inbound = conn.execute(
+        "SELECT * FROM stock_inbounds WHERE id = ?",
+        (inbound_id,),
+    ).fetchone()
+    item = conn.execute(
+        "SELECT * FROM stock_inbound_items WHERE id = ?",
+        (item_cursor.lastrowid,),
+    ).fetchone()
+    _post_finished_inventory(
+        conn,
+        inbound,
+        item,
+        values["quantity"],
+        document["store_id"],
+        values["warehouse_id"],
+    )
+    return inbound
+
+
+def _reverse_finished_inbound(conn, document):
+    inbound_id = document["finished_inbound_id"]
+    if not inbound_id:
+        return
+
+    inbound = conn.execute(
+        "SELECT * FROM stock_inbounds WHERE id = ?",
+        (inbound_id,),
+    ).fetchone()
+    if not inbound:
+        raise ValueError("关联的成品入库单不存在")
+
+    movements = conn.execute(
+        """
+        SELECT * FROM stock_movements
+        WHERE movement_type = 'in'
+          AND receipt_type = 'finished-product'
+          AND source_document_id = ?
+        ORDER BY id
+        """,
+        (inbound_id,),
+    ).fetchall()
+    if not movements:
+        raise ValueError("关联的成品入库单没有库存流水")
+
+    now = _now()
+    for movement in movements:
+        quantity = float(movement["quantity"] or 0)
+        balance = conn.execute(
+            """
+            SELECT quantity FROM stock_balances
+            WHERE product_type = ? AND product_id = ? AND warehouse_id = ?
+              AND store_id = ? AND bin_code = ? AND batch_no = ?
+            """,
+            (
+                movement["product_type"],
+                movement["product_id"],
+                movement["warehouse_id"],
+                movement["store_id"],
+                movement["bin_code"] or "",
+                movement["batch_no"] or "",
+            ),
+        ).fetchone()
+        if not balance or float(balance["quantity"] or 0) + _QUANTITY_EPSILON < quantity:
+            raise ValueError("当前成品库存不足，无法反审核")
+        conn.execute(
+            """
+            UPDATE stock_balances
+            SET quantity = quantity - ?, updated_at = ?
+            WHERE product_type = ? AND product_id = ? AND warehouse_id = ?
+              AND store_id = ? AND bin_code = ? AND batch_no = ?
+            """,
+            (
+                quantity,
+                now,
+                movement["product_type"],
+                movement["product_id"],
+                movement["warehouse_id"],
+                movement["store_id"],
+                movement["bin_code"] or "",
+                movement["batch_no"] or "",
+            ),
+        )
+        conn.execute(
+            """
+            UPDATE inventory
+            SET stock = COALESCE(stock, 0) - ?, updated_at = ?
+            WHERE product_id = ?
+            """,
+            (quantity, now, movement["product_id"]),
+        )
+
+    conn.execute(
+        """
+        DELETE FROM stock_movements
+        WHERE movement_type = 'in'
+          AND receipt_type = 'finished-product'
+          AND source_document_id = ?
+        """,
+        (inbound_id,),
+    )
+    conn.execute("DELETE FROM stock_balances WHERE ABS(quantity) < 0.0000001")
+    conn.execute(
+        """
+        UPDATE stock_inbounds
+        SET status = 'cancelled', posted_at = NULL, updated_at = ?
+        WHERE id = ?
+        """,
+        (now, inbound_id),
     )
 
 
@@ -891,6 +1220,7 @@ def update_material_outbound(outbound_id):
     ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["material_outbound"],
 )
 def audit_material_outbound(outbound_id):
+    data = request.get_json(silent=True) or {}
     try:
         with _write_lock:
             with get_db() as conn:
@@ -932,17 +1262,43 @@ def audit_material_outbound(outbound_id):
                 ).fetchall()
                 if not items:
                     raise ValueError("出库单没有原材料明细")
+                finished_values = _resolve_finished_audit_values(conn, document, data)
                 for item in items:
                     _post_inventory(conn, document, item)
+                finished_inbound = _create_finished_inbound(
+                    conn,
+                    document,
+                    finished_values,
+                )
                 now = _now()
                 conn.execute(
                     """
                     UPDATE material_outbounds SET
                         status = 'reviewed', audited_by = ?,
-                        audited_at = ?, updated_at = ?
+                        audited_at = ?, produced_quantity = ?,
+                        finished_inbound_id = ?, finished_product_id = ?,
+                        finished_product_code = ?, finished_product_name = ?,
+                        finished_product_specification = ?, finished_product_unit = ?,
+                        finished_warehouse_id = ?, finished_warehouse_name = ?,
+                        finished_remark = ?, updated_at = ?
                     WHERE id = ?
                     """,
-                    (_operator(conn), now, now, outbound_id),
+                    (
+                        _operator(conn),
+                        now,
+                        finished_values["quantity"],
+                        finished_inbound["id"],
+                        finished_values["product_id"],
+                        finished_values["product_code"],
+                        finished_values["product_name"],
+                        finished_values["product_specification"],
+                        finished_values["product_unit"],
+                        finished_values["warehouse_id"],
+                        finished_values["warehouse_name"],
+                        finished_values["remark"],
+                        now,
+                        outbound_id,
+                    ),
                 )
                 updated = conn.execute(
                     "SELECT * FROM material_outbounds WHERE id = ?",
@@ -958,8 +1314,10 @@ def audit_material_outbound(outbound_id):
                 return jsonify(
                     {
                         "success": True,
-                        "message": "审核成功，原材料库存已按先进先出扣减",
+                        "message": "审核成功，原材料已出库，成品已入库",
                         "materialOutbound": material_outbound,
+                        "finishedInboundId": finished_inbound["id"],
+                        "finishedInboundNo": finished_inbound["document_no"],
                     }
                 )
     except ValueError as exc:
@@ -992,6 +1350,7 @@ def reverse_audit_material_outbound(outbound_id):
                     return jsonify(
                         {"success": False, "message": "当前单据未审核"}
                     ), 409
+                _reverse_finished_inbound(conn, document)
                 _reverse_inventory(conn, document)
                 now = _now()
                 conn.execute(

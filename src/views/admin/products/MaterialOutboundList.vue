@@ -154,7 +154,15 @@
                 {{ formatNumber(record.totalQuantity) }}
                 <small>{{ record.primaryItem?.unit || '' }}</small>
               </td>
-              <td class="number">{{ formatNumber(record.producedQuantity) }} kg</td>
+              <td class="number">
+                <div class="finished-cell">
+                  <strong>
+                    {{ formatNumber(record.producedQuantity) }}
+                    {{ record.finishedProductUnit || 'kg' }}
+                  </strong>
+                  <small>{{ record.finishedProductName || '待审核补充成品' }}</small>
+                </div>
+              </td>
               <td class="remark-cell" :title="record.remark">{{ record.remark || '-' }}</td>
               <td>{{ record.createdBy || '-' }}</td>
               <td>
@@ -201,6 +209,13 @@
         </table>
       </div>
     </section>
+
+    <MaterialOutboundAuditModal
+      :visible="Boolean(auditRecord)"
+      :record="auditRecord"
+      @close="auditRecord = null"
+      @audited="handleAuditSuccess"
+    />
 
     <teleport to="body">
       <div v-if="settingsVisible" class="modal-layer" @click.self="settingsVisible = false">
@@ -372,7 +387,7 @@
               <span :class="['status-badge', `status-${detailRecord.status}`]">
                 {{ statusLabel(detailRecord.status) }}
               </span>
-              <span>审核后才会扣减原材料库存</span>
+              <span>审核后扣减原材料库存，并完成成品入库</span>
             </div>
             <dl class="detail-grid">
               <div><dt>门店</dt><dd>{{ detailRecord.storeName || '-' }}</dd></div>
@@ -383,7 +398,15 @@
                 <dt>出库数量</dt>
                 <dd>{{ formatNumber(detailRecord.totalQuantity) }} {{ detailRecord.primaryItem?.unit }}</dd>
               </div>
-              <div><dt>成品数量</dt><dd>{{ formatNumber(detailRecord.producedQuantity) }} kg</dd></div>
+              <div>
+                <dt>成品数量</dt>
+                <dd>
+                  {{ formatNumber(detailRecord.producedQuantity) }}
+                  {{ detailRecord.finishedProductUnit || 'kg' }}
+                </dd>
+              </div>
+              <div><dt>成品商品</dt><dd>{{ detailRecord.finishedProductName || '尚未补充' }}</dd></div>
+              <div><dt>成品仓库</dt><dd>{{ detailRecord.finishedWarehouseName || '尚未补充' }}</dd></div>
               <div class="wide"><dt>备注标签</dt><dd>{{ detailRecord.remark || '无' }}</dd></div>
               <div class="wide">
                 <dt>审核信息</dt>
@@ -454,6 +477,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import request from '@/api/request'
+import MaterialOutboundAuditModal from '@/components/admin/MaterialOutboundAuditModal.vue'
 
 const loading = ref(false)
 const loadError = ref('')
@@ -486,6 +510,7 @@ const settingsForm = reactive({
   allowInsufficientDraft: true
 })
 const detailRecord = ref(null)
+const auditRecord = ref(null)
 const pendingAction = ref(null)
 const actionLoading = ref(false)
 
@@ -698,7 +723,20 @@ const openDetail = record => {
 }
 
 const requestAction = (type, record) => {
+  if (type === 'audit') {
+    detailRecord.value = null
+    pendingAction.value = null
+    auditRecord.value = record
+    return
+  }
   pendingAction.value = { type, record }
+}
+
+const handleAuditSuccess = async () => {
+  auditRecord.value = null
+  detailRecord.value = null
+  await loadData()
+  window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
 }
 
 const executeAction = async () => {
@@ -1186,6 +1224,25 @@ th:nth-child(11) { width: 166px; }
 .quantity small {
   color: #7a8698;
   font-weight: 500;
+}
+
+.finished-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.finished-cell strong,
+.finished-cell small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.finished-cell small {
+  color: #7a8698;
+  font-size: 11px;
+  text-align: right;
 }
 
 .muted,

@@ -64,7 +64,7 @@
               </label>
 
               <label class="touch-field produced-field">
-                <span>成品数量（kg）</span>
+                <span>成品数量（kg，可选）</span>
                 <input
                   id="materialInputProduct"
                   v-model="producedValue"
@@ -254,8 +254,8 @@ const handleSubmit = async () => {
     setActiveTarget('used')
     return
   }
-  if (producedValue.value === '' || !Number.isFinite(produced) || produced < 0) {
-    submitError.value = '请输入有效的成品数量。'
+  if (producedValue.value !== '' && (!Number.isFinite(produced) || produced < 0)) {
+    submitError.value = '成品数量必须是有效的非负数字。'
     setActiveTarget('produced')
     return
   }
@@ -268,7 +268,7 @@ const handleSubmit = async () => {
       data: {
         productId: settings.value.defaultProductId,
         quantity: used,
-        producedQuantity: produced,
+        producedQuantity: producedValue.value === '' ? null : produced,
         remark: remarkValue.value.trim()
       }
     })
@@ -277,7 +277,7 @@ const handleSubmit = async () => {
       documentNo ? `单号：${documentNo}` : '',
       `原材料：${currentProduct.value?.name || '-'}`,
       `出库数量：${formatNumber(used)} ${currentProduct.value?.unit || ''}`,
-      `成品数量：${formatNumber(produced)} kg`,
+      producedValue.value === '' ? '成品数量：待后台审核补充' : `成品数量：${formatNumber(produced)} kg`,
       '当前状态：待审核（尚未扣减库存）'
     ].filter(Boolean).join('\n')
     showSuccess.value = true

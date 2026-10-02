@@ -2560,7 +2560,8 @@ receipt_image: File (图片文件)
   - `endDate`: 结束日期
   - `limit`: 返回数量，最大 1000
 
-每张单据包含门店、仓库、原材料快照、出库数量、成品数量、备注、录入人、审核人与审核时间。
+每张单据包含门店、原材料出库仓库、原材料快照、出库数量、触屏备注、录入人、审核人与审核时间。
+审核完成后还会返回成品入库单号、成品商品、成品仓库、成品入库数量和成品入库备注。
 
 #### 8.3.1 原材料出库实时事件
 - **URL**: `/api/material-outbounds/events`
@@ -2580,24 +2581,41 @@ receipt_image: File (图片文件)
 {
   "productId": 3,
   "quantity": 50,
-  "producedQuantity": 120,
+  "producedQuantity": null,
   "remark": "粘钢胶"
 }
 ```
 
-门店和仓库以提交时的触屏设置为准，并保存名称快照。新备注会自动进入出库备注标签表。
+门店和仓库以提交时的触屏设置为准，并保存名称快照。`producedQuantity` 可暂不填写，
+此时由后台审核窗口补充成品商品、成品仓库和成品入库数量。新备注会自动进入出库备注标签表。
 
 ### 8.5 审核原材料出库单
 - **URL**: `/api/material-outbounds/<int:outbound_id>/audit`
 - **Method**: `POST`
-- **说明**: 在同一事务内校验实时库存、按 FIFO 扣减 `stock_balances`、写入 `stock_movements`，并将状态更新为 `reviewed`
+- **请求体**:
 
-库存不足时返回 `409`，单据继续保持草稿状态。
+```json
+{
+  "finishedWarehouseId": 5,
+  "finishedProductId": 18,
+  "finishedQuantity": 120,
+  "finishedRemark": "棒棒糖"
+}
+```
+
+- **说明**: 审核窗口需要补齐成品入库仓库、成品商品和成品入库数量；成品备注默认沿用触屏端备注。
+  后端在同一事务内校验实时原材料库存、按 FIFO 扣减 `stock_balances`、写入原材料出库流水，
+  自动创建一张 `finished-product` 类型的已审核成品入库单、写入成品库存余额和入库流水，
+  最后将原材料出库单状态更新为 `reviewed`。
+
+成品仓库必须是当前门店可用仓库，成品商品必须启用，并且商品配置了门店或仓库范围时必须匹配所选范围。
+库存不足或成品信息不完整时返回 `409`，单据继续保持草稿状态，不会提交部分库存变更。
 
 ### 8.6 反审核原材料出库单
 - **URL**: `/api/material-outbounds/<int:outbound_id>/audit`
 - **Method**: `DELETE`
-- **说明**: 按原出库流水回补对应批次和库位，并将状态恢复为 `draft`
+- **说明**: 先回退审核时自动创建的成品入库库存和流水，再按原出库流水回补原材料对应批次和库位，
+  将关联成品入库单标记为 `cancelled`，最后将原材料出库单状态恢复为 `draft`。
 
 ### 8.7 作废、删除与重新启用
 
@@ -3631,7 +3649,8 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 | `totalAmount` | number/null | 入库金额合计；出库流水返回 `null` |
 | `batchNos` | string | 本单涉及的库存批次，多个批次使用逗号连接 |
 
-原材料库存明细页面将出库备注显示为 `remark · producedQuantity公斤`。由于 FIFO 出库可能从多个批次扣减，本接口会把同一出库单产生的多条批次流水聚合为一条，避免页面重复显示同一单据。
+原材料库存明细页面将出库备注显示为 `remark · producedQuantity`。由于 FIFO 出库可能从多个批次扣减，
+本接口会把同一出库单产生的多条批次流水聚合为一条，避免页面重复显示同一单据。
 
 `productId` 缺失时返回 HTTP `400`；`type` 无效时同样返回 HTTP `400`。
 
