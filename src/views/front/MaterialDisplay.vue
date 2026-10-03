@@ -12,14 +12,17 @@
     <section v-for="group in materialGroups" v-else :key="group.date" class="timeline-group">
       <div class="timeline-date">{{ group.date }}</div>
       <div class="timeline-items">
-        <article v-for="record in group.records" :key="record.id" class="material-card">
+        <article v-for="record in group.records" :key="record.displayKey" class="material-card">
           <div class="card-header">
-            <span class="card-document-no" :title="record.documentNo || '-'">
-              {{ record.documentNo || '-' }}
+            <span class="card-document-no" :title="record.parentDocumentNo || '-'">
+              {{ record.displayDocumentNo || '-' }}
+            </span>
+            <span v-if="record.isMultiItem" class="line-count">
+              同单据 {{ record.itemCount }} 条
             </span>
             <span
               v-if="record.stockCalculation"
-              class="stock-calculation"
+              :class="['stock-calculation', `stock-calculation-${statusClass(record.status)}`]"
               :title="record.stockCalculation"
             >
               {{ record.stockCalculation }}
@@ -34,26 +37,29 @@
 
           <div class="card-main">
             <div class="material-name">
-              <span class="column-label">{{ record.primaryItem?.productCode || '原材料' }}</span>
-              <strong>{{ record.primaryItem?.productName || '-' }}</strong>
+              <span class="column-label">{{ record.displayItem?.productCode || '原材料' }}</span>
+              <strong>{{ record.displayItem?.productName || '-' }}</strong>
             </div>
 
             <div class="quantity-block used">
               <span class="column-label">出库数量</span>
               <strong>
-                {{ formatNumber(record.totalQuantity) }}
-                <small>{{ record.primaryItem?.unit || '' }}</small>
+                {{ formatNumber(record.displayQuantity) }}
+                <small>{{ record.displayItem?.unit || '' }}</small>
               </strong>
             </div>
 
             <div class="finished-name">
               <span class="column-label">成品名称</span>
-              <strong>{{ record.remark || '-' }}</strong>
+              <strong>{{ record.displayFinishedName || '-' }}</strong>
             </div>
 
             <div class="quantity-block produced">
               <span class="column-label">成品数量</span>
-              <strong>{{ formatNumber(record.producedQuantity) }} <small>kg</small></strong>
+              <strong>
+                {{ formatNumber(record.displayProducedQuantity) }}
+                <small>{{ record.displayItem?.finishedProductUnit || 'kg' }}</small>
+              </strong>
             </div>
 
             <div class="record-creator">
@@ -64,11 +70,11 @@
               </div>
             </div>
 
-            <div class="quantity-block stock-balance">
+            <div :class="['quantity-block', 'stock-balance', `stock-balance-${statusClass(record.status)}`]">
               <span class="column-label">{{ stockLabel(record.status) }}</span>
               <strong>
                 {{ record.remainingStockKnown ? formatNumber(record.remainingStock) : '-' }}
-                <small v-if="record.primaryItem?.unit">{{ record.primaryItem.unit }}</small>
+                <small v-if="record.displayItem?.unit">{{ record.displayItem.unit }}</small>
               </strong>
             </div>
           </div>
@@ -124,6 +130,53 @@ const recordSortValue = record => (
   `${record.documentDate || ''} ${record.createdAt || ''} ${String(record.id || '').padStart(12, '0')}`
 )
 
+const normalizeRecordItems = record => {
+  const items = Array.isArray(record.items)
+    ? record.items.filter(Boolean)
+    : []
+
+  if (items.length > 0) return items
+  if (record.primaryItem) return [record.primaryItem]
+  return [null]
+}
+
+const materialDisplayRecords = computed(() => records.value.flatMap(record => {
+  const items = normalizeRecordItems(record)
+  const isMultiItem = items.length > 1
+  const parentDocumentNo = record.documentNo || '-'
+
+  return items.map((item, index) => {
+    const lineNo = Number(item?.lineNo) > 0 ? Number(item.lineNo) : index + 1
+    const lineSuffix = String(lineNo).padStart(2, '0')
+
+    return {
+      ...record,
+      displayKey: `${record.id || parentDocumentNo}-${lineNo}-${index}`,
+      displayDocumentNo: isMultiItem
+        ? `${parentDocumentNo}-${lineSuffix}`
+        : parentDocumentNo,
+      parentDocumentNo,
+      displayItem: item,
+      displayQuantity: item?.quantity ?? record.totalQuantity,
+      displayProducedQuantity: item?.finishedQuantity ?? record.producedQuantity,
+      displayFinishedName: (
+        item?.finishedProductName
+        || record.finishedProductName
+        || record.remark
+      ),
+      lineNo,
+      itemCount: items.length,
+      isMultiItem
+    }
+  })
+}))
+
+const compareDisplayRecords = (left, right) => {
+  const parentOrder = recordSortValue(right).localeCompare(recordSortValue(left))
+  if (parentOrder !== 0) return parentOrder
+  return Number(left.lineNo || 0) - Number(right.lineNo || 0)
+}
+
 const inventoryKey = (productId, warehouseId, storeId) => (
   [productId, warehouseId, storeId].map(value => String(value ?? '')).join(':')
 )
@@ -142,10 +195,10 @@ const stockBalanceMap = computed(() => {
 const materialRecordsWithStock = computed(() => {
   const runningDrafts = new Map()
 
-  return [...records.value]
-    .sort((left, right) => recordSortValue(right).localeCompare(recordSortValue(left)))
+  return [...materialDisplayRecords.value]
+    .sort(compareDisplayRecords)
     .map(record => {
-      const item = record.primaryItem
+      const item = record.displayItem
       const productId = item?.productId
       const key = inventoryKey(productId, record.warehouseId, record.storeId)
       const hasProduct = productId !== null && productId !== undefined && productId !== ''
@@ -202,7 +255,7 @@ const materialGroups = computed(() => {
     .sort(([left], [right]) => right.localeCompare(left))
     .map(([date, items]) => ({
       date,
-      records: items.sort((left, right) => recordSortValue(right).localeCompare(recordSortValue(left)))
+      records: items.sort(compareDisplayRecords)
     }))
 })
 
@@ -446,15 +499,32 @@ defineExpose({ refresh: fetchRecords })
   white-space: nowrap;
 }
 
+.line-count {
+  flex: 0 0 auto;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .stock-calculation {
   min-width: 0;
   overflow: hidden;
-  color: #08745a;
+  color: #2563eb;
   font-size: 12px;
   font-weight: 750;
   line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.stock-calculation-draft {
+  color: #d92d20;
+}
+
+.stock-calculation-reviewed,
+.stock-calculation-cancelled {
+  color: #2563eb;
 }
 
 .status-ribbon {
@@ -561,7 +631,22 @@ defineExpose({ refresh: fetchRecords })
 }
 
 .stock-balance strong {
-  color: #08745a;
+  color: #2563eb;
+}
+
+.stock-balance-draft .column-label,
+.stock-balance-draft strong {
+  color: #d92d20;
+}
+
+.stock-balance-reviewed .column-label,
+.stock-balance-cancelled .column-label {
+  color: #172033;
+}
+
+.stock-balance-reviewed strong,
+.stock-balance-cancelled strong {
+  color: #2563eb;
 }
 
 .quantity-block strong small {
@@ -652,6 +737,10 @@ defineExpose({ refresh: fetchRecords })
   .card-document-no {
     max-width: 42%;
     font-size: 12px;
+  }
+
+  .line-count {
+    font-size: 10px;
   }
 
   .stock-calculation {
