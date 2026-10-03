@@ -96,10 +96,13 @@
             <span>{{ tab.count }}</span>
           </button>
         </div>
-        <div class="config-summary">
-          <span :class="{ configured: settings.configured }"></span>
-          {{ settings.configured ? configSummary : '触屏端尚未配置' }}
-        </div>
+        <button
+          type="button"
+          class="button primary create-outbound-button"
+          @click="openCreateOutbound"
+        >
+          录入出库单
+        </button>
       </header>
 
       <div v-if="loadError" class="load-error">{{ loadError }}</div>
@@ -217,7 +220,8 @@
     <MaterialOutboundAuditModal
       :visible="Boolean(auditRecord)"
       :record="auditRecord"
-      @close="auditRecord = null"
+      :mode="auditMode"
+      @close="closeAuditModal"
       @updated="handleEditSuccess"
     />
 
@@ -564,6 +568,7 @@ const settingsForm = reactive({
 })
 const detailRecord = ref(null)
 const auditRecord = ref(null)
+const auditMode = ref('edit')
 const pendingAction = ref(null)
 const actionLoading = ref(false)
 const auditSlideVisible = ref(false)
@@ -649,17 +654,6 @@ const availableWarehouses = computed(() => settings.value.warehouses.filter(ware
 const selectedProducts = computed(() => settings.value.products.filter(product => (
   settingsForm.allowedProductIds.some(id => String(id) === String(product.id))
 )))
-
-const configSummary = computed(() => {
-  const store = settings.value.stores.find(item => String(item.id) === String(settings.value.defaultStoreId))
-  const warehouse = settings.value.warehouses.find(
-    item => String(item.id) === String(settings.value.defaultWarehouseId)
-  )
-  const product = settings.value.products.find(
-    item => String(item.id) === String(settings.value.defaultProductId)
-  )
-  return `${store?.name || '-'} / ${warehouse?.name || '-'} / ${product?.name || '-'}`
-})
 
 const actionCopy = computed(() => {
   const record = pendingAction.value?.record
@@ -829,6 +823,15 @@ const openDetail = record => {
   detailRecord.value = record
 }
 
+const openCreateOutbound = () => {
+  closeAuditSlider()
+  detailActionError.value = ''
+  pendingAction.value = null
+  detailRecord.value = null
+  auditMode.value = 'create'
+  auditRecord.value = { source: 'admin' }
+}
+
 const requestAction = (type, record) => {
   if (type === 'audit') {
     pendingAction.value = null
@@ -840,10 +843,16 @@ const requestAction = (type, record) => {
     closeAuditSlider()
     detailRecord.value = null
     pendingAction.value = null
+    auditMode.value = 'edit'
     auditRecord.value = record
     return
   }
   pendingAction.value = { type, record }
+}
+
+const closeAuditModal = () => {
+  auditRecord.value = null
+  auditMode.value = 'edit'
 }
 
 const closeDetail = () => {
@@ -854,7 +863,7 @@ const closeDetail = () => {
 }
 
 const handleEditSuccess = async response => {
-  auditRecord.value = null
+  closeAuditModal()
   const updatedRecord = response?.materialOutbound || response
   await loadData()
   if (updatedRecord?.id) {
@@ -1351,28 +1360,9 @@ select:focus-visible {
   text-align: center;
 }
 
-.config-summary {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
-  overflow: hidden;
-  color: #7a8698;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.config-summary > span {
-  width: 8px;
-  height: 8px;
+.create-outbound-button {
   flex: 0 0 auto;
-  background: #f59e0b;
-  border-radius: 50%;
-}
-
-.config-summary > span.configured {
-  background: var(--accent);
+  margin-left: auto;
 }
 
 .load-error,

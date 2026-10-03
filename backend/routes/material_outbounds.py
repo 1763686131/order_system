@@ -699,6 +699,105 @@ def _resolve_draft_items(conn, data, values, settings):
     return items
 
 
+def _resolve_admin_document_values(conn, data):
+    store_id = _optional_int(data.get("storeId"), "门店")
+    warehouse_id = _optional_int(data.get("warehouseId"), "仓库")
+    if not store_id or not warehouse_id:
+        raise ValueError("请选择门店和出库仓库")
+
+    store = conn.execute(
+        """
+        SELECT id, name, status
+        FROM stores
+        WHERE id = ?
+        """,
+        (store_id,),
+    ).fetchone()
+    warehouse = _warehouse_row(conn, warehouse_id)
+    if not store or (store["status"] or "active") != "active":
+        raise ValueError("所选门店不存在或已停用")
+    if not warehouse or (warehouse["status"] or "active") != "active":
+        raise ValueError("所选出库仓库不存在或已停用")
+    if int(warehouse["store_id"] or 0) not in (0, store_id):
+        raise ValueError("出库仓库不属于当前门店")
+
+    return {
+        "store_id": store_id,
+        "store_name": store["name"] or "",
+        "warehouse_id": warehouse_id,
+        "warehouse_name": warehouse["name"] or "",
+        "remark": _text(data.get("remark"), 200),
+    }
+
+
+def _resolve_admin_items(conn, data, values, settings):
+    payloads = data.get("items")
+    if not isinstance(payloads, list):
+        payloads = []
+    payloads = [
+        payload if isinstance(payload, dict) else {}
+        for payload in payloads
+        if isinstance(payload, dict)
+    ]
+    if not payloads:
+        raise ValueError("至少填写一条原材料明细")
+
+    items = []
+    requested_by_stock = {}
+    for index, payload in enumerate(payloads):
+        product_id = _optional_int(
+            _present_value(payload, ("productId", "product_id")),
+            "原材料商品",
+        )
+        if not product_id:
+            raise ValueError(f"第 {index + 1} 行请选择原材料商品")
+        product = _product_row(conn, product_id)
+        if not product:
+            raise ValueError(f"第 {index + 1} 行原材料不存在或已停用")
+
+        quantity = _positive_number(
+            _present_value(payload, ("quantity", "used")),
+            f"第 {index + 1} 行原材料出库数量",
+        )
+        remark = _text(
+            _present_value(payload, ("remark",), values["remark"]),
+            200,
+        )
+        stock_key = (product_id, values["warehouse_id"], values["store_id"])
+        requested_by_stock[stock_key] = (
+            requested_by_stock.get(stock_key, 0) + quantity
+        )
+        items.append(
+            {
+                "product_id": product_id,
+                "product_code": product["code"] or "",
+                "product_name": product["name"] or "",
+                "specification": product["specification"] or "",
+                "unit": product["unit_name"] or "",
+                "quantity": quantity,
+                "remark": remark,
+            }
+        )
+
+    if not bool(settings["allow_insufficient_draft"]):
+        for (product_id, warehouse_id, store_id), requested in requested_by_stock.items():
+            available = conn.execute(
+                """
+                SELECT COALESCE(SUM(quantity), 0) AS quantity
+                FROM stock_balances
+                WHERE product_type = 'raw-material'
+                  AND product_id = ? AND warehouse_id = ? AND store_id = ?
+                """,
+                (product_id, warehouse_id, store_id),
+            ).fetchone()["quantity"]
+            if float(available or 0) + _QUANTITY_EPSILON < requested:
+                raise ValueError(
+                    f"原材料库存不足，可用库存为 {float(available or 0):g}"
+                )
+
+    return items
+
+
 def _save_remark_tag(conn, remark):
     if not remark:
         return
@@ -766,6 +865,94 @@ def _insert_draft(conn, values):
     )
     _save_remark_tag(conn, values["remark"])
     return outbound_id, item_cursor.lastrowid
+
+
+def _insert_admin_draft(conn, values, items, finished_items, document_date):
+    now = _now()
+    total_quantity = sum(item["quantity"] for item in items)
+    produced_quantity = sum(item["quantity"] for item in finished_items)
+    first_finished = finished_items[0]
+    cursor = conn.execute(
+        """
+        INSERT INTO material_outbounds (
+            document_no, document_date, store_id, store_name,
+            warehouse_id, warehouse_name, status, total_quantity,
+            produced_quantity, remark, source, created_by, created_at, updated_at,
+            finished_product_id, finished_product_code, finished_product_name,
+            finished_product_specification, finished_product_unit,
+            finished_warehouse_id, finished_warehouse_name, finished_remark
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, 'admin', ?, ?, ?,
+            ?, ?, ?, ?, ?, ?, ?, ?
+        )
+        """,
+        (
+            f"TEMP-{now.replace('-', '').replace(':', '').replace(' ', '')}-{threading.get_ident()}",
+            document_date,
+            values["store_id"],
+            values["store_name"],
+            values["warehouse_id"],
+            values["warehouse_name"],
+            total_quantity,
+            produced_quantity,
+            values["remark"],
+            _operator(conn),
+            now,
+            now,
+            first_finished["product_id"],
+            first_finished["product_code"],
+            first_finished["product_name"],
+            first_finished["product_specification"],
+            first_finished["product_unit"],
+            first_finished["warehouse_id"],
+            first_finished["warehouse_name"],
+            first_finished["remark"],
+        ),
+    )
+    outbound_id = cursor.lastrowid
+    document_no = f"YLCK{datetime.now().strftime('%Y%m%d')}{outbound_id:04d}"
+    conn.execute(
+        "UPDATE material_outbounds SET document_no = ? WHERE id = ?",
+        (document_no, outbound_id),
+    )
+
+    for line_no, item in enumerate(items, start=1):
+        finished = finished_items[line_no - 1]
+        conn.execute(
+            """
+            INSERT INTO material_outbound_items (
+                outbound_id, line_no, product_id, product_code,
+                product_name, specification, unit, quantity, remark,
+                finished_product_id, finished_product_code,
+                finished_product_name, finished_product_specification,
+                finished_product_unit, finished_warehouse_id,
+                finished_warehouse_name, finished_quantity, finished_remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                outbound_id,
+                line_no,
+                item["product_id"],
+                item["product_code"],
+                item["product_name"],
+                item["specification"],
+                item["unit"],
+                item["quantity"],
+                item["remark"],
+                finished["product_id"],
+                finished["product_code"],
+                finished["product_name"],
+                finished["product_specification"],
+                finished["product_unit"],
+                finished["warehouse_id"],
+                finished["warehouse_name"],
+                finished["quantity"],
+                finished["remark"],
+            ),
+        )
+        _save_remark_tag(conn, item["remark"])
+
+    return outbound_id
 
 
 def _post_inventory(conn, document, item):
@@ -1274,6 +1461,80 @@ def get_material_outbound(outbound_id):
         if not row:
             return jsonify({"success": False, "message": "原材料出库单不存在"}), 404
         return jsonify(_serialize_document(conn, row))
+
+
+@material_outbounds_bp.route("/material-outbounds/admin", methods=["POST"])
+@require_admin_access
+def create_admin_material_outbound():
+    data = request.get_json(silent=True) or {}
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                document_date = _text(data.get("documentDate", _today()), 10)
+                try:
+                    datetime.strptime(document_date, "%Y-%m-%d")
+                except (TypeError, ValueError):
+                    raise ValueError("单据日期格式应为 YYYY-MM-DD")
+
+                values = _resolve_admin_document_values(conn, data)
+                settings = _settings_row(conn)
+                if not settings:
+                    raise ValueError("原材料出库设置尚未初始化")
+                items = _resolve_admin_items(conn, data, values, settings)
+                item_payloads = data.get("items")
+                document_for_finished = {
+                    "store_id": values["store_id"],
+                    "remark": values["remark"],
+                    "produced_quantity": 0,
+                }
+                finished_items = _resolve_finished_items(
+                    conn,
+                    document_for_finished,
+                    items,
+                    item_payloads,
+                )
+                outbound_id = _insert_admin_draft(
+                    conn,
+                    values,
+                    items,
+                    finished_items,
+                    document_date,
+                )
+                row = conn.execute(
+                    "SELECT * FROM material_outbounds WHERE id = ?",
+                    (outbound_id,),
+                ).fetchone()
+                material_outbound = _serialize_document(conn, row)
+                create_audit_notifications(
+                    conn,
+                    "material_outbound",
+                    outbound_id,
+                    row["document_no"],
+                    f"原材料出库单 {row['document_no']} 已提交，请及时审核。",
+                )
+                conn.commit()
+                broadcast_material_outbound_event(
+                    "created",
+                    outbound=material_outbound,
+                )
+                return jsonify(
+                    {
+                        "success": True,
+                        "message": "原材料出库草稿已保存，等待管理员审核",
+                        "materialOutbound": material_outbound,
+                    }
+                ), 201
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        return jsonify(
+            {
+                "success": False,
+                "message": "保存后台原材料出库草稿失败",
+                "detail": str(exc),
+            }
+        ), 500
 
 
 @material_outbounds_bp.route("/material-outbounds", methods=["POST"])

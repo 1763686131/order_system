@@ -17,7 +17,7 @@
           <div class="top-info-bar">
             <div class="document-title">
               <span class="document-eyebrow">原材料出库</span>
-              <h2 id="materialEditTitle">修改</h2>
+              <h2 id="materialEditTitle">{{ isCreateMode ? '新增录入' : '修改' }}</h2>
             </div>
 
             <div class="header-fields">
@@ -57,7 +57,7 @@
                   </option>
                 </select>
               </label>
-              <label class="info-group material-source-field">
+              <label v-if="!isCreateMode" class="info-group material-source-field">
                 <span>触屏原材料</span>
                 <div class="product-picker">
                   <input
@@ -98,7 +98,7 @@
               </label>
               <label class="info-group document-no-field">
                 <span>单据编号</span>
-                <input :value="record?.documentNo || '-'" type="text" readonly />
+                <input :value="record?.documentNo || (isCreateMode ? '保存后生成' : '-')" type="text" readonly />
               </label>
             </div>
 
@@ -378,15 +378,15 @@
             <div class="finance-row-full">
               <label class="info-group">
                 <span>制单人</span>
-                <input :value="record?.createdBy || '-'" type="text" readonly />
+                <input :value="createdByDisplay" type="text" readonly />
               </label>
               <label class="info-group">
                 <span>制单时间</span>
-                <input :value="record?.createdAt || '-'" type="text" readonly />
+                <input :value="createdAtDisplay" type="text" readonly />
               </label>
               <label class="info-group wide remark-field">
                 <span>备注信息</span>
-                <input :value="primaryRemark || '-'" type="text" readonly />
+                <input :value="primaryRemark" type="text" readonly />
               </label>
               <label class="info-group">
                 <span>修改人</span>
@@ -405,14 +405,14 @@
                 :disabled="saving"
                 @click="cancelEditing"
               >
-                取消修改
+                {{ isCreateMode ? '取消录入' : '取消修改' }}
               </button>
               <button
                 type="submit"
                 class="edit-button primary bottom-edit-button"
                 :disabled="saving || optionsLoading || Boolean(optionsError)"
               >
-                {{ saving ? '保存中...' : (editing ? '保存修改' : '修改') }}
+                {{ saving ? '保存中...' : (isCreateMode ? '保存出库草稿' : (editing ? '保存修改' : '修改')) }}
               </button>
             </div>
           </div>
@@ -430,7 +430,8 @@ import { useUserStore } from '@/stores/user'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
-  record: { type: Object, default: null }
+  record: { type: Object, default: null },
+  mode: { type: String, default: 'edit' }
 })
 
 const emit = defineEmits(['close', 'updated'])
@@ -469,9 +470,19 @@ const errors = reactive({
 const rowErrors = ref([])
 
 const currentUserName = computed(() => userStore.name || userStore.username || '当前操作员')
-const sourceLabel = computed(() => props.record?.source === 'touch'
-  ? '触屏端辅助输入'
-  : (props.record?.source || '-'))
+const isCreateMode = computed(() => props.mode === 'create')
+const sourceLabel = computed(() => {
+  if (isCreateMode.value) return '新增订单来源'
+  return props.record?.source === 'touch'
+    ? '触屏端辅助输入'
+    : (props.record?.source || '-')
+})
+const createdByDisplay = computed(() => (
+  isCreateMode.value ? currentUserName.value : (props.record?.createdBy || '-')
+))
+const createdAtDisplay = computed(() => (
+  isCreateMode.value ? '-' : (props.record?.createdAt || '-')
+))
 const filledRows = computed(() => rows.value.filter(row => (
   row.productId
   || row.productQuery
@@ -571,8 +582,27 @@ const clearErrors = () => {
   formError.value = ''
 }
 
+const localDate = () => {
+  const date = new Date()
+  const offset = date.getTimezoneOffset()
+  return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 10)
+}
+
 const resetForm = () => {
   clearErrors()
+  if (isCreateMode.value) {
+    editing.value = true
+    form.storeId = ''
+    form.warehouseId = ''
+    form.warehouseName = ''
+    form.documentDate = localDate()
+    form.finishedRemark = ''
+    rows.value = [makeRow()]
+    ensureMinimumRows()
+    rawProductQuery.value = ''
+    return
+  }
+
   editing.value = false
   form.storeId = props.record?.storeId ? String(props.record.storeId) : ''
   form.warehouseId = props.record?.warehouseId ? String(props.record.warehouseId) : ''
@@ -592,12 +622,6 @@ const filteredRawProducts = query => {
   const text = String(query || '').trim().toLowerCase()
   return rawProducts.value.filter(product => {
     if (product.enabled === false) return false
-    if (
-      allowedProductIds.value.length
-      && !allowedProductIds.value.some(id => String(id) === String(product.id))
-    ) {
-      return false
-    }
     const storeIds = parseIds(product.storeIds ?? product.store_ids)
     if (storeIds.length && form.storeId && !storeIds.some(id => String(id) === String(form.storeId))) {
       return false
@@ -713,9 +737,12 @@ const loadOptions = async () => {
 }
 
 const initialize = async () => {
-  if (!props.record) return
-  if (initializedRecordId.value !== props.record.id) {
-    initializedRecordId.value = props.record.id
+  const initializationKey = isCreateMode.value
+    ? 'create'
+    : (props.record?.id || null)
+  if (!isCreateMode.value && !props.record) return
+  if (initializedRecordId.value !== initializationKey) {
+    initializedRecordId.value = initializationKey
     resetForm()
   }
   if (!optionsLoaded.value) await loadOptions()
@@ -788,7 +815,12 @@ const removeRow = index => {
 }
 
 const cancelEditing = () => {
-  if (!saving.value) resetForm()
+  if (saving.value) return
+  if (isCreateMode.value) {
+    emit('close')
+    return
+  }
+  resetForm()
 }
 
 const startEditing = () => {
@@ -870,7 +902,7 @@ const requestClose = () => {
 }
 
 const submitChanges = async () => {
-  if (saving.value || !props.record) return
+  if (saving.value || (!props.record && !isCreateMode.value)) return
   if (!editing.value) {
     startEditing()
     return
@@ -880,34 +912,41 @@ const submitChanges = async () => {
   try {
     const activeRows = filledRows.value
     const firstRow = activeRows[0]
+    const payload = {
+      documentDate: form.documentDate,
+      storeId: Number(form.storeId),
+      warehouseId: Number(form.warehouseId),
+      quantity: Number(firstRow?.quantity || 0),
+      productId: Number(firstRow?.productId || 0),
+      remark: primaryRemark.value,
+      items: activeRows.map(row => ({
+        productId: Number(row.productId),
+        quantity: Number(row.quantity),
+        remark: row.remark || primaryRemark.value,
+        finishedProductId: Number(row.finishedProductId),
+        finishedWarehouseId: Number(row.finishedWarehouseId),
+        finishedQuantity: Number(row.finishedQuantity),
+        finishedRemark: row.finishedRemark || row.remark || primaryRemark.value
+      })),
+      finishedProductId: Number(firstRow?.finishedProductId || 0),
+      finishedWarehouseId: Number(firstRow?.finishedWarehouseId || 0),
+      finishedQuantity: Number(firstRow?.finishedQuantity || 0),
+      finishedRemark: firstRow?.finishedRemark || firstRow?.remark || primaryRemark.value
+    }
     const response = await request({
-      url: `/material-outbounds/${props.record.id}`,
-      method: 'PUT',
-      data: {
-        documentDate: form.documentDate,
-        storeId: Number(form.storeId),
-        warehouseId: Number(form.warehouseId),
-        quantity: Number(firstRow?.quantity || 0),
-        productId: Number(firstRow?.productId || 0),
-        remark: primaryRemark.value,
-        items: activeRows.map(row => ({
-          productId: Number(row.productId),
-          quantity: Number(row.quantity),
-          remark: row.remark || primaryRemark.value,
-          finishedProductId: Number(row.finishedProductId),
-          finishedWarehouseId: Number(row.finishedWarehouseId),
-          finishedQuantity: Number(row.finishedQuantity),
-          finishedRemark: row.finishedRemark || row.remark || primaryRemark.value
-        })),
-        finishedProductId: Number(firstRow?.finishedProductId || 0),
-        finishedWarehouseId: Number(firstRow?.finishedWarehouseId || 0),
-        finishedQuantity: Number(firstRow?.finishedQuantity || 0),
-        finishedRemark: firstRow?.finishedRemark || firstRow?.remark || primaryRemark.value
-      }
+      url: isCreateMode.value
+        ? '/material-outbounds/admin'
+        : `/material-outbounds/${props.record.id}`,
+      method: isCreateMode.value ? 'POST' : 'PUT',
+      data: isCreateMode.value ? { ...payload, source: 'admin' } : payload
     })
     emit('updated', response)
   } catch (error) {
-    formError.value = error?.response?.data?.message || '保存修改失败，请检查表单后重试。'
+    formError.value = error?.response?.data?.message || (
+      isCreateMode.value
+        ? '保存出库草稿失败，请检查表单后重试。'
+        : '保存修改失败，请检查表单后重试。'
+    )
   } finally {
     saving.value = false
   }
@@ -927,6 +966,13 @@ watch(
 
 watch(
   () => props.record?.id,
+  () => {
+    if (props.visible) initialize()
+  }
+)
+
+watch(
+  () => props.mode,
   () => {
     if (props.visible) initialize()
   }
