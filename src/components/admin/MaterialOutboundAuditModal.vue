@@ -219,134 +219,156 @@
                     </small>
                   </td>
                   <td>
-                    <input :value="row.productCode || '-'" type="text" readonly aria-label="原材料编码" />
+                    <span v-if="hasMaterial(row)" class="table-cell-value">
+                      {{ row.productCode || '-' }}
+                    </span>
                   </td>
                   <td>
-                    <div class="combined-spec">{{ row.specification || '-' }}</div>
-                    <small class="cell-subtext">{{ row.unit || '-' }}</small>
+                    <template v-if="hasMaterial(row)">
+                      <div class="combined-spec">{{ row.specification || '-' }}</div>
+                      <small class="cell-subtext">{{ row.unit || '-' }}</small>
+                    </template>
                   </td>
                   <td>
-                    <select
-                      v-model="form.warehouseId"
-                      class="table-input"
-                      :disabled="!editing || saving"
-                      aria-label="出库仓库"
-                      @change="syncWarehouse"
-                    >
-                      <option value="">请选择仓库</option>
-                      <option
-                        v-for="warehouse in availableWarehouses"
-                        :key="warehouse.id"
-                        :value="String(warehouse.id)"
+                    <template v-if="hasMaterial(row)">
+                      <select
+                        v-model="form.warehouseId"
+                        class="table-input"
+                        :disabled="!editing || saving"
+                        aria-label="出库仓库"
+                        @change="syncWarehouse"
                       >
-                        {{ warehouse.name }}
-                      </option>
-                    </select>
-                    <small v-if="rowErrors[index]?.warehouseId" class="cell-error">
-                      {{ rowErrors[index].warehouseId }}
-                    </small>
+                        <option value="">请选择仓库</option>
+                        <option
+                          v-for="warehouse in availableWarehouses"
+                          :key="warehouse.id"
+                          :value="String(warehouse.id)"
+                        >
+                          {{ warehouse.name }}
+                        </option>
+                      </select>
+                      <small v-if="rowErrors[index]?.warehouseId" class="cell-error">
+                        {{ rowErrors[index].warehouseId }}
+                      </small>
+                    </template>
                   </td>
                   <td class="right">
-                    <input :value="formatNumber(row.currentStock)" type="text" readonly aria-label="仓库原材料数量" />
+                    <span v-if="hasMaterial(row)" class="table-cell-value">
+                      {{ formatNumber(row.currentStock) }}
+                    </span>
                   </td>
                   <td class="right">
-                    <input
-                      v-model="row.quantity"
-                      class="table-input number-input"
-                      :class="{ invalid: rowErrors[index]?.quantity }"
-                      :readonly="!editing || saving"
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      placeholder="出库数量"
-                      aria-label="出库数量"
-                    />
-                    <small v-if="rowErrors[index]?.quantity" class="cell-error">
-                      {{ rowErrors[index].quantity }}
-                    </small>
+                    <template v-if="hasMaterial(row)">
+                      <input
+                        v-model="row.quantity"
+                        class="table-input number-input"
+                        :class="{ invalid: rowErrors[index]?.quantity }"
+                        :readonly="!editing || saving"
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        placeholder="出库数量"
+                        aria-label="出库数量"
+                      />
+                      <small v-if="rowErrors[index]?.quantity" class="cell-error">
+                        {{ rowErrors[index].quantity }}
+                      </small>
+                    </template>
                   </td>
                   <td class="module-divider-cell">
-                    <Link2 :size="15" :stroke-width="1.8" aria-hidden="true" />
+                    <Link2
+                      v-if="hasMaterial(row)"
+                      :size="15"
+                      :stroke-width="1.8"
+                      aria-hidden="true"
+                    />
                   </td>
                   <td>
-                    <div class="product-picker">
-                      <input
-                        v-model="row.finishedProductQuery"
-                        class="table-input"
-                        :class="{ invalid: rowErrors[index]?.finishedProductId }"
-                        :readonly="!editing || saving"
-                        type="text"
-                        autocomplete="off"
-                        aria-label="成品商品"
-                        @focus="openPicker(`finished-${index}`)"
-                        @input="openPicker(`finished-${index}`)"
-                      />
-                      <div v-if="activePicker === `finished-${index}` && editing" class="picker-options">
-                        <button
-                          v-for="product in filteredFinishedProducts(row.finishedProductQuery, row)"
-                          :key="product.id"
-                          type="button"
-                          @mousedown.prevent="selectFinishedProduct(product, index)"
-                        >
-                          <strong>{{ product.name }}</strong>
-                          <small>{{ product.code || '无编码' }} · {{ product.specification || '无规格' }}</small>
-                        </button>
-                        <span
-                          v-if="filteredFinishedProducts(row.finishedProductQuery, row).length === 0"
-                          class="picker-empty"
-                        >
-                          没有匹配的成品商品
-                        </span>
+                    <template v-if="hasMaterial(row)">
+                      <div class="product-picker">
+                        <input
+                          v-model="row.finishedProductQuery"
+                          class="table-input"
+                          :class="{ invalid: rowErrors[index]?.finishedProductId }"
+                          :readonly="!editing || saving"
+                          type="text"
+                          autocomplete="off"
+                          aria-label="成品商品"
+                          @focus="openPicker(`finished-${index}`)"
+                          @input="openPicker(`finished-${index}`)"
+                        />
+                        <div v-if="activePicker === `finished-${index}` && editing" class="picker-options">
+                          <button
+                            v-for="product in filteredFinishedProducts(row.finishedProductQuery, row)"
+                            :key="product.id"
+                            type="button"
+                            @mousedown.prevent="selectFinishedProduct(product, index)"
+                          >
+                            <strong>{{ product.name }}</strong>
+                            <small>{{ product.code || '无编码' }} · {{ product.specification || '无规格' }}</small>
+                          </button>
+                          <span
+                            v-if="filteredFinishedProducts(row.finishedProductQuery, row).length === 0"
+                            class="picker-empty"
+                          >
+                            没有匹配的成品商品
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                    <small v-if="rowErrors[index]?.finishedProductId" class="cell-error">
-                      {{ rowErrors[index].finishedProductId }}
-                    </small>
+                      <small v-if="rowErrors[index]?.finishedProductId" class="cell-error">
+                        {{ rowErrors[index].finishedProductId }}
+                      </small>
+                    </template>
                   </td>
                   <td>
-                    <div class="combined-spec finished-spec">
+                    <div v-if="hasMaterial(row) && row.finishedProductId" class="combined-spec finished-spec">
                       {{ row.finishedSpecification || '-' }}
                     </div>
                   </td>
                   <td>
-                    <select
-                      v-model="row.finishedWarehouseId"
-                      class="table-input"
-                      :class="{ invalid: rowErrors[index]?.finishedWarehouseId }"
-                      :disabled="!editing || saving"
-                      aria-label="入库仓库"
-                    >
-                      <option value="">请选择仓库</option>
-                      <option
-                        v-for="warehouse in availableWarehouses"
-                        :key="warehouse.id"
-                        :value="String(warehouse.id)"
+                    <template v-if="hasMaterial(row)">
+                      <select
+                        v-model="row.finishedWarehouseId"
+                        class="table-input"
+                        :class="{ invalid: rowErrors[index]?.finishedWarehouseId }"
+                        :disabled="!editing || saving"
+                        aria-label="入库仓库"
                       >
-                        {{ warehouse.name }}
-                      </option>
-                    </select>
-                    <small v-if="rowErrors[index]?.finishedWarehouseId" class="cell-error">
-                      {{ rowErrors[index].finishedWarehouseId }}
-                    </small>
+                        <option value="">请选择仓库</option>
+                        <option
+                          v-for="warehouse in availableWarehouses"
+                          :key="warehouse.id"
+                          :value="String(warehouse.id)"
+                        >
+                          {{ warehouse.name }}
+                        </option>
+                      </select>
+                      <small v-if="rowErrors[index]?.finishedWarehouseId" class="cell-error">
+                        {{ rowErrors[index].finishedWarehouseId }}
+                      </small>
+                    </template>
                   </td>
                   <td class="right">
-                    <input
-                      v-model="row.finishedQuantity"
-                      class="table-input number-input"
-                      :class="{ invalid: rowErrors[index]?.finishedQuantity }"
-                      :readonly="!editing || saving"
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      placeholder="入库数量"
-                      aria-label="入库数量"
-                    />
-                    <small v-if="rowErrors[index]?.finishedQuantity" class="cell-error">
-                      {{ rowErrors[index].finishedQuantity }}
-                    </small>
+                    <template v-if="hasMaterial(row)">
+                      <input
+                        v-model="row.finishedQuantity"
+                        class="table-input number-input"
+                        :class="{ invalid: rowErrors[index]?.finishedQuantity }"
+                        :readonly="!editing || saving"
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        placeholder="入库数量"
+                        aria-label="入库数量"
+                      />
+                      <small v-if="rowErrors[index]?.finishedQuantity" class="cell-error">
+                        {{ rowErrors[index].finishedQuantity }}
+                      </small>
+                    </template>
                   </td>
                   <td>
                     <input
+                      v-if="hasMaterial(row)"
                       v-model.trim="row.remark"
                       class="table-input"
                       :readonly="!editing || saving"
@@ -359,13 +381,19 @@
                 </tr>
                 <tr class="total-row">
                   <td colspan="6" class="center">合计</td>
-                  <td class="right">-</td>
-                  <td class="right">{{ formatNumber(totalQuantity) }}</td>
+                  <td class="right">
+                    <span v-if="hasActiveProducts">-</span>
+                  </td>
+                  <td class="right">
+                    <span v-if="hasActiveProducts">{{ formatNumber(totalQuantity) }}</span>
+                  </td>
                   <td class="module-divider-cell"></td>
                   <td></td>
                   <td></td>
                   <td></td>
-                  <td class="right">{{ formatNumber(totalFinishedQuantity) }}</td>
+                  <td class="right">
+                    <span v-if="hasActiveProducts">{{ formatNumber(totalFinishedQuantity) }}</span>
+                  </td>
                   <td></td>
                 </tr>
               </tbody>
@@ -493,6 +521,10 @@ const filledRows = computed(() => rows.value.filter(row => (
   || row.finishedWarehouseId
   || row.finishedQuantity !== ''
 )))
+const hasMaterial = row => Boolean(
+  row.productId || String(row.productQuery || '').trim()
+)
+const hasActiveProducts = computed(() => rows.value.some(hasMaterial))
 const primaryRemark = computed(() => filledRows.value[0]?.remark || form.finishedRemark || '')
 const totalQuantity = computed(() => rows.value.reduce(
   (sum, row) => sum + Number(row.quantity || 0),
@@ -1311,6 +1343,16 @@ button:disabled {
 .products-table td input:disabled {
   color: #46535f;
   background: #f8fafb;
+}
+
+.table-cell-value {
+  display: block;
+  min-height: 30px;
+  padding: 7px 4px;
+  color: #46535f;
+  background: #f8fafb;
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
 }
 
 .table-input {
