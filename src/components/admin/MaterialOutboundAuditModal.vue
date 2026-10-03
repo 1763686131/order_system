@@ -128,18 +128,20 @@
           <div v-if="!optionsLoading && !optionsError" class="products-table-wrapper">
             <table class="products-table">
               <colgroup>
-                <col style="width: 64px" />
-                <col style="width: 48px" />
-                <col style="width: 235px" />
-                <col style="width: 90px" />
-                <col style="width: 180px" />
-                <col style="width: 170px" />
-                <col style="width: 125px" />
-                <col style="width: 115px" />
-                <col style="width: 220px" />
-                <col style="width: 180px" />
-                <col style="width: 115px" />
-                <col style="width: 250px" />
+                <col style="width: 4%" />
+                <col style="width: 3%" />
+                <col style="width: 13%" />
+                <col style="width: 4.5%" />
+                <col style="width: 7.5%" />
+                <col style="width: 8%" />
+                <col style="width: 7%" />
+                <col style="width: 7%" />
+                <col style="width: 2.5%" />
+                <col style="width: 12%" />
+                <col style="width: 8%" />
+                <col style="width: 8%" />
+                <col style="width: 7%" />
+                <col style="width: 8.5%" />
               </colgroup>
               <thead>
                 <tr>
@@ -151,7 +153,11 @@
                   <th>出库仓库</th>
                   <th>仓库原材料数量</th>
                   <th>出库数量</th>
+                  <th class="module-divider-header">
+                    <Link2 :size="15" :stroke-width="1.8" aria-hidden="true" />
+                  </th>
                   <th>成品商品</th>
+                  <th>规格型号</th>
                   <th>入库仓库</th>
                   <th>入库数量</th>
                   <th>备注信息</th>
@@ -259,6 +265,9 @@
                       {{ rowErrors[index].quantity }}
                     </small>
                   </td>
+                  <td class="module-divider-cell">
+                    <Link2 :size="15" :stroke-width="1.8" aria-hidden="true" />
+                  </td>
                   <template v-if="index === 0">
                     <td>
                       <div class="product-picker">
@@ -288,10 +297,12 @@
                           </span>
                         </div>
                       </div>
-                      <small class="cell-subtext">
-                        {{ finishedProduct?.specification || finishedProduct?.unit || '-' }}
-                      </small>
                       <small v-if="errors.finishedProductId" class="cell-error">{{ errors.finishedProductId }}</small>
+                    </td>
+                    <td>
+                      <div class="combined-spec finished-spec">
+                        {{ finishedProduct?.specification || record?.finishedProductSpecification || '-' }}
+                      </div>
                     </td>
                     <td>
                       <select
@@ -332,7 +343,7 @@
                     </td>
                   </template>
                   <template v-else>
-                    <td colspan="3" class="shared-finished-cell">成品入库信息见第 1 行</td>
+                    <td colspan="4" class="shared-finished-cell">成品入库信息见第 1 行</td>
                   </template>
                   <td>
                     <input
@@ -350,6 +361,8 @@
                   <td colspan="6" class="center">合计</td>
                   <td class="right">-</td>
                   <td class="right">{{ formatNumber(totalQuantity) }}</td>
+                  <td class="module-divider-cell"></td>
+                  <td></td>
                   <td></td>
                   <td></td>
                   <td class="right">{{ formatNumber(form.finishedQuantity || 0) }}</td>
@@ -412,6 +425,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import request from '@/api/request'
+import { Link2 } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
 
 const props = defineProps({
@@ -485,7 +499,13 @@ const availableWarehouses = computed(() => warehouses.value.filter(item => {
 }))
 const finishedProduct = computed(() => finishedProducts.value.find(
   item => String(item.id) === String(form.finishedProductId)
-) || null)
+) || (
+  props.record?.finishedProductId
+    ? {
+        specification: props.record.finishedProductSpecification || ''
+      }
+    : null
+))
 
 const formatNumber = value => Number(value || 0).toLocaleString('zh-CN', {
   maximumFractionDigits: 3
@@ -1146,53 +1166,54 @@ button:disabled {
 }
 
 .products-table-wrapper {
-  overflow-x: auto;
+  overflow: visible;
 }
 
 .products-table {
   width: 100%;
-  min-width: 1720px;
+  min-width: 0;
   table-layout: fixed;
   border-collapse: collapse;
 }
 
 .products-table th,
 .products-table td {
-  height: 44px;
-  padding: 4px 7px;
+  height: 40px;
+  padding: 3px 4px;
   overflow: visible;
   border-right: 1px solid #eef1f3;
   border-bottom: 1px solid #e9eef1;
 }
 
 .products-table th {
-  height: 48px;
-  padding: 8px 7px;
+  height: 42px;
+  padding: 5px 4px;
+  line-height: 1.2;
 }
 
 .products-table tbody tr.data-row td {
-  height: 64px;
-  padding: 8px 7px;
+  height: 56px;
+  padding: 6px 4px;
   vertical-align: middle;
 }
 
 .products-table tbody tr.data-row td input,
 .products-table tbody tr.data-row td select {
-  height: 40px;
+  height: 34px;
 }
 
 .products-table tbody tr.data-row .row-action {
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
 }
 
 .products-table th {
   color: var(--muted);
   background: #f8fafb;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   text-align: left;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .products-table td {
@@ -1208,9 +1229,9 @@ button:disabled {
 .products-table td input,
 .products-table td select {
   width: 100%;
-  height: 32px;
+  height: 30px;
   min-width: 0;
-  padding: 0 5px;
+  padding: 0 4px;
   color: inherit;
   background: transparent;
   border: 1px solid transparent;
@@ -1316,9 +1337,16 @@ button:disabled {
 }
 
 .combined-spec {
+  display: inline-block;
+  max-width: 58%;
   overflow: hidden;
   text-overflow: ellipsis;
+  vertical-align: middle;
   white-space: nowrap;
+}
+
+.finished-spec {
+  max-width: 100%;
 }
 
 .shared-finished-cell {
@@ -1338,9 +1366,17 @@ button:disabled {
 }
 
 .cell-subtext {
-  padding: 0 5px;
+  display: inline-block;
+  max-width: 42%;
+  padding: 0;
+  margin-left: 3px;
   color: #7b8892;
   font-size: 11px;
+  vertical-align: middle;
+}
+
+.cell-subtext::before {
+  content: '/ ';
 }
 
 .cell-error {
@@ -1357,6 +1393,24 @@ button:disabled {
 
 .center {
   text-align: center !important;
+}
+
+.module-divider-header,
+.module-divider-cell {
+  padding-right: 2px !important;
+  padding-left: 2px !important;
+  color: var(--accent-dark) !important;
+  background: #f1f8f6 !important;
+  border-right: 1px solid #c7e0d9 !important;
+  border-left: 1px solid #c7e0d9 !important;
+  text-align: center !important;
+  vertical-align: middle;
+}
+
+.module-divider-header svg,
+.module-divider-cell svg {
+  display: inline-block;
+  vertical-align: middle;
 }
 
 .total-row td {
