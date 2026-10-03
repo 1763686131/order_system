@@ -18,7 +18,7 @@
               {{ record.displayDocumentNo || '-' }}
             </span>
             <span v-if="record.isMultiItem" class="line-count">
-              同单据 {{ record.itemCount }} 条
+              同单据第 {{ record.lineNo }} / {{ record.itemCount }} 条
             </span>
             <span
               v-if="record.stockCalculation"
@@ -93,6 +93,8 @@ const loadError = ref('')
 const records = ref([])
 const stockBalances = ref([])
 const stockBalancesLoaded = ref(false)
+const materialSettings = ref(null)
+const materialSettingsLoaded = ref(false)
 const filterStartDate = ref('')
 const filterEndDate = ref('')
 let materialEventSource = null
@@ -140,9 +142,25 @@ const normalizeRecordItems = record => {
   return [null]
 }
 
-const materialDisplayRecords = computed(() => records.value.flatMap(record => {
-  const items = normalizeRecordItems(record)
-  const isMultiItem = items.length > 1
+const allowedProductIds = computed(() => new Set(
+  (materialSettings.value?.allowedProductIds || []).map(value => String(value))
+))
+
+const isAllowedProduct = productId => (
+  !materialSettingsLoaded.value
+  || allowedProductIds.value.has(String(productId ?? ''))
+)
+
+const materialDisplayRecords = computed(() => records.value
+  .filter(record => statusClass(record.status) !== 'cancelled')
+  .flatMap(record => {
+  const allItems = normalizeRecordItems(record)
+  const items = allItems.filter(item => (
+    item && isAllowedProduct(item.productId)
+  ))
+  if (items.length === 0) return []
+
+  const isMultiItem = allItems.length > 1
   const parentDocumentNo = record.documentNo || '-'
 
   return items.map((item, index) => {
@@ -165,11 +183,11 @@ const materialDisplayRecords = computed(() => records.value.flatMap(record => {
         || record.remark
       ),
       lineNo,
-      itemCount: items.length,
+      itemCount: allItems.length,
       isMultiItem
     }
   })
-}))
+  }))
 
 const compareDisplayRecords = (left, right) => {
   const parentOrder = recordSortValue(right).localeCompare(recordSortValue(left))
@@ -297,7 +315,7 @@ const fetchRecords = async ({ silent = false } = {}) => {
       ? { start: filterStartDate.value, end: filterEndDate.value }
       : defaultDateRange()
 
-    const [recordResult, stockResult] = await Promise.allSettled([
+    const [recordResult, stockResult, settingsResult] = await Promise.allSettled([
       request({
         url: '/material-outbounds',
         method: 'GET',
@@ -311,6 +329,10 @@ const fetchRecords = async ({ silent = false } = {}) => {
         url: '/stock-balances',
         method: 'GET',
         params: { type: 'raw-material' }
+      }),
+      request({
+        url: '/material-outbound-settings',
+        method: 'GET'
       })
     ])
 
@@ -321,6 +343,15 @@ const fetchRecords = async ({ silent = false } = {}) => {
       stockBalances.value = []
       stockBalancesLoaded.value = false
       console.warn('原材料库存加载失败，触屏端暂时无法计算剩余库存', stockResult.reason)
+    }
+
+    if (settingsResult?.status === 'fulfilled') {
+      materialSettings.value = settingsResult.value || null
+      materialSettingsLoaded.value = true
+    } else {
+      materialSettings.value = null
+      materialSettingsLoaded.value = false
+      console.warn('触屏端原材料显示设置加载失败，暂时显示全部出库卡片', settingsResult?.reason)
     }
 
     if (recordResult.status === 'rejected') {

@@ -1386,6 +1386,8 @@ def update_material_outbound_settings():
                         now,
                     ),
                 )
+                conn.commit()
+                broadcast_material_outbound_event("settings-updated")
                 return jsonify(
                     {
                         "success": True,

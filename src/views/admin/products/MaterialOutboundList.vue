@@ -203,7 +203,15 @@
                     反审核
                   </button>
                   <button
-                    v-else-if="record.status === 'cancelled'"
+                    v-if="record.status === 'cancelled'"
+                    type="button"
+                    class="delete-action"
+                    @click="requestAction('delete', record)"
+                  >
+                    删除
+                  </button>
+                  <button
+                    v-if="record.status === 'cancelled'"
                     type="button"
                     @click="requestAction('restart', record)"
                   >
@@ -509,7 +517,7 @@
 
       <div v-if="pendingAction" class="modal-layer confirm-layer">
         <section class="confirm-modal" role="alertdialog" aria-modal="true">
-          <div :class="['confirm-icon', { danger: pendingAction.type === 'cancel' }]">!</div>
+          <div :class="['confirm-icon', { danger: ['cancel', 'delete'].includes(pendingAction.type) }]">!</div>
           <h3>{{ actionCopy.title }}</h3>
           <p>{{ actionCopy.message }}</p>
           <div class="confirm-actions">
@@ -518,7 +526,10 @@
             </button>
             <button
               type="button"
-              :class="['button', pendingAction.type === 'cancel' ? 'danger' : 'primary']"
+              :class="[
+                'button',
+                ['cancel', 'delete'].includes(pendingAction.type) ? 'danger' : 'primary'
+              ]"
               :disabled="actionLoading"
               @click="executeAction"
             >
@@ -673,6 +684,11 @@ const actionCopy = computed(() => {
       message: '草稿尚未扣减库存，作废后可在已作废列表中重新启用。',
       confirm: '确认作废'
     },
+    delete: {
+      title: '确认删除已作废单据吗？',
+      message: '删除后将同时删除单据及其明细，此操作不可撤回。',
+      confirm: '确认删除'
+    },
     restart: {
       title: '确认重新启用？',
       message: '单据会恢复为待审核状态，库存不会发生变化。',
@@ -810,6 +826,7 @@ const saveSettings = async () => {
     })
     settings.value = response.settings || settings.value
     settingsVisible.value = false
+    window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
   } catch (error) {
     settingsError.value = error?.response?.data?.message || '触屏端设置保存失败。'
   } finally {
@@ -978,6 +995,7 @@ const executeAction = async () => {
       audit: { url: `/material-outbounds/${action.record.id}/audit`, method: 'POST' },
       reverse: { url: `/material-outbounds/${action.record.id}/audit`, method: 'DELETE' },
       cancel: { url: `/material-outbounds/${action.record.id}`, method: 'DELETE' },
+      delete: { url: `/material-outbounds/${action.record.id}`, method: 'DELETE' },
       restart: { url: `/material-outbounds/${action.record.id}/restart`, method: 'POST' }
     }
     await request(requests[action.type])
@@ -1554,6 +1572,15 @@ th:nth-child(11) { width: 166px; }
   color: #fff;
   background: var(--accent);
   border-color: var(--accent);
+}
+
+.row-actions .delete-action {
+  color: #b4232f;
+  border-color: #f0b8bf;
+}
+
+.row-actions .delete-action:hover {
+  background: #fff1f2;
 }
 
 .empty-cell {
