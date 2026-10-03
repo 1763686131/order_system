@@ -13,257 +13,286 @@
         aria-labelledby="materialAuditTitle"
         @click.stop
       >
-        <header class="audit-header">
-          <div class="audit-title">
-            <span class="audit-eyebrow">ERP · 原材料出库</span>
-            <h2 id="materialAuditTitle">{{ record?.documentNo || '审核出库单' }}</h2>
-            <p>补齐成品入库明细后，审核将同时完成原材料出库和成品入库。</p>
-          </div>
-          <div class="audit-header-actions">
-            <button
-              type="button"
-              class="audit-close"
-              aria-label="关闭"
-              :disabled="saving"
-              @click="requestClose"
-            >
-              ×
-            </button>
-            <span class="audit-status">待审核</span>
-            <button
-              type="button"
-              class="audit-button primary header-audit-button"
-              :disabled="saving || optionsLoading || Boolean(optionsError)"
-              @click="submitAudit"
-            >
-              {{ saving ? '正在审核...' : '审核并入库' }}
-            </button>
-          </div>
-        </header>
-
-        <div class="audit-body">
-          <section class="audit-section source-section">
-            <div class="section-heading">
-              <span class="section-index">1</span>
-              <div>
-                <h3>触屏端辅助输入</h3>
-                <p>以下字段由员工在触屏端录入，审核员无需重复填写。</p>
-              </div>
+        <form class="material-audit-form" @submit.prevent="submitAudit">
+          <div class="top-info-bar">
+            <div class="document-title">
+              <span class="document-eyebrow">原材料出库</span>
+              <h2 id="materialAuditTitle">审核</h2>
             </div>
-            <div class="source-strip">
-              <div class="source-item">
+
+            <div class="header-fields">
+              <label class="info-group">
                 <span>门店</span>
-                <strong>{{ record?.storeName || '-' }}</strong>
-              </div>
-              <div class="source-item">
+                <input :value="record?.storeName || '-'" type="text" readonly />
+              </label>
+              <label class="info-group">
                 <span>出库仓库</span>
-                <strong>{{ record?.warehouseName || '-' }}</strong>
-              </div>
-              <div class="source-item">
-                <span>原材料</span>
-                <strong>{{ record?.primaryItem?.productName || '-' }}</strong>
-              </div>
-              <div class="source-item number-source">
+                <input :value="record?.warehouseName || '-'" type="text" readonly />
+              </label>
+              <label class="info-group material-source-field">
+                <span>触屏原材料</span>
+                <input :value="record?.primaryItem?.productName || '-'" type="text" readonly />
+              </label>
+              <label class="info-group quantity-source-field">
                 <span>出库数量</span>
-                <strong>
-                  {{ formatNumber(record?.totalQuantity) }}
-                  {{ record?.primaryItem?.unit || '' }}
-                </strong>
-              </div>
-              <div class="source-item source-remark">
-                <span>触屏备注</span>
-                <strong>{{ record?.remark || '-' }}</strong>
-              </div>
-            </div>
-          </section>
-
-          <section class="audit-section detail-section">
-            <div class="section-heading">
-              <span class="section-index">2</span>
-              <div>
-                <h3>原材料出库及成品入库明细</h3>
-                <p>灰色字段为触屏端数据，白色字段需要审核员补充。</p>
-              </div>
+                <input
+                  :value="`${formatNumber(record?.totalQuantity)} ${record?.primaryItem?.unit || ''}`"
+                  type="text"
+                  readonly
+                />
+              </label>
+              <label class="info-group date-field">
+                <span>单据日期</span>
+                <input :value="record?.documentDate || '-'" type="text" readonly />
+              </label>
+              <label class="info-group document-no-field">
+                <span>单据编号</span>
+                <input :value="record?.documentNo || '-'" type="text" readonly />
+              </label>
             </div>
 
-            <div v-if="optionsLoading" class="options-state">正在加载仓库和成品资料...</div>
-            <div v-else-if="optionsError" class="options-state error">
+            <div class="toolbar-actions">
+              <span class="audit-status">待审核</span>
+              <button
+                type="button"
+                class="close-button"
+                aria-label="关闭"
+                title="关闭"
+                :disabled="saving"
+                @click="requestClose"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          <div class="contact-info-bar">
+            <label class="info-group touch-remark-field">
+              <span>触屏备注</span>
+              <input :value="record?.remark || '-'" type="text" readonly />
+            </label>
+            <label class="info-group">
+              <span>单据来源</span>
+              <input :value="record?.source === 'touch' ? '触屏端辅助输入' : (record?.source || '-')" type="text" readonly />
+            </label>
+          </div>
+
+          <div class="table-state" :class="{ error: optionsError }">
+            <span v-if="optionsLoading">正在加载仓库和成品资料...</span>
+            <template v-else-if="optionsError">
               <span>{{ optionsError }}</span>
               <button type="button" class="inline-button" @click="loadOptions">重新加载</button>
-            </div>
-            <div v-else class="detail-table-wrap">
-              <table class="audit-detail-table">
-                <thead>
-                  <tr>
-                    <th class="index-col">行号</th>
-                    <th class="material-col">原材料</th>
-                    <th>规格型号</th>
-                    <th class="unit-col">单位</th>
-                    <th>出库仓库</th>
-                    <th class="number-col">出库数量</th>
-                    <th class="required-head">成品入库仓库</th>
-                    <th class="product-col required-head">成品商品</th>
-                    <th class="number-col required-head">入库数量</th>
-                    <th class="remark-col">备注</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td class="index-col">1</td>
-                    <td class="material-cell readonly-cell">
-                      <strong>{{ record?.primaryItem?.productName || '-' }}</strong>
-                      <small>{{ record?.primaryItem?.productCode || '无编码' }}</small>
-                    </td>
-                    <td class="readonly-cell">
-                      {{ record?.primaryItem?.specification || '-' }}
-                    </td>
-                    <td class="readonly-cell unit-cell">
-                      {{ record?.primaryItem?.unit || '-' }}
-                    </td>
-                    <td class="readonly-cell">
-                      {{ record?.warehouseName || '-' }}
-                    </td>
-                    <td class="readonly-cell number-cell">
-                      {{ formatNumber(record?.totalQuantity) }}
-                    </td>
-                    <td>
-                      <select
-                        v-model="form.finishedWarehouseId"
-                        class="table-control"
-                        :class="{ invalid: errors.finishedWarehouseId }"
-                        @change="handleWarehouseChange"
-                      >
-                        <option value="">请选择仓库</option>
-                        <option
-                          v-for="warehouse in availableWarehouses"
-                          :key="warehouse.id"
-                          :value="String(warehouse.id)"
-                        >
-                          {{ warehouse.name }}
-                        </option>
-                      </select>
-                      <small v-if="errors.finishedWarehouseId" class="cell-error">
-                        {{ errors.finishedWarehouseId }}
-                      </small>
-                    </td>
-                    <td>
-                      <select
-                        v-model="form.finishedProductId"
-                        class="table-control"
-                        :class="{ invalid: errors.finishedProductId }"
-                        :disabled="!form.finishedWarehouseId"
-                      >
-                        <option value="">
-                          {{ form.finishedWarehouseId ? '请选择成品' : '请先选仓库' }}
-                        </option>
-                        <option
-                          v-for="product in availableProducts"
-                          :key="product.id"
-                          :value="String(product.id)"
-                        >
-                          {{ product.code ? `${product.code} · ` : '' }}{{ product.name }}
-                        </option>
-                      </select>
-                      <small v-if="selectedProduct" class="cell-hint">
-                        {{ selectedProduct.specification || '无规格' }}
-                        · {{ productUnit(selectedProduct) || '未设置单位' }}
-                      </small>
-                      <small v-if="errors.finishedProductId" class="cell-error">
-                        {{ errors.finishedProductId }}
-                      </small>
-                    </td>
-                    <td>
-                      <input
-                        v-model="form.finishedQuantity"
-                        class="table-control number-input"
-                        :class="{ invalid: errors.finishedQuantity }"
-                        type="number"
-                        min="0"
-                        step="0.0001"
-                        placeholder="实际数量"
-                      />
-                      <small v-if="errors.finishedQuantity" class="cell-error">
-                        {{ errors.finishedQuantity }}
-                      </small>
-                    </td>
-                    <td>
-                      <input
-                        v-model.trim="form.finishedRemark"
-                        class="table-control"
-                        type="text"
-                        maxlength="200"
-                        placeholder="默认继承触屏备注"
-                      />
-                    </td>
-                  </tr>
-                </tbody>
-                <tfoot>
-                  <tr>
-                    <td colspan="5" class="summary-label">合计</td>
-                    <td class="number-cell">
-                      {{ formatNumber(record?.totalQuantity) }}
-                      {{ record?.primaryItem?.unit || '' }}
-                    </td>
-                    <td colspan="2" class="summary-label finished-summary-label">成品入库合计</td>
-                    <td class="number-cell finished-total">
-                      {{ formatNumber(form.finishedQuantity || 0) }}
-                      {{ productUnit(selectedProduct) || 'kg' }}
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            <div v-if="formError" class="form-error">{{ formError }}</div>
-          </section>
-
-          <section class="audit-section document-meta-section">
-            <div class="section-heading">
-              <span class="section-index">3</span>
-              <div>
-                <h3>制单与审核信息</h3>
-                <p>单据来源和审核记录由系统自动保留。</p>
-              </div>
-            </div>
-            <dl class="document-meta-grid">
-              <div>
-                <dt>制单人</dt>
-                <dd>{{ record?.createdBy || '-' }}</dd>
-              </div>
-              <div>
-                <dt>制单时间</dt>
-                <dd>{{ record?.createdAt || '-' }}</dd>
-              </div>
-              <div>
-                <dt>单据来源</dt>
-                <dd>{{ record?.source === 'touch' ? '触屏端辅助输入' : (record?.source || '-') }}</dd>
-              </div>
-              <div>
-                <dt>审核人</dt>
-                <dd>{{ record?.auditedBy || '待审核' }}</dd>
-              </div>
-              <div>
-                <dt>审核时间</dt>
-                <dd>{{ record?.auditedAt || '待审核' }}</dd>
-              </div>
-              <div>
-                <dt>审核结果</dt>
-                <dd><span class="meta-status">审核后扣减原材料并完成成品入库</span></dd>
-              </div>
-            </dl>
-          </section>
-        </div>
-
-        <footer class="audit-footer">
-          <div class="audit-footer-summary">
-            <span>原材料出库 <strong>{{ formatNumber(record?.totalQuantity) }} {{ record?.primaryItem?.unit || '' }}</strong></span>
-            <span>成品入库 <strong>{{ formatNumber(form.finishedQuantity || 0) }} {{ productUnit(selectedProduct) || 'kg' }}</strong></span>
+            </template>
           </div>
-          <button type="button" class="audit-button secondary" :disabled="saving" @click="requestClose">
-            关闭
-          </button>
-        </footer>
+
+          <div v-if="!optionsLoading && !optionsError" class="products-table-wrapper">
+            <table class="products-table">
+              <colgroup>
+                <col style="width: 48px" />
+                <col style="width: 190px" />
+                <col style="width: 130px" />
+                <col style="width: 70px" />
+                <col style="width: 140px" />
+                <col style="width: 105px" />
+                <col style="width: 170px" />
+                <col style="width: 220px" />
+                <col style="width: 110px" />
+                <col style="width: 75px" />
+                <col style="width: 220px" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>序号</th>
+                  <th>原材料</th>
+                  <th>规格型号</th>
+                  <th>单位</th>
+                  <th>出库仓库</th>
+                  <th>出库数量</th>
+                  <th>成品入库仓库</th>
+                  <th>成品商品</th>
+                  <th>入库数量</th>
+                  <th>单位</th>
+                  <th>备注信息</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="data-row">
+                  <td class="center">1</td>
+                  <td>
+                    <input
+                      :value="record?.primaryItem?.productName || '-'"
+                      type="text"
+                      readonly
+                      aria-label="原材料"
+                    />
+                    <small class="cell-subtext">{{ record?.primaryItem?.productCode || '无编码' }}</small>
+                  </td>
+                  <td>
+                    <input
+                      :value="record?.primaryItem?.specification || '-'"
+                      type="text"
+                      readonly
+                      aria-label="规格型号"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      :value="record?.primaryItem?.unit || '-'"
+                      type="text"
+                      readonly
+                      aria-label="原材料单位"
+                    />
+                  </td>
+                  <td>
+                    <input
+                      :value="record?.warehouseName || '-'"
+                      type="text"
+                      readonly
+                      aria-label="出库仓库"
+                    />
+                  </td>
+                  <td class="right">
+                    <input
+                      :value="formatNumber(record?.totalQuantity)"
+                      type="text"
+                      readonly
+                      aria-label="出库数量"
+                    />
+                  </td>
+                  <td>
+                    <select
+                      v-model="form.finishedWarehouseId"
+                      class="table-input"
+                      :class="{ invalid: errors.finishedWarehouseId }"
+                      :disabled="saving || optionsLoading"
+                      aria-label="成品入库仓库"
+                      @change="handleWarehouseChange"
+                    >
+                      <option value="">请选择仓库</option>
+                      <option
+                        v-for="warehouse in availableWarehouses"
+                        :key="warehouse.id"
+                        :value="String(warehouse.id)"
+                      >
+                        {{ warehouse.name }}
+                      </option>
+                    </select>
+                    <small v-if="errors.finishedWarehouseId" class="cell-error">
+                      {{ errors.finishedWarehouseId }}
+                    </small>
+                  </td>
+                  <td>
+                    <select
+                      v-model="form.finishedProductId"
+                      class="table-input"
+                      :class="{ invalid: errors.finishedProductId }"
+                      :disabled="saving || !form.finishedWarehouseId"
+                      aria-label="成品商品"
+                    >
+                      <option value="">
+                        {{ form.finishedWarehouseId ? '请选择成品商品' : '请先选择仓库' }}
+                      </option>
+                      <option
+                        v-for="product in availableProducts"
+                        :key="product.id"
+                        :value="String(product.id)"
+                      >
+                        {{ product.code ? `${product.code} · ` : '' }}{{ product.name }}
+                      </option>
+                    </select>
+                    <small v-if="selectedProduct" class="cell-subtext">
+                      {{ selectedProduct.specification || '无规格' }}
+                    </small>
+                    <small v-if="errors.finishedProductId" class="cell-error">
+                      {{ errors.finishedProductId }}
+                    </small>
+                  </td>
+                  <td>
+                    <input
+                      v-model="form.finishedQuantity"
+                      class="table-input number-input"
+                      :class="{ invalid: errors.finishedQuantity }"
+                      :disabled="saving"
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      placeholder="入库数量"
+                      aria-label="入库数量"
+                    />
+                    <small v-if="errors.finishedQuantity" class="cell-error">
+                      {{ errors.finishedQuantity }}
+                    </small>
+                  </td>
+                  <td class="center readonly-unit">
+                    {{ productUnit(selectedProduct) || '待定' }}
+                  </td>
+                  <td>
+                    <input
+                      v-model.trim="form.finishedRemark"
+                      class="table-input"
+                      :disabled="saving"
+                      type="text"
+                      maxlength="200"
+                      placeholder="默认继承触屏备注"
+                      aria-label="成品入库备注"
+                    />
+                  </td>
+                </tr>
+                <tr v-for="index in 7" :key="`blank-row-${index}`" class="blank-row">
+                  <td class="center">{{ index + 1 }}</td>
+                  <td colspan="10"></td>
+                </tr>
+                <tr class="total-row">
+                  <td colspan="5" class="center">合计</td>
+                  <td class="right">{{ formatNumber(record?.totalQuantity) }}</td>
+                  <td colspan="2"></td>
+                  <td class="right">{{ formatNumber(form.finishedQuantity || 0) }}</td>
+                  <td class="center">{{ productUnit(selectedProduct) || '-' }}</td>
+                  <td></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div v-if="formError" class="form-error" role="alert">{{ formError }}</div>
+
+          <div class="bottom-info-bar">
+            <div class="finance-row-full">
+              <label class="info-group">
+                <span>制单人</span>
+                <input :value="record?.createdBy || '-'" type="text" readonly />
+              </label>
+              <label class="info-group">
+                <span>制单时间</span>
+                <input :value="record?.createdAt || '-'" type="text" readonly />
+              </label>
+              <label class="info-group wide remark-field">
+                <span>备注信息</span>
+                <input :value="record?.remark || '-'" type="text" readonly />
+              </label>
+              <label class="info-group">
+                <span>审核人</span>
+                <input value="当前审核员" type="text" readonly />
+              </label>
+              <label class="info-group">
+                <span>审核状态</span>
+                <input value="待审核" type="text" readonly />
+              </label>
+            </div>
+            <div class="finance-row">
+              <span>原材料出库 <strong>{{ formatNumber(record?.totalQuantity) }} {{ record?.primaryItem?.unit || '' }}</strong></span>
+              <span>成品入库 <strong>{{ formatNumber(form.finishedQuantity || 0) }} {{ productUnit(selectedProduct) || '-' }}</strong></span>
+              <span>审核结果 <strong>审核后同步完成出库和入库</strong></span>
+              <button
+                type="submit"
+                class="audit-button primary bottom-audit-button"
+                :disabled="saving || optionsLoading || Boolean(optionsError)"
+              >
+                {{ saving ? '审核中...' : '审核并入库' }}
+              </button>
+            </div>
+          </div>
+        </form>
       </section>
     </div>
   </teleport>
@@ -488,492 +517,238 @@ watch(
 
 <style scoped>
 .material-audit-overlay {
-  --accent: #0f9f78;
-  --accent-dark: #08745a;
-  --accent-soft: #e9f8f3;
+  --accent: #159a7c;
+  --accent-dark: #08755e;
+  --border: #e3e8ec;
+  --border-strong: #d4dde3;
+  --muted: #6c7a85;
+  --text: #17212b;
   position: fixed;
   inset: 0;
   z-index: 2147483100;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 22px;
-  color: #172033;
+  padding: 12px;
+  color: var(--text);
   background: rgba(15, 23, 42, 0.52);
+  font-size: 13px;
+}
+
+.material-audit-modal,
+.material-audit-modal * {
+  box-sizing: border-box;
+  letter-spacing: 0;
 }
 
 .material-audit-modal {
   display: flex;
-  width: min(1280px, calc(100vw - 44px));
-  max-height: calc(100vh - 44px);
+  width: min(1660px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
   flex-direction: column;
   overflow: hidden;
-  background: #f4f7f8;
-  border: 1px solid #dbe3ea;
-  border-radius: 8px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  box-shadow: 0 18px 54px rgba(23, 33, 43, 0.24);
 }
 
-.audit-header,
-.audit-footer {
+.material-audit-form {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 17px 21px;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
   background: #fff;
 }
 
-.audit-header {
-  border-bottom: 1px solid #dfe5ec;
+.top-info-bar,
+.contact-info-bar,
+.finance-row-full,
+.finance-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
 }
 
-.audit-header-actions {
+.top-info-bar {
+  min-height: 62px;
+}
+
+.document-title {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 126px;
+}
+
+.document-eyebrow {
+  color: var(--text);
+  font-size: 16px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.document-title h2 {
+  margin: 0;
+  color: var(--accent-dark);
+  font-size: 16px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.header-fields {
+  display: flex;
+  flex: 1 1 780px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px 12px;
+  min-width: 0;
+}
+
+.info-group {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.info-group > span {
+  flex: none;
+  color: #46535f;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+.info-group input,
+.info-group select {
+  width: 148px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 9px;
+  color: var(--text);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  outline: none;
+}
+
+.info-group input:focus,
+.info-group select:focus,
+.table-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(21, 154, 124, 0.12);
+}
+
+.info-group input[readonly] {
+  color: #64717c;
+  background: #f8fafb;
+}
+
+.material-source-field input {
+  width: 166px;
+}
+
+.quantity-source-field input {
+  width: 104px;
+  text-align: right;
+}
+
+.date-field input {
+  width: 132px;
+}
+
+.document-no-field input {
+  width: 154px;
+}
+
+.contact-info-bar {
+  min-height: 58px;
+  background: #fbfcfc;
+}
+
+.contact-info-bar .info-group input,
+.contact-info-bar .info-group select {
+  width: 160px;
+}
+
+.touch-remark-field {
+  flex: 1 1 280px;
+}
+
+.touch-remark-field input {
+  width: 100%;
+}
+
+.document-time-field input {
+  width: 190px;
+}
+
+.toolbar-actions {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
   gap: 9px;
+  margin-left: auto;
+}
+
+.close-button {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  color: #687580;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+
+.close-button:hover {
+  background: #f3f8f6;
 }
 
 .audit-status {
   display: inline-flex;
-  min-height: 28px;
+  min-height: 30px;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 9px;
   color: #a15c00;
-  background: #fff5df;
-  border: 1px solid #f4d99a;
+  background: #fff7e7;
+  border: 1px solid #f1d9a7;
   border-radius: 4px;
   font-size: 12px;
-  font-weight: 700;
-}
-
-.header-audit-button {
-  min-height: 38px;
-}
-
-.audit-title {
-  min-width: 0;
-}
-
-.audit-eyebrow {
-  color: var(--accent-dark);
-  font-size: 11px;
-  font-weight: 750;
-}
-
-.audit-title h2 {
-  margin: 4px 0 3px;
-  overflow: hidden;
-  font-size: 19px;
-  text-overflow: ellipsis;
+  font-weight: 600;
   white-space: nowrap;
-}
-
-.audit-title p,
-.section-heading p {
-  margin: 0;
-  color: #7a8698;
-  font-size: 12px;
-}
-
-.audit-close {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 auto;
-  color: #68758a;
-  background: transparent;
-  border: 0;
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 25px;
-  line-height: 1;
-}
-
-.audit-close:hover {
-  background: #f0f3f6;
-}
-
-.audit-body {
-  min-height: 0;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-.audit-section {
-  padding: 15px;
-  background: #fff;
-  border: 1px solid #dfe5ec;
-  border-radius: 7px;
-}
-
-.audit-section + .audit-section {
-  margin-top: 13px;
-}
-
-.section-heading {
-  display: flex;
-  align-items: flex-start;
-  gap: 9px;
-  margin-bottom: 14px;
-}
-
-.section-heading h3 {
-  margin: 0 0 4px;
-  font-size: 14px;
-}
-
-.section-index {
-  display: inline-flex;
-  width: 23px;
-  height: 23px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-  background: var(--accent);
-  border-radius: 50%;
-  font-size: 11px;
-  font-weight: 750;
-}
-
-.source-strip {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1.2fr 1fr 1.7fr;
-  overflow: hidden;
-  border: 1px solid #edf1f5;
-  border-radius: 5px;
-}
-
-.source-item {
-  min-width: 0;
-  padding: 11px 12px;
-  border-right: 1px solid #edf1f5;
-}
-
-.source-item:last-child {
-  border-right: 0;
-}
-
-.source-item span,
-.source-item strong {
-  display: block;
-}
-
-.source-item span {
-  margin-bottom: 5px;
-  color: #8a96a8;
-  font-size: 11px;
-}
-
-.source-item strong {
-  overflow: hidden;
-  color: #283548;
-  font-size: 13px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.number-source strong {
-  color: var(--accent-dark);
-}
-
-.detail-table-wrap {
-  overflow-x: auto;
-  border: 1px solid #dfe5ec;
-  border-radius: 5px;
-}
-
-.audit-detail-table {
-  width: 100%;
-  min-width: 1160px;
-  border-collapse: collapse;
-  table-layout: fixed;
-  font-size: 12px;
-}
-
-.audit-detail-table th,
-.audit-detail-table td {
-  padding: 10px 9px;
-  border-right: 1px solid #edf1f5;
-  border-bottom: 1px solid #edf1f5;
-  text-align: left;
-  vertical-align: top;
-}
-
-.audit-detail-table th {
-  color: #596579;
-  background: #f8fafc;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.audit-detail-table th:last-child,
-.audit-detail-table td:last-child {
-  border-right: 0;
-}
-
-.audit-detail-table tfoot td {
-  border-bottom: 0;
-  color: #596579;
-  background: #fbfcfd;
-  font-weight: 650;
-}
-
-.index-col {
-  width: 48px;
-  text-align: center !important;
-}
-
-.material-col {
-  width: 150px;
-}
-
-.product-col {
-  width: 190px;
-}
-
-.unit-col {
-  width: 68px;
-}
-
-.number-col {
-  width: 100px;
-  text-align: right !important;
-}
-
-.remark-col {
-  width: 190px;
-}
-
-.readonly-cell {
-  color: #526076;
-  background: #f8fafc;
-}
-
-.material-cell strong,
-.material-cell small {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.material-cell strong {
-  color: #283548;
-  font-size: 13px;
-}
-
-.material-cell small,
-.cell-hint {
-  margin-top: 4px;
-  color: #8a96a8;
-  font-size: 11px;
-}
-
-.unit-cell,
-.number-cell {
-  font-variant-numeric: tabular-nums;
-}
-
-.number-cell {
-  text-align: right !important;
-}
-
-.table-control {
-  width: 100%;
-  min-width: 0;
-  height: 35px;
-  padding: 0 8px;
-  color: #344054;
-  background: #fff;
-  border: 1px solid #cbd5e1;
-  border-radius: 4px;
-  outline: none;
-  font: inherit;
-}
-
-.table-control:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(15, 159, 120, 0.12);
-}
-
-.table-control:disabled {
-  color: #8a96a8;
-  background: #f8fafc;
-}
-
-.table-control.invalid {
-  border-color: #dc2626;
-  background: #fffafa;
-}
-
-.number-input {
-  text-align: right;
-}
-
-.cell-error,
-.cell-hint {
-  display: block;
-  line-height: 1.35;
-}
-
-.cell-error {
-  margin-top: 4px;
-  color: #b42318;
-  font-size: 11px;
-}
-
-.required-head::after {
-  margin-left: 3px;
-  color: #dc2626;
-  content: '*';
-}
-
-.summary-label {
-  text-align: right !important;
-}
-
-.finished-summary-label {
-  color: var(--accent-dark) !important;
-}
-
-.finished-total {
-  color: var(--accent-dark) !important;
-}
-
-.options-state {
-  display: flex;
-  min-height: 96px;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: #7a8698;
-  font-size: 12px;
-}
-
-.options-state.error,
-.form-error {
-  color: #b42318;
-  background: #fff1f0;
-  border: 1px solid #fecaca;
-  border-radius: 5px;
-}
-
-.options-state.error {
-  padding: 12px;
-}
-
-.options-state.error {
-  padding: 12px;
-}
-
-.inline-button {
-  padding: 4px 8px;
-  color: var(--accent-dark);
-  background: #fff;
-  border: 1px solid #a9e5d2;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.form-error {
-  margin-top: 12px;
-  padding: 10px 12px;
-  font-size: 12px;
-}
-
-.document-meta-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  margin: 0;
-  overflow: hidden;
-  border: 1px solid #edf1f5;
-  border-radius: 5px;
-}
-
-.document-meta-grid > div {
-  min-width: 0;
-  padding: 10px 12px;
-  border-right: 1px solid #edf1f5;
-  border-bottom: 1px solid #edf1f5;
-}
-
-.document-meta-grid > div:nth-child(3n) {
-  border-right: 0;
-}
-
-.document-meta-grid > div:nth-last-child(-n + 3) {
-  border-bottom: 0;
-}
-
-.document-meta-grid dt {
-  margin-bottom: 5px;
-  color: #8a96a8;
-  font-size: 11px;
-}
-
-.document-meta-grid dd {
-  margin: 0;
-  overflow: hidden;
-  color: #283548;
-  font-size: 13px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.meta-status {
-  color: var(--accent-dark);
-  font-size: 12px;
-}
-
-.audit-footer {
-  flex-wrap: wrap;
-  border-top: 1px solid #dfe5ec;
-}
-
-.audit-footer-summary {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  color: #7a8698;
-  font-size: 12px;
-}
-
-.audit-footer-summary strong {
-  margin-left: 4px;
-  color: var(--accent-dark);
-  font-size: 14px;
-}
-
-.audit-footer > .audit-button {
-  margin-left: auto;
 }
 
 .audit-button {
   min-height: 38px;
-  padding: 0 14px;
+  padding: 0 15px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
-  font: inherit;
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
-.audit-button:disabled {
-  cursor: not-allowed;
+.audit-button:disabled,
+.close-button:disabled,
+button:disabled {
+  cursor: default;
   opacity: 0.55;
-}
-
-.audit-button.secondary {
-  color: #475569;
-  background: #fff;
-  border-color: #cbd5e1;
 }
 
 .audit-button.primary {
@@ -984,72 +759,321 @@ watch(
 
 .audit-button.primary:hover:not(:disabled) {
   background: var(--accent-dark);
+  border-color: var(--accent-dark);
+}
+
+.audit-button.secondary {
+  color: #52616c;
+  background: #fff;
+  border-color: var(--border-strong);
+}
+
+.audit-button.secondary:hover:not(:disabled) {
+  background: #f3f8f6;
+}
+
+.table-state {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.table-state:empty {
+  display: none;
+}
+
+.table-state.error,
+.form-error {
+  color: #b5363e;
+  background: #fff6f6;
+}
+
+.table-state.error {
+  justify-content: flex-start;
+  padding: 8px 14px;
+}
+
+.inline-button {
+  min-height: 28px;
+  padding: 0 9px;
+  color: var(--accent-dark);
+  background: #fff;
+  border: 1px solid #b5e5d8;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.products-table-wrapper {
+  overflow-x: auto;
+}
+
+.products-table {
+  width: 100%;
+  min-width: 1260px;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.products-table th,
+.products-table td {
+  height: 44px;
+  padding: 4px 7px;
+  overflow: hidden;
+  border-right: 1px solid #eef1f3;
+  border-bottom: 1px solid #e9eef1;
+}
+
+.products-table th {
+  color: var(--muted);
+  background: #f8fafb;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.products-table td {
+  color: var(--text);
+  background: #fff;
+  font-size: 13px;
+}
+
+.products-table td:last-child,
+.products-table th:last-child {
+  border-right: 0;
+}
+
+.products-table td input,
+.products-table td select {
+  width: 100%;
+  height: 32px;
+  min-width: 0;
+  padding: 0 5px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  outline: none;
+}
+
+.products-table td input[readonly] {
+  color: #46535f;
+  background: #f8fafb;
+}
+
+.products-table .table-input {
+  background: #fff;
+  border-color: var(--border-strong);
+}
+
+.products-table .table-input:disabled {
+  color: #87939b;
+  background: #f8fafb;
+}
+
+.products-table .table-input.invalid,
+.info-group select.invalid {
+  border-color: #d64550;
+  background: #fff6f6;
+}
+
+.products-table td.right,
+.products-table td.right input,
+.number-input {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.center {
+  text-align: center !important;
+}
+
+.cell-subtext,
+.cell-error {
+  display: block;
+  overflow: hidden;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cell-subtext {
+  padding: 0 5px;
+  color: #7b8892;
+  font-size: 11px;
+}
+
+.cell-error {
+  padding: 0 5px;
+  color: #b5363e;
+  font-size: 11px;
+  white-space: normal;
+}
+
+.readonly-unit {
+  color: #64717c !important;
+  background: #f8fafb !important;
+}
+
+.blank-row td {
+  height: 43px;
+  background: #fff;
+}
+
+.total-row td {
+  height: 43px;
+  color: #17212b;
+  background: #f8fafb;
+  font-weight: 600;
+}
+
+.total-row td.right {
+  color: var(--accent-dark);
+}
+
+.form-error {
+  margin: 0;
+  padding: 9px 14px;
+  border-bottom: 1px solid #f1cbd0;
+  font-size: 12px;
+}
+
+.bottom-info-bar {
+  border-top: 0;
+  background: #fff;
+}
+
+.finance-row-full {
+  border-bottom: 0;
+}
+
+.finance-row-full .info-group input {
+  width: 142px;
+}
+
+.finance-row-full .info-group.wide {
+  flex: 1 1 260px;
+}
+
+.finance-row-full .info-group.wide input {
+  width: 100%;
+}
+
+.finance-row {
+  gap: 22px;
+  background: #fbfcfc;
+}
+
+.finance-row > span {
+  color: #46535f;
+  white-space: nowrap;
+}
+
+.finance-row strong {
+  margin-left: 7px;
+  color: var(--accent-dark);
+  font-variant-numeric: tabular-nums;
+}
+
+.finance-row > span:nth-child(3) strong {
+  font-weight: 500;
+}
+
+.finance-row .audit-button {
+  margin-left: auto;
+}
+
+@media (max-width: 1180px) {
+  .top-info-bar {
+    align-items: flex-start;
+  }
+
+  .toolbar-actions {
+    margin-left: 0;
+  }
+
+  .header-fields {
+    flex-basis: 100%;
+    order: 3;
+  }
+
+  .document-title {
+    margin-top: 7px;
+  }
 }
 
 @media (max-width: 720px) {
   .material-audit-overlay {
-    padding: 10px;
+    padding: 5px;
   }
 
   .material-audit-modal {
-    width: calc(100vw - 20px);
-    max-height: calc(100vh - 20px);
+    width: calc(100vw - 10px);
+    max-height: calc(100vh - 10px);
   }
 
-  .audit-header {
-    align-items: flex-start;
-    flex-direction: column;
+  .top-info-bar,
+  .contact-info-bar,
+  .finance-row-full,
+  .finance-row {
+    gap: 9px;
+    padding: 9px;
   }
 
-  .audit-header-actions {
+  .document-title {
     width: 100%;
+    margin-top: 0;
+  }
+
+  .header-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .header-fields .info-group,
+  .contact-info-bar .info-group,
+  .finance-row-full .info-group {
+    width: 100%;
+  }
+
+  .info-group input,
+  .info-group select,
+  .material-source-field input,
+  .quantity-source-field input,
+  .date-field input,
+  .document-no-field input,
+  .contact-info-bar .info-group input,
+  .contact-info-bar .info-group select,
+  .finance-row-full .info-group input {
+    flex: 1;
+    width: 0;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    margin-left: 0;
   }
 
   .header-audit-button {
     flex: 1;
   }
 
-  .source-strip {
-    grid-template-columns: 1fr;
-  }
-
-  .source-item,
-  .source-item:last-child {
-    border-right: 0;
-    border-bottom: 1px solid #edf1f5;
-  }
-
-  .source-item:last-child {
-    border-bottom: 0;
-  }
-
-  .document-meta-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .document-meta-grid > div,
-  .document-meta-grid > div:nth-child(3n),
-  .document-meta-grid > div:nth-last-child(-n + 3) {
-    border-right: 0;
-    border-bottom: 1px solid #edf1f5;
-  }
-
-  .document-meta-grid > div:last-child {
-    border-bottom: 0;
-  }
-
-  .audit-footer {
+  .finance-row {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .audit-footer-summary {
-    width: 100%;
-    justify-content: space-between;
     gap: 8px;
   }
 
-  .audit-footer > .audit-button {
+  .finance-row > span {
+    white-space: normal;
+  }
+
+  .finance-row .audit-button {
     width: 100%;
     margin-left: 0;
   }
