@@ -1586,6 +1586,26 @@ def _ensure_material_outbound_schema(conn):
             )
             """
         )
+        outbound_item_columns = {
+            row["name"]
+            for row in cursor.execute("PRAGMA table_info(material_outbound_items)")
+        }
+        outbound_item_columns_to_add = {
+            "finished_product_id": "INTEGER",
+            "finished_product_code": "TEXT",
+            "finished_product_name": "TEXT",
+            "finished_product_specification": "TEXT",
+            "finished_product_unit": "TEXT",
+            "finished_warehouse_id": "INTEGER",
+            "finished_warehouse_name": "TEXT",
+            "finished_quantity": "REAL NOT NULL DEFAULT 0",
+            "finished_remark": "TEXT",
+        }
+        for column, definition in outbound_item_columns_to_add.items():
+            if column not in outbound_item_columns:
+                cursor.execute(
+                    f"ALTER TABLE material_outbound_items ADD COLUMN {column} {definition}"
+                )
         cursor.execute(
             """
             CREATE INDEX IF NOT EXISTS idx_material_outbound_items_document

@@ -268,83 +268,83 @@
                   <td class="module-divider-cell">
                     <Link2 :size="15" :stroke-width="1.8" aria-hidden="true" />
                   </td>
-                  <template v-if="index === 0">
-                    <td>
-                      <div class="product-picker">
-                        <input
-                          v-model="finishedProductQuery"
-                          class="table-input"
-                          :class="{ invalid: errors.finishedProductId }"
-                          :readonly="!editing || saving"
-                          type="text"
-                          autocomplete="off"
-                          aria-label="成品商品"
-                          @focus="openPicker('finished')"
-                          @input="openPicker('finished')"
-                        />
-                        <div v-if="activePicker === 'finished' && editing" class="picker-options">
-                          <button
-                            v-for="product in filteredFinishedProducts(finishedProductQuery)"
-                            :key="product.id"
-                            type="button"
-                            @mousedown.prevent="selectFinishedProduct(product)"
-                          >
-                            <strong>{{ product.name }}</strong>
-                            <small>{{ product.code || '无编码' }} · {{ product.specification || '无规格' }}</small>
-                          </button>
-                          <span v-if="filteredFinishedProducts(finishedProductQuery).length === 0" class="picker-empty">
-                            没有匹配的成品商品
-                          </span>
-                        </div>
-                      </div>
-                      <small v-if="errors.finishedProductId" class="cell-error">{{ errors.finishedProductId }}</small>
-                    </td>
-                    <td>
-                      <div class="combined-spec finished-spec">
-                        {{ finishedProduct?.specification || record?.finishedProductSpecification || '-' }}
-                      </div>
-                    </td>
-                    <td>
-                      <select
-                        v-model="form.finishedWarehouseId"
-                        class="table-input"
-                        :class="{ invalid: errors.finishedWarehouseId }"
-                        :disabled="!editing || saving"
-                        aria-label="入库仓库"
-                      >
-                        <option value="">请选择仓库</option>
-                        <option
-                          v-for="warehouse in availableWarehouses"
-                          :key="warehouse.id"
-                          :value="String(warehouse.id)"
-                        >
-                          {{ warehouse.name }}
-                        </option>
-                      </select>
-                      <small v-if="errors.finishedWarehouseId" class="cell-error">
-                        {{ errors.finishedWarehouseId }}
-                      </small>
-                    </td>
-                    <td class="right">
+                  <td>
+                    <div class="product-picker">
                       <input
-                        v-model="form.finishedQuantity"
-                        class="table-input number-input"
-                        :class="{ invalid: errors.finishedQuantity }"
+                        v-model="row.finishedProductQuery"
+                        class="table-input"
+                        :class="{ invalid: rowErrors[index]?.finishedProductId }"
                         :readonly="!editing || saving"
-                        type="number"
-                        min="0"
-                        step="0.0001"
-                        placeholder="入库数量"
-                        aria-label="入库数量"
+                        type="text"
+                        autocomplete="off"
+                        aria-label="成品商品"
+                        @focus="openPicker(`finished-${index}`)"
+                        @input="openPicker(`finished-${index}`)"
                       />
-                      <small v-if="errors.finishedQuantity" class="cell-error">
-                        {{ errors.finishedQuantity }}
-                      </small>
-                    </td>
-                  </template>
-                  <template v-else>
-                    <td colspan="4" class="shared-finished-cell">成品入库信息见第 1 行</td>
-                  </template>
+                      <div v-if="activePicker === `finished-${index}` && editing" class="picker-options">
+                        <button
+                          v-for="product in filteredFinishedProducts(row.finishedProductQuery, row)"
+                          :key="product.id"
+                          type="button"
+                          @mousedown.prevent="selectFinishedProduct(product, index)"
+                        >
+                          <strong>{{ product.name }}</strong>
+                          <small>{{ product.code || '无编码' }} · {{ product.specification || '无规格' }}</small>
+                        </button>
+                        <span
+                          v-if="filteredFinishedProducts(row.finishedProductQuery, row).length === 0"
+                          class="picker-empty"
+                        >
+                          没有匹配的成品商品
+                        </span>
+                      </div>
+                    </div>
+                    <small v-if="rowErrors[index]?.finishedProductId" class="cell-error">
+                      {{ rowErrors[index].finishedProductId }}
+                    </small>
+                  </td>
+                  <td>
+                    <div class="combined-spec finished-spec">
+                      {{ row.finishedSpecification || '-' }}
+                    </div>
+                  </td>
+                  <td>
+                    <select
+                      v-model="row.finishedWarehouseId"
+                      class="table-input"
+                      :class="{ invalid: rowErrors[index]?.finishedWarehouseId }"
+                      :disabled="!editing || saving"
+                      aria-label="入库仓库"
+                    >
+                      <option value="">请选择仓库</option>
+                      <option
+                        v-for="warehouse in availableWarehouses"
+                        :key="warehouse.id"
+                        :value="String(warehouse.id)"
+                      >
+                        {{ warehouse.name }}
+                      </option>
+                    </select>
+                    <small v-if="rowErrors[index]?.finishedWarehouseId" class="cell-error">
+                      {{ rowErrors[index].finishedWarehouseId }}
+                    </small>
+                  </td>
+                  <td class="right">
+                    <input
+                      v-model="row.finishedQuantity"
+                      class="table-input number-input"
+                      :class="{ invalid: rowErrors[index]?.finishedQuantity }"
+                      :readonly="!editing || saving"
+                      type="number"
+                      min="0"
+                      step="0.0001"
+                      placeholder="入库数量"
+                      aria-label="入库数量"
+                    />
+                    <small v-if="rowErrors[index]?.finishedQuantity" class="cell-error">
+                      {{ rowErrors[index].finishedQuantity }}
+                    </small>
+                  </td>
                   <td>
                     <input
                       v-model.trim="row.remark"
@@ -365,7 +365,7 @@
                   <td></td>
                   <td></td>
                   <td></td>
-                  <td class="right">{{ formatNumber(form.finishedQuantity || 0) }}</td>
+                  <td class="right">{{ formatNumber(totalFinishedQuantity) }}</td>
                   <td></td>
                 </tr>
               </tbody>
@@ -447,7 +447,6 @@ const allowedProductIds = ref([])
 const rows = ref([])
 const activePicker = ref('')
 const rawProductQuery = ref('')
-const finishedProductQuery = ref('')
 const optionsLoading = ref(false)
 const optionsError = ref('')
 const optionsLoaded = ref(false)
@@ -461,17 +460,11 @@ const form = reactive({
   warehouseId: '',
   warehouseName: '',
   documentDate: '',
-  finishedProductId: '',
-  finishedWarehouseId: '',
-  finishedQuantity: '',
   finishedRemark: ''
 })
 
 const errors = reactive({
-  documentDate: '',
-  finishedProductId: '',
-  finishedWarehouseId: '',
-  finishedQuantity: ''
+  documentDate: ''
 })
 const rowErrors = ref([])
 
@@ -484,10 +477,18 @@ const filledRows = computed(() => rows.value.filter(row => (
   || row.productQuery
   || row.quantity !== ''
   || row.remark
+  || row.finishedProductId
+  || row.finishedProductQuery
+  || row.finishedWarehouseId
+  || row.finishedQuantity !== ''
 )))
 const primaryRemark = computed(() => filledRows.value[0]?.remark || form.finishedRemark || '')
 const totalQuantity = computed(() => rows.value.reduce(
   (sum, row) => sum + Number(row.quantity || 0),
+  0
+))
+const totalFinishedQuantity = computed(() => rows.value.reduce(
+  (sum, row) => sum + Number(row.finishedQuantity || 0),
   0
 ))
 const availableStores = computed(() => stores.value.filter(item => item.status !== 'inactive'))
@@ -497,16 +498,6 @@ const availableWarehouses = computed(() => warehouses.value.filter(item => {
     || !item.storeId
     || String(item.storeId) === String(form.storeId)
 }))
-const finishedProduct = computed(() => finishedProducts.value.find(
-  item => String(item.id) === String(form.finishedProductId)
-) || (
-  props.record?.finishedProductId
-    ? {
-        specification: props.record.finishedProductSpecification || ''
-      }
-    : null
-))
-
 const formatNumber = value => Number(value || 0).toLocaleString('zh-CN', {
   maximumFractionDigits: 3
 })
@@ -527,19 +518,46 @@ const productUnit = product => product?.unit
   || units.value.find(unit => String(unit.id) === String(product?.unitId ?? product?.unit_id))?.name
   || ''
 
-const makeRow = item => ({
-  id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-  productId: item?.productId ? String(item.productId) : '',
-  productQuery: item?.productName || '',
-  productCode: item?.productCode || '',
-  productName: item?.productName || '',
-  specification: item?.specification || '',
-  unit: item?.unit || '',
-  warehouseId: form.warehouseId,
-  quantity: item?.quantity != null ? String(item.quantity) : '',
-  currentStock: 0,
-  remark: item ? (item.remark || props.record?.remark || '') : ''
-})
+const makeRow = (item, index = 0) => {
+  const legacyFinished = item && index === 0
+    ? {
+        finishedProductId: props.record?.finishedProductId,
+        finishedProductName: props.record?.finishedProductName,
+        finishedProductCode: props.record?.finishedProductCode,
+        finishedProductSpecification: props.record?.finishedProductSpecification,
+        finishedProductUnit: props.record?.finishedProductUnit,
+        finishedWarehouseId: props.record?.finishedWarehouseId,
+        finishedWarehouseName: props.record?.finishedWarehouseName,
+        finishedQuantity: props.record?.producedQuantity,
+        finishedRemark: props.record?.finishedRemark
+      }
+    : {}
+  const source = { ...legacyFinished, ...(item || {}) }
+  return {
+    id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    productId: item?.productId ? String(item.productId) : '',
+    productQuery: item?.productName || '',
+    productCode: item?.productCode || '',
+    productName: item?.productName || '',
+    specification: item?.specification || '',
+    unit: item?.unit || '',
+    warehouseId: form.warehouseId,
+    quantity: item?.quantity != null ? String(item.quantity) : '',
+    currentStock: 0,
+    remark: item ? (item.remark || props.record?.remark || '') : '',
+    finishedProductId: source.finishedProductId ? String(source.finishedProductId) : '',
+    finishedProductQuery: source.finishedProductName || '',
+    finishedProductCode: source.finishedProductCode || '',
+    finishedSpecification: source.finishedProductSpecification || '',
+    finishedUnit: source.finishedProductUnit || '',
+    finishedWarehouseId: source.finishedWarehouseId ? String(source.finishedWarehouseId) : '',
+    finishedWarehouseName: source.finishedWarehouseName || '',
+    finishedQuantity: Number(source.finishedQuantity || 0) > 0
+      ? String(source.finishedQuantity)
+      : '',
+    finishedRemark: source.finishedRemark || (item ? (item.remark || props.record?.remark || '') : '')
+  }
+}
 
 const ensureMinimumRows = () => {
   while (rows.value.length < minVisibleRows) {
@@ -549,9 +567,6 @@ const ensureMinimumRows = () => {
 
 const clearErrors = () => {
   errors.documentDate = ''
-  errors.finishedProductId = ''
-  errors.finishedWarehouseId = ''
-  errors.finishedQuantity = ''
   rowErrors.value = []
   formError.value = ''
 }
@@ -563,24 +578,14 @@ const resetForm = () => {
   form.warehouseId = props.record?.warehouseId ? String(props.record.warehouseId) : ''
   form.warehouseName = props.record?.warehouseName || ''
   form.documentDate = props.record?.documentDate || ''
-  form.finishedProductId = props.record?.finishedProductId
-    ? String(props.record.finishedProductId)
-    : ''
-  form.finishedWarehouseId = props.record?.finishedWarehouseId
-    ? String(props.record.finishedWarehouseId)
-    : ''
-  form.finishedQuantity = Number(props.record?.producedQuantity || 0) > 0
-    ? String(props.record.producedQuantity)
-    : ''
   form.finishedRemark = props.record?.finishedRemark || props.record?.remark || ''
   const sourceRows = Array.isArray(props.record?.items) && props.record.items.length
     ? props.record.items
     : [props.record?.primaryItem]
-  rows.value = sourceRows.filter(Boolean).map(makeRow)
+  rows.value = sourceRows.filter(Boolean).map((item, index) => makeRow(item, index))
   if (rows.value.length === 0) rows.value = [makeRow()]
   ensureMinimumRows()
   rawProductQuery.value = rows.value[0]?.productQuery || ''
-  finishedProductQuery.value = props.record?.finishedProductName || ''
 }
 
 const filteredRawProducts = query => {
@@ -603,7 +608,7 @@ const filteredRawProducts = query => {
   })
 }
 
-const filteredFinishedProducts = query => {
+const filteredFinishedProducts = (query, row) => {
   const text = String(query || '').trim().toLowerCase()
   return finishedProducts.value.filter(product => {
     if (product.enabled === false) return false
@@ -612,7 +617,11 @@ const filteredFinishedProducts = query => {
       return false
     }
     const warehouseId = product.warehouseId ?? product.warehouse_id
-    if (warehouseId && form.finishedWarehouseId && String(warehouseId) !== String(form.finishedWarehouseId)) {
+    if (
+      warehouseId
+      && row?.finishedWarehouseId
+      && String(warehouseId) !== String(row.finishedWarehouseId)
+    ) {
       return false
     }
     if (!text) return true
@@ -685,6 +694,15 @@ const loadOptions = async () => {
         row.specification = product.specification || ''
         row.unit = productUnit(product)
       }
+      const finishedProduct = finishedProducts.value.find(
+        item => String(item.id) === String(row.finishedProductId)
+      )
+      if (finishedProduct) {
+        row.finishedProductQuery = finishedProduct.name || ''
+        row.finishedProductCode = finishedProduct.code || ''
+        row.finishedSpecification = finishedProduct.specification || ''
+        row.finishedUnit = productUnit(finishedProduct)
+      }
     })
     refreshAllStock()
   } catch (error) {
@@ -721,11 +739,19 @@ const selectRawProduct = (product, index) => {
   activePicker.value = ''
 }
 
-const selectFinishedProduct = product => {
-  form.finishedProductId = String(product.id)
-  finishedProductQuery.value = product.name || ''
+const selectFinishedProduct = (product, index) => {
+  const row = rows.value[index]
+  if (!row) return
+  row.finishedProductId = String(product.id)
+  row.finishedProductQuery = product.name || ''
+  row.finishedProductCode = product.code || ''
+  row.finishedSpecification = product.specification || ''
+  row.finishedUnit = productUnit(product)
+  row.finishedWarehouseName = availableWarehouses.value.find(
+    item => String(item.id) === String(row.finishedWarehouseId)
+  )?.name || ''
+  rowErrors.value[index] = { ...(rowErrors.value[index] || {}), finishedProductId: '' }
   activePicker.value = ''
-  errors.finishedProductId = ''
 }
 
 const syncStore = () => {
@@ -773,12 +799,7 @@ const startEditing = () => {
 const validate = () => {
   clearErrors()
   let valid = true
-  const activeRows = rows.value.filter(row => (
-    row.productId
-    || row.productQuery
-    || row.quantity !== ''
-    || row.remark
-  ))
+  const activeRows = filledRows.value
   if (!form.storeId) {
     formError.value = '请选择门店。'
     valid = false
@@ -815,6 +836,19 @@ const validate = () => {
       rowError.quantity = '数量必须大于 0'
       valid = false
     }
+    if (!row.finishedProductId) {
+      rowError.finishedProductId = '请选择成品商品'
+      valid = false
+    }
+    if (!row.finishedWarehouseId) {
+      rowError.finishedWarehouseId = '请选择入库仓库'
+      valid = false
+    }
+    const finishedQuantity = Number(row.finishedQuantity)
+    if (!Number.isFinite(finishedQuantity) || finishedQuantity <= 0) {
+      rowError.finishedQuantity = '入库数量必须大于 0'
+      valid = false
+    }
     rowErrors.value[index] = rowError
   })
   activeRows.forEach(row => {
@@ -828,19 +862,6 @@ const validate = () => {
       valid = false
     }
   })
-  if (!form.finishedProductId) {
-    errors.finishedProductId = '请选择成品商品。'
-    valid = false
-  }
-  if (!form.finishedWarehouseId) {
-    errors.finishedWarehouseId = '请选择入库仓库。'
-    valid = false
-  }
-  const finishedQuantity = Number(form.finishedQuantity)
-  if (!Number.isFinite(finishedQuantity) || finishedQuantity <= 0) {
-    errors.finishedQuantity = '入库数量必须大于 0。'
-    valid = false
-  }
   return valid
 }
 
@@ -857,6 +878,8 @@ const submitChanges = async () => {
   if (!validate()) return
   saving.value = true
   try {
+    const activeRows = filledRows.value
+    const firstRow = activeRows[0]
     const response = await request({
       url: `/material-outbounds/${props.record.id}`,
       method: 'PUT',
@@ -864,23 +887,22 @@ const submitChanges = async () => {
         documentDate: form.documentDate,
         storeId: Number(form.storeId),
         warehouseId: Number(form.warehouseId),
-        quantity: Number(rows.value[0]?.quantity || 0),
-        productId: Number(rows.value[0]?.productId || 0),
+        quantity: Number(firstRow?.quantity || 0),
+        productId: Number(firstRow?.productId || 0),
         remark: primaryRemark.value,
-        items: rows.value.filter(row => (
-          row.productId
-          || row.productQuery
-          || row.quantity !== ''
-          || row.remark
-        )).map(row => ({
+        items: activeRows.map(row => ({
           productId: Number(row.productId),
           quantity: Number(row.quantity),
-          remark: row.remark || primaryRemark.value
+          remark: row.remark || primaryRemark.value,
+          finishedProductId: Number(row.finishedProductId),
+          finishedWarehouseId: Number(row.finishedWarehouseId),
+          finishedQuantity: Number(row.finishedQuantity),
+          finishedRemark: row.finishedRemark || row.remark || primaryRemark.value
         })),
-        finishedProductId: Number(form.finishedProductId),
-        finishedWarehouseId: Number(form.finishedWarehouseId),
-        finishedQuantity: Number(form.finishedQuantity),
-        finishedRemark: primaryRemark.value
+        finishedProductId: Number(firstRow?.finishedProductId || 0),
+        finishedWarehouseId: Number(firstRow?.finishedWarehouseId || 0),
+        finishedQuantity: Number(firstRow?.finishedQuantity || 0),
+        finishedRemark: firstRow?.finishedRemark || firstRow?.remark || primaryRemark.value
       }
     })
     emit('updated', response)
@@ -1347,13 +1369,6 @@ button:disabled {
 
 .finished-spec {
   max-width: 100%;
-}
-
-.shared-finished-cell {
-  color: #87939b !important;
-  background: #f8fafb !important;
-  text-align: center;
-  white-space: nowrap;
 }
 
 .cell-subtext,

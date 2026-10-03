@@ -221,6 +221,120 @@ def _resolve_finished_audit_values(conn, document, data):
     }
 
 
+def _resolve_finished_item_values(
+    conn,
+    document,
+    data=None,
+    fallback=None,
+    use_document_fallback=False,
+    line_no=None,
+):
+    document_values = dict(document)
+    payload = data if isinstance(data, dict) else {}
+    fallback_values = dict(fallback or {})
+    store_id = int(document_values["store_id"])
+    line_label = f"第 {line_no} 行" if line_no else "成品入库"
+
+    def source_value(keys, fallback_key, document_key=None):
+        if any(key in payload for key in keys):
+            return _present_value(payload, keys)
+        value = fallback_values.get(fallback_key)
+        if value not in (None, ""):
+            if (
+                use_document_fallback
+                and fallback_key == "finished_quantity"
+                and float(value or 0) <= 0
+            ):
+                value = None
+            else:
+                return value
+        if use_document_fallback:
+            return document_values.get(document_key or fallback_key)
+        return None
+
+    warehouse_id = _optional_int(
+        source_value(
+            ("finishedWarehouseId", "finished_warehouse_id"),
+            "finished_warehouse_id",
+        ),
+        f"{line_label}成品入库仓库",
+    )
+    product_id = _optional_int(
+        source_value(
+            ("finishedProductId", "finished_product_id"),
+            "finished_product_id",
+        ),
+        f"{line_label}成品商品",
+    )
+    quantity_value = source_value(
+        ("finishedQuantity", "producedQuantity", "finished_quantity"),
+        "finished_quantity",
+        "produced_quantity",
+    )
+    remark = _text(
+        source_value(
+            ("finishedRemark", "finished_remark"),
+            "finished_remark",
+            "remark",
+        ),
+        200,
+    )
+
+    if not warehouse_id:
+        raise ValueError(f"{line_label}请填写成品入库仓库")
+    if not product_id:
+        raise ValueError(f"{line_label}请填写成品商品")
+    quantity = _positive_number(quantity_value, f"{line_label}成品入库数量")
+
+    warehouse = _warehouse_row(conn, warehouse_id)
+    if not warehouse or (warehouse["status"] or "active") != "active":
+        raise ValueError(f"{line_label}成品入库仓库不存在或已停用")
+    if int(warehouse["store_id"] or 0) not in (0, store_id):
+        raise ValueError(f"{line_label}成品入库仓库不属于当前门店")
+
+    product = _finished_product_row(conn, product_id)
+    if not product:
+        raise ValueError(f"{line_label}成品商品不存在或已停用")
+
+    product_warehouse_id = product["warehouse_id"]
+    if product_warehouse_id not in (None, "") and int(product_warehouse_id) != warehouse_id:
+        raise ValueError(f"{line_label}成品商品不属于所选成品仓库")
+
+    product_store_ids = _decode_ids(product["store_ids"])
+    if product_store_ids and store_id not in product_store_ids:
+        raise ValueError(f"{line_label}成品商品不属于当前门店")
+
+    return {
+        "warehouse_id": warehouse_id,
+        "warehouse_name": warehouse["name"] or "",
+        "product_id": product_id,
+        "product_code": product["code"] or "",
+        "product_name": product["name"] or "",
+        "product_specification": product["specification"] or "",
+        "product_unit": product["unit_name"] or "",
+        "quantity": quantity,
+        "remark": remark,
+    }
+
+
+def _resolve_finished_items(conn, document, item_rows, payloads=None):
+    payloads = payloads if isinstance(payloads, list) else []
+    values = []
+    for index, item in enumerate(item_rows):
+        payload = payloads[index] if index < len(payloads) else None
+        values.append(
+            _resolve_finished_item_values(
+                conn,
+                document,
+                data=payload,
+                fallback=item,
+                use_document_fallback=index == 0,
+                line_no=index + 1,
+            )
+        )
+    return values
+
+
 def _location_rows(conn):
     stores = [
         dict(row)
@@ -361,6 +475,17 @@ def _serialize_item(row):
     item["productId"] = item.pop("product_id", None)
     item["productCode"] = item.pop("product_code", "") or ""
     item["productName"] = item.pop("product_name", "") or ""
+    item["finishedProductId"] = item.pop("finished_product_id", None)
+    item["finishedProductCode"] = item.pop("finished_product_code", "") or ""
+    item["finishedProductName"] = item.pop("finished_product_name", "") or ""
+    item["finishedProductSpecification"] = (
+        item.pop("finished_product_specification", "") or ""
+    )
+    item["finishedProductUnit"] = item.pop("finished_product_unit", "") or ""
+    item["finishedWarehouseId"] = item.pop("finished_warehouse_id", None)
+    item["finishedWarehouseName"] = item.pop("finished_warehouse_name", "") or ""
+    item["finishedQuantity"] = float(item.pop("finished_quantity", 0) or 0)
+    item["finishedRemark"] = item.pop("finished_remark", "") or ""
     return item
 
 
@@ -822,7 +947,10 @@ def _post_finished_inventory(conn, inbound, item, quantity, store_id, warehouse_
     )
 
 
-def _create_finished_inbound(conn, document, values):
+def _create_finished_inbound(conn, document, values_list):
+    if not values_list:
+        raise ValueError("至少需要一条成品入库明细")
+
     now = _now()
     temporary_no = (
         f"TEMP-FINISHED-{document['id']}-"
@@ -842,10 +970,10 @@ def _create_finished_inbound(conn, document, values):
             temporary_no,
             document["document_date"],
             document["store_id"],
-            values["warehouse_id"],
+            values_list[0]["warehouse_id"],
             _operator(conn),
-            values["remark"],
-            values["quantity"],
+            document["remark"] or values_list[0]["remark"],
+            sum(value["quantity"] for value in values_list),
             now,
             now,
             now,
@@ -860,44 +988,47 @@ def _create_finished_inbound(conn, document, values):
         "UPDATE stock_inbounds SET document_no = ? WHERE id = ?",
         (document_no, inbound_id),
     )
-    item_cursor = conn.execute(
-        """
-        INSERT INTO stock_inbound_items (
-            inbound_id, line_no, product_type, product_id, warehouse_id,
-            product_code, product_name, specification, unit, expected_qty,
-            received_qty, bin_code, batch_no, unit_price, tax_rate,
-            tax_amount, total_amount, remark
-        ) VALUES (?, 1, 'finished-product', ?, ?, ?, ?, ?, ?, NULL, ?,
-                   '', '', NULL, 0, 0, 0, ?)
-        """,
-        (
-            inbound_id,
-            values["product_id"],
-            values["warehouse_id"],
-            values["product_code"],
-            values["product_name"],
-            values["product_specification"],
-            values["product_unit"],
-            values["quantity"],
-            values["remark"],
-        ),
-    )
     inbound = conn.execute(
         "SELECT * FROM stock_inbounds WHERE id = ?",
         (inbound_id,),
     ).fetchone()
-    item = conn.execute(
-        "SELECT * FROM stock_inbound_items WHERE id = ?",
-        (item_cursor.lastrowid,),
-    ).fetchone()
-    _post_finished_inventory(
-        conn,
-        inbound,
-        item,
-        values["quantity"],
-        document["store_id"],
-        values["warehouse_id"],
-    )
+    for line_no, values in enumerate(values_list, start=1):
+        item_cursor = conn.execute(
+            """
+            INSERT INTO stock_inbound_items (
+                inbound_id, line_no, product_type, product_id, warehouse_id,
+                product_code, product_name, specification, unit, expected_qty,
+                received_qty, bin_code, batch_no, unit_price, tax_rate,
+                tax_amount, total_amount, remark
+            ) VALUES (?, ?, 'finished-product', ?, ?, ?, ?, ?, ?, NULL, ?,
+                       '', '', NULL, 0, 0, 0, ?)
+            """,
+            (
+                inbound_id,
+                line_no,
+                values["product_id"],
+                values["warehouse_id"],
+                values["product_code"],
+                values["product_name"],
+                values["product_specification"],
+                values["product_unit"],
+                values["quantity"],
+                values["remark"],
+            ),
+        )
+        item = conn.execute(
+            "SELECT * FROM stock_inbound_items WHERE id = ?",
+            (item_cursor.lastrowid,),
+        ).fetchone()
+        _post_finished_inventory(
+            conn,
+            inbound,
+            item,
+            values["quantity"],
+            document["store_id"],
+            values["warehouse_id"],
+        )
+
     return inbound
 
 
@@ -1229,13 +1360,24 @@ def update_material_outbound(outbound_id):
                 values = _resolve_draft_values(conn, data, existing=existing)
                 settings = _settings_row(conn)
                 items = _resolve_draft_items(conn, data, values, settings)
+                item_payloads = data.get("items")
+                if not isinstance(item_payloads, list) or not item_payloads:
+                    item_payloads = [data]
                 document_for_finished = dict(row)
                 document_for_finished["store_id"] = values["store_id"]
-                finished_values = _resolve_finished_audit_values(
+                finished_fallback_rows = []
+                for index, item in enumerate(items):
+                    previous = dict(old_items[index]) if index < len(old_items) else {}
+                    previous.update(item)
+                    finished_fallback_rows.append(previous)
+                finished_items = _resolve_finished_items(
                     conn,
                     document_for_finished,
-                    data,
+                    finished_fallback_rows,
+                    item_payloads,
                 )
+                first_finished = finished_items[0]
+                finished_total = sum(item["quantity"] for item in finished_items)
                 total_quantity = sum(item["quantity"] for item in items)
                 now = _now()
                 conn.execute(
@@ -1258,16 +1400,16 @@ def update_material_outbound(outbound_id):
                         values["warehouse_id"],
                         values["warehouse_name"],
                         total_quantity,
-                        finished_values["quantity"],
+                        finished_total,
                         values["remark"],
-                        finished_values["product_id"],
-                        finished_values["product_code"],
-                        finished_values["product_name"],
-                        finished_values["product_specification"],
-                        finished_values["product_unit"],
-                        finished_values["warehouse_id"],
-                        finished_values["warehouse_name"],
-                        finished_values["remark"],
+                        first_finished["product_id"],
+                        first_finished["product_code"],
+                        first_finished["product_name"],
+                        first_finished["product_specification"],
+                        first_finished["product_unit"],
+                        first_finished["warehouse_id"],
+                        first_finished["warehouse_name"],
+                        first_finished["remark"],
                         now,
                         outbound_id,
                     ),
@@ -1281,8 +1423,13 @@ def update_material_outbound(outbound_id):
                         """
                         INSERT INTO material_outbound_items (
                             outbound_id, line_no, product_id, product_code,
-                            product_name, specification, unit, quantity, remark
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            product_name, specification, unit, quantity, remark,
+                            finished_product_id, finished_product_code,
+                            finished_product_name, finished_product_specification,
+                            finished_product_unit, finished_warehouse_id,
+                            finished_warehouse_name, finished_quantity,
+                            finished_remark
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                         """,
                         (
                             outbound_id,
@@ -1294,6 +1441,15 @@ def update_material_outbound(outbound_id):
                             item["unit"],
                             item["quantity"],
                             item["remark"],
+                            finished_items[line_no - 1]["product_id"],
+                            finished_items[line_no - 1]["product_code"],
+                            finished_items[line_no - 1]["product_name"],
+                            finished_items[line_no - 1]["product_specification"],
+                            finished_items[line_no - 1]["product_unit"],
+                            finished_items[line_no - 1]["warehouse_id"],
+                            finished_items[line_no - 1]["warehouse_name"],
+                            finished_items[line_no - 1]["quantity"],
+                            finished_items[line_no - 1]["remark"],
                         ),
                     )
                     _save_remark_tag(conn, item["remark"])
@@ -1373,13 +1529,23 @@ def audit_material_outbound(outbound_id):
                 ).fetchall()
                 if not items:
                     raise ValueError("出库单没有原材料明细")
-                finished_values = _resolve_finished_audit_values(conn, document, data)
+                item_payloads = data.get("items")
+                if not isinstance(item_payloads, list) or not item_payloads:
+                    item_payloads = [data]
+                finished_items = _resolve_finished_items(
+                    conn,
+                    document,
+                    items,
+                    item_payloads,
+                )
+                first_finished = finished_items[0]
+                finished_total = sum(item["quantity"] for item in finished_items)
                 for item in items:
                     _post_inventory(conn, document, item)
                 finished_inbound = _create_finished_inbound(
                     conn,
                     document,
-                    finished_values,
+                    finished_items,
                 )
                 now = _now()
                 conn.execute(
@@ -1397,16 +1563,16 @@ def audit_material_outbound(outbound_id):
                     (
                         _operator(conn),
                         now,
-                        finished_values["quantity"],
+                        finished_total,
                         finished_inbound["id"],
-                        finished_values["product_id"],
-                        finished_values["product_code"],
-                        finished_values["product_name"],
-                        finished_values["product_specification"],
-                        finished_values["product_unit"],
-                        finished_values["warehouse_id"],
-                        finished_values["warehouse_name"],
-                        finished_values["remark"],
+                        first_finished["product_id"],
+                        first_finished["product_code"],
+                        first_finished["product_name"],
+                        first_finished["product_specification"],
+                        first_finished["product_unit"],
+                        first_finished["warehouse_id"],
+                        first_finished["warehouse_name"],
+                        first_finished["remark"],
                         now,
                         outbound_id,
                     ),

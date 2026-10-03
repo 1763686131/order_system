@@ -396,21 +396,18 @@
             <dl class="detail-grid">
               <div><dt>门店</dt><dd>{{ detailRecord.storeName || '-' }}</dd></div>
               <div><dt>仓库</dt><dd>{{ detailRecord.warehouseName || '-' }}</dd></div>
-              <div><dt>原材料</dt><dd>{{ detailRecord.primaryItem?.productName || '-' }}</dd></div>
-              <div><dt>规格</dt><dd>{{ detailRecord.primaryItem?.specification || '-' }}</dd></div>
+              <div><dt>原材料</dt><dd>{{ materialSummary(detailRecord) }}</dd></div>
+              <div><dt>规格</dt><dd>{{ materialSpecificationSummary(detailRecord) }}</dd></div>
               <div>
                 <dt>出库数量</dt>
                 <dd>{{ formatNumber(detailRecord.totalQuantity) }} {{ detailRecord.primaryItem?.unit }}</dd>
               </div>
               <div>
                 <dt>成品数量</dt>
-                <dd>
-                  {{ formatNumber(detailRecord.producedQuantity) }}
-                  {{ detailRecord.finishedProductUnit || 'kg' }}
-                </dd>
+                <dd>{{ finishedQuantitySummary(detailRecord) }}</dd>
               </div>
-              <div><dt>成品商品</dt><dd>{{ detailRecord.finishedProductName || '尚未补充' }}</dd></div>
-              <div><dt>成品仓库</dt><dd>{{ detailRecord.finishedWarehouseName || '尚未补充' }}</dd></div>
+              <div><dt>成品商品</dt><dd>{{ finishedProductSummary(detailRecord) }}</dd></div>
+              <div><dt>成品仓库</dt><dd>{{ finishedWarehouseSummary(detailRecord) }}</dd></div>
               <div class="wide"><dt>备注标签</dt><dd>{{ detailRecord.remark || '无' }}</dd></div>
               <div class="wide">
                 <dt>审核信息</dt>
@@ -701,6 +698,53 @@ const statusLabel = status => ({
   cancelled: '已作废'
 }[status] || status)
 
+const detailItems = record => (
+  Array.isArray(record?.items)
+    ? record.items.filter(item => item?.productId || item?.productName)
+    : []
+)
+
+const detailFinishedItems = record => detailItems(record).filter(item => (
+  item.finishedProductId
+  || item.finishedProductName
+  || Number(item.finishedQuantity || 0) > 0
+))
+
+const detailSummary = (values, fallback = '-') => {
+  const uniqueValues = [...new Set(values.map(value => String(value || '').trim()).filter(Boolean))]
+  return uniqueValues.length ? uniqueValues.join('、') : fallback
+}
+
+const materialSummary = record => detailSummary(
+  detailItems(record).map(item => item.productName),
+  record?.primaryItem?.productName || '-'
+)
+
+const materialSpecificationSummary = record => detailSummary(
+  detailItems(record).map(item => item.specification),
+  record?.primaryItem?.specification || '-'
+)
+
+const finishedProductSummary = record => detailSummary(
+  detailFinishedItems(record).map(item => item.finishedProductName),
+  record?.finishedProductName || '尚未补充'
+)
+
+const finishedWarehouseSummary = record => detailSummary(
+  detailFinishedItems(record).map(item => item.finishedWarehouseName),
+  record?.finishedWarehouseName || '尚未补充'
+)
+
+const finishedQuantitySummary = record => {
+  const items = detailFinishedItems(record)
+  if (!items.length) {
+    return `${formatNumber(record?.producedQuantity)} ${record?.finishedProductUnit || 'kg'}`
+  }
+  return items.map(item => (
+    `${formatNumber(item.finishedQuantity)} ${item.finishedProductUnit || ''}`.trim()
+  )).join('、')
+}
+
 const resetFilters = () => {
   keywordInput.value = ''
   filters.keyword = ''
@@ -851,13 +895,38 @@ const handleAuditSlideRelease = async () => {
     closeAuditSlider()
     return
   }
-  if (
-    !record.finishedWarehouseId
-    || !record.finishedProductId
-    || Number(record.producedQuantity || 0) <= 0
-  ) {
+  const rawItems = detailItems(record)
+  const hasPerRowFinished = rawItems.some(item => (
+    item.finishedProductId
+    || item.finishedWarehouseId
+    || Number(item.finishedQuantity || 0) > 0
+  ))
+  const legacyFinishedReady = (
+    record.finishedWarehouseId
+    && record.finishedProductId
+    && Number(record.producedQuantity || 0) > 0
+  )
+  let itemPayload
+  if (hasPerRowFinished) {
+    const incompleteIndex = rawItems.findIndex(item => (
+      !item.finishedWarehouseId
+      || !item.finishedProductId
+      || Number(item.finishedQuantity || 0) <= 0
+    ))
+    if (incompleteIndex >= 0) {
+      auditSlideValue.value = 0
+      detailActionError.value = `请先点击“修改”补充第 ${incompleteIndex + 1} 行的成品商品、入库仓库和入库数量。`
+      return
+    }
+    itemPayload = rawItems.map(item => ({
+      finishedProductId: item.finishedProductId,
+      finishedWarehouseId: item.finishedWarehouseId,
+      finishedQuantity: item.finishedQuantity,
+      finishedRemark: item.finishedRemark || item.remark || record.finishedRemark || record.remark || ''
+    }))
+  } else if (!legacyFinishedReady || rawItems.length > 1) {
     auditSlideValue.value = 0
-    detailActionError.value = '请先点击“修改”补充成品商品、入库仓库和入库数量。'
+    detailActionError.value = '请先点击“修改”补充每一行的成品商品、入库仓库和入库数量。'
     return
   }
 
@@ -868,6 +937,7 @@ const handleAuditSlideRelease = async () => {
       url: `/material-outbounds/${record.id}/audit`,
       method: 'POST',
       data: {
+        ...(itemPayload ? { items: itemPayload } : {}),
         finishedWarehouseId: record.finishedWarehouseId,
         finishedProductId: record.finishedProductId,
         finishedQuantity: record.producedQuantity,

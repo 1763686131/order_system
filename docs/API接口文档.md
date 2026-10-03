@@ -2603,10 +2603,23 @@ receipt_image: File (图片文件)
   "warehouseId": 2,
   "productId": 8,
   "quantity": 30,
-  "remark": "棒棒糖"
+  "remark": "棒棒糖",
+  "items": [
+    {
+      "productId": 8,
+      "quantity": 30,
+      "remark": "棒棒糖",
+      "finishedProductId": 18,
+      "finishedWarehouseId": 5,
+      "finishedQuantity": 120,
+      "finishedRemark": "棒棒糖"
+    }
+  ]
 }
 ```
 
+- `items` 为批量明细数组；每一行都可以填写不同的原材料、出库数量、成品商品、成品仓库和入库数量。
+- `productId`、`quantity`、`remark` 以及成品字段仍保留在请求顶层，用于兼容旧版单行请求，顶层值对应第一行。
 - **返回**: 返回更新后的 `materialOutbound`，字段结构与 `8.3` 查询接口中的单据结构一致。
 
 ### 8.5 审核原材料出库单
@@ -2616,14 +2629,25 @@ receipt_image: File (图片文件)
 
 ```json
 {
-  "finishedWarehouseId": 5,
-  "finishedProductId": 18,
-  "finishedQuantity": 120,
-  "finishedRemark": "棒棒糖"
+  "items": [
+    {
+      "finishedWarehouseId": 5,
+      "finishedProductId": 18,
+      "finishedQuantity": 120,
+      "finishedRemark": "棒棒糖"
+    },
+    {
+      "finishedWarehouseId": 5,
+      "finishedProductId": 19,
+      "finishedQuantity": 80,
+      "finishedRemark": "棒棒糖"
+    }
+  ]
 }
 ```
 
-- **说明**: 审核窗口需要补齐成品入库仓库、成品商品和成品入库数量；成品备注默认沿用触屏端备注。
+- **说明**: `items` 按原材料出库明细逐行对应，审核窗口需要补齐每一行的成品入库仓库、成品商品和成品入库数量；成品备注默认沿用对应行的触屏端备注。
+  仍可使用旧版顶层成品字段审核单行历史草稿。
   后端在同一事务内校验实时原材料库存、按 FIFO 扣减 `stock_balances`、写入原材料出库流水，
   自动创建一张 `finished-product` 类型的已审核成品入库单、写入成品库存余额和入库流水，
   最后将原材料出库单状态更新为 `reviewed`。

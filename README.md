@@ -213,10 +213,10 @@ order_system/
 │  │  └─ admin/
 │  │     ├─ products/
 │  │     │  ├─ ProductList.vue       # 成品档案
-│  │     │  ├─ MaterialProductList.vue
+│  │     │  ├─ MaterialProductList.vue 
 │  │     │  ├─ InventoryList.vue     # 成品库存
 │  │     │  ├─ MaterialInventory.vue # 原材料库存及库存金额
-│  │     │  ├─ MaterialOutboundList.vue # 原材料出库审核与触屏端配置
+│  │     │  ├─ MaterialOutboundList.vue # 原材料出库历史审核与触屏端配置
 │  │     │  └─ StockRecordList.vue   # 入库/出库记录通用组件
 │  │     ├─ sales/                   # 销售管理
 │  │     │  ├─ UnifiedOrderList.vue  # 销售订单和物流订单列表
@@ -226,7 +226,7 @@ order_system/
 │  │     │  ├─ PurchaseList.vue      # 采购订单/采购入库共用列表；按路由 mode 显示字段
 │  │     │  └─ SupplierList.vue      # 供应商管理
 │  │     ├─ inventory/               # 仓库管理
-│  │     ├─ finance/
+│  │     ├─ finance/                  #财务
 │  │     │  ├─ Receivables.vue        # 客户应收欠款汇总
 │  │     │  ├─ PaymentHistory.vue     # 收款历史、收款单录入与审核
 │  │     │  ├─ BankAccounts.vue       # 银行账户管理（卡片展示、翻转查看余额）
@@ -237,12 +237,12 @@ order_system/
 │  │     │  ├─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
 │  │     │  ├─ PrintTemplate.vue     # 打印模板管理
 │  │     │  └─ OperationLogs.vue     # 操作日志筛选、分页、详情和清空
-│  │     └─ hr/
+│  │     └─ hr/                       #人事行政
 │  │        ├─ AccountManage.vue     # 员工档案、可选登录账号和头像上传
 │  │        ├─ DepartmentManage.vue  # 部门配置、员工归属和职位维护
 │  │        └─ Reports.vue           # 人事检测报告
 │  ├─ router/index.js                # 前端路由和登录守卫
-│  ├─ utils/
+│  ├─ utils/                          
 │  │  ├─ accessControl.js            # 权限、角色并集和数据范围过滤
 │  │  ├─ adminAccess.js              # 后台菜单分支和路由权限映射
 │  │  ├─ adminRealtime.js            # 后台组件共享的 EventSource 客户端
