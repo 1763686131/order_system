@@ -9,8 +9,8 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `5.4` |
-| 文档更新 | `2026-09-30` |
+| 权限/API 文档版本 | `5.5` |
+| 文档更新 | `2026-10-03` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -41,7 +41,8 @@
 - 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
 - 操作日志：记录账号安全、角色权限、员工部门及指定业务写操作，支持筛选和清空
 - 物流复制模板：支持服务器保存、历史模板、复制入口和绑定用户、变量拖拽/点击插入、逐件换行、变量拼接及实时预览
-- 原材料触屏出库、审核和库存流水
+- 原材料触屏辅助出库、后台完整录入、多行明细修改、审核和库存流水
+- 原材料出库审核时同步批量扣减原材料库存并批量创建成品入库
 
 ## 快速开始
 
@@ -143,7 +144,7 @@ order_system/
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
 │  │  ├─ raw_material_products.py    # 原材料商品档案接口
 │  │  ├─ stock_inbounds.py           # 供应商、入库单、审核、库存余额和流水
-│  │  ├─ material_outbounds.py        # 触屏原材料出库草稿、配置、审核和库存扣减
+│  │  ├─ material_outbounds.py        # 原材料出库触屏辅助、后台录入、审核和库存扣减
 │  │  ├─ stores.py                   # 门店接口
 │  │  ├─ warehouses.py               # 仓库接口
 │  │  ├─ customers.py                # 客户、应收欠款与账户汇总接口
@@ -193,6 +194,7 @@ order_system/
 │  │  │  └─ NomiFloatingAI.vue       # nomi小人
 │  │  ├─ admin/
 │  │  │  ├─ BusinessDocumentForm.vue # 销售订单、销售退货、原材料进货共用录入界面
+│  │  │  ├─ MaterialOutboundAuditModal.vue # 原材料出库后台新增、修改与批量明细
 │  │  │  ├─ AvatarCropper.vue        # 员工头像拖动、缩放和裁剪弹窗
 │  │  │  ├─ DirectoryPanel.vue       # 后台通讯录搜索、部门折叠和员工状态
 │  │  │  ├─ MessageInbox.vue         # 留言会话与审核通知双模式面板
@@ -216,7 +218,7 @@ order_system/
 │  │     │  ├─ MaterialProductList.vue 
 │  │     │  ├─ InventoryList.vue     # 成品库存
 │  │     │  ├─ MaterialInventory.vue # 原材料库存及库存金额
-│  │     │  ├─ MaterialOutboundList.vue # 原材料出库历史审核与触屏端配置
+│  │     │  ├─ MaterialOutboundList.vue # 原材料出库录入、历史审核与触屏端配置
 │  │     │  └─ StockRecordList.vue   # 入库/出库记录通用组件
 │  │     ├─ sales/                   # 销售管理
 │  │     │  ├─ UnifiedOrderList.vue  # 销售订单和物流订单列表
@@ -424,11 +426,22 @@ import {
 
 ### 原材料触屏出库
 
-- 员工在前台触屏弹窗录入出库数量、成品数量和备注标签，提交后生成草稿，不立即扣减库存。
-- 管理员在“库存 / 原材料出库”中审核草稿；审核会按先进先出扣减 `stock_balances` 并写入 `stock_movements`。
-- 反审核会按原库存流水回补对应批次和库位。
+- 前台触屏端是辅助输入入口：员工录入原材料、出库数量和备注后生成 `draft` 草稿，不立即扣减库存；触屏端原材料仍受后台配置的可操作范围限制。
+- 后台“库存 / 原材料出库”提供“录入出库单”和“修改”入口。后台录入或修改时，可以增加多行原材料，并为每行补齐成品商品、入库仓库、入库数量和备注；后台编辑不受触屏端原材料白名单限制。
+- 草稿详情页的“审核并扣减库存”使用滑块确认，审核成功后按明细批量扣减原材料库存，同时批量创建成品入库和库存流水。
+- 草稿保存、后台修改和取消不会改变库存；反审核会回补原材料库存、取消关联成品入库，并将单据恢复为待审核草稿。
 - 默认门店、默认仓库、可操作原材料和默认原材料由原材料出库页面统一配置。
 - 旧 `/api/materials` 使用/生产流水接口已经下线；库存统一由入库、出库审核和 `stock_movements` 维护。
+
+#### 原材料出库后台操作顺序
+
+1. 触屏端提交辅助草稿，或在后台点击“录入出库单”从空白表格开始填写。
+2. 在出库明细表中选择原材料和出库仓库；同一单据可以增加多行原材料。
+3. 为每行选择成品商品、入库仓库并填写成品入库数量，确认原材料出库数量不超过当前库存。
+4. 点击“修改”保存草稿；打开详情后，将审核滑块滑到末端完成审核。
+5. 审核失败时单据保持草稿，补齐缺失信息或处理库存不足后重新审核。
+
+接口字段、权限和状态变化详见 [原材料出库 API](docs/API接口文档.md#8-原材料触屏出库)。
 
 ## 主要页面
 
@@ -444,7 +457,7 @@ import {
 | `/admin/purchase/inbound/:id` | 查看、打印进货单（公共表单） | `/api/stock-inbounds/:id`、`/api/print-templates` |
 | `/admin/inventory` | 成品库存 | `/api/products/inventory` |
 | `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances`、`/api/stock-movements` |
-| `/admin/inventory/material-outbounds` | 原材料出库审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbound-settings` |
+| `/admin/inventory/material-outbounds` | 原材料出库录入、修改、审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbounds/admin`、`/api/material-outbound-settings` |
 | `/admin/stock/in` | 入库记录 | `/api/stock-inbounds` |
 | `/admin/stock/out` | 出库记录 | `/api/orders` |
 | `/admin/inventory/warehouse` | 仓库管理 | `/api/warehouses` |
@@ -970,6 +983,16 @@ docker restart my_order_app
 ### 提交入库单后库存没有变化
 
 提交审核只创建待审核单据。请进入“入库记录”，打开单据抽屉并点击“审核”。只有审核接口成功返回后，库存才会增加。
+
+### 为什么后台修改原材料时不再提示触屏端可操作范围
+
+触屏端原材料白名单只约束前台辅助录入接口。后台“录入出库单”和草稿“修改”使用管理员接口，
+允许选择有效且启用的原材料；门店、仓库、库存数量和审核时的库存校验仍然保留。
+
+### 原材料出库什么时候真正改变库存
+
+触屏提交、后台录入、后台修改和草稿作废都只保存单据，不改变库存。只有详情窗口将审核滑块滑到末端并审核成功后，
+才会批量扣减原材料并创建成品入库；审核失败会保持草稿状态，反审核会回滚已过账的库存流水。
 
 ### 保存退货单后客户欠款和库存没有变化
 
