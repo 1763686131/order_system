@@ -421,6 +421,7 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'updated'])
 const userStore = useUserStore()
+const minVisibleRows = 5
 
 const stores = ref([])
 const warehouses = ref([])
@@ -464,7 +465,13 @@ const currentUserName = computed(() => userStore.name || userStore.username || '
 const sourceLabel = computed(() => props.record?.source === 'touch'
   ? '触屏端辅助输入'
   : (props.record?.source || '-'))
-const primaryRemark = computed(() => rows.value[0]?.remark || form.finishedRemark || '')
+const filledRows = computed(() => rows.value.filter(row => (
+  row.productId
+  || row.productQuery
+  || row.quantity !== ''
+  || row.remark
+)))
+const primaryRemark = computed(() => filledRows.value[0]?.remark || form.finishedRemark || '')
 const totalQuantity = computed(() => rows.value.reduce(
   (sum, row) => sum + Number(row.quantity || 0),
   0
@@ -511,8 +518,14 @@ const makeRow = item => ({
   warehouseId: form.warehouseId,
   quantity: item?.quantity != null ? String(item.quantity) : '',
   currentStock: 0,
-  remark: item?.remark || props.record?.remark || ''
+  remark: item ? (item.remark || props.record?.remark || '') : ''
 })
+
+const ensureMinimumRows = () => {
+  while (rows.value.length < minVisibleRows) {
+    rows.value.push(makeRow())
+  }
+}
 
 const clearErrors = () => {
   errors.documentDate = ''
@@ -545,6 +558,7 @@ const resetForm = () => {
     : [props.record?.primaryItem]
   rows.value = sourceRows.filter(Boolean).map(makeRow)
   if (rows.value.length === 0) rows.value = [makeRow()]
+  ensureMinimumRows()
   rawProductQuery.value = rows.value[0]?.productQuery || ''
   finishedProductQuery.value = props.record?.finishedProductName || ''
 }
@@ -720,6 +734,7 @@ const addRow = () => {
 const removeRow = index => {
   if (rows.value.length <= 1) return
   rows.value.splice(index, 1)
+  ensureMinimumRows()
   if (index === 0) {
     rawProductQuery.value = rows.value[0]?.productQuery || ''
   }
@@ -738,6 +753,12 @@ const startEditing = () => {
 const validate = () => {
   clearErrors()
   let valid = true
+  const activeRows = rows.value.filter(row => (
+    row.productId
+    || row.productQuery
+    || row.quantity !== ''
+    || row.remark
+  ))
   if (!form.storeId) {
     formError.value = '请选择门店。'
     valid = false
@@ -750,13 +771,14 @@ const validate = () => {
     formError.value = formError.value || '请选择出库仓库。'
     valid = false
   }
-  if (!rows.value.length) {
+  if (!activeRows.length) {
     formError.value = formError.value || '至少保留一条原材料明细。'
     valid = false
   }
   const requestedByStock = new Map()
   rowErrors.value = rows.value.map(() => ({}))
-  rows.value.forEach((row, index) => {
+  activeRows.forEach(row => {
+    const index = rows.value.indexOf(row)
     const rowError = {}
     if (!row.productId) {
       rowError.productId = '请选择原材料'
@@ -775,7 +797,8 @@ const validate = () => {
     }
     rowErrors.value[index] = rowError
   })
-  rows.value.forEach((row, index) => {
+  activeRows.forEach(row => {
+    const index = rows.value.indexOf(row)
     const key = `${row.productId}:${form.warehouseId}`
     if (
       row.productId
@@ -824,7 +847,12 @@ const submitChanges = async () => {
         quantity: Number(rows.value[0]?.quantity || 0),
         productId: Number(rows.value[0]?.productId || 0),
         remark: primaryRemark.value,
-        items: rows.value.map(row => ({
+        items: rows.value.filter(row => (
+          row.productId
+          || row.productQuery
+          || row.quantity !== ''
+          || row.remark
+        )).map(row => ({
           productId: Number(row.productId),
           quantity: Number(row.quantity),
           remark: row.remark || primaryRemark.value
