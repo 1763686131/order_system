@@ -128,9 +128,15 @@
             <tr v-else-if="filteredRecords.length === 0">
               <td colspan="11" class="empty-cell">暂无匹配的原材料出库记录</td>
             </tr>
-            <tr v-for="record in filteredRecords" v-else :key="record.id">
+            <tr
+              v-for="record in filteredRecords"
+              v-else
+              :key="record.id"
+              class="record-row"
+              @click="openDetail(record)"
+            >
               <td>
-                <button type="button" class="document-link" @click="openDetail(record)">
+                <button type="button" class="document-link" @click.stop="openDetail(record)">
                   {{ record.documentNo }}
                 </button>
               </td>
@@ -178,8 +184,7 @@
                 <span v-else>-</span>
               </td>
               <td class="actions-column">
-                <div class="row-actions">
-                  <button type="button" @click="openDetail(record)">详情</button>
+                <div class="row-actions" @click.stop>
                   <button
                     v-if="record.status === 'draft'"
                     type="button"
@@ -1459,6 +1464,15 @@ th:nth-child(11) { width: 166px; }
 
 .actions-column {
   text-align: center;
+}
+
+.record-row {
+  cursor: pointer;
+  transition: background-color 0.16s ease;
+}
+
+.record-row:hover td {
+  background: #f7fbfa;
 }
 
 .row-actions {

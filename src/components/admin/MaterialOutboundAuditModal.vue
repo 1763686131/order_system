@@ -1138,6 +1138,27 @@ button:disabled {
 }
 
 .products-table th {
+  height: 48px;
+  padding: 8px 7px;
+}
+
+.products-table tbody tr.data-row td {
+  height: 64px;
+  padding: 8px 7px;
+  vertical-align: middle;
+}
+
+.products-table tbody tr.data-row td input,
+.products-table tbody tr.data-row td select {
+  height: 40px;
+}
+
+.products-table tbody tr.data-row .row-action {
+  width: 30px;
+  height: 30px;
+}
+
+.products-table th {
   color: var(--muted);
   background: #f8fafb;
   font-size: 12px;
