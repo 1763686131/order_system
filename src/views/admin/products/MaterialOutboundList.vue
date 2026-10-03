@@ -183,10 +183,9 @@
                   <button
                     v-if="record.status === 'draft'"
                     type="button"
-                    class="audit-action"
-                    @click="requestAction('audit', record)"
+                    @click="requestAction('edit', record)"
                   >
-                    审核
+                    修改
                   </button>
                   <button
                     v-else-if="record.status === 'reviewed'"
@@ -215,13 +214,6 @@
       :record="auditRecord"
       @close="auditRecord = null"
       @updated="handleEditSuccess"
-    />
-
-    <MaterialOutboundReviewSlider
-      :visible="Boolean(reviewRecord)"
-      :record="reviewRecord"
-      @close="reviewRecord = null"
-      @audited="handleAuditSuccess"
     />
 
     <teleport to="body">
@@ -435,7 +427,7 @@
               作废草稿
             </button>
             <div class="modal-footer-actions">
-              <button type="button" class="button secondary" @click="detailRecord = null">关闭</button>
+              <button type="button" class="button secondary" @click="closeDetail">关闭</button>
               <button
                 v-if="detailRecord.status === 'draft'"
                 type="button"
@@ -444,14 +436,55 @@
               >
                 修改
               </button>
-              <button
-                v-if="detailRecord.status === 'draft'"
-                type="button"
-                class="button primary"
-                @click="requestAction('audit', detailRecord)"
-              >
-                审核并扣减库存
-              </button>
+              <template v-if="detailRecord.status === 'draft'">
+                <button
+                  v-if="!auditSlideVisible"
+                  type="button"
+                  class="button primary"
+                  :disabled="auditLoading"
+                  @click="handleAuditOrder"
+                >
+                  审核并扣减库存
+                </button>
+                <div v-else class="audit-slide-row">
+                  <div
+                    class="audit-slide-track"
+                    :class="{ loading: auditLoading }"
+                    :style="{ '--audit-slide-progress': auditSlideValue }"
+                  >
+                    <div class="audit-slide-progress" aria-hidden="true"></div>
+                    <span class="audit-slide-label">
+                      {{ auditLoading ? '审核中...' : '滑动以审核' }}
+                    </span>
+                    <input
+                      ref="auditSlideInput"
+                      v-model.number="auditSlideValue"
+                      class="audit-slide-input"
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      aria-label="向右滑动确认审核"
+                      :aria-valuetext="`${auditSlideValue}%`"
+                      :disabled="auditLoading"
+                      @change="handleAuditSlideRelease"
+                      @keydown.esc.prevent="closeAuditSlider"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    class="audit-slide-cancel"
+                    title="取消审核"
+                    aria-label="取消审核"
+                    :disabled="auditLoading"
+                    @click="closeAuditSlider"
+                  >
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="m6 6 12 12M18 6 6 18"></path>
+                    </svg>
+                  </button>
+                </div>
+              </template>
               <button
                 v-else-if="detailRecord.status === 'reviewed'"
                 type="button"
@@ -462,6 +495,9 @@
               </button>
             </div>
           </footer>
+          <div v-if="detailActionError" class="detail-action-error" role="alert">
+            {{ detailActionError }}
+          </div>
         </section>
       </div>
 
@@ -490,10 +526,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import request from '@/api/request'
 import MaterialOutboundAuditModal from '@/components/admin/MaterialOutboundAuditModal.vue'
-import MaterialOutboundReviewSlider from '@/components/admin/MaterialOutboundReviewSlider.vue'
 
 const loading = ref(false)
 const loadError = ref('')
@@ -527,9 +562,13 @@ const settingsForm = reactive({
 })
 const detailRecord = ref(null)
 const auditRecord = ref(null)
-const reviewRecord = ref(null)
 const pendingAction = ref(null)
 const actionLoading = ref(false)
+const auditSlideVisible = ref(false)
+const auditSlideValue = ref(0)
+const auditSlideInput = ref(null)
+const auditLoading = ref(false)
+const detailActionError = ref('')
 
 const recordsForSelectedStore = computed(() => records.value.filter(record => (
   filters.storeId === null
@@ -736,17 +775,20 @@ const saveSettings = async () => {
 }
 
 const openDetail = record => {
+  closeAuditSlider()
+  detailActionError.value = ''
   detailRecord.value = record
 }
 
 const requestAction = (type, record) => {
   if (type === 'audit') {
-    detailRecord.value = null
     pendingAction.value = null
-    reviewRecord.value = record
+    detailRecord.value = record
+    handleAuditOrder()
     return
   }
   if (type === 'edit') {
+    closeAuditSlider()
     detailRecord.value = null
     pendingAction.value = null
     auditRecord.value = record
@@ -755,11 +797,11 @@ const requestAction = (type, record) => {
   pendingAction.value = { type, record }
 }
 
-const handleAuditSuccess = async () => {
-  reviewRecord.value = null
+const closeDetail = () => {
+  if (auditLoading.value) return
+  closeAuditSlider()
+  detailActionError.value = ''
   detailRecord.value = null
-  await loadData()
-  window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
 }
 
 const handleEditSuccess = async response => {
@@ -774,6 +816,73 @@ const handleEditSuccess = async response => {
     detailRecord.value = null
   }
   window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
+}
+
+const handleAuditOrder = () => {
+  if (!detailRecord.value || auditLoading.value) return
+  detailActionError.value = ''
+  auditSlideValue.value = 0
+  auditSlideVisible.value = true
+  nextTick(() => {
+    auditSlideInput.value?.focus()
+  })
+}
+
+const closeAuditSlider = () => {
+  if (auditLoading.value) return
+  auditSlideValue.value = 0
+  auditSlideVisible.value = false
+}
+
+const handleAuditSlideRelease = async () => {
+  if (auditSlideValue.value < 95) {
+    auditSlideValue.value = 0
+    return
+  }
+
+  auditSlideValue.value = 100
+  const record = detailRecord.value
+  if (!record) {
+    closeAuditSlider()
+    return
+  }
+  if (
+    !record.finishedWarehouseId
+    || !record.finishedProductId
+    || Number(record.producedQuantity || 0) <= 0
+  ) {
+    auditSlideValue.value = 0
+    detailActionError.value = '请先点击“修改”补充成品商品、入库仓库和入库数量。'
+    return
+  }
+
+  auditLoading.value = true
+  detailActionError.value = ''
+  try {
+    const response = await request({
+      url: `/material-outbounds/${record.id}/audit`,
+      method: 'POST',
+      data: {
+        finishedWarehouseId: record.finishedWarehouseId,
+        finishedProductId: record.finishedProductId,
+        finishedQuantity: record.producedQuantity,
+        finishedRemark: record.finishedRemark || record.remark || ''
+      }
+    })
+    await loadData()
+    const updatedRecord = response?.materialOutbound || response
+    detailRecord.value = records.value.find(
+      item => String(item.id) === String(record.id)
+    ) || updatedRecord
+    auditSlideVisible.value = false
+    auditSlideValue.value = 0
+    window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
+  } catch (error) {
+    auditSlideValue.value = 0
+    detailActionError.value = error?.response?.data?.message || '审核失败，请检查库存和成品入库信息。'
+  } finally {
+    auditLoading.value = false
+  }
 }
 
 const executeAction = async () => {
@@ -1823,6 +1932,159 @@ th:nth-child(11) { width: 166px; }
   justify-content: space-between;
 }
 
+.detail-action-error {
+  margin: 0 18px 12px;
+  padding: 9px 11px;
+  color: #b42318;
+  background: #fff6f6;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.audit-slide-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.audit-slide-track {
+  --audit-slide-progress: 0;
+  position: relative;
+  width: 250px;
+  max-width: calc(100vw - 150px);
+  height: 42px;
+  overflow: hidden;
+  background: #eef2f3;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  box-shadow: inset 0 1px 3px rgba(15, 23, 42, 0.1);
+}
+
+.audit-slide-progress {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: calc(var(--audit-slide-progress) * 1%);
+  background: linear-gradient(90deg, #a9e5d2, #0f9f78);
+  transition: width 0.08s linear;
+}
+
+.audit-slide-label {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-left: 28px;
+  color: #596579;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0;
+  pointer-events: none;
+  transition: color 0.18s ease;
+}
+
+.audit-slide-track.loading .audit-slide-label {
+  color: #fff;
+}
+
+.audit-slide-input {
+  position: absolute;
+  inset: 3px;
+  z-index: 2;
+  width: calc(100% - 6px);
+  height: 36px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+}
+
+.audit-slide-input:active {
+  cursor: grabbing;
+}
+
+.audit-slide-input:disabled {
+  cursor: wait;
+}
+
+.audit-slide-input::-webkit-slider-runnable-track {
+  height: 36px;
+  background: transparent;
+}
+
+.audit-slide-input::-webkit-slider-thumb {
+  width: 36px;
+  height: 36px;
+  margin-top: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: #fff;
+  border: 1px solid #c7d0da;
+  border-radius: 6px;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.24);
+}
+
+.audit-slide-input::-moz-range-track {
+  height: 36px;
+  background: transparent;
+  border: 0;
+}
+
+.audit-slide-input::-moz-range-progress {
+  height: 36px;
+  background: transparent;
+}
+
+.audit-slide-input::-moz-range-thumb {
+  width: 34px;
+  height: 34px;
+  background: #fff;
+  border: 1px solid #c7d0da;
+  border-radius: 6px;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.24);
+}
+
+.audit-slide-input:focus-visible {
+  outline: 2px solid var(--accent, #0f9f78);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+.audit-slide-cancel {
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #64748b;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.audit-slide-cancel:hover:not(:disabled) {
+  color: #dc3545;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.audit-slide-cancel:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.audit-slide-cancel svg {
+  width: 16px;
+  height: 16px;
+}
+
 .confirm-layer {
   z-index: 2147483000;
 }
@@ -1972,6 +2234,16 @@ th:nth-child(11) { width: 166px; }
 
   .modal-footer-actions .button {
     flex: 1;
+  }
+
+  .audit-slide-row {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .audit-slide-track {
+    width: 100%;
+    max-width: none;
   }
 }
 
