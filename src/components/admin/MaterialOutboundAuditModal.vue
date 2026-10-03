@@ -620,7 +620,7 @@ const localDate = () => {
   return new Date(date.getTime() - offset * 60000).toISOString().slice(0, 10)
 }
 
-const resetForm = () => {
+const resetForm = ({ editable = isCreateMode.value } = {}) => {
   clearErrors()
   if (isCreateMode.value) {
     editing.value = true
@@ -635,7 +635,7 @@ const resetForm = () => {
     return
   }
 
-  editing.value = false
+  editing.value = editable
   form.storeId = props.record?.storeId ? String(props.record.storeId) : ''
   form.warehouseId = props.record?.warehouseId ? String(props.record.warehouseId) : ''
   form.warehouseName = props.record?.warehouseName || ''
@@ -775,9 +775,13 @@ const initialize = async () => {
   if (!isCreateMode.value && !props.record) return
   if (initializedRecordId.value !== initializationKey) {
     initializedRecordId.value = initializationKey
-    resetForm()
+    resetForm({ editable: true })
   }
-  if (!optionsLoaded.value) await loadOptions()
+  if (!optionsLoaded.value) {
+    await loadOptions()
+  } else {
+    refreshAllStock()
+  }
 }
 
 const openPicker = key => {
