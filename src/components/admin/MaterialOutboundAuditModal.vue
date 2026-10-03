@@ -1059,10 +1059,6 @@ button:disabled {
     margin-left: 0;
   }
 
-  .header-audit-button {
-    flex: 1;
-  }
-
   .finance-row {
     align-items: stretch;
     flex-direction: column;
