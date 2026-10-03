@@ -529,7 +529,12 @@ def _serialize_document(conn, row, include_items=True):
     return document
 
 
-def _resolve_draft_values(conn, data, existing=None):
+def _resolve_draft_values(
+    conn,
+    data,
+    existing=None,
+    enforce_allowed_products=True,
+):
     existing = existing or {}
     settings = _settings_row(conn)
     if not settings:
@@ -556,7 +561,7 @@ def _resolve_draft_values(conn, data, existing=None):
     )
     if not store_id or not warehouse_id or not product_id:
         raise ValueError("请先在后台配置默认门店、仓库和原材料")
-    if product_id not in allowed_ids:
+    if enforce_allowed_products and product_id not in allowed_ids:
         raise ValueError("该原材料未包含在触屏端可操作范围内")
 
     store = conn.execute(
@@ -622,7 +627,13 @@ def _resolve_draft_values(conn, data, existing=None):
     }
 
 
-def _resolve_draft_items(conn, data, values, settings):
+def _resolve_draft_items(
+    conn,
+    data,
+    values,
+    settings,
+    enforce_allowed_products=True,
+):
     payloads = data.get("items")
     if not isinstance(payloads, list) or not payloads:
         payloads = [data]
@@ -644,7 +655,7 @@ def _resolve_draft_items(conn, data, values, settings):
         )
         if not product_id:
             raise ValueError(f"第 {index + 1} 行请选择原材料商品")
-        if product_id not in allowed_ids:
+        if enforce_allowed_products and product_id not in allowed_ids:
             raise ValueError("所选原材料未包含在触屏端可操作范围内")
 
         product = _product_row(conn, product_id)
@@ -1618,9 +1629,20 @@ def update_material_outbound(outbound_id):
                     datetime.strptime(document_date, "%Y-%m-%d")
                 except (TypeError, ValueError):
                     raise ValueError("单据日期格式应为 YYYY-MM-DD")
-                values = _resolve_draft_values(conn, data, existing=existing)
+                values = _resolve_draft_values(
+                    conn,
+                    data,
+                    existing=existing,
+                    enforce_allowed_products=False,
+                )
                 settings = _settings_row(conn)
-                items = _resolve_draft_items(conn, data, values, settings)
+                items = _resolve_draft_items(
+                    conn,
+                    data,
+                    values,
+                    settings,
+                    enforce_allowed_products=False,
+                )
                 item_payloads = data.get("items")
                 if not isinstance(item_payloads, list) or not item_payloads:
                     item_payloads = [data]
