@@ -215,6 +215,7 @@
       :record="auditRecord"
       @close="auditRecord = null"
       @audited="handleAuditSuccess"
+      @updated="handleEditSuccess"
     />
 
     <teleport to="body">
@@ -429,6 +430,14 @@
             </button>
             <div class="modal-footer-actions">
               <button type="button" class="button secondary" @click="detailRecord = null">关闭</button>
+              <button
+                v-if="detailRecord.status === 'draft'"
+                type="button"
+                class="button secondary"
+                @click="requestAction('edit', detailRecord)"
+              >
+                修改
+              </button>
               <button
                 v-if="detailRecord.status === 'draft'"
                 type="button"
@@ -723,7 +732,7 @@ const openDetail = record => {
 }
 
 const requestAction = (type, record) => {
-  if (type === 'audit') {
+  if (type === 'audit' || type === 'edit') {
     detailRecord.value = null
     pendingAction.value = null
     auditRecord.value = record
@@ -733,6 +742,13 @@ const requestAction = (type, record) => {
 }
 
 const handleAuditSuccess = async () => {
+  auditRecord.value = null
+  detailRecord.value = null
+  await loadData()
+  window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
+}
+
+const handleEditSuccess = async () => {
   auditRecord.value = null
   detailRecord.value = null
   await loadData()

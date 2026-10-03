@@ -1141,17 +1141,26 @@ def update_material_outbound(outbound_id):
                 existing = dict(row)
                 if old_item:
                     existing.update(dict(old_item))
+                document_date = _text(
+                    data.get("documentDate", existing.get("document_date", _today())),
+                    10,
+                )
+                try:
+                    datetime.strptime(document_date, "%Y-%m-%d")
+                except (TypeError, ValueError):
+                    raise ValueError("单据日期格式应为 YYYY-MM-DD")
                 values = _resolve_draft_values(conn, data, existing=existing)
                 now = _now()
                 conn.execute(
                     """
                     UPDATE material_outbounds SET
-                        store_id = ?, store_name = ?, warehouse_id = ?,
+                        document_date = ?, store_id = ?, store_name = ?, warehouse_id = ?,
                         warehouse_name = ?, total_quantity = ?,
                         produced_quantity = ?, remark = ?, updated_at = ?
                     WHERE id = ?
                     """,
                     (
+                        document_date,
                         values["store_id"],
                         values["store_name"],
                         values["warehouse_id"],

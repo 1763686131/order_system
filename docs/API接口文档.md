@@ -2589,6 +2589,26 @@ receipt_image: File (图片文件)
 门店和仓库以提交时的触屏设置为准，并保存名称快照。`producedQuantity` 可暂不填写，
 此时由后台审核窗口补充成品商品、成品仓库和成品入库数量。新备注会自动进入出库备注标签表。
 
+### 8.4.1 修改原材料出库草稿
+- **URL**: `/api/material-outbounds/<int:outbound_id>`
+- **Method**: `PUT`
+- **权限**: 管理员
+- **说明**: 仅允许修改 `draft` 状态的原材料出库单；修改只更新单据和明细快照，不扣减原材料库存，也不创建成品入库。审核仍需通过 `8.5` 接口完成。
+- **请求体**:
+
+```json
+{
+  "documentDate": "2026-10-03",
+  "storeId": 1,
+  "warehouseId": 2,
+  "productId": 8,
+  "quantity": 30,
+  "remark": "棒棒糖"
+}
+```
+
+- **返回**: 返回更新后的 `materialOutbound`，字段结构与 `8.3` 查询接口中的单据结构一致。
+
 ### 8.5 审核原材料出库单
 - **URL**: `/api/material-outbounds/<int:outbound_id>/audit`
 - **Method**: `POST`

@@ -13,11 +13,11 @@
         aria-labelledby="materialAuditTitle"
         @click.stop
       >
-        <form class="material-audit-form" @submit.prevent="submitAudit">
+        <form class="material-audit-form" @submit.prevent="submitChanges">
           <div class="top-info-bar">
             <div class="document-title">
               <span class="document-eyebrow">原材料出库</span>
-              <h2 id="materialAuditTitle">审核</h2>
+              <h2 id="materialAuditTitle">修改</h2>
             </div>
 
             <div class="header-fields">
@@ -43,7 +43,14 @@
               </label>
               <label class="info-group date-field">
                 <span>单据日期</span>
-                <input :value="record?.documentDate || '-'" type="text" readonly />
+                <input
+                  v-model="form.documentDate"
+                  :class="{ invalid: errors.documentDate }"
+                  :disabled="!editing || saving"
+                  type="date"
+                  aria-label="单据日期"
+                />
+                <small v-if="errors.documentDate" class="top-error">{{ errors.documentDate }}</small>
               </label>
               <label class="info-group document-no-field">
                 <span>单据编号</span>
@@ -52,7 +59,7 @@
             </div>
 
             <div class="toolbar-actions">
-              <span class="audit-status">待审核</span>
+              <span class="audit-status">草稿</span>
               <button
                 type="button"
                 class="close-button"
@@ -78,7 +85,7 @@
           </div>
 
           <div class="table-state" :class="{ error: optionsError }">
-            <span v-if="optionsLoading">正在加载仓库和成品资料...</span>
+            <span v-if="optionsLoading">正在加载仓库和原材料资料...</span>
             <template v-else-if="optionsError">
               <span>{{ optionsError }}</span>
               <button type="button" class="inline-button" @click="loadOptions">重新加载</button>
@@ -89,16 +96,12 @@
             <table class="products-table">
               <colgroup>
                 <col style="width: 48px" />
-                <col style="width: 190px" />
+                <col style="width: 240px" />
                 <col style="width: 130px" />
                 <col style="width: 70px" />
-                <col style="width: 140px" />
-                <col style="width: 105px" />
-                <col style="width: 170px" />
-                <col style="width: 220px" />
-                <col style="width: 110px" />
-                <col style="width: 75px" />
-                <col style="width: 220px" />
+                <col style="width: 180px" />
+                <col style="width: 115px" />
+                <col style="width: 280px" />
               </colgroup>
               <thead>
                 <tr>
@@ -108,10 +111,6 @@
                   <th>单位</th>
                   <th>出库仓库</th>
                   <th>出库数量</th>
-                  <th>成品入库仓库</th>
-                  <th>成品商品</th>
-                  <th>入库数量</th>
-                  <th>单位</th>
                   <th>备注信息</th>
                 </tr>
               </thead>
@@ -119,17 +118,29 @@
                 <tr class="data-row">
                   <td class="center">1</td>
                   <td>
-                    <input
-                      :value="record?.primaryItem?.productName || '-'"
-                      type="text"
-                      readonly
+                    <select
+                      v-model="form.productId"
+                      class="table-input"
+                      :class="{ invalid: errors.productId }"
+                      :disabled="!editing || saving || optionsLoading"
                       aria-label="原材料"
-                    />
-                    <small class="cell-subtext">{{ record?.primaryItem?.productCode || '无编码' }}</small>
+                      @change="syncProduct"
+                    >
+                      <option value="">请选择原材料</option>
+                      <option
+                        v-for="product in availableProducts"
+                        :key="product.id"
+                        :value="String(product.id)"
+                      >
+                        {{ product.code ? `${product.code} · ` : '' }}{{ product.name }}
+                      </option>
+                    </select>
+                    <small class="cell-subtext">{{ form.productCode || '无编码' }}</small>
+                    <small v-if="errors.productId" class="cell-error">{{ errors.productId }}</small>
                   </td>
                   <td>
                     <input
-                      :value="record?.primaryItem?.specification || '-'"
+                      :value="form.specification || '-'"
                       type="text"
                       readonly
                       aria-label="规格型号"
@@ -137,36 +148,20 @@
                   </td>
                   <td>
                     <input
-                      :value="record?.primaryItem?.unit || '-'"
+                      :value="form.unit || '-'"
                       type="text"
                       readonly
                       aria-label="原材料单位"
                     />
                   </td>
                   <td>
-                    <input
-                      :value="record?.warehouseName || '-'"
-                      type="text"
-                      readonly
-                      aria-label="出库仓库"
-                    />
-                  </td>
-                  <td class="right">
-                    <input
-                      :value="formatNumber(record?.totalQuantity)"
-                      type="text"
-                      readonly
-                      aria-label="出库数量"
-                    />
-                  </td>
-                  <td>
                     <select
-                      v-model="form.finishedWarehouseId"
+                      v-model="form.warehouseId"
                       class="table-input"
-                      :class="{ invalid: errors.finishedWarehouseId }"
-                      :disabled="saving || optionsLoading"
-                      aria-label="成品入库仓库"
-                      @change="handleWarehouseChange"
+                      :class="{ invalid: errors.warehouseId }"
+                      :disabled="!editing || saving || optionsLoading"
+                      aria-label="出库仓库"
+                      @change="syncWarehouse"
                     >
                       <option value="">请选择仓库</option>
                       <option
@@ -177,77 +172,41 @@
                         {{ warehouse.name }}
                       </option>
                     </select>
-                    <small v-if="errors.finishedWarehouseId" class="cell-error">
-                      {{ errors.finishedWarehouseId }}
-                    </small>
+                    <small v-if="errors.warehouseId" class="cell-error">{{ errors.warehouseId }}</small>
                   </td>
-                  <td>
-                    <select
-                      v-model="form.finishedProductId"
-                      class="table-input"
-                      :class="{ invalid: errors.finishedProductId }"
-                      :disabled="saving || !form.finishedWarehouseId"
-                      aria-label="成品商品"
-                    >
-                      <option value="">
-                        {{ form.finishedWarehouseId ? '请选择成品商品' : '请先选择仓库' }}
-                      </option>
-                      <option
-                        v-for="product in availableProducts"
-                        :key="product.id"
-                        :value="String(product.id)"
-                      >
-                        {{ product.code ? `${product.code} · ` : '' }}{{ product.name }}
-                      </option>
-                    </select>
-                    <small v-if="selectedProduct" class="cell-subtext">
-                      {{ selectedProduct.specification || '无规格' }}
-                    </small>
-                    <small v-if="errors.finishedProductId" class="cell-error">
-                      {{ errors.finishedProductId }}
-                    </small>
-                  </td>
-                  <td>
+                  <td class="right">
                     <input
-                      v-model="form.finishedQuantity"
+                      v-model="form.quantity"
                       class="table-input number-input"
-                      :class="{ invalid: errors.finishedQuantity }"
-                      :disabled="saving"
+                      :class="{ invalid: errors.quantity }"
+                      :readonly="!editing || saving"
                       type="number"
                       min="0"
                       step="0.0001"
-                      placeholder="入库数量"
-                      aria-label="入库数量"
+                      placeholder="出库数量"
+                      aria-label="出库数量"
                     />
-                    <small v-if="errors.finishedQuantity" class="cell-error">
-                      {{ errors.finishedQuantity }}
-                    </small>
-                  </td>
-                  <td class="center readonly-unit">
-                    {{ productUnit(selectedProduct) || '待定' }}
+                    <small v-if="errors.quantity" class="cell-error">{{ errors.quantity }}</small>
                   </td>
                   <td>
                     <input
-                      v-model.trim="form.finishedRemark"
+                      v-model.trim="form.remark"
                       class="table-input"
-                      :disabled="saving"
+                      :readonly="!editing || saving"
                       type="text"
                       maxlength="200"
                       placeholder="默认继承触屏备注"
-                      aria-label="成品入库备注"
+                      aria-label="备注信息"
                     />
                   </td>
                 </tr>
                 <tr v-for="index in 7" :key="`blank-row-${index}`" class="blank-row">
                   <td class="center">{{ index + 1 }}</td>
-                  <td colspan="10"></td>
+                  <td colspan="6"></td>
                 </tr>
                 <tr class="total-row">
                   <td colspan="5" class="center">合计</td>
-                  <td class="right">{{ formatNumber(record?.totalQuantity) }}</td>
-                  <td colspan="2"></td>
-                  <td class="right">{{ formatNumber(form.finishedQuantity || 0) }}</td>
-                  <td class="center">{{ productUnit(selectedProduct) || '-' }}</td>
+                  <td class="right">{{ formatNumber(form.quantity || 0) }}</td>
                   <td></td>
                 </tr>
               </tbody>
@@ -268,27 +227,36 @@
               </label>
               <label class="info-group wide remark-field">
                 <span>备注信息</span>
-                <input :value="record?.remark || '-'" type="text" readonly />
+                <input :value="form.remark || '-'" type="text" readonly />
               </label>
               <label class="info-group">
-                <span>审核人</span>
-                <input value="当前审核员" type="text" readonly />
+                <span>修改人</span>
+                <input value="当前操作员" type="text" readonly />
               </label>
               <label class="info-group">
-                <span>审核状态</span>
-                <input value="待审核" type="text" readonly />
+                <span>单据状态</span>
+                <input value="草稿，待审核" type="text" readonly />
               </label>
             </div>
             <div class="finance-row">
-              <span>原材料出库 <strong>{{ formatNumber(record?.totalQuantity) }} {{ record?.primaryItem?.unit || '' }}</strong></span>
-              <span>成品入库 <strong>{{ formatNumber(form.finishedQuantity || 0) }} {{ productUnit(selectedProduct) || '-' }}</strong></span>
-              <span>审核结果 <strong>审核后同步完成出库和入库</strong></span>
+              <span>原材料出库 <strong>{{ formatNumber(form.quantity || 0) }} {{ form.unit || '' }}</strong></span>
+              <span>单据状态 <strong>草稿</strong></span>
+              <span>修改结果 <strong>{{ editing ? '保存后仍为草稿，待详情弹窗审核' : '点击修改后编辑表单' }}</strong></span>
+              <button
+                v-if="editing"
+                type="button"
+                class="edit-button secondary"
+                :disabled="saving"
+                @click="cancelEditing"
+              >
+                取消修改
+              </button>
               <button
                 type="submit"
-                class="audit-button primary bottom-audit-button"
+                class="edit-button primary bottom-edit-button"
                 :disabled="saving || optionsLoading || Boolean(optionsError)"
               >
-                {{ saving ? '审核中...' : '审核并入库' }}
+                {{ saving ? '保存中...' : (editing ? '保存修改' : '修改') }}
               </button>
             </div>
           </div>
@@ -307,26 +275,36 @@ const props = defineProps({
   record: { type: Object, default: null }
 })
 
-const emit = defineEmits(['close', 'audited'])
+const emit = defineEmits(['close', 'updated'])
 
 const warehouses = ref([])
 const products = ref([])
 const units = ref([])
+const allowedProductIds = ref([])
 const optionsLoading = ref(false)
 const optionsError = ref('')
+const optionsLoaded = ref(false)
 const saving = ref(false)
+const editing = ref(false)
 const formError = ref('')
 const initializedRecordId = ref(null)
 const form = reactive({
-  finishedWarehouseId: '',
-  finishedProductId: '',
-  finishedQuantity: '',
-  finishedRemark: ''
+  documentDate: '',
+  productId: '',
+  productName: '',
+  productCode: '',
+  specification: '',
+  unit: '',
+  warehouseId: '',
+  warehouseName: '',
+  quantity: '',
+  remark: ''
 })
 const errors = reactive({
-  finishedWarehouseId: '',
-  finishedProductId: '',
-  finishedQuantity: ''
+  documentDate: '',
+  productId: '',
+  warehouseId: '',
+  quantity: ''
 })
 
 const formatNumber = value => Number(value || 0).toLocaleString('zh-CN', {
@@ -356,21 +334,28 @@ const availableWarehouses = computed(() => {
 })
 
 const availableProducts = computed(() => {
-  if (!form.finishedWarehouseId) return []
   return products.value.filter(product => {
     if (product.enabled === false) return false
+    if (
+      allowedProductIds.value.length
+      && !allowedProductIds.value.some(id => String(id) === String(product.id))
+      && String(product.id) !== String(form.productId)
+    ) {
+      return false
+    }
     const storeIds = parseIds(product.storeIds ?? product.store_ids)
     if (storeIds.length && props.record?.storeId) {
       if (!storeIds.some(id => String(id) === String(props.record.storeId))) return false
     }
-    const productWarehouseId = product.warehouseId ?? product.warehouse_id
-    return !productWarehouseId || String(productWarehouseId) === String(form.finishedWarehouseId)
+    return true
   })
 })
 
-const selectedProduct = computed(() => availableProducts.value.find(
-  product => String(product.id) === String(form.finishedProductId)
-) || products.value.find(product => String(product.id) === String(form.finishedProductId)) || null)
+const selectedProduct = computed(() => (
+  availableProducts.value.find(product => String(product.id) === String(form.productId))
+  || products.value.find(product => String(product.id) === String(form.productId))
+  || null
+))
 
 const productUnit = product => {
   if (!product) return ''
@@ -381,55 +366,66 @@ const productUnit = product => {
 }
 
 const clearErrors = () => {
-  errors.finishedWarehouseId = ''
-  errors.finishedProductId = ''
-  errors.finishedQuantity = ''
+  errors.documentDate = ''
+  errors.productId = ''
+  errors.warehouseId = ''
+  errors.quantity = ''
   formError.value = ''
-}
-
-const preferredWarehouseId = () => {
-  const existing = props.record?.finishedWarehouseId
-  if (existing && availableWarehouses.value.some(item => String(item.id) === String(existing))) {
-    return String(existing)
-  }
-  const named = availableWarehouses.value.find(item => /成品|完工|商品|finished/i.test(item.name || ''))
-  if (named) return String(named.id)
-  return availableWarehouses.value.length === 1 ? String(availableWarehouses.value[0].id) : ''
 }
 
 const resetForm = () => {
   clearErrors()
-  form.finishedWarehouseId = ''
-  form.finishedProductId = props.record?.finishedProductId
-    ? String(props.record.finishedProductId)
+  editing.value = false
+  form.documentDate = props.record?.documentDate || ''
+  form.productId = props.record?.primaryItem?.productId
+    ? String(props.record.primaryItem.productId)
     : ''
-  form.finishedQuantity = Number(props.record?.producedQuantity || 0) > 0
-    ? String(props.record.producedQuantity)
+  form.productName = props.record?.primaryItem?.productName || ''
+  form.productCode = props.record?.primaryItem?.productCode || ''
+  form.specification = props.record?.primaryItem?.specification || ''
+  form.unit = props.record?.primaryItem?.unit || ''
+  form.warehouseId = props.record?.warehouseId ? String(props.record.warehouseId) : ''
+  form.warehouseName = props.record?.warehouseName || ''
+  form.quantity = props.record?.totalQuantity != null
+    ? String(props.record.totalQuantity)
     : ''
-  form.finishedRemark = props.record?.finishedRemark || props.record?.remark || ''
+  form.remark = props.record?.remark || ''
 }
 
 const loadOptions = async () => {
   optionsLoading.value = true
   optionsError.value = ''
+  optionsLoaded.value = false
   try {
     const results = await Promise.all([
       request({ url: '/warehouses', method: 'GET' }),
-      request({ url: '/products', method: 'GET' }),
+      request({ url: '/material-outbound-settings', method: 'GET' }),
       request({ url: '/products/units/measurements', method: 'GET' })
     ])
     warehouses.value = Array.isArray(results[0]) ? results[0] : []
-    products.value = Array.isArray(results[1]) ? results[1] : []
+    const settings = results[1] || {}
+    allowedProductIds.value = parseIds(settings.allowedProductIds)
+    products.value = Array.isArray(settings.products)
+      ? settings.products
+      : (Array.isArray(settings.allowedProducts) ? settings.allowedProducts : [])
     units.value = Array.isArray(results[2]) ? results[2] : []
-    if (!form.finishedWarehouseId) form.finishedWarehouseId = preferredWarehouseId()
+    const currentProduct = props.record?.primaryItem
     if (
-      form.finishedProductId
-      && !availableProducts.value.some(item => String(item.id) === String(form.finishedProductId))
+      currentProduct?.productId
+      && !products.value.some(item => String(item.id) === String(currentProduct.productId))
     ) {
-      form.finishedProductId = ''
+      products.value.push({
+        id: currentProduct.productId,
+        code: currentProduct.productCode || '',
+        name: currentProduct.productName || '',
+        specification: currentProduct.specification || '',
+        unit: currentProduct.unit || '',
+        enabled: true
+      })
     }
+    optionsLoaded.value = true
   } catch (error) {
-    optionsError.value = error?.response?.data?.message || '成品资料加载失败。'
+    optionsError.value = error?.response?.data?.message || '仓库和原材料资料加载失败。'
   } finally {
     optionsLoading.value = false
   }
@@ -441,33 +437,58 @@ const initialize = async () => {
     initializedRecordId.value = props.record.id
     resetForm()
   }
-  if (!warehouses.value.length || !products.value.length) await loadOptions()
+  if (!optionsLoaded.value) await loadOptions()
 }
 
-const handleWarehouseChange = () => {
-  errors.finishedWarehouseId = ''
-  if (
-    form.finishedProductId
-    && !availableProducts.value.some(item => String(item.id) === String(form.finishedProductId))
-  ) {
-    form.finishedProductId = ''
-  }
+const syncProduct = () => {
+  const product = selectedProduct.value
+  errors.productId = ''
+  if (!product) return
+  form.productName = product.name || ''
+  form.productCode = product.code || ''
+  form.specification = product.specification || ''
+  form.unit = productUnit(product)
+}
+
+const syncWarehouse = () => {
+  errors.warehouseId = ''
+  const warehouse = availableWarehouses.value.find(
+    item => String(item.id) === String(form.warehouseId)
+  )
+  form.warehouseName = warehouse?.name || ''
+}
+
+const cancelEditing = () => {
+  if (saving.value) return
+  resetForm()
+}
+
+const startEditing = () => {
+  clearErrors()
+  editing.value = true
 }
 
 const validate = () => {
   clearErrors()
   let valid = true
-  if (!form.finishedWarehouseId) {
-    errors.finishedWarehouseId = '请选择成品入库仓库。'
+  if (!form.documentDate) {
+    errors.documentDate = '请选择单据日期。'
+    valid = false
+  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(form.documentDate)) {
+    errors.documentDate = '单据日期格式无效。'
     valid = false
   }
-  if (!form.finishedProductId) {
-    errors.finishedProductId = '请选择成品商品。'
+  if (!form.productId) {
+    errors.productId = '请选择原材料。'
     valid = false
   }
-  const quantity = Number(form.finishedQuantity)
+  if (!form.warehouseId) {
+    errors.warehouseId = '请选择出库仓库。'
+    valid = false
+  }
+  const quantity = Number(form.quantity)
   if (!Number.isFinite(quantity) || quantity <= 0) {
-    errors.finishedQuantity = '入库数量必须大于 0。'
+    errors.quantity = '出库数量必须大于 0。'
     valid = false
   }
   return valid
@@ -477,23 +498,30 @@ const requestClose = () => {
   if (!saving.value) emit('close')
 }
 
-const submitAudit = async () => {
-  if (saving.value || !props.record || !validate()) return
+const submitChanges = async () => {
+  if (saving.value || !props.record) return
+  if (!editing.value) {
+    startEditing()
+    return
+  }
+  if (!validate()) return
   saving.value = true
   try {
     const response = await request({
-      url: `/material-outbounds/${props.record.id}/audit`,
-      method: 'POST',
+      url: `/material-outbounds/${props.record.id}`,
+      method: 'PUT',
       data: {
-        finishedWarehouseId: Number(form.finishedWarehouseId),
-        finishedProductId: Number(form.finishedProductId),
-        finishedQuantity: Number(form.finishedQuantity),
-        finishedRemark: form.finishedRemark
+        documentDate: form.documentDate,
+        storeId: props.record.storeId,
+        warehouseId: Number(form.warehouseId),
+        productId: Number(form.productId),
+        quantity: Number(form.quantity),
+        remark: form.remark
       }
     })
-    emit('audited', response)
+    emit('updated', response)
   } catch (error) {
-    formError.value = error?.response?.data?.message || '审核失败，请检查表单和库存后重试。'
+    formError.value = error?.response?.data?.message || '保存修改失败，请检查表单后重试。'
   } finally {
     saving.value = false
   }
@@ -503,7 +531,10 @@ watch(
   () => props.visible,
   visible => {
     if (visible) initialize()
-    else initializedRecordId.value = null
+    else {
+      initializedRecordId.value = null
+      editing.value = false
+    }
   }
 )
 
@@ -733,7 +764,7 @@ button {
   white-space: nowrap;
 }
 
-.audit-button {
+.edit-button {
   min-height: 38px;
   padding: 0 15px;
   border: 1px solid transparent;
@@ -744,31 +775,31 @@ button {
   white-space: nowrap;
 }
 
-.audit-button:disabled,
+.edit-button:disabled,
 .close-button:disabled,
 button:disabled {
   cursor: default;
   opacity: 0.55;
 }
 
-.audit-button.primary {
+.edit-button.primary {
   color: #fff;
   background: var(--accent);
   border-color: var(--accent);
 }
 
-.audit-button.primary:hover:not(:disabled) {
+.edit-button.primary:hover:not(:disabled) {
   background: var(--accent-dark);
   border-color: var(--accent-dark);
 }
 
-.audit-button.secondary {
+.edit-button.secondary {
   color: #52616c;
   background: #fff;
   border-color: var(--border-strong);
 }
 
-.audit-button.secondary:hover:not(:disabled) {
+.edit-button.secondary:hover:not(:disabled) {
   background: #f3f8f6;
 }
 
@@ -814,7 +845,7 @@ button:disabled {
 
 .products-table {
   width: 100%;
-  min-width: 1260px;
+  min-width: 1080px;
   table-layout: fixed;
   border-collapse: collapse;
 }
@@ -877,9 +908,16 @@ button:disabled {
 }
 
 .products-table .table-input.invalid,
-.info-group select.invalid {
+.info-group select.invalid,
+.info-group input.invalid {
   border-color: #d64550;
   background: #fff6f6;
+}
+
+.info-group input:disabled {
+  color: #64717c;
+  background: #f8fafb;
+  cursor: default;
 }
 
 .products-table td.right,
@@ -913,6 +951,12 @@ button:disabled {
   color: #b5363e;
   font-size: 11px;
   white-space: normal;
+}
+
+.top-error {
+  color: #b5363e;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .readonly-unit {
@@ -984,7 +1028,7 @@ button:disabled {
   font-weight: 500;
 }
 
-.finance-row .audit-button {
+.finance-row .edit-button {
   margin-left: auto;
 }
 
@@ -1069,7 +1113,7 @@ button:disabled {
     white-space: normal;
   }
 
-  .finance-row .audit-button {
+  .finance-row .edit-button {
     width: 100%;
     margin-left: 0;
   }
