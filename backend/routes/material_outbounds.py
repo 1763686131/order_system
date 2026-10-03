@@ -497,6 +497,83 @@ def _resolve_draft_values(conn, data, existing=None):
     }
 
 
+def _resolve_draft_items(conn, data, values, settings):
+    payloads = data.get("items")
+    if not isinstance(payloads, list) or not payloads:
+        payloads = [data]
+
+    allowed_ids = _decode_ids(settings["allowed_product_ids"])
+    items = []
+    requested_by_stock = {}
+
+    for index, payload in enumerate(payloads):
+        payload = payload if isinstance(payload, dict) else {}
+        fallback_product_id = values["product_id"] if index == 0 else None
+        product_id = _optional_int(
+            _present_value(
+                payload,
+                ("productId", "product_id"),
+                fallback_product_id,
+            ),
+            "原材料商品",
+        )
+        if not product_id:
+            raise ValueError(f"第 {index + 1} 行请选择原材料商品")
+        if product_id not in allowed_ids:
+            raise ValueError("所选原材料未包含在触屏端可操作范围内")
+
+        product = _product_row(conn, product_id)
+        if not product:
+            raise ValueError(f"第 {index + 1} 行原材料不存在或已停用")
+
+        quantity_value = _present_value(
+            payload,
+            ("quantity", "used"),
+            values["quantity"] if index == 0 else None,
+        )
+        quantity = _positive_number(
+            quantity_value,
+            f"第 {index + 1} 行原材料出库数量",
+        )
+        remark = _text(
+            _present_value(payload, ("remark",), values["remark"]),
+            200,
+        )
+        stock_key = (product_id, values["warehouse_id"], values["store_id"])
+        requested_by_stock[stock_key] = (
+            requested_by_stock.get(stock_key, 0) + quantity
+        )
+        items.append(
+            {
+                "product_id": product_id,
+                "product_code": product["code"] or "",
+                "product_name": product["name"] or "",
+                "specification": product["specification"] or "",
+                "unit": product["unit_name"] or "",
+                "quantity": quantity,
+                "remark": remark,
+            }
+        )
+
+    if not bool(settings["allow_insufficient_draft"]):
+        for (product_id, warehouse_id, store_id), requested in requested_by_stock.items():
+            available = conn.execute(
+                """
+                SELECT COALESCE(SUM(quantity), 0) AS quantity
+                FROM stock_balances
+                WHERE product_type = 'raw-material'
+                  AND product_id = ? AND warehouse_id = ? AND store_id = ?
+                """,
+                (product_id, warehouse_id, store_id),
+            ).fetchone()["quantity"]
+            if float(available or 0) + _QUANTITY_EPSILON < requested:
+                raise ValueError(
+                    f"原材料库存不足，可用库存为 {float(available or 0):g}"
+                )
+
+    return items
+
+
 def _save_remark_tag(conn, remark):
     if not remark:
         return
@@ -1130,17 +1207,17 @@ def update_material_outbound(outbound_id):
                     return jsonify(
                         {"success": False, "message": "只有草稿状态可以修改"}
                     ), 409
-                old_item = conn.execute(
+                old_items = conn.execute(
                     """
                     SELECT * FROM material_outbound_items
                     WHERE outbound_id = ?
-                    ORDER BY line_no, id LIMIT 1
+                    ORDER BY line_no, id
                     """,
                     (outbound_id,),
-                ).fetchone()
+                ).fetchall()
                 existing = dict(row)
-                if old_item:
-                    existing.update(dict(old_item))
+                if old_items:
+                    existing.update(dict(old_items[0]))
                 document_date = _text(
                     data.get("documentDate", existing.get("document_date", _today())),
                     10,
@@ -1150,13 +1227,28 @@ def update_material_outbound(outbound_id):
                 except (TypeError, ValueError):
                     raise ValueError("单据日期格式应为 YYYY-MM-DD")
                 values = _resolve_draft_values(conn, data, existing=existing)
+                settings = _settings_row(conn)
+                items = _resolve_draft_items(conn, data, values, settings)
+                document_for_finished = dict(row)
+                document_for_finished["store_id"] = values["store_id"]
+                finished_values = _resolve_finished_audit_values(
+                    conn,
+                    document_for_finished,
+                    data,
+                )
+                total_quantity = sum(item["quantity"] for item in items)
                 now = _now()
                 conn.execute(
                     """
                     UPDATE material_outbounds SET
                         document_date = ?, store_id = ?, store_name = ?, warehouse_id = ?,
                         warehouse_name = ?, total_quantity = ?,
-                        produced_quantity = ?, remark = ?, updated_at = ?
+                        produced_quantity = ?, remark = ?,
+                        finished_product_id = ?, finished_product_code = ?,
+                        finished_product_name = ?, finished_product_specification = ?,
+                        finished_product_unit = ?, finished_warehouse_id = ?,
+                        finished_warehouse_name = ?, finished_remark = ?,
+                        updated_at = ?
                     WHERE id = ?
                     """,
                     (
@@ -1165,9 +1257,17 @@ def update_material_outbound(outbound_id):
                         values["store_name"],
                         values["warehouse_id"],
                         values["warehouse_name"],
-                        values["quantity"],
-                        values["produced_quantity"],
+                        total_quantity,
+                        finished_values["quantity"],
                         values["remark"],
+                        finished_values["product_id"],
+                        finished_values["product_code"],
+                        finished_values["product_name"],
+                        finished_values["product_specification"],
+                        finished_values["product_unit"],
+                        finished_values["warehouse_id"],
+                        finished_values["warehouse_name"],
+                        finished_values["remark"],
                         now,
                         outbound_id,
                     ),
@@ -1176,25 +1276,27 @@ def update_material_outbound(outbound_id):
                     "DELETE FROM material_outbound_items WHERE outbound_id = ?",
                     (outbound_id,),
                 )
-                conn.execute(
-                    """
-                    INSERT INTO material_outbound_items (
-                        outbound_id, line_no, product_id, product_code,
-                        product_name, specification, unit, quantity, remark
-                    ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?)
-                    """,
-                    (
-                        outbound_id,
-                        values["product_id"],
-                        values["product_code"],
-                        values["product_name"],
-                        values["specification"],
-                        values["unit"],
-                        values["quantity"],
-                        values["remark"],
-                    ),
-                )
-                _save_remark_tag(conn, values["remark"])
+                for line_no, item in enumerate(items, start=1):
+                    conn.execute(
+                        """
+                        INSERT INTO material_outbound_items (
+                            outbound_id, line_no, product_id, product_code,
+                            product_name, specification, unit, quantity, remark
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            outbound_id,
+                            line_no,
+                            item["product_id"],
+                            item["product_code"],
+                            item["product_name"],
+                            item["specification"],
+                            item["unit"],
+                            item["quantity"],
+                            item["remark"],
+                        ),
+                    )
+                    _save_remark_tag(conn, item["remark"])
                 updated = conn.execute(
                     "SELECT * FROM material_outbounds WHERE id = ?",
                     (outbound_id,),

@@ -214,8 +214,14 @@
       :visible="Boolean(auditRecord)"
       :record="auditRecord"
       @close="auditRecord = null"
-      @audited="handleAuditSuccess"
       @updated="handleEditSuccess"
+    />
+
+    <MaterialOutboundReviewSlider
+      :visible="Boolean(reviewRecord)"
+      :record="reviewRecord"
+      @close="reviewRecord = null"
+      @audited="handleAuditSuccess"
     />
 
     <teleport to="body">
@@ -487,6 +493,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import request from '@/api/request'
 import MaterialOutboundAuditModal from '@/components/admin/MaterialOutboundAuditModal.vue'
+import MaterialOutboundReviewSlider from '@/components/admin/MaterialOutboundReviewSlider.vue'
 
 const loading = ref(false)
 const loadError = ref('')
@@ -520,6 +527,7 @@ const settingsForm = reactive({
 })
 const detailRecord = ref(null)
 const auditRecord = ref(null)
+const reviewRecord = ref(null)
 const pendingAction = ref(null)
 const actionLoading = ref(false)
 
@@ -732,7 +740,13 @@ const openDetail = record => {
 }
 
 const requestAction = (type, record) => {
-  if (type === 'audit' || type === 'edit') {
+  if (type === 'audit') {
+    detailRecord.value = null
+    pendingAction.value = null
+    reviewRecord.value = record
+    return
+  }
+  if (type === 'edit') {
     detailRecord.value = null
     pendingAction.value = null
     auditRecord.value = record
@@ -742,16 +756,23 @@ const requestAction = (type, record) => {
 }
 
 const handleAuditSuccess = async () => {
-  auditRecord.value = null
+  reviewRecord.value = null
   detailRecord.value = null
   await loadData()
   window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
 }
 
-const handleEditSuccess = async () => {
+const handleEditSuccess = async response => {
   auditRecord.value = null
-  detailRecord.value = null
+  const updatedRecord = response?.materialOutbound || response
   await loadData()
+  if (updatedRecord?.id) {
+    detailRecord.value = records.value.find(
+      record => String(record.id) === String(updatedRecord.id)
+    ) || updatedRecord
+  } else {
+    detailRecord.value = null
+  }
   window.dispatchEvent(new CustomEvent('refresh-material-outbounds'))
 }
 

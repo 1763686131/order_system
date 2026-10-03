@@ -2,44 +2,88 @@
   <teleport to="body">
     <div
       v-if="visible"
-      class="material-audit-overlay"
+      class="material-edit-overlay"
       role="presentation"
       @click.self="requestClose"
     >
       <section
-        class="material-audit-modal"
+        class="material-edit-modal"
         role="dialog"
         aria-modal="true"
-        aria-labelledby="materialAuditTitle"
+        aria-labelledby="materialEditTitle"
         @click.stop
       >
-        <form class="material-audit-form" @submit.prevent="submitChanges">
+        <form class="material-edit-form" @submit.prevent="submitChanges">
           <div class="top-info-bar">
             <div class="document-title">
               <span class="document-eyebrow">原材料出库</span>
-              <h2 id="materialAuditTitle">修改</h2>
+              <h2 id="materialEditTitle">修改</h2>
             </div>
 
             <div class="header-fields">
+              <label class="info-group source-field">
+                <span>单据来源</span>
+                <input :value="sourceLabel" type="text" readonly />
+              </label>
               <label class="info-group">
                 <span>门店</span>
-                <input :value="record?.storeName || '-'" type="text" readonly />
+                <select
+                  v-model="form.storeId"
+                  :disabled="!editing || saving"
+                  aria-label="门店"
+                  @change="syncStore"
+                >
+                  <option value="">请选择门店</option>
+                  <option v-for="store in availableStores" :key="store.id" :value="String(store.id)">
+                    {{ store.name }}
+                  </option>
+                </select>
               </label>
               <label class="info-group">
                 <span>出库仓库</span>
-                <input :value="record?.warehouseName || '-'" type="text" readonly />
+                <select
+                  v-model="form.warehouseId"
+                  :disabled="!editing || saving"
+                  aria-label="出库仓库"
+                  @change="syncWarehouse"
+                >
+                  <option value="">请选择仓库</option>
+                  <option
+                    v-for="warehouse in availableWarehouses"
+                    :key="warehouse.id"
+                    :value="String(warehouse.id)"
+                  >
+                    {{ warehouse.name }}
+                  </option>
+                </select>
               </label>
               <label class="info-group material-source-field">
                 <span>触屏原材料</span>
-                <input :value="record?.primaryItem?.productName || '-'" type="text" readonly />
-              </label>
-              <label class="info-group quantity-source-field">
-                <span>出库数量</span>
-                <input
-                  :value="`${formatNumber(record?.totalQuantity)} ${record?.primaryItem?.unit || ''}`"
-                  type="text"
-                  readonly
-                />
+                <div class="product-picker">
+                  <input
+                    v-model="rawProductQuery"
+                    :readonly="!editing || saving"
+                    type="text"
+                    autocomplete="off"
+                    aria-label="触屏原材料"
+                    @focus="openPicker('raw-top')"
+                    @input="openPicker('raw-top')"
+                  />
+                  <div v-if="activePicker === 'raw-top' && editing" class="picker-options">
+                    <button
+                      v-for="product in filteredRawProducts(rawProductQuery)"
+                      :key="product.id"
+                      type="button"
+                      @mousedown.prevent="selectRawProduct(product, 0)"
+                    >
+                      <strong>{{ product.name }}</strong>
+                      <small>{{ product.code || '无编码' }} · {{ product.specification || '无规格' }}</small>
+                    </button>
+                    <span v-if="filteredRawProducts(rawProductQuery).length === 0" class="picker-empty">
+                      没有匹配的原材料
+                    </span>
+                  </div>
+                </div>
               </label>
               <label class="info-group date-field">
                 <span>单据日期</span>
@@ -59,7 +103,7 @@
             </div>
 
             <div class="toolbar-actions">
-              <span class="audit-status">草稿</span>
+              <span class="document-status">草稿</span>
               <button
                 type="button"
                 class="close-button"
@@ -73,19 +117,8 @@
             </div>
           </div>
 
-          <div class="contact-info-bar">
-            <label class="info-group touch-remark-field">
-              <span>触屏备注</span>
-              <input :value="record?.remark || '-'" type="text" readonly />
-            </label>
-            <label class="info-group">
-              <span>单据来源</span>
-              <input :value="record?.source === 'touch' ? '触屏端辅助输入' : (record?.source || '-')" type="text" readonly />
-            </label>
-          </div>
-
           <div class="table-state" :class="{ error: optionsError }">
-            <span v-if="optionsLoading">正在加载仓库和原材料资料...</span>
+            <span v-if="optionsLoading">正在加载门店、仓库、商品和库存资料...</span>
             <template v-else-if="optionsError">
               <span>{{ optionsError }}</span>
               <button type="button" class="inline-button" @click="loadOptions">重新加载</button>
@@ -95,71 +128,102 @@
           <div v-if="!optionsLoading && !optionsError" class="products-table-wrapper">
             <table class="products-table">
               <colgroup>
+                <col style="width: 64px" />
                 <col style="width: 48px" />
-                <col style="width: 240px" />
-                <col style="width: 130px" />
-                <col style="width: 70px" />
+                <col style="width: 235px" />
+                <col style="width: 90px" />
+                <col style="width: 180px" />
+                <col style="width: 170px" />
+                <col style="width: 125px" />
+                <col style="width: 115px" />
+                <col style="width: 220px" />
                 <col style="width: 180px" />
                 <col style="width: 115px" />
-                <col style="width: 280px" />
+                <col style="width: 250px" />
               </colgroup>
               <thead>
                 <tr>
+                  <th>操作</th>
                   <th>序号</th>
                   <th>原材料</th>
-                  <th>规格型号</th>
-                  <th>单位</th>
+                  <th>编码</th>
+                  <th>规格 / 单位</th>
                   <th>出库仓库</th>
+                  <th>仓库原材料数量</th>
                   <th>出库数量</th>
+                  <th>成品商品</th>
+                  <th>入库仓库</th>
+                  <th>入库数量</th>
                   <th>备注信息</th>
                 </tr>
               </thead>
               <tbody>
-                <tr class="data-row">
-                  <td class="center">1</td>
-                  <td>
-                    <select
-                      v-model="form.productId"
-                      class="table-input"
-                      :class="{ invalid: errors.productId }"
-                      :disabled="!editing || saving || optionsLoading"
-                      aria-label="原材料"
-                      @change="syncProduct"
+                <tr v-for="(row, index) in rows" :key="row.id" class="data-row">
+                  <td class="row-actions-cell">
+                    <button
+                      type="button"
+                      class="row-action add"
+                      title="增加栏目"
+                      :disabled="!editing || saving"
+                      @click="addRow"
                     >
-                      <option value="">请选择原材料</option>
-                      <option
-                        v-for="product in availableProducts"
-                        :key="product.id"
-                        :value="String(product.id)"
-                      >
-                        {{ product.code ? `${product.code} · ` : '' }}{{ product.name }}
-                      </option>
-                    </select>
-                    <small class="cell-subtext">{{ form.productCode || '无编码' }}</small>
-                    <small v-if="errors.productId" class="cell-error">{{ errors.productId }}</small>
+                      +
+                    </button>
+                    <button
+                      type="button"
+                      class="row-action delete"
+                      title="删除栏目"
+                      :disabled="!editing || saving || rows.length <= 1"
+                      @click="removeRow(index)"
+                    >
+                      ×
+                    </button>
+                  </td>
+                  <td class="center">{{ index + 1 }}</td>
+                  <td>
+                    <div class="product-picker">
+                      <input
+                        v-model="row.productQuery"
+                        class="table-input"
+                        :class="{ invalid: rowErrors[index]?.productId }"
+                        :readonly="!editing || saving"
+                        type="text"
+                        autocomplete="off"
+                        aria-label="原材料商品"
+                        @focus="openPicker(`raw-${index}`)"
+                        @input="openPicker(`raw-${index}`)"
+                      />
+                      <div v-if="activePicker === `raw-${index}` && editing" class="picker-options">
+                        <button
+                          v-for="product in filteredRawProducts(row.productQuery)"
+                          :key="product.id"
+                          type="button"
+                          @mousedown.prevent="selectRawProduct(product, index)"
+                        >
+                          <strong>{{ product.name }}</strong>
+                          <small>{{ product.code || '无编码' }} · {{ product.specification || '无规格' }}</small>
+                        </button>
+                        <span v-if="filteredRawProducts(row.productQuery).length === 0" class="picker-empty">
+                          没有匹配的原材料
+                        </span>
+                      </div>
+                    </div>
+                    <small v-if="rowErrors[index]?.productId" class="cell-error">
+                      {{ rowErrors[index].productId }}
+                    </small>
                   </td>
                   <td>
-                    <input
-                      :value="form.specification || '-'"
-                      type="text"
-                      readonly
-                      aria-label="规格型号"
-                    />
+                    <input :value="row.productCode || '-'" type="text" readonly aria-label="原材料编码" />
                   </td>
                   <td>
-                    <input
-                      :value="form.unit || '-'"
-                      type="text"
-                      readonly
-                      aria-label="原材料单位"
-                    />
+                    <div class="combined-spec">{{ row.specification || '-' }}</div>
+                    <small class="cell-subtext">{{ row.unit || '-' }}</small>
                   </td>
                   <td>
                     <select
                       v-model="form.warehouseId"
                       class="table-input"
-                      :class="{ invalid: errors.warehouseId }"
-                      :disabled="!editing || saving || optionsLoading"
+                      :disabled="!editing || saving"
                       aria-label="出库仓库"
                       @change="syncWarehouse"
                     >
@@ -172,13 +236,18 @@
                         {{ warehouse.name }}
                       </option>
                     </select>
-                    <small v-if="errors.warehouseId" class="cell-error">{{ errors.warehouseId }}</small>
+                    <small v-if="rowErrors[index]?.warehouseId" class="cell-error">
+                      {{ rowErrors[index].warehouseId }}
+                    </small>
+                  </td>
+                  <td class="right">
+                    <input :value="formatNumber(row.currentStock)" type="text" readonly aria-label="仓库原材料数量" />
                   </td>
                   <td class="right">
                     <input
-                      v-model="form.quantity"
+                      v-model="row.quantity"
                       class="table-input number-input"
-                      :class="{ invalid: errors.quantity }"
+                      :class="{ invalid: rowErrors[index]?.quantity }"
                       :readonly="!editing || saving"
                       type="number"
                       min="0"
@@ -186,11 +255,88 @@
                       placeholder="出库数量"
                       aria-label="出库数量"
                     />
-                    <small v-if="errors.quantity" class="cell-error">{{ errors.quantity }}</small>
+                    <small v-if="rowErrors[index]?.quantity" class="cell-error">
+                      {{ rowErrors[index].quantity }}
+                    </small>
                   </td>
+                  <template v-if="index === 0">
+                    <td>
+                      <div class="product-picker">
+                        <input
+                          v-model="finishedProductQuery"
+                          class="table-input"
+                          :class="{ invalid: errors.finishedProductId }"
+                          :readonly="!editing || saving"
+                          type="text"
+                          autocomplete="off"
+                          aria-label="成品商品"
+                          @focus="openPicker('finished')"
+                          @input="openPicker('finished')"
+                        />
+                        <div v-if="activePicker === 'finished' && editing" class="picker-options">
+                          <button
+                            v-for="product in filteredFinishedProducts(finishedProductQuery)"
+                            :key="product.id"
+                            type="button"
+                            @mousedown.prevent="selectFinishedProduct(product)"
+                          >
+                            <strong>{{ product.name }}</strong>
+                            <small>{{ product.code || '无编码' }} · {{ product.specification || '无规格' }}</small>
+                          </button>
+                          <span v-if="filteredFinishedProducts(finishedProductQuery).length === 0" class="picker-empty">
+                            没有匹配的成品商品
+                          </span>
+                        </div>
+                      </div>
+                      <small class="cell-subtext">
+                        {{ finishedProduct?.specification || finishedProduct?.unit || '-' }}
+                      </small>
+                      <small v-if="errors.finishedProductId" class="cell-error">{{ errors.finishedProductId }}</small>
+                    </td>
+                    <td>
+                      <select
+                        v-model="form.finishedWarehouseId"
+                        class="table-input"
+                        :class="{ invalid: errors.finishedWarehouseId }"
+                        :disabled="!editing || saving"
+                        aria-label="入库仓库"
+                      >
+                        <option value="">请选择仓库</option>
+                        <option
+                          v-for="warehouse in availableWarehouses"
+                          :key="warehouse.id"
+                          :value="String(warehouse.id)"
+                        >
+                          {{ warehouse.name }}
+                        </option>
+                      </select>
+                      <small v-if="errors.finishedWarehouseId" class="cell-error">
+                        {{ errors.finishedWarehouseId }}
+                      </small>
+                    </td>
+                    <td class="right">
+                      <input
+                        v-model="form.finishedQuantity"
+                        class="table-input number-input"
+                        :class="{ invalid: errors.finishedQuantity }"
+                        :readonly="!editing || saving"
+                        type="number"
+                        min="0"
+                        step="0.0001"
+                        placeholder="入库数量"
+                        aria-label="入库数量"
+                      />
+                      <small v-if="errors.finishedQuantity" class="cell-error">
+                        {{ errors.finishedQuantity }}
+                      </small>
+                    </td>
+                  </template>
+                  <template v-else>
+                    <td colspan="3" class="shared-finished-cell">成品入库信息见第 1 行</td>
+                  </template>
                   <td>
                     <input
-                      v-model.trim="form.remark"
+                      v-model.trim="row.remark"
                       class="table-input"
                       :readonly="!editing || saving"
                       type="text"
@@ -200,13 +346,13 @@
                     />
                   </td>
                 </tr>
-                <tr v-for="index in 7" :key="`blank-row-${index}`" class="blank-row">
-                  <td class="center">{{ index + 1 }}</td>
-                  <td colspan="6"></td>
-                </tr>
                 <tr class="total-row">
-                  <td colspan="5" class="center">合计</td>
-                  <td class="right">{{ formatNumber(form.quantity || 0) }}</td>
+                  <td colspan="6" class="center">合计</td>
+                  <td class="right">-</td>
+                  <td class="right">{{ formatNumber(totalQuantity) }}</td>
+                  <td></td>
+                  <td></td>
+                  <td class="right">{{ formatNumber(form.finishedQuantity || 0) }}</td>
                   <td></td>
                 </tr>
               </tbody>
@@ -227,11 +373,11 @@
               </label>
               <label class="info-group wide remark-field">
                 <span>备注信息</span>
-                <input :value="form.remark || '-'" type="text" readonly />
+                <input :value="primaryRemark || '-'" type="text" readonly />
               </label>
               <label class="info-group">
                 <span>修改人</span>
-                <input value="当前操作员" type="text" readonly />
+                <input :value="currentUserName" type="text" readonly />
               </label>
               <label class="info-group">
                 <span>单据状态</span>
@@ -239,9 +385,6 @@
               </label>
             </div>
             <div class="finance-row">
-              <span>原材料出库 <strong>{{ formatNumber(form.quantity || 0) }} {{ form.unit || '' }}</strong></span>
-              <span>单据状态 <strong>草稿</strong></span>
-              <span>修改结果 <strong>{{ editing ? '保存后仍为草稿，待详情弹窗审核' : '点击修改后编辑表单' }}</strong></span>
               <button
                 v-if="editing"
                 type="button"
@@ -269,6 +412,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -276,11 +420,19 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'updated'])
+const userStore = useUserStore()
 
+const stores = ref([])
 const warehouses = ref([])
-const products = ref([])
+const rawProducts = ref([])
+const finishedProducts = ref([])
+const stockBalances = ref([])
 const units = ref([])
 const allowedProductIds = ref([])
+const rows = ref([])
+const activePicker = ref('')
+const rawProductQuery = ref('')
+const finishedProductQuery = ref('')
 const optionsLoading = ref(false)
 const optionsError = ref('')
 const optionsLoaded = ref(false)
@@ -288,24 +440,45 @@ const saving = ref(false)
 const editing = ref(false)
 const formError = ref('')
 const initializedRecordId = ref(null)
+
 const form = reactive({
-  documentDate: '',
-  productId: '',
-  productName: '',
-  productCode: '',
-  specification: '',
-  unit: '',
+  storeId: '',
   warehouseId: '',
   warehouseName: '',
-  quantity: '',
-  remark: ''
+  documentDate: '',
+  finishedProductId: '',
+  finishedWarehouseId: '',
+  finishedQuantity: '',
+  finishedRemark: ''
 })
+
 const errors = reactive({
   documentDate: '',
-  productId: '',
-  warehouseId: '',
-  quantity: ''
+  finishedProductId: '',
+  finishedWarehouseId: '',
+  finishedQuantity: ''
 })
+const rowErrors = ref([])
+
+const currentUserName = computed(() => userStore.name || userStore.username || '当前操作员')
+const sourceLabel = computed(() => props.record?.source === 'touch'
+  ? '触屏端辅助输入'
+  : (props.record?.source || '-'))
+const primaryRemark = computed(() => rows.value[0]?.remark || form.finishedRemark || '')
+const totalQuantity = computed(() => rows.value.reduce(
+  (sum, row) => sum + Number(row.quantity || 0),
+  0
+))
+const availableStores = computed(() => stores.value.filter(item => item.status !== 'inactive'))
+const availableWarehouses = computed(() => warehouses.value.filter(item => {
+  if (item.status === 'inactive') return false
+  return !form.storeId
+    || !item.storeId
+    || String(item.storeId) === String(form.storeId)
+}))
+const finishedProduct = computed(() => finishedProducts.value.find(
+  item => String(item.id) === String(form.finishedProductId)
+) || null)
 
 const formatNumber = value => Number(value || 0).toLocaleString('zh-CN', {
   maximumFractionDigits: 3
@@ -322,75 +495,114 @@ const parseIds = value => {
   }
 }
 
-const activeWarehouses = computed(() => warehouses.value.filter(item => item.status !== 'inactive'))
+const productUnit = product => product?.unit
+  || product?.unitName
+  || units.value.find(unit => String(unit.id) === String(product?.unitId ?? product?.unit_id))?.name
+  || ''
 
-const availableWarehouses = computed(() => {
-  const scoped = activeWarehouses.value.filter(item => (
-    !props.record?.storeId
-    || !item.storeId
-    || String(item.storeId) === String(props.record.storeId)
-  ))
-  return scoped.length ? scoped : activeWarehouses.value
+const makeRow = item => ({
+  id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+  productId: item?.productId ? String(item.productId) : '',
+  productQuery: item?.productName || '',
+  productCode: item?.productCode || '',
+  productName: item?.productName || '',
+  specification: item?.specification || '',
+  unit: item?.unit || '',
+  warehouseId: form.warehouseId,
+  quantity: item?.quantity != null ? String(item.quantity) : '',
+  currentStock: 0,
+  remark: item?.remark || props.record?.remark || ''
 })
-
-const availableProducts = computed(() => {
-  return products.value.filter(product => {
-    if (product.enabled === false) return false
-    if (
-      allowedProductIds.value.length
-      && !allowedProductIds.value.some(id => String(id) === String(product.id))
-      && String(product.id) !== String(form.productId)
-    ) {
-      return false
-    }
-    const storeIds = parseIds(product.storeIds ?? product.store_ids)
-    if (storeIds.length && props.record?.storeId) {
-      if (!storeIds.some(id => String(id) === String(props.record.storeId))) return false
-    }
-    return true
-  })
-})
-
-const selectedProduct = computed(() => (
-  availableProducts.value.find(product => String(product.id) === String(form.productId))
-  || products.value.find(product => String(product.id) === String(form.productId))
-  || null
-))
-
-const productUnit = product => {
-  if (!product) return ''
-  return product.unit
-    || product.unitName
-    || units.value.find(unit => String(unit.id) === String(product.unitId ?? product.unit_id))?.name
-    || ''
-}
 
 const clearErrors = () => {
   errors.documentDate = ''
-  errors.productId = ''
-  errors.warehouseId = ''
-  errors.quantity = ''
+  errors.finishedProductId = ''
+  errors.finishedWarehouseId = ''
+  errors.finishedQuantity = ''
+  rowErrors.value = []
   formError.value = ''
 }
 
 const resetForm = () => {
   clearErrors()
   editing.value = false
-  form.documentDate = props.record?.documentDate || ''
-  form.productId = props.record?.primaryItem?.productId
-    ? String(props.record.primaryItem.productId)
-    : ''
-  form.productName = props.record?.primaryItem?.productName || ''
-  form.productCode = props.record?.primaryItem?.productCode || ''
-  form.specification = props.record?.primaryItem?.specification || ''
-  form.unit = props.record?.primaryItem?.unit || ''
+  form.storeId = props.record?.storeId ? String(props.record.storeId) : ''
   form.warehouseId = props.record?.warehouseId ? String(props.record.warehouseId) : ''
   form.warehouseName = props.record?.warehouseName || ''
-  form.quantity = props.record?.totalQuantity != null
-    ? String(props.record.totalQuantity)
+  form.documentDate = props.record?.documentDate || ''
+  form.finishedProductId = props.record?.finishedProductId
+    ? String(props.record.finishedProductId)
     : ''
-  form.remark = props.record?.remark || ''
+  form.finishedWarehouseId = props.record?.finishedWarehouseId
+    ? String(props.record.finishedWarehouseId)
+    : ''
+  form.finishedQuantity = Number(props.record?.producedQuantity || 0) > 0
+    ? String(props.record.producedQuantity)
+    : ''
+  form.finishedRemark = props.record?.finishedRemark || props.record?.remark || ''
+  const sourceRows = Array.isArray(props.record?.items) && props.record.items.length
+    ? props.record.items
+    : [props.record?.primaryItem]
+  rows.value = sourceRows.filter(Boolean).map(makeRow)
+  if (rows.value.length === 0) rows.value = [makeRow()]
+  rawProductQuery.value = rows.value[0]?.productQuery || ''
+  finishedProductQuery.value = props.record?.finishedProductName || ''
 }
+
+const filteredRawProducts = query => {
+  const text = String(query || '').trim().toLowerCase()
+  return rawProducts.value.filter(product => {
+    if (product.enabled === false) return false
+    if (
+      allowedProductIds.value.length
+      && !allowedProductIds.value.some(id => String(id) === String(product.id))
+    ) {
+      return false
+    }
+    const storeIds = parseIds(product.storeIds ?? product.store_ids)
+    if (storeIds.length && form.storeId && !storeIds.some(id => String(id) === String(form.storeId))) {
+      return false
+    }
+    if (!text) return true
+    return [product.name, product.code, product.specification]
+      .some(value => String(value || '').toLowerCase().includes(text))
+  })
+}
+
+const filteredFinishedProducts = query => {
+  const text = String(query || '').trim().toLowerCase()
+  return finishedProducts.value.filter(product => {
+    if (product.enabled === false) return false
+    const storeIds = parseIds(product.storeIds ?? product.store_ids)
+    if (storeIds.length && form.storeId && !storeIds.some(id => String(id) === String(form.storeId))) {
+      return false
+    }
+    const warehouseId = product.warehouseId ?? product.warehouse_id
+    if (warehouseId && form.finishedWarehouseId && String(warehouseId) !== String(form.finishedWarehouseId)) {
+      return false
+    }
+    if (!text) return true
+    return [product.name, product.code, product.specification]
+      .some(value => String(value || '').toLowerCase().includes(text))
+  })
+}
+
+const stockFor = (productId, warehouseId, storeId) => stockBalances.value
+  .filter(item => (
+    String(item.productId) === String(productId)
+    && String(item.warehouseId) === String(warehouseId)
+    && String(item.storeId) === String(storeId)
+  ))
+  .reduce((sum, item) => sum + Number(item.quantity || 0), 0)
+
+const refreshRowStock = row => {
+  row.currentStock = row.productId
+    ? stockFor(row.productId, form.warehouseId, form.storeId)
+    : 0
+  row.warehouseId = form.warehouseId
+}
+
+const refreshAllStock = () => rows.value.forEach(refreshRowStock)
 
 const loadOptions = async () => {
   optionsLoading.value = true
@@ -398,34 +610,51 @@ const loadOptions = async () => {
   optionsLoaded.value = false
   try {
     const results = await Promise.all([
+      request({ url: '/stores', method: 'GET' }),
       request({ url: '/warehouses', method: 'GET' }),
       request({ url: '/material-outbound-settings', method: 'GET' }),
+      request({ url: '/products', method: 'GET' }),
+      request({ url: '/stock-balances', method: 'GET', params: { type: 'raw-material' } }),
       request({ url: '/products/units/measurements', method: 'GET' })
     ])
-    warehouses.value = Array.isArray(results[0]) ? results[0] : []
-    const settings = results[1] || {}
+    stores.value = Array.isArray(results[0]) ? results[0] : []
+    warehouses.value = Array.isArray(results[1]) ? results[1] : []
+    const settings = results[2] || {}
     allowedProductIds.value = parseIds(settings.allowedProductIds)
-    products.value = Array.isArray(settings.products)
+    rawProducts.value = Array.isArray(settings.products)
       ? settings.products
       : (Array.isArray(settings.allowedProducts) ? settings.allowedProducts : [])
-    units.value = Array.isArray(results[2]) ? results[2] : []
-    const currentProduct = props.record?.primaryItem
+    finishedProducts.value = Array.isArray(results[3]) ? results[3] : []
+    stockBalances.value = Array.isArray(results[4]) ? results[4] : []
+    units.value = Array.isArray(results[5]) ? results[5] : (results[5]?.measurements || [])
+    const currentRaw = props.record?.primaryItem
     if (
-      currentProduct?.productId
-      && !products.value.some(item => String(item.id) === String(currentProduct.productId))
+      currentRaw?.productId
+      && !rawProducts.value.some(item => String(item.id) === String(currentRaw.productId))
     ) {
-      products.value.push({
-        id: currentProduct.productId,
-        code: currentProduct.productCode || '',
-        name: currentProduct.productName || '',
-        specification: currentProduct.specification || '',
-        unit: currentProduct.unit || '',
+      rawProducts.value.push({
+        id: currentRaw.productId,
+        code: currentRaw.productCode || '',
+        name: currentRaw.productName || '',
+        specification: currentRaw.specification || '',
+        unit: currentRaw.unit || '',
         enabled: true
       })
     }
     optionsLoaded.value = true
+    rows.value.forEach(row => {
+      const product = rawProducts.value.find(item => String(item.id) === String(row.productId))
+      if (product) {
+        row.productName = product.name || ''
+        row.productQuery = product.name || ''
+        row.productCode = product.code || ''
+        row.specification = product.specification || ''
+        row.unit = productUnit(product)
+      }
+    })
+    refreshAllStock()
   } catch (error) {
-    optionsError.value = error?.response?.data?.message || '仓库和原材料资料加载失败。'
+    optionsError.value = error?.response?.data?.message || '基础资料和库存加载失败。'
   } finally {
     optionsLoading.value = false
   }
@@ -440,27 +669,65 @@ const initialize = async () => {
   if (!optionsLoaded.value) await loadOptions()
 }
 
-const syncProduct = () => {
-  const product = selectedProduct.value
-  errors.productId = ''
-  if (!product) return
-  form.productName = product.name || ''
-  form.productCode = product.code || ''
-  form.specification = product.specification || ''
-  form.unit = productUnit(product)
+const openPicker = key => {
+  if (editing.value) activePicker.value = key
+}
+
+const selectRawProduct = (product, index) => {
+  const row = rows.value[index] || rows.value[0]
+  if (!row) return
+  row.productId = String(product.id)
+  row.productQuery = product.name || ''
+  row.productName = product.name || ''
+  row.productCode = product.code || ''
+  row.specification = product.specification || ''
+  row.unit = productUnit(product)
+  refreshRowStock(row)
+  if (index === 0) rawProductQuery.value = row.productQuery
+  activePicker.value = ''
+}
+
+const selectFinishedProduct = product => {
+  form.finishedProductId = String(product.id)
+  finishedProductQuery.value = product.name || ''
+  activePicker.value = ''
+  errors.finishedProductId = ''
+}
+
+const syncStore = () => {
+  const warehouseValid = availableWarehouses.value.some(
+    item => String(item.id) === String(form.warehouseId)
+  )
+  if (!warehouseValid) {
+    form.warehouseId = ''
+    form.warehouseName = ''
+  }
+  refreshAllStock()
 }
 
 const syncWarehouse = () => {
-  errors.warehouseId = ''
   const warehouse = availableWarehouses.value.find(
     item => String(item.id) === String(form.warehouseId)
   )
   form.warehouseName = warehouse?.name || ''
+  refreshAllStock()
+}
+
+const addRow = () => {
+  rows.value.push(makeRow())
+}
+
+const removeRow = index => {
+  if (rows.value.length <= 1) return
+  rows.value.splice(index, 1)
+  if (index === 0) {
+    rawProductQuery.value = rows.value[0]?.productQuery || ''
+  }
+  refreshAllStock()
 }
 
 const cancelEditing = () => {
-  if (saving.value) return
-  resetForm()
+  if (!saving.value) resetForm()
 }
 
 const startEditing = () => {
@@ -471,24 +738,64 @@ const startEditing = () => {
 const validate = () => {
   clearErrors()
   let valid = true
-  if (!form.documentDate) {
-    errors.documentDate = '请选择单据日期。'
-    valid = false
-  } else if (!/^\d{4}-\d{2}-\d{2}$/.test(form.documentDate)) {
-    errors.documentDate = '单据日期格式无效。'
+  if (!form.storeId) {
+    formError.value = '请选择门店。'
     valid = false
   }
-  if (!form.productId) {
-    errors.productId = '请选择原材料。'
+  if (!form.documentDate || !/^\d{4}-\d{2}-\d{2}$/.test(form.documentDate)) {
+    errors.documentDate = '请选择有效的单据日期。'
     valid = false
   }
   if (!form.warehouseId) {
-    errors.warehouseId = '请选择出库仓库。'
+    formError.value = formError.value || '请选择出库仓库。'
     valid = false
   }
-  const quantity = Number(form.quantity)
-  if (!Number.isFinite(quantity) || quantity <= 0) {
-    errors.quantity = '出库数量必须大于 0。'
+  if (!rows.value.length) {
+    formError.value = formError.value || '至少保留一条原材料明细。'
+    valid = false
+  }
+  const requestedByStock = new Map()
+  rowErrors.value = rows.value.map(() => ({}))
+  rows.value.forEach((row, index) => {
+    const rowError = {}
+    if (!row.productId) {
+      rowError.productId = '请选择原材料'
+      valid = false
+    }
+    if (!form.warehouseId) {
+      rowError.warehouseId = '请选择仓库'
+      valid = false
+    }
+    const quantity = Number(row.quantity)
+    const key = `${row.productId}:${form.warehouseId}`
+    requestedByStock.set(key, (requestedByStock.get(key) || 0) + (Number.isFinite(quantity) ? quantity : 0))
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      rowError.quantity = '数量必须大于 0'
+      valid = false
+    }
+    rowErrors.value[index] = rowError
+  })
+  rows.value.forEach((row, index) => {
+    const key = `${row.productId}:${form.warehouseId}`
+    if (
+      row.productId
+      && requestedByStock.get(key) > Number(row.currentStock || 0) + 0.0000001
+    ) {
+      rowErrors.value[index].quantity = `不能超过库存 ${formatNumber(row.currentStock)}`
+      valid = false
+    }
+  })
+  if (!form.finishedProductId) {
+    errors.finishedProductId = '请选择成品商品。'
+    valid = false
+  }
+  if (!form.finishedWarehouseId) {
+    errors.finishedWarehouseId = '请选择入库仓库。'
+    valid = false
+  }
+  const finishedQuantity = Number(form.finishedQuantity)
+  if (!Number.isFinite(finishedQuantity) || finishedQuantity <= 0) {
+    errors.finishedQuantity = '入库数量必须大于 0。'
     valid = false
   }
   return valid
@@ -512,11 +819,20 @@ const submitChanges = async () => {
       method: 'PUT',
       data: {
         documentDate: form.documentDate,
-        storeId: props.record.storeId,
+        storeId: Number(form.storeId),
         warehouseId: Number(form.warehouseId),
-        productId: Number(form.productId),
-        quantity: Number(form.quantity),
-        remark: form.remark
+        quantity: Number(rows.value[0]?.quantity || 0),
+        productId: Number(rows.value[0]?.productId || 0),
+        remark: primaryRemark.value,
+        items: rows.value.map(row => ({
+          productId: Number(row.productId),
+          quantity: Number(row.quantity),
+          remark: row.remark || primaryRemark.value
+        })),
+        finishedProductId: Number(form.finishedProductId),
+        finishedWarehouseId: Number(form.finishedWarehouseId),
+        finishedQuantity: Number(form.finishedQuantity),
+        finishedRemark: primaryRemark.value
       }
     })
     emit('updated', response)
@@ -534,6 +850,7 @@ watch(
     else {
       initializedRecordId.value = null
       editing.value = false
+      activePicker.value = ''
     }
   }
 )
@@ -547,7 +864,7 @@ watch(
 </script>
 
 <style scoped>
-.material-audit-overlay {
+.material-edit-overlay {
   --accent: #159a7c;
   --accent-dark: #08755e;
   --border: #e3e8ec;
@@ -562,29 +879,29 @@ watch(
   justify-content: center;
   padding: 12px;
   color: var(--text);
-  background: rgba(15, 23, 42, 0.52);
+  background: rgba(15, 23, 42, .52);
   font-size: 13px;
 }
 
-.material-audit-modal,
-.material-audit-modal * {
+.material-edit-modal,
+.material-edit-modal * {
   box-sizing: border-box;
   letter-spacing: 0;
 }
 
-.material-audit-modal {
+.material-edit-modal {
   display: flex;
-  width: min(1660px, calc(100vw - 24px));
+  width: min(1780px, calc(100vw - 24px));
   max-height: calc(100vh - 24px);
   flex-direction: column;
   overflow: hidden;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 5px;
-  box-shadow: 0 18px 54px rgba(23, 33, 43, 0.24);
+  box-shadow: 0 18px 54px rgba(23, 33, 43, .24);
 }
 
-.material-audit-form {
+.material-edit-form {
   display: flex;
   min-height: 0;
   flex-direction: column;
@@ -593,7 +910,6 @@ watch(
 }
 
 .top-info-bar,
-.contact-info-bar,
 .finance-row-full,
 .finance-row {
   display: flex;
@@ -633,7 +949,7 @@ watch(
 
 .header-fields {
   display: flex;
-  flex: 1 1 780px;
+  flex: 1 1 980px;
   flex-wrap: wrap;
   align-items: center;
   gap: 9px 12px;
@@ -641,6 +957,7 @@ watch(
 }
 
 .info-group {
+  position: relative;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -650,7 +967,6 @@ watch(
 .info-group > span {
   flex: none;
   color: #46535f;
-  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -674,25 +990,36 @@ button {
   outline: none;
 }
 
-.info-group input:focus,
-.info-group select:focus,
-.table-input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 2px rgba(21, 154, 124, 0.12);
-}
-
-.info-group input[readonly] {
+.info-group input[readonly],
+.info-group input:disabled {
   color: #64717c;
   background: #f8fafb;
 }
 
-.material-source-field input {
-  width: 166px;
+.info-group input:focus,
+.info-group select:focus,
+.table-input:focus,
+.product-picker input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(21, 154, 124, .12);
 }
 
-.quantity-source-field input {
-  width: 104px;
-  text-align: right;
+.info-group input.invalid,
+.table-input.invalid {
+  border-color: #d64550;
+  background: #fff6f6;
+}
+
+.source-field input {
+  width: 150px;
+}
+
+.material-source-field {
+  flex: 1 1 230px;
+}
+
+.material-source-field .product-picker {
+  width: 190px;
 }
 
 .date-field input {
@@ -703,26 +1030,13 @@ button {
   width: 154px;
 }
 
-.contact-info-bar {
-  min-height: 58px;
-  background: #fbfcfc;
-}
-
-.contact-info-bar .info-group input,
-.contact-info-bar .info-group select {
-  width: 160px;
-}
-
-.touch-remark-field {
-  flex: 1 1 280px;
-}
-
-.touch-remark-field input {
-  width: 100%;
-}
-
-.document-time-field input {
-  width: 190px;
+.top-error {
+  position: absolute;
+  top: calc(100% + 1px);
+  left: 58px;
+  color: #b5363e;
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .toolbar-actions {
@@ -731,6 +1045,19 @@ button {
   align-items: center;
   gap: 9px;
   margin-left: auto;
+}
+
+.document-status {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 9px;
+  color: #a15c00;
+  background: #fff7e7;
+  border: 1px solid #f1d9a7;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .close-button {
@@ -746,61 +1073,12 @@ button {
   line-height: 1;
 }
 
-.close-button:hover {
-  background: #f3f8f6;
-}
-
-.audit-status {
-  display: inline-flex;
-  min-height: 30px;
-  align-items: center;
-  padding: 0 9px;
-  color: #a15c00;
-  background: #fff7e7;
-  border: 1px solid #f1d9a7;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.edit-button {
-  min-height: 38px;
-  padding: 0 15px;
-  border: 1px solid transparent;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-}
-
-.edit-button:disabled,
 .close-button:disabled,
+.edit-button:disabled,
+.row-action:disabled,
 button:disabled {
   cursor: default;
-  opacity: 0.55;
-}
-
-.edit-button.primary {
-  color: #fff;
-  background: var(--accent);
-  border-color: var(--accent);
-}
-
-.edit-button.primary:hover:not(:disabled) {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
-}
-
-.edit-button.secondary {
-  color: #52616c;
-  background: #fff;
-  border-color: var(--border-strong);
-}
-
-.edit-button.secondary:hover:not(:disabled) {
-  background: #f3f8f6;
+  opacity: .55;
 }
 
 .table-state {
@@ -845,7 +1123,7 @@ button:disabled {
 
 .products-table {
   width: 100%;
-  min-width: 1080px;
+  min-width: 1720px;
   table-layout: fixed;
   border-collapse: collapse;
 }
@@ -854,7 +1132,7 @@ button:disabled {
 .products-table td {
   height: 44px;
   padding: 4px 7px;
-  overflow: hidden;
+  overflow: visible;
   border-right: 1px solid #eef1f3;
   border-bottom: 1px solid #e9eef1;
 }
@@ -871,7 +1149,6 @@ button:disabled {
 .products-table td {
   color: var(--text);
   background: #fff;
-  font-size: 13px;
 }
 
 .products-table td:last-child,
@@ -892,43 +1169,114 @@ button:disabled {
   outline: none;
 }
 
-.products-table td input[readonly] {
+.products-table td input[readonly],
+.products-table td input:disabled {
   color: #46535f;
   background: #f8fafb;
 }
 
-.products-table .table-input {
-  background: #fff;
-  border-color: var(--border-strong);
+.table-input {
+  background: #fff !important;
+  border-color: var(--border-strong) !important;
 }
 
-.products-table .table-input:disabled {
+.table-input:disabled {
   color: #87939b;
-  background: #f8fafb;
+  background: #f8fafb !important;
 }
 
-.products-table .table-input.invalid,
-.info-group select.invalid,
-.info-group input.invalid {
-  border-color: #d64550;
-  background: #fff6f6;
+.product-picker {
+  position: relative;
+  min-width: 0;
 }
 
-.info-group input:disabled {
-  color: #64717c;
-  background: #f8fafb;
-  cursor: default;
+.product-picker > input {
+  width: 100%;
 }
 
-.products-table td.right,
-.products-table td.right input,
-.number-input {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
+.picker-options {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  z-index: 20;
+  width: min(290px, 32vw);
+  max-height: 230px;
+  overflow-y: auto;
+  padding: 4px;
+  background: #fff;
+  border: 1px solid #cbd8d5;
+  border-radius: 4px;
+  box-shadow: 0 12px 26px rgba(23, 33, 43, .17);
 }
 
-.center {
-  text-align: center !important;
+.picker-options button {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px;
+  color: var(--text);
+  background: #fff;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.picker-options button:hover {
+  background: #eef8f5;
+}
+
+.picker-options button small,
+.picker-empty {
+  color: #7b8892;
+  font-size: 11px;
+}
+
+.picker-empty {
+  display: block;
+  padding: 10px 8px;
+}
+
+.row-actions-cell {
+  text-align: center;
+  white-space: nowrap;
+}
+
+.row-action {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.row-action.add {
+  color: #08755e;
+}
+
+.row-action.delete {
+  color: #d64550;
+}
+
+.combined-spec {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shared-finished-cell {
+  color: #87939b !important;
+  background: #f8fafb !important;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .cell-subtext,
@@ -953,20 +1301,13 @@ button:disabled {
   white-space: normal;
 }
 
-.top-error {
-  color: #b5363e;
-  font-size: 11px;
-  white-space: nowrap;
+.right {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
 }
 
-.readonly-unit {
-  color: #64717c !important;
-  background: #f8fafb !important;
-}
-
-.blank-row td {
-  height: 43px;
-  background: #fff;
+.center {
+  text-align: center !important;
 }
 
 .total-row td {
@@ -988,7 +1329,6 @@ button:disabled {
 }
 
 .bottom-info-bar {
-  border-top: 0;
   background: #fff;
 }
 
@@ -1009,27 +1349,36 @@ button:disabled {
 }
 
 .finance-row {
-  gap: 22px;
+  justify-content: flex-end;
+  gap: 9px;
   background: #fbfcfc;
 }
 
-.finance-row > span {
-  color: #46535f;
-  white-space: nowrap;
+.edit-button {
+  min-height: 38px;
+  padding: 0 15px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
 }
 
-.finance-row strong {
-  margin-left: 7px;
-  color: var(--accent-dark);
-  font-variant-numeric: tabular-nums;
+.edit-button.primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
-.finance-row > span:nth-child(3) strong {
-  font-weight: 500;
+.edit-button.primary:hover:not(:disabled) {
+  background: var(--accent-dark);
+  border-color: var(--accent-dark);
 }
 
-.finance-row .edit-button {
-  margin-left: auto;
+.edit-button.secondary {
+  color: #52616c;
+  background: #fff;
+  border-color: var(--border-strong);
 }
 
 @media (max-width: 1180px) {
@@ -1045,24 +1394,19 @@ button:disabled {
     flex-basis: 100%;
     order: 3;
   }
-
-  .document-title {
-    margin-top: 7px;
-  }
 }
 
 @media (max-width: 720px) {
-  .material-audit-overlay {
+  .material-edit-overlay {
     padding: 5px;
   }
 
-  .material-audit-modal {
+  .material-edit-modal {
     width: calc(100vw - 10px);
     max-height: calc(100vh - 10px);
   }
 
   .top-info-bar,
-  .contact-info-bar,
   .finance-row-full,
   .finance-row {
     gap: 9px;
@@ -1071,7 +1415,6 @@ button:disabled {
 
   .document-title {
     width: 100%;
-    margin-top: 0;
   }
 
   .header-fields {
@@ -1080,19 +1423,15 @@ button:disabled {
   }
 
   .header-fields .info-group,
-  .contact-info-bar .info-group,
   .finance-row-full .info-group {
     width: 100%;
   }
 
   .info-group input,
   .info-group select,
-  .material-source-field input,
-  .quantity-source-field input,
+  .material-source-field .product-picker,
   .date-field input,
   .document-no-field input,
-  .contact-info-bar .info-group input,
-  .contact-info-bar .info-group select,
   .finance-row-full .info-group input {
     flex: 1;
     width: 0;
@@ -1106,16 +1445,10 @@ button:disabled {
   .finance-row {
     align-items: stretch;
     flex-direction: column;
-    gap: 8px;
-  }
-
-  .finance-row > span {
-    white-space: normal;
   }
 
   .finance-row .edit-button {
     width: 100%;
-    margin-left: 0;
   }
 }
 </style>
