@@ -1,7 +1,7 @@
 """
 订单管理系统后端主入口文件
 """
-from datetime import timedelta
+from datetime import datetime, timedelta
 from flask import Flask, abort, send_from_directory
 from flask_cors import CORS
 import os
@@ -156,7 +156,11 @@ register_operation_logging(app)
 # ==========================================
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    return {"status": "ok", "message": "服务运行正常"}
+    return {
+        "status": "ok",
+        "message": "服务运行正常",
+        "serverDate": datetime.now().strftime("%Y-%m-%d")
+    }
 
 # ==========================================
 # 运营商标签接口（独立路由）

@@ -97,6 +97,7 @@ const materialSettings = ref(null)
 const materialSettingsLoaded = ref(false)
 const filterStartDate = ref('')
 const filterEndDate = ref('')
+const serverDate = ref('')
 let materialEventSource = null
 let fallbackPollingInterval = null
 let isFetching = false
@@ -286,8 +287,15 @@ const formatTime = value => {
   return text.length >= 16 ? text.slice(11, 16) : text || '-'
 }
 
-const defaultDateRange = () => {
-  const end = new Date()
+const defaultDateRange = (dateText = serverDate.value) => {
+  const serverDateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateText || ''))
+  const end = serverDateMatch
+    ? new Date(
+      Number(serverDateMatch[1]),
+      Number(serverDateMatch[2]) - 1,
+      Number(serverDateMatch[3])
+    )
+    : new Date()
   const start = new Date(end.getFullYear(), end.getMonth(), end.getDate() - 29)
   const format = date => {
     const year = date.getFullYear()
@@ -311,9 +319,26 @@ const fetchRecords = async ({ silent = false } = {}) => {
   }
 
   try {
-    const range = filterStartDate.value && filterEndDate.value
-      ? { start: filterStartDate.value, end: filterEndDate.value }
-      : defaultDateRange()
+    const hasCustomRange = filterStartDate.value && filterEndDate.value
+    let range
+
+    if (hasCustomRange) {
+      range = { start: filterStartDate.value, end: filterEndDate.value }
+    } else {
+      try {
+        const healthResult = await request({
+          url: '/health',
+          method: 'GET'
+        })
+        if (/^\d{4}-\d{2}-\d{2}$/.test(String(healthResult?.serverDate || ''))) {
+          serverDate.value = healthResult.serverDate
+        }
+      } catch (error) {
+        // 服务端时间不可用时，继续使用本地时间，保证展示页面仍可用。
+        console.warn('服务端日期获取失败，使用本地日期计算默认范围', error)
+      }
+      range = defaultDateRange()
+    }
 
     const [recordResult, stockResult, settingsResult] = await Promise.allSettled([
       request({
