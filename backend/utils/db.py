@@ -23,6 +23,8 @@ _raw_material_schema_lock = Lock()
 _raw_material_schema_ready = False
 _stock_inbound_schema_lock = Lock()
 _stock_inbound_schema_ready = False
+_purchase_order_schema_lock = Lock()
+_purchase_order_schema_ready = False
 _material_outbound_schema_lock = Lock()
 _material_outbound_schema_ready = False
 _return_schema_lock = Lock()
@@ -1469,6 +1471,93 @@ def _ensure_stock_inbound_schema(conn):
         _stock_inbound_schema_ready = True
 
 
+def _ensure_purchase_order_schema(conn):
+    """Create purchase order masters/details and link them to inbound documents."""
+    global _purchase_order_schema_ready
+    if _purchase_order_schema_ready:
+        return
+
+    with _purchase_order_schema_lock:
+        if _purchase_order_schema_ready:
+            return
+
+        cursor = conn.cursor()
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS purchase_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_no TEXT NOT NULL UNIQUE,
+                order_date TEXT NOT NULL,
+                expected_date TEXT,
+                store_id INTEGER,
+                supplier_id INTEGER NOT NULL,
+                remark TEXT,
+                status TEXT NOT NULL DEFAULT 'draft',
+                total_quantity REAL NOT NULL DEFAULT 0,
+                total_amount REAL NOT NULL DEFAULT 0,
+                audited_by TEXT,
+                audited_at TEXT,
+                created_by TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_purchase_orders_status_date "
+            "ON purchase_orders(status, order_date DESC, id DESC)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_purchase_orders_supplier "
+            "ON purchase_orders(supplier_id, order_date DESC)"
+        )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS purchase_order_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id INTEGER NOT NULL,
+                line_no INTEGER NOT NULL,
+                product_type TEXT NOT NULL DEFAULT 'raw-material',
+                product_id INTEGER,
+                product_code TEXT,
+                product_name TEXT,
+                specification TEXT,
+                unit TEXT,
+                ordered_qty REAL NOT NULL DEFAULT 0,
+                received_qty REAL NOT NULL DEFAULT 0,
+                unit_price REAL,
+                amount REAL,
+                remark TEXT,
+                FOREIGN KEY(order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE
+            )
+            """
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_purchase_order_items_order "
+            "ON purchase_order_items(order_id, line_no, id)"
+        )
+        inbound_columns = {
+            row['name'] for row in cursor.execute('PRAGMA table_info(stock_inbounds)')
+        }
+        if 'purchase_order_id' not in inbound_columns:
+            cursor.execute('ALTER TABLE stock_inbounds ADD COLUMN purchase_order_id INTEGER')
+        inbound_item_columns = {
+            row['name'] for row in cursor.execute('PRAGMA table_info(stock_inbound_items)')
+        }
+        if 'purchase_order_item_id' not in inbound_item_columns:
+            cursor.execute('ALTER TABLE stock_inbound_items ADD COLUMN purchase_order_item_id INTEGER')
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stock_inbounds_purchase_order "
+            "ON stock_inbounds(purchase_order_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stock_inbound_items_purchase_order "
+            "ON stock_inbound_items(purchase_order_item_id)"
+        )
+        conn.commit()
+        _purchase_order_schema_ready = True
+
+
 def _ensure_material_outbound_schema(conn):
     """Create touch-entry material outbound documents and their settings."""
     global _material_outbound_schema_ready
@@ -2258,6 +2347,7 @@ def get_db():
         _ensure_bank_accounts_schema(conn)
         _ensure_raw_material_products_schema(conn)
         _ensure_stock_inbound_schema(conn)
+        _ensure_purchase_order_schema(conn)
         _ensure_material_outbound_schema(conn)
         _ensure_return_schema(conn)
         _ensure_print_templates_schema(conn)

@@ -8,7 +8,8 @@ import {
   ADMIN_DEPARTMENT_PERMISSIONS,
   ADMIN_EMPLOYEE_PERMISSIONS,
   ADMIN_OPERATION_LOG_PERMISSIONS,
-  ADMIN_SALES_ORDER_PERMISSIONS
+  ADMIN_SALES_ORDER_PERMISSIONS,
+  ADMIN_PURCHASE_ORDER_PERMISSIONS
 } from '@/utils/accessControl'
 
 const routes = [
@@ -218,6 +219,27 @@ const routes = [
         meta: { requiresAuth: true }
       },
       {
+        path: 'purchase/orders/create',
+        name: 'admin-purchase-order-create',
+        component: () => import('@/components/admin/PurchaseOrderForm.vue'),
+        props: { action: 'create' },
+        meta: { requiresAuth: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.CREATE }
+      },
+      {
+        path: 'purchase/orders/edit/:id',
+        name: 'admin-purchase-order-edit',
+        component: () => import('@/components/admin/PurchaseOrderForm.vue'),
+        props: route => ({ action: 'edit', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT }
+      },
+      {
+        path: 'purchase/orders/:id',
+        name: 'admin-purchase-order-view',
+        component: () => import('@/components/admin/PurchaseOrderForm.vue'),
+        props: route => ({ action: 'view', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'purchase/suppliers',
         name: 'admin-purchase-suppliers',
         component: () => import('@/views/admin/purchase/SupplierList.vue'),
@@ -240,7 +262,7 @@ const routes = [
         path: 'purchase/inbound/create',
         name: 'admin-purchase-inbound-create',
         component: () => import('@/components/admin/BusinessDocumentForm.vue'),
-        props: { documentType: 'purchase', action: 'create' },
+        props: route => ({ documentType: 'purchase', action: 'create', purchaseOrderId: route.query.purchaseOrderId ? Number(route.query.purchaseOrderId) : null }),
         meta: { requiresAuth: true, documentForm: true }
       },
       {

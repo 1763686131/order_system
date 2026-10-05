@@ -21,6 +21,14 @@ export const ADMIN_SALES_ORDER_PERMISSIONS = {
   REVERSE_AUDIT: 'admin.sales.order.reverse_audit'
 }
 
+export const ADMIN_PURCHASE_ORDER_PERMISSIONS = {
+  CREATE: 'admin.purchase.order.create',
+  EDIT: 'admin.purchase.order.edit',
+  DELETE: 'admin.purchase.order.delete',
+  AUDIT: 'admin.purchase.order.audit',
+  REVERSE_AUDIT: 'admin.purchase.order.reverse_audit'
+}
+
 export const ADMIN_EMPLOYEE_PERMISSIONS = {
   READ: 'admin.employee.read',
   DETAIL: 'admin.employee.detail',

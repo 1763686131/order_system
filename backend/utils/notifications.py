@@ -9,6 +9,11 @@ from utils.permission_catalog import (
 
 
 AUDIT_NOTIFICATION_CONFIG = {
+    "purchase_order": {
+        "permission": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["purchase_order"],
+        "title": "閲囪喘璁㈠崟寰呭鏍?",
+        "route": "admin-purchase-orders",
+    },
     "sales_order": {
         "permission": ADMIN_SALES_ORDER_PERMISSIONS["audit"],
         "title": "销售订单待审核",

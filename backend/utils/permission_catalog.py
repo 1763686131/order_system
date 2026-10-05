@@ -12,6 +12,14 @@ ADMIN_SALES_ORDER_PERMISSIONS = {
     "reverse_audit": "admin.sales.order.reverse_audit",
 }
 
+ADMIN_PURCHASE_ORDER_PERMISSIONS = {
+    "create": "admin.purchase.order.create",
+    "edit": "admin.purchase.order.edit",
+    "delete": "admin.purchase.order.delete",
+    "audit": "admin.purchase.order.audit",
+    "reverse_audit": "admin.purchase.order.reverse_audit",
+}
+
 ADMIN_MESSAGE_PERMISSIONS = {
     "read": "admin.message.read",
     "send": "admin.message.send",
@@ -19,6 +27,7 @@ ADMIN_MESSAGE_PERMISSIONS = {
 }
 
 ADMIN_AUDIT_NOTIFICATION_PERMISSIONS = {
+    "purchase_order": ADMIN_PURCHASE_ORDER_PERMISSIONS["audit"],
     "stock_inbound": "admin.inventory.stock_inbound.audit",
     "material_outbound": "admin.inventory.material_outbound.audit",
     "payment_receipt": "admin.finance.payment_receipt.audit",
@@ -513,6 +522,38 @@ PERMISSION_MODULES = [
         ],
     },
     {
+        "code": "admin_purchase_order_operations",
+        "name": "閲囪喘璁㈠崟鎿嶄綔",
+        "description": "鎺у埗閲囪喘璁㈠崟鏂板銆佺紪杈戙€佸垹闄ゅ拰瀹℃牳",
+        "permissions": [
+            {
+                "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["create"],
+                "name": "鏂板缓閲囪喘璁㈠崟",
+                "description": "鏂板缓鍘熸潗鏂欓噰璐鍗?",
+            },
+            {
+                "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["edit"],
+                "name": "缂栬緫閲囪喘璁㈠崟",
+                "description": "淇敼鏈鏍哥殑閲囪喘璁㈠崟",
+            },
+            {
+                "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["delete"],
+                "name": "鍒犻櫎閲囪喘璁㈠崟",
+                "description": "鍒犻櫎鏈紑濮嬪叆搴撶殑閲囪喘璁㈠崟",
+            },
+            {
+                "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["audit"],
+                "name": "瀹℃牳閲囪喘璁㈠崟",
+                "description": "瀹℃牳閲囪喘璁㈠崟骞跺厑璁稿紑濮嬪叆搴?",
+            },
+            {
+                "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["reverse_audit"],
+                "name": "鍙嶅鏍歌喘璁㈠崟",
+                "description": "鎾ら攢灏氭湭鍏ㄩ儴鍏ュ簱鐨勮喘璐鍗曞鏍?",
+            },
+        ],
+    },
+    {
         "code": "admin_messages",
         "name": "留言与通知",
         "description": "控制后台留言、附件和审核通知功能",
@@ -539,6 +580,11 @@ PERMISSION_MODULES = [
         "name": "单据审核通知",
         "description": "决定角色组接收哪些待审核单据通知",
         "permissions": [
+            {
+                "code": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["purchase_order"],
+                "name": "閲囪喘璁㈠崟瀹℃牳",
+                "description": "瀹℃牳閲囪喘璁㈠崟骞舵帴鏀跺緟瀹℃牳閫氱煡",
+            },
             {
                 "code": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["stock_inbound"],
                 "name": "采购入库审核",

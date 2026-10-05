@@ -243,6 +243,9 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
         if not isinstance(raw, dict):
             continue
         product_id = _optional_int(raw.get('productId', raw.get('product_id')), '物料ID')
+        purchase_order_item_id = _optional_int(
+            raw.get('purchaseOrderItemId', raw.get('purchase_order_item_id')), 'purchase order item id'
+        )
         name = _clean_text(raw.get('name', raw.get('productName', raw.get('product_name', ''))), 160)
         received = _number(raw.get('receivedQty', raw.get('received_qty', raw.get('quantity'))), Decimal('0'))
         expected = _number(raw.get('expectedQty', raw.get('expected_qty')), Decimal('0'))
@@ -278,6 +281,7 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
             raise ValueError('明细仓库不存在')
 
         normalized.append({
+            'purchase_order_item_id': purchase_order_item_id,
             'product_id': product_id,
             'warehouse_id': warehouse_id,
             'product_code': _clean_text(raw.get('code', raw.get('productCode', raw.get('product_code', ''))), 80),
@@ -312,6 +316,10 @@ def _document_values(conn, data, existing=None, for_post=False):
     warehouse_id = _required_int(data.get('warehouseId', data.get('warehouse_id', existing.get('warehouse_id'))), '目标仓库')
     store_id = _optional_int(data.get('storeId', data.get('store_id', existing.get('store_id'))), '门店ID')
     supplier_id = _optional_int(data.get('supplierId', data.get('supplier_id', existing.get('supplier_id'))), '供应商ID')
+    purchase_order_id = _optional_int(
+        data.get('purchaseOrderId', data.get('purchase_order_id', existing.get('purchase_order_id'))),
+        '采购订单ID',
+    )
     workshop = _clean_text(data.get('workshop', data.get('productionWorkshop', existing.get('workshop', ''))), 80)
     if receipt_type == 'raw-material' and require_valid:
         if supplier_id is None:
@@ -321,6 +329,8 @@ def _document_values(conn, data, existing=None, for_post=False):
     if not conn.execute('SELECT 1 FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone():
         raise ValueError('目标仓库不存在')
     items = _normalize_items(conn, receipt_type, data.get('items', existing.get('_items', [])), require_valid, default_warehouse_id=warehouse_id)
+    if purchase_order_id is not None:
+        _validate_purchase_link(conn, purchase_order_id, supplier_id, items, require_valid=require_valid)
     if require_valid and not any(item['received_qty'] > 0 for item in items):
         raise ValueError('审核至少需要 1 条有效物料明细')
     total_quantity = sum(Decimal(str(item['received_qty'])) for item in items)
@@ -333,6 +343,7 @@ def _document_values(conn, data, existing=None, for_post=False):
         'store_id': store_id,
         'warehouse_id': warehouse_id,
         'supplier_id': supplier_id if receipt_type == 'raw-material' else None,
+        'purchase_order_id': purchase_order_id if receipt_type == 'raw-material' else None,
         'workshop': workshop if receipt_type == 'finished-product' else '',
         'inspector': _clean_text(data.get('inspector', existing.get('inspector', '')), 80),
         'quality_no': _clean_text(data.get('qualityNo', data.get('quality_no', existing.get('quality_no', ''))), 80),
@@ -346,8 +357,73 @@ def _document_values(conn, data, existing=None, for_post=False):
     }
 
 
+def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, require_valid=False):
+    """Validate inbound quantities against the remaining approved purchase order."""
+    order = conn.execute(
+        'SELECT * FROM purchase_orders WHERE id = ?', (purchase_order_id,)
+    ).fetchone()
+    if not order:
+        raise ValueError('关联的采购订单不存在')
+    if order['status'] not in ('approved', 'partial'):
+        raise ValueError('只有已审核或部分入库的采购订单可以入库')
+    if supplier_id is not None and order['supplier_id'] != supplier_id:
+        raise ValueError('入库供应商必须与采购订单一致')
+    order_items = {
+        int(row['id']): row
+        for row in conn.execute(
+            'SELECT * FROM purchase_order_items WHERE order_id = ?', (purchase_order_id,)
+        ).fetchall()
+    }
+    linked = 0
+    for item in items:
+        link_id = item.get('purchase_order_item_id')
+        if link_id is None:
+            if require_valid:
+                raise ValueError('采购入库明细必须关联采购订单明细')
+            continue
+        linked += 1
+        order_item = order_items.get(int(link_id))
+        if not order_item:
+            raise ValueError('关联的采购订单明细不存在')
+        if item.get('product_id') is not None and order_item['product_id'] != item['product_id']:
+            raise ValueError('入库物料与采购订单明细不一致')
+        for item_field, order_field in (
+            ('product_code', 'product_code'),
+            ('product_name', 'product_name'),
+            ('specification', 'specification'),
+            ('unit', 'unit'),
+        ):
+            if not item.get(item_field) and order_item[order_field]:
+                item[item_field] = order_item[order_field]
+        remaining = float(order_item['ordered_qty'] or 0) - float(order_item['received_qty'] or 0)
+        if float(item.get('received_qty') or 0) > remaining + 0.0000001:
+            raise ValueError('本次入库数量不能超过采购订单剩余数量')
+        if item.get('expected_qty') is None:
+            item['expected_qty'] = max(remaining, 0)
+        if item.get('unit_price') is None and order_item['unit_price'] is not None:
+            item['unit_price'] = order_item['unit_price']
+        # The inbound line may omit price because the purchase order already
+        # carries it. Recalculate the derived tax and total fields after that
+        # fallback so stock movement and document totals stay consistent.
+        received = Decimal(str(item.get('received_qty') or 0))
+        unit_price = Decimal(str(item.get('unit_price') or 0))
+        tax_rate = Decimal(str(item.get('tax_rate') or 0))
+        tax_amount = (received * unit_price * tax_rate / Decimal('100')).quantize(
+            _MONEY_QUANT, rounding=ROUND_HALF_UP
+        )
+        item['tax_amount'] = float(tax_amount)
+        item['total_amount'] = float(
+            (received * unit_price + tax_amount).quantize(
+                _MONEY_QUANT, rounding=ROUND_HALF_UP
+            )
+        )
+    if require_valid and linked == 0:
+        raise ValueError('采购入库必须关联采购订单明细')
+
+
 def _serialize_item(row, default_warehouse_id=None):
     item = dict(row)
+    item['purchaseOrderItemId'] = item.pop('purchase_order_item_id', None)
     item['productId'] = item.pop('product_id', None)
     item['warehouseId'] = item.pop('warehouse_id', None) or default_warehouse_id
     item['productCode'] = item.pop('product_code', '') or ''
@@ -365,12 +441,28 @@ def _serialize_item(row, default_warehouse_id=None):
 
 def _serialize_document(conn, row, include_items=True):
     document = dict(row)
+    supplier = conn.execute(
+        'SELECT supplier_name FROM suppliers WHERE id = ?',
+        (row['supplier_id'],),
+    ).fetchone() if row['supplier_id'] is not None else None
+    warehouse = conn.execute(
+        'SELECT name FROM warehouses WHERE id = ?',
+        (row['warehouse_id'],),
+    ).fetchone() if row['warehouse_id'] is not None else None
+    store = conn.execute(
+        'SELECT name FROM stores WHERE id = ?',
+        (row['store_id'],),
+    ).fetchone() if row['store_id'] is not None else None
     document['documentNo'] = document.pop('document_no', '')
     document['documentDate'] = document.pop('document_date', '')
     document['type'] = document.pop('receipt_type', '')
     document['storeId'] = document.pop('store_id', None)
     document['warehouseId'] = document.pop('warehouse_id', None)
     document['supplierId'] = document.pop('supplier_id', None)
+    document['purchaseOrderId'] = document.pop('purchase_order_id', None)
+    document['supplierName'] = supplier['supplier_name'] if supplier else ''
+    document['warehouseName'] = warehouse['name'] if warehouse else ''
+    document['storeName'] = store['name'] if store else ''
     document['qualityNo'] = document.pop('quality_no', '') or ''
     document['totalQuantity'] = document.pop('total_quantity', 0)
     document['totalTax'] = document.pop('total_tax', 0)
@@ -498,19 +590,48 @@ def _reverse_posted_items(conn, document_row):
     conn.execute('DELETE FROM stock_balances WHERE ABS(quantity) < 0.0000001')
 
 
+def _update_purchase_receipts(conn, purchase_order_id, item_rows, direction=1):
+    if not purchase_order_id:
+        return
+    for item in item_rows:
+        link_id = item.get('purchase_order_item_id')
+        if link_id is None:
+            continue
+        quantity = float(item.get('received_qty') or 0) * direction
+        if abs(quantity) < 0.0000001:
+            continue
+        conn.execute(
+            'UPDATE purchase_order_items SET received_qty = received_qty + ? WHERE id = ? AND order_id = ?',
+            (quantity, link_id, purchase_order_id),
+        )
+    remaining = conn.execute(
+        '''
+        SELECT COALESCE(SUM(CASE WHEN ordered_qty > received_qty
+                                THEN ordered_qty - received_qty ELSE 0 END), 0) AS quantity
+        FROM purchase_order_items WHERE order_id = ?
+        ''',
+        (purchase_order_id,),
+    ).fetchone()['quantity']
+    new_status = 'completed' if float(remaining or 0) <= 0.0000001 else 'partial' if direction > 0 else 'approved'
+    conn.execute(
+        'UPDATE purchase_orders SET status = ?, updated_at = ? WHERE id = ? AND status <> \'cancelled\'',
+        (new_status, _now(), purchase_order_id),
+    )
+
+
 def _insert_items(conn, inbound_id, receipt_type, items):
     for line_no, item in enumerate(items, start=1):
         cursor = conn.execute(
             '''
             INSERT INTO stock_inbound_items (
-                inbound_id, line_no, product_type, product_id, warehouse_id, product_code,
+                inbound_id, line_no, product_type, product_id, purchase_order_item_id, warehouse_id, product_code,
                 product_name, specification, unit, expected_qty, received_qty,
                 bin_code, batch_no, unit_price, tax_rate, tax_amount,
                 total_amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
-                inbound_id, line_no, receipt_type, item['product_id'], item['warehouse_id'], item['product_code'],
+                inbound_id, line_no, receipt_type, item['product_id'], item.get('purchase_order_item_id'), item['warehouse_id'], item['product_code'],
                 item['product_name'], item['specification'], item['unit'], item['expected_qty'],
                 item['received_qty'], item['bin_code'], item['batch_no'], item['unit_price'],
                 item['tax_rate'], item['tax_amount'], item['total_amount'], item['remark'],
@@ -525,14 +646,14 @@ def _document_insert(conn, values):
         '''
         INSERT INTO stock_inbounds (
             document_no, document_date, receipt_type, store_id, warehouse_id,
-            supplier_id, workshop, inspector, quality_no, remark, attachments,
+            supplier_id, purchase_order_id, workshop, inspector, quality_no, remark, attachments,
             status, total_quantity, total_tax, total_amount, posted_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
             values['document_no'] or f'TEMP-{now.replace(" ", "").replace(":", "").replace("-", "")}-{threading.get_ident()}',
             values['document_date'], values['receipt_type'], values['store_id'], values['warehouse_id'],
-            values['supplier_id'], values['workshop'], values['inspector'], values['quality_no'],
+            values['supplier_id'], values.get('purchase_order_id'), values['workshop'], values['inspector'], values['quality_no'],
             values['remark'], json.dumps(values['attachments'], ensure_ascii=False), values['status'],
             values['total_quantity'], values['total_tax'], values['total_amount'],
             now if _is_audited(values['status']) else None, now, now,
@@ -634,14 +755,14 @@ def update_stock_inbound(inbound_id):
                 conn.execute(
                     '''
                     UPDATE stock_inbounds SET document_no = ?, document_date = ?, receipt_type = ?,
-                        store_id = ?, warehouse_id = ?, supplier_id = ?, workshop = ?, inspector = ?,
+                        store_id = ?, warehouse_id = ?, supplier_id = ?, purchase_order_id = ?, workshop = ?, inspector = ?,
                         quality_no = ?, remark = ?, attachments = ?, status = ?, total_quantity = ?,
                         total_tax = ?, total_amount = ?, posted_at = ?, updated_at = ?
                     WHERE id = ?
                     ''',
                     (
                         document_no, values['document_date'], values['receipt_type'], values['store_id'],
-                        values['warehouse_id'], values['supplier_id'], values['workshop'], values['inspector'],
+                        values['warehouse_id'], values['supplier_id'], values.get('purchase_order_id'), values['workshop'], values['inspector'],
                         values['quality_no'], values['remark'], json.dumps(values['attachments'], ensure_ascii=False),
                         values['status'], values['total_quantity'], values['total_tax'], values['total_amount'],
                         now if _is_audited(values['status']) else None, now, inbound_id,
@@ -745,6 +866,7 @@ def audit_stock_inbound(inbound_id):
                 )
                 audited_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                 _post_items(conn, audited_row, [dict(item) for item in item_rows])
+                _update_purchase_receipts(conn, audited_row['purchase_order_id'], [dict(item) for item in item_rows], direction=1)
                 complete_audit_notifications(conn, "stock_inbound", inbound_id)
                 return jsonify({
                     'success': True,
@@ -769,7 +891,12 @@ def reverse_audit_stock_inbound(inbound_id):
                     return jsonify({'success': False, 'message': '入库单不存在'}), 404
                 if not _is_audited(row['status']):
                     return jsonify({'success': False, 'message': '当前单据未审核'}), 409
+                item_rows = conn.execute(
+                    'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id',
+                    (inbound_id,),
+                ).fetchall()
                 _reverse_posted_items(conn, row)
+                _update_purchase_receipts(conn, row['purchase_order_id'], [dict(item) for item in item_rows], direction=-1)
                 now = _now()
                 conn.execute(
                     "UPDATE stock_inbounds SET status = 'draft', posted_at = NULL, updated_at = ? WHERE id = ?",

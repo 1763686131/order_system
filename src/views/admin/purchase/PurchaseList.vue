@@ -223,7 +223,7 @@
                     </svg>
                   </button>
                   <button
-                    v-if="isInbound"
+                    v-if="isInbound && record.status !== 'pending'"
                     class="table-action"
                     type="button"
                     title="打印入库单"
@@ -234,6 +234,15 @@
                       <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
                       <path d="M6 14h12v7H6z"></path>
                     </svg>
+                  </button>
+                  <button
+                    v-if="!isInbound && record.status === 'pending'"
+                    class="table-action audit-action"
+                    type="button"
+                    title="审核采购订单"
+                    @click="auditRecord(record)"
+                  >
+                    ✓
                   </button>
                   <button
                     v-if="canEdit(record)"
@@ -408,7 +417,13 @@
             <footer class="detail-modal-footer">
               <button class="button button-ghost" type="button" @click="closeDetail">关闭</button>
               <div class="footer-actions">
-                <button v-if="isInbound" class="button button-secondary" type="button" @click="printRecord(selectedRecord)">
+                <button v-if="!isInbound && selectedRecord.status === 'pending'" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
+                  审核并进入入库
+                </button>
+                <button v-if="!isInbound && ['approved', 'partial'].includes(selectedRecord.status)" class="button button-secondary" type="button" @click="router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: selectedRecord.id } })">
+                  创建采购入库单
+                </button>
+                <button v-if="isInbound && selectedRecord.status !== 'pending'" class="button button-secondary" type="button" @click="printRecord(selectedRecord)">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="M6 9V3h12v6"></path>
                     <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
@@ -416,7 +431,10 @@
                   </svg>
                   打印入库单
                 </button>
-                <button v-if="canEdit(selectedRecord)" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
+                <button v-if="isInbound && selectedRecord.status === 'pending'" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
+                  创建采购入库单
+                </button>
+                <button v-if="canEdit(selectedRecord) && !(isInbound && selectedRecord.status === 'pending')" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
                   {{ isInbound ? '编辑入库单' : '查看采购单' }}
                 </button>
               </div>
@@ -429,8 +447,9 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import request from '@/api/request'
 
 const props = defineProps({
   mode: {
@@ -654,6 +673,7 @@ const statusTabs = computed(() => {
   const statuses = isInbound.value
     ? [
         { key: 'all', label: '全部' },
+        { key: 'pending', label: '待入库' },
         { key: 'draft', label: '草稿' },
         { key: 'reviewed', label: '已审核' },
         { key: 'posted', label: '已入库' },
@@ -662,7 +682,7 @@ const statusTabs = computed(() => {
     : [
         { key: 'all', label: '全部' },
         { key: 'pending', label: '待确认' },
-        { key: 'confirmed', label: '已确认' },
+        { key: 'approved', label: '已审核' },
         { key: 'partial', label: '部分入库' },
         { key: 'completed', label: '已完成' },
         { key: 'cancelled', label: '已取消' }
@@ -716,6 +736,7 @@ watch(
     currentPage.value = 1
     selectedIds.value = new Set()
     closeDetail()
+    refreshData(false)
   }
 )
 
@@ -768,14 +789,16 @@ function getStatusLabel(status) {
 
 function getStatusClass(status) {
   if (status === 'pending' || status === 'draft') return 'pending'
-  if (status === 'confirmed' || status === 'reviewed') return 'confirmed'
+  if (status === 'approved' || status === 'reviewed') return 'confirmed'
   if (status === 'partial') return 'processing'
   if (status === 'completed' || status === 'posted') return 'completed'
   return 'rejected'
 }
 
 function canEdit(record) {
-  return !isInbound.value || !['reviewed', 'posted', 'cancelled'].includes(record.status)
+  return isInbound.value
+    ? !['reviewed', 'posted', 'cancelled'].includes(record.status)
+    : ['draft', 'pending'].includes(record.status)
 }
 
 function applyFilters() {
@@ -833,21 +856,47 @@ function showNotice(message) {
   }, 3200)
 }
 
-function createRecord() {
-  if (isInbound.value) {
-    router.push({ name: 'admin-purchase-inbound-create' })
+async function createRecord() {
+  if (!isInbound.value) {
+    router.push({ name: 'admin-purchase-order-create' })
     return
   }
-  showNotice('采购订单新增接口待接入，当前页面使用演示数据')
+  const candidates = inboundRecords.value.filter(record => record.status === 'pending' && record.purchaseOrderId)
+  if (!candidates.length) {
+    showNotice('暂无已审核且有剩余数量的采购订单，请先审核采购订单')
+    return
+  }
+  if (candidates.length === 1) {
+    router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: candidates[0].purchaseOrderId } })
+    return
+  }
+  showNotice('请打开采购订单详情后选择需要入库的订单')
 }
 
 function editRecord(record) {
   if (!isInbound.value) {
-    openDetail(record)
-    showNotice('采购订单编辑接口待接入，当前先展示订单详情')
+    if (canEdit(record)) router.push({ name: 'admin-purchase-order-edit', params: { id: record.id } })
+    else router.push({ name: 'admin-purchase-order-view', params: { id: record.id } })
+    return
+  }
+  if (record.status === 'pending' && record.purchaseOrderId) {
+    router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: record.purchaseOrderId } })
     return
   }
   router.push({ name: 'admin-purchase-inbound-edit', params: { id: record.id } })
+}
+
+async function auditRecord(record) {
+  if (isInbound.value || record.status !== 'pending') return
+  try {
+    const response = await request({ url: `/purchase-orders/${record.id}/audit`, method: 'POST' })
+    if (!response?.success) throw new Error(response?.message || '审核失败')
+    closeDetail()
+    await refreshData(false)
+    showNotice('采购订单审核成功，已进入采购入库列表')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || error.message || '采购订单审核失败')
+  }
 }
 
 function printRecord(record) {
@@ -856,20 +905,98 @@ function printRecord(record) {
 }
 
 function exportRecords() {
-  showNotice('导出接口待接入，当前列表为演示数据')
+  const rows = filteredRecords.value
+  if (!rows.length) { showNotice('当前没有可导出的记录'); return }
+  const headers = isInbound.value ? ['入库单号', '日期', '供应商', '实收数量', '金额', '状态'] : ['采购单号', '日期', '供应商', '采购数量', '金额', '状态']
+  const lines = rows.map(record => [getRecordNo(record), recordDate(record), record.supplierName, quantityValue(record), record.totalAmount, getStatusLabel(record.status)])
+  const csv = [headers, ...lines].map(line => line.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
+  const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' })
+  const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${isInbound.value ? '采购入库' : '采购订单'}.csv`; link.click(); URL.revokeObjectURL(link.href)
 }
 
-function refreshData() {
+function normalizeOrder(record) {
+  const items = (record.items || record.orderItems || []).map(item => ({
+    ...item,
+    goodsName: item.productName || item.goodsName || '',
+    quantity: item.orderedQty || 0,
+    expectedQty: item.orderedQty || 0,
+    price: item.unitPrice,
+    amount: item.amount
+  }))
+  return {
+    ...record, id: record.orderId || record.id, orderNo: record.orderNo || '', purchaseDate: record.orderDate || '',
+    supplierName: record.supplierName || '', warehouseName: record.warehouseName || '', contact: record.createdBy || '',
+    itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''),
+    itemCount: items.length, totalQuantity: Number(record.totalQuantity || 0), receivedQuantity: items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0),
+    totalAmount: Number(record.totalAmount || 0), items
+  }
+}
+
+function normalizeInbound(record) {
+  const items = (record.items || []).map(item => ({ ...item, goodsName: item.productName || item.goodsName || '', quantity: item.receivedQty || 0, price: item.unitPrice, amount: item.totalAmount }))
+  return {
+    ...record, id: record.id, inboundNo: record.documentNo || '', documentDate: record.documentDate || '', supplierName: record.supplierName || '',
+    warehouseName: record.warehouseName || '', inspector: record.inspector || '', qualityNo: record.qualityNo || '', itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''), itemCount: items.length,
+    expectedQuantity: items.reduce((sum, item) => sum + Number(item.expectedQty || 0), 0), receivedQuantity: items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0), totalAmount: Number(record.totalAmount || 0), items
+  }
+}
+
+function normalizePendingInbound(record) {
+  const items = (record.items || record.orderItems || [])
+    .map(item => ({
+      ...item,
+      goodsName: item.productName || item.goodsName || '',
+      expectedQty: Number(item.remainingQty ?? item.orderedQty ?? 0),
+      receivedQty: 0,
+      quantity: 0,
+      price: item.unitPrice,
+      amount: item.unitPrice == null ? null : Number((Number(item.remainingQty ?? item.orderedQty ?? 0) * Number(item.unitPrice)).toFixed(2))
+    }))
+    .filter(item => item.expectedQty > 0)
+  return {
+    ...record,
+    id: `purchase-order-${record.orderId}`,
+    purchaseOrderId: record.orderId,
+    inboundNo: record.orderNo || '',
+    documentDate: record.orderDate || '',
+    supplierName: record.supplierName || '',
+    warehouseName: '待选择入库仓库',
+    inspector: '',
+    qualityNo: '',
+    itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''),
+    itemCount: items.length,
+    expectedQuantity: items.reduce((sum, item) => sum + item.expectedQty, 0),
+    receivedQuantity: 0,
+    totalAmount: items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0),
+    status: 'pending',
+    remark: record.remark || '采购订单已审核，等待选择仓库入库',
+    items
+  }
+}
+
+async function refreshData(showMessage = true) {
   loading.value = true
-  window.setTimeout(() => {
+  try {
     if (isInbound.value) {
-      inboundRecords.value = cloneRecords(mockInbounds)
+      const [inboundData, approvedData, partialData] = await Promise.all([
+        request({ url: '/stock-inbounds', method: 'GET', params: { type: 'raw-material' } }),
+        request({ url: '/purchase-orders', method: 'GET', params: { status: 'approved' } }),
+        request({ url: '/purchase-orders', method: 'GET', params: { status: 'partial' } })
+      ])
+      const actualRecords = (Array.isArray(inboundData) ? inboundData : []).map(normalizeInbound)
+      const draftOrderIds = new Set(actualRecords.filter(record => record.status === 'draft' && record.purchaseOrderId).map(record => String(record.purchaseOrderId)))
+      const pendingOrders = [...(Array.isArray(approvedData) ? approvedData : []), ...(Array.isArray(partialData) ? partialData : [])]
+        .filter(order => !draftOrderIds.has(String(order.orderId || order.id)))
+        .map(normalizePendingInbound)
+      inboundRecords.value = [...pendingOrders, ...actualRecords]
     } else {
-      orderRecords.value = cloneRecords(mockOrders)
+      const data = await request({ url: '/purchase-orders', method: 'GET' })
+      orderRecords.value = (Array.isArray(data) ? data : []).map(normalizeOrder)
     }
-    loading.value = false
-    showNotice('列表已刷新')
-  }, 350)
+    if (showMessage) showNotice('列表已刷新')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || error.message || '列表加载失败')
+  } finally { loading.value = false }
 }
 
 function copyDocumentNo() {
@@ -878,6 +1005,8 @@ function copyDocumentNo() {
   navigator.clipboard?.writeText(documentNo)
   showNotice(`已复制单号 ${documentNo}`)
 }
+
+onMounted(() => refreshData(false))
 </script>
 
 <style scoped>

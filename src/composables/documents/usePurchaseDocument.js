@@ -6,7 +6,7 @@ import { DOCUMENT_TYPES, inboundAmounts, isLockedInbound, localDate, money, purc
 import { useDocumentValidation } from './useDocumentValidation'
 
 const blankItem = () => ({
-  productId: '', productCode: '', goodsName: '', specification: '', unit: '', warehouseId: '', warehouseName: '', expectedQty: '',
+  purchaseOrderItemId: '', productId: '', productCode: '', goodsName: '', specification: '', unit: '', warehouseId: '', warehouseName: '', expectedQty: '',
   quantity: '', price: '', taxRate: 0, amount: 0, taxAmount: 0, taxIncludedAmount: 0,
   batchNo: '', binCode: '', remark: ''
 })
@@ -21,7 +21,7 @@ export function usePurchaseDocument(props) {
   const products = ref([])
   const units = ref([])
   const form = ref({
-    storeId: '', supplierId: '', warehouseId: '', documentDate: localDate(), documentNo: '',
+    storeId: '', supplierId: '', warehouseId: '', purchaseOrderId: props.purchaseOrderId || null, documentDate: localDate(), documentNo: '',
     inspector: '', qualityNo: '', remark: '', taxEnabled: false, items: [blankItem(), blankItem()],
     attachments: [], status: 'draft'
   })
@@ -29,6 +29,8 @@ export function usePurchaseDocument(props) {
   const loading = ref(true)
   const loadFailed = ref(false)
   const savedDocumentId = ref(props.documentId)
+  const purchaseOrderId = ref(props.purchaseOrderId || null)
+  const purchaseOrder = ref(null)
   const notice = ref({ visible: false, type: 'success', message: '' })
   const readOnly = ref(props.action === 'view')
   const stockBalances = ref([])
@@ -57,8 +59,34 @@ export function usePurchaseDocument(props) {
     showNotice.timer = window.setTimeout(() => { notice.value.visible = false }, type === 'error' ? 5000 : 3000)
   }
   const calculateRow = item => Object.assign(item, inboundAmounts(item, form.value.taxEnabled))
-  const onStoreChange = () => { form.value.supplierId = ''; form.value.warehouseId = ''; form.value.items = [blankItem(), blankItem()] }
-  const onWarehouseChange = () => { form.value.items = [blankItem(), blankItem()] }
+  const onStoreChange = () => {
+    if (purchaseOrderId.value) {
+      form.value.warehouseId = ''
+      form.value.items.forEach(item => {
+        if (item.productId) {
+          item.warehouseId = ''
+          item.warehouseName = ''
+          item.currentStock = 0
+        }
+      })
+      return
+    }
+    form.value.supplierId = ''
+    form.value.warehouseId = ''
+    form.value.items = [blankItem(), blankItem()]
+  }
+  const onWarehouseChange = () => {
+    if (purchaseOrderId.value) {
+      form.value.items.forEach(item => {
+        if (item.productId) {
+          item.warehouseId = form.value.warehouseId || ''
+          onItemWarehouseChange(item)
+        }
+      })
+      return
+    }
+    form.value.items = [blankItem(), blankItem()]
+  }
   const getProductStock = (product, item = {}) => stockBalances.value.filter(balance => String(balance.productId) === String(product.id) && String(balance.storeId) === String(form.value.storeId) && String(balance.warehouseId) === String(item.warehouseId || form.value.warehouseId)).reduce((sum, balance) => sum + Number(balance.quantity || 0), 0)
   const onItemWarehouseChange = item => {
     item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
@@ -101,6 +129,8 @@ export function usePurchaseDocument(props) {
     stockBalances.value = Array.isArray(stockData) ? stockData : []
   }
   const normalizeInbound = data => {
+    purchaseOrderId.value = data.purchaseOrderId || null
+    form.value.purchaseOrderId = purchaseOrderId.value
     form.value = {
       ...form.value,
       storeId: data.storeId ? String(data.storeId) : '',
@@ -112,7 +142,7 @@ export function usePurchaseDocument(props) {
       taxEnabled: (data.items || []).some(item => Number(item.taxRate) > 0),
       attachments: data.attachments || [],
       items: (data.items || []).map(item => ({
-        ...blankItem(), productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '', warehouseId: String(item.warehouseId || data.warehouseId || ''), warehouseName: warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId || data.warehouseId))?.name || '',
+        ...blankItem(), purchaseOrderItemId: item.purchaseOrderItemId || '', productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '', warehouseId: String(item.warehouseId || data.warehouseId || ''), warehouseName: warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId || data.warehouseId))?.name || '',
         goodsName: item.productName || item.goodsName || '', specification: item.specification || '', unit: item.unit || '',
         expectedQty: item.expectedQty ?? '', quantity: item.receivedQty ?? '', price: item.unitPrice ?? '',
         taxRate: Number(item.taxRate || 0), amount: Number(item.totalAmount || 0) - Number(item.taxAmount || 0),
@@ -122,8 +152,34 @@ export function usePurchaseDocument(props) {
     }
     form.value.items.filter(item => item.productId).forEach(onItemWarehouseChange)
   }
+  const normalizePurchaseOrder = data => {
+    purchaseOrder.value = data
+    purchaseOrderId.value = data.orderId || data.id || purchaseOrderId.value
+    form.value.purchaseOrderId = purchaseOrderId.value
+    form.value = {
+      ...form.value,
+      storeId: data.storeId ? String(data.storeId) : '',
+      supplierId: data.supplierId ? String(data.supplierId) : '',
+      documentDate: data.orderDate || localDate(),
+      remark: data.remark || '',
+      items: (data.items || []).map(item => ({
+        ...blankItem(), purchaseOrderItemId: item.orderItemId || item.id || '',
+        productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
+        goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
+        expectedQty: item.remainingQty ?? item.orderedQty ?? '', quantity: item.remainingQty ?? item.orderedQty ?? '',
+        price: item.unitPrice ?? '', amount: 0
+      })).concat([blankItem(), blankItem()]).slice(0, Math.max(2, (data.items || []).length + 1))
+    }
+    form.value.items.filter(item => item.productId).forEach(item => { item.warehouseId = form.value.warehouseId; onItemWarehouseChange(item); calculateRow(item) })
+  }
   const loadExisting = async () => {
-    if (!props.documentId) return
+    if (!props.documentId) {
+      if (props.purchaseOrderId) {
+        const data = await request({ url: `/purchase-orders/${props.purchaseOrderId}/available-inbound`, method: 'GET' })
+        normalizePurchaseOrder(data)
+      }
+      return
+    }
     const data = await request({ url: `/stock-inbounds/${props.documentId}`, method: 'GET' })
     if (data.type !== 'raw-material') throw new Error('此页面只支持原材料进货单')
     normalizeInbound(data)
@@ -167,7 +223,9 @@ export function usePurchaseDocument(props) {
   }
   const clearForm = () => {
     if (readOnly.value) return
-    form.value = { ...form.value, storeId: '', supplierId: '', warehouseId: '', documentDate: localDate(), items: [blankItem(), blankItem()], taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
+    purchaseOrderId.value = null
+    purchaseOrder.value = null
+    form.value = { ...form.value, storeId: '', supplierId: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: [blankItem(), blankItem()], taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
     if (!props.documentId) { savedDocumentId.value = null; form.value.documentNo = ''; form.value.attachments = [] }
   }
   const close = () => router.push({ name: 'admin-purchase-inbound' })
@@ -179,7 +237,7 @@ export function usePurchaseDocument(props) {
   return {
     ...validation, validateForm,
     config: DOCUMENT_TYPES.purchase, form, stores, suppliers: filteredSuppliers, filteredWarehouses, products: productOptions, productsForItem, units, getProductStock,
-    currentCreatorName, selectedStore, selectedSupplier, selectedWarehouse, savedDocumentId, saving, loading, loadFailed, readOnly, notice,
+    currentCreatorName, selectedStore, selectedSupplier, selectedWarehouse, savedDocumentId, purchaseOrderId, purchaseOrder, saving, loading, loadFailed, readOnly, notice,
     taxEnabled: computed({ get: () => form.value.taxEnabled, set: value => { form.value.taxEnabled = value; form.value.items.forEach(item => { item.taxRate = value ? Number(item.taxRate) || 13 : 0; calculateRow(item) }) } }),
     totalPackages, totalQuantity, totalAmount, totalTaxAmount, totalIncludedAmount, money,
     addRow, removeRow, calculateRow, onProductChange, onStoreChange, onWarehouseChange, onItemWarehouseChange, save, clearForm, close, showNotice,

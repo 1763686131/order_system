@@ -20,6 +20,7 @@ export function purchasePayload(form) {
     type: 'raw-material',
     storeId: Number(form.storeId),
     supplierId: Number(form.supplierId),
+    purchaseOrderId: form.purchaseOrderId ? Number(form.purchaseOrderId) : null,
     warehouseId: Number(form.warehouseId),
     inspector: form.inspector,
     qualityNo: form.qualityNo,
@@ -28,6 +29,7 @@ export function purchasePayload(form) {
     status: 'draft',
     items: form.items.filter(item => item.productId).map(item => ({
       productId: Number(item.productId),
+      purchaseOrderItemId: item.purchaseOrderItemId ? Number(item.purchaseOrderItemId) : null,
       warehouseId: Number(item.warehouseId || form.warehouseId),
       code: item.productCode,
       name: item.goodsName,

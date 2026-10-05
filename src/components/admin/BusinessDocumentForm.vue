@@ -6,14 +6,14 @@
           <h2>{{ ui.config.title }}</h2>
           <label class="info-group">
             <span>门店</span>
-            <select v-model="ui.form.storeId" :ref="element => setFieldRef('storeId', element)" @change="handleStoreChange">
+            <select v-model="ui.form.storeId" :disabled="fieldsDisabled || (isPurchase && Boolean(ui.purchaseOrderId))" :ref="element => setFieldRef('storeId', element)" @change="handleStoreChange">
               <option value="">请选择门店</option>
               <option v-for="store in ui.stores" :key="store.id" :value="isSale ? store.id : String(store.id)">{{ store.name }}</option>
             </select>
           </label>
           <label class="info-group">
             <span>{{ ui.config.partyLabel }}</span>
-            <select v-if="isPurchase" v-model="ui.form.supplierId" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
+            <select v-if="isPurchase" v-model="ui.form.supplierId" :disabled="fieldsDisabled || Boolean(ui.purchaseOrderId)" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
               <option value="">请选择供应商</option>
               <option v-for="supplier in ui.suppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName || supplier.name }}</option>
             </select>
@@ -173,6 +173,7 @@ const props = defineProps({
   documentType: { type: String, required: true, validator: value => Boolean(DOCUMENT_TYPES[value]) },
   action: { type: String, default: 'create', validator: value => DOCUMENT_ACTIONS.includes(value) },
   documentId: { type: Number, default: null },
+  purchaseOrderId: { type: Number, default: null },
   printOnOpen: { type: Boolean, default: false },
   productType: { type: String, default: 'finished-product' }
 })
