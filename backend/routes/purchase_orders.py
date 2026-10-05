@@ -218,6 +218,18 @@ def _order_values(conn, data, existing=None):
         (Decimal(str(item["amount"])) for item in items if item["amount"] is not None),
         Decimal("0"),
     ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+    payment_value = data.get("paymentAmount", data.get("payment_amount", existing.get("payment_amount")))
+    payment_amount = None if payment_value in (None, "") else _number(payment_value)
+    other_fees = _number(data.get("otherFees", data.get("other_fees", existing.get("other_fees", 0))))
+    current_payment = _number(
+        data.get("currentPayment", data.get("current_payment", existing.get("current_payment", 0)))
+    )
+    if payment_amount is not None and payment_amount < 0:
+        raise ValueError("付款金额不能为负数")
+    if other_fees < 0:
+        raise ValueError("其它费用不能为负数")
+    if current_payment < 0:
+        raise ValueError("本次付款不能为负数")
     return {
         "order_no": _text(data.get("orderNo", data.get("order_no", existing.get("order_no"))), 80),
         "order_date": order_date,
@@ -225,11 +237,32 @@ def _order_values(conn, data, existing=None):
         "store_id": store_id,
         "supplier_id": supplier_id,
         "remark": _text(data.get("remark", existing.get("remark")), 500),
+        "purchaser": _text(data.get("purchaser", existing.get("purchaser")), 80),
+        "creator": _text(data.get("creator", existing.get("creator")), 80),
+        "payment_amount": float(payment_amount) if payment_amount is not None else None,
+        "other_fees": float(other_fees),
+        "settlement_account": _text(
+            data.get("settlementAccount", data.get("settlement_account", existing.get("settlement_account"))),
+            160,
+        ),
+        "current_payment": float(current_payment),
         "status": requested_status,
         "items": items,
         "total_quantity": float(total_quantity),
         "total_amount": float(total_amount),
     }
+
+
+def _supplier_payable(conn, supplier_ids):
+    supplier_ids = sorted({int(supplier_id) for supplier_id in supplier_ids if supplier_id is not None})
+    if not supplier_ids:
+        return 0.0
+    placeholders = ",".join("?" for _ in supplier_ids)
+    row = conn.execute(
+        f"SELECT COALESCE(SUM(payable), 0) AS payable FROM suppliers WHERE id IN ({placeholders})",
+        tuple(supplier_ids),
+    ).fetchone()
+    return float(row["payable"] or 0)
 
 
 def _serialize_item(row):
@@ -269,6 +302,12 @@ def _serialize_order(conn, row, include_items=True):
     order["storeId"] = order.pop("store_id", None)
     order["supplierId"] = order.pop("supplier_id", None)
     order["supplierName"] = supplier["supplier_name"] if supplier else ""
+    order["purchaser"] = order.pop("purchaser", "") or ""
+    order["creator"] = order.pop("creator", "") or ""
+    order["paymentAmount"] = order.pop("payment_amount", None)
+    order["otherFees"] = order.pop("other_fees", 0) or 0
+    order["settlementAccount"] = order.pop("settlement_account", "") or ""
+    order["currentPayment"] = order.pop("current_payment", 0) or 0
     order["totalQuantity"] = order.pop("total_quantity", 0) or 0
     order["totalAmount"] = order.pop("total_amount", 0) or 0
     order["auditedBy"] = order.pop("audited_by", "") or ""
@@ -313,6 +352,18 @@ def _serialize_order(conn, row, include_items=True):
                 item["supplierName"] for item in order["items"] if item["supplierName"]
             ))
         order["orderItems"] = order["items"]
+    selected_supplier_ids = [
+        item["supplierId"] for item in order.get("items", [])
+        if item.get("supplierId") is not None
+    ]
+    order_payable_base = (
+        float(order["paymentAmount"])
+        if order["paymentAmount"] is not None
+        else float(order["totalAmount"] or 0)
+    )
+    order["orderPayable"] = max(0.0, order_payable_base + float(order["otherFees"] or 0))
+    order["currentPayable"] = max(0.0, order["orderPayable"] - float(order["currentPayment"] or 0))
+    order["supplierPayable"] = _supplier_payable(conn, selected_supplier_ids)
     return order
 
 
@@ -424,13 +475,17 @@ def create_purchase_order():
                     """
                     INSERT INTO purchase_orders (
                         order_no, order_date, expected_date, store_id, supplier_id, remark,
-                        status, total_quantity, total_amount, created_by, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        purchaser, creator, payment_amount, other_fees, settlement_account,
+                        current_payment, status, total_quantity, total_amount, created_by,
+                        created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         values["order_no"] or f"TEMP-{now.replace(' ', '').replace(':', '').replace('-', '')}",
                         values["order_date"], values["expected_date"], values["store_id"], values["supplier_id"],
-                        values["remark"], values["status"], values["total_quantity"], values["total_amount"],
+                        values["remark"], values["purchaser"], values["creator"], values["payment_amount"],
+                        values["other_fees"], values["settlement_account"], values["current_payment"],
+                        values["status"], values["total_quantity"], values["total_amount"],
                         current_identity(), now, now,
                     ),
                 )
@@ -475,12 +530,16 @@ def update_purchase_order(order_id):
                 conn.execute(
                     """
                     UPDATE purchase_orders SET order_no = ?, order_date = ?, expected_date = ?, store_id = ?,
-                        supplier_id = ?, remark = ?, status = ?, total_quantity = ?, total_amount = ?, updated_at = ?
+                        supplier_id = ?, remark = ?, purchaser = ?, creator = ?, payment_amount = ?,
+                        other_fees = ?, settlement_account = ?, current_payment = ?, status = ?,
+                        total_quantity = ?, total_amount = ?, updated_at = ?
                     WHERE id = ?
                     """,
                     (
                         values["order_no"] or row["order_no"], values["order_date"], values["expected_date"],
-                        values["store_id"], values["supplier_id"], values["remark"], values["status"],
+                        values["store_id"], values["supplier_id"], values["remark"], values["purchaser"],
+                        values["creator"], values["payment_amount"], values["other_fees"],
+                        values["settlement_account"], values["current_payment"], values["status"],
                         values["total_quantity"], values["total_amount"], now, order_id,
                     ),
                 )
@@ -544,15 +603,18 @@ def audit_purchase_order(order_id):
                     conn.execute(
                         """
                         UPDATE purchase_orders SET order_no = ?, order_date = ?, expected_date = ?,
-                            store_id = ?, supplier_id = ?, remark = ?, status = ?, total_quantity = ?,
-                            total_amount = ?, updated_at = ?
+                            store_id = ?, supplier_id = ?, remark = ?, purchaser = ?, creator = ?,
+                            payment_amount = ?, other_fees = ?, settlement_account = ?, current_payment = ?,
+                            status = ?, total_quantity = ?, total_amount = ?, updated_at = ?
                         WHERE id = ?
                         """,
                         (
                             audit_values["order_no"] or row["order_no"], audit_values["order_date"],
                             audit_values["expected_date"], audit_values["store_id"], master_supplier_id,
-                            audit_values["remark"], "pending", audit_values["total_quantity"],
-                            audit_values["total_amount"], now, order_id,
+                            audit_values["remark"], audit_values["purchaser"], audit_values["creator"],
+                            audit_values["payment_amount"], audit_values["other_fees"],
+                            audit_values["settlement_account"], audit_values["current_payment"],
+                            "pending", audit_values["total_quantity"], audit_values["total_amount"], now, order_id,
                         ),
                     )
                     conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))

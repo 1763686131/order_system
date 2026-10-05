@@ -97,6 +97,7 @@ def _supplier_response(row):
     supplier['taxNumber'] = supplier.pop('tax_number', '') or ''
     supplier['bankName'] = supplier.pop('bank_name', '') or ''
     supplier['bankAccount'] = supplier.pop('bank_account', '') or ''
+    supplier['payable'] = float(supplier.pop('payable', 0) or 0)
     supplier['createdAt'] = supplier.pop('created_at', '') or ''
     supplier['updatedAt'] = supplier.pop('updated_at', '') or ''
     return supplier

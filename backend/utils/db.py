@@ -1337,12 +1337,20 @@ def _ensure_stock_inbound_schema(conn):
                 bank_name TEXT,
                 bank_account TEXT,
                 remark TEXT,
+                payable REAL NOT NULL DEFAULT 0,
                 status TEXT NOT NULL DEFAULT 'active',
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT
             )
             """
         )
+        supplier_columns = {
+            row['name'] for row in cursor.execute('PRAGMA table_info(suppliers)')
+        }
+        if 'payable' not in supplier_columns:
+            cursor.execute(
+                "ALTER TABLE suppliers ADD COLUMN payable REAL NOT NULL DEFAULT 0"
+            )
         cursor.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_suppliers_code "
             "ON suppliers(supplier_code) "
@@ -1492,6 +1500,12 @@ def _ensure_purchase_order_schema(conn):
                 store_id INTEGER,
                 supplier_id INTEGER,
                 remark TEXT,
+                purchaser TEXT,
+                creator TEXT,
+                payment_amount REAL,
+                other_fees REAL NOT NULL DEFAULT 0,
+                settlement_account TEXT,
+                current_payment REAL NOT NULL DEFAULT 0,
                 status TEXT NOT NULL DEFAULT 'draft',
                 total_quantity REAL NOT NULL DEFAULT 0,
                 total_amount REAL NOT NULL DEFAULT 0,
@@ -1535,6 +1549,12 @@ def _ensure_purchase_order_schema(conn):
                     store_id INTEGER,
                     supplier_id INTEGER,
                     remark TEXT,
+                    purchaser TEXT,
+                    creator TEXT,
+                    payment_amount REAL,
+                    other_fees REAL NOT NULL DEFAULT 0,
+                    settlement_account TEXT,
+                    current_payment REAL NOT NULL DEFAULT 0,
                     status TEXT NOT NULL DEFAULT 'draft',
                     total_quantity REAL NOT NULL DEFAULT 0,
                     total_amount REAL NOT NULL DEFAULT 0,
@@ -1550,12 +1570,13 @@ def _ensure_purchase_order_schema(conn):
                 '''
                 INSERT INTO purchase_orders (
                     id, order_no, order_date, expected_date, store_id, supplier_id,
-                    remark, status, total_quantity, total_amount, audited_by,
-                    audited_at, created_by, created_at, updated_at
+                    remark, purchaser, creator, payment_amount, other_fees,
+                    settlement_account, current_payment, status, total_quantity,
+                    total_amount, audited_by, audited_at, created_by, created_at, updated_at
                 )
                 SELECT id, order_no, order_date, expected_date, store_id, supplier_id,
-                       remark, status, total_quantity, total_amount, audited_by,
-                       audited_at, created_by, created_at, updated_at
+                       remark, NULL, NULL, NULL, 0, NULL, 0, status, total_quantity,
+                       total_amount, audited_by, audited_at, created_by, created_at, updated_at
                 FROM purchase_orders_legacy
                 '''
             )
@@ -1601,6 +1622,20 @@ def _ensure_purchase_order_schema(conn):
             cursor.execute('DROP TABLE purchase_orders_legacy')
             conn.commit()
             conn.execute('PRAGMA foreign_keys = ON')
+        purchase_order_columns = {
+            row['name']: row for row in cursor.execute('PRAGMA table_info(purchase_orders)')
+        }
+        purchase_order_migrations = {
+            'purchaser': "ALTER TABLE purchase_orders ADD COLUMN purchaser TEXT",
+            'creator': "ALTER TABLE purchase_orders ADD COLUMN creator TEXT",
+            'payment_amount': "ALTER TABLE purchase_orders ADD COLUMN payment_amount REAL",
+            'other_fees': "ALTER TABLE purchase_orders ADD COLUMN other_fees REAL NOT NULL DEFAULT 0",
+            'settlement_account': "ALTER TABLE purchase_orders ADD COLUMN settlement_account TEXT",
+            'current_payment': "ALTER TABLE purchase_orders ADD COLUMN current_payment REAL NOT NULL DEFAULT 0",
+        }
+        for column, statement in purchase_order_migrations.items():
+            if column not in purchase_order_columns:
+                cursor.execute(statement)
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_purchase_orders_status_date "
             "ON purchase_orders(status, order_date DESC, id DESC)"

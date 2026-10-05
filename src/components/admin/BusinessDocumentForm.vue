@@ -148,16 +148,33 @@
               </span>
             </label>
             <label v-if="isSalesDocument" class="info-group"><span>制单人</span><input :value="ui.currentCreatorName" :style="ui.creatorNameStyle" type="text" readonly /></label>
+            <label v-if="isPurchaseOrder" class="info-group purchaser-field">
+              <span>采购人</span>
+              <span class="salesperson-control">
+                <span class="salesperson-sizer" aria-hidden="true">{{ purchasePersonLabel }}</span>
+                <select v-model="ui.form.purchaser">
+                  <option value="">请选择采购人</option>
+                  <option v-if="ui.form.purchaser && !ui.purchasePeople.some(employee => employee.displayName === ui.form.purchaser)" :value="ui.form.purchaser">{{ ui.form.purchaser }}（历史记录）</option>
+                  <option v-for="employee in ui.purchasePeople" :key="employee.id || employee.username" :value="employee.displayName">{{ employee.displayName }}</option>
+                </select>
+              </span>
+            </label>
+            <label v-if="isPurchaseOrder" class="info-group"><span>制单人</span><input :value="ui.currentCreatorName" :style="ui.creatorNameStyle" type="text" readonly /></label>
             <label class="info-group wide"><span>{{ isPurchaseOrder ? '申请备注' : '备注信息' }}</span><input v-model="ui.form[ui.config.remarkField]" type="text" :maxlength="isPurchaseOrder ? 500 : isPurchase ? 200 : 1000" :placeholder="isPurchaseOrder ? '申请用途、交期等补充说明' : undefined" /></label>
             <label v-if="isSalesDocument" class="info-group"><span>包装</span><select v-model="ui.form.packaging" @change="ui.handlePackagingChange?.()"><option v-for="packaging in ui.packagingOptions" :key="packaging" :value="packaging">{{ packaging }}</option><option v-if="isSale" :value="ui.ADD_PACKAGING_VALUE">新增包装...</option></select></label>
             <template v-if="isSale"><label class="info-group"><span>折扣后金额</span><input v-model.number="ui.form.discountAmount" type="number" min="0" step="0.01" /></label><label class="info-group"><span>其他费用</span><input v-model.number="ui.form.otherFees" type="number" min="0" step="0.01" /></label></template>
             <template v-if="isReturn"><label class="info-group"><span>应退金额</span><input v-model.number="ui.form.returnAmount" :ref="element => setFieldRef('returnAmount', element)" type="number" min="0" step="0.01" /></label><label class="info-group"><span>本次退款</span><input v-model.number="ui.form.refundAmount" :ref="element => setFieldRef('refundAmount', element)" type="number" min="0" step="0.01" /></label></template>
+            <template v-if="isPurchaseOrder">
+              <label class="info-group"><span>付款金额</span><input v-model.number="ui.form.paymentAmount" :ref="element => setFieldRef('paymentAmount', element)" type="number" min="0" step="0.01" /></label>
+              <label class="info-group"><span>其它费用</span><input v-model.number="ui.form.otherFees" :ref="element => setFieldRef('otherFees', element)" type="number" min="0" step="0.01" /></label>
+            </template>
             <label v-if="isSalesDocument" class="info-group"><span>结算账户</span><select v-model="ui.form.settlementAccount"><option value="">请选择结算账户</option><option v-if="ui.form.settlementAccount && !ui.storeBankAccounts.some(account => (account.value || account.accountName) === ui.form.settlementAccount)" :value="ui.form.settlementAccount">{{ ui.form.settlementAccount }}</option><option v-for="account in ui.storeBankAccounts" :key="account.id" :value="account.value || account.accountName">{{ account.label || account.accountName }}</option></select></label>
+            <label v-if="isPurchaseOrder" class="info-group"><span>结算账户</span><select v-model="ui.form.settlementAccount"><option value="">请选择结算账户</option><option v-if="ui.form.settlementAccount && !ui.storeBankAccounts.some(account => (account.value || account.accountName) === ui.form.settlementAccount)" :value="ui.form.settlementAccount">{{ ui.form.settlementAccount }}</option><option v-for="account in ui.storeBankAccounts" :key="account.id" :value="account.value || account.accountName">{{ account.label || account.accountName }}</option></select></label>
           </div>
           <div class="finance-row">
             <template v-if="isSale"><span>客户欠款 <strong>{{ money(ui.customerReceivable) }}</strong></span><span>本单应收 <strong>{{ money(ui.shouldReceive) }}</strong></span><label class="info-group"><span>本次收款</span><input v-model.number="ui.form.currentPayment" type="number" min="0" step="0.01" /></label><span>本单欠款 <strong class="red">{{ money(ui.currentDebt) }}</strong></span></template>
             <template v-else-if="isReturn"><span>商品合计 <strong>{{ money(ui.taxEnabled ? ui.totalIncludedAmount : ui.totalAmount) }}</strong></span><span>核销金额 <strong>{{ money(Number(ui.form.returnAmount || 0) - Number(ui.form.refundAmount || 0)) }}</strong></span><span>本次退款 <strong class="red">{{ money(ui.form.refundAmount) }}</strong></span></template>
-            <template v-else-if="isPurchaseOrder"><span class="document-status" :class="`status-${ui.form.status}`">{{ ui.statusLabel }}</span><span>采购数量 <strong>{{ money(ui.totalQuantity) }}</strong></span><span>采购金额 <strong>{{ formatMoney(ui.totalAmount) }}</strong></span></template>
+            <template v-else-if="isPurchaseOrder"><span class="document-status" :class="`status-${ui.form.status}`">{{ ui.statusLabel }}</span><span>供应商应付 <strong>{{ formatMoney(ui.supplierPayable) }}</strong></span><span>本单应付 <strong>{{ formatMoney(ui.purchaseOrderPayable) }}</strong></span><label class="info-group"><span>本次付款</span><input v-model.number="ui.form.currentPayment" :ref="element => setFieldRef('currentPayment', element)" type="number" min="0" step="0.01" /></label><span>本单应付 <strong class="red">{{ formatMoney(ui.currentPayable) }}</strong></span></template>
             <template v-else><span>入库数量 <strong>{{ money(ui.totalQuantity) }}</strong></span><span>入库金额 <strong>{{ money(ui.totalAmount) }}</strong></span><span v-if="ui.taxEnabled">税额 <strong>{{ money(ui.totalTaxAmount) }}</strong></span><span>价税合计 <strong>{{ money(ui.totalIncludedAmount) }}</strong></span></template>
             <div v-if="isPurchaseOrder && !ui.readOnly" class="document-actions">
               <button class="btn" type="button" @click="requestClose">取消</button>
@@ -231,6 +248,11 @@ const salespersonLabel = computed(() => {
   const name = ui.form.salesPerson
   if (!name) return '请选择业务员'
   return ui.salesPeople.some(employee => employee.displayName === name) ? name : `${name}（历史记录）`
+})
+const purchasePersonLabel = computed(() => {
+  const name = ui.form.purchaser
+  if (!name) return '请选择采购人'
+  return ui.purchasePeople.some(employee => employee.displayName === name) ? name : `${name}（历史记录）`
 })
 const confirmation = ref('')
 const requestClose = () => {
@@ -316,7 +338,7 @@ input, select, button { font: inherit; }
 .contact-info-bar .logistics-field select { width: 220px; }
 .info-group.wide { flex: 1 1 230px; }
 .info-group.wide input { width: 100%; }
-.info-group.salesperson-field { flex: 0 1 auto; max-width: 100%; }
+.info-group.salesperson-field, .info-group.purchaser-field { flex: 0 1 auto; max-width: 100%; }
 .info-group > .salesperson-control { position: relative; display: inline-block; min-width: 72px; max-width: 280px; color: #17212b; font-size: 13px; font-weight: 400; }
 .salesperson-sizer { display: block; visibility: hidden; height: 34px; padding: 0 32px 0 11px; white-space: nowrap; }
 .info-group .salesperson-control select { position: absolute; inset: 0; width: 100%; min-width: 0; padding: 0 28px 0 9px; }

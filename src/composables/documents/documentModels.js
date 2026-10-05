@@ -76,6 +76,12 @@ export function purchaseOrderPayload(form, status = 'pending') {
     expectedDate: form.expectedDate,
     storeId: Number(form.storeId),
     supplierId: null,
+    purchaser: form.purchaser || '',
+    creator: form.creator || '',
+    paymentAmount: hasValue(form.paymentAmount) ? Number(form.paymentAmount) : null,
+    otherFees: hasValue(form.otherFees) ? Number(form.otherFees) : 0,
+    settlementAccount: form.settlementAccount || '',
+    currentPayment: hasValue(form.currentPayment) ? Number(form.currentPayment) : 0,
     remark: form.remark,
     status,
     items: form.items.filter(item => item.productId).map(item => ({
@@ -100,6 +106,15 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
   const hasValue = value => value !== '' && value != null
   if (!form.storeId) return invalid('storeId', '请选择申请门店。')
   if (!form.orderDate) return invalid('documentDate', '请填写申请日期。')
+  if (hasValue(form.paymentAmount) && (!Number.isFinite(Number(form.paymentAmount)) || Number(form.paymentAmount) < 0)) {
+    return invalid('paymentAmount', '付款金额必须为非负数。')
+  }
+  if (hasValue(form.otherFees) && (!Number.isFinite(Number(form.otherFees)) || Number(form.otherFees) < 0)) {
+    return invalid('otherFees', '其它费用必须为非负数。')
+  }
+  if (hasValue(form.currentPayment) && (!Number.isFinite(Number(form.currentPayment)) || Number(form.currentPayment) < 0)) {
+    return invalid('currentPayment', '本次付款必须为非负数。')
+  }
   if (!form.items.some(item => item.productId)) return invalid('item-product-0', '请至少选择一条原材料。')
   for (const [index, item] of form.items.entries()) {
     if (!item.productId) continue
