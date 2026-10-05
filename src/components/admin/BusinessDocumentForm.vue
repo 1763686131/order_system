@@ -91,8 +91,8 @@
                     <option v-if="item.productId && !ui.products.some(product => String(product.id) === String(item.productId))" :value="item.productId">{{ item.goodsName }}</option>
                     <option v-for="product in ui.productsForItem(item)" :key="product.id" :value="String(product.id)">{{ product.code ? `${product.code} · ` : '' }}{{ product.name }}</option>
                   </select>
-                  <select v-else-if="isPurchase" v-model="item.productId" :ref="element => setProductInputRef(index, element)" aria-label="物料" @change="ui.onProductChange(item)">
-                    <option value="">请选择物料</option>
+                  <select v-else-if="isPurchase" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" aria-label="物料" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
+                    <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? '请选择物料' : '请先选择门店') }}</option>
                     <option v-if="item.productId && !ui.products.some(product => String(product.id) === String(item.productId))" :value="item.productId">{{ item.goodsName }}</option>
                     <option v-for="product in ui.productsForItem(item)" :key="product.id" :value="String(product.id)">{{ product.code ? `${product.code} · ` : '' }}{{ product.name }}</option>
                   </select>
@@ -102,7 +102,7 @@
                 <td><input v-model="item[ui.config.specField]" type="text" readonly /></td>
                 <td><input v-model="item.unit" type="text" readonly /></td>
                 <template v-if="!isPurchaseOrder">
-                  <td><select v-if="item.productId" v-model="item.warehouseId" class="warehouse-select" :ref="element => setFieldRef(`item-warehouse-${index}`, element)" aria-label="所属仓库" @change="ui.onItemWarehouseChange(item)"><option value="">请选择仓库</option><option v-for="warehouse in ui.filteredWarehouses" :key="warehouse.id" :value="String(warehouse.id)">{{ warehouse.name }}</option></select></td>
+                  <td><select v-if="item.productId" v-model="item.warehouseId" class="purchase-cell-select" :ref="element => setFieldRef(`item-warehouse-${index}`, element)" aria-label="所属仓库" @focus="activatePurchaseCell(item, 'warehouse')" @blur="activePurchaseCell = ''" @change="ui.onItemWarehouseChange(item); dismissHint(`item-warehouse-${index}`)"><option value="">{{ purchaseCellPlaceholder(item, 'warehouse', ui.form.storeId ? '请选择仓库' : '请先选择门店') }}</option><option v-for="warehouse in ui.filteredWarehouses" :key="warehouse.id" :value="String(warehouse.id)">{{ warehouse.name }}</option></select></td>
                   <td class="right">{{ item.productId ? money(item.currentStock) : '' }}</td>
                   <td><input v-if="isPurchase" v-model.number="item.expectedQty" :ref="element => setFieldRef(`item-expected-${index}`, element)" aria-label="应收数量" type="number" min="0" step="0.0001" /><input v-else v-model.number="item.packages" aria-label="件数" type="number" min="0" step="0.01" @input="ui.onPackagesInput(index)" /></td>
                 </template>
@@ -387,8 +387,10 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .business-document-form[data-document-type="purchase-order"] .products-table td { font-size: 12px; }
 .business-document-form[data-document-type="purchase-order"] .products-table td input,
 .business-document-form[data-document-type="purchase-order"] .products-table td select { height: 28px; }
-.business-document-form[data-document-type="purchase-order"] .products-table td .purchase-cell-select { appearance: none; padding-right: 20px; background-image: none; }
-.business-document-form[data-document-type="purchase-order"] .products-table td .purchase-cell-select:focus { border-color: #0f9f78; background-color: #fff; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23172033'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; background-size: 10px 6px; }
+.business-document-form[data-document-type="purchase-order"] .products-table td .purchase-cell-select,
+.business-document-form[data-document-type="purchase"] .products-table td .purchase-cell-select { appearance: none; padding-right: 20px; background-image: none; }
+.business-document-form[data-document-type="purchase-order"] .products-table td .purchase-cell-select:focus,
+.business-document-form[data-document-type="purchase"] .products-table td .purchase-cell-select:focus { border-color: #0f9f78; background-color: #fff; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23172033'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; background-size: 10px 6px; }
 .business-document-form[data-document-type="purchase-order"] .products-table tbody tr:not(.total-row):hover { background: #f4fbf8; }
 .business-document-form[data-document-type="purchase-order"] .products-table th.right { text-align: right; }
 .business-document-form[data-document-type="purchase-order"] .muted { color: #596579; text-overflow: ellipsis; white-space: nowrap; }

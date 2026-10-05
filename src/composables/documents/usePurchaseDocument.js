@@ -5,11 +5,15 @@ import { useUserStore } from '@/stores/user'
 import { DOCUMENT_TYPES, inboundAmounts, isLockedInbound, localDate, money, purchasePayload, validatePurchase } from './documentModels'
 import { useDocumentValidation } from './useDocumentValidation'
 
+const BLANK_ROWS = 8
+let rowKey = 0
 const blankItem = () => ({
+  key: ++rowKey,
   purchaseOrderItemId: '', productId: '', productCode: '', goodsName: '', specification: '', unit: '', warehouseId: '', warehouseName: '', expectedQty: '',
   quantity: '', price: '', taxRate: 0, amount: 0, taxAmount: 0, taxIncludedAmount: 0,
   batchNo: '', binCode: '', remark: ''
 })
+const blankRows = () => Array.from({ length: BLANK_ROWS }, blankItem)
 
 export function usePurchaseDocument(props) {
   const router = useRouter()
@@ -22,7 +26,7 @@ export function usePurchaseDocument(props) {
   const units = ref([])
   const form = ref({
     storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: props.purchaseOrderId || null, documentDate: localDate(), documentNo: '',
-    inspector: '', qualityNo: '', remark: '', taxEnabled: false, items: [blankItem(), blankItem()],
+    inspector: '', qualityNo: '', remark: '', taxEnabled: false, items: blankRows(),
     attachments: [], status: 'draft'
   })
   const saving = ref(false)
@@ -73,7 +77,7 @@ export function usePurchaseDocument(props) {
     }
     form.value.supplierId = ''
     form.value.warehouseId = ''
-    form.value.items = [blankItem(), blankItem()]
+    form.value.items = blankRows()
   }
   const onWarehouseChange = () => {
     if (purchaseOrderId.value) {
@@ -85,7 +89,7 @@ export function usePurchaseDocument(props) {
       })
       return
     }
-    form.value.items = [blankItem(), blankItem()]
+    form.value.items = blankRows()
   }
   const getProductStock = (product, item = {}) => stockBalances.value.filter(balance => String(balance.productId) === String(product.id) && String(balance.storeId) === String(form.value.storeId) && String(balance.warehouseId) === String(item.warehouseId || form.value.warehouseId)).reduce((sum, balance) => sum + Number(balance.quantity || 0), 0)
   const onItemWarehouseChange = item => {
@@ -96,7 +100,7 @@ export function usePurchaseDocument(props) {
   const onProductChange = item => {
     const product = productsForItem(item).find(candidate => String(candidate.id) === String(item.productId))
     if (!product) {
-      Object.assign(item, blankItem())
+      Object.assign(item, blankItem(), { key: item.key })
       return
     }
     item.productCode = product.code || ''
@@ -149,7 +153,7 @@ export function usePurchaseDocument(props) {
         taxRate: Number(item.taxRate || 0), amount: Number(item.totalAmount || 0) - Number(item.taxAmount || 0),
         taxAmount: Number(item.taxAmount || 0), taxIncludedAmount: Number(item.totalAmount || 0), batchNo: item.batchNo || '',
         binCode: item.binCode || '', remark: item.remark || ''
-      })).concat([blankItem(), blankItem()]).slice(0, Math.max(2, (data.items || []).length + 1))
+      })).concat(blankRows()).slice(0, Math.max(BLANK_ROWS, (data.items || []).length + 1))
     }
     form.value.items.filter(item => item.productId).forEach(onItemWarehouseChange)
   }
@@ -174,7 +178,7 @@ export function usePurchaseDocument(props) {
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
         expectedQty: item.remainingQty ?? item.orderedQty ?? '', quantity: item.remainingQty ?? item.orderedQty ?? '',
         price: item.unitPrice ?? '', amount: 0
-      })).concat([blankItem(), blankItem()]).slice(0, Math.max(2, (data.items || []).length + 1))
+      })).concat(blankRows()).slice(0, Math.max(BLANK_ROWS, (data.items || []).length + 1))
     }
     form.value.items.filter(item => item.productId).forEach(item => { item.warehouseId = item.warehouseId || form.value.warehouseId; onItemWarehouseChange(item); calculateRow(item) })
   }
@@ -231,7 +235,7 @@ export function usePurchaseDocument(props) {
     if (readOnly.value) return
     purchaseOrderId.value = null
     purchaseOrder.value = null
-    form.value = { ...form.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: [blankItem(), blankItem()], taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
+    form.value = { ...form.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: blankRows(), taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
     if (!props.documentId) { savedDocumentId.value = null; form.value.documentNo = ''; form.value.attachments = [] }
   }
   const close = () => router.push({ name: 'admin-purchase-inbound' })
