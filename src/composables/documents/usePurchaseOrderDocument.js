@@ -22,7 +22,8 @@ export function usePurchaseOrderDocument(props) {
   const stores = ref([])
   const suppliers = ref([])
   const warehouses = ref([])
-  const products = ref([])
+  const rawMaterialProducts = ref([])
+  const finishedProducts = ref([])
   const units = ref([])
   const employees = ref([])
   const bankAccounts = ref([])
@@ -33,7 +34,8 @@ export function usePurchaseOrderDocument(props) {
   let redirectTimer
   const blankItem = () => ({
     key: ++rowKey, orderItemId: null, productId: '', productCode: '', goodsName: '',
-    specification: '', unit: '', warehouseId: '', warehouseName: '', quantity: '', supplierId: '', supplierName: '',
+    specification: '', unit: '', productType: 'raw-material',
+    warehouseId: '', warehouseName: '', quantity: '', supplierId: '', supplierName: '',
     price: '', amount: '', remark: ''
   })
   const blankForm = () => {
@@ -67,6 +69,28 @@ export function usePurchaseOrderDocument(props) {
   }, { immediate: true })
   const filteredWarehouses = computed(() => warehouses.value.filter(warehouse =>
     String(warehouse.storeId ?? warehouse.store_id) === String(form.value.storeId)))
+  const products = computed(() => [...rawMaterialProducts.value, ...finishedProducts.value])
+  const productCatalog = item => item?.productType === 'finished-product'
+    ? finishedProducts.value
+    : rawMaterialProducts.value
+  const productMatchesItem = (product, item) => {
+    if (!form.value.storeId || !item?.warehouseId) return false
+    const storeIds = product.storeIds || product.store_ids
+    if (Array.isArray(storeIds) && storeIds.length &&
+      !storeIds.map(value => String(value)).includes(String(form.value.storeId))) return false
+    const warehouseId = String(item.warehouseId)
+    const productWarehouseId = product.warehouseId ?? product.warehouse_id
+    const warehouseMapping = product.warehouseCategories || product.warehouse_categories
+    const hasWarehouseMapping = warehouseMapping && typeof warehouseMapping === 'object' &&
+      Object.prototype.hasOwnProperty.call(warehouseMapping, warehouseId)
+    if (productWarehouseId != null && String(productWarehouseId) !== warehouseId && !hasWarehouseMapping) return false
+    return true
+  }
+  const productsForItem = item => productCatalog(item)
+    .filter(product => product.enabled !== false && productMatchesItem(product, item))
+  const clearProductSelection = item => Object.assign(item, {
+    productId: '', productCode: '', goodsName: '', specification: '', unit: '', price: '', amount: ''
+  })
   const auditMode = computed(() => props.action === 'audit' && form.value.status === 'pending')
   const readOnly = computed(() => props.action === 'view' ||
     (props.action === 'audit' && !auditMode.value) ||
@@ -113,9 +137,9 @@ export function usePurchaseOrderDocument(props) {
     }
   }
   const onProductChange = item => {
-    const product = products.value.find(candidate => String(candidate.id) === String(item.productId))
+    const product = productsForItem(item).find(candidate => String(candidate.id) === String(item.productId))
     if (!product) {
-      Object.assign(item, { productCode: '', goodsName: '', specification: '', unit: '' })
+      clearProductSelection(item)
       return
     }
     item.productCode = product.code || ''
@@ -124,14 +148,24 @@ export function usePurchaseOrderDocument(props) {
     item.unit = units.value.find(unit => String(unit.id) === String(product.unitId))?.name || product.unit || ''
     calculateRow(item)
   }
+  const onProductTypeChange = item => {
+    clearProductSelection(item)
+  }
   const onItemWarehouseChange = item => {
-    item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
+    const warehouse = warehouses.value.find(candidate => String(candidate.id) === String(item.warehouseId))
+    item.warehouseName = warehouse?.name || ''
+    if (item.productId && !productsForItem(item).some(product => String(product.id) === String(item.productId))) {
+      clearProductSelection(item)
+    }
   }
   const onStoreChange = () => {
     form.value.items.forEach(item => {
       if (item.warehouseId && !filteredWarehouses.value.some(warehouse => String(warehouse.id) === String(item.warehouseId))) {
         item.warehouseId = ''
         item.warehouseName = ''
+        clearProductSelection(item)
+      } else {
+        onItemWarehouseChange(item)
       }
     })
     validation.dismissValidationHint()
@@ -163,6 +197,7 @@ export function usePurchaseOrderDocument(props) {
         ...blankItem(), orderItemId: item.orderItemId || item.id,
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
+        productType: item.productType === 'finished-product' ? 'finished-product' : 'raw-material',
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
         quantity: item.orderedQty ?? '', supplierId: item.supplierId ? String(item.supplierId) : '',
         supplierName: item.supplierName || '', price: item.unitPrice ?? '', amount: item.amount ?? '', remark: item.remark || ''
@@ -179,7 +214,9 @@ export function usePurchaseOrderDocument(props) {
     form.value.otherFees ??= 0
     form.value.settlementAccount ??= ''
     form.value.currentPayment ??= 0
-    form.value.items = form.value.items.map(item => ({ warehouseId: '', warehouseName: '', ...item }))
+    form.value.items = form.value.items.map(item => ({
+      productType: 'raw-material', warehouseId: '', warehouseName: '', ...item
+    }))
     rowKey = Math.max(rowKey, ...form.value.items.map(item => Number(item.key) || 0))
     savedDocumentId.value = draft.savedDocumentId ?? props.documentId
   }
@@ -223,10 +260,12 @@ export function usePurchaseOrderDocument(props) {
   }
   onMounted(async () => {
     try {
-      const [storeData, supplierData, warehouseData, productData, unitData] = await Promise.all([
+      const [storeData, supplierData, warehouseData, rawMaterialData, finishedProductData, unitData] = await Promise.all([
         request({ url: '/stores', method: 'GET' }), request({ url: '/suppliers', method: 'GET' }),
         request({ url: '/warehouses', method: 'GET' }),
-        request({ url: '/raw-material-products', method: 'GET' }), request({ url: '/products/units/measurements', method: 'GET' }),
+        request({ url: '/raw-material-products', method: 'GET' }),
+        request({ url: '/products', method: 'GET' }),
+        request({ url: '/products/units/measurements', method: 'GET' }),
       ])
       const [directoryResult, bankAccountResult] = await Promise.allSettled([
         request({ url: '/admin/directory', method: 'GET' }),
@@ -237,7 +276,8 @@ export function usePurchaseOrderDocument(props) {
       stores.value = Array.isArray(storeData) ? storeData.filter(item => item.status !== 'inactive') : []
       suppliers.value = Array.isArray(supplierData) ? supplierData.filter(item => item.status !== 'inactive') : []
       warehouses.value = Array.isArray(warehouseData) ? warehouseData.filter(item => item.status !== 'inactive') : []
-      products.value = Array.isArray(productData) ? productData.filter(item => item.enabled !== false) : []
+      rawMaterialProducts.value = Array.isArray(rawMaterialData) ? rawMaterialData.filter(item => item.enabled !== false) : []
+      finishedProducts.value = Array.isArray(finishedProductData) ? finishedProductData.filter(item => item.enabled !== false) : []
       units.value = Array.isArray(unitData) ? unitData : []
       employees.value = Array.isArray(directoryData?.employees)
         ? directoryData.employees.map(employee => ({
@@ -266,8 +306,8 @@ export function usePurchaseOrderDocument(props) {
     stores, suppliers, filteredWarehouses, products, savedDocumentId, notice, totalQuantity, totalAmount,
     currentCreatorName, creatorNameStyle, purchasePeople, storeBankAccounts,
     supplierPayable, purchaseOrderPayable, currentPayable,
-    productsForItem: () => form.value.storeId ? products.value : [],
-    addRow, removeRow, onProductChange, onItemWarehouseChange, onStoreChange, onDateChange, onExpectedDateInput, restoreDraft,
+    productsForItem, addRow, removeRow, onProductChange, onProductTypeChange,
+    onItemWarehouseChange, onStoreChange, onDateChange, onExpectedDateInput, restoreDraft,
     validateForm, save, clearForm, close,
     onQuantityInput: index => calculateRow(form.value.items[index]),
     onPriceInput: index => calculateRow(form.value.items[index])

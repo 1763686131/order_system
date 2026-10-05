@@ -86,6 +86,7 @@ export function purchaseOrderPayload(form, status = 'pending') {
     status,
     items: form.items.filter(item => item.productId).map(item => ({
       orderItemId: item.orderItemId,
+      productType: item.productType || 'raw-material',
       productId: Number(item.productId),
       productCode: item.productCode,
       productName: item.goodsName,
@@ -115,7 +116,7 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
   if (hasValue(form.currentPayment) && (!Number.isFinite(Number(form.currentPayment)) || Number(form.currentPayment) < 0)) {
     return invalid('currentPayment', '本次付款必须为非负数。')
   }
-  if (!form.items.some(item => item.productId)) return invalid('item-product-0', '请至少选择一条原材料。')
+  if (!form.items.some(item => item.productId)) return invalid('item-product-0', '请至少选择一条商品。')
   for (const [index, item] of form.items.entries()) {
     if (!item.productId) continue
     if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return invalid(`item-quantity-${index}`, '采购数量必须大于 0。')

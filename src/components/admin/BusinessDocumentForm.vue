@@ -56,7 +56,7 @@
         <div class="products-table-wrapper">
           <table class="products-table">
             <colgroup>
-              <col style="width: 44px" /><col style="width: 66px" /><col v-if="isPurchaseOrder" style="width: 150px" /><col style="width: 220px" /><col v-if="isPurchaseOrder" style="width: 110px" /><col style="width: 130px" /><col style="width: 70px" />
+              <col style="width: 44px" /><col style="width: 66px" /><col v-if="isPurchaseOrder" style="width: 150px" /><col v-if="isPurchaseOrder" style="width: 120px" /><col style="width: 220px" /><col v-if="isPurchaseOrder" style="width: 110px" /><col style="width: 130px" /><col style="width: 70px" />
               <template v-if="!isPurchaseOrder"><col style="width: 130px" /><col style="width: 95px" /><col style="width: 90px" /></template>
               <col style="width: 100px" /><col v-if="isPurchaseOrder" style="width: 180px" /><col style="width: 100px" />
               <template v-if="ui.taxEnabled"><col style="width: 80px" /><col style="width: 110px" /></template>
@@ -66,7 +66,7 @@
               <col style="width: 180px" />
             </colgroup>
             <thead><tr>
-              <th>序号</th><th>操作</th><th v-if="isPurchaseOrder">所属仓库</th><th>{{ isMaterial ? '物料信息' : '商品信息' }}<b v-if="isPurchaseOrder"> *</b></th><th v-if="isPurchaseOrder">编码</th><th>规格型号</th><th>单位</th>
+              <th>序号</th><th>操作</th><th v-if="isPurchaseOrder">所属仓库</th><th v-if="isPurchaseOrder">分类</th><th>{{ isPurchaseOrder ? '商品信息' : isMaterial ? '物料信息' : '商品信息' }}<b v-if="isPurchaseOrder"> *</b></th><th v-if="isPurchaseOrder">编码</th><th>规格型号</th><th>单位</th>
               <template v-if="!isPurchaseOrder"><th>所属仓库</th><th>当前库存</th><th>{{ isPurchase ? '应收数量' : '件数' }}</th></template>
               <th :class="{ right: isPurchaseOrder }">{{ isPurchaseOrder ? '采购数量' : isPurchase ? '实收数量' : '数量' }}<b v-if="isPurchaseOrder"> *</b></th>
               <th v-if="isPurchaseOrder">采购供应商<b v-if="ui.auditMode"> *</b></th><th :class="{ right: isPurchaseOrder }">{{ isPurchaseOrder ? '采购单价 (元)' : '单价 (元)' }}<b v-if="isPurchaseOrder && ui.auditMode"> *</b></th>
@@ -85,9 +85,16 @@
                     <option v-for="warehouse in ui.filteredWarehouses" :key="warehouse.id" :value="String(warehouse.id)">{{ warehouse.name }}</option>
                   </select>
                 </td>
+                <td v-if="isPurchaseOrder">
+                  <select v-model="item.productType" class="purchase-cell-select" :ref="element => setFieldRef(`item-category-${index}`, element)" aria-label="分类" @focus="activatePurchaseCell(item, 'category')" @blur="activePurchaseCell = ''" @change="ui.onProductTypeChange(item); dismissHint(`item-category-${index}`)">
+                    <option value="">{{ purchaseCellPlaceholder(item, 'category', '请选择分类') }}</option>
+                    <option value="raw-material">原材料</option>
+                    <option value="finished-product">成品</option>
+                  </select>
+                </td>
                 <td>
-                  <select v-if="isPurchaseOrder" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" aria-label="物料" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
-                    <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? '请选择物料' : '请先选择门店') }}</option>
+                  <select v-if="isPurchaseOrder" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" aria-label="商品" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
+                    <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? (item.warehouseId ? '请选择商品' : '请先选择仓库') : '请先选择门店') }}</option>
                     <option v-if="item.productId && !ui.products.some(product => String(product.id) === String(item.productId))" :value="item.productId">{{ item.goodsName }}</option>
                     <option v-for="product in ui.productsForItem(item)" :key="product.id" :value="String(product.id)">{{ product.code ? `${product.code} · ` : '' }}{{ product.name }}</option>
                   </select>
@@ -125,7 +132,7 @@
                 <td><input v-if="!isPurchaseOrder || item.productId" v-model="item.remark" aria-label="行备注" type="text" :maxlength="isPurchaseOrder ? 500 : undefined" /><span v-else class="blank-cell"></span></td>
               </tr>
               <tr class="total-row">
-                <td colspan="7" class="center">合计</td>
+                <td :colspan="isPurchaseOrder ? 8 : 7" class="center">合计</td>
                 <td v-if="!isPurchaseOrder" class="right"><input v-if="isSale" v-model.number="ui.totalPackages" aria-label="总件数" type="number" min="0" @input="ui.onTotalPackagesManualInput" /><span v-else>{{ money(ui.totalPackages) }}</span></td>
                 <td class="right">{{ isPurchaseOrder && !hasPurchaseOrderItems ? '' : money(ui.totalQuantity) }}</td><td :colspan="isPurchaseOrder ? 2 : ui.taxEnabled ? 3 : 1"></td>
                 <td class="right">{{ isPurchaseOrder && !hasPurchaseOrderItems ? '' : money(ui.totalAmount) }}</td><template v-if="ui.taxEnabled"><td v-if="!isSale" class="right">{{ money(ui.totalTaxAmount) }}</td><td class="right">{{ money(ui.totalIncludedAmount) }}</td></template><td :colspan="isPurchase ? 3 : 1"></td>
@@ -240,7 +247,7 @@ const hasPurchaseOrderItems = computed(() => isPurchaseOrder.value && ui.form.it
 const activePurchaseCell = ref('')
 const activatePurchaseCell = (item, field) => { activePurchaseCell.value = `${item.key}-${field}` }
 const purchaseCellPlaceholder = (item, field, message) => activePurchaseCell.value === `${item.key}-${field}` ? message : ''
-const isMaterial = computed(() => isPurchase.value || isPurchaseOrder.value)
+const isMaterial = computed(() => isPurchase.value)
 const isSalesDocument = computed(() => isSale.value || isReturn.value)
 const formatMoney = value => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fieldsDisabled = computed(() => ui.loading || ui.loadFailed || ui.readOnly || ui.saving)
@@ -273,7 +280,7 @@ const handleHeaderWarehouseChange = () => {
   ui.onWarehouseChange?.()
   dismissHint('warehouseId')
 }
-const validationMessageParts = computed(() => (ui.validationHint?.message || '').split(/(采购数量|采购供应商|采购单价|申请门店|申请日期|实收数量|应收数量|商品数量|原订单编号|单据日期|所属仓库|应退金额|本次退款|总件数|联系(?:人|方式|电话)|供应商|门店|仓库|客户|商品明细|商品|物料|批次号|数量|单价|税率|金额|件数|有效数值|整数|非负数|\d+(?:\.\d+)?)/g).map((text, index) => ({ text, important: index % 2 === 1 })))
+const validationMessageParts = computed(() => (ui.validationHint?.message || '').split(/(采购数量|采购供应商|采购单价|申请门店|申请日期|实收数量|应收数量|商品数量|原订单编号|单据日期|所属仓库|分类|应退金额|本次退款|总件数|联系(?:人|方式|电话)|供应商|门店|仓库|客户|商品明细|商品|物料|批次号|数量|单价|税率|金额|件数|有效数值|整数|非负数|\d+(?:\.\d+)?)/g).map((text, index) => ({ text, important: index % 2 === 1 })))
 const submitDocument = (event, status) => {
   if (fieldsDisabled.value || !ui.validateForm()) return
   const form = event.currentTarget instanceof HTMLFormElement ? event.currentTarget : event.currentTarget.form
@@ -405,7 +412,7 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .business-document-form[data-document-type="purchase-order"] .finance-row-full,
 .business-document-form[data-document-type="purchase-order"] .finance-row { padding: 14px 20px; }
 .business-document-form[data-document-type="purchase-order"] b { color: #dc3545; }
-.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 1560px; }
+.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 1680px; }
 .business-document-form[data-document-type="purchase-order"] .products-table td { font-size: 12px; }
 .business-document-form[data-document-type="purchase-order"] .products-table td input,
 .business-document-form[data-document-type="purchase-order"] .products-table td select { height: 28px; }

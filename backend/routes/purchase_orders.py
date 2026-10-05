@@ -62,9 +62,17 @@ def _status(value):
     return value
 
 
-def _product_exists(conn, product_id):
+def _product_table(product_type):
+    if product_type == "finished-product":
+        return "products"
+    if product_type == "raw-material":
+        return "raw_material_products"
+    raise ValueError("商品分类无效")
+
+
+def _product_exists(conn, product_type, product_id):
     return conn.execute(
-        "SELECT 1 FROM raw_material_products WHERE id = ?", (product_id,)
+        f"SELECT 1 FROM {_product_table(product_type)} WHERE id = ?", (product_id,)
     ).fetchone() is not None
 
 
@@ -83,20 +91,26 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
     for raw in raw_items:
         if not isinstance(raw, dict):
             continue
-        product_id = _optional_int(raw.get("productId", raw.get("product_id")), "物料ID")
+        existing_id = _optional_int(raw.get("id", raw.get("orderItemId")), "明细ID")
+        existing = existing_by_id.get(existing_id or -1)
+        product_type = _text(
+            raw.get("productType", raw.get("product_type", existing.get("product_type") if existing else "raw-material"))
+        ) or "raw-material"
+        _product_table(product_type)
+        product_id = _optional_int(raw.get("productId", raw.get("product_id", existing.get("product_id") if existing else None)), "商品ID")
         product_name = _text(
             raw.get("productName", raw.get("name", raw.get("product_name"))), 160
         )
         if product_id is None and not product_name:
             continue
         if product_id is not None:
-            if not _product_exists(conn, product_id):
-                raise ValueError(f"原材料 ID {product_id} 不存在")
+            if not _product_exists(conn, product_type, product_id):
+                raise ValueError(f"商品 ID {product_id} 不存在")
             product = conn.execute(
-                """
+                f"""
                 SELECT product.code, product.name, product.specification,
                        unit.name AS unit_name
-                FROM raw_material_products AS product
+                FROM {_product_table(product_type)} AS product
                 LEFT JOIN units AS unit ON unit.id = product.unit_id
                 WHERE product.id = ?
                 """,
@@ -133,8 +147,6 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
         )
         if amount is not None and amount < 0:
             raise ValueError("采购金额不能为负数")
-        existing_id = _optional_int(raw.get("id", raw.get("orderItemId")), "明细ID")
-        existing = existing_by_id.get(existing_id or -1)
         warehouse_value = raw.get(
             "warehouseId",
             raw.get("warehouse_id", existing.get("warehouse_id") if existing else None),
@@ -166,7 +178,7 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
             {
                 "id": existing_id,
                 "line_no": len(normalized) + 1,
-                "product_type": "raw-material",
+                "product_type": product_type,
                 "product_id": product_id,
                 "warehouse_id": warehouse_id,
                 "supplier_id": supplier_id,
@@ -388,7 +400,7 @@ def _insert_items(conn, order_id, items):
             INSERT INTO purchase_order_items (
                 order_id, line_no, product_type, product_id, product_code, product_name,
                 supplier_id, warehouse_id, specification, unit, ordered_qty, received_qty, unit_price, amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id, item["line_no"], item["product_type"], item["product_id"],
