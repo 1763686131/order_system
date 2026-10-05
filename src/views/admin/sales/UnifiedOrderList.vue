@@ -572,32 +572,41 @@
             @click="toggleMobileOrder(order)"
             @keydown.enter.self.prevent="toggleMobileOrder(order)"
           >
-            <div class="mobile-order-heading">
-              <label
-                v-if="mode !== 'finance' || canDeleteSalesOrders"
-                class="mobile-order-select"
-                @click.stop
-              >
-                <input
-                  type="checkbox"
-                  :checked="isSelected(order.id)"
-                  :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
-                  :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
-                  @change="toggleSelect(order.id)"
-                />
-              </label>
-              <div class="mobile-order-number-wrap">
-                <button
-                  class="mobile-order-number"
-                  type="button"
-                  @click.stop="toggleMobileOrder(order)"
-                >
-                  {{ order.order_number || order.id }}
-                </button>
-                <span class="mobile-order-date">{{ formatDate(order) }}</span>
-              </div>
-              <span class="mobile-order-store mobile-order-header-store">
-                {{ getCategoryText(order) }}
+            <label
+              v-if="mode !== 'finance' || canDeleteSalesOrders"
+              class="mobile-order-select"
+              @click.stop
+            >
+              <input
+                type="checkbox"
+                :checked="isSelected(order.id)"
+                :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
+                :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
+                @change="toggleSelect(order.id)"
+              />
+            </label>
+            <div class="mobile-order-field mobile-order-customer-field">
+              <span>客户</span>
+              <strong>{{ order.order_client || '-' }}</strong>
+            </div>
+            <button
+              v-if="mode === 'finance'"
+              class="mobile-order-copy"
+              type="button"
+              title="复制订单信息"
+              aria-label="复制订单信息"
+              @click.stop="handleCopyOrderInfo(order, 'order-info')"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+                <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+              </svg>
+            </button>
+            <div class="mobile-order-field mobile-order-header-status">
+              <span>状态</span>
+              <span :class="['status-tag', getStatusClass(order)]">
+                <i aria-hidden="true"></i>
+                {{ getStatusText(order) }}
               </span>
             </div>
             <button
@@ -617,9 +626,18 @@
           </header>
 
           <div class="mobile-order-primary" @click="toggleMobileOrder(order)">
-            <div class="mobile-order-field">
-              <span>客户</span>
-              <strong>{{ order.order_client || '-' }}</strong>
+            <div class="mobile-order-field mobile-order-document-field">
+              <span>编号 / 日期</span>
+              <div class="mobile-order-document-meta">
+                <button
+                  class="mobile-order-number"
+                  type="button"
+                  @click.stop="toggleMobileOrder(order)"
+                >
+                  {{ order.order_number || order.id }}
+                </button>
+                <span class="mobile-order-date">{{ formatDate(order) }}</span>
+              </div>
             </div>
             <div class="mobile-order-field">
               <span>收货人</span>
@@ -635,13 +653,6 @@
             <div class="mobile-order-field mobile-order-address-field">
               <span>客户地址</span>
               <strong>{{ getContactAddress(order) }}</strong>
-            </div>
-            <div class="mobile-order-field mobile-order-status-field">
-              <span>状态</span>
-              <span :class="['status-tag', getStatusClass(order)]">
-                <i aria-hidden="true"></i>
-                {{ getStatusText(order) }}
-              </span>
             </div>
           </div>
 
@@ -725,18 +736,6 @@
             </div>
 
             <div class="mobile-order-actions" @click.stop>
-              <button
-                v-if="mode === 'finance' && canCreateSalesOrders && isNewOrder(order)"
-                type="button"
-                title="复制为新订单"
-                @click="handleCopySalesOrder(order)"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <rect x="8" y="8" width="12" height="12" rx="2"></rect>
-                  <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
-                </svg>
-                复制订单
-              </button>
               <button
                 v-if="mode === 'logistics'"
                 type="button"
@@ -4245,10 +4244,14 @@ svg {
 .mobile-order-card-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
   padding: 11px 12px 7px;
   cursor: pointer;
+}
+
+.mobile-order-customer-field {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .mobile-order-heading {
@@ -4272,12 +4275,52 @@ svg {
   accent-color: var(--accent);
 }
 
-.mobile-order-number-wrap {
+.mobile-order-copy {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.mobile-order-copy:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.mobile-order-copy svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mobile-order-header-status {
   display: flex;
-  flex: 1 1 auto;
+  flex: 0 1 72px;
   min-width: 0;
   flex-direction: column;
+  align-items: flex-end;
   gap: 3px;
+}
+
+.mobile-order-header-status .status-tag {
+  max-width: 100%;
+  min-height: 22px;
+  gap: 4px;
+  overflow: hidden;
+  padding: 3px 7px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.mobile-order-header-status .status-tag i {
+  flex: 0 0 auto;
 }
 
 .mobile-order-number {
@@ -4339,6 +4382,13 @@ svg {
   cursor: pointer;
 }
 
+.mobile-order-document-meta {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
 .mobile-order-field {
   display: flex;
   min-width: 0;
@@ -4384,7 +4434,7 @@ svg {
 }
 
 .mobile-order-contact-row {
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.45fr) minmax(64px, 0.8fr);
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr);
   padding: 9px 12px 8px;
 }
 
