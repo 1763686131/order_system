@@ -68,7 +68,7 @@ def _product_exists(conn, product_id):
     ).fetchone() is not None
 
 
-def _normalize_items(conn, raw_items, existing_items=None):
+def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
     if raw_items is None:
         raw_items = existing_items or []
     if not isinstance(raw_items, list):
@@ -135,6 +135,19 @@ def _normalize_items(conn, raw_items, existing_items=None):
             raise ValueError("采购金额不能为负数")
         existing_id = _optional_int(raw.get("id", raw.get("orderItemId")), "明细ID")
         existing = existing_by_id.get(existing_id or -1)
+        warehouse_value = raw.get(
+            "warehouseId",
+            raw.get("warehouse_id", existing.get("warehouse_id") if existing else None),
+        )
+        warehouse_id = _optional_int(warehouse_value, "明细仓库ID")
+        if warehouse_id is not None:
+            warehouse = conn.execute(
+                "SELECT store_id FROM warehouses WHERE id = ?", (warehouse_id,)
+            ).fetchone()
+            if warehouse is None:
+                raise ValueError("明细仓库不存在")
+            if store_id is not None and warehouse["store_id"] != store_id:
+                raise ValueError("明细仓库必须属于申请门店")
         supplier_value = raw.get(
             "supplierId",
             raw.get("supplier_id", existing.get("supplier_id") if existing else None),
@@ -155,6 +168,7 @@ def _normalize_items(conn, raw_items, existing_items=None):
                 "line_no": len(normalized) + 1,
                 "product_type": "raw-material",
                 "product_id": product_id,
+                "warehouse_id": warehouse_id,
                 "supplier_id": supplier_id,
                 "product_code": product_code,
                 "product_name": product_name,
@@ -186,7 +200,8 @@ def _order_values(conn, data, existing=None):
     requested_status = _status(data.get("status", existing.get("status", "draft")))
     if requested_status not in ("draft", "pending"):
         raise ValueError("新建或编辑采购订单只能保存为草稿或待审核")
-    items = _normalize_items(conn, data.get("items"), existing.get("_items"))
+    store_id = _optional_int(data.get("storeId", data.get("store_id", existing.get("store_id"))), "门店ID")
+    items = _normalize_items(conn, data.get("items"), existing.get("_items"), store_id)
     # Keep existing callers that submit one master supplier compatible.
     if supplier_id is not None:
         for item in items:
@@ -207,7 +222,7 @@ def _order_values(conn, data, existing=None):
         "order_no": _text(data.get("orderNo", data.get("order_no", existing.get("order_no"))), 80),
         "order_date": order_date,
         "expected_date": _text(data.get("expectedDate", data.get("expected_date", existing.get("expected_date"))), 20),
-        "store_id": _optional_int(data.get("storeId", data.get("store_id", existing.get("store_id"))), "门店ID"),
+        "store_id": store_id,
         "supplier_id": supplier_id,
         "remark": _text(data.get("remark", existing.get("remark")), 500),
         "status": requested_status,
@@ -224,6 +239,8 @@ def _serialize_item(row):
     amount = item.pop("amount", None)
     item["orderItemId"] = item.pop("id", None)
     item["productId"] = item.pop("product_id", None)
+    item["warehouseId"] = item.pop("warehouse_id", None)
+    item["warehouseName"] = ""
     supplier_id = item.pop("supplier_id", None)
     item["productType"] = item.pop("product_type", "raw-material")
     item["productCode"] = item.pop("product_code", "") or ""
@@ -278,6 +295,19 @@ def _serialize_order(conn, row, include_items=True):
             }
         for item in order["items"]:
             item["supplierName"] = supplier_rows.get(item["supplierId"], "")
+        warehouse_ids = {item["warehouseId"] for item in order["items"] if item["warehouseId"] is not None}
+        warehouse_rows = {}
+        if warehouse_ids:
+            placeholders = ",".join("?" for _ in warehouse_ids)
+            warehouse_rows = {
+                warehouse["id"]: warehouse["name"]
+                for warehouse in conn.execute(
+                    f"SELECT id, name FROM warehouses WHERE id IN ({placeholders})",
+                    tuple(sorted(warehouse_ids)),
+                ).fetchall()
+            }
+        for item in order["items"]:
+            item["warehouseName"] = warehouse_rows.get(item["warehouseId"], "")
         if not order["supplierName"]:
             order["supplierName"] = "、".join(dict.fromkeys(
                 item["supplierName"] for item in order["items"] if item["supplierName"]
@@ -306,12 +336,12 @@ def _insert_items(conn, order_id, items):
             """
             INSERT INTO purchase_order_items (
                 order_id, line_no, product_type, product_id, product_code, product_name,
-                supplier_id, specification, unit, ordered_qty, received_qty, unit_price, amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                supplier_id, warehouse_id, specification, unit, ordered_qty, received_qty, unit_price, amount, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id, item["line_no"], item["product_type"], item["product_id"],
-                item["product_code"], item["product_name"], item["supplier_id"], item["specification"], item["unit"],
+                item["product_code"], item["product_name"], item["supplier_id"], item["warehouse_id"], item["specification"], item["unit"],
                 item["ordered_qty"], item["received_qty"], item["unit_price"], item["amount"], item["remark"],
             ),
         )

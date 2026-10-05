@@ -56,7 +56,7 @@
         <div class="products-table-wrapper">
           <table class="products-table">
             <colgroup>
-              <col style="width: 44px" /><col style="width: 66px" /><col style="width: 220px" /><col v-if="isPurchaseOrder" style="width: 110px" /><col style="width: 130px" /><col style="width: 70px" />
+              <col style="width: 44px" /><col style="width: 66px" /><col v-if="isPurchaseOrder" style="width: 150px" /><col style="width: 220px" /><col v-if="isPurchaseOrder" style="width: 110px" /><col style="width: 130px" /><col style="width: 70px" />
               <template v-if="!isPurchaseOrder"><col style="width: 130px" /><col style="width: 95px" /><col style="width: 90px" /></template>
               <col style="width: 100px" /><col v-if="isPurchaseOrder" style="width: 180px" /><col style="width: 100px" />
               <template v-if="ui.taxEnabled"><col style="width: 80px" /><col style="width: 110px" /></template>
@@ -66,7 +66,7 @@
               <col style="width: 180px" />
             </colgroup>
             <thead><tr>
-              <th>序号</th><th>操作</th><th>{{ isMaterial ? '物料信息' : '商品信息' }}<b v-if="isPurchaseOrder"> *</b></th><th v-if="isPurchaseOrder">编码</th><th>规格型号</th><th>单位</th>
+              <th>序号</th><th>操作</th><th v-if="isPurchaseOrder">所属仓库</th><th>{{ isMaterial ? '物料信息' : '商品信息' }}<b v-if="isPurchaseOrder"> *</b></th><th v-if="isPurchaseOrder">编码</th><th>规格型号</th><th>单位</th>
               <template v-if="!isPurchaseOrder"><th>所属仓库</th><th>当前库存</th><th>{{ isPurchase ? '应收数量' : '件数' }}</th></template>
               <th :class="{ right: isPurchaseOrder }">{{ isPurchaseOrder ? '采购数量' : isPurchase ? '实收数量' : '数量' }}<b v-if="isPurchaseOrder"> *</b></th>
               <th v-if="isPurchaseOrder">采购供应商<b v-if="ui.auditMode"> *</b></th><th :class="{ right: isPurchaseOrder }">{{ isPurchaseOrder ? '采购单价 (元)' : '单价 (元)' }}<b v-if="isPurchaseOrder && ui.auditMode"> *</b></th>
@@ -78,9 +78,21 @@
               <tr v-for="(item, index) in ui.form.items" :key="item.key ?? index" :class="{ 'row-focused': ui.focusedRow === index }">
                 <td class="center">{{ index + 1 }}</td>
                 <td class="center"><template v-if="!isPurchaseOrder || !ui.readOnly"><button class="btn-icon" type="button" title="在下方插入一行" aria-label="在下方插入一行" @click="ui.addRow(index)"><Plus :size="16" aria-hidden="true" /></button><button class="btn-icon remove" type="button" title="删除此行" aria-label="删除此行" :disabled="isPurchaseOrder && ui.form.items.length === 1" @click="ui.removeRow(index)"><Trash2 :size="15" aria-hidden="true" /></button></template></td>
+                <td v-if="isPurchaseOrder">
+                  <select v-model="item.warehouseId" class="purchase-cell-select" :ref="element => setFieldRef(`item-warehouse-${index}`, element)" aria-label="所属仓库" @focus="activatePurchaseCell(item, 'warehouse')" @blur="activePurchaseCell = ''" @change="ui.onItemWarehouseChange(item); dismissHint(`item-warehouse-${index}`)">
+                    <option value="">{{ purchaseCellPlaceholder(item, 'warehouse', ui.form.storeId ? '请选择仓库' : '请先选择门店') }}</option>
+                    <option v-if="item.warehouseId && !ui.filteredWarehouses.some(warehouse => String(warehouse.id) === String(item.warehouseId))" :value="item.warehouseId">{{ item.warehouseName || '历史仓库' }}</option>
+                    <option v-for="warehouse in ui.filteredWarehouses" :key="warehouse.id" :value="String(warehouse.id)">{{ warehouse.name }}</option>
+                  </select>
+                </td>
                 <td>
-                  <select v-if="isMaterial" v-model="item.productId" :ref="element => setProductInputRef(index, element)" :disabled="isPurchaseOrder && !ui.form.storeId" aria-label="物料" @change="ui.onProductChange(item)">
-                    <option value="">{{ isPurchaseOrder && !ui.form.storeId ? '请先选择门店' : '请选择物料' }}</option>
+                  <select v-if="isPurchaseOrder" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" aria-label="物料" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
+                    <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? '请选择物料' : '请先选择门店') }}</option>
+                    <option v-if="item.productId && !ui.products.some(product => String(product.id) === String(item.productId))" :value="item.productId">{{ item.goodsName }}</option>
+                    <option v-for="product in ui.productsForItem(item)" :key="product.id" :value="String(product.id)">{{ product.code ? `${product.code} · ` : '' }}{{ product.name }}</option>
+                  </select>
+                  <select v-else-if="isPurchase" v-model="item.productId" :ref="element => setProductInputRef(index, element)" aria-label="物料" @change="ui.onProductChange(item)">
+                    <option value="">请选择物料</option>
                     <option v-if="item.productId && !ui.products.some(product => String(product.id) === String(item.productId))" :value="item.productId">{{ item.goodsName }}</option>
                     <option v-for="product in ui.productsForItem(item)" :key="product.id" :value="String(product.id)">{{ product.code ? `${product.code} · ` : '' }}{{ product.name }}</option>
                   </select>
@@ -96,8 +108,8 @@
                 </template>
                 <td><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.quantity" :ref="element => setFieldRef(`item-quantity-${index}`, element)" :aria-label="isPurchaseOrder ? '采购数量' : '数量'" type="number" :min="isPurchaseOrder ? '0.0001' : '0'" step="0.0001" :required="isPurchaseOrder" @input="ui.onQuantityInput(index); dismissHint(`item-quantity-${index}`)" /><span v-else class="blank-cell"></span></td>
                 <td v-if="isPurchaseOrder">
-                  <select v-if="item.productId" v-model="item.supplierId" :ref="element => setFieldRef(`item-supplier-${index}`, element)" :required="ui.auditMode" aria-label="采购供应商" @change="dismissHint(`item-supplier-${index}`)">
-                    <option value="">{{ ui.auditMode ? '请选择采购供应商' : '暂不指定（选填）' }}</option>
+                  <select v-if="item.productId" v-model="item.supplierId" class="purchase-cell-select" :ref="element => setFieldRef(`item-supplier-${index}`, element)" :required="ui.auditMode" aria-label="采购供应商" @focus="activatePurchaseCell(item, 'supplier')" @blur="activePurchaseCell = ''" @change="dismissHint(`item-supplier-${index}`)">
+                    <option value="">{{ purchaseCellPlaceholder(item, 'supplier', ui.auditMode ? '请选择采购供应商' : '暂不指定（选填）') }}</option>
                     <option v-if="item.supplierId && !ui.suppliers.some(supplier => String(supplier.id) === String(item.supplierId))" :value="item.supplierId">{{ item.supplierName }}</option>
                     <option v-for="supplier in ui.suppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName || supplier.name }}</option>
                   </select><span v-else class="blank-cell"></span>
@@ -113,10 +125,10 @@
                 <td><input v-if="!isPurchaseOrder || item.productId" v-model="item.remark" aria-label="行备注" type="text" :maxlength="isPurchaseOrder ? 500 : undefined" /><span v-else class="blank-cell"></span></td>
               </tr>
               <tr class="total-row">
-                <td :colspan="isPurchaseOrder ? 6 : 7" class="center">合计</td>
+                <td colspan="7" class="center">合计</td>
                 <td v-if="!isPurchaseOrder" class="right"><input v-if="isSale" v-model.number="ui.totalPackages" aria-label="总件数" type="number" min="0" @input="ui.onTotalPackagesManualInput" /><span v-else>{{ money(ui.totalPackages) }}</span></td>
-                <td class="right">{{ money(ui.totalQuantity) }}</td><td :colspan="isPurchaseOrder ? 2 : ui.taxEnabled ? 3 : 1"></td>
-                <td class="right">{{ money(ui.totalAmount) }}</td><template v-if="ui.taxEnabled"><td v-if="!isSale" class="right">{{ money(ui.totalTaxAmount) }}</td><td class="right">{{ money(ui.totalIncludedAmount) }}</td></template><td :colspan="isPurchase ? 3 : 1"></td>
+                <td class="right">{{ isPurchaseOrder && !hasPurchaseOrderItems ? '' : money(ui.totalQuantity) }}</td><td :colspan="isPurchaseOrder ? 2 : ui.taxEnabled ? 3 : 1"></td>
+                <td class="right">{{ isPurchaseOrder && !hasPurchaseOrderItems ? '' : money(ui.totalAmount) }}</td><template v-if="ui.taxEnabled"><td v-if="!isSale" class="right">{{ money(ui.totalTaxAmount) }}</td><td class="right">{{ money(ui.totalIncludedAmount) }}</td></template><td :colspan="isPurchase ? 3 : 1"></td>
               </tr>
             </tbody>
           </table>
@@ -207,6 +219,10 @@ const isSale = computed(() => props.documentType === 'sale')
 const isReturn = computed(() => props.documentType === 'sale-return')
 const isPurchase = computed(() => props.documentType === 'purchase')
 const isPurchaseOrder = computed(() => props.documentType === 'purchase-order')
+const hasPurchaseOrderItems = computed(() => isPurchaseOrder.value && ui.form.items.some(item => item.productId))
+const activePurchaseCell = ref('')
+const activatePurchaseCell = (item, field) => { activePurchaseCell.value = `${item.key}-${field}` }
+const purchaseCellPlaceholder = (item, field, message) => activePurchaseCell.value === `${item.key}-${field}` ? message : ''
 const isMaterial = computed(() => isPurchase.value || isPurchaseOrder.value)
 const isSalesDocument = computed(() => isSale.value || isReturn.value)
 const formatMoney = value => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -367,10 +383,12 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .business-document-form[data-document-type="purchase-order"] .finance-row-full,
 .business-document-form[data-document-type="purchase-order"] .finance-row { padding: 14px 20px; }
 .business-document-form[data-document-type="purchase-order"] b { color: #dc3545; }
-.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 1410px; }
+.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 1560px; }
 .business-document-form[data-document-type="purchase-order"] .products-table td { font-size: 12px; }
 .business-document-form[data-document-type="purchase-order"] .products-table td input,
 .business-document-form[data-document-type="purchase-order"] .products-table td select { height: 28px; }
+.business-document-form[data-document-type="purchase-order"] .products-table td .purchase-cell-select { appearance: none; padding-right: 20px; background-image: none; }
+.business-document-form[data-document-type="purchase-order"] .products-table td .purchase-cell-select:focus { border-color: #0f9f78; background-color: #fff; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23172033'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; background-size: 10px 6px; }
 .business-document-form[data-document-type="purchase-order"] .products-table tbody tr:not(.total-row):hover { background: #f4fbf8; }
 .business-document-form[data-document-type="purchase-order"] .products-table th.right { text-align: right; }
 .business-document-form[data-document-type="purchase-order"] .muted { color: #596579; text-overflow: ellipsis; white-space: nowrap; }

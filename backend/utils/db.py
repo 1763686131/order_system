@@ -1517,6 +1517,7 @@ def _ensure_purchase_order_schema(conn):
                 if item_table_exists else set()
             )
             item_supplier_select = 'supplier_id' if 'supplier_id' in item_columns else 'NULL'
+            item_warehouse_select = 'warehouse_id' if 'warehouse_id' in item_columns else 'NULL'
             conn.execute('PRAGMA foreign_keys = OFF')
             cursor.execute('DROP INDEX IF EXISTS idx_purchase_orders_status_date')
             cursor.execute('DROP INDEX IF EXISTS idx_purchase_orders_supplier')
@@ -1568,6 +1569,7 @@ def _ensure_purchase_order_schema(conn):
                         product_type TEXT NOT NULL DEFAULT 'raw-material',
                         product_id INTEGER,
                         supplier_id INTEGER,
+                        warehouse_id INTEGER,
                         product_code TEXT,
                         product_name TEXT,
                         specification TEXT,
@@ -1584,12 +1586,12 @@ def _ensure_purchase_order_schema(conn):
                 cursor.execute(
                     f'''
                     INSERT INTO purchase_order_items (
-                        id, order_id, line_no, product_type, product_id, supplier_id,
+                        id, order_id, line_no, product_type, product_id, supplier_id, warehouse_id,
                         product_code, product_name, specification, unit, ordered_qty,
                         received_qty, unit_price, amount, remark
                     )
                     SELECT id, order_id, line_no, product_type, product_id,
-                           {item_supplier_select}, product_code, product_name,
+                           {item_supplier_select}, {item_warehouse_select}, product_code, product_name,
                            specification, unit, ordered_qty, received_qty,
                            unit_price, amount, remark
                     FROM purchase_order_items_legacy
@@ -1616,6 +1618,7 @@ def _ensure_purchase_order_schema(conn):
                 product_type TEXT NOT NULL DEFAULT 'raw-material',
                 product_id INTEGER,
                 supplier_id INTEGER,
+                warehouse_id INTEGER,
                 product_code TEXT,
                 product_name TEXT,
                 specification TEXT,
@@ -1634,6 +1637,8 @@ def _ensure_purchase_order_schema(conn):
         }
         if 'supplier_id' not in purchase_item_columns:
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN supplier_id INTEGER')
+        if 'warehouse_id' not in purchase_item_columns:
+            cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN warehouse_id INTEGER')
         cursor.execute(
             '''
             UPDATE purchase_order_items SET supplier_id = (

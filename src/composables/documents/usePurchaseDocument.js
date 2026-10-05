@@ -157,22 +157,26 @@ export function usePurchaseDocument(props) {
     purchaseOrder.value = data
     purchaseOrderId.value = data.orderId || data.id || purchaseOrderId.value
     form.value.purchaseOrderId = purchaseOrderId.value
+    const defaultWarehouse = (data.items || []).find(item => item.warehouseId && warehouses.value.some(warehouse =>
+      String(warehouse.id) === String(item.warehouseId) && String(warehouse.storeId ?? warehouse.store_id) === String(data.storeId)))
     form.value = {
       ...form.value,
       storeId: data.storeId ? String(data.storeId) : '',
       supplierId: data.supplierId ? String(data.supplierId) : '',
       supplierName: data.supplierName || '',
+      warehouseId: defaultWarehouse ? String(defaultWarehouse.warehouseId) : '',
       documentDate: data.orderDate || localDate(),
       remark: data.remark || '',
       items: (data.items || []).map(item => ({
         ...blankItem(), purchaseOrderItemId: item.orderItemId || item.id || '',
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
+        warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
         expectedQty: item.remainingQty ?? item.orderedQty ?? '', quantity: item.remainingQty ?? item.orderedQty ?? '',
         price: item.unitPrice ?? '', amount: 0
       })).concat([blankItem(), blankItem()]).slice(0, Math.max(2, (data.items || []).length + 1))
     }
-    form.value.items.filter(item => item.productId).forEach(item => { item.warehouseId = form.value.warehouseId; onItemWarehouseChange(item); calculateRow(item) })
+    form.value.items.filter(item => item.productId).forEach(item => { item.warehouseId = item.warehouseId || form.value.warehouseId; onItemWarehouseChange(item); calculateRow(item) })
   }
   const loadExisting = async () => {
     if (!props.documentId) {
