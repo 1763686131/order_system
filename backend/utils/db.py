@@ -1591,6 +1591,8 @@ def _ensure_purchase_order_schema(conn):
                         product_id INTEGER,
                         supplier_id INTEGER,
                         warehouse_id INTEGER,
+                        category_id INTEGER,
+                        category_name TEXT,
                         product_code TEXT,
                         product_name TEXT,
                         specification TEXT,
@@ -1654,6 +1656,8 @@ def _ensure_purchase_order_schema(conn):
                 product_id INTEGER,
                 supplier_id INTEGER,
                 warehouse_id INTEGER,
+                category_id INTEGER,
+                category_name TEXT,
                 product_code TEXT,
                 product_name TEXT,
                 specification TEXT,
@@ -1674,6 +1678,10 @@ def _ensure_purchase_order_schema(conn):
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN supplier_id INTEGER')
         if 'warehouse_id' not in purchase_item_columns:
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN warehouse_id INTEGER')
+        if 'category_id' not in purchase_item_columns:
+            cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN category_id INTEGER')
+        if 'category_name' not in purchase_item_columns:
+            cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN category_name TEXT')
         cursor.execute(
             '''
             UPDATE purchase_order_items SET supplier_id = (

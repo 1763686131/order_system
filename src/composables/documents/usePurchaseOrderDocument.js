@@ -34,7 +34,7 @@ export function usePurchaseOrderDocument(props) {
   let redirectTimer
   const blankItem = () => ({
     key: ++rowKey, orderItemId: null, productId: '', productCode: '', goodsName: '',
-    specification: '', unit: '', productType: 'raw-material',
+    specification: '', unit: '', productType: '', categoryId: '', categoryName: '',
     warehouseId: '', warehouseName: '', quantity: '', supplierId: '', supplierName: '',
     price: '', amount: '', remark: ''
   })
@@ -69,12 +69,17 @@ export function usePurchaseOrderDocument(props) {
   }, { immediate: true })
   const filteredWarehouses = computed(() => warehouses.value.filter(warehouse =>
     String(warehouse.storeId ?? warehouse.store_id) === String(form.value.storeId)))
-  const products = computed(() => [...rawMaterialProducts.value, ...finishedProducts.value])
-  const productCatalog = item => item?.productType === 'finished-product'
-    ? finishedProducts.value
-    : rawMaterialProducts.value
+  const products = computed(() => [
+    ...rawMaterialProducts.value.map(product => ({ ...product, productType: 'raw-material' })),
+    ...finishedProducts.value.map(product => ({ ...product, productType: 'finished-product' }))
+  ])
+  const categoriesForItem = item => {
+    const warehouse = warehouses.value.find(candidate => String(candidate.id) === String(item?.warehouseId))
+    return Array.isArray(warehouse?.categories) ? warehouse.categories : []
+  }
   const productMatchesItem = (product, item) => {
     if (!form.value.storeId || !item?.warehouseId) return false
+    if (categoriesForItem(item).length && !item.categoryId) return false
     const storeIds = product.storeIds || product.store_ids
     if (Array.isArray(storeIds) && storeIds.length &&
       !storeIds.map(value => String(value)).includes(String(form.value.storeId))) return false
@@ -84,9 +89,18 @@ export function usePurchaseOrderDocument(props) {
     const hasWarehouseMapping = warehouseMapping && typeof warehouseMapping === 'object' &&
       Object.prototype.hasOwnProperty.call(warehouseMapping, warehouseId)
     if (productWarehouseId != null && String(productWarehouseId) !== warehouseId && !hasWarehouseMapping) return false
+    if (item.categoryId) {
+      const mappedCategories = hasWarehouseMapping
+        ? (Array.isArray(warehouseMapping[warehouseId]) ? warehouseMapping[warehouseId] : []).map(value => String(value))
+        : []
+      const productCategory = product.categoryId ?? product.category ?? product.category_id
+      if (mappedCategories.length
+        ? !mappedCategories.includes(String(item.categoryId))
+        : String(productCategory ?? '') !== String(item.categoryId)) return false
+    }
     return true
   }
-  const productsForItem = item => productCatalog(item)
+  const productsForItem = item => products.value
     .filter(product => product.enabled !== false && productMatchesItem(product, item))
   const clearProductSelection = item => Object.assign(item, {
     productId: '', productCode: '', goodsName: '', specification: '', unit: '', price: '', amount: ''
@@ -144,16 +158,27 @@ export function usePurchaseOrderDocument(props) {
     }
     item.productCode = product.code || ''
     item.goodsName = product.name || ''
+    item.productType = product.productType
     item.specification = product.specification || ''
     item.unit = units.value.find(unit => String(unit.id) === String(product.unitId))?.name || product.unit || ''
     calculateRow(item)
   }
-  const onProductTypeChange = item => {
-    clearProductSelection(item)
+  const onCategoryChange = item => {
+    const category = categoriesForItem(item).find(candidate => String(candidate.id) === String(item.categoryId))
+    item.categoryName = category?.name || ''
+    if (item.productId && !productsForItem(item).some(product => String(product.id) === String(item.productId))) {
+      clearProductSelection(item)
+    }
   }
   const onItemWarehouseChange = item => {
     const warehouse = warehouses.value.find(candidate => String(candidate.id) === String(item.warehouseId))
     item.warehouseName = warehouse?.name || ''
+    if (!categoriesForItem(item).some(category => String(category.id) === String(item.categoryId))) {
+      item.categoryId = ''
+      item.categoryName = ''
+    } else {
+      onCategoryChange(item)
+    }
     if (item.productId && !productsForItem(item).some(product => String(product.id) === String(item.productId))) {
       clearProductSelection(item)
     }
@@ -163,6 +188,8 @@ export function usePurchaseOrderDocument(props) {
       if (item.warehouseId && !filteredWarehouses.value.some(warehouse => String(warehouse.id) === String(item.warehouseId))) {
         item.warehouseId = ''
         item.warehouseName = ''
+        item.categoryId = ''
+        item.categoryName = ''
         clearProductSelection(item)
       } else {
         onItemWarehouseChange(item)
@@ -197,7 +224,8 @@ export function usePurchaseOrderDocument(props) {
         ...blankItem(), orderItemId: item.orderItemId || item.id,
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
-        productType: item.productType === 'finished-product' ? 'finished-product' : 'raw-material',
+        productType: item.productType === 'finished-product' ? 'finished-product' : '',
+        categoryId: item.categoryId ? String(item.categoryId) : '', categoryName: item.categoryName || '',
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
         quantity: item.orderedQty ?? '', supplierId: item.supplierId ? String(item.supplierId) : '',
         supplierName: item.supplierName || '', price: item.unitPrice ?? '', amount: item.amount ?? '', remark: item.remark || ''
@@ -215,7 +243,7 @@ export function usePurchaseOrderDocument(props) {
     form.value.settlementAccount ??= ''
     form.value.currentPayment ??= 0
     form.value.items = form.value.items.map(item => ({
-      productType: 'raw-material', warehouseId: '', warehouseName: '', ...item
+      productType: '', categoryId: '', categoryName: '', warehouseId: '', warehouseName: '', ...item
     }))
     rowKey = Math.max(rowKey, ...form.value.items.map(item => Number(item.key) || 0))
     savedDocumentId.value = draft.savedDocumentId ?? props.documentId
@@ -306,7 +334,7 @@ export function usePurchaseOrderDocument(props) {
     stores, suppliers, filteredWarehouses, products, savedDocumentId, notice, totalQuantity, totalAmount,
     currentCreatorName, creatorNameStyle, purchasePeople, storeBankAccounts,
     supplierPayable, purchaseOrderPayable, currentPayable,
-    productsForItem, addRow, removeRow, onProductChange, onProductTypeChange,
+    productsForItem, categoriesForItem, addRow, removeRow, onProductChange, onCategoryChange,
     onItemWarehouseChange, onStoreChange, onDateChange, onExpectedDateInput, restoreDraft,
     validateForm, save, clearForm, close,
     onQuantityInput: index => calculateRow(form.value.items[index]),

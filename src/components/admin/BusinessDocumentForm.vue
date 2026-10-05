@@ -86,11 +86,11 @@
                   </select>
                 </td>
                 <td v-if="isPurchaseOrder">
-                  <select v-model="item.productType" class="purchase-cell-select" :ref="element => setFieldRef(`item-category-${index}`, element)" aria-label="分类" @focus="activatePurchaseCell(item, 'category')" @blur="activePurchaseCell = ''" @change="ui.onProductTypeChange(item); dismissHint(`item-category-${index}`)">
-                    <option value="">{{ purchaseCellPlaceholder(item, 'category', '请选择分类') }}</option>
-                    <option value="raw-material">原材料</option>
-                    <option value="finished-product">成品</option>
+                  <select v-if="item.warehouseId" v-model="item.categoryId" class="purchase-cell-select" :ref="element => setFieldRef(`item-category-${index}`, element)" aria-label="分类" @focus="activatePurchaseCell(item, 'category')" @blur="activePurchaseCell = ''" @change="ui.onCategoryChange(item); dismissHint(`item-category-${index}`)">
+                    <option value="">请选择分类</option>
+                    <option v-for="category in ui.categoriesForItem(item)" :key="category.id" :value="String(category.id)">{{ category.name }}</option>
                   </select>
+                  <span v-else class="blank-cell"></span>
                 </td>
                 <td>
                   <select v-if="isPurchaseOrder" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" aria-label="商品" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">

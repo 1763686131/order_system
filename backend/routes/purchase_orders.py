@@ -1,6 +1,7 @@
 """Purchase order master/detail and approval workflow APIs."""
 
 import threading
+import json
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
@@ -160,6 +161,27 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
                 raise ValueError("明细仓库不存在")
             if store_id is not None and warehouse["store_id"] != store_id:
                 raise ValueError("明细仓库必须属于申请门店")
+        category_id = _optional_int(
+            raw.get("categoryId", raw.get("category_id", existing.get("category_id") if existing else None)),
+            "分类ID",
+        )
+        category_name = _text(
+            raw.get("categoryName", raw.get("category_name", existing.get("category_name") if existing else "")), 120
+        )
+        if category_id is not None:
+            if warehouse_id is None:
+                raise ValueError("选择分类前请先选择仓库")
+            warehouse_row = conn.execute(
+                "SELECT categories FROM warehouses WHERE id = ?", (warehouse_id,)
+            ).fetchone()
+            try:
+                categories = json.loads(warehouse_row["categories"] or "[]") if warehouse_row else []
+            except (TypeError, ValueError):
+                categories = []
+            category = next((entry for entry in categories if str(entry.get("id")) == str(category_id)), None)
+            if not category:
+                raise ValueError("明细分类必须属于所选仓库")
+            category_name = category_name or _text(category.get("name"), 120)
         supplier_value = raw.get(
             "supplierId",
             raw.get("supplier_id", existing.get("supplier_id") if existing else None),
@@ -181,6 +203,8 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
                 "product_type": product_type,
                 "product_id": product_id,
                 "warehouse_id": warehouse_id,
+                "category_id": category_id,
+                "category_name": category_name,
                 "supplier_id": supplier_id,
                 "product_code": product_code,
                 "product_name": product_name,
@@ -288,6 +312,8 @@ def _serialize_item(row):
     item["warehouseName"] = ""
     supplier_id = item.pop("supplier_id", None)
     item["productType"] = item.pop("product_type", "raw-material")
+    item["categoryId"] = item.pop("category_id", None)
+    item["categoryName"] = item.pop("category_name", "") or ""
     item["productCode"] = item.pop("product_code", "") or ""
     item["productName"] = item.pop("product_name", "") or ""
     item["specification"] = item.pop("specification", "") or ""
@@ -399,12 +425,14 @@ def _insert_items(conn, order_id, items):
             """
             INSERT INTO purchase_order_items (
                 order_id, line_no, product_type, product_id, product_code, product_name,
-                supplier_id, warehouse_id, specification, unit, ordered_qty, received_qty, unit_price, amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                supplier_id, warehouse_id, category_id, category_name, specification, unit,
+                ordered_qty, received_qty, unit_price, amount, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id, item["line_no"], item["product_type"], item["product_id"],
-                item["product_code"], item["product_name"], item["supplier_id"], item["warehouse_id"], item["specification"], item["unit"],
+                item["product_code"], item["product_name"], item["supplier_id"], item["warehouse_id"],
+                item["category_id"], item["category_name"], item["specification"], item["unit"],
                 item["ordered_qty"], item["received_qty"], item["unit_price"], item["amount"], item["remark"],
             ),
         )

@@ -90,6 +90,8 @@ export function purchaseOrderPayload(form, status = 'pending') {
       productId: Number(item.productId),
       productCode: item.productCode,
       productName: item.goodsName,
+      categoryId: item.categoryId ? Number(item.categoryId) : null,
+      categoryName: item.categoryName || '',
       warehouseId: item.warehouseId ? Number(item.warehouseId) : null,
       specification: item.specification,
       unit: item.unit,
