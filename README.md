@@ -26,7 +26,9 @@
 - 退货订单管理、退货单录入、审核、反审核及客户应收/库存联动
 - 成品和原材料档案独立维护
 - 门店、仓库、客户、供应商和单位等基础资料管理
+- 客户与供应商列表共用 `PartyList.vue`，按实体类型切换字段、接口和财务文案
 - 客户期初欠款、储值余额和应收欠款汇总
+- 供应商应付欠款读取采购业务维护的 `payable` 字段
 - 收款历史、收款单草稿、附件、打印和 Excel 导出
 - 收款单审核入账、反审核回滚及客户账户流水追溯
 - 成品库存与原材料库存查询
@@ -214,6 +216,7 @@ order_system/
 │  │  │  ├─ ChatWindow.vue           # 可拖动的一对一留言和附件窗口
 │  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制模板、变量、绑定和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
+│  │  │  ├─ PartyList.vue             # 客户/供应商共用列表、详情、编辑和财务展示
 │  │  │  └─ StoreFormModal.vue       # 门店维护弹窗
 │  │  ├─ print/
 │  │  │  ├─ PrintDesignerEditor.vue  # 可视化模板设计器封装
@@ -237,10 +240,10 @@ order_system/
 │  │     ├─ sales/                   # 销售管理
 │  │     │  ├─ UnifiedOrderList.vue  # 销售订单和物流订单列表
 │  │     │  ├─ ReturnOrderList.vue   # 退货订单列表
-│  │     │  └─ CustomerList.vue      # 客户列表、编辑弹窗（支持期初欠款和储值管理）
+│  │     │  └─ CustomerList.vue      # 客户管理入口，封装 PartyList 的 customer 模式
 │  │     ├─ purchase/                # 采购管理
 │  │     │  ├─ PurchaseList.vue      # 采购订单/采购入库共用列表；按路由 mode 显示字段
-│  │     │  └─ SupplierList.vue      # 供应商管理
+│  │     │  └─ SupplierList.vue      # 供应商管理入口，封装 PartyList 的 supplier 模式
 │  │     ├─ inventory/               # 仓库管理
 │  │     │  └─ WarehouseManage.vue   # 仓库档案和启停维护
 │  │     ├─ finance/                 # 财务
@@ -295,6 +298,26 @@ order_system/
 ├─ 版本更新日志.md
 └─ README.md
 ```
+
+## 客户与供应商管理组件
+
+客户和供应商页面使用同一个 `src/components/admin/PartyList.vue`，页面入口只负责传入实体类型：
+
+```vue
+<PartyList entity-type="customer" />
+<PartyList entity-type="supplier" />
+```
+
+共享组件根据 `entity-type` 自动切换以下内容：
+
+| 实体类型 | 请求接口 | 主要财务字段 | 页面文案 |
+| --- | --- | --- | --- |
+| `customer` | `/api/customers` | `balance`、`initialReceivable`、`receivable` | 储值余额、期初欠款、应收欠款 |
+| `supplier` | `/api/suppliers` | `payable` | 欠款金额、应付欠款 |
+
+客户页面允许维护储值余额和期初欠款。供应商接口当前只返回采购业务维护的 `payable`，因此供应商欠款在列表、详情和编辑窗口中只读展示，不在供应商档案表单中伪造可保存的期初金额字段。供应商的联系人、银行信息、税号和备注仍可正常编辑。
+
+`CustomerList.vue` 和 `SupplierList.vue` 保留原有页面入口与对外方法名，路由无需调整。新增第三类往来单位时，应优先扩展共享组件的实体配置、字段标准化和请求映射。
 
 ## 权限与数据范围
 
@@ -905,6 +928,7 @@ order-system-print-client-config
 
 - 页面和组件使用 Vue 3 `<script setup>`。
 - 页面级组件放在 `src/views/`，可复用弹窗放在 `src/components/`。
+- 客户、供应商等结构相近的基础资料列表优先复用 `src/components/admin/PartyList.vue`，通过实体类型配置差异，避免复制整套页面。
 - 组件样式优先使用 `<style scoped>`，公共样式放在 `src/assets/styles/`。
 - API 请求统一使用 `src/api/request.js`，接口地址保持 `/api` 相对路径。
 - 登录和身份统一依赖服务端 Session Cookie，禁止重新增加 `Username`、`Role` 等客户端身份请求头。
