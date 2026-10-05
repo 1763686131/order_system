@@ -537,6 +537,253 @@
         </table>
       </div>
 
+      <div class="mobile-order-list">
+        <div v-if="loading" class="mobile-order-loading" aria-hidden="true">
+          <div v-for="index in 5" :key="`mobile-loading-${index}`" class="mobile-order-skeleton">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+
+        <div v-else-if="pagedRecords.length === 0" class="mobile-order-empty">
+          <div class="empty-mark" aria-hidden="true">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 6h16v14H4z"></path>
+              <path d="M8 3h8v3H8z"></path>
+              <path d="M8 11h8M8 15h5"></path>
+            </svg>
+          </div>
+          <strong>{{ emptyMessage }}</strong>
+          <span>调整筛选条件后重新查询</span>
+        </div>
+
+        <article
+          v-for="order in paginatedOrders"
+          v-else
+          :key="order.id"
+          class="mobile-order-card"
+          :class="{ selected: isSelected(order.id) }"
+          :style="{ '--store-bg-color': getStoreColor(order) }"
+        >
+          <header
+            class="mobile-order-card-header"
+            tabindex="0"
+            @click="toggleMobileOrder(order)"
+            @keydown.enter.self.prevent="toggleMobileOrder(order)"
+          >
+            <div class="mobile-order-heading">
+              <label
+                v-if="mode !== 'finance' || canDeleteSalesOrders"
+                class="mobile-order-select"
+                @click.stop
+              >
+                <input
+                  type="checkbox"
+                  :checked="isSelected(order.id)"
+                  :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
+                  :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
+                  @change="toggleSelect(order.id)"
+                />
+              </label>
+              <div class="mobile-order-number-wrap">
+                <button
+                  class="mobile-order-number"
+                  type="button"
+                  @click.stop="toggleMobileOrder(order)"
+                >
+                  {{ order.order_number || order.id }}
+                </button>
+                <span class="mobile-order-date">{{ formatDate(order) }}</span>
+              </div>
+              <span class="mobile-order-store mobile-order-header-store">
+                {{ getCategoryText(order) }}
+              </span>
+            </div>
+            <button
+              class="mobile-order-expand"
+              type="button"
+              :aria-expanded="mobileExpandedOrderId === order.id"
+              :aria-label="mobileExpandedOrderId === order.id ? '收起订单详情' : '展开订单详情'"
+              :title="mobileExpandedOrderId === order.id ? '收起详情' : '展开详情'"
+              @click.stop="toggleMobileOrder(order)"
+            >
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path
+                  :d="mobileExpandedOrderId === order.id ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'"
+                ></path>
+              </svg>
+            </button>
+          </header>
+
+          <div class="mobile-order-primary" @click="toggleMobileOrder(order)">
+            <div class="mobile-order-field">
+              <span>客户</span>
+              <strong>{{ order.order_client || '-' }}</strong>
+            </div>
+            <div class="mobile-order-field">
+              <span>收货人</span>
+              <strong>{{ getContactPerson(order) }}</strong>
+            </div>
+          </div>
+
+          <div class="mobile-order-contact-row" @click="toggleMobileOrder(order)">
+            <div class="mobile-order-field">
+              <span>联系电话</span>
+              <strong>{{ getContactPhone(order) }}</strong>
+            </div>
+            <div class="mobile-order-field mobile-order-address-field">
+              <span>客户地址</span>
+              <strong>{{ getContactAddress(order) }}</strong>
+            </div>
+            <div class="mobile-order-field mobile-order-status-field">
+              <span>状态</span>
+              <span :class="['status-tag', getStatusClass(order)]">
+                <i aria-hidden="true"></i>
+                {{ getStatusText(order) }}
+              </span>
+            </div>
+          </div>
+
+          <div class="mobile-order-amount-row" @click="toggleMobileOrder(order)">
+            <template v-if="mode === 'finance'">
+              <div class="mobile-order-field">
+                <span>应收金额</span>
+                <strong>{{ getShouldReceive(order) }}</strong>
+              </div>
+              <div class="mobile-order-field">
+                <span>未收金额</span>
+                <strong>{{ getCurrentDebt(order) }}</strong>
+              </div>
+              <div class="mobile-order-field">
+                <span>已收金额</span>
+                <strong>{{ getCurrentPayment(order) }}</strong>
+              </div>
+            </template>
+            <template v-else>
+              <div class="mobile-order-field">
+                <span>发货方式</span>
+                <strong>{{ getShippingMethodText(order) }}</strong>
+              </div>
+              <div class="mobile-order-field">
+                <span>总重量</span>
+                <strong>{{ getTotalWeight(order) }}</strong>
+              </div>
+              <div class="mobile-order-field">
+                <span>运费</span>
+                <strong>{{ getFreightTotal(order) > 0 ? `¥${getFreightTotal(order).toFixed(2)}` : '-' }}</strong>
+              </div>
+            </template>
+          </div>
+
+          <div
+            v-if="mobileExpandedOrderId === order.id"
+            class="mobile-order-details"
+            @click.stop
+          >
+            <div class="mobile-product-scroll">
+              <div class="mobile-product-table">
+                <div class="mobile-product-row mobile-product-head">
+                  <span>商品信息</span>
+                  <span>型号</span>
+                  <span>数量</span>
+                  <span>单价</span>
+                  <span>金额</span>
+                  <span>备注</span>
+                </div>
+                <template v-if="isNewOrder(order)">
+                  <div
+                    v-for="(item, index) in order.order_goods"
+                    :key="`${order.id}-mobile-item-${index}`"
+                    class="mobile-product-row"
+                  >
+                    <strong :title="getGoodsItemName(item)">{{ getGoodsItemName(item) }}</strong>
+                    <span>{{ getGoodsItemSpec(item) }}</span>
+                    <span>{{ item.quantity ?? '-' }}</span>
+                    <span>{{ formatMobileMoney(item.price) }}</span>
+                    <span>{{ formatMobileMoney(item.amount) }}</span>
+                    <span>{{ item.remark || '-' }}</span>
+                  </div>
+                </template>
+                <div v-else class="mobile-product-row">
+                  <strong>{{ getGoodsDisplay(order) }}</strong>
+                  <span>-</span>
+                  <span>{{ order.goods_quantity ?? '-' }}</span>
+                  <span>-</span>
+                  <span>{{ getShouldReceive(order) }}</span>
+                  <span>{{ order.remark || '-' }}</span>
+                </div>
+                <div class="mobile-product-total">
+                  <strong>合计</strong>
+                  <span></span>
+                  <strong>{{ calculateTotalQuantity(order) }}</strong>
+                  <span></span>
+                  <strong>{{ formatMobileMoney(calculateSubtotal(order)) }}</strong>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mobile-order-actions" @click.stop>
+              <button
+                v-if="mode === 'finance' && canCreateSalesOrders && isNewOrder(order)"
+                type="button"
+                title="复制为新订单"
+                @click="handleCopySalesOrder(order)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+                  <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+                </svg>
+                复制订单
+              </button>
+              <button
+                v-if="mode === 'logistics'"
+                type="button"
+                title="物流信息"
+                @click="handleCopyOrderInfo(order)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+                  <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+                </svg>
+                复制物流
+              </button>
+              <button
+                v-if="canPrintSalesOrders"
+                type="button"
+                title="打印订单"
+                @click="handlePrintOrder(order)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M6 9V2h12v7"></path>
+                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                  <path d="M6 14h12v8H6z"></path>
+                </svg>
+                打印
+              </button>
+              <button
+                v-if="hasRowMenuActions(order)"
+                class="mobile-order-more"
+                type="button"
+                title="更多操作"
+                :aria-label="`订单 ${order.order_number || order.id} 更多操作`"
+                aria-haspopup="menu"
+                :aria-expanded="openActionMenuOrderId === order.id"
+                @click="toggleActionMenu(order, $event)"
+              >
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <circle cx="5" cy="12" r="1.4"></circle>
+                  <circle cx="12" cy="12" r="1.4"></circle>
+                  <circle cx="19" cy="12" r="1.4"></circle>
+                </svg>
+                更多
+              </button>
+            </div>
+          </div>
+        </article>
+      </div>
+
       <footer class="table-footer">
         <span>
           共 <strong>{{ filteredOrders.length }}</strong> 条记录
@@ -1476,6 +1723,7 @@ const selectedShippingMethodText = computed(() => {
 
 // 选中的订单
 const selectedOrders = ref([])
+const mobileExpandedOrderId = ref(null)
 
 // 展开弹窗状态
 const expandModal = ref({
@@ -1754,7 +2002,10 @@ const actionMenuOrder = computed(() =>
   paginatedOrders.value.find(order => order.id === openActionMenuOrderId.value) || null
 )
 
-watch(paginatedOrders, () => closeActionMenu())
+watch(paginatedOrders, () => {
+  closeActionMenu()
+  mobileExpandedOrderId.value = null
+})
 
 const pageStart = computed(() => filteredOrders.value.length ? (currentPage.value - 1) * pageSize.value + 1 : 0)
 const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredOrders.value.length))
@@ -1788,6 +2039,11 @@ const currentPageFreightTotal = computed(() => {
 // 方法
 const isSelected = (orderId) => {
   return selectedOrders.value.includes(orderId)
+}
+
+const toggleMobileOrder = (order) => {
+  mobileExpandedOrderId.value =
+    mobileExpandedOrderId.value === order.id ? null : order.id
 }
 
 // ========== 新旧字段兼容辅助函数 ==========
@@ -1936,6 +2192,15 @@ const getGoodsItemName = (item) => {
   }
   // 3. 都没有，返回默认值
   return '-'
+}
+
+const getGoodsItemSpec = (item) => {
+  return item?.spec || item?.model || '-'
+}
+
+const formatMobileMoney = (value) => {
+  const amount = Number(value)
+  return Number.isFinite(amount) ? `¥${amount.toFixed(2)}` : '-'
 }
 
 // 计算合计件数
@@ -3611,6 +3876,10 @@ svg {
   overflow-x: auto;
 }
 
+.mobile-order-list {
+  display: none;
+}
+
 .records-table {
   width: 100%;
   min-width: 1320px;
@@ -3959,6 +4228,397 @@ svg {
   color: var(--accent-dark);
   background: var(--accent-soft);
   border-color: var(--accent-border);
+}
+
+.mobile-order-card {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--store-bg-color, var(--accent));
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+}
+
+.mobile-order-card.selected {
+  background: rgba(var(--accent-rgb), 0.08);
+}
+
+.mobile-order-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 11px 12px 7px;
+  cursor: pointer;
+}
+
+.mobile-order-heading {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.mobile-order-select {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.mobile-order-select input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.mobile-order-number-wrap {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mobile-order-number {
+  max-width: 220px;
+  overflow: hidden;
+  padding: 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 750;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-order-number:hover {
+  text-decoration: underline;
+}
+
+.mobile-order-date {
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.mobile-order-expand {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.mobile-order-expand:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.mobile-order-expand svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mobile-order-primary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  padding: 3px 12px 10px;
+  cursor: pointer;
+}
+
+.mobile-order-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.mobile-order-field > span:first-child,
+.mobile-order-detail-grid dt {
+  color: var(--text-muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.mobile-order-field strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-order-header-store {
+  flex: 0 1 104px;
+  max-width: 104px;
+  margin-left: auto;
+  padding: 4px 7px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.mobile-order-contact-row,
+.mobile-order-amount-row {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid #edf1f5;
+  cursor: pointer;
+}
+
+.mobile-order-contact-row {
+  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.45fr) minmax(64px, 0.8fr);
+  padding: 9px 12px 8px;
+}
+
+.mobile-order-amount-row {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding: 9px 12px 10px;
+}
+
+.mobile-order-contact-row .mobile-order-field,
+.mobile-order-amount-row .mobile-order-field {
+  cursor: pointer;
+}
+
+.mobile-order-address-field strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-order-status-field {
+  align-items: flex-end;
+}
+
+.mobile-order-status-field .status-tag {
+  max-width: 100%;
+  min-height: 22px;
+  gap: 4px;
+  overflow: hidden;
+  padding: 3px 7px;
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+
+.mobile-order-status-field .status-tag i {
+  flex: 0 0 auto;
+}
+
+.mobile-order-details {
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: #fbfcfd;
+}
+
+.mobile-product-scroll {
+  overflow-x: auto;
+  margin: 0 -2px;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.mobile-product-table {
+  min-width: 620px;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+}
+
+.mobile-product-row,
+.mobile-product-total {
+  display: grid;
+  grid-template-columns: 1.5fr 1.05fr 0.65fr 1fr 1fr 1.25fr;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 9px;
+}
+
+.mobile-product-row {
+  min-height: 38px;
+  color: #344054;
+  border-bottom: 1px solid #edf1f5;
+  font-size: 11px;
+}
+
+.mobile-product-head {
+  min-height: 34px;
+  color: var(--text-muted);
+  background: #f4f7f9;
+  font-weight: 650;
+}
+
+.mobile-product-row > *,
+.mobile-product-total > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-product-row strong {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.mobile-product-total {
+  min-height: 38px;
+  color: var(--text);
+  background: #fff;
+  font-size: 12px;
+}
+
+.mobile-product-total > :nth-child(3),
+.mobile-product-total > :nth-child(5) {
+  text-align: right;
+}
+
+.mobile-order-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin: 0;
+}
+
+.mobile-order-detail-grid > div {
+  min-width: 0;
+}
+
+.mobile-order-detail-grid dd {
+  margin: 3px 0 0;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.mobile-order-detail-wide,
+.mobile-order-remark {
+  grid-column: 1 / -1;
+}
+
+.mobile-order-inline-action {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 0;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 12px;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-order-inline-action:hover {
+  text-decoration: underline;
+}
+
+.mobile-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.mobile-order-actions button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 9px;
+  color: #445066;
+  background: #fff;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mobile-order-actions button:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.mobile-order-actions svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mobile-order-more {
+  margin-left: auto;
+}
+
+.mobile-order-loading,
+.mobile-order-empty {
+  padding: 16px 8px;
+}
+
+.mobile-order-skeleton {
+  display: grid;
+  grid-template-columns: 1fr 0.7fr 0.45fr;
+  gap: 8px;
+  min-height: 74px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.mobile-order-skeleton span {
+  display: block;
+  height: 10px;
+  background: linear-gradient(90deg, #edf1f5 25%, #f8fafc 50%, #edf1f5 75%);
+  background-size: 200% 100%;
+  border-radius: 3px;
+  animation: skeleton 1.25s infinite linear;
+}
+
+.mobile-order-empty {
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.mobile-order-empty strong,
+.mobile-order-empty span {
+  display: block;
+}
+
+.mobile-order-empty strong {
+  margin-top: 11px;
+  color: #4c586b;
+  font-size: 14px;
+}
+
+.mobile-order-empty span {
+  margin-top: 5px;
+  font-size: 12px;
 }
 
 .row-action-menu {
@@ -5003,6 +5663,17 @@ svg {
     top: 12px;
     min-width: 0;
     max-width: calc(100vw - 32px);
+  }
+
+  .table-scroll {
+    display: none;
+  }
+
+  .mobile-order-list {
+    display: grid;
+    gap: 8px;
+    padding: 8px;
+    background: #f8fafc;
   }
 
   .records-toolbar {
