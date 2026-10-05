@@ -63,7 +63,13 @@
     </Teleport>
 
     <!-- 筛选工具栏 - 参考 StockRecordList 风格 -->
-    <section class="search-panel" aria-label="订单筛选">
+    <div class="search-panel-shell">
+      <section
+        id="order-search-panel"
+        class="search-panel"
+        aria-label="订单筛选"
+        :class="{ 'is-mobile-collapsed': !mobileSearchExpanded }"
+      >
       <form class="search-grid" @submit.prevent="handleFilter">
         <label class="field-group">
           <span>关键词搜索</span>
@@ -142,8 +148,25 @@
             查询
           </button>
         </div>
-      </form>
-    </section>
+        </form>
+      </section>
+
+      <button
+        class="mobile-search-toggle"
+        :class="{ expanded: mobileSearchExpanded }"
+        type="button"
+        :aria-expanded="mobileSearchExpanded"
+        aria-controls="order-search-panel"
+        :aria-label="mobileSearchExpanded ? '收起搜索' : '展开搜索'"
+        :title="mobileSearchExpanded ? '收起搜索' : '展开搜索'"
+        @click="mobileSearchExpanded = !mobileSearchExpanded"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path v-if="!mobileSearchExpanded" d="m6 9 6 6 6-6"></path>
+          <path v-else d="m6 15 6-6 6 6"></path>
+        </svg>
+      </button>
+    </div>
 
     <!-- 订单记录面板 -->
     <section class="records-panel">
@@ -1439,6 +1462,8 @@ const toggleShippingMethod = (method) => {
 }
 
 // 计算选中的发货方式显示文本
+const mobileSearchExpanded = ref(false)
+
 const selectedShippingMethodText = computed(() => {
   if (filters.value.shippingMethods.length === 0) {
     return '全部发货方式'
@@ -3162,12 +3187,20 @@ svg {
 }
 
 /* 搜索面板 */
+.search-panel-shell {
+  position: relative;
+}
+
 .search-panel {
   padding: 18px 20px;
   background: var(--panel-bg);
   border: 1px solid var(--border);
   border-radius: 7px;
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
+}
+
+.mobile-search-toggle {
+  display: none;
 }
 
 .search-grid {
@@ -4914,10 +4947,110 @@ svg {
 }
 
 @media (max-width: 780px) {
+  .search-panel-shell {
+    margin-bottom: 14px;
+    padding-bottom: 10px;
+  }
+
+  .search-panel {
+    max-height: 520px;
+    overflow: hidden;
+    transition: max-height 0.2s ease, padding 0.2s ease, border-color 0.2s ease,
+      box-shadow 0.2s ease, opacity 0.2s ease;
+  }
+
+  .search-panel.is-mobile-collapsed {
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    border-color: transparent;
+    box-shadow: none;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .mobile-search-toggle {
+    position: absolute;
+    right: 50%;
+    bottom: 0;
+    display: flex;
+    width: 36px;
+    height: 22px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: var(--text-secondary);
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-top: 0;
+    border-radius: 0 0 6px 6px;
+    cursor: pointer;
+    transform: translateX(50%);
+    transition: color 0.18s ease, background 0.18s ease;
+  }
+
+  .mobile-search-toggle:hover {
+    color: var(--accent-dark);
+    background: var(--accent-soft);
+  }
+
+  .mobile-search-toggle svg {
+    width: 16px;
+    height: 16px;
+  }
+
   .page-notice {
     top: 12px;
     min-width: 0;
     max-width: calc(100vw - 32px);
+  }
+
+  .records-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    padding: 10px 12px;
+  }
+
+  .toolbar-filters {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .material-type-slider,
+  .status-filter-slider {
+    width: 100%;
+    max-width: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .material-type-slider::-webkit-scrollbar,
+  .status-filter-slider::-webkit-scrollbar {
+    display: none;
+  }
+
+  .slider-tab {
+    flex: 0 0 auto;
+    padding: 0 12px;
+  }
+
+  .selection-count {
+    margin-left: 0;
+    padding: 0 4px;
+  }
+
+  .toolbar-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .toolbar-actions .button {
+    flex: 1 1 auto;
   }
 
   .confirm-dialog-overlay {
