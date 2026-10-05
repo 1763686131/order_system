@@ -3,11 +3,15 @@ import { DOCUMENT_TYPES } from './documentModels'
 import { useSalesDocument } from './useSalesDocument'
 import { useReturnDocument } from './useReturnDocument'
 import { usePurchaseDocument } from './usePurchaseDocument'
+import { usePurchaseOrderDocument } from './usePurchaseOrderDocument'
 import { useDocumentDraft } from './useDocumentDraft'
 
 export function useBusinessDocument(props) {
   const config = DOCUMENT_TYPES[props.documentType]
   if (!config) throw new Error(`Unknown document type: ${props.documentType}`)
+  if (props.documentType === 'purchase-order') {
+    return withDocumentDraft(props, reactive(usePurchaseOrderDocument(props)))
+  }
   if (props.documentType === 'purchase') {
     return withDocumentDraft(props, reactive({ ...usePurchaseDocument(props), config }))
   }
@@ -50,6 +54,14 @@ export function useBusinessDocument(props) {
 function withDocumentDraft(props, ui) {
   const { discardDraft } = useDocumentDraft(props, ui)
   ui.discardDraft = discardDraft
+  if (props.documentType === 'purchase-order') {
+    const save = ui.save
+    ui.save = async status => {
+      const saved = await save(status)
+      if (saved) discardDraft()
+      return saved
+    }
+  }
   const close = ui.close
   ui.close = () => {
     if (!ui.readOnly && !ui.loadFailed) discardDraft()

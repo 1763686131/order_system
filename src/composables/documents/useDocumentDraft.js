@@ -50,9 +50,12 @@ export function useDocumentDraft(props, ui) {
     if (loading || ui.loadFailed || ui.readOnly) return
     const saved = store.drafts[type]
     if (saved?.path === path) {
-      ui.form = JSON.parse(JSON.stringify(saved.form))
-      if (type === 'purchase') ui.savedDocumentId = saved.savedDocumentId ?? props.documentId
-      else ui.savedReturnId = saved.savedDocumentId ?? props.documentId
+      if (ui.restoreDraft) ui.restoreDraft(saved)
+      else {
+        ui.form = JSON.parse(JSON.stringify(saved.form))
+        if (type === 'purchase') ui.savedDocumentId = saved.savedDocumentId ?? props.documentId
+        else ui.savedReturnId = saved.savedDocumentId ?? props.documentId
+      }
       await restoreDocumentViewport(saved.viewport)
     }
     ready = true

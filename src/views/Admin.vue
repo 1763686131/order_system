@@ -86,7 +86,7 @@
           <TransitionGroup name="document-dock" tag="div" class="header-actions">
             <button v-for="draft in dockedDocuments" :key="draft.type" :data-dock-type="draft.type" :class="['document-dock-shortcut', `is-${draft.type}`, { 'is-docking': dockingDocument?.type === draft.type, 'is-arriving': receivedDockType === draft.type }]" type="button" :disabled="Boolean(dockingDocument)" :title="`返回${draft.title}`" :aria-label="`返回${draft.title}`" @click="restoreDockedDocument(draft)">
               <FilePenLine v-if="draft.type === 'edit'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
-              <FilePlus2 v-else-if="draft.type === 'sale'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
+              <FilePlus2 v-else-if="['sale', 'purchase-order'].includes(draft.type)" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <RotateCcw v-else-if="draft.type === 'sale-return'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <PackageCheck v-else class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <span class="document-dock-dot" aria-hidden="true"></span>
@@ -800,16 +800,27 @@ const dockedDocuments = computed(() => {
     const draft = documentDraftStore.drafts.purchase
     add({ type: 'purchase', title: '采购入库单', path: draft?.path })
   }
+  if (userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS)) {
+    const draft = documentDraftStore.drafts['purchase-order']
+    add({ type: 'purchase-order', title: draft?.action === 'audit' ? '采购申请审核' : '采购申请', path: draft?.path })
+  }
   if (dockingDocument.value) {
     const existingIndex = documents.findIndex(document => document.type === dockingDocument.value.type)
     if (existingIndex !== -1) documents.splice(existingIndex, 1)
     documents.push(dockingDocument.value)
   }
-  const order = ['sale', 'edit', 'sale-return', 'purchase']
+  const order = ['sale', 'edit', 'sale-return', 'purchase-order', 'purchase']
   return documents.sort((left, right) => order.indexOf(left.type) - order.indexOf(right.type))
 })
 
 const currentMenuLabel = computed(() => {
+  if (currentPath.value.startsWith('/admin/purchase/orders/')) {
+    const action = {
+      'admin-purchase-order-create': '新增', 'admin-purchase-order-edit': '修改',
+      'admin-purchase-order-audit': '审核', 'admin-purchase-order-view': '查看'
+    }[route.name] || '查看'
+    return `采购/${action}采购申请`
+  }
   if (currentPath.value.startsWith('/admin/purchase/inbound/')) {
     return `采购/${route.name === 'admin-purchase-inbound-create' ? '新增' : route.name === 'admin-purchase-inbound-edit' ? '修改' : '查看'}进货单`
   }
@@ -899,6 +910,7 @@ removeDocumentDockAfterHook = router.afterEach(async (to, from, failure) => {
 const navigateTo = (path) => router.push(path)
 
 const documentListPath = (type) => {
+  if (type === 'purchase-order') return '/admin/purchase/orders'
   if (type === 'purchase') return '/admin/purchase/inbound'
   if (type === 'sale-return') return '/admin/sales/returns'
   return '/admin/sales'
@@ -1366,7 +1378,8 @@ const logout = async () => {
   border-color: #fed7aa;
 }
 
-.document-dock-shortcut.is-purchase {
+.document-dock-shortcut.is-purchase,
+.document-dock-shortcut.is-purchase-order {
   color: #0f766e;
   background: #f0fdfa;
   border-color: #99f6e4;

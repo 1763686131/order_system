@@ -221,30 +221,30 @@ const routes = [
       {
         path: 'purchase/orders/create',
         name: 'admin-purchase-order-create',
-        component: () => import('@/components/admin/PurchaseOrderForm.vue'),
-        props: { action: 'create' },
-        meta: { requiresAuth: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.CREATE }
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: { documentType: 'purchase-order', action: 'create' },
+        meta: { requiresAuth: true, documentForm: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.CREATE }
       },
       {
         path: 'purchase/orders/edit/:id',
         name: 'admin-purchase-order-edit',
-        component: () => import('@/components/admin/PurchaseOrderForm.vue'),
-        props: route => ({ action: 'edit', documentId: Number(route.params.id) }),
-        meta: { requiresAuth: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT }
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'purchase-order', action: 'edit', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true, documentForm: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT }
       },
       {
         path: 'purchase/orders/audit/:id',
         name: 'admin-purchase-order-audit',
-        component: () => import('@/components/admin/PurchaseOrderForm.vue'),
-        props: route => ({ action: 'audit', documentId: Number(route.params.id) }),
-        meta: { requiresAuth: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT }
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'purchase-order', action: 'audit', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true, documentForm: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT }
       },
       {
         path: 'purchase/orders/:id',
         name: 'admin-purchase-order-view',
-        component: () => import('@/components/admin/PurchaseOrderForm.vue'),
-        props: route => ({ action: 'view', documentId: Number(route.params.id) }),
-        meta: { requiresAuth: true }
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'purchase-order', action: 'view', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true, documentForm: true }
       },
       {
         path: 'purchase/suppliers',

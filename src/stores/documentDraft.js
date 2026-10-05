@@ -1,14 +1,14 @@
 import { defineStore } from 'pinia'
 
 const STORAGE_KEY = 'admin_business_document_drafts'
-const TYPES = ['sale-return', 'purchase']
+const TYPES = ['sale-return', 'purchase', 'purchase-order']
 
 function readDrafts() {
   try {
     const data = JSON.parse(sessionStorage.getItem(STORAGE_KEY) || '{}')
     return Object.fromEntries(TYPES.map(type => [type, data?.[type]?.path ? data[type] : null]))
   } catch {
-    return { 'sale-return': null, purchase: null }
+    return Object.fromEntries(TYPES.map(type => [type, null]))
   }
 }
 

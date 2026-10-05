@@ -10,7 +10,7 @@
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
 | 权限/API 文档版本 | `5.5` |
-| 文档更新 | `2026-10-03` |
+| 文档更新 | `2026-10-05` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -28,7 +28,7 @@
 - 收款单审核入账、反审核回滚及客户账户流水追溯
 - 成品库存与原材料库存查询
 - 原材料采购入库和成品生产完工入库
-- 销售订单、销售退货、原材料进货共用录入界面，按路由选择单据类型和操作状态
+- 销售订单、销售退货、原材料采购申请和采购入库共用录入界面，按路由选择单据类型和操作状态
 - 入库单待审核、审核、反审核、红冲、重新启用和删除
 - 入库记录与出库记录统一流水组件
 - 回单上传、查看、旋转和删除
@@ -143,6 +143,7 @@ order_system/
 │  │  ├─ returns.py                  # 销售/原材料退货草稿、审核、退款和库存联动
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
 │  │  ├─ raw_material_products.py    # 原材料商品档案接口
+│  │  ├─ purchase_orders.py          # 原材料采购申请、审核和关联入库
 │  │  ├─ stock_inbounds.py           # 供应商、入库单、审核、库存余额和流水
 │  │  ├─ material_outbounds.py        # 原材料出库触屏辅助、后台录入、审核和库存扣减
 │  │  ├─ stores.py                   # 门店接口
@@ -173,15 +174,19 @@ order_system/
 │  │  └─ logisticsCopy.js            # 物流复制模板管理和解析接口
 │  ├─ composables/
 │  │  └─ documents/
-│  │     ├─ documentModels.js        # 单据字段配置、入库请求映射、校验和金额计算
+│  │     ├─ documentModels.js        # 单据字段配置、采购申请/入库请求映射、校验和金额计算
 │  │     ├─ useBusinessDocument.js   # 选择业务适配器，统一公共表单的状态和操作名称
+│  │     ├─ useDocumentDraft.js      # 公共单据草稿保存、恢复和滚动位置
+│  │     ├─ useDocumentValidation.js # 字段就地校验提示与定位
 │  │     ├─ useSalesDocument.js      # 销售订单草稿、复制、历史价格、结算和保存
 │  │     ├─ useReturnDocument.js     # 销售/原材料退货、退款核销、保存和打印
+│  │     ├─ usePurchaseOrderDocument.js # 原材料采购申请、逐行供应商、保存和审核
 │  │     └─ usePurchaseDocument.js   # 原材料进货、供应商、入库保存和打印
 │  ├─ stores/
 │  │  ├─ user.js                     # 登录、用户和权限状态
 │  │  ├─ order.js                    # 销售订单状态
 │  │  ├─ orderDraft.js               # 销售订单草稿
+│  │  ├─ documentDraft.js            # 退货、采购申请与采购入库的独立会话草稿
 │  │  ├─ stockDraft.js               # 入库单会话内存草稿
 │  │  └─ nomi.js                     # 辅助工具状态
 │  ├─ components/
@@ -193,7 +198,7 @@ order_system/
 │  │  │  ├─ ShippedOrderActionModal.vue #物流发货-回单上传窗口
 │  │  │  └─ NomiFloatingAI.vue       # nomi小人
 │  │  ├─ admin/
-│  │  │  ├─ BusinessDocumentForm.vue # 销售订单、销售退货、原材料进货共用录入界面
+│  │  │  ├─ BusinessDocumentForm.vue # 销售、退货、采购申请与采购入库共用录入界面
 │  │  │  ├─ MaterialOutboundAuditModal.vue # 原材料出库后台新增、修改与批量明细
 │  │  │  ├─ AvatarCropper.vue        # 员工头像拖动、缩放和裁剪弹窗
 │  │  │  ├─ DirectoryPanel.vue       # 后台通讯录搜索、部门折叠和员工状态
@@ -449,7 +454,11 @@ import {
 | --- | --- | --- |
 | `/admin/products` | 成品档案 | `/api/products` |
 | `/admin/materials` | 原材料档案 | `/api/raw-material-products`、`/api/stock-balances` |
-| `/admin/purchase/orders` | 采购订单（`PurchaseList.vue`，`mode: orders`） | 当前仅空列表占位，未接入采购订单接口 |
+| `/admin/purchase/orders` | 采购订单（`PurchaseList.vue`，`mode: orders`） | `/api/purchase-orders` |
+| `/admin/purchase/orders/create` | 新增采购申请（公共表单） | `/api/purchase-orders`、门店/供应商/原材料/单位接口 |
+| `/admin/purchase/orders/edit/:id` | 编辑采购申请（公共表单） | `/api/purchase-orders/:id` |
+| `/admin/purchase/orders/audit/:id` | 补齐采购信息并审核（公共表单） | `/api/purchase-orders/:id`、`/api/purchase-orders/:id/audit` |
+| `/admin/purchase/orders/:id` | 查看采购申请（公共表单） | `/api/purchase-orders/:id` |
 | `/admin/purchase/suppliers` | 供应商管理 | `/api/suppliers` |
 | `/admin/purchase/inbound` | 采购入库（`PurchaseList.vue`，`mode: inbound`） | `/api/stock-inbounds?type=raw-material`、`/api/suppliers`、`/api/warehouses` |
 | `/admin/purchase/inbound/create` | 新增进货单（公共表单） | `/api/stock-inbounds`、门店/供应商/仓库/原材料/单位/库存余额接口 |
@@ -479,33 +488,39 @@ import {
 
 采购订单和采购入库保留独立路由及菜单权限，共用 `src/views/admin/purchase/PurchaseList.vue`。
 路由通过 `mode: 'orders'` 或 `mode: 'inbound'` 切换标题、筛选条件、表格列和操作；页面样式写在组件内的 `<style scoped>`，切换路由会重置筛选。
-采购入库列表已接入真实原材料入库数据，并支持跳转到新增、编辑草稿、只读查看和打印页面。审核、反审核、红冲、重新启用和删除仍在“库存 / 入库记录”页面操作。采购订单尚无对应后端接口，当前保留空列表且禁用新增按钮。
+采购订单已接入 `/api/purchase-orders`，支持新增申请、编辑、审核和查看。申请阶段可暂不填写逐行供应商、单价和金额，审核时必须补齐供应商和单价。审核通过的采购订单进入采购入库列表，可据此补充仓库和应收/实收数量。采购入库保存为草稿，审核、反审核、红冲、重新启用和删除仍在“库存 / 入库记录”页面操作。
 
 ### 公共单据录入组件
 
-`src/components/admin/BusinessDocumentForm.vue` 统一表头、扩展信息、明细表、金额汇总、确认弹窗和打印控件；样式写在组件内的 `<style scoped>`。销售订单、销售退货和进货单路由直接使用该组件，退货列表 `ReturnOrderList.vue` 仍独立管理查询、审核和反审核。
+`src/components/admin/BusinessDocumentForm.vue` 统一表头、扩展信息、明细表、金额汇总、确认弹窗和打印控件；样式写在组件内的 `<style scoped>`。销售订单、销售退货、采购申请和进货单路由直接使用该组件，不再通过独立表单转接，退货列表 `ReturnOrderList.vue` 仍独立管理查询、审核和反审核。
 
 `src/composables/documents/` 保存单据业务逻辑。composable 是在组件初始化时调用的 Vue 函数，用于组织响应式状态、字段联动和生命周期；这些文件不是额外页面，也不是后端 API。
 
 | 文件 | 职责 |
 | --- | --- |
-| `documentModels.js` | 定义单据类型、字段名称和打印类型；提供日期/金额工具、进货单请求体映射、校验和行金额计算 |
+| `documentModels.js` | 定义单据类型、字段名称和打印类型；提供日期/金额工具、采购申请/进货单请求体映射、校验和行金额计算 |
 | `useBusinessDocument.js` | 按 `documentType` 选择业务模块，把表单、税务开关、行操作和打印变量转换成公共组件使用的 `ui` 接口 |
+| `useDocumentDraft.js` | 保存、恢复退货/采购申请/采购入库草稿及滚动位置，提供确认关闭或采购申请保存成功时使用的草稿清除方法 |
+| `useDocumentValidation.js` | 管理字段引用、就地校验气泡和定位 |
 | `useSalesDocument.js` | 销售订单基础数据、客户/商品搜索、客户历史价格、件数换算、内存草稿恢复、复制、收款欠款、保存和打印 |
 | `useReturnDocument.js` | 成品/原材料退货基础数据、单据回填、应退金额/本次退款/核销金额、保存、只读状态和打印 |
+| `usePurchaseOrderDocument.js` | 采购申请基础数据、申请日期与预计到货日期联动、逐行供应商、可选单价/金额、保存和审核 |
 | `usePurchaseDocument.js` | 供应商/原材料/库存选择、应收与实收数量、批次/货位、进货单加载与保存、保存后的单据 ID 和打印 |
 
 调用关系为：路由 → `BusinessDocumentForm.vue` → `useBusinessDocument.js` → 对应业务模块。公共界面复用布局，各业务模块保留自己的请求字段、金额含义和保存行为。
 
+这些 JS 文件仍由公共组件调用，是迁移后的正式业务实现，不属于待删除的旧代码。
+
 | 参数 | 含义与当前入口 |
 | --- | --- |
-| `documentType` | `sale` 为销售订单；`sale-return` 为销售退货；`purchase` 为原材料进货，使用已有入库接口，不表示采购订单 |
-| `action` | 接受 `create`、`edit`、`copy`、`view`；当前销售入口提供新增/编辑/复制，退货入口提供新增/编辑，进货入口提供新增/编辑/只读查看 |
-| `documentId` | 编辑或查看时传入的已有单据 ID |
+| `documentType` | `sale` 为销售订单；`sale-return` 为销售退货；`purchase-order` 为原材料采购申请；`purchase` 为原材料进货，使用入库接口 |
+| `action` | 接受 `create`、`edit`、`copy`、`view`、`audit`；采购申请提供新增/编辑/审核/只读查看，销售提供新增/编辑/复制，退货提供新增/编辑，进货提供新增/编辑/只读查看 |
+| `documentId` | 编辑、审核或查看时传入的已有单据 ID |
+| `purchaseOrderId` | 从采购订单发起入库时，由查询参数传入采购订单 ID，用于加载可入库明细并保留关联 |
 | `productType` | 退货商品类型，默认 `finished-product`，支持 `raw-material`；进货适配器固定使用原材料 |
 | `printOnOpen` | 入库查看路由带 `?print=1` 时，在数据加载成功后打开打印模板选择器 |
 
-销售复制入口为 `/admin/sales/create?copyFrom=<订单ID>`。后台对公共表单按 `route.fullPath` 设置组件 `key`，使路由切换后重新初始化对应业务状态；销售内存草稿恢复仍由销售适配器处理。三类单据分别使用打印模板业务类型 `sale`、`return`、`purchase`。
+销售复制入口为 `/admin/sales/create?copyFrom=<订单ID>`。后台对公共表单按 `route.fullPath` 设置组件 `key`，使路由切换后重新初始化对应业务状态；销售内存草稿恢复仍由销售适配器处理。销售、退货和进货分别使用打印模板业务类型 `sale`、`return`、`purchase`，采购申请暂不提供打印入口。
 
 进货单保存使用 `/api/stock-inbounds`，固定提交 `type: 'raw-material'` 和 `status: 'draft'`；保存不会立即增加库存，需在入库记录页面审核。首次保存返回的 ID 会用于后续修改，避免同一单据重复新增。现有入库接口没有供应商付款、应付余额或付款流水字段，因此当前进货单显示入库金额与价税合计，暂未接入付款功能。
 
