@@ -28,24 +28,30 @@
 
 ### 公共单据表单调用约定
 
-销售订单、销售退货和原材料进货页面统一使用 `src/components/admin/BusinessDocumentForm.vue`，由 `src/composables/documents/useBusinessDocument.js` 选择业务模块。界面复用不改变各单据的后端接口契约。
+销售订单、销售退货、原材料采购申请和原材料进货页面统一使用
+`src/components/admin/BusinessDocumentForm.vue`，由
+`src/composables/documents/useBusinessDocument.js` 选择业务模块。界面复用不改变各单据的后端接口契约。
 
 | `documentType` | 业务模块 | 新增/修改接口 | 主体与金额字段 | 打印模板业务类型 |
 | --- | --- | --- | --- | --- |
 | `sale` | `useSalesDocument.js` | `POST /api/orders`、`PUT /api/orders/{id}` | 客户；`discountAmount` 为折扣后金额，另有 `otherFees`、`currentPayment` | `sale` |
 | `sale-return` | `useReturnDocument.js` | `POST /api/returns`、`PUT /api/returns/{id}` | 客户；`returnAmount`、`refundAmount`，核销金额为两者差额 | `return` |
+| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、原材料明细；逐行供应商、采购人、制单人、付款金额、其它费用、结算账户和本次付款 | 暂不提供打印入口 |
 | `purchase` | `usePurchaseDocument.js` | `POST /api/stock-inbounds`、`PUT /api/stock-inbounds/{id}` | 供应商；原材料入库数量、单价、税额、价税合计 | `purchase` |
 
-公共组件的 `action`（`create`、`edit`、`copy`、`view`）和 `documentId` 是前端路由参数，不是提交给三个接口的通用字段。销售复制使用 `/admin/sales/create?copyFrom=<id>`，读取源订单后按新增接口保存；新增/编辑/复制/查看不能代替服务端的审核状态或权限校验。
+公共组件的 `action`（`create`、`edit`、`copy`、`view`）和 `documentId` 是前端路由参数，不是提交给这些业务接口的通用字段。销售复制使用 `/admin/sales/create?copyFrom=<id>`，读取源订单后按新增接口保存；新增/编辑/复制/查看不能代替服务端的审核状态或权限校验。
 
-原材料进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?type=raw-material`，并关联供应商和仓库名称；采购订单页面当前没有对应业务 API，不能用入库接口替代采购订单接口。
+采购申请路由为 `/admin/purchase/orders/create`、`/admin/purchase/orders/edit/:id`、`/admin/purchase/orders/audit/:id` 和 `/admin/purchase/orders/:id`，对应本节的 `/api/purchase-orders` 接口。审核通过后，前端通过 `/api/purchase-orders/{id}/available-inbound` 读取可入库明细，再使用带 `purchaseOrderId`、`purchaseOrderItemId` 的入库请求创建采购入库单。
+
+原材料进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?type=raw-material`，并关联供应商和仓库名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
 
 `documentModels.js` 的 `purchasePayload()` 固定提交 `type: 'raw-material'`、`status: 'draft'`，将界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。商品来源为 `/api/raw-material-products`，库存来源为 `/api/stock-balances?type=raw-material`；成品生产入库仍由库存入库弹窗处理。
 
-当前入库接口没有本次付款、结算账户扣款、供应商应付余额或付款流水字段。前端进货表单显示入库金额和价税合计；保存单据、选择打印模板均不会产生供应商付款。销售/退货的结算字段不能直接映射到入库请求。金额最终由各接口重新校验与计算。
+入库接口只负责到货数量、仓库、批次和库存过账，不负责采购订单的付款、供应商应付余额或付款流水。采购订单的付款字段只通过 `/api/purchase-orders` 保存和返回；保存采购申请或入库草稿都不会立即增加库存，必须分别完成采购订单审核和入库审核。金额最终由各接口重新校验与计算。
 
 ## 版本历史
 
+- **v5.6** (2026-10-05，采购申请与付款字段) - 新增采购订单查询、新建、编辑、删除、审核、反审核和可入库明细接口；采购明细支持逐行供应商、仓库、采购数量、可选单价和金额；新增采购人、制单人、付款金额、其它费用、结算账户、本次付款及应付汇总字段；明确采购申请、采购入库和库存审核的边界
 - **v5.5** (2026-10-03，原材料出库流程完善) - 新增后台完整录入出库单接口；原材料出库草稿支持多行原材料和成品入库明细；后台修改不受触屏端原材料白名单限制；审核接口按明细批量扣减原材料库存并批量创建成品入库；补充触屏辅助输入与后台审核边界
 - **v5.4** (2026-09-30，文档修订) - 补充公共录入组件与业务适配器的 API 对应关系；按当前实现修正入库草稿/审核、红冲、退货退款核销规则，无新增业务接口
 - **v5.3** (2026-09-26) - 物流复制模板新增复制入口和账号头像绑定，订单详情新增订单信息复制入口
@@ -3222,7 +3228,9 @@ volumes:
 
 ## 11. 供应商与入库管理
 
-本模块由 `backend/routes/stock_inbounds.py` 提供，支持原材料采购入库和成品生产完工入库。
+采购订单申请接口由 `backend/routes/purchase_orders.py` 提供，采购入库和库存过账接口由
+`backend/routes/stock_inbounds.py` 提供。本模块覆盖原材料采购申请、采购入库和成品生产完工入库，
+其中采购订单申请接口详见上方 11.0，以下接口负责供应商档案、入库单和库存流水。
 
 入库单有以下两种类型：
 
@@ -3237,6 +3245,180 @@ volumes:
 - `cancelled`：已红冲/作废，未审核单据可红冲，已红冲单据可重新启用
 
 当前进货表单使用 `draft` 保存。新建和修改接口拒绝直接传入 `reviewed` 或 `posted`；写入库存必须调用 `POST /api/stock-inbounds/{id}/audit`，反审核调用同路径的 `DELETE`。供应商付款、供应商应付余额和付款流水不属于当前入库接口字段。
+
+### 11.0 采购订单申请、审核与关联入库
+
+采购订单由 `backend/routes/purchase_orders.py` 提供，表示“申请采购什么物料”，
+采购入库由本节后续的 `stock-inbounds` 接口提供，表示“实际收到多少并写入哪个仓库”。
+两类单据分开保存、分开审核，采购申请保存或审核都不会直接增加库存。
+
+采购订单状态如下：
+
+| 状态 | 页面含义 | 可执行操作 |
+| --- | --- | --- |
+| `draft` | 草稿 | 编辑、提交待审核、删除 |
+| `pending` | 待审核 | 审核、编辑、删除 |
+| `approved` | 已审核，尚未完成入库 | 发起采购入库、反审核（没有入库数量时） |
+| `partial` | 部分入库 | 继续采购入库 |
+| `completed` | 已完成入库 | 只读 |
+| `cancelled` | 已取消 | 只读 |
+| `rejected` | 已驳回（兼容状态） | 由业务页面按权限处理 |
+
+推荐业务流程为：员工填写采购申请并保存为 `draft` 或 `pending` →
+审核人补齐每行供应商和采购单价并调用审核接口 →
+从已审核订单打开采购入库，补充仓库、应收数量和实收数量 →
+入库单审核后写入库存，并同步采购订单的已入库数量和状态。
+
+#### 采购订单接口一览
+
+| 方法 | 地址 | 说明 | 权限 |
+| --- | --- | --- | --- |
+| `GET` | `/api/purchase-orders?status=<status>` | 查询采购订单列表，可按状态筛选 | 登录会话 |
+| `GET` | `/api/purchase-orders/{id}` | 查询采购订单详情和明细 | 登录会话 |
+| `GET` | `/api/purchase-orders/{id}/available-inbound` | 查询可关联入库的已审核订单 | 登录会话 |
+| `POST` | `/api/purchase-orders` | 新建采购申请 | `admin.purchase.order.create` |
+| `PUT` | `/api/purchase-orders/{id}` | 修改 `draft`/`pending` 订单 | `admin.purchase.order.edit` |
+| `DELETE` | `/api/purchase-orders/{id}` | 删除未审核订单 | `admin.purchase.order.delete` |
+| `POST` | `/api/purchase-orders/{id}/audit` | 审核待审核订单 | `admin.purchase.order.audit` |
+| `DELETE` | `/api/purchase-orders/{id}/audit` | 反审核尚未入库的已审核订单 | `admin.purchase.order.reverse_audit` |
+
+`status` 只能传 `draft`、`pending`、`approved`、`partial`、`completed`、
+`cancelled` 或 `rejected`。新建和编辑接口只允许保存 `draft` 或 `pending`；
+`approved`、`partial`、`completed` 由审核和采购入库流程自动产生。
+
+#### 新建或修改采购申请
+
+- **URL**：`POST /api/purchase-orders` 或 `PUT /api/purchase-orders/{id}`
+- **请求格式**：JSON
+- **说明**：明细中的供应商、单价和金额可以在申请阶段留空，审核时必须补齐供应商和单价。
+  采购数量必须大于 `0`；空白行会被忽略，但至少要保留一条有效明细。
+
+**请求示例**：
+
+```json
+{
+  "orderNo": "",
+  "orderDate": "2026-10-05",
+  "expectedDate": "2026-10-12",
+  "storeId": 1,
+  "purchaser": "采购员",
+  "creator": "当前账户",
+  "paymentAmount": null,
+  "otherFees": 0,
+  "settlementAccount": "对公账户",
+  "currentPayment": 0,
+  "remark": "门店原材料申请",
+  "status": "pending",
+  "items": [
+    {
+      "productId": 12,
+      "productCode": "RM-012",
+      "productName": "果糖原浆",
+      "warehouseId": 2,
+      "specification": "25kg/桶",
+      "unit": "桶",
+      "orderedQty": 10,
+      "supplierId": null,
+      "unitPrice": null,
+      "amount": null,
+      "remark": ""
+    }
+  ]
+}
+```
+
+**表头字段**：
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `orderNo` | string | 否 | 为空时由后端按 `CG + 日期 + ID` 生成 |
+| `orderDate` | string | 是 | 申请日期，建议 `YYYY-MM-DD` |
+| `expectedDate` | string | 否 | 预计到货日期；前端默认申请日期后 7 天 |
+| `storeId` | integer | 否 | 申请门店 ID；明细仓库如填写必须属于该门店 |
+| `purchaser` | string | 否 | 采购人；申请阶段可先留空 |
+| `creator` | string | 否 | 制单人名称快照 |
+| `paymentAmount` | number/null | 否 | 手工指定本单采购金额；为空时按明细金额合计计算 |
+| `otherFees` | number | 否 | 其它费用，默认 `0`，不能为负数 |
+| `settlementAccount` | string | 否 | 结算账户名称快照 |
+| `currentPayment` | number | 否 | 本次付款，默认 `0`，不能为负数 |
+| `remark` | string | 否 | 单据备注，最多 500 字符 |
+| `status` | string | 否 | 默认 `draft`；提交审核使用 `pending` |
+| `items` | array | 是 | 至少一条有效采购明细 |
+
+**明细字段**：
+
+| 字段 | 类型 | 申请阶段 | 审核阶段 | 说明 |
+| --- | --- | --- | --- | --- |
+| `productId` | integer | 否* | 否* | 原材料 ID；填写后由后端补全名称、编码、规格和单位 |
+| `productName` | string | 是* | 是* | 物料名称快照；`productId` 和名称至少填写一个 |
+| `warehouseId` | integer | 否 | 否 | 申请阶段可预填仓库，入库前仍可调整 |
+| `orderedQty` | number | 是 | 是 | 采购数量，必须大于 `0` |
+| `supplierId` | integer | 否 | 是 | 逐行采购供应商，必须为启用供应商 |
+| `unitPrice` | number | 否 | 是 | 采购单价，不能为负数 |
+| `amount` | number | 否 | 否 | 行金额；省略时由 `orderedQty × unitPrice` 计算 |
+| `receivedQty` | number | 否 | 否 | 已入库数量，范围为 `0` 到采购数量 |
+| `remark` | string | 否 | 否 | 明细备注 |
+
+带 `*` 的两个物料字段至少填写一个。供应商是明细级字段，同一采购订单可以包含多个供应商。
+`supplierId` 全部相同且全部填写时，响应中的主 `supplierId` 会同步为该供应商；供应商不一致时主字段为空，
+以明细供应商为准。
+
+**应付字段计算**：
+
+```text
+orderPayable = (paymentAmount（有值时）或 totalAmount) + otherFees
+currentPayable = max(0, orderPayable - currentPayment)
+supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额合计
+```
+
+`supplierPayable` 是供应商主档当前余额的查询汇总，不会因为保存采购申请或采购入库草稿自动入账。
+供应商付款流水仍需通过后续财务业务实现。
+
+**成功响应**：新建返回 HTTP `201`，修改返回 HTTP `200`。
+
+```json
+{
+  "success": true,
+  "id": 18,
+  "purchaseOrder": {
+    "orderId": 18,
+    "orderNo": "CG202610050018",
+    "orderDate": "2026-10-05",
+    "expectedDate": "2026-10-12",
+    "storeId": 1,
+    "status": "pending",
+    "purchaser": "采购员",
+    "creator": "当前账户",
+    "paymentAmount": null,
+    "otherFees": 0,
+    "settlementAccount": "对公账户",
+    "currentPayment": 0,
+    "totalQuantity": 10,
+    "totalAmount": 0,
+    "orderPayable": 0,
+    "currentPayable": 0,
+    "supplierPayable": 0,
+    "items": []
+  }
+}
+```
+
+列表接口返回采购订单数组，详情接口直接返回单个采购订单对象；每条明细还会返回
+`orderItemId`、`warehouseName`、`supplierName`、`remainingQty` 和 `receivedQty`。
+
+#### 审核、反审核和关联入库
+
+- `POST /api/purchase-orders/{id}/audit` 只接受 `pending` 订单。可以不带请求体，审核已保存的明细；
+  如果需要在审核时修改表头或明细，应提交包含 `items` 的完整请求，以补齐供应商、单价、仓库或付款信息。
+- 审核会重新校验每行采购数量、启用供应商和采购单价，成功后状态变为 `approved`，并记录审核人和审核时间。
+- `DELETE /api/purchase-orders/{id}/audit` 只允许反审核 `approved` 订单；只要已有入库数量就返回 HTTP `409`。
+- `GET /api/purchase-orders/{id}/available-inbound` 只允许 `approved` 或 `partial` 订单。
+  入库明细应把采购明细 ID 写入 `purchaseOrderItemId`，并把采购订单 ID 写入 `purchaseOrderId`。
+- 关联入库审核时，实收数量不能超过采购订单剩余数量；成功后订单自动变为 `partial` 或 `completed`。
+  入库反审核会回退已入库数量并恢复订单状态。
+
+常见错误状态码：订单不存在 `404`；状态不允许当前操作 `409`；字段校验失败 `400`；
+缺少对应后台权限 `403`。
 
 ### 11.1 获取供应商列表
 
@@ -3504,6 +3686,7 @@ volumes:
 | `storeId` | integer | 否 | 否 | 门店 ID |
 | `warehouseId` | integer | 是 | 是 | 默认目标仓库 ID，必须存在；未指定明细仓库时使用此仓库 |
 | `supplierId` | integer | 否 | 原材料必填 | 供应商 ID，原材料审核时必须有效且为 `active` |
+| `purchaseOrderId` | integer | 否 | 否 | 关联已审核采购订单；关联采购申请入库时使用 |
 | `workshop` | string | 否 | 否 | 成品生产车间/班组，当前为选填 |
 | `inspector` | string | 否 | 否 | 检验员 |
 | `qualityNo` | string | 否 | 否 | 质检单号 |
@@ -3517,6 +3700,7 @@ volumes:
 | 参数 | 类型 | 审核必填 | 说明 |
 |------|------|----------|------|
 | `productId` | integer | 业务必填 | 物料 ID；按入库类型关联 `products` 或 `raw_material_products` |
+| `purchaseOrderItemId` | integer | 关联入库时必填 | 关联采购订单明细 ID；审核关联入库时用于校验剩余数量 |
 | `productCode` | string | 否 | 物料编码；请求也兼容 `code` |
 | `productName` | string | 否 | 物料名称快照；请求也兼容 `name`，前端选择物料后自动填充 |
 | `warehouseId` | integer | 否 | 该行目标仓库 ID，必须存在；省略时继承单据的 `warehouseId`，响应也返回此字段；审核按各行仓库写入库存和流水 |
@@ -3554,6 +3738,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
     "documentDate": "2026-09-08",
     "type": "raw-material",
     "status": "draft",
+    "purchaseOrderId": 18,
     "totalQuantity": 98.5,
     "totalTax": 158.09,
     "totalAmount": 1374.13,
@@ -3564,6 +3749,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
         "inbound_id": 12,
         "line_no": 1,
         "product_type": "raw-material",
+         "purchaseOrderItemId": 42,
         "productId": 3,
         "productCode": "RM-003",
         "productName": "轻质碳酸钙",
@@ -4166,6 +4352,10 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 | 退货单反审核 | 加回原 `refundAmount` |
 
 例如客户应收 5000 元，退货实退金额 500 元、本次退款 0 元：客户应收核销为 4500 元，银行账户余额不变化。
+
+`isDefault` 表示门店默认结算账户。每个门店最多一个默认账户，新增或修改时提交
+`isDefault: true` 会在同一事务内取消旧默认标记；接口按默认账户优先返回。订单录入、
+收款历史和退货单录入选择门店后会自动带出默认账户，没有默认账户时回退到该门店第一条账户。
 
 ---
 
@@ -5450,6 +5640,8 @@ CREATE TABLE logistics_copy_settings (
 - `operation_logs` - 操作人快照、模块/动作、目标单据、来源、请求元数据和结果
 - `logistics_copy_settings` - 物流列表复制字段的共享配置 JSON 和更新时间
 - `suppliers` - 供应商基础资料表
+- `purchase_orders` - 原材料采购申请/订单表，保存审核和应付快照
+- `purchase_order_items` - 采购订单明细、逐行供应商、仓库和已入库数量
 - `stock_inbounds` - 入库单头与状态、汇总信息表
 - `stock_inbound_items` - 入库单明细表
 - `material_outbound_settings` - 员工触屏端默认门店、仓库和原材料配置
@@ -5497,6 +5689,12 @@ ON suppliers(supplier_code)
 WHERE supplier_code IS NOT NULL AND trim(supplier_code) <> '';
 CREATE INDEX idx_suppliers_store_status
 ON suppliers(store_id, status);
+CREATE INDEX idx_purchase_orders_status_date
+ON purchase_orders(status, order_date DESC, id DESC);
+CREATE INDEX idx_purchase_orders_supplier
+ON purchase_orders(supplier_id, order_date DESC);
+CREATE INDEX idx_purchase_order_items_order
+ON purchase_order_items(order_id, line_no, id);
 CREATE INDEX idx_stock_inbounds_filter
 ON stock_inbounds(receipt_type, status, document_date DESC);
 CREATE INDEX idx_stock_inbound_items_inbound
@@ -5647,6 +5845,20 @@ ON print_templates(is_default);
 
 这些权限只对启用了 `canAccessAdmin` 的后台账号生效。超级管理员自动拥有全部权限。升级时，已经拥有 `admin.route.sales.orders` 的非超级管理员角色会一次性继承全部销售订单操作权限，以保持原有操作能力，后续可在角色组管理中逐项移除。
 
+### 采购订单操作权限
+
+| 权限编码 | 控制按钮或操作 |
+|---|---|
+| `admin.purchase.order.create` | 新建采购申请 |
+| `admin.purchase.order.edit` | 编辑草稿或待审核采购申请 |
+| `admin.purchase.order.delete` | 删除草稿或待审核采购申请 |
+| `admin.purchase.order.audit` | 补齐逐行供应商/单价并审核采购订单 |
+| `admin.purchase.order.reverse_audit` | 反审核尚未发生入库的采购订单 |
+
+采购订单列表入口另由 `admin.route.purchase.orders` 控制；采购入库列表入口使用
+`admin.route.purchase.inbound`，入库过账和反审核使用库存入库审核权限
+`admin.inventory.stock_inbound.audit`。页面入口权限不自动代替接口操作权限。
+
 ### 操作日志权限
 
 | 权限编码 | 控制范围 |
@@ -5755,7 +5967,9 @@ SQLite 支持**多读一写**模式：
 
 ---
 
-## 更新日志
+## 历史更新明细
+
+当前接口版本概览见文档开头的“版本历史”；本节保留早期版本的详细变更记录。
 
 ### v5.0.0 (2026-09-23)
 - 新增操作日志列表、筛选、分页、详情和授权清空 API
@@ -5856,7 +6070,6 @@ SQLite 支持**多读一写**模式：
 ## 技术支持
 
 如有问题，请联系开发团队或查看：
-- 项目文档: [README_SQLITE.md](../README_SQLITE.md)
-- 迁移文档: [MIGRATION_SQLITE.md](../MIGRATION_SQLITE.md)
-- 测试脚本: [backend/test_sqlite.py](../backend/test_sqlite.py)
-默认账户规则：`isDefault` 表示门店默认结算账户。每个门店最多一个默认账户，新增或修改时提交 `isDefault: true` 会在同一事务内取消旧默认标记；接口按默认账户优先返回。订单录入、收款历史和退货单录入选择门店后会自动带出默认账户，没有默认账户时回退到该门店第一条账户。
+- 项目说明：[README.md](../README.md)
+- 数据迁移：[本文数据迁移章节](#数据迁移)
+- 后端测试目录：[backend/tests/](../backend/tests/)
