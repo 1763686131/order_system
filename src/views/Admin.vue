@@ -1,7 +1,7 @@
 <template>
   <div class="admin-container" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
     <!-- 左侧边栏 -->
-    <aside class="sidebar">
+    <aside id="admin-sidebar" class="sidebar">
       <div class="sidebar-header">
         <div class="system-name">后台管理系统</div>
       </div>
@@ -66,18 +66,33 @@
       </nav>
     </aside>
 
+    <button
+      v-if="isMobileViewport && !isSidebarCollapsed"
+      class="sidebar-backdrop"
+      type="button"
+      aria-label="关闭菜单"
+      @click="closeSidebar"
+    ></button>
+
     <!-- 右侧主体区域 -->
     <div class="main-wrapper">
       <!-- 顶部栏 -->
       <header class="top-header" :class="{ 'is-document-docking': Boolean(dockingDocument) }">
         <div class="header-left">
-          <button class="sidebar-toggle-btn" @click="toggleSidebar" :title="isSidebarCollapsed ? '展开菜单' : '收起菜单'">
+          <button
+            class="sidebar-toggle-btn"
+            type="button"
+            aria-controls="admin-sidebar"
+            :aria-expanded="!isSidebarCollapsed"
+            @click="toggleSidebar"
+            :title="isSidebarCollapsed ? '展开菜单' : '收起菜单'"
+          >
             <span v-if="!isSidebarCollapsed" class="hamburger-icon">
               <span class="line"></span>
               <span class="line"></span>
               <span class="line"></span>
             </span>
-            <span v-else class="arrow-icon">←</span>
+            <span v-else class="arrow-icon">→</span>
           </button>
           <h2 class="header-page-title">{{ currentMenuLabel }}</h2>
         </div>
@@ -95,7 +110,7 @@
           </TransitionGroup>
 
           <div class="header-icons">
-            <button class="icon-btn" title="系统公告">
+            <button v-if="!isMobileViewport" class="icon-btn" title="系统公告">
               <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 2L2 7l10 5 10-5-10-5z"/>
                 <path d="M2 17l10 5 10-5"/>
@@ -103,7 +118,7 @@
               </svg>
             </button>
             <button
-              v-if="canOpenLogisticsCopySettings"
+              v-if="canOpenLogisticsCopySettings && !isMobileViewport"
               class="icon-btn"
               type="button"
               title="物流复制字段设置"
@@ -131,6 +146,7 @@
 
             <DirectoryPanel
               ref="directoryPanelRef"
+              class="mobile-directory-menu"
               @open-change="handleDirectoryOpenChange"
               @open-chat="openChat"
             />
@@ -219,6 +235,51 @@
                   role="menu"
                   aria-label="账户操作"
                 >
+                  <template v-if="isMobileViewport">
+                    <button
+                      class="account-menu-item account-menu-mobile-action"
+                      type="button"
+                      role="menuitem"
+                      @click="closeAccountMenu"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 3v18M3 12h18"/>
+                        <path d="M5 5h14v14H5z"/>
+                      </svg>
+                      <span>系统公告</span>
+                    </button>
+
+                    <button
+                      v-if="canOpenLogisticsCopySettings"
+                      class="account-menu-item account-menu-mobile-action"
+                      type="button"
+                      role="menuitem"
+                      @click="openLogisticsCopySettings"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 7h10M18 7h2M4 17h2M10 17h10"></path>
+                        <circle cx="16" cy="7" r="2"></circle>
+                        <circle cx="8" cy="17" r="2"></circle>
+                      </svg>
+                      <span>物流复制字段设置</span>
+                    </button>
+
+                    <button
+                      class="account-menu-item account-menu-mobile-action"
+                      type="button"
+                      role="menuitem"
+                      @click="directoryPanelRef?.open?.(); closeAccountMenu()"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M7 3h11a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z"/>
+                        <path d="M5 8H3M5 12H3M5 16H3"/>
+                        <circle cx="13" cy="9" r="2.2"/>
+                        <path d="M9.5 17c.5-2.1 1.7-3.2 3.5-3.2s3 1.1 3.5 3.2"/>
+                      </svg>
+                      <span>通讯录</span>
+                    </button>
+                  </template>
+
                   <button
                     class="account-menu-item account-menu-logout"
                     type="button"
@@ -444,16 +505,41 @@ const handleAccountMenuClickOutside = event => {
 }
 
 // 侧边栏折叠状态
-const isSidebarCollapsed = ref(false)
+const sidebarMediaQuery = '(max-width: 780px)'
+const isMobileViewport = ref(
+  typeof window !== 'undefined' && window.matchMedia(sidebarMediaQuery).matches
+)
+const isSidebarCollapsed = ref(isMobileViewport.value)
+let sidebarMediaQueryList = null
 
 // 切换侧边栏
 const toggleSidebar = () => {
   isSidebarCollapsed.value = !isSidebarCollapsed.value
 }
 
+const closeSidebar = () => {
+  isSidebarCollapsed.value = true
+}
+
+const syncSidebarWithViewport = event => {
+  const isMobile = typeof event?.matches === 'boolean'
+    ? event.matches
+    : window.matchMedia(sidebarMediaQuery).matches
+
+  isMobileViewport.value = isMobile
+  isSidebarCollapsed.value = isMobile
+}
+
 // 注册全局方法供子组件调用
 onMounted(() => {
   document.addEventListener('pointerdown', handleAccountMenuClickOutside)
+  sidebarMediaQueryList = window.matchMedia(sidebarMediaQuery)
+  if (typeof sidebarMediaQueryList.addEventListener === 'function') {
+    sidebarMediaQueryList.addEventListener('change', syncSidebarWithViewport)
+  } else {
+    sidebarMediaQueryList.addListener?.(syncSidebarWithViewport)
+  }
+  syncSidebarWithViewport(sidebarMediaQueryList)
 
   window.triggerShippedActionModal = (orderId, action) => {
     if (shippedActionModal.value) {
@@ -465,6 +551,11 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('pointerdown', handleAccountMenuClickOutside)
+  if (typeof sidebarMediaQueryList?.removeEventListener === 'function') {
+    sidebarMediaQueryList.removeEventListener('change', syncSidebarWithViewport)
+  } else {
+    sidebarMediaQueryList?.removeListener?.(syncSidebarWithViewport)
+  }
   removeDocumentDockGuard()
   removeDocumentDockAfterHook()
   clearTimeout(dockFeedbackTimer)
@@ -907,7 +998,10 @@ removeDocumentDockAfterHook = router.afterEach(async (to, from, failure) => {
   release?.()
 })
 
-const navigateTo = (path) => router.push(path)
+const navigateTo = (path) => {
+  if (isMobileViewport.value) closeSidebar()
+  return router.push(path)
+}
 
 const documentListPath = (type) => {
   if (type === 'purchase-order') return '/admin/purchase/orders'
@@ -986,6 +1080,11 @@ const logout = async () => {
 
 .admin-container.sidebar-collapsed .main-wrapper {
   margin-left: 0;
+}
+
+/* 移动端侧边栏展开时的遮罩 */
+.sidebar-backdrop {
+  display: none;
 }
 
 /* 左侧边栏样式 */
@@ -1723,6 +1822,15 @@ const logout = async () => {
   transition: background 0.18s ease, color 0.18s ease;
 }
 
+.account-menu-mobile-action {
+  color: var(--text-secondary);
+}
+
+.account-menu-mobile-action:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+}
+
 .account-menu-item svg {
   width: 17px;
   height: 17px;
@@ -1790,10 +1898,26 @@ const logout = async () => {
     top: 0;
     bottom: 0;
     z-index: 1000;
+    width: min(240px, 82vw);
+    transform: translateX(0);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
   }
 
   .admin-container.sidebar-collapsed .sidebar {
-    width: 0;
+    width: min(240px, 82vw);
+    transform: translateX(-100%);
+    box-shadow: none;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 900;
+    padding: 0;
+    border: 0;
+    background: rgba(15, 23, 42, 0.34);
+    cursor: pointer;
   }
 
   .main-wrapper {
@@ -1835,12 +1959,22 @@ const logout = async () => {
     display: none;
   }
 
+  .account-menu-panel {
+    width: min(220px, calc(100vw - 24px));
+  }
+
+  :deep(.mobile-directory-menu .directory-trigger) {
+    display: none;
+  }
+
   .main-content {
     padding: 12px;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar-backdrop,
   .document-dock-shortcut.is-docking::after,
   .document-dock-shortcut.is-arriving,
   .document-dock-shortcut.is-arriving::after,

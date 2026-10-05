@@ -246,6 +246,13 @@ const toggleDirectory = () => {
   loadDirectory()
 }
 
+const openDirectory = () => {
+  if (directoryOpen.value) return
+  directoryOpen.value = true
+  emit('open-change', true)
+  loadDirectory()
+}
+
 const toggleDirectoryDepartment = departmentId => {
   if (directorySearch.value) return
   expandedDirectoryDepartments.value = expandedDirectoryDepartments.value.includes(departmentId)
@@ -291,6 +298,7 @@ const handleDirectoryClickOutside = event => {
 }
 
 defineExpose({
+  open: openDirectory,
   close: closeDirectory,
   reload: loadDirectory
 })
