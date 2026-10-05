@@ -56,14 +56,14 @@
         <div class="products-table-wrapper">
           <table class="products-table">
             <colgroup>
-              <col style="width: 44px" /><col style="width: 66px" /><col v-if="isPurchaseOrder" style="width: 150px" /><col v-if="isPurchaseOrder" style="width: 120px" /><col style="width: 220px" /><col v-if="isPurchaseOrder" style="width: 110px" /><col style="width: 130px" /><col style="width: 70px" />
+              <col style="width: 40px" /><col style="width: 54px" /><col v-if="isPurchaseOrder" style="width: 125px" /><col v-if="isPurchaseOrder" style="width: 88px" /><col style="width: 170px" /><col v-if="isPurchaseOrder" style="width: 82px" /><col style="width: 105px" /><col style="width: 55px" />
               <template v-if="!isPurchaseOrder"><col style="width: 130px" /><col style="width: 95px" /><col style="width: 90px" /></template>
-              <col style="width: 100px" /><col v-if="isPurchaseOrder" style="width: 180px" /><col style="width: 100px" />
+              <col style="width: 88px" /><col v-if="isPurchaseOrder" style="width: 125px" /><col style="width: 88px" />
               <template v-if="ui.taxEnabled"><col style="width: 80px" /><col style="width: 110px" /></template>
               <col style="width: 110px" />
               <template v-if="ui.taxEnabled"><col v-if="!isSale" style="width: 100px" /><col style="width: 110px" /></template>
               <template v-if="isPurchase"><col style="width: 140px" /><col style="width: 110px" /></template>
-              <col style="width: 180px" />
+              <col style="width: 110px" />
             </colgroup>
             <thead><tr>
               <th>序号</th><th>操作</th><th v-if="isPurchaseOrder">所属仓库</th><th v-if="isPurchaseOrder">分类</th><th>{{ isPurchaseOrder ? '商品信息' : isMaterial ? '物料信息' : '商品信息' }}<b v-if="isPurchaseOrder"> *</b></th><th v-if="isPurchaseOrder">编码</th><th>规格型号</th><th>单位</th>
@@ -412,7 +412,7 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .business-document-form[data-document-type="purchase-order"] .finance-row-full,
 .business-document-form[data-document-type="purchase-order"] .finance-row { padding: 14px 20px; }
 .business-document-form[data-document-type="purchase-order"] b { color: #dc3545; }
-.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 1680px; }
+.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 0; width: 100%; }
 .business-document-form[data-document-type="purchase-order"] .products-table td { font-size: 12px; }
 .business-document-form[data-document-type="purchase-order"] .products-table td input,
 .business-document-form[data-document-type="purchase-order"] .products-table td select { height: 28px; }
