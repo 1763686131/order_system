@@ -367,11 +367,11 @@ export function useSalesDocument(props) {
       ...restoredFormData
     }
     formData.value.creator = currentCreatorName.value
-    formData.value.items = (formData.value.items || []).map(item => ({
+    formData.value.items = padBlankSalesRows((formData.value.items || []).map(item => ({
       ...item,
       showDropdown: false,
       filteredProducts: []
-    }))
+    })))
     showTaxColumns.value = Boolean(draft.showTaxColumns)
     normalizeTaxRows(showTaxColumns.value, true)
   
@@ -804,31 +804,42 @@ export function useSalesDocument(props) {
     }
   }
   
+  // 明细行结构：新增/清空/插入行共用，避免字段不一致
+  const createBlankSalesItem = () => ({
+    productId: '',
+    goodsName: '',
+    spec: '',
+    unit: '',
+    warehouseId: '',
+    warehouseName: '',
+    currentStock: null,
+    packages: null,
+    quantity: null,
+    price: null,
+    taxRate: null,
+    taxIncludedPrice: null,
+    amount: null,
+    totalAmount: null,
+    remark: '',
+    showDropdown: false,
+    filteredProducts: [],
+    unitConversions: [],
+    conversionRate: null,
+    historyPriceLoading: false,
+    historyPriceRequestKey: ''
+  })
+  
+  // 最低展示 8 行：实际明细超过 8 行时按实际条数展示
+  const MIN_SALES_ITEM_ROWS = 8
+  const createBlankSalesRows = count => Array.from({ length: count }, createBlankSalesItem)
+  const padBlankSalesRows = items => {
+    while (items.length < MIN_SALES_ITEM_ROWS) items.push(createBlankSalesItem())
+    return items
+  }
+  
   // 初始化空白行
   function initEmptyRows() {
-    formData.value.items = Array.from({ length: 8 }, () => ({
-      productId: '',
-      goodsName: '',
-      spec: '',
-      unit: '',
-      warehouseId: '',
-      warehouseName: '',
-      currentStock: null,
-      packages: null,
-      quantity: null,
-      price: null,
-      taxRate: null,
-      taxIncludedPrice: null,
-      amount: null,
-      totalAmount: null,
-      remark: '',
-      showDropdown: false,
-      filteredProducts: [],
-      unitConversions: [],
-      conversionRate: null,
-      historyPriceLoading: false,
-      historyPriceRequestKey: ''
-    }))
+    formData.value.items = createBlankSalesRows(MIN_SALES_ITEM_ROWS)
     // 新建订单首次显示按明细计算的合计，此时未手动修改
     totalPackages.value = totalPackagesCalculated.value
     totalPackagesManuallyEdited.value = false
@@ -1018,30 +1029,8 @@ export function useSalesDocument(props) {
   
           console.log('商品明细填充完成，items:', formData.value.items)
   
-          // 编辑模式：在已有数据基础上增加3行空行
-          for (let i = 0; i < 3; i++) {
-            formData.value.items.push({
-              productId: '',
-              goodsName: '',
-              spec: '',
-              unit: '',
-              warehouseId: '',
-              warehouseName: '',
-              currentStock: null,
-              packages: null,
-              quantity: null,
-              price: null,
-              taxRate: null,
-              taxIncludedPrice: null,
-              amount: null,
-              totalAmount: 0,
-              remark: '',
-              showDropdown: false,
-              filteredProducts: [],
-              unitConversions: [],
-              conversionRate: null
-            })
-          }
+          // 编辑/复制：保留实际明细，不足 8 行时补齐空白行；已审核只读单据不补行
+          if (!readOnly.value) padBlankSalesRows(formData.value.items)
   
           // 重新查询每个商品的当前库存
           for (let item of formData.value.items) {
@@ -1149,27 +1138,7 @@ export function useSalesDocument(props) {
   
   // 清空商品列表
   const clearProductItems = () => {
-    formData.value.items = Array.from({ length: 8 }, () => ({
-      productId: '',
-      goodsName: '',
-      spec: '',
-      unit: '',
-      warehouseId: '',
-      warehouseName: '',
-      currentStock: null,
-      packages: null,
-      quantity: null,
-      price: null,
-      taxRate: null,
-      taxIncludedPrice: null,
-      amount: null,
-      totalAmount: null,
-      remark: '',
-      showDropdown: false,
-      filteredProducts: [],
-      unitConversions: [],
-      conversionRate: null
-    }))
+    formData.value.items = createBlankSalesRows(MIN_SALES_ITEM_ROWS)
   }
   
   // 加载客户欠款
@@ -1557,27 +1526,7 @@ export function useSalesDocument(props) {
   
   // 添加行
   const addRow = (index) => {
-    formData.value.items.splice(index + 1, 0, {
-      productId: '',
-      goodsName: '',
-      spec: '',
-      unit: '',
-      warehouseId: '',
-      warehouseName: '',
-      currentStock: null,
-      packages: null,
-      quantity: null,
-      price: null,
-      taxRate: null,
-      taxIncludedPrice: null,
-      amount: null,
-      totalAmount: null,
-      remark: '',
-      showDropdown: false,
-      filteredProducts: [],
-      unitConversions: [],
-      conversionRate: null
-    })
+    formData.value.items.splice(index + 1, 0, createBlankSalesItem())
   }
   
   // 删除行
