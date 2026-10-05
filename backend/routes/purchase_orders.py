@@ -135,6 +135,15 @@ def _normalize_items(conn, raw_items, existing_items=None):
             raise ValueError("采购金额不能为负数")
         existing_id = _optional_int(raw.get("id", raw.get("orderItemId")), "明细ID")
         existing = existing_by_id.get(existing_id or -1)
+        supplier_value = raw.get(
+            "supplierId",
+            raw.get("supplier_id", existing.get("supplier_id") if existing else None),
+        )
+        supplier_id = _optional_int(supplier_value, "明细供应商ID")
+        if supplier_id is not None and not conn.execute(
+            "SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)
+        ).fetchone():
+            raise ValueError("明细供应商不存在或已停用")
         received = _number(
             raw.get("receivedQty", raw.get("received_qty", existing.get("received_qty", 0) if existing else 0))
         )
@@ -146,6 +155,7 @@ def _normalize_items(conn, raw_items, existing_items=None):
                 "line_no": len(normalized) + 1,
                 "product_type": "raw-material",
                 "product_id": product_id,
+                "supplier_id": supplier_id,
                 "product_code": product_code,
                 "product_name": product_name,
                 "specification": specification,
@@ -166,11 +176,10 @@ def _order_values(conn, data, existing=None):
     existing = existing or {}
     order_date = _text(data.get("orderDate", data.get("order_date", existing.get("order_date"))), 20)
     if not order_date:
-        raise ValueError("请选择采购日期")
-    supplier_id = _required_int(
-        data.get("supplierId", data.get("supplier_id", existing.get("supplier_id"))), "供应商"
-    )
-    if not conn.execute(
+        raise ValueError("请选择申请日期")
+    supplier_value = data.get("supplierId", data.get("supplier_id", existing.get("supplier_id")))
+    supplier_id = _optional_int(supplier_value, "供应商ID")
+    if supplier_id is not None and not conn.execute(
         "SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)
     ).fetchone():
         raise ValueError("供应商不存在或已停用")
@@ -178,9 +187,21 @@ def _order_values(conn, data, existing=None):
     if requested_status not in ("draft", "pending"):
         raise ValueError("新建或编辑采购订单只能保存为草稿或待审核")
     items = _normalize_items(conn, data.get("items"), existing.get("_items"))
+    # Keep existing callers that submit one master supplier compatible.
+    if supplier_id is not None:
+        for item in items:
+            if item["supplier_id"] is None:
+                item["supplier_id"] = supplier_id
+    item_suppliers = {item["supplier_id"] for item in items if item["supplier_id"] is not None}
+    supplier_id = (
+        next(iter(item_suppliers))
+        if len(item_suppliers) == 1 and all(item["supplier_id"] is not None for item in items)
+        else None
+    )
     total_quantity = sum(Decimal(str(item["ordered_qty"])) for item in items)
     total_amount = sum(
-        Decimal(str(item["amount"])) for item in items if item["amount"] is not None
+        (Decimal(str(item["amount"])) for item in items if item["amount"] is not None),
+        Decimal("0"),
     ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
     return {
         "order_no": _text(data.get("orderNo", data.get("order_no", existing.get("order_no"))), 80),
@@ -203,6 +224,7 @@ def _serialize_item(row):
     amount = item.pop("amount", None)
     item["orderItemId"] = item.pop("id", None)
     item["productId"] = item.pop("product_id", None)
+    supplier_id = item.pop("supplier_id", None)
     item["productType"] = item.pop("product_type", "raw-material")
     item["productCode"] = item.pop("product_code", "") or ""
     item["productName"] = item.pop("product_name", "") or ""
@@ -213,6 +235,8 @@ def _serialize_item(row):
     item["remainingQty"] = max(0, ordered - received)
     item["unitPrice"] = item.pop("unit_price", None)
     item["amount"] = amount
+    item["supplierId"] = supplier_id
+    item["supplierName"] = ""
     return item
 
 
@@ -241,6 +265,23 @@ def _serialize_order(conn, row, include_items=True):
             (row["id"],),
         ).fetchall()
         order["items"] = [_serialize_item(item) for item in items]
+        supplier_ids = [item["supplierId"] for item in order["items"] if item["supplierId"] is not None]
+        supplier_rows = {}
+        if supplier_ids:
+            placeholders = ",".join("?" for _ in set(supplier_ids))
+            supplier_rows = {
+                row["id"]: row["supplier_name"]
+                for row in conn.execute(
+                    f"SELECT id, supplier_name FROM suppliers WHERE id IN ({placeholders})",
+                    tuple(sorted(set(supplier_ids))),
+                ).fetchall()
+            }
+        for item in order["items"]:
+            item["supplierName"] = supplier_rows.get(item["supplierId"], "")
+        if not order["supplierName"]:
+            order["supplierName"] = "、".join(dict.fromkeys(
+                item["supplierName"] for item in order["items"] if item["supplierName"]
+            ))
         order["orderItems"] = order["items"]
     return order
 
@@ -265,16 +306,36 @@ def _insert_items(conn, order_id, items):
             """
             INSERT INTO purchase_order_items (
                 order_id, line_no, product_type, product_id, product_code, product_name,
-                specification, unit, ordered_qty, received_qty, unit_price, amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                supplier_id, specification, unit, ordered_qty, received_qty, unit_price, amount, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id, item["line_no"], item["product_type"], item["product_id"],
-                item["product_code"], item["product_name"], item["specification"], item["unit"],
+                item["product_code"], item["product_name"], item["supplier_id"], item["specification"], item["unit"],
                 item["ordered_qty"], item["received_qty"], item["unit_price"], item["amount"], item["remark"],
             ),
         )
         item["id"] = cursor.lastrowid
+
+
+def _validate_audit_items(conn, items):
+    if not items:
+        raise ValueError("采购订单没有有效明细")
+    if any(float(item.get("ordered_qty") or 0) <= 0 for item in items):
+        raise ValueError("采购数量必须大于 0")
+    if any(item.get("supplier_id") is None for item in items):
+        raise ValueError("审核前请为每项物料补充采购供应商")
+    if any(item.get("unit_price") is None for item in items):
+        raise ValueError("审核前请为每项物料补充采购单价")
+    supplier_ids = {int(item["supplier_id"]) for item in items}
+    placeholders = ",".join("?" for _ in supplier_ids)
+    active_supplier_count = conn.execute(
+        f"SELECT COUNT(*) AS count FROM suppliers WHERE status = 'active' AND id IN ({placeholders})",
+        tuple(sorted(supplier_ids)),
+    ).fetchone()["count"]
+    if active_supplier_count != len(supplier_ids):
+        raise ValueError("采购明细中存在不存在或已停用的供应商")
+    return next(iter(supplier_ids)) if len(supplier_ids) == 1 else None
 
 
 def _make_order_no(order_date, order_id):
@@ -432,6 +493,7 @@ def delete_purchase_order(order_id):
 @purchase_orders_bp.route("/purchase-orders/<int:order_id>/audit", methods=["POST"])
 @require_admin_permission(ADMIN_PURCHASE_ORDER_PERMISSIONS["audit"])
 def audit_purchase_order(order_id):
+    data = request.get_json(silent=True) or {}
     try:
         with _write_lock:
             with get_db() as conn:
@@ -441,14 +503,34 @@ def audit_purchase_order(order_id):
                     return jsonify({"success": False, "message": "采购订单不存在"}), 404
                 if row["status"] != "pending":
                     return jsonify({"success": False, "message": "只有待审核采购订单可以审核"}), 409
-                if not existing["_items"]:
-                    return jsonify({"success": False, "message": "采购订单没有有效明细"}), 409
-                if any(float(item.get("ordered_qty") or 0) <= 0 for item in existing["_items"]):
-                    return jsonify({"success": False, "message": "采购数量必须大于 0"}), 409
+                audit_items = existing["_items"]
+                audit_values = None
+                if data.get("items") is not None:
+                    audit_values = _order_values(conn, {**data, "status": "pending"}, existing)
+                    audit_items = audit_values["items"]
+                master_supplier_id = _validate_audit_items(conn, audit_items)
+                if audit_values is not None:
+                    now = _now()
+                    conn.execute(
+                        """
+                        UPDATE purchase_orders SET order_no = ?, order_date = ?, expected_date = ?,
+                            store_id = ?, supplier_id = ?, remark = ?, status = ?, total_quantity = ?,
+                            total_amount = ?, updated_at = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            audit_values["order_no"] or row["order_no"], audit_values["order_date"],
+                            audit_values["expected_date"], audit_values["store_id"], master_supplier_id,
+                            audit_values["remark"], "pending", audit_values["total_quantity"],
+                            audit_values["total_amount"], now, order_id,
+                        ),
+                    )
+                    conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
+                    _insert_items(conn, order_id, audit_values["items"])
                 now = _now()
                 conn.execute(
-                    "UPDATE purchase_orders SET status = 'approved', audited_by = ?, audited_at = ?, updated_at = ? WHERE id = ?",
-                    (current_identity(), now, now, order_id),
+                    "UPDATE purchase_orders SET status = 'approved', supplier_id = ?, audited_by = ?, audited_at = ?, updated_at = ? WHERE id = ?",
+                    (master_supplier_id, current_identity(), now, now, order_id),
                 )
                 complete_audit_notifications(conn, "purchase_order", order_id)
                 updated = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()

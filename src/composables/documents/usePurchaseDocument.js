@@ -21,7 +21,7 @@ export function usePurchaseDocument(props) {
   const products = ref([])
   const units = ref([])
   const form = ref({
-    storeId: '', supplierId: '', warehouseId: '', purchaseOrderId: props.purchaseOrderId || null, documentDate: localDate(), documentNo: '',
+    storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: props.purchaseOrderId || null, documentDate: localDate(), documentNo: '',
     inspector: '', qualityNo: '', remark: '', taxEnabled: false, items: [blankItem(), blankItem()],
     attachments: [], status: 'draft'
   })
@@ -135,6 +135,7 @@ export function usePurchaseDocument(props) {
       ...form.value,
       storeId: data.storeId ? String(data.storeId) : '',
       supplierId: data.supplierId ? String(data.supplierId) : '',
+      supplierName: data.supplierName || '',
       warehouseId: data.warehouseId ? String(data.warehouseId) : '',
       documentDate: data.documentDate || localDate(), documentNo: data.documentNo || '',
       inspector: data.inspector || '', qualityNo: data.qualityNo || '', remark: data.remark || '',
@@ -160,6 +161,7 @@ export function usePurchaseDocument(props) {
       ...form.value,
       storeId: data.storeId ? String(data.storeId) : '',
       supplierId: data.supplierId ? String(data.supplierId) : '',
+      supplierName: data.supplierName || '',
       documentDate: data.orderDate || localDate(),
       remark: data.remark || '',
       items: (data.items || []).map(item => ({
@@ -225,7 +227,7 @@ export function usePurchaseDocument(props) {
     if (readOnly.value) return
     purchaseOrderId.value = null
     purchaseOrder.value = null
-    form.value = { ...form.value, storeId: '', supplierId: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: [blankItem(), blankItem()], taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
+    form.value = { ...form.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: [blankItem(), blankItem()], taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
     if (!props.documentId) { savedDocumentId.value = null; form.value.documentNo = ''; form.value.attachments = [] }
   }
   const close = () => router.push({ name: 'admin-purchase-inbound' })
@@ -247,7 +249,7 @@ export function usePurchaseDocument(props) {
     closePrintTemplateDialog, closePrintPreview, openPrint,
     previewSelectedPrintTemplate: (template, printer) => openPrintTemplate(template, printer, false),
     printSelectedPrintTemplate: (template, printer) => openPrintTemplate(template, printer, true),
-    printVariables: computed(() => ({ ...form.value, orderNumber: form.value.documentNo, orderDate: form.value.documentDate, purchaseNumber: form.value.documentNo, purchaseDate: form.value.documentDate, storeName: selectedStore.value?.name || '', supplierName: selectedSupplier.value?.supplierName || selectedSupplier.value?.name || '', warehouseName: selectedWarehouse.value?.name || '', totalQuantity: totalQuantity.value, totalAmount: totalIncludedAmount.value, totalTaxAmount: totalTaxAmount.value, totalTaxIncludedAmount: totalIncludedAmount.value, items: form.value.items.filter(item => item.productId).map((item, index) => ({ ...item, index: index + 1, spec: item.specification, name: item.goodsName, receivedQty: item.quantity, unitPrice: item.price, warehouseName: item.warehouseName || selectedWarehouse.value?.name || '' })) })),
+    printVariables: computed(() => ({ ...form.value, orderNumber: form.value.documentNo, orderDate: form.value.documentDate, purchaseNumber: form.value.documentNo, purchaseDate: form.value.documentDate, storeName: selectedStore.value?.name || '', supplierName: selectedSupplier.value?.supplierName || selectedSupplier.value?.name || form.value.supplierName || '', warehouseName: selectedWarehouse.value?.name || '', totalQuantity: totalQuantity.value, totalAmount: totalIncludedAmount.value, totalTaxAmount: totalTaxAmount.value, totalTaxIncludedAmount: totalIncludedAmount.value, items: form.value.items.filter(item => item.productId).map((item, index) => ({ ...item, index: index + 1, spec: item.specification, name: item.goodsName, receivedQty: item.quantity, unitPrice: item.price, warehouseName: item.warehouseName || selectedWarehouse.value?.name || '' })) })),
     printNumber: computed(() => form.value.documentNo)
   }
 }

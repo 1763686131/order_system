@@ -30,7 +30,7 @@
         </label>
 
         <div class="search-field date-field">
-          <span class="field-label">{{ isInbound ? '入库日期' : '采购日期' }}</span>
+          <span class="field-label">{{ isInbound ? '入库日期' : '申请日期' }}</span>
           <div class="date-range">
             <input
               v-model="filters.startDate"
@@ -147,7 +147,7 @@
                 />
               </th>
               <th>{{ isInbound ? '入库单号' : '采购单号' }}</th>
-              <th>{{ isInbound ? '入库日期' : '采购日期' }}</th>
+              <th>{{ isInbound ? '入库日期' : '申请日期' }}</th>
               <th>供应商</th>
               <th>物料摘要</th>
               <th>数量 / 进度</th>
@@ -236,10 +236,10 @@
                     </svg>
                   </button>
                   <button
-                    v-if="!isInbound && record.status === 'pending'"
+                    v-if="!isInbound && record.status === 'pending' && canAudit"
                     class="table-action audit-action"
                     type="button"
-                    title="审核采购订单"
+                    title="补充采购信息并审核"
                     @click="auditRecord(record)"
                   >
                     ✓
@@ -248,7 +248,7 @@
                     v-if="canEdit(record)"
                     class="table-action"
                     type="button"
-                    :title="isInbound ? '编辑入库单' : '查看采购单'"
+                    :title="isInbound ? '编辑入库单' : '编辑采购申请'"
                     @click="editRecord(record)"
                   >
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -349,11 +349,11 @@
                   </span>
                 </div>
                 <div>
-                  <span class="detail-label">{{ isInbound ? '入库日期' : '采购日期' }}</span>
+                  <span class="detail-label">{{ isInbound ? '入库日期' : '申请日期' }}</span>
                   <strong>{{ formatDate(recordDate(selectedRecord)) }}</strong>
                 </div>
                 <div>
-                  <span class="detail-label">含税金额</span>
+                  <span class="detail-label">{{ isInbound ? '含税金额' : '采购金额' }}</span>
                   <strong class="overview-amount">¥ {{ formatMoney(selectedRecord.totalAmount) }}</strong>
                 </div>
               </div>
@@ -366,7 +366,7 @@
                 <div class="meta-grid">
                   <div><span>供应商</span><strong>{{ selectedRecord.supplierName }}</strong></div>
                   <div><span>收货仓库</span><strong>{{ selectedRecord.warehouseName }}</strong></div>
-                  <div><span>{{ isInbound ? '验收人员' : '采购人员' }}</span><strong>{{ isInbound ? selectedRecord.inspector : selectedRecord.contact }}</strong></div>
+                  <div><span>{{ isInbound ? '验收人员' : '申请人员' }}</span><strong>{{ isInbound ? selectedRecord.inspector : selectedRecord.contact }}</strong></div>
                   <div><span>{{ isInbound ? '质检单号' : '预计到货' }}</span><strong>{{ isInbound ? selectedRecord.qualityNo || '—' : selectedRecord.expectedDate || '—' }}</strong></div>
                 </div>
               </section>
@@ -385,8 +385,9 @@
                         <th>规格型号</th>
                         <th>单位</th>
                         <th>计划数量</th>
+                        <th>采购供应商</th>
                         <th v-if="isInbound">实收数量</th>
-                        <th>含税单价</th>
+                        <th>{{ isInbound ? '含税单价' : '采购单价' }}</th>
                         <th>金额</th>
                         <th v-if="isInbound">批次 / 库位</th>
                       </tr>
@@ -398,9 +399,10 @@
                         <td>{{ item.specification || '—' }}</td>
                         <td>{{ item.unit }}</td>
                         <td>{{ formatNumber(item.expectedQty ?? item.quantity) }}</td>
+                        <td :title="item.supplierName || selectedRecord.supplierName">{{ item.supplierName || (isInbound ? selectedRecord.supplierName || '—' : '待补充') }}</td>
                         <td v-if="isInbound">{{ formatNumber(item.receivedQty ?? item.quantity) }}</td>
-                        <td>¥ {{ formatMoney(item.price) }}</td>
-                        <td>¥ {{ formatMoney(item.amount) }}</td>
+                        <td>{{ item.price == null ? '待补充' : `¥ ${formatMoney(item.price)}` }}</td>
+                        <td>{{ item.amount == null ? '待补充' : `¥ ${formatMoney(item.amount)}` }}</td>
                         <td v-if="isInbound">{{ item.batchNo || '—' }} / {{ item.binCode || '—' }}</td>
                       </tr>
                     </tbody>
@@ -417,8 +419,8 @@
             <footer class="detail-modal-footer">
               <button class="button button-ghost" type="button" @click="closeDetail">关闭</button>
               <div class="footer-actions">
-                <button v-if="!isInbound && selectedRecord.status === 'pending'" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
-                  审核并进入入库
+                <button v-if="!isInbound && selectedRecord.status === 'pending' && canAudit" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
+                  补充采购信息并审核
                 </button>
                 <button v-if="!isInbound && ['approved', 'partial'].includes(selectedRecord.status)" class="button button-secondary" type="button" @click="router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: selectedRecord.id } })">
                   创建采购入库单
@@ -435,7 +437,7 @@
                   创建采购入库单
                 </button>
                 <button v-if="canEdit(selectedRecord) && !(isInbound && selectedRecord.status === 'pending')" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
-                  {{ isInbound ? '编辑入库单' : '查看采购单' }}
+                  {{ isInbound ? '编辑入库单' : '编辑采购申请' }}
                 </button>
               </div>
             </footer>
@@ -450,6 +452,8 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
+import { ADMIN_PURCHASE_ORDER_PERMISSIONS } from '@/utils/accessControl'
 
 const props = defineProps({
   mode: {
@@ -460,7 +464,9 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const userStore = useUserStore()
 const isInbound = computed(() => props.mode === 'inbound')
+const canAudit = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT))
 
 const mockOrders = [
   {
@@ -798,7 +804,7 @@ function getStatusClass(status) {
 function canEdit(record) {
   return isInbound.value
     ? !['reviewed', 'posted', 'cancelled'].includes(record.status)
-    : ['draft', 'pending'].includes(record.status)
+    : userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT) && ['draft', 'pending'].includes(record.status)
 }
 
 function applyFilters() {
@@ -886,17 +892,10 @@ function editRecord(record) {
   router.push({ name: 'admin-purchase-inbound-edit', params: { id: record.id } })
 }
 
-async function auditRecord(record) {
-  if (isInbound.value || record.status !== 'pending') return
-  try {
-    const response = await request({ url: `/purchase-orders/${record.id}/audit`, method: 'POST' })
-    if (!response?.success) throw new Error(response?.message || '审核失败')
-    closeDetail()
-    await refreshData(false)
-    showNotice('采购订单审核成功，已进入采购入库列表')
-  } catch (error) {
-    showNotice(error?.response?.data?.message || error.message || '采购订单审核失败')
-  }
+function auditRecord(record) {
+  if (isInbound.value || record.status !== 'pending' || !canAudit.value) return
+  closeDetail()
+  router.push({ name: 'admin-purchase-order-audit', params: { id: record.id } })
 }
 
 function printRecord(record) {
@@ -923,9 +922,10 @@ function normalizeOrder(record) {
     price: item.unitPrice,
     amount: item.amount
   }))
+  const lineSupplierNames = [...new Set(items.map(item => item.supplierName).filter(Boolean))]
   return {
     ...record, id: record.orderId || record.id, orderNo: record.orderNo || '', purchaseDate: record.orderDate || '',
-    supplierName: record.supplierName || '', warehouseName: record.warehouseName || '', contact: record.createdBy || '',
+    supplierName: record.supplierName || lineSupplierNames.join('、') || '待采购审核', warehouseName: record.warehouseName || '', contact: record.createdBy || '',
     itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''),
     itemCount: items.length, totalQuantity: Number(record.totalQuantity || 0), receivedQuantity: items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0),
     totalAmount: Number(record.totalAmount || 0), items

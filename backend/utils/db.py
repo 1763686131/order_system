@@ -1490,7 +1490,7 @@ def _ensure_purchase_order_schema(conn):
                 order_date TEXT NOT NULL,
                 expected_date TEXT,
                 store_id INTEGER,
-                supplier_id INTEGER NOT NULL,
+                supplier_id INTEGER,
                 remark TEXT,
                 status TEXT NOT NULL DEFAULT 'draft',
                 total_quantity REAL NOT NULL DEFAULT 0,
@@ -1503,6 +1503,102 @@ def _ensure_purchase_order_schema(conn):
             )
             """
         )
+        purchase_order_columns = {
+            row['name']: row for row in cursor.execute('PRAGMA table_info(purchase_orders)')
+        }
+        if purchase_order_columns.get('supplier_id') is not None and purchase_order_columns['supplier_id']['notnull']:
+            # The original draft schema required one supplier at master level.
+            # Rebuild it once so supplier selection can live on each detail line.
+            item_table_exists = cursor.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'purchase_order_items'"
+            ).fetchone() is not None
+            item_columns = (
+                {row['name'] for row in cursor.execute('PRAGMA table_info(purchase_order_items)')}
+                if item_table_exists else set()
+            )
+            item_supplier_select = 'supplier_id' if 'supplier_id' in item_columns else 'NULL'
+            conn.execute('PRAGMA foreign_keys = OFF')
+            cursor.execute('DROP INDEX IF EXISTS idx_purchase_orders_status_date')
+            cursor.execute('DROP INDEX IF EXISTS idx_purchase_orders_supplier')
+            cursor.execute('DROP INDEX IF EXISTS idx_purchase_order_items_order')
+            if item_table_exists:
+                cursor.execute('ALTER TABLE purchase_order_items RENAME TO purchase_order_items_legacy')
+            cursor.execute('ALTER TABLE purchase_orders RENAME TO purchase_orders_legacy')
+            cursor.execute(
+                '''
+                CREATE TABLE purchase_orders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    order_no TEXT NOT NULL UNIQUE,
+                    order_date TEXT NOT NULL,
+                    expected_date TEXT,
+                    store_id INTEGER,
+                    supplier_id INTEGER,
+                    remark TEXT,
+                    status TEXT NOT NULL DEFAULT 'draft',
+                    total_quantity REAL NOT NULL DEFAULT 0,
+                    total_amount REAL NOT NULL DEFAULT 0,
+                    audited_by TEXT,
+                    audited_at TEXT,
+                    created_by TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TEXT
+                )
+                '''
+            )
+            cursor.execute(
+                '''
+                INSERT INTO purchase_orders (
+                    id, order_no, order_date, expected_date, store_id, supplier_id,
+                    remark, status, total_quantity, total_amount, audited_by,
+                    audited_at, created_by, created_at, updated_at
+                )
+                SELECT id, order_no, order_date, expected_date, store_id, supplier_id,
+                       remark, status, total_quantity, total_amount, audited_by,
+                       audited_at, created_by, created_at, updated_at
+                FROM purchase_orders_legacy
+                '''
+            )
+            if item_table_exists:
+                cursor.execute(
+                    '''
+                    CREATE TABLE purchase_order_items (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        order_id INTEGER NOT NULL,
+                        line_no INTEGER NOT NULL,
+                        product_type TEXT NOT NULL DEFAULT 'raw-material',
+                        product_id INTEGER,
+                        supplier_id INTEGER,
+                        product_code TEXT,
+                        product_name TEXT,
+                        specification TEXT,
+                        unit TEXT,
+                        ordered_qty REAL NOT NULL DEFAULT 0,
+                        received_qty REAL NOT NULL DEFAULT 0,
+                        unit_price REAL,
+                        amount REAL,
+                        remark TEXT,
+                        FOREIGN KEY(order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE
+                    )
+                    '''
+                )
+                cursor.execute(
+                    f'''
+                    INSERT INTO purchase_order_items (
+                        id, order_id, line_no, product_type, product_id, supplier_id,
+                        product_code, product_name, specification, unit, ordered_qty,
+                        received_qty, unit_price, amount, remark
+                    )
+                    SELECT id, order_id, line_no, product_type, product_id,
+                           {item_supplier_select}, product_code, product_name,
+                           specification, unit, ordered_qty, received_qty,
+                           unit_price, amount, remark
+                    FROM purchase_order_items_legacy
+                    '''
+                )
+                cursor.execute('DROP TABLE purchase_order_items_legacy')
+            cursor.execute('DROP TABLE purchase_orders_legacy')
+            conn.commit()
+            conn.execute('PRAGMA foreign_keys = ON')
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_purchase_orders_status_date "
             "ON purchase_orders(status, order_date DESC, id DESC)"
@@ -1519,6 +1615,7 @@ def _ensure_purchase_order_schema(conn):
                 line_no INTEGER NOT NULL,
                 product_type TEXT NOT NULL DEFAULT 'raw-material',
                 product_id INTEGER,
+                supplier_id INTEGER,
                 product_code TEXT,
                 product_name TEXT,
                 specification TEXT,
@@ -1531,6 +1628,21 @@ def _ensure_purchase_order_schema(conn):
                 FOREIGN KEY(order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE
             )
             """
+        )
+        purchase_item_columns = {
+            row['name'] for row in cursor.execute('PRAGMA table_info(purchase_order_items)')
+        }
+        if 'supplier_id' not in purchase_item_columns:
+            cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN supplier_id INTEGER')
+        cursor.execute(
+            '''
+            UPDATE purchase_order_items SET supplier_id = (
+                SELECT supplier_id FROM purchase_orders WHERE id = purchase_order_items.order_id
+            )
+            WHERE supplier_id IS NULL AND order_id IN (
+                SELECT id FROM purchase_orders WHERE supplier_id IS NOT NULL
+            )
+            '''
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_purchase_order_items_order "

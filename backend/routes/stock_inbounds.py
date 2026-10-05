@@ -322,9 +322,9 @@ def _document_values(conn, data, existing=None, for_post=False):
     )
     workshop = _clean_text(data.get('workshop', data.get('productionWorkshop', existing.get('workshop', ''))), 80)
     if receipt_type == 'raw-material' and require_valid:
-        if supplier_id is None:
+        if supplier_id is None and purchase_order_id is None:
             raise ValueError('请选择供应商')
-        if not conn.execute("SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)).fetchone():
+        if supplier_id is not None and not conn.execute("SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)).fetchone():
             raise ValueError('供应商不存在或已停用')
     if not conn.execute('SELECT 1 FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone():
         raise ValueError('目标仓库不存在')
@@ -366,7 +366,7 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, require
         raise ValueError('关联的采购订单不存在')
     if order['status'] not in ('approved', 'partial'):
         raise ValueError('只有已审核或部分入库的采购订单可以入库')
-    if supplier_id is not None and order['supplier_id'] != supplier_id:
+    if supplier_id is not None and order['supplier_id'] is not None and order['supplier_id'] != supplier_id:
         raise ValueError('入库供应商必须与采购订单一致')
     order_items = {
         int(row['id']): row
@@ -480,6 +480,28 @@ def _serialize_document(conn, row, include_items=True):
             (row['id'],),
         ).fetchall()
         document['items'] = [_serialize_item(item, document['warehouseId']) for item in items]
+        linked_suppliers = {
+            item['id']: item
+            for item in conn.execute(
+                '''
+                SELECT inbound_item.id, order_item.supplier_id, supplier.supplier_name
+                FROM stock_inbound_items AS inbound_item
+                JOIN purchase_order_items AS order_item
+                  ON order_item.id = inbound_item.purchase_order_item_id
+                LEFT JOIN suppliers AS supplier ON supplier.id = order_item.supplier_id
+                WHERE inbound_item.inbound_id = ?
+                ''',
+                (row['id'],),
+            ).fetchall()
+        } if document['purchaseOrderId'] else {}
+        for item in document['items']:
+            linked_supplier = linked_suppliers.get(item['id'])
+            item['supplierId'] = linked_supplier['supplier_id'] if linked_supplier else document['supplierId']
+            item['supplierName'] = (linked_supplier['supplier_name'] or '') if linked_supplier else document['supplierName']
+        if not document['supplierName']:
+            document['supplierName'] = '、'.join(dict.fromkeys(
+                item['supplierName'] for item in document['items'] if item['supplierName']
+            ))
     return document
 
 

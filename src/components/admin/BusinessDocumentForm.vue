@@ -13,7 +13,8 @@
           </label>
           <label class="info-group">
             <span>{{ ui.config.partyLabel }}</span>
-            <select v-if="isPurchase" v-model="ui.form.supplierId" :disabled="fieldsDisabled || Boolean(ui.purchaseOrderId)" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
+            <input v-if="isPurchase && ui.purchaseOrderId" type="text" :value="ui.form.supplierName || '供应商详见采购申请明细'" readonly />
+            <select v-else-if="isPurchase" v-model="ui.form.supplierId" :disabled="fieldsDisabled" :required="!ui.purchaseOrderId" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
               <option value="">请选择供应商</option>
               <option v-for="supplier in ui.suppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName || supplier.name }}</option>
             </select>

@@ -233,6 +233,13 @@ const routes = [
         meta: { requiresAuth: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT }
       },
       {
+        path: 'purchase/orders/audit/:id',
+        name: 'admin-purchase-order-audit',
+        component: () => import('@/components/admin/PurchaseOrderForm.vue'),
+        props: route => ({ action: 'audit', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT }
+      },
+      {
         path: 'purchase/orders/:id',
         name: 'admin-purchase-order-view',
         component: () => import('@/components/admin/PurchaseOrderForm.vue'),
