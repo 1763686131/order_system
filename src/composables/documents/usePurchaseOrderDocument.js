@@ -33,6 +33,14 @@ export function usePurchaseOrderDocument(props) {
   const productInputRefs = new Map()
   const productDropdownRef = ref(null)
   const productDropdownStyle = ref({})
+  const focusedSupplierRow = ref(-1)
+  const supplierInputRefs = new Map()
+  const supplierDropdownRef = ref(null)
+  const supplierDropdownStyle = ref({})
+  const supplierSearch = ref('')
+  const supplierPage = ref(1)
+  const supplierDropdownOpen = ref(false)
+  const SUPPLIER_PAGE_SIZE = 15
   let rowKey = 0
   let noticeTimer
   let redirectTimer
@@ -77,6 +85,21 @@ export function usePurchaseOrderDocument(props) {
     ...rawMaterialProducts.value.map(product => ({ ...product, productType: 'raw-material' })),
     ...finishedProducts.value.map(product => ({ ...product, productType: 'finished-product' }))
   ])
+  const supplierSearchResults = computed(() => {
+    const keyword = String(supplierSearch.value || '').trim().toLowerCase()
+    if (!keyword) return suppliers.value
+    return suppliers.value.filter(supplier => [
+      supplier.supplierName, supplier.name, supplier.supplierCode, supplier.code,
+      supplier.contactPerson, supplier.phone
+    ].some(value => String(value || '').toLowerCase().includes(keyword)))
+  })
+  const supplierTotalPages = computed(() =>
+    Math.max(1, Math.ceil(supplierSearchResults.value.length / SUPPLIER_PAGE_SIZE))
+  )
+  const paginatedSuppliers = computed(() => {
+    const start = (supplierPage.value - 1) * SUPPLIER_PAGE_SIZE
+    return supplierSearchResults.value.slice(start, start + SUPPLIER_PAGE_SIZE)
+  })
   const categoriesForItem = item => {
     const warehouse = warehouses.value.find(candidate => String(candidate.id) === String(item?.warehouseId))
     return Array.isArray(warehouse?.categories) ? warehouse.categories : []
@@ -201,6 +224,88 @@ export function usePurchaseOrderDocument(props) {
     focusedRow.value = -1
     productDropdownStyle.value = {}
   }
+  const setSupplierInputRef = (index, element) => {
+    if (element) supplierInputRefs.set(index, element)
+    else supplierInputRefs.delete(index)
+  }
+  const setSupplierDropdownRef = element => { supplierDropdownRef.value = element }
+  const updateSupplierDropdownPosition = () => {
+    const input = supplierInputRefs.get(focusedSupplierRow.value)
+    if (!input || !supplierDropdownOpen.value) {
+      supplierDropdownStyle.value = {}
+      return
+    }
+
+    const rect = input.getBoundingClientRect()
+    const viewportPadding = 12
+    const gap = 4
+    const dropdownWidth = Math.min(420, Math.max(280, window.innerWidth - viewportPadding * 2))
+    const rowHeight = 38
+    const paginationHeight = supplierTotalPages.value > 1 ? 44 : 0
+    const desiredHeight = Math.min(
+      620,
+      Math.max(44, paginatedSuppliers.value.length * rowHeight + paginationHeight)
+    )
+    const spaceBelow = Math.max(120, window.innerHeight - rect.bottom - viewportPadding)
+    const spaceAbove = Math.max(120, rect.top - viewportPadding)
+    const shouldOpenAbove = desiredHeight > spaceBelow && spaceAbove > spaceBelow
+    const availableHeight = shouldOpenAbove ? spaceAbove : spaceBelow
+    const height = Math.min(desiredHeight, availableHeight)
+    const top = shouldOpenAbove
+      ? Math.max(viewportPadding, rect.top - height - gap)
+      : Math.min(window.innerHeight - height - viewportPadding, rect.bottom + gap)
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, window.innerWidth - dropdownWidth - viewportPadding)
+    )
+
+    supplierDropdownStyle.value = {
+      top: `${Math.round(top)}px`,
+      left: `${Math.round(left)}px`,
+      width: `${Math.round(dropdownWidth)}px`,
+      height: `${Math.round(height)}px`
+    }
+  }
+  const openSupplierDropdown = index => {
+    if (!form.value.items[index]?.productId) return
+    focusedSupplierRow.value = index
+    supplierDropdownOpen.value = true
+    supplierSearch.value = ''
+    supplierPage.value = 1
+    nextTick(updateSupplierDropdownPosition)
+  }
+  const hideSupplierDropdown = index => {
+    window.setTimeout(() => {
+      if (focusedSupplierRow.value === index) closeSupplierDropdown()
+    }, 180)
+  }
+  const closeSupplierDropdown = () => {
+    supplierDropdownOpen.value = false
+    supplierSearch.value = ''
+    supplierPage.value = 1
+    focusedSupplierRow.value = -1
+    supplierDropdownStyle.value = {}
+  }
+  const handleSupplierSearchInput = (index, event) => {
+    focusedSupplierRow.value = index
+    supplierDropdownOpen.value = true
+    supplierSearch.value = event.target.value
+    supplierPage.value = 1
+    nextTick(updateSupplierDropdownPosition)
+  }
+  const selectSupplier = (index, supplier) => {
+    const item = form.value.items[index]
+    if (!item || !supplier) return
+    item.supplierId = String(supplier.id)
+    item.supplierName = supplier.supplierName || supplier.name || ''
+    closeSupplierDropdown()
+    supplierInputRefs.get(index)?.blur()
+    validation.dismissValidationHint(`item-supplier-${index}`)
+  }
+  const changeSupplierPage = page => {
+    supplierPage.value = Math.min(Math.max(1, page), supplierTotalPages.value)
+    nextTick(updateSupplierDropdownPosition)
+  }
   const clearProductSelection = item => Object.assign(item, {
     productId: '', productCode: '', goodsName: '', specification: '', unit: '', productType: '', price: '', amount: ''
   })
@@ -285,6 +390,7 @@ export function usePurchaseOrderDocument(props) {
     item.showDropdown = false
     item.filteredProducts = []
     if (focusedRow.value === index) productDropdownStyle.value = {}
+    closeSupplierDropdown()
   }
   const onCategoryChange = item => {
     const category = categoriesForItem(item).find(candidate => String(candidate.id) === String(item.categoryId))
@@ -295,6 +401,7 @@ export function usePurchaseOrderDocument(props) {
   }
   const onItemWarehouseChange = item => {
     closeProductDropdown()
+    closeSupplierDropdown()
     const warehouse = warehouses.value.find(candidate => String(candidate.id) === String(item.warehouseId))
     item.warehouseName = warehouse?.name || ''
     if (!categoriesForItem(item).some(category => String(category.id) === String(item.categoryId))) {
@@ -309,6 +416,7 @@ export function usePurchaseOrderDocument(props) {
   }
   const onStoreChange = () => {
     closeProductDropdown()
+    closeSupplierDropdown()
     form.value.items.forEach(item => {
       if (item.warehouseId && !filteredWarehouses.value.some(warehouse => String(warehouse.id) === String(item.warehouseId))) {
         item.warehouseId = ''
@@ -414,6 +522,8 @@ export function usePurchaseOrderDocument(props) {
   onMounted(async () => {
     window.addEventListener('resize', updateProductDropdownPosition)
     window.addEventListener('scroll', updateProductDropdownPosition, true)
+    window.addEventListener('resize', updateSupplierDropdownPosition)
+    window.addEventListener('scroll', updateSupplierDropdownPosition, true)
     try {
       const [storeData, supplierData, warehouseData, rawMaterialData, finishedProductData, unitData] = await Promise.all([
         request({ url: '/stores', method: 'GET' }), request({ url: '/suppliers', method: 'GET' }),
@@ -457,7 +567,10 @@ export function usePurchaseOrderDocument(props) {
     window.clearTimeout(redirectTimer)
     window.removeEventListener('resize', updateProductDropdownPosition)
     window.removeEventListener('scroll', updateProductDropdownPosition, true)
+    window.removeEventListener('resize', updateSupplierDropdownPosition)
+    window.removeEventListener('scroll', updateSupplierDropdownPosition, true)
     productInputRefs.clear()
+    supplierInputRefs.clear()
   })
   return {
     ...validation, config, form, loading, loadFailed, saving, readOnly, auditMode, statusLabel,
@@ -468,6 +581,10 @@ export function usePurchaseOrderDocument(props) {
     showProductDropdown, hideProductDropdown, closeProductDropdown, activeProductRow, focusedRow,
     productDropdownRef, productDropdownStyle, setProductInputRef, setProductDropdownRef,
     getUnitName, getProductStock,
+    supplierDropdownOpen, supplierSearch, supplierPage, paginatedSuppliers, supplierTotalPages,
+    focusedSupplierRow, supplierDropdownStyle, setSupplierInputRef, setSupplierDropdownRef,
+    openSupplierDropdown, hideSupplierDropdown, closeSupplierDropdown,
+    handleSupplierSearchInput, selectSupplier, changeSupplierPage,
     onCategoryChange,
     onItemWarehouseChange, onStoreChange, onDateChange, onExpectedDateInput, restoreDraft,
     validateForm, save, clearForm, close,

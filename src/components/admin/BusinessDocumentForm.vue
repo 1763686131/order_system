@@ -111,11 +111,8 @@
                 </template>
                 <td><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.quantity" :ref="element => setFieldRef(`item-quantity-${index}`, element)" :aria-label="isPurchaseOrder ? '采购数量' : '数量'" type="number" :min="isPurchaseOrder ? '0.0001' : '0'" step="0.0001" :required="isPurchaseOrder" @input="ui.onQuantityInput(index); dismissHint(`item-quantity-${index}`)" /><span v-else class="blank-cell"></span></td>
                 <td v-if="isPurchaseOrder">
-                  <select v-if="item.productId" v-model="item.supplierId" class="purchase-cell-select" :ref="element => setFieldRef(`item-supplier-${index}`, element)" :required="ui.auditMode" aria-label="采购供应商" @focus="activatePurchaseCell(item, 'supplier')" @blur="activePurchaseCell = ''" @change="dismissHint(`item-supplier-${index}`)">
-                    <option value="">{{ purchaseCellPlaceholder(item, 'supplier', ui.auditMode ? '请选择采购供应商' : '暂不指定（选填）') }}</option>
-                    <option v-if="item.supplierId && !ui.suppliers.some(supplier => String(supplier.id) === String(item.supplierId))" :value="item.supplierId">{{ item.supplierName }}</option>
-                    <option v-for="supplier in ui.suppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName || supplier.name }}</option>
-                  </select><span v-else class="blank-cell"></span>
+                  <input v-if="item.productId" :value="ui.supplierDropdownOpen && ui.focusedSupplierRow === index ? ui.supplierSearch : item.supplierName" class="purchase-cell-input" :ref="element => setSupplierInputRef(index, element)" type="text" autocomplete="off" :required="ui.auditMode" aria-label="采购供应商" :placeholder="purchaseCellPlaceholder(item, 'supplier', ui.auditMode ? '请选择采购供应商' : '暂不指定（选填）')" @focus="activatePurchaseCell(item, 'supplier'); ui.openSupplierDropdown(index)" @blur="activePurchaseCell = ''; ui.hideSupplierDropdown(index)" @input="ui.handleSupplierSearchInput(index, $event); dismissHint(`item-supplier-${index}`)" @keydown.escape.prevent="ui.closeSupplierDropdown?.()" />
+                  <span v-else class="blank-cell"></span>
                 </td>
                 <td><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.price" :ref="element => setFieldRef(`item-price-${index}`, element)" :aria-label="isPurchaseOrder ? '采购单价' : '单价'" :required="isPurchaseOrder && ui.auditMode" type="number" min="0" :step="isMaterial ? '0.0001' : '0.01'" @input="ui.onPriceInput(index); dismissHint(`item-price-${index}`)" /><span v-else class="blank-cell"></span></td>
                 <template v-if="ui.taxEnabled">
@@ -205,6 +202,11 @@
         <button v-for="customer in ui.paginatedCustomers" :key="customer.id" type="button" class="customer-option" @click="ui.selectCustomer(customer)"><strong>{{ customer.customerName || customer.name }}</strong><span>{{ customer.contactPerson || '-' }}</span><span>{{ customer.phone || '-' }}</span></button>
         <div v-if="!ui.paginatedCustomers.length" class="dropdown-empty">暂无匹配客户</div>
         <div v-if="ui.customerTotalPages > 1" class="dropdown-pagination"><button type="button" aria-label="上一页客户" :disabled="ui.customerPage <= 1" @click="ui.changeCustomerPage(ui.customerPage - 1)">&lsaquo;</button><span>{{ ui.customerPage }} / {{ ui.customerTotalPages }}</span><button type="button" aria-label="下一页客户" :disabled="ui.customerPage >= ui.customerTotalPages" @click="ui.changeCustomerPage(ui.customerPage + 1)">&rsaquo;</button></div>
+      </div>
+      <div v-if="isPurchaseOrder && ui.supplierDropdownOpen && !ui.readOnly" :ref="ui.setSupplierDropdownRef" class="document-dropdown customer-dropdown" :style="ui.supplierDropdownStyle" @pointerdown.stop @mousedown.prevent>
+        <button v-for="supplier in ui.paginatedSuppliers" :key="supplier.id" type="button" class="customer-option" @click="ui.selectSupplier(ui.focusedSupplierRow, supplier)"><strong>{{ supplier.supplierName || supplier.name }}</strong><span>{{ supplier.contactPerson || '-' }}</span><span>{{ supplier.phone || '-' }}</span></button>
+        <div v-if="!ui.paginatedSuppliers.length" class="dropdown-empty">暂无匹配供应商</div>
+        <div v-if="ui.supplierTotalPages > 1" class="dropdown-pagination"><button type="button" aria-label="上一页供应商" :disabled="ui.supplierPage <= 1" @click="ui.changeSupplierPage(ui.supplierPage - 1)">&lsaquo;</button><span>{{ ui.supplierPage }} / {{ ui.supplierTotalPages }}</span><button type="button" aria-label="下一页供应商" :disabled="ui.supplierPage >= ui.supplierTotalPages" @click="ui.changeSupplierPage(ui.supplierPage + 1)">&rsaquo;</button></div>
       </div>
       <div v-if="ui.validationHint?.key" :ref="ui.setValidationHintRef" class="validation-hint" :class="ui.validationHintPlacement" :style="ui.validationHintStyle" role="alert"><TriangleAlert :size="18" aria-hidden="true" /><span><template v-for="(part, index) in validationMessageParts" :key="index"><strong v-if="part.important">{{ part.text }}</strong><template v-else>{{ part.text }}</template></template></span></div>
       <div v-if="ui.notice?.visible" class="page-notice" :class="{ error: ui.notice.type === 'error', 'purchase-order-notice': isPurchaseOrder }" :role="ui.notice.type === 'error' ? 'alert' : 'status'"><template v-if="isPurchaseOrder"><CircleAlert v-if="ui.notice.type === 'error'" :size="19" aria-hidden="true" /><CircleCheck v-else :size="19" aria-hidden="true" /></template>{{ ui.notice.message }}</div>
@@ -317,6 +319,10 @@ const setCustomerInputRef = element => {
 const setProductInputRef = (index, element) => {
   ui.setProductInputRef?.(index, element)
   setFieldRef(`item-product-${index}`, element)
+}
+const setSupplierInputRef = (index, element) => {
+  ui.setSupplierInputRef?.(index, element)
+  setFieldRef(`item-supplier-${index}`, element)
 }
 const confirmAction = () => {
   const action = confirmation.value
