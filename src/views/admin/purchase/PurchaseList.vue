@@ -58,6 +58,21 @@
           </select>
         </label>
 
+        <label class="search-field">
+          <span class="field-label">开票状态</span>
+          <select v-model="filters.invoiceStatus">
+            <option value="">全部</option>
+            <option v-for="(label, key) in invoiceLabels" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </label>
+        <label class="search-field">
+          <span class="field-label">付款状态</span>
+          <select v-model="filters.paymentStatus">
+            <option value="">全部</option>
+            <option v-for="(label, key) in paymentLabels" :key="key" :value="key">{{ label }}</option>
+          </select>
+        </label>
+
         <div class="search-actions">
           <button class="button button-primary" type="button" @click="applyFilters">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -164,15 +179,17 @@
               <th>{{ isInbound ? '入库数量/总数量' : '采购数量' }}</th>
               <th v-if="isInbound">进度</th>
               <th v-if="!isInbound">仓库</th>
-              <th>含税金额</th>
-              <th>状态</th>
+              <th>估算 / 已确认应付</th>
+              <th>{{ isInbound ? '入库状态' : '履约状态' }}</th>
+              <th class="finance-column">开票状态</th>
+              <th class="finance-column">付款状态</th>
               <th>备注</th>
               <th class="action-column">操作</th>
             </tr>
           </thead>
           <tbody v-if="loading">
             <tr v-for="index in 6" :key="`skeleton-${index}`" class="skeleton-row">
-              <td v-for="column in (isInbound ? 12 : 11)" :key="column"><span></span></td>
+              <td v-for="column in (isInbound ? 14 : 13)" :key="column"><span></span></td>
             </tr>
           </tbody>
           <tbody v-else-if="paginatedRecords.length">
@@ -224,14 +241,17 @@
               </td>
               <td>
                 <div class="quantity-cell">
-                  <strong>{{ formatNumber(quantityValue(record)) }}</strong>
-                  <span>{{ isInbound ? `/ ${formatNumber(record.expectedQuantity)} ${record.items?.[0]?.unit || '件'}` : '件' }}</span>
+                  <strong>{{ receiptLabel(record) }}</strong>
                 </div>
+                <div v-if="!isInbound" class="secondary-cell">已入库 / 计划</div>
               </td>
               <td v-if="isInbound" class="progress-column">
                 <div class="progress-cell">
-                  <span class="progress-track"><i :style="{ width: `${recordProgress(record)}%` }"></i></span>
-                  <small>{{ recordProgress(record) }}%</small>
+                  <template v-if="record.purchaseOrderId">
+                    <span class="progress-track"><i :style="{ width: `${recordProgress(record)}%` }"></i></span>
+                    <small>{{ recordProgress(record) }}%</small>
+                  </template>
+                  <span v-else>—</span>
                 </div>
               </td>
               <td v-if="!isInbound">
@@ -241,11 +261,19 @@
                 </div>
                 <div v-else class="primary-cell">{{ warehouseNamesFor(record)[0] || record.warehouseName || '—' }}</div>
               </td>
-              <td class="amount-cell">¥ {{ formatMoney(record.totalAmount) }}</td>
+              <td class="amount-cell">
+                <div>¥ {{ formatMoney(record.estimatedAmount ?? record.totalAmount) }}</div>
+                <div class="secondary-cell">应付 ¥ {{ formatMoney(record.confirmedPayable) }}</div>
+              </td>
               <td>
                 <span class="status-tag" :class="`status-${getStatusClass(record.status)}`">
                   <i></i>{{ getStatusLabel(record.status) }}
                 </span>
+              </td>
+              <td class="finance-column">{{ invoiceLabels[record.invoiceStatus] || '无需开票' }}</td>
+              <td class="finance-column">
+                <div>{{ paymentLabels[record.paymentStatus] || '未确认应付' }}</div>
+                <div class="secondary-cell">未付 ¥ {{ formatMoney(record.unpaidAmount) }}</div>
               </td>
               <td class="remark-cell" :title="record.remark || ''">{{ record.remark || '—' }}</td>
               <td class="action-column" @click.stop>
@@ -306,7 +334,7 @@
           </tbody>
           <tbody v-else>
             <tr>
-              <td :colspan="isInbound ? 12 : 11" class="empty-cell">
+              <td :colspan="isInbound ? 14 : 13" class="empty-cell">
                 <div class="empty-state">
                   <div class="empty-icon">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -397,6 +425,17 @@
               </div>
 
               <section class="detail-section">
+                <div class="section-heading"><h3>采购结算</h3><span>{{ receiptLabel(selectedRecord) }}</span></div>
+                <div class="meta-grid">
+                  <div><span>已确认应付</span><strong>¥ {{ formatMoney(selectedRecord.confirmedPayable) }}</strong></div>
+                  <div><span>已核销 / 未付</span><strong>¥ {{ formatMoney(selectedRecord.allocatedAmount) }} / ¥ {{ formatMoney(selectedRecord.unpaidAmount) }}</strong></div>
+                  <div><span>开票状态</span><strong>{{ invoiceLabels[selectedRecord.invoiceStatus] || '无需开票' }}</strong></div>
+                  <div><span>付款状态</span><strong>{{ paymentLabels[selectedRecord.paymentStatus] || '未确认应付' }}</strong></div>
+                  <div><span>已开票 / 未开票</span><strong>¥ {{ formatMoney(selectedRecord.billedAmount) }} / ¥ {{ formatMoney(selectedRecord.unbilledAmount) }}</strong></div>
+                </div>
+              </section>
+
+              <section class="detail-section">
                 <div class="section-heading">
                   <h3>基础信息</h3>
                   <span>共 {{ selectedRecord.itemCount }} 项物料</span>
@@ -412,7 +451,7 @@
               <section class="detail-section">
                 <div class="section-heading">
                   <h3>采购物料明细</h3>
-                  <span>{{ isInbound ? `${formatNumber(selectedRecord.receivedQuantity)} / ${formatNumber(selectedRecord.expectedQuantity)} 已入库` : `合计 ${formatNumber(selectedRecord.totalQuantity)} 件` }}</span>
+                  <span>{{ receiptLabel(selectedRecord) }}</span>
                 </div>
                 <div class="detail-items-scroll">
                   <table class="detail-items-table">
@@ -424,8 +463,8 @@
                         <th>单位</th>
                         <th>采购供应商</th>
                         <th>计划数量</th>
-                        <th v-if="isInbound">实收数量</th>
-                        <th v-if="isInbound">进度</th>
+                        <th>累计实收</th>
+                        <th>履约进度</th>
                         <th>{{ isInbound ? '含税单价' : '采购单价' }}</th>
                         <th>金额</th>
                         <th v-if="isInbound">批次 / 库位</th>
@@ -439,8 +478,11 @@
                         <td>{{ item.unit }}</td>
                         <td :title="item.supplierName || selectedRecord.supplierName">{{ item.supplierName || (isInbound ? selectedRecord.supplierName || '—' : '待补充') }}</td>
                         <td>{{ formatNumber(item.expectedQty ?? item.quantity) }}</td>
-                        <td v-if="isInbound">{{ formatNumber(item.receivedQty ?? item.quantity) }}</td>
-                        <td v-if="isInbound">
+                        <td>
+                          {{ formatNumber(item.receivedQty ?? 0) }}
+                          <small v-if="Number(item.receivedQty) > Number(item.expectedQty ?? item.quantity)" class="secondary-cell">超收 {{ formatNumber(Number(item.receivedQty) - Number(item.expectedQty ?? item.quantity)) }}</small>
+                        </td>
+                        <td>
                           <div class="detail-item-progress">
                             <span class="progress-track">
                               <i :style="{ width: `${Math.min(100, itemProgress(item))}%` }"></i>
@@ -457,9 +499,9 @@
                       <tr>
                         <td colspan="4" class="detail-total-label">合计</td>
                         <td>—</td>
-                        <td>{{ formatNumber(detailTotals.plannedQuantity) }}</td>
-                        <td v-if="isInbound">{{ formatNumber(detailTotals.receivedQuantity) }}</td>
-                        <td v-if="isInbound" class="detail-progress-total">—</td>
+                        <td>{{ hasMixedUnits(selectedRecord) ? '—' : formatNumber(detailTotals.plannedQuantity) }}</td>
+                        <td>{{ hasMixedUnits(selectedRecord) ? '—' : formatNumber(detailTotals.receivedQuantity) }}</td>
+                        <td class="detail-progress-total">—</td>
                         <td>—</td>
                         <td>¥ {{ formatMoney(detailTotals.amount) }}</td>
                         <td v-if="isInbound"></td>
@@ -507,6 +549,12 @@
 
             <footer class="detail-modal-footer">
               <div class="footer-actions">
+                <button v-if="canOpenExpenses(selectedRecord)" class="button button-secondary" type="button" @click="openExpenses(selectedRecord)">
+                  <ReceiptText :size="16" aria-hidden="true" />采购费用
+                </button>
+                <button v-if="isInbound && !selectedRecord.purchaseOrderId && selectedRecord.settlementType === 'pending_supplier' && canReadSettlement" class="button button-secondary" type="button" @click="openSettlement(selectedRecord)">
+                  <Wallet :size="16" aria-hidden="true" />供应商归属
+                </button>
                 <button v-if="!isInbound && selectedRecord.status === 'pending' && canAudit" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
                 </button>
@@ -536,6 +584,8 @@
         </div>
       </Transition>
     </Teleport>
+    <PurchaseExpenseDialog v-if="expenseOrderId" :order-id="expenseOrderId" @close="expenseOrderId = null" @updated="refreshData(false)" />
+    <SupplierAssignmentDialog v-if="settlementInboundId" :inbound-id="settlementInboundId" @close="settlementInboundId = null" @updated="refreshData(false)" />
     <CustomModal
       :visible="deleteConfirmOpen"
       title="确认批量删除"
@@ -551,11 +601,14 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Trash2 } from '@lucide/vue'
+import { Plus, Trash2, ReceiptText, Wallet } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { ADMIN_PURCHASE_ORDER_PERMISSIONS } from '@/utils/accessControl'
+import PurchaseExpenseDialog from '@/components/admin/purchase/PurchaseExpenseDialog.vue'
+import SupplierAssignmentDialog from '@/components/admin/purchase/SupplierAssignmentDialog.vue'
+import { invoiceLabels, paymentLabels, fulfillmentLabel } from '@/utils/supplierFinance'
 
 const props = defineProps({
   mode: {
@@ -767,7 +820,11 @@ const cloneRecords = records => records.map(record => ({
 
 const orderRecords = ref(cloneRecords(mockOrders))
 const inboundRecords = ref(cloneRecords(mockInbounds))
-const filters = ref({ keyword: '', status: 'all', startDate: '', endDate: '' })
+const emptyFilters = () => ({ keyword: '', status: 'all', startDate: '', endDate: '', invoiceStatus: '', paymentStatus: '' })
+const filters = ref(emptyFilters())
+const expenseOrderId = ref(null)
+const settlementInboundId = ref(null)
+const canReadSettlement = computed(() => userStore.hasPerm('admin.purchase.inbound.settlement.read'))
 const loading = ref(false)
 const currentPage = ref(1)
 const pageSize = 30
@@ -821,7 +878,7 @@ const statusOptions = computed(() => statusTabs.value.filter(tab => tab.key !== 
 
 const filteredRecords = computed(() => {
   const keyword = filters.value.keyword.toLowerCase()
-  const { status, startDate, endDate } = filters.value
+  const { status, startDate, endDate, invoiceStatus, paymentStatus } = filters.value
 
   return sourceRecords.value
     .filter(record => {
@@ -834,6 +891,8 @@ const filteredRecords = computed(() => {
       const date = recordDate(record)
       return (!keyword || searchable.includes(keyword))
         && (status === 'all' || record.status === status)
+        && (!invoiceStatus || record.invoiceStatus === invoiceStatus)
+        && (!paymentStatus || record.paymentStatus === paymentStatus)
         && (!startDate || date >= startDate)
         && (!endDate || date <= endDate)
     })
@@ -853,7 +912,7 @@ const isSomePageSelected = computed(() => currentPageIds.value.some(id => select
 watch(
   () => props.mode,
   () => {
-    filters.value = { keyword: '', status: 'all', startDate: '', endDate: '' }
+    filters.value = emptyFilters()
     currentPage.value = 1
     selectedIds.value = new Set()
     closeDetail()
@@ -862,7 +921,7 @@ watch(
 )
 
 watch(
-  () => [filters.value.keyword, filters.value.status, filters.value.startDate, filters.value.endDate],
+  () => Object.values(filters.value),
   () => {
     currentPage.value = 1
     selectedIds.value = new Set()
@@ -892,8 +951,32 @@ function formatNumber(value) {
 
 function itemProgress(item) {
   const planned = Number(item.expectedQty ?? item.quantity ?? 0)
-  const received = Number(item.receivedQty ?? item.quantity ?? 0)
-  return planned > 0 ? Math.round((received / planned) * 100) : 0
+  const received = Number(item.receivedQty ?? 0)
+  return planned > 0 ? Math.min(100, Math.round((received / planned) * 100)) : 0
+}
+
+function hasMixedUnits(record) {
+  return new Set((record.items || []).map(item => item.unit)).size > 1
+}
+function receiptLabel(record) {
+  if (isInbound.value && !record.purchaseOrderId) {
+    return hasMixedUnits(record) ? `${record.items.length} 行` : `${formatNumber(record.receivedQuantity)} ${record.items?.[0]?.unit || ''}`
+  }
+  return fulfillmentLabel(record)
+}
+function canOpenExpenses(record) {
+  return userStore.hasPerm('admin.route.purchase.orders') &&
+    Boolean(record.purchaseOrderId || (!isInbound.value && ['approved', 'partial', 'completed'].includes(record.status)))
+}
+function openExpenses(record) {
+  const id = Number(record.purchaseOrderId || record.id)
+  closeDetail()
+  expenseOrderId.value = id
+}
+function openSettlement(record) {
+  const id = record.inboundId
+  closeDetail()
+  settlementInboundId.value = id
 }
 
 function formatMoney(value) {
@@ -911,8 +994,7 @@ function quantityValue(record) {
 }
 
 function recordProgress(record) {
-  if (!record.expectedQuantity) return 0
-  return Math.min(100, Math.round((record.receivedQuantity / record.expectedQuantity) * 100))
+  return Math.min(100, Number(record.fulfillmentProgress || 0))
 }
 
 function getStatusLabel(status) {
@@ -961,7 +1043,7 @@ function applyFilters() {
 }
 
 function resetFilters() {
-  filters.value = { keyword: '', status: 'all', startDate: '', endDate: '' }
+  filters.value = emptyFilters()
 }
 
 function setStatusFilter(status) {
@@ -1254,6 +1336,29 @@ onMounted(() => refreshData(false))
   min-height: 100%;
   padding: 24px 28px 36px;
   color: var(--ink);
+}
+
+.search-grid {
+  grid-template-columns: minmax(180px, 1fr) minmax(250px, 1.3fr) repeat(3, minmax(110px, .6fr)) auto !important;
+}
+.records-table {
+  min-width: 1610px !important;
+}
+.is-inbound .records-table {
+  min-width: 1720px !important;
+}
+.records-table .finance-column {
+  width: 130px !important;
+  text-align: left !important;
+}
+.records-table .action-column {
+  width: 170px !important;
+}
+@media (max-width: 1200px) {
+  .search-grid { grid-template-columns: repeat(3, minmax(140px, 1fr)) !important; }
+}
+@media (max-width: 600px) {
+  .search-grid { grid-template-columns: 1fr !important; }
 }
 
 .search-panel,

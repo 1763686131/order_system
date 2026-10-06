@@ -659,6 +659,11 @@ const allMenuItems = [
         label: '采购入库',
         path: '/admin/purchase/inbound',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND
+      },
+      {
+        label: '独立入库结算',
+        path: '/admin/purchase/inbound-settlement',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT
       }
     ]
   },
@@ -744,6 +749,16 @@ const allMenuItems = [
     label: '财务',
     icon: icons.dollar,
     children: [
+      {
+        label: '供应商应付',
+        path: '/admin/finance/payables',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
+      },
+      {
+        label: '员工费用原型',
+        path: '/admin/finance/employee-expenses',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES
+      },
       {
         label: '应收欠款',
         path: '/admin/finance/receivables',

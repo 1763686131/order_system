@@ -243,6 +243,7 @@ order_system/
 │  │     │  └─ CustomerList.vue      # 客户管理入口，封装 PartyList 的 customer 模式
 │  │     ├─ purchase/                # 采购管理
 │  │     │  ├─ PurchaseList.vue      # 采购订单/采购入库共用列表；按路由 mode 显示字段
+│  │     │  ├─ PurchaseInboundSettlement.vue # 待补供应商独立入库结算
 │  │     │  └─ SupplierList.vue      # 供应商管理入口，封装 PartyList 的 supplier 模式
 │  │     ├─ inventory/               # 仓库管理
 │  │     │  └─ WarehouseManage.vue   # 仓库档案和启停维护
@@ -251,6 +252,9 @@ order_system/
 │  │     │  ├─ PaymentHistory.vue    # 收款历史、收款单录入与审核
 │  │     │  ├─ BankAccounts.vue      # 银行账户管理和余额展示
 │  │     │  ├─ DebtDetails.vue       # 应收/应付欠款详情
+│  │     │  ├─ Payables.vue          # 供应商应付、预付款、贷项汇总
+│  │     │  ├─ SupplierStatement.vue # 供应商内部对账、打印和导出
+│  │     │  ├─ EmployeeExpenses.vue  # 员工费用前端临时原型
 │  │     │  ├─ ExpressCourierReconciliation.vue # 快递运费对账
 │  │     │  └─ LogisticsTruckReconciliation.vue # 物流运费对账
 │  │     ├─ system/                  # 角色组、门店、打印模板、操作日志和系统配置
@@ -272,6 +276,7 @@ order_system/
 │  │  ├─ lodopPrint.js               # C-Lodop 检测、打印机读取和打印输出
 │  │  ├─ printClientConfig.js        # 本地打印配置和默认端口
 │  │  ├─ chineseMoney.js             # 金额中文大写
+│  │  ├─ supplierFinance.js          # 供应商账务标签、金额和幂等键工具
 │  │  └─ ...                         # Excel、日期、单位和通用工具
 │  └─ assets/styles/                 # 本地全局样式
 ├─ data/
@@ -486,6 +491,7 @@ import {
 | `/admin/purchase/inbound/create` | 新增进货单（公共表单） | `/api/stock-inbounds`、门店/供应商/仓库/原材料/单位/库存余额接口 |
 | `/admin/purchase/inbound/edit/:id` | 修改未审核进货单（公共表单） | `/api/stock-inbounds/:id` |
 | `/admin/purchase/inbound/:id` | 查看、打印进货单（公共表单） | `/api/stock-inbounds/:id`、`/api/print-templates` |
+| `/admin/purchase/inbound-settlement` | 待补供应商独立入库结算 | `/api/stock-inbounds/:id/settlement`、`/assign-supplier`、`/confirm-payable` |
 | `/admin/inventory` | 成品库存 | `/api/products/inventory` |
 | `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances`、`/api/stock-movements` |
 | `/admin/inventory/material-outbounds` | 原材料出库录入、修改、审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbounds/admin`、`/api/material-outbound-settings` |
@@ -501,6 +507,9 @@ import {
 | `/admin/customers` | 客户管理 | `/api/customers` |
 | `/admin/finance/receivables` | 应收欠款 | `/api/customers/receivables` |
 | `/admin/finance/payment-history` | 收款历史 | `/api/payment-receipts` |
+| `/admin/finance/payables` | 供应商应付、预付款和贷项 | `/api/suppliers/payables`、`/api/suppliers/:id/initial-balances` |
+| `/admin/finance/supplier-statement/:supplierId` | 供应商内部对账、打印和导出 | `/api/suppliers/:id/debt-details`、`/api/supplier-payables/:id/invoice` |
+| `/admin/finance/employee-expenses` | 员工采购/费用报销前端原型 | 仅页面临时状态，不调用正式财务接口 |
 | `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
 | `/admin/finance/debt-details/:type/:targetId` | 欠款详情 | 前端模拟数据（待接入后端 API） |
 | `/admin/system/print-template` | 打印模板管理和设计器 | `/api/print-templates` |
@@ -512,9 +521,11 @@ import {
 路由通过 `mode: 'orders'` 或 `mode: 'inbound'` 切换标题、筛选条件、表格列和操作；页面样式写在组件内的 `<style scoped>`，切换路由会重置筛选。
 采购订单已接入 `/api/purchase-orders`，支持新增申请、编辑、审核和查看。申请阶段可以暂不填写逐行供应商、单价和金额，审核时必须补齐供应商和单价；审核通过后从采购订单发起关联入库，补充仓库、应收数量和实收数量。
 
-采购订单和采购入库的业务边界如下：采购订单记录申请内容和付款信息，采购入库记录实际到货和库存位置；两者均先保存草稿，分别审核后才进入下一环节。采购入库的审核、反审核、红冲、重新启用和删除在“库存 / 入库记录”页面完成。
+采购订单记录申请、合同/金额估算和履约承诺，采购入库记录实际到货和库存位置；两者均先保存草稿，分别审核后才进入下一环节。关联入库审核按实际数量确认供应商应付，独立入库按 `none` 或 `pending_supplier` 处理。采购入库的审核、反审核、红冲、重新启用和删除在“库存 / 入库记录”页面完成。
 
-采购申请底部提供采购人、制单人、付款金额、其它费用、结算账户和本次付款字段；页面显示本单应付和本次付款后的剩余应付。付款字段只保存采购订单口径，不会在保存草稿时直接扣减结算账户或更新供应商付款流水。
+采购申请提供采购人、制单人、合同/金额估算和费用估算；已移除“本次付款”输入。旧 `currentPayment`、结算账户等字段仅为历史兼容，不代表真实付款。供应商余额以新流水为准，真实付款/银行联动放在后续阶段。采购列表将履约、开票和付款状态分开。
+
+采购第一阶段新增逻辑集中在 `backend/utils/supplier_ledger.py` 和 `backend/routes/supplier_finance.py`，前端复用 `src/components/admin/purchase/SupplierAssignmentDialog.vue`、`PurchaseExpenseDialog.vue` 与 `src/assets/styles/supplier-finance.css`。新表在首次数据库访问时自动创建，不迁移旧 `suppliers.payable`，不回填历史已审核入库应付。普通角色需在权限组中授予新的应付、对账、供应商归属和费用权限。供应商付款、完整发票分配、采购退货/退款、正式对账锁定仍属后续阶段。
 
 ### 公共单据录入组件
 
@@ -546,7 +557,7 @@ import {
 
 销售复制入口为 `/admin/sales/create?copyFrom=<订单ID>`。后台对公共表单按 `route.fullPath` 设置组件 `key`，使路由切换后重新初始化对应业务状态；销售内存草稿恢复仍由销售适配器处理。销售、退货和进货分别使用打印模板业务类型 `sale`、`return`、`purchase`，采购申请暂不提供打印入口。
 
-进货单保存使用 `/api/stock-inbounds`，固定提交 `type: 'raw-material'` 和 `status: 'draft'`；保存不会立即增加库存，需在入库记录页面审核。首次保存返回的 ID 会用于后续修改，避免同一单据重复新增。采购订单的付款字段由 `/api/purchase-orders` 负责，入库接口只负责到货、库存和入库金额。
+进货单保存使用 `/api/stock-inbounds`，按商品类型提交并固定 `status: 'draft'`；保存不增加库存，需在入库记录页面审核。首次保存 ID 用于后续修改。关联入库审核按实际数量确认新账务应付；`none` 独立入库只写库存，`pending_supplier` 独立入库待财务补录供应商后再确认应付。
 
 ## 员工与头像关键接口
 
@@ -626,6 +637,9 @@ import {
 | `DELETE` | `/api/stock-inbounds/:id` | 红冲，或删除已红冲单据 |
 | `POST` | `/api/stock-inbounds/:id/restart` | 重新启用已红冲单据 |
 | `GET` | `/api/stock-balances` | 查询库存数量、平均成本和库存金额 |
+| `GET` | `/api/stock-inbounds/:id/settlement` | 查询待补供应商独立入库 |
+| `POST` | `/api/stock-inbounds/:id/assign-supplier` | 按入库明细补录供应商 |
+| `POST` | `/api/stock-inbounds/:id/confirm-payable` | 确认独立入库应付，不重复写库存 |
 
 完整字段定义和请求示例见 [API 接口文档](docs/API接口文档.md)。
 
@@ -651,6 +665,14 @@ import {
 | `DELETE` | `/api/bank-accounts/:id` | 删除未被业务单据引用的银行账户 |
 | `POST` | `/api/upload/bank-card-background` | 上传银行卡背景图（不超过 5 MB） |
 | `POST` | `/api/upload/bank-icon` | 上传银行图标（不超过 2 MB） |
+| `GET` | `/api/suppliers/payables` | 查询供应商应付、预付款、贷项和账龄 |
+| `GET` | `/api/suppliers/:id/balance` | 查询指定供应商余额 |
+| `GET` | `/api/suppliers/:id/debt-details` | 查询内部对账明细 |
+| `POST` | `/api/suppliers/:id/initial-balances` | 录入新账务期初余额 |
+| `PUT` | `/api/supplier-payables/:id/invoice` | 维护基础开票状态 |
+| `GET` / `POST` | `/api/purchase-orders/:id/expenses` | 查询/新增采购费用行 |
+| `PUT` / `DELETE` | `/api/purchase-expenses/:id` | 修改/删除草稿费用 |
+| `POST` / `DELETE` | `/api/purchase-expenses/:id/confirm` | 确认/撤销费用归属 |
 
 银行账户图片目录由 `/api/settings/paths` 的 `bankCardBgPath` 和 `bankIconPath` 配置；数据库只保存 `/uploads/bank-cards/...` 访问路径。
 

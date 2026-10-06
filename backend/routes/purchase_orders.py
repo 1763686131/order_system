@@ -11,6 +11,9 @@ from utils.auth import current_identity, require_admin_permission
 from utils.db import get_db
 from utils.notifications import create_audit_notifications, complete_audit_notifications
 from utils.permission_catalog import ADMIN_PURCHASE_ORDER_PERMISSIONS
+from utils.supplier_ledger import (
+    FinanceError, balance, check_scope, check_version, idempotent_result, save_operation, scope_sql, source_summary,
+)
 
 
 purchase_orders_bp = Blueprint("purchase_orders", __name__, url_prefix="/api")
@@ -191,11 +194,10 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
             "SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)
         ).fetchone():
             raise ValueError("明细供应商不存在或已停用")
-        received = _number(
-            raw.get("receivedQty", raw.get("received_qty", existing.get("received_qty", 0) if existing else 0))
-        )
-        if received < 0 or received > ordered:
-            raise ValueError("已入库数量必须在 0 到采购数量之间")
+        received = _number(existing.get("received_qty", 0) if existing else 0)
+        supplied_received = raw.get("receivedQty", raw.get("received_qty"))
+        if supplied_received not in (None, "") and _number(supplied_received) != received:
+            raise ValueError("已入库数量只能由入库审核更新")
         normalized.append(
             {
                 "id": existing_id,
@@ -237,6 +239,9 @@ def _order_values(conn, data, existing=None):
     if requested_status not in ("draft", "pending"):
         raise ValueError("新建或编辑采购订单只能保存为草稿或待审核")
     store_id = _optional_int(data.get("storeId", data.get("store_id", existing.get("store_id"))), "门店ID")
+    if store_id is None or not conn.execute('SELECT 1 FROM stores WHERE id = ?', (store_id,)).fetchone():
+        raise ValueError("请选择有效申请门店")
+    check_scope(store_id)
     items = _normalize_items(conn, data.get("items"), existing.get("_items"), store_id)
     # Keep existing callers that submit one master supplier compatible.
     if supplier_id is not None:
@@ -293,12 +298,7 @@ def _supplier_payable(conn, supplier_ids):
     supplier_ids = sorted({int(supplier_id) for supplier_id in supplier_ids if supplier_id is not None})
     if not supplier_ids:
         return 0.0
-    placeholders = ",".join("?" for _ in supplier_ids)
-    row = conn.execute(
-        f"SELECT COALESCE(SUM(payable), 0) AS payable FROM suppliers WHERE id IN ({placeholders})",
-        tuple(supplier_ids),
-    ).fetchone()
-    return float(row["payable"] or 0)
+    return sum(balance(conn, supplier_id)["payableBalance"] for supplier_id in supplier_ids)
 
 
 def _serialize_item(row):
@@ -321,6 +321,8 @@ def _serialize_item(row):
     item["orderedQty"] = ordered
     item["receivedQty"] = received
     item["remainingQty"] = max(0, ordered - received)
+    item["overReceivedQty"] = max(0, received - ordered)
+    item["fulfillmentProgress"] = min(100, round(received / ordered * 100, 2)) if ordered else 0
     item["unitPrice"] = item.pop("unit_price", None)
     item["amount"] = amount
     item["supplierId"] = supplier_id
@@ -400,9 +402,20 @@ def _serialize_order(conn, row, include_items=True):
         if order["paymentAmount"] is not None
         else float(order["totalAmount"] or 0)
     )
-    order["orderPayable"] = max(0.0, order_payable_base + float(order["otherFees"] or 0))
-    order["currentPayable"] = max(0.0, order["orderPayable"] - float(order["currentPayment"] or 0))
+    order["estimatedAmount"] = max(0.0, order_payable_base + float(order["otherFees"] or 0))
+    order.update(source_summary(conn, "purchase_order_id", row["id"]))
+    order["orderPayable"] = order["confirmedPayable"]
+    order["currentPayable"] = order["unpaidAmount"]
     order["supplierPayable"] = _supplier_payable(conn, selected_supplier_ids)
+    items = order.get("items", [])
+    units = {item["unit"] for item in items}
+    order["progressBasis"] = "quantity" if len(units) == 1 else "lines"
+    order["completedLineCount"] = sum(item["remainingQty"] <= 0.0000001 for item in items)
+    order["totalLineCount"] = len(items)
+    order["receivedQuantity"] = sum(item["receivedQty"] for item in items)
+    order["fulfillmentProgress"] = min(100, round(
+        (order["receivedQuantity"] / order["totalQuantity"] if order["progressBasis"] == "quantity" and order["totalQuantity"]
+         else order["completedLineCount"] / len(items) if items else 0) * 100, 2))
     return order
 
 
@@ -440,7 +453,7 @@ def _insert_items(conn, order_id, items):
         item["id"] = cursor.lastrowid
 
 
-def _validate_audit_items(conn, items):
+def _validate_audit_items(conn, items, store_id):
     if not items:
         raise ValueError("采购订单没有有效明细")
     if any(float(item.get("ordered_qty") or 0) <= 0 for item in items):
@@ -452,8 +465,9 @@ def _validate_audit_items(conn, items):
     supplier_ids = {int(item["supplier_id"]) for item in items}
     placeholders = ",".join("?" for _ in supplier_ids)
     active_supplier_count = conn.execute(
-        f"SELECT COUNT(*) AS count FROM suppliers WHERE status = 'active' AND id IN ({placeholders})",
-        tuple(sorted(supplier_ids)),
+        f"SELECT COUNT(*) AS count FROM suppliers WHERE status = 'active' AND id IN ({placeholders}) "
+        "AND (store_id IS NULL OR store_id = ?)",
+        (*sorted(supplier_ids), store_id),
     ).fetchone()["count"]
     if active_supplier_count != len(supplier_ids):
         raise ValueError("采购明细中存在不存在或已停用的供应商")
@@ -472,13 +486,16 @@ def list_purchase_orders():
             requested_status = _status(requested_status)
         with get_db() as conn:
             sql = "SELECT * FROM purchase_orders WHERE 1 = 1"
-            params = []
+            scoped, params = scope_sql(alias="purchase_orders")
+            sql += scoped
             if requested_status:
                 sql += " AND status = ?"
                 params.append(requested_status)
             sql += " ORDER BY order_date DESC, id DESC"
             rows = conn.execute(sql, params).fetchall()
             return jsonify([_serialize_order(conn, row) for row in rows])
+    except FinanceError as exc:
+        return jsonify({"success": False, "message": str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
 
@@ -489,6 +506,10 @@ def get_purchase_order(order_id):
         row = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
         if not row:
             return jsonify({"success": False, "message": "采购订单不存在"}), 404
+        try:
+            check_scope(row["store_id"])
+        except FinanceError as exc:
+            return jsonify({"success": False, "message": str(exc)}), exc.status
         return jsonify(_serialize_order(conn, row))
 
 
@@ -499,7 +520,11 @@ def get_available_inbound(order_id):
         if not row:
             return jsonify({"success": False, "message": "采购订单不存在"}), 404
         if row["status"] not in ("approved", "partial"):
-            return jsonify({"success": False, "message": "采购订单尚未审核，不能创建入库单"}), 409
+            return jsonify({"success": False, "message": "采购订单未审核或已完成入库，不能创建补充入库"}), 409
+        try:
+            check_scope(row["store_id"])
+        except FinanceError as exc:
+            return jsonify({"success": False, "message": str(exc)}), exc.status
         order = _serialize_order(conn, row)
         first_inbound = conn.execute(
             "SELECT document_no FROM stock_inbounds WHERE purchase_order_id = ? ORDER BY id LIMIT 1",
@@ -550,6 +575,8 @@ def create_purchase_order():
                         f"采购订单 {row['order_no']} 已提交，请及时审核。",
                     )
                 return jsonify({"success": True, "id": order_id, "purchaseOrder": _serialize_order(conn, row)}), 201
+    except FinanceError as exc:
+        return jsonify({"success": False, "message": str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
     except Exception as exc:
@@ -565,11 +592,16 @@ def update_purchase_order(order_id):
     try:
         with _write_lock:
             with get_db() as conn:
+                conn.execute("BEGIN IMMEDIATE")
                 row, existing = _existing_values(conn, order_id)
                 if not row:
                     return jsonify({"success": False, "message": "采购订单不存在"}), 404
                 if row["status"] not in ("draft", "pending"):
                     return jsonify({"success": False, "message": "已审核或已入库的采购订单不能编辑"}), 409
+                check_scope(row["store_id"])
+                check_version(data, row)
+                if conn.execute("SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ?", (order_id,)).fetchone():
+                    raise FinanceError("请先删除采购费用，再修改采购明细", 409)
                 if any(float(item.get("received_qty") or 0) > 0 for item in existing["_items"]):
                     return jsonify({"success": False, "message": "已有入库数量的采购订单不能编辑"}), 409
                 values = _order_values(conn, data, existing)
@@ -579,7 +611,7 @@ def update_purchase_order(order_id):
                     UPDATE purchase_orders SET order_no = ?, order_date = ?, expected_date = ?, store_id = ?,
                         supplier_id = ?, remark = ?, purchaser = ?, creator = ?, payment_amount = ?,
                         other_fees = ?, settlement_account = ?, current_payment = ?, status = ?,
-                        total_quantity = ?, total_amount = ?, updated_at = ?
+                        total_quantity = ?, total_amount = ?, updated_at = ?, version = version + 1
                     WHERE id = ?
                     """,
                     (
@@ -602,6 +634,8 @@ def update_purchase_order(order_id):
                         event_version=f"submitted:{now}",
                     )
                 return jsonify({"success": True, "purchaseOrder": _serialize_order(conn, updated)})
+    except FinanceError as exc:
+        return jsonify({"success": False, "message": str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
     except Exception as exc:
@@ -615,11 +649,21 @@ def update_purchase_order(order_id):
 def delete_purchase_order(order_id):
     with _write_lock:
         with get_db() as conn:
-            row = conn.execute("SELECT status FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
+            conn.execute("BEGIN IMMEDIATE")
+            row = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
             if not row:
                 return jsonify({"success": False, "message": "采购订单不存在"}), 404
             if row["status"] not in ("draft", "pending"):
                 return jsonify({"success": False, "message": "已审核或已入库的采购订单不能删除"}), 409
+            try:
+                check_scope(row["store_id"])
+                check_version(request.get_json(silent=True) or {}, row)
+            except FinanceError as exc:
+                return jsonify({"success": False, "message": str(exc)}), exc.status
+            if conn.execute("SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ?", (order_id,)).fetchone() or conn.execute(
+                "SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ?", (order_id,)
+            ).fetchone():
+                return jsonify({"success": False, "message": "订单已被入库或费用引用，不能删除"}), 409
             complete_audit_notifications(conn, "purchase_order", order_id)
             conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
             conn.execute("DELETE FROM purchase_orders WHERE id = ?", (order_id,))
@@ -637,14 +681,23 @@ def audit_purchase_order(order_id):
                 row, existing = _existing_values(conn, order_id)
                 if not row:
                     return jsonify({"success": False, "message": "采购订单不存在"}), 404
+                check_scope(row["store_id"])
+                replay, token = idempotent_result(conn, f"purchase-order:{order_id}:audit", data)
+                if replay:
+                    return jsonify(replay)
+                if row["status"] in ("approved", "partial", "completed"):
+                    return jsonify(save_operation(conn, token, {
+                        "success": True, "purchaseOrder": _serialize_order(conn, row),
+                    }))
                 if row["status"] != "pending":
                     return jsonify({"success": False, "message": "只有待审核采购订单可以审核"}), 409
+                check_version(data, row)
                 audit_items = existing["_items"]
                 audit_values = None
                 if data.get("items") is not None:
                     audit_values = _order_values(conn, {**data, "status": "pending"}, existing)
                     audit_items = audit_values["items"]
-                master_supplier_id = _validate_audit_items(conn, audit_items)
+                master_supplier_id = _validate_audit_items(conn, audit_items, audit_values["store_id"] if audit_values else row["store_id"])
                 if audit_values is not None:
                     now = _now()
                     conn.execute(
@@ -668,12 +721,14 @@ def audit_purchase_order(order_id):
                     _insert_items(conn, order_id, audit_values["items"])
                 now = _now()
                 conn.execute(
-                    "UPDATE purchase_orders SET status = 'approved', supplier_id = ?, audited_by = ?, audited_at = ?, updated_at = ? WHERE id = ?",
+                    "UPDATE purchase_orders SET status = 'approved', supplier_id = ?, audited_by = ?, audited_at = ?, updated_at = ?, version = version + 1 WHERE id = ?",
                     (master_supplier_id, current_identity(), now, now, order_id),
                 )
                 complete_audit_notifications(conn, "purchase_order", order_id)
                 updated = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
-                return jsonify({"success": True, "message": "采购订单审核成功", "purchaseOrder": _serialize_order(conn, updated)})
+                return jsonify(save_operation(conn, token, {"success": True, "message": "采购订单审核成功", "purchaseOrder": _serialize_order(conn, updated)}))
+    except FinanceError as exc:
+        return jsonify({"success": False, "message": str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
     except Exception as exc:
@@ -685,11 +740,21 @@ def audit_purchase_order(order_id):
 def reverse_audit_purchase_order(order_id):
     with _write_lock:
         with get_db() as conn:
+            conn.execute("BEGIN IMMEDIATE")
             row = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
             if not row:
                 return jsonify({"success": False, "message": "采购订单不存在"}), 404
             if row["status"] not in ("approved",):
                 return jsonify({"success": False, "message": "当前采购订单不能反审核"}), 409
+            try:
+                check_scope(row["store_id"])
+                check_version(request.get_json(silent=True) or {}, row)
+            except FinanceError as exc:
+                return jsonify({"success": False, "message": str(exc)}), exc.status
+            if conn.execute("SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ?", (order_id,)).fetchone() or conn.execute(
+                "SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ?", (order_id,)
+            ).fetchone():
+                return jsonify({"success": False, "message": "订单已被入库或费用引用，请先处理引用单据"}), 409
             received = conn.execute(
                 "SELECT COALESCE(SUM(received_qty), 0) AS quantity FROM purchase_order_items WHERE order_id = ?",
                 (order_id,),
@@ -698,7 +763,7 @@ def reverse_audit_purchase_order(order_id):
                 return jsonify({"success": False, "message": "采购订单已有入库数量，不能反审核"}), 409
             now = _now()
             conn.execute(
-                "UPDATE purchase_orders SET status = 'pending', audited_by = NULL, audited_at = NULL, updated_at = ? WHERE id = ?",
+                "UPDATE purchase_orders SET status = 'pending', audited_by = NULL, audited_at = NULL, updated_at = ?, version = version + 1 WHERE id = ?",
                 (now, order_id),
             )
             updated = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()

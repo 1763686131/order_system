@@ -14,7 +14,11 @@ from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
 from utils.notifications import create_audit_notifications, complete_audit_notifications
-from utils.auth import admin_permission_granted, require_admin_permission
+from utils.auth import admin_permission_granted, require_admin_permission, current_identity
+from utils.supplier_ledger import (
+    FinanceError, balance, check_scope, check_version, idempotent_result,
+    post_inbound_payables, reverse_inbound_payables, save_operation, source_summary,
+)
 from utils.permission_catalog import ADMIN_AUDIT_NOTIFICATION_PERMISSIONS, ADMIN_PURCHASE_ORDER_PERMISSIONS
 
 
@@ -86,7 +90,7 @@ def _clean_text(value, max_length=None):
     return text[:max_length] if max_length else text
 
 
-def _supplier_response(row):
+def _supplier_response(row, conn):
     if not row:
         return None
     supplier = dict(row)
@@ -97,7 +101,9 @@ def _supplier_response(row):
     supplier['taxNumber'] = supplier.pop('tax_number', '') or ''
     supplier['bankName'] = supplier.pop('bank_name', '') or ''
     supplier['bankAccount'] = supplier.pop('bank_account', '') or ''
-    supplier['payable'] = float(supplier.pop('payable', 0) or 0)
+    supplier.pop('payable', None)
+    supplier.update(balance(conn, row['id']))
+    supplier['payable'] = supplier['payableBalance']
     supplier['createdAt'] = supplier.pop('created_at', '') or ''
     supplier['updatedAt'] = supplier.pop('updated_at', '') or ''
     return supplier
@@ -139,7 +145,7 @@ def list_suppliers():
             params.append(status)
         sql += ' ORDER BY supplier_name COLLATE NOCASE, id'
         rows = conn.execute(sql, params).fetchall()
-        return jsonify([_supplier_response(row) for row in rows])
+        return jsonify([_supplier_response(row, conn) for row in rows])
 
 
 @stock_inbounds_bp.route('/suppliers', methods=['POST'])
@@ -172,7 +178,7 @@ def create_supplier():
                 ),
             )
             row = conn.execute('SELECT * FROM suppliers WHERE id = ?', (cursor.lastrowid,)).fetchone()
-            return jsonify({'success': True, 'supplier': _supplier_response(row)}), 201
+            return jsonify({'success': True, 'supplier': _supplier_response(row, conn)}), 201
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
 
@@ -208,7 +214,7 @@ def update_supplier(supplier_id):
                 ),
             )
             row = conn.execute('SELECT * FROM suppliers WHERE id = ?', (supplier_id,)).fetchone()
-            return jsonify({'success': True, 'supplier': _supplier_response(row)})
+            return jsonify({'success': True, 'supplier': _supplier_response(row, conn)})
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
 
@@ -216,7 +222,13 @@ def update_supplier(supplier_id):
 @stock_inbounds_bp.route('/suppliers/<int:supplier_id>', methods=['DELETE'])
 def delete_supplier(supplier_id):
     with get_db() as conn:
-        used = conn.execute('SELECT 1 FROM stock_inbounds WHERE supplier_id = ? LIMIT 1', (supplier_id,)).fetchone()
+        used = conn.execute(
+            """SELECT 1 FROM stock_inbounds WHERE supplier_id = ?
+               UNION ALL SELECT 1 FROM stock_inbound_items WHERE supplier_id = ?
+               UNION ALL SELECT 1 FROM purchase_order_items WHERE supplier_id = ?
+               UNION ALL SELECT 1 FROM supplier_account_transactions WHERE supplier_id = ?
+               LIMIT 1""", (supplier_id,) * 4,
+        ).fetchone()
         if used:
             conn.execute("UPDATE suppliers SET status = 'inactive', updated_at = ? WHERE id = ?", (_now(), supplier_id))
             return jsonify({'success': True, 'message': '供应商已停用'})
@@ -255,6 +267,8 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
         expected = _number(raw.get('expectedQty', raw.get('expected_qty')), Decimal('0'))
         price_value = raw.get('unitPrice', raw.get('unit_price', raw.get('price')))
         price = None if price_value in (None, '') else _number(price_value)
+        if price is not None and price < 0:
+            raise ValueError('采购单价不能为负数')
         tax_rate = _number(raw.get('taxRate', raw.get('tax_rate', 0)), Decimal('0'))
         if tax_rate < 0 or tax_rate > 100:
             raise ValueError('税率必须在 0 到 100 之间')
@@ -285,6 +299,7 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
             raise ValueError('明细仓库不存在')
 
         normalized.append({
+            'id': _optional_int(raw.get('id'), '入库明细ID'),
             'product_type': product_type,
             'purchase_order_item_id': purchase_order_item_id,
             'product_id': product_id,
@@ -302,6 +317,7 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
             'tax_amount': float(tax_amount),
             'total_amount': float(total_amount),
             'remark': _clean_text(raw.get('remark', ''), 500),
+            'supplier_id': _optional_int(raw.get('supplierId', raw.get('supplier_id')), '明细供应商'),
         })
     if require_valid and not normalized:
         raise ValueError('审核至少需要 1 条有效物料明细')
@@ -341,12 +357,21 @@ def _document_values(conn, data, existing=None, for_post=False):
             raise ValueError('独立入库的单据来源无效')
     if purchase_order_id is None and supplier_id is not None:
         raise ValueError('有供应商的原材料请通过采购订单入库')
+    settlement_type = _clean_text(data.get('settlementType', data.get('settlement_type', existing.get('settlement_type', 'none'))))
+    if settlement_type not in ('none', 'pending_supplier'):
+        raise ValueError('结算归属只能为无需结算或待补供应商')
+    if purchase_order_id or document_source == 'production':
+        settlement_type = 'none'
     workshop = _clean_text(data.get('workshop', data.get('productionWorkshop', existing.get('workshop', ''))), 80)
     if receipt_type == 'raw-material' and require_valid:
         if supplier_id is not None and not conn.execute("SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)).fetchone():
             raise ValueError('供应商不存在或已停用')
-    if not conn.execute('SELECT 1 FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone():
+    warehouse = conn.execute('SELECT store_id FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone()
+    if not warehouse:
         raise ValueError('目标仓库不存在')
+    if warehouse['store_id'] != store_id:
+        raise ValueError('目标仓库必须属于单据门店')
+    check_scope(store_id, [warehouse_id])
     items = _normalize_items(
         conn,
         receipt_type,
@@ -356,7 +381,20 @@ def _document_values(conn, data, existing=None, for_post=False):
         allow_mixed_types=purchase_order_id is not None,
     )
     if purchase_order_id is not None:
+        order_store = conn.execute('SELECT store_id FROM purchase_orders WHERE id = ?', (purchase_order_id,)).fetchone()
+        if order_store and order_store['store_id'] != store_id:
+            raise ValueError('入库门店必须与采购订单一致')
         _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt_type, require_valid=require_valid)
+    else:
+        if any(item.get('supplier_id') for item in items):
+            raise ValueError('独立入库不能填写明细供应商，请使用财务补录流程')
+        for item in items:
+            item['supplier_assignment_status'] = 'pending' if settlement_type == 'pending_supplier' else 'not_required'
+    for item in items:
+        warehouse = conn.execute('SELECT store_id FROM warehouses WHERE id = ?', (item['warehouse_id'],)).fetchone()
+        if not warehouse or warehouse['store_id'] != store_id:
+            raise ValueError('明细仓库必须属于单据门店')
+    check_scope(store_id, [item['warehouse_id'] for item in items])
     if require_valid and not any(item['received_qty'] > 0 for item in items):
         raise ValueError('审核至少需要 1 条有效物料明细')
     total_quantity = sum(Decimal(str(item['received_qty'])) for item in items)
@@ -377,6 +415,8 @@ def _document_values(conn, data, existing=None, for_post=False):
         'supplier_id': supplier_id if receipt_type == 'raw-material' else None,
         'purchase_order_id': purchase_order_id,
         'document_source': document_source,
+        'settlement_type': settlement_type,
+        'settlement_remark': _clean_text(data.get('settlementRemark', data.get('settlement_remark', existing.get('settlement_remark', ''))), 500),
         'workshop': workshop if receipt_type == 'finished-product' else '',
         'inspector': _clean_text(data.get('inspector', existing.get('inspector', '')), 80),
         'quality_no': _clean_text(data.get('qualityNo', data.get('quality_no', existing.get('quality_no', ''))), 80),
@@ -399,6 +439,7 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt
         raise ValueError('关联的采购订单不存在')
     if order['status'] not in ('approved', 'partial', 'completed'):
         raise ValueError('只有已审核或部分入库的采购订单可以入库')
+    check_scope(order['store_id'])
     if supplier_id is not None and order['supplier_id'] is not None and order['supplier_id'] != supplier_id:
         raise ValueError('入库供应商必须与采购订单一致')
     order_items = {
@@ -418,6 +459,8 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt
         order_item = order_items.get(int(link_id))
         if not order_item:
             raise ValueError('关联的采购订单明细不存在')
+        item['supplier_id'] = order_item['supplier_id']
+        item['supplier_assignment_status'] = 'confirmed'
         if order_item['product_type'] != item['product_type']:
             raise ValueError('入库类型与采购订单明细类型不一致')
         if item.get('product_id') is not None and order_item['product_id'] != item['product_id']:
@@ -470,6 +513,11 @@ def _serialize_item(row, default_warehouse_id=None, default_product_type=None):
     item['taxRate'] = item.pop('tax_rate', 0)
     item['taxAmount'] = item.pop('tax_amount', 0)
     item['totalAmount'] = item.pop('total_amount', 0)
+    item['supplierId'] = item.pop('supplier_id', None)
+    item['supplierAssignmentStatus'] = item.pop('supplier_assignment_status', 'not_required')
+    item['supplierAssignedBy'] = item.pop('supplier_assigned_by', None)
+    item['supplierAssignedAt'] = item.pop('supplier_assigned_at', None)
+    item['payableTransactionId'] = item.pop('payable_transaction_id', None)
     return item
 
 
@@ -495,6 +543,11 @@ def _serialize_document(conn, row, include_items=True):
     document['supplierId'] = document.pop('supplier_id', None)
     document['purchaseOrderId'] = document.pop('purchase_order_id', None)
     document['documentSource'] = document.pop('document_source', 'other')
+    document['settlementType'] = document.pop('settlement_type', 'none')
+    document['settlementRemark'] = document.pop('settlement_remark', '')
+    document['auditedBy'] = document.pop('audited_by', '')
+    document['reversedAt'] = document.pop('reversed_at', None)
+    document.update(source_summary(conn, 'source_id', row['id']))
     document['supplierName'] = supplier['supplier_name'] if supplier else ''
     document['warehouseName'] = warehouse['name'] if warehouse else ''
     document['storeName'] = store['name'] if store else ''
@@ -534,12 +587,23 @@ def _serialize_document(conn, row, include_items=True):
         } if document['purchaseOrderId'] else {}
         for item in document['items']:
             linked_supplier = linked_suppliers.get(item['id'])
-            item['supplierId'] = linked_supplier['supplier_id'] if linked_supplier else document['supplierId']
-            item['supplierName'] = (linked_supplier['supplier_name'] or '') if linked_supplier else document['supplierName']
+            if item['supplierId'] is None and linked_supplier:
+                item['supplierId'] = linked_supplier['supplier_id']
+            supplier_row = conn.execute(
+                'SELECT supplier_name FROM suppliers WHERE id = ?', (item['supplierId'],)
+            ).fetchone()
+            item['supplierName'] = supplier_row['supplier_name'] if supplier_row else ''
         if not document['supplierName']:
             document['supplierName'] = '、'.join(dict.fromkeys(
                 item['supplierName'] for item in document['items'] if item['supplierName']
             ))
+    document['financialStatus'] = (
+        'payable_confirmed' if document['payableCount'] else
+        'pending_inbound' if document['purchaseOrderId'] else
+        'supplier_assigned' if document['settlementType'] == 'pending_supplier' and
+            document.get('items') and all(item['supplierId'] for item in document['items']) else
+        'pending_supplier' if document['settlementType'] == 'pending_supplier' else 'not_required'
+    )
     return document
 
 
@@ -557,6 +621,12 @@ def _post_items(conn, document_row, item_rows):
         store_id = int(document_row['store_id'] or 0)
         bin_code = item['bin_code'] or ''
         batch_no = item['batch_no'] or ''
+        expense_cost = conn.execute(
+            """SELECT COALESCE(SUM(amount_excluding_tax_cents), 0) AS amount
+               FROM purchase_expense_lines WHERE inbound_item_id = ?
+               AND status = 'confirmed' AND include_in_inventory_cost = 1""", (item['id'],),
+        ).fetchone()['amount'] / 100
+        inventory_price = float(item['unit_price'] or 0) + expense_cost / qty
         conn.execute(
             '''
             INSERT INTO stock_balances (
@@ -580,7 +650,7 @@ def _post_items(conn, document_row, item_rows):
             (
                 receipt_type, document_row['id'], document_row['document_no'], item['id'],
                 receipt_type, product_id, warehouse_id, store_id, bin_code, batch_no,
-                qty, item['unit_price'], item['tax_rate'], item['total_amount'], now,
+                qty, inventory_price, item['tax_rate'], float(item['total_amount']) + expense_cost, now,
             ),
         )
         if receipt_type == 'finished-product':
@@ -703,12 +773,28 @@ def _insert_items(conn, inbound_id, receipt_type, items):
             ),
         )
         item['id'] = cursor.lastrowid
+        conn.execute(
+            "UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ? WHERE id = ?",
+            (item.get('supplier_id'), item.get('supplier_assignment_status', 'not_required'), item['id']),
+        )
 
 
 def _document_insert(conn, values):
     now = _now()
     purchase_order_id = values.get('purchase_order_id')
     if purchase_order_id:
+        order = conn.execute('SELECT status, store_id FROM purchase_orders WHERE id = ?', (purchase_order_id,)).fetchone()
+        if order['status'] == 'completed':
+            raise FinanceError('采购订单已完成入库，请新建采购订单或独立入库', 409)
+        if order['store_id'] != values['store_id']:
+            raise ValueError('入库门店必须与采购订单一致')
+        for item in values['items']:
+            order_item = conn.execute(
+                'SELECT ordered_qty, received_qty FROM purchase_order_items WHERE id = ?',
+                (item['purchase_order_item_id'],),
+            ).fetchone()
+            if order_item and order_item['received_qty'] >= order_item['ordered_qty']:
+                raise FinanceError('已完成的采购明细不能补充入库', 409)
         previous = conn.execute(
             'SELECT document_no FROM stock_inbounds WHERE purchase_order_id = ? ORDER BY id LIMIT 1',
             (purchase_order_id,),
@@ -740,6 +826,10 @@ def _document_insert(conn, values):
         ),
     )
     inbound_id = cursor.lastrowid
+    conn.execute(
+        "UPDATE stock_inbounds SET settlement_type = ?, settlement_remark = ? WHERE id = ?",
+        (values['settlement_type'], values['settlement_remark'], inbound_id),
+    )
     if not values['document_no']:
         generated = f"RK{values['document_date'].replace('-', '')[:8]}{inbound_id:03d}"
         _validate_document_number(conn, generated, purchase_order_id, inbound_id)
@@ -783,11 +873,21 @@ def list_stock_inbounds():
     receipt_type = request.args.get('type')
     status = request.args.get('status')
     business_type = _clean_text(request.args.get('businessType')).lower()
+    settlement_type = request.args.get('settlementType')
     if business_type not in ('', 'purchase', 'production'):
         return jsonify({'success': False, 'message': '入库业务类型无效'}), 400
     with get_db() as conn:
         sql = 'SELECT * FROM stock_inbounds WHERE 1 = 1'
         params = []
+        from utils.supplier_ledger import scope_sql
+        scoped, scoped_params = scope_sql(alias='stock_inbounds')
+        sql += scoped
+        params.extend(scoped_params)
+        if settlement_type:
+            if settlement_type not in ('none', 'pending_supplier'):
+                return jsonify({'success': False, 'message': '结算归属无效'}), 400
+            sql += ' AND settlement_type = ? AND purchase_order_id IS NULL'
+            params.append(settlement_type)
         if business_type == 'purchase':
             sql += " AND document_source IN ('other', 'purchase-order')"
         elif business_type == 'production':
@@ -809,6 +909,10 @@ def get_stock_inbound(inbound_id):
         row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
         if not row:
             return jsonify({'success': False, 'message': '入库单不存在'}), 404
+        try:
+            check_scope(row['store_id'])
+        except FinanceError as exc:
+            return jsonify({'success': False, 'message': str(exc)}), exc.status
         return jsonify(_serialize_document(conn, row))
 
 
@@ -821,6 +925,7 @@ def create_stock_inbound():
             return jsonify({'success': False, 'message': '请先保存待审核单据，再调用审核接口'}), 400
         with _write_lock:
             with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
                 values = _document_values(conn, data)
                 row = _document_insert(conn, values)
                 create_audit_notifications(
@@ -831,6 +936,8 @@ def create_stock_inbound():
                     f"入库单 {row['document_no']} 已提交，请及时审核。",
                 )
                 return jsonify({'success': True, 'message': '入库单保存成功', 'stockIn': _serialize_document(conn, row), 'id': row['id']}), 201
+    except FinanceError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
@@ -846,11 +953,17 @@ def update_stock_inbound(inbound_id):
             return jsonify({'success': False, 'message': '请通过审核接口变更审核状态'}), 400
         with _write_lock:
             with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
                 old_row, old_values = _existing_values(conn, inbound_id)
                 if not old_row:
                     return jsonify({'success': False, 'message': '入库单不存在'}), 404
                 if _is_audited(old_row['status']):
                     return jsonify({'success': False, 'message': '已审核单据不可修改'}), 409
+                check_scope(old_row['store_id'])
+                check_version(data, old_row)
+                if conn.execute('SELECT 1 FROM purchase_expense_lines WHERE inbound_item_id IN '
+                                '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?)', (inbound_id,)).fetchone():
+                    raise FinanceError('请先删除或取消该批次的费用归属，再修改入库明细', 409)
                 values = _document_values(conn, data, existing=old_values)
                 if values.get('purchase_order_id') != old_row['purchase_order_id']:
                     raise ValueError('不能修改入库批次关联的采购订单')
@@ -874,12 +987,18 @@ def update_stock_inbound(inbound_id):
                     ),
                 )
                 conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (inbound_id,))
+                conn.execute(
+                    "UPDATE stock_inbounds SET settlement_type = ?, settlement_remark = ?, version = version + 1 WHERE id = ?",
+                    (values['settlement_type'], values['settlement_remark'], inbound_id),
+                )
                 _insert_items(conn, inbound_id, values['receipt_type'], values['items'])
                 if _is_audited(values['status']):
                     new_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                     _post_items(conn, new_row, [dict(item, id=item.get('id')) for item in values['items']])
                 row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                 return jsonify({'success': True, 'message': '入库单更新成功', 'stockIn': _serialize_document(conn, row)})
+    except FinanceError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
@@ -888,20 +1007,41 @@ def update_stock_inbound(inbound_id):
 
 @stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>', methods=['DELETE'])
 def cancel_stock_inbound(inbound_id):
-    with get_db() as conn:
-        row = conn.execute('SELECT status FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
-        if not row:
-            return jsonify({'success': False, 'message': '入库单不存在'}), 404
-        if _is_audited(row['status']):
-            return jsonify({'success': False, 'message': '已审核单据不能直接删除，请先反审核'}), 409
-        if row['status'] == 'cancelled':
-            complete_audit_notifications(conn, "stock_inbound", inbound_id)
-            conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (inbound_id,))
-            conn.execute('DELETE FROM stock_inbounds WHERE id = ?', (inbound_id,))
-            return jsonify({'success': True, 'message': '已红冲入库单已删除', 'deleted': True})
-        conn.execute("UPDATE stock_inbounds SET status = 'cancelled', updated_at = ? WHERE id = ?", (_now(), inbound_id))
-        complete_audit_notifications(conn, "stock_inbound", inbound_id)
-        return jsonify({'success': True, 'message': '入库单已作废'})
+    data = request.get_json(silent=True) or {}
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+                if not row:
+                    return jsonify({'success': False, 'message': '入库单不存在'}), 404
+                check_scope(row['store_id'])
+                check_version(data, row)
+                if _is_audited(row['status']):
+                    return jsonify({'success': False, 'message': '已审核单据不能直接删除，请先反审核'}), 409
+                if conn.execute(
+                    'SELECT 1 FROM purchase_expense_lines WHERE inbound_item_id IN '
+                    '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?) LIMIT 1',
+                    (inbound_id,),
+                ).fetchone():
+                    raise FinanceError('请先删除或取消该批次的费用归属，再作废入库单', 409)
+                if row['status'] == 'cancelled':
+                    complete_audit_notifications(conn, "stock_inbound", inbound_id)
+                    conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (inbound_id,))
+                    conn.execute('DELETE FROM stock_inbounds WHERE id = ?', (inbound_id,))
+                    return jsonify({'success': True, 'message': '已红冲入库单已删除', 'deleted': True})
+                conn.execute(
+                    "UPDATE stock_inbounds SET status = 'cancelled', version = version + 1, updated_at = ? WHERE id = ?",
+                    (_now(), inbound_id),
+                )
+                complete_audit_notifications(conn, "stock_inbound", inbound_id)
+                return jsonify({'success': True, 'message': '入库单已作废'})
+    except FinanceError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), exc.status
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'message': '入库单作废失败', 'detail': str(exc)}), 500
 
 
 @stock_inbounds_bp.route('/purchase-inbounds/bulk-delete', methods=['POST'])
@@ -924,6 +1064,7 @@ def delete_purchase_inbounds():
             raise ValueError('请先勾选需要删除的入库记录')
         with _write_lock:
             with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
                 orders = []
                 if order_ids:
                     placeholders = ','.join('?' for _ in order_ids)
@@ -953,13 +1094,17 @@ def delete_purchase_inbounds():
                     if any(_is_audited(row['status']) for row in rows) and not admin_permission_granted(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS['stock_inbound']):
                         return jsonify({'success': False, 'message': '删除已审核入库需要入库审核权限'}), 403
                 for row in rows:
+                    check_scope(row['store_id'])
                     if _is_audited(row['status']):
                         items = [dict(item) for item in conn.execute(
                             'SELECT * FROM stock_inbound_items WHERE inbound_id = ?', (row['id'],)
                         ).fetchall()]
+                        reverse_inbound_payables(conn, row)
                         _reverse_posted_items(conn, row)
                         _update_purchase_receipts(conn, row['purchase_order_id'], items, direction=-1)
                     complete_audit_notifications(conn, 'stock_inbound', row['id'])
+                    conn.execute('DELETE FROM purchase_expense_lines WHERE inbound_item_id IN '
+                                 '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?)', (row['id'],))
                     conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (row['id'],))
                     conn.execute('DELETE FROM stock_inbounds WHERE id = ?', (row['id'],))
                 for order in orders:
@@ -968,6 +1113,8 @@ def delete_purchase_inbounds():
                         (_now(), _now(), order['id']),
                     )
                 return jsonify({'success': True, 'message': '采购入库记录已删除', 'deletedCount': len(rows)})
+    except FinanceError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 409
     except Exception as exc:
@@ -977,32 +1124,43 @@ def delete_purchase_inbounds():
 @stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>/restart', methods=['POST'])
 def restart_stock_inbound(inbound_id):
     """将已红冲且未写库存的单据重新置为待审核。"""
-    with _write_lock:
-        with get_db() as conn:
-            row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
-            if not row:
-                return jsonify({'success': False, 'message': '入库单不存在'}), 404
-            if row['status'] != 'cancelled':
-                return jsonify({'success': False, 'message': '只有已红冲单据可以重新启用'}), 409
-            now = _now()
-            conn.execute(
-                "UPDATE stock_inbounds SET status = 'draft', updated_at = ? WHERE id = ?",
-                (now, inbound_id),
-            )
-            updated = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
-            create_audit_notifications(
-                conn,
-                "stock_inbound",
-                inbound_id,
-                updated["document_no"],
-                f"入库单 {updated['document_no']} 已重新提交，请及时审核。",
-                event_version=f"restart:{now}",
-            )
-            return jsonify({
-                'success': True,
-                'message': '入库单已重新启用',
-                'stockIn': _serialize_document(conn, updated),
-            })
+    data = request.get_json(silent=True) or {}
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
+                row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+                if not row:
+                    return jsonify({'success': False, 'message': '入库单不存在'}), 404
+                check_scope(row['store_id'])
+                check_version(data, row)
+                if row['status'] != 'cancelled':
+                    return jsonify({'success': False, 'message': '只有已红冲单据可以重新启用'}), 409
+                now = _now()
+                conn.execute(
+                    "UPDATE stock_inbounds SET status = 'draft', version = version + 1, updated_at = ? WHERE id = ?",
+                    (now, inbound_id),
+                )
+                updated = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+                create_audit_notifications(
+                    conn,
+                    "stock_inbound",
+                    inbound_id,
+                    updated["document_no"],
+                    f"入库单 {updated['document_no']} 已重新提交，请及时审核。",
+                    event_version=f"restart:{now}",
+                )
+                return jsonify({
+                    'success': True,
+                    'message': '入库单已重新启用',
+                    'stockIn': _serialize_document(conn, updated),
+                })
+    except FinanceError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), exc.status
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 400
+    except Exception as exc:
+        return jsonify({'success': False, 'message': '入库单重新启用失败', 'detail': str(exc)}), 500
 
 
 @stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>/audit', methods=['POST'])
@@ -1012,11 +1170,18 @@ def audit_stock_inbound(inbound_id):
     try:
         with _write_lock:
             with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
                 row, values = _existing_values(conn, inbound_id)
                 if not row:
                     return jsonify({'success': False, 'message': '入库单不存在'}), 404
+                check_scope(row['store_id'])
+                data = request.get_json(silent=True) or {}
+                replay, token = idempotent_result(conn, f'inbound:{inbound_id}:audit', data)
+                if replay:
+                    return jsonify(replay)
                 if _is_audited(row['status']):
-                    return jsonify({'success': False, 'message': '入库单已经审核'}), 409
+                    return jsonify(save_operation(conn, token, {'success': True, 'stockIn': _serialize_document(conn, row)}))
+                check_version(data, row)
                 if row['status'] != 'draft':
                     return jsonify({'success': False, 'message': '只有待审核单据可以审核'}), 409
                 movement_exists = conn.execute(
@@ -1027,25 +1192,37 @@ def audit_stock_inbound(inbound_id):
                     return jsonify({'success': False, 'message': '该单据已有库存流水，请先检查数据状态'}), 409
 
                 # 重新按审核规则校验供应商、物料、数量和批次。
-                _document_values(conn, values, existing=values, for_post=True)
+                checked = _document_values(conn, values, existing=values, for_post=True)
+                for item in checked['items']:
+                    conn.execute(
+                        """UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ?,
+                           unit_price = ?, tax_amount = ?, total_amount = ? WHERE id = ? AND inbound_id = ?""",
+                        (item['supplier_id'], item['supplier_assignment_status'], item['unit_price'],
+                         item['tax_amount'], item['total_amount'], item['id'], inbound_id),
+                    )
                 item_rows = conn.execute(
                     'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id',
                     (inbound_id,),
                 ).fetchall()
                 now = _now()
                 conn.execute(
-                    "UPDATE stock_inbounds SET status = 'reviewed', posted_at = ?, updated_at = ? WHERE id = ?",
-                    (now, now, inbound_id),
+                    """UPDATE stock_inbounds SET status = 'reviewed', posted_at = ?, updated_at = ?,
+                       audited_by = ?, version = version + 1, total_tax = ?, total_amount = ? WHERE id = ?""",
+                    (now, now, current_identity(), checked['total_tax'], checked['total_amount'], inbound_id),
                 )
                 audited_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                 _post_items(conn, audited_row, [dict(item) for item in item_rows])
+                if audited_row['purchase_order_id']:
+                    post_inbound_payables(conn, audited_row, [dict(item) for item in item_rows])
                 _update_purchase_receipts(conn, audited_row['purchase_order_id'], [dict(item) for item in item_rows], direction=1)
                 complete_audit_notifications(conn, "stock_inbound", inbound_id)
-                return jsonify({
+                return jsonify(save_operation(conn, token, {
                     'success': True,
                     'message': '入库单审核成功，库存已更新',
                     'stockIn': _serialize_document(conn, audited_row),
-                })
+                }))
+    except FinanceError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
@@ -1059,21 +1236,38 @@ def reverse_audit_stock_inbound(inbound_id):
     try:
         with _write_lock:
             with get_db() as conn:
+                conn.execute('BEGIN IMMEDIATE')
                 row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                 if not row:
                     return jsonify({'success': False, 'message': '入库单不存在'}), 404
+                check_scope(row['store_id'])
+                data = request.get_json(silent=True) or {}
+                replay, token = idempotent_result(conn, f'inbound:{inbound_id}:reverse', data)
+                if replay:
+                    return jsonify(replay)
                 if not _is_audited(row['status']):
+                    if row['status'] == 'draft' and row['reversed_at']:
+                        return jsonify(save_operation(conn, token, {'success': True, 'stockIn': _serialize_document(conn, row)}))
                     return jsonify({'success': False, 'message': '当前单据未审核'}), 409
+                check_version(data, row)
                 item_rows = conn.execute(
                     'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id',
                     (inbound_id,),
                 ).fetchall()
+                reverse_inbound_payables(conn, row)
                 _reverse_posted_items(conn, row)
+                if not row['purchase_order_id']:
+                    conn.execute(
+                        """UPDATE stock_inbound_items SET supplier_id = NULL,
+                           supplier_assignment_status = CASE WHEN ? = 'pending_supplier' THEN 'pending' ELSE 'not_required' END,
+                           supplier_assigned_by = NULL, supplier_assigned_at = NULL WHERE inbound_id = ?""",
+                        (row['settlement_type'], inbound_id),
+                    )
                 _update_purchase_receipts(conn, row['purchase_order_id'], [dict(item) for item in item_rows], direction=-1)
                 now = _now()
                 conn.execute(
-                    "UPDATE stock_inbounds SET status = 'draft', posted_at = NULL, updated_at = ? WHERE id = ?",
-                    (now, inbound_id),
+                    "UPDATE stock_inbounds SET status = 'draft', posted_at = NULL, updated_at = ?, reversed_at = ?, version = version + 1 WHERE id = ?",
+                    (now, now, inbound_id),
                 )
                 updated = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                 create_audit_notifications(
@@ -1084,11 +1278,13 @@ def reverse_audit_stock_inbound(inbound_id):
                     f"入库单 {updated['document_no']} 已反审核，请重新审核。",
                     event_version=f"reverse:{now}",
                 )
-                return jsonify({
+                return jsonify(save_operation(conn, token, {
                     'success': True,
                     'message': '入库单已反审核，库存已回退',
                     'stockIn': _serialize_document(conn, updated),
-                })
+                }))
+    except FinanceError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), exc.status
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 409
     except Exception as exc:

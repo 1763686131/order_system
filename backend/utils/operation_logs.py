@@ -10,6 +10,15 @@ from utils.db import get_db
 
 
 _RULES = (
+    (
+        r"/api/(?:stock-inbounds/\d+/(?:assign-supplier|confirm-payable)|"
+        r"suppliers/\d+/initial-balances|supplier-payables/\d+/invoice|"
+        r"purchase-orders/\d+/expenses|purchase-expenses/\d+(?:/confirm)?)",
+        {"POST", "PUT", "DELETE"},
+        "inventory",
+        "采购与供应商账务",
+        "stock_record",
+    ),
     (r"/api/auth/login", {"POST"}, "account_security", "账号安全", "account"),
     (r"/api/auth/logout", {"POST"}, "account_security", "账号安全", "account"),
     (r"/api/auth/password", {"PUT"}, "account_security", "账号安全", "account"),

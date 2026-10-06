@@ -523,33 +523,33 @@ PERMISSION_MODULES = [
     },
     {
         "code": "admin_purchase_order_operations",
-        "name": "閲囪喘璁㈠崟鎿嶄綔",
-        "description": "鎺у埗閲囪喘璁㈠崟鏂板銆佺紪杈戙€佸垹闄ゅ拰瀹℃牳",
+        "name": "采购订单操作",
+        "description": "控制采购订单新增、编辑、删除和审核",
         "permissions": [
             {
                 "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["create"],
-                "name": "鏂板缓閲囪喘璁㈠崟",
-                "description": "鏂板缓鍘熸潗鏂欓噰璐鍗?",
+                "name": "新建采购订单",
+                "description": "新建原材料或成品采购订单",
             },
             {
                 "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["edit"],
-                "name": "缂栬緫閲囪喘璁㈠崟",
-                "description": "淇敼鏈鏍哥殑閲囪喘璁㈠崟",
+                "name": "编辑采购订单",
+                "description": "修改未审核的采购订单",
             },
             {
                 "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["delete"],
-                "name": "鍒犻櫎閲囪喘璁㈠崟",
-                "description": "鍒犻櫎鏈紑濮嬪叆搴撶殑閲囪喘璁㈠崟",
+                "name": "删除采购订单",
+                "description": "删除未关联入库批次或费用的采购订单",
             },
             {
                 "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["audit"],
-                "name": "瀹℃牳閲囪喘璁㈠崟",
-                "description": "瀹℃牳閲囪喘璁㈠崟骞跺厑璁稿紑濮嬪叆搴?",
+                "name": "审核采购订单",
+                "description": "审核采购订单并允许开始入库",
             },
             {
                 "code": ADMIN_PURCHASE_ORDER_PERMISSIONS["reverse_audit"],
-                "name": "鍙嶅鏍歌喘璁㈠崟",
-                "description": "鎾ら攢灏氭湭鍏ㄩ儴鍏ュ簱鐨勮喘璐鍗曞鏍?",
+                "name": "反审核采购订单",
+                "description": "撤销未关联入库批次或费用的采购订单审核",
             },
         ],
     },
@@ -582,8 +582,8 @@ PERMISSION_MODULES = [
         "permissions": [
             {
                 "code": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["purchase_order"],
-                "name": "閲囪喘璁㈠崟瀹℃牳",
-                "description": "瀹℃牳閲囪喘璁㈠崟骞舵帴鏀跺緟瀹℃牳閫氱煡",
+                "name": "采购订单审核",
+                "description": "审核采购订单并接收待审核通知",
             },
             {
                 "code": ADMIN_AUDIT_NOTIFICATION_PERMISSIONS["stock_inbound"],
@@ -815,6 +815,57 @@ for (
             "permissions": [_route_permissions[code] for code in permission_codes],
         }
     )
+
+PERMISSION_MODULES.extend([
+    {
+        "code": "admin_supplier_finance",
+        "name": "供应商应付与对账",
+        "description": "供应商新账务、期初余额和内部对账",
+        "permissions": [
+            {"code": code, "name": name, "description": name}
+            for code, name in [
+                ("admin.route.finance.payables", "访问应付账款"),
+                ("admin.finance.supplier_statement.read", "查看供应商对账"),
+                ("admin.finance.supplier_statement.export", "打印和导出供应商对账"),
+                ("admin.finance.payable.initial", "录入供应商新期初余额"),
+                ("admin.purchase.invoice_status.edit", "维护基础开票状态"),
+            ]
+        ],
+    },
+    {
+        "code": "admin_purchase_settlement",
+        "name": "独立入库结算",
+        "description": "待补供应商入库财务归属",
+        "permissions": [
+            {"code": code, "name": name, "description": name}
+            for code, name in [
+                ("admin.route.purchase.inbound_settlement", "访问独立入库结算"),
+                ("admin.purchase.inbound.settlement.read", "查看待补供应商入库"),
+                ("admin.purchase.inbound.assign_supplier", "补录明细供应商"),
+                ("admin.purchase.inbound.confirm_payable", "确认独立入库应付"),
+            ]
+        ],
+    },
+    {
+        "code": "admin_purchase_expenses",
+        "name": "采购费用归属",
+        "description": "实际入库批次费用归属，不自动分摊",
+        "permissions": [
+            {"code": "admin.purchase.expense." + action, "name": name, "description": name}
+            for action, name in [("create", "新增采购费用"), ("edit", "修改采购费用"),
+                                 ("delete", "删除采购费用"), ("confirm", "确认或撤销费用归属")]
+        ],
+    },
+    {
+        "code": "admin_employee_expenses",
+        "name": "员工费用原型",
+        "description": "仅临时前端费用数据，不产生正式财务业务",
+        "permissions": [
+            {"code": "admin.route.finance.employee_expenses", "name": "访问员工费用原型", "description": "访问员工费用原型"},
+            {"code": "admin.finance.employee_expense.read", "name": "查看员工费用原型", "description": "查看临时费用数据"},
+        ],
+    },
+])
 
 ALL_PERMISSION_CODES = [
     permission["code"]

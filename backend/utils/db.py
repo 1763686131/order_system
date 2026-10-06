@@ -43,6 +43,8 @@ _messaging_schema_lock = Lock()
 _messaging_schema_ready = False
 _operation_logs_schema_lock = Lock()
 _operation_logs_schema_ready = False
+_supplier_finance_schema_lock = Lock()
+_supplier_finance_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 DEFAULT_DEPARTMENT_NAMES = ('仓储部', '财务部', '销售部', '人事行政', '运营部')
@@ -2590,6 +2592,12 @@ def get_db():
         _ensure_raw_material_products_schema(conn)
         _ensure_stock_inbound_schema(conn)
         _ensure_purchase_order_schema(conn)
+        global _supplier_finance_schema_ready
+        with _supplier_finance_schema_lock:
+            if not _supplier_finance_schema_ready:
+                from utils.supplier_ledger import ensure_schema
+                ensure_schema(conn)
+                _supplier_finance_schema_ready = True
         _ensure_material_outbound_schema(conn)
         _ensure_return_schema(conn)
         _ensure_print_templates_schema(conn)

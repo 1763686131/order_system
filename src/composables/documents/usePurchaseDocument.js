@@ -31,7 +31,7 @@ export function usePurchaseDocument(props) {
   const form = ref({
     type: inboundType.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: props.purchaseOrderId || null, documentDate: localDate(), documentNo: '',
     inspector: '', qualityNo: '', remark: '', taxEnabled: false, items: blankRows(),
-    attachments: [], status: 'draft'
+    attachments: [], status: 'draft', settlementType: 'none', settlementRemark: '', version: null,
   })
   const saving = ref(false)
   const loading = ref(true)
@@ -175,6 +175,10 @@ export function usePurchaseDocument(props) {
       documentDate: data.documentDate || localDate(), documentNo: data.documentNo || '',
       inspector: data.inspector || '', qualityNo: data.qualityNo || '', remark: data.remark || '',
       status: data.status || 'draft',
+      settlementType: data.settlementType || 'none',
+      settlementRemark: data.settlementRemark || '',
+      financialStatus: data.financialStatus || 'not_required',
+      version: data.version,
       taxEnabled: (data.items || []).some(item => Number(item.taxRate) > 0),
       attachments: data.attachments || [],
       items: (data.items || []).map(item => ({
@@ -312,6 +316,7 @@ export function usePurchaseDocument(props) {
       const saved = response.stockIn || {}
       savedDocumentId.value = response.id || saved.id || id
       form.value.documentNo = saved.documentNo || form.value.documentNo
+      form.value.version = saved.version ?? form.value.version
       showNotice('进货单保存成功')
       openPrint()
     } catch (error) {
@@ -322,7 +327,7 @@ export function usePurchaseDocument(props) {
     if (readOnly.value) return
     purchaseOrderId.value = null
     purchaseOrder.value = null
-    form.value = { ...form.value, type: inboundType.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: blankRows(), taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
+    form.value = { ...form.value, type: inboundType.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: blankRows(), taxEnabled: false, inspector: '', qualityNo: '', remark: '', settlementType: 'none', settlementRemark: '' }
     if (!props.documentId) { savedDocumentId.value = null; form.value.documentNo = ''; form.value.attachments = [] }
   }
   const close = () => router.push({ name: 'admin-purchase-inbound' })

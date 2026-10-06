@@ -21,7 +21,8 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
   PURCHASE: {
     ORDERS: 'admin.route.purchase.orders',
     SUPPLIERS: 'admin.route.purchase.suppliers',
-    INBOUND: 'admin.route.purchase.inbound'
+    INBOUND: 'admin.route.purchase.inbound',
+    INBOUND_SETTLEMENT: 'admin.route.purchase.inbound_settlement'
   },
   INVENTORY: {
     PRODUCTS: 'admin.route.inventory.products',
@@ -32,6 +33,8 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
     WAREHOUSE: 'admin.route.inventory.warehouse'
   },
   FINANCE: {
+    PAYABLES: 'admin.route.finance.payables',
+    EMPLOYEE_EXPENSES: 'admin.route.finance.employee_expenses',
     RECEIVABLES: 'admin.route.finance.receivables',
     PAYMENT_HISTORY: 'admin.route.finance.payment_history',
     BANK_ACCOUNTS: 'admin.route.finance.bank_accounts',
@@ -64,6 +67,9 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS, path: '/admin/purchase/orders' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.SUPPLIERS, path: '/admin/purchase/suppliers' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND, path: '/admin/purchase/inbound' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT, path: '/admin/purchase/inbound-settlement' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES, path: '/admin/finance/payables' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES, path: '/admin/finance/employee-expenses' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS, path: '/admin/inventory' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIALS, path: '/admin/inventory/materials' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIAL_OUTBOUNDS, path: '/admin/inventory/material-outbounds' },
@@ -92,6 +98,9 @@ export function getDefaultAdminPath(userStore) {
 }
 
 export function getAdminRoutePermission(path = '') {
+  if (/^\/admin\/purchase\/inbound-settlement(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT
+  if (/^\/admin\/finance\/(payables|supplier-statement)(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
+  if (/^\/admin\/finance\/employee-expenses(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES
   if (path === '/admin/dashboard') return ADMIN_ROUTE_PERMISSIONS.DASHBOARD
   if (path === '/admin/products') return ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST
   if (path === '/admin/materials') return ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS

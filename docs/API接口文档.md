@@ -36,8 +36,8 @@
 | --- | --- | --- | --- | --- |
 | `sale` | `useSalesDocument.js` | `POST /api/orders`、`PUT /api/orders/{id}` | 客户；`discountAmount` 为折扣后金额，另有 `otherFees`、`currentPayment` | `sale` |
 | `sale-return` | `useReturnDocument.js` | `POST /api/returns`、`PUT /api/returns/{id}` | 客户；`returnAmount`、`refundAmount`，核销金额为两者差额 | `return` |
-| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、原材料/成品明细；逐行供应商、采购人、制单人、付款金额、其它费用、结算账户和本次付款 | 暂不提供打印入口 |
-| `purchase` | `usePurchaseDocument.js` | `POST /api/stock-inbounds`、`PUT /api/stock-inbounds/{id}` | 按 `type` 切换原材料/成品入库数量、单价、税额、价税合计；原材料需要供应商，成品不强制供应商 | `purchase` |
+| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、原材料/成品明细；逐行供应商、采购人、制单人、合同/金额估算和费用估算 | 暂不提供打印入口 |
+| `purchase` | `usePurchaseDocument.js` | `POST /api/stock-inbounds`、`PUT /api/stock-inbounds/{id}` | 按 `type` 切换商品、数量、单价和税额；关联采购单按明细供应商确认应付，独立入库使用结算类型 | `purchase` |
 
 公共组件的 `action`（`create`、`edit`、`copy`、`view`）和 `documentId` 是前端路由参数，不是提交给这些业务接口的通用字段。销售复制使用 `/admin/sales/create?copyFrom=<id>`，读取源订单后按新增接口保存；新增/编辑/复制/查看不能代替服务端的审核状态或权限校验。
 
@@ -47,10 +47,11 @@
 
 `documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交单据默认类型、`documentSource` 和每条明细的 `productType`；`documentSource` 可为 `purchase-order` 或 `other`，由后端根据采购订单关联再次校验。独立其他入库不选择供应商；请求若在没有 `purchaseOrderId` 时提交 `supplierId`，后端返回错误并要求改走采购订单流程。关联采购申请允许同一单据包含两种商品类型，独立入库仍要求明细类型与表头一致。状态为 `draft`，界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。原材料商品来源为 `/api/raw-material-products`、库存来源为 `/api/stock-balances?type=raw-material`；成品商品来源为 `/api/products`、库存来源为 `/api/stock-balances?type=finished-product`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。
 
-入库接口只负责到货数量、仓库、批次和库存过账，不负责采购订单的付款、供应商应付余额或付款流水。采购订单的付款字段只通过 `/api/purchase-orders` 保存和返回；保存采购申请或入库草稿都不会立即增加库存，必须分别完成采购订单审核和入库审核。金额最终由各接口重新校验与计算。
+采购订单审核只形成采购承诺，不产生供应商应付，也不扣减银行账户。`paymentAmount`、`currentPayment`、`settlementAccount` 仅作为历史/估算字段兼容保留，不作为真实付款状态依据。关联采购入库审核后，按实际审核数量、明细供应商、单价和税额快照写入新的供应商账务流水；独立 `none` 入库只写库存，独立 `pending_supplier` 入库先写库存，待财务补录供应商并确认应付。保存采购申请或入库草稿不会入账。完整新增契约见文末“采购模块第一阶段新增接口”。
 
 ## 版本历史
 
+- **v5.11** (2026-10-06，采购第一阶段闭环) - 新增实际入库应付、独立入库供应商归属、采购费用归属、应付汇总/内部对账/期初/基础开票状态接口；增加版本、幂等和数据范围校验；不迁移旧 `suppliers.payable`
 - **v5.10** (2026-10-06，独立入库供应商规则) - 独立其他入库不再选择供应商；有供应商的入库须关联采购订单，前后端均校验
 - **v5.9** (2026-10-06，独立采购入库来源) - 新增持久化单据来源，采购入库列表开放独立入库并与生产完工入库分开筛选，库存台账按来源显示业务类型
 - **v5.8** (2026-10-06，混合类型采购入库) - 关联采购入库一次载入全部未完成明细，支持同一单据混合原材料和成品并按行类型过账
@@ -6095,6 +6096,65 @@ SQLite 支持**多读一写**模式：
 - 使用 JSON 文件存储
 
 ---
+
+## 采购模块第一阶段新增接口（v5.11）
+
+以下规则覆盖前文 v5.6 的采购应付公式。账务唯一来源为新建的 `supplier_account_transactions`，不读取、写入或迁移旧 `suppliers.payable`。采购订单的 `estimatedAmount` 表示合同/金额估算，`confirmedPayable` 和 `orderPayable` 表示有效已审核入库应付，`allocatedAmount` 表示已核销金额，`unpaidAmount` 和 `currentPayable` 表示未付应付。第一阶段无真实付款核销接口，不能从历史 `currentPayment` 推算付款状态。
+
+履约字段包括 `progressBasis`（`quantity`/`lines`）、`fulfillmentProgress`（0-100）、`completedLineCount`、`totalLineCount`；明细返回实际 `receivedQty`、`overReceivedQty` 和封顶的 `fulfillmentProgress`。超收数量计入库存和应付，完成订单不能新增补充入库。
+
+写接口使用登录 Session，并按门店/仓库数据范围校验。请求携带 `version` 时启用乐观锁，旧版本返回 `409`；审核、反审核、供应商归属、应付确认、期初、费用新增和费用确认支持 `Idempotency-Key` 请求头或请求体 `idempotencyKey`。同一键与相同请求可重放，键被用于不同请求返回 `409`。
+
+### 独立入库结算
+
+| 方法 | 地址 | 用途 | 权限 |
+| --- | --- | --- | --- |
+| `GET` | `/api/stock-inbounds/{id}/settlement` | 查询待补供应商的独立入库 | `admin.purchase.inbound.settlement.read` |
+| `POST` | `/api/stock-inbounds/{id}/assign-supplier` | 按明细补录供应商，不改库存 | `admin.purchase.inbound.assign_supplier` |
+| `POST` | `/api/stock-inbounds/{id}/confirm-payable` | 确认应付，不重复写库存 | `admin.purchase.inbound.confirm_payable` |
+
+独立入库创建/编辑使用 `settlementType: none/pending_supplier` 和 `settlementRemark`，此时表头及明细均不能选择供应商。`pending_supplier` 入库审核后只写库存，再调用供应商归属接口：
+
+```json
+{
+  "version": 2,
+  "idempotencyKey": "unique-assignment-key",
+  "settlementRemark": "财务确认",
+  "items": [{"inboundItemId": 10, "supplierId": 3}]
+}
+```
+
+明细必须属于该单据，供应商须启用且属于对应门店或通用供应商。全部明细归属后调用 `confirm-payable`，请求体为 `{ "version": 3, "idempotencyKey": "unique-confirm-key" }`。响应为 `{ "success": true, "stockIn": ... }`。已确认应付的供应商不能直接改写；需先撤销开票/核销依赖并反审核入库。关联采购订单入库的供应商从订单明细快照取得。
+
+### 应付汇总与内部对账
+
+| 方法 | 地址 | 参数/请求字段 | 权限 |
+| --- | --- | --- | --- |
+| `GET` | `/api/suppliers/payables` | `storeId`、`keyword`、`asOf`、`aging`（`0-30/31-60/61-90/90+`） | `admin.route.finance.payables` |
+| `GET` | `/api/suppliers/{id}/balance` | `storeId`、`asOf` | `admin.route.finance.payables` |
+| `GET` | `/api/suppliers/{id}/debt-details` | `storeId`、`startDate`、`endDate`、`businessType`、`invoiceStatus`、`page`、`pageSize`、`export=1` | `admin.finance.supplier_statement.read`；导出另需 `export` 权限 |
+| `POST` | `/api/suppliers/{id}/initial-balances` | `storeId`、`businessDate`、`payableAmount`、`prepaymentAmount`、`creditAmount`、`remark` | `admin.finance.payable.initial` |
+| `PUT` | `/api/supplier-payables/{id}/invoice` | `version`、`invoiceStatus`、`billedAmount`、`invoiceRemark` | `admin.purchase.invoice_status.edit` |
+
+金额单位为元，数据库以整数分保存。余额分别返回 `payableBalance`、`prepaymentBalance`、`creditBalance`、`netSettlement`。期初按供应商/门店录入一次，有新账务流水后不得补录；首次成功返回 `201`，幂等重放返回 `200`。不自动继承旧主档余额。
+
+对账响应包含 `supplier`、`opening`、`changes`、`closing`、`items`、`total`、`page` 和 `pageSize`。三类余额分别满足期初加期间变动等于期末；类型/开票筛选仅影响显示行，不改变会计等式。反审核保留原流水并追加反向冲销流水，不覆盖历史金额。
+
+基础开票状态为 `not_required/unbilled/partial/billed/difference`。无需开票/未开票金额必须为零，部分开票金额介于零与应付金额之间，已开票金额须等于应付，差异必须备注。不产生新应付，也不改变库存或银行余额；已有开票金额的入库不能直接反审核。
+
+### 采购费用归属
+
+| 方法 | 地址 | 用途 | 权限 |
+| --- | --- | --- | --- |
+| `GET` | `/api/purchase-orders/{id}/expenses` | 查询费用行 | `admin.route.purchase.orders` |
+| `POST` | `/api/purchase-orders/{id}/expenses` | 新增草稿费用 | `admin.purchase.expense.create` |
+| `PUT` | `/api/purchase-expenses/{id}` | 修改草稿费用 | `admin.purchase.expense.edit` |
+| `DELETE` | `/api/purchase-expenses/{id}` | 删除草稿费用 | `admin.purchase.expense.delete` |
+| `POST` / `DELETE` | `/api/purchase-expenses/{id}/confirm` | 确认/撤销费用归属 | `admin.purchase.expense.confirm` |
+
+费用请求包含 `supplierId`、`purchaseOrderItemId`、可选 `inboundItemId`、`expenseType`、`amountExcludingTax`、`taxAmount`、`includeInPayable`、`includeInInventoryCost`、`remark`。供应商必须与采购商品行一致；确认时必须明确未审核入库批次的明细。未确认或未明确归属的费用不能入账，不自动平均分摊。入库审核时应付计入已确认的含税费用，库存成本计入已确认的未税费用。
+
+第二阶段的供应商付款、付款核销、银行联动、完整发票登记/分配，以及第三阶段的采购退货、退款、正式对账期间锁定尚未实现。员工费用仅为前端页面临时状态，没有后端实体或真实审核/付款接口。
 
 ## 技术支持
 

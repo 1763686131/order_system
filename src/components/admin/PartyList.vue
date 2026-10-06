@@ -315,16 +315,19 @@
                   </template>
                   <template v-else>
                     <div>
-                      <span>欠款金额</span>
+                      <span>应付余额</span>
                       <strong class="debt-amount">¥{{ formatAmount(selectedRecord.payable) }}</strong>
                     </div>
                     <div>
-                      <span>应付欠款</span>
-                      <strong class="debt-amount">¥{{ formatAmount(selectedRecord.payable) }}</strong>
+                      <span>供应商预付款</span>
+                      <strong>¥{{ formatAmount(selectedRecord.prepaymentBalance) }}</strong>
+                    </div>
+                    <div>
+                      <span>供应商贷项</span>
+                      <strong>¥{{ formatAmount(selectedRecord.creditBalance) }}</strong>
                     </div>
                   </template>
                 </div>
-                <p v-if="isSupplier" class="finance-hint">供应商欠款由采购订单及后续付款业务维护。</p>
               </section>
 
               <section v-if="selectedRecord.bankName || selectedRecord.bankAccount || selectedRecord.taxNumber" class="detail-section">
@@ -517,7 +520,7 @@
                       <label class="form-field">
                         <span class="field-label">欠款金额</span>
                         <div class="readonly-money">¥{{ formatAmount(formData.payable) }}</div>
-                        <small class="field-hint">当前应付余额由采购业务维护</small>
+                        <small class="field-hint">应付余额（只读）</small>
                       </label>
                       <label class="form-field">
                         <span class="field-label">应付欠款</span>

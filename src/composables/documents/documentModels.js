@@ -21,6 +21,9 @@ export function purchasePayload(form) {
     documentDate: form.documentDate,
     type,
     documentSource: form.purchaseOrderId ? 'purchase-order' : 'other',
+    settlementType: form.purchaseOrderId ? 'none' : form.settlementType || 'none',
+    settlementRemark: form.settlementRemark || '',
+    ...(form.version ? { version: form.version } : {}),
     storeId: Number(form.storeId),
     supplierId: form.purchaseOrderId && type === 'raw-material' && form.supplierId ? Number(form.supplierId) : null,
     purchaseOrderId: form.purchaseOrderId ? Number(form.purchaseOrderId) : null,
@@ -76,6 +79,7 @@ export function purchaseOrderPayload(form, status = 'pending') {
   const hasValue = value => value !== '' && value != null
   return {
     orderNo: form.orderNo,
+    ...(form.version ? { version: form.version } : {}),
     orderDate: form.orderDate,
     expectedDate: form.expectedDate,
     storeId: Number(form.storeId),
@@ -85,7 +89,6 @@ export function purchaseOrderPayload(form, status = 'pending') {
     paymentAmount: hasValue(form.paymentAmount) ? Number(form.paymentAmount) : null,
     otherFees: hasValue(form.otherFees) ? Number(form.otherFees) : 0,
     settlementAccount: form.settlementAccount || '',
-    currentPayment: hasValue(form.currentPayment) ? Number(form.currentPayment) : 0,
     remark: form.remark,
     status,
     items: form.items.filter(item => item.productId).map(item => ({
@@ -114,7 +117,7 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
   if (!form.storeId) return invalid('storeId', '请选择申请门店。')
   if (!form.orderDate) return invalid('documentDate', '请填写申请日期。')
   if (hasValue(form.paymentAmount) && (!Number.isFinite(Number(form.paymentAmount)) || Number(form.paymentAmount) < 0)) {
-    return invalid('paymentAmount', '付款金额必须为非负数。')
+    return invalid('paymentAmount', '合同金额必须为非负数。')
   }
   if (hasValue(form.otherFees) && (!Number.isFinite(Number(form.otherFees)) || Number(form.otherFees) < 0)) {
     return invalid('otherFees', '其它费用必须为非负数。')

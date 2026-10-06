@@ -329,9 +329,7 @@ export function usePurchaseOrderDocument(props) {
       : totalAmount.value
     return Math.max(0, base + (Number(form.value.otherFees) || 0))
   })
-  const currentPayable = computed(() =>
-    Math.max(0, purchaseOrderPayable.value - (Number(form.value.currentPayment) || 0))
-  )
+  const currentPayable = computed(() => Number(form.value.unpaidAmount || 0))
   const supplierPayable = computed(() => {
     const selectedSupplierIds = new Set(
       form.value.items
@@ -444,7 +442,7 @@ export function usePurchaseOrderDocument(props) {
   const normalize = data => {
     const orderDate = data.orderDate || localDate()
     form.value = {
-      orderNo: data.orderNo || '', orderDate, expectedDate: data.expectedDate || dateAfter(orderDate),
+      orderNo: data.orderNo || '', version: data.version, orderDate, expectedDate: data.expectedDate || dateAfter(orderDate),
       expectedDateAuto: !data.expectedDate || data.expectedDate === dateAfter(orderDate),
       storeId: data.storeId ? String(data.storeId) : '', purchaser: data.purchaser || '',
       creator: data.creator || currentCreatorName.value,
@@ -453,6 +451,8 @@ export function usePurchaseOrderDocument(props) {
       settlementAccount: data.settlementAccount || '',
       currentPayment: data.currentPayment ?? 0,
       remark: data.remark || '', status: data.status || 'draft',
+      confirmedPayable: data.confirmedPayable || 0, unpaidAmount: data.unpaidAmount || 0,
+      billedAmount: data.billedAmount || 0, allocatedAmount: data.allocatedAmount || 0,
       items: (data.items || []).map(item => ({
         ...blankItem(), orderItemId: item.orderItemId || item.id,
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',

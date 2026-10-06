@@ -37,6 +37,31 @@ const routes = [
     redirect: '/admin/dashboard',
     children: [
       {
+        path: 'finance/payables',
+        name: 'admin-finance-payables',
+        component: () => import('@/views/admin/finance/Payables.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'finance/supplier-statement/:supplierId',
+        name: 'admin-supplier-statement',
+        component: () => import('@/views/admin/finance/SupplierStatement.vue'),
+        props: route => ({ supplierId: Number(route.params.supplierId) }),
+        meta: { requiresAuth: true, permission: 'admin.finance.supplier_statement.read' }
+      },
+      {
+        path: 'finance/employee-expenses',
+        name: 'admin-employee-expenses',
+        component: () => import('@/views/admin/finance/EmployeeExpenses.vue'),
+        meta: { requiresAuth: true, permission: 'admin.finance.employee_expense.read' }
+      },
+      {
+        path: 'purchase/inbound-settlement',
+        name: 'admin-purchase-inbound-settlement',
+        component: () => import('@/views/admin/purchase/PurchaseInboundSettlement.vue'),
+        meta: { requiresAuth: true, permission: 'admin.purchase.inbound.settlement.read' }
+      },
+      {
         path: 'dashboard',
         name: 'admin-dashboard',
         component: () => import('@/views/admin/Dashboard.vue'),
