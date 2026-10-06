@@ -158,10 +158,12 @@
               </th>
               <th>{{ isInbound ? '入库单号' : '采购单号' }}</th>
               <th>{{ isInbound ? '入库日期' : '申请日期' }}</th>
+              <th v-if="isInbound">仓库</th>
               <th>供应商</th>
-              <th>物料摘要</th>
-              <th>数量 / 进度</th>
-              <th>仓库</th>
+              <th>{{ isInbound ? '商品物品名称' : '物料摘要' }}</th>
+              <th>{{ isInbound ? '入库数量/总数量' : '采购数量' }}</th>
+              <th v-if="isInbound">进度</th>
+              <th v-if="!isInbound">仓库</th>
               <th>含税金额</th>
               <th>状态</th>
               <th>备注</th>
@@ -170,7 +172,7 @@
           </thead>
           <tbody v-if="loading">
             <tr v-for="index in 6" :key="`skeleton-${index}`" class="skeleton-row">
-              <td v-for="column in 11" :key="column"><span></span></td>
+              <td v-for="column in (isInbound ? 12 : 11)" :key="column"><span></span></td>
             </tr>
           </tbody>
           <tbody v-else-if="paginatedRecords.length">
@@ -198,25 +200,47 @@
                 </button>
               </td>
               <td class="date-cell">{{ formatDate(recordDate(record)) }}</td>
+              <td v-if="isInbound">{{ record.warehouseName }}</td>
               <td>
-                <div class="primary-cell">{{ record.supplierName }}</div>
+                <div v-if="supplierNamesFor(record).length > 1" class="summary-with-count" :title="supplierNamesFor(record).join('、')">
+                  <span class="primary-cell summary-name">{{ supplierNamesFor(record)[0] }}</span>
+                  <span class="summary-pill">供应商+{{ supplierNamesFor(record).length }}</span>
+                </div>
+                <div v-else class="primary-cell">{{ supplierNamesFor(record)[0] || record.supplierName || '—' }}</div>
                 <div class="secondary-cell">{{ isInbound ? record.inspector : record.contact }}</div>
               </td>
               <td>
-                <div class="primary-cell item-summary">{{ record.itemSummary }}</div>
-                <div class="secondary-cell">{{ record.itemCount }} 项物料</div>
+                <template v-if="isInbound">
+                  <div v-if="itemNamesFor(record).length > 1" class="summary-with-count item-summary-count" :title="itemNamesFor(record).join('、')">
+                    <span class="primary-cell summary-name">{{ itemNamesFor(record)[0] }}</span>
+                    <span class="summary-pill">商品+{{ itemNamesFor(record).length }}</span>
+                  </div>
+                  <div v-else class="primary-cell item-summary">{{ itemNamesFor(record)[0] || '—' }}</div>
+                </template>
+                <template v-else>
+                  <div class="primary-cell item-summary">{{ record.itemSummary }}</div>
+                  <div class="secondary-cell">{{ record.itemCount }} 项物料</div>
+                </template>
               </td>
               <td>
                 <div class="quantity-cell">
                   <strong>{{ formatNumber(quantityValue(record)) }}</strong>
                   <span>{{ isInbound ? `/ ${formatNumber(record.expectedQuantity)} ${record.items?.[0]?.unit || '件'}` : '件' }}</span>
                 </div>
-                <div v-if="isInbound" class="progress-cell">
+              </td>
+              <td v-if="isInbound" class="progress-column">
+                <div class="progress-cell">
                   <span class="progress-track"><i :style="{ width: `${recordProgress(record)}%` }"></i></span>
                   <small>{{ recordProgress(record) }}%</small>
                 </div>
               </td>
-              <td>{{ record.warehouseName }}</td>
+              <td v-if="!isInbound">
+                <div v-if="warehouseNamesFor(record).length > 1" class="summary-with-count" :title="warehouseNamesFor(record).join('、')">
+                  <span class="primary-cell summary-name">{{ warehouseNamesFor(record)[0] }}</span>
+                  <span class="summary-pill">仓库+{{ warehouseNamesFor(record).length }}</span>
+                </div>
+                <div v-else class="primary-cell">{{ warehouseNamesFor(record)[0] || record.warehouseName || '—' }}</div>
+              </td>
               <td class="amount-cell">¥ {{ formatMoney(record.totalAmount) }}</td>
               <td>
                 <span class="status-tag" :class="`status-${getStatusClass(record.status)}`">
@@ -282,7 +306,7 @@
           </tbody>
           <tbody v-else>
             <tr>
-              <td colspan="11" class="empty-cell">
+              <td :colspan="isInbound ? 12 : 11" class="empty-cell">
                 <div class="empty-state">
                   <div class="empty-icon">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -344,16 +368,10 @@
                 <div>
                   <span class="modal-kicker">{{ isInbound ? 'PURCHASE INBOUND' : 'PURCHASE ORDER' }}</span>
                   <h2>{{ isInbound ? '采购入库详情' : '采购订单详情' }}</h2>
-                  <button class="modal-document-no" type="button" @click="copyDocumentNo">
-                    {{ getRecordNo(selectedRecord) }}
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <rect x="8" y="8" width="11" height="11" rx="1.5"></rect>
-                      <path d="M5 16H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1 1h11a1 1 0 0 1 1 1v1"></path>
-                    </svg>
-                  </button>
+                  <div class="modal-document-no">{{ getRecordNo(selectedRecord) }}</div>
                 </div>
               </div>
-              <button class="modal-close" type="button" title="关闭" @click="closeDetail">
+              <button class="modal-close" type="button" title="关闭" aria-label="关闭详情" @click="closeDetail">
                 <svg viewBox="0 0 24 24" aria-hidden="true">
                   <path d="m6 6 12 12M18 6 6 18"></path>
                 </svg>
@@ -404,9 +422,10 @@
                         <th>物料名称</th>
                         <th>规格型号</th>
                         <th>单位</th>
-                        <th>计划数量</th>
                         <th>采购供应商</th>
+                        <th>计划数量</th>
                         <th v-if="isInbound">实收数量</th>
+                        <th v-if="isInbound">进度</th>
                         <th>{{ isInbound ? '含税单价' : '采购单价' }}</th>
                         <th>金额</th>
                         <th v-if="isInbound">批次 / 库位</th>
@@ -418,14 +437,34 @@
                         <td>{{ item.goodsName }}</td>
                         <td>{{ item.specification || '—' }}</td>
                         <td>{{ item.unit }}</td>
-                        <td>{{ formatNumber(item.expectedQty ?? item.quantity) }}</td>
                         <td :title="item.supplierName || selectedRecord.supplierName">{{ item.supplierName || (isInbound ? selectedRecord.supplierName || '—' : '待补充') }}</td>
+                        <td>{{ formatNumber(item.expectedQty ?? item.quantity) }}</td>
                         <td v-if="isInbound">{{ formatNumber(item.receivedQty ?? item.quantity) }}</td>
+                        <td v-if="isInbound">
+                          <div class="detail-item-progress">
+                            <span class="progress-track">
+                              <i :style="{ width: `${Math.min(100, itemProgress(item))}%` }"></i>
+                            </span>
+                            <small>{{ itemProgress(item) }}%</small>
+                          </div>
+                        </td>
                         <td>{{ item.price == null ? '待补充' : `¥ ${formatMoney(item.price)}` }}</td>
                         <td>{{ item.amount == null ? '待补充' : `¥ ${formatMoney(item.amount)}` }}</td>
                         <td v-if="isInbound">{{ item.batchNo || '—' }} / {{ item.binCode || '—' }}</td>
                       </tr>
                     </tbody>
+                    <tfoot>
+                      <tr>
+                        <td colspan="4" class="detail-total-label">合计</td>
+                        <td>—</td>
+                        <td>{{ formatNumber(detailTotals.plannedQuantity) }}</td>
+                        <td v-if="isInbound">{{ formatNumber(detailTotals.receivedQuantity) }}</td>
+                        <td v-if="isInbound" class="detail-progress-total">—</td>
+                        <td>—</td>
+                        <td>¥ {{ formatMoney(detailTotals.amount) }}</td>
+                        <td v-if="isInbound"></td>
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               </section>
@@ -436,17 +475,24 @@
                   <span>共 {{ selectedRecord.batches.length }} 批</span>
                 </div>
                 <div class="detail-items-scroll">
-                  <table class="detail-items-table">
-                    <thead><tr><th>入库日期</th><th>保存时间</th><th>类型</th><th>本批数量</th><th>仓库</th><th>状态</th><th>操作</th></tr></thead>
-                    <tbody>
-                      <tr v-for="batch in selectedRecord.batches" :key="batch.id">
-                        <td>{{ formatDate(batch.documentDate) }}</td>
-                        <td>{{ batch.createdAt || '—' }}</td>
-                        <td>{{ batch.type === 'finished-product' ? '成品' : '原材料' }}</td>
-                        <td>{{ formatNumber(batch.receivedQuantity) }}</td>
-                        <td>{{ batch.warehouseName || '—' }}</td>
-                        <td>{{ getStatusLabel(batch.status) }}</td>
-                        <td><button class="document-link" type="button" @click="viewBatch(batch)">查看</button></td>
+                  <table class="detail-items-table batch-items-table">
+                    <thead><tr><th>入库日期</th><th>商品名称</th><th>规格型号</th><th>单位</th><th>类型</th><th>本批数量</th><th>仓库</th><th>状态</th><th>操作</th></tr></thead>
+                    <tbody v-for="batch in selectedRecord.batches" :key="batch.id">
+                      <tr
+                        v-for="(item, itemIndex) in (batch.items?.length ? batch.items : [null])"
+                        :key="`${batch.id}-${item?.id ?? itemIndex}`"
+                      >
+                        <td v-if="itemIndex === 0" :rowspan="batch.items?.length || 1">{{ formatDate(batch.documentDate) }}</td>
+                        <td :title="item?.goodsName || item?.productName || '—'">{{ item?.goodsName || item?.productName || '—' }}</td>
+                        <td :title="item?.specification || '—'">{{ item?.specification || '—' }}</td>
+                        <td>{{ item?.unit || '—' }}</td>
+                        <td>{{ getInboundTypeLabel(item?.productType || batch.type) }}</td>
+                        <td class="batch-quantity">{{ formatNumber(item?.receivedQty ?? item?.quantity ?? batch.receivedQuantity ?? 0) }}</td>
+                        <td v-if="itemIndex === 0" :rowspan="batch.items?.length || 1">{{ batch.warehouseName || '—' }}</td>
+                        <td v-if="itemIndex === 0" :rowspan="batch.items?.length || 1">{{ getStatusLabel(batch.status) }}</td>
+                        <td v-if="itemIndex === 0" :rowspan="batch.items?.length || 1">
+                          <button class="document-link" type="button" @click="viewBatch(batch)">查看</button>
+                        </td>
                       </tr>
                     </tbody>
                   </table>
@@ -460,7 +506,6 @@
             </div>
 
             <footer class="detail-modal-footer">
-              <button class="button button-ghost" type="button" @click="closeDetail">关闭</button>
               <div class="footer-actions">
                 <button v-if="!isInbound && selectedRecord.status === 'pending' && canAudit" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
@@ -728,6 +773,11 @@ const currentPage = ref(1)
 const pageSize = 30
 const selectedIds = ref(new Set())
 const selectedRecord = ref(null)
+const detailTotals = computed(() => (selectedRecord.value?.items || []).reduce((totals, item) => ({
+  plannedQuantity: totals.plannedQuantity + Number(item.expectedQty ?? item.quantity ?? 0),
+  receivedQuantity: totals.receivedQuantity + Number(item.receivedQty ?? item.quantity ?? 0),
+  amount: totals.amount + Number(item.amount ?? item.totalAmount ?? 0)
+}), { plannedQuantity: 0, receivedQuantity: 0, amount: 0 }))
 const detailModalOpen = ref(false)
 const notice = ref('')
 const deleting = ref(false)
@@ -750,11 +800,13 @@ const statusTabs = computed(() => {
       ]
     : [
         { key: 'all', label: '全部' },
-        { key: 'pending', label: '待确认' },
+        { key: 'draft', label: '草稿' },
+        { key: 'pending', label: '待审核' },
         { key: 'approved', label: '已审核' },
         { key: 'partial', label: '部分入库' },
         { key: 'completed', label: '已完成' },
-        { key: 'cancelled', label: '已取消' }
+        { key: 'cancelled', label: '已取消' },
+        { key: 'rejected', label: '已驳回' }
       ]
 
   return statuses.map(tab => ({
@@ -838,8 +890,20 @@ function formatNumber(value) {
   return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
 }
 
+function itemProgress(item) {
+  const planned = Number(item.expectedQty ?? item.quantity ?? 0)
+  const received = Number(item.receivedQty ?? item.quantity ?? 0)
+  return planned > 0 ? Math.round((received / planned) * 100) : 0
+}
+
 function formatMoney(value) {
   return Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function getInboundTypeLabel(type) {
+  if (type === 'finished-product') return '成品'
+  if (type === 'raw-material') return '原材料'
+  return '—'
 }
 
 function quantityValue(record) {
@@ -1021,6 +1085,37 @@ function exportRecords() {
   const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${isInbound.value ? '采购入库' : '采购订单'}.csv`; link.click(); URL.revokeObjectURL(link.href)
 }
 
+function supplierNamesFor(record) {
+  const itemNames = [...new Set((record.items || [])
+    .map(item => String(item.supplierName || '').trim())
+    .filter(Boolean))]
+  if (itemNames.length) return itemNames
+  const names = Array.isArray(record.supplierNames) && record.supplierNames.length
+    ? record.supplierNames
+    : String(record.supplierName || '').split('、')
+  return [...new Set(names.map(name => String(name || '').trim()).filter(Boolean))]
+}
+
+function warehouseNamesFor(record) {
+  const itemNames = [...new Set((record.items || [])
+    .map(item => String(item.warehouseName || item.warehouse_name || '').trim())
+    .filter(Boolean))]
+  if (itemNames.length) return itemNames
+  const names = Array.isArray(record.warehouseNames) && record.warehouseNames.length
+    ? record.warehouseNames
+    : String(record.warehouseName || record.warehouse_name || '').split('、')
+  return [...new Set(names.map(name => String(name || '').trim()).filter(Boolean))]
+}
+
+function itemNamesFor(record) {
+  const names = (record.items || [])
+    .map(item => String(item.goodsName || item.productName || '').trim())
+    .filter(Boolean)
+  return names.length
+    ? [...new Set(names)]
+    : (record.itemSummary ? [record.itemSummary] : [])
+}
+
 function normalizeOrder(record) {
   const items = (record.items || record.orderItems || []).map(item => ({
     ...item,
@@ -1030,10 +1125,18 @@ function normalizeOrder(record) {
     price: item.unitPrice,
     amount: item.amount
   }))
-  const lineSupplierNames = [...new Set(items.map(item => item.supplierName).filter(Boolean))]
+  const lineSupplierNames = [...new Set(items
+    .map(item => String(item.supplierName || '').trim())
+    .filter(Boolean))]
+  const lineWarehouseNames = [...new Set(items
+    .map(item => String(item.warehouseName || item.warehouse_name || '').trim())
+    .filter(Boolean))]
   return {
     ...record, id: record.orderId || record.id, orderNo: record.orderNo || '', purchaseDate: record.orderDate || '',
-    supplierName: record.supplierName || lineSupplierNames.join('、') || '待采购审核', warehouseName: record.warehouseName || '', contact: record.createdBy || '',
+    status: record.status === 'confirmed' ? 'approved' : (record.status || 'draft'),
+    supplierName: record.supplierName || lineSupplierNames.join('、') || '待采购审核', supplierNames: lineSupplierNames,
+    warehouseName: record.warehouseName || record.warehouse_name || lineWarehouseNames.join('、'), warehouseNames: lineWarehouseNames,
+    contact: record.createdBy || '',
     itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''),
     itemCount: items.length, totalQuantity: Number(record.totalQuantity || 0), receivedQuantity: items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0),
     totalAmount: Number(record.totalAmount || 0), items
@@ -1042,8 +1145,9 @@ function normalizeOrder(record) {
 
 function normalizeInbound(record) {
   const items = (record.items || []).map(item => ({ ...item, goodsName: item.productName || item.goodsName || '', quantity: item.receivedQty || 0, price: item.unitPrice, amount: item.totalAmount }))
+  const supplierNames = [...new Set(items.map(item => String(item.supplierName || '').trim()).filter(Boolean))]
   return {
-    ...record, id: record.id, inboundId: record.id, editableInboundId: record.status === 'draft' ? record.id : null, inboundNo: record.documentNo || '', documentDate: record.documentDate || '', supplierName: record.supplierName || '',
+    ...record, id: record.id, inboundId: record.id, editableInboundId: record.status === 'draft' ? record.id : null, inboundNo: record.documentNo || '', documentDate: record.documentDate || '', supplierName: record.supplierName || supplierNames.join('、'), supplierNames,
     warehouseName: record.warehouseName || '', inspector: record.inspector || '', qualityNo: record.qualityNo || '', itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''), itemCount: items.length,
     expectedQuantity: items.reduce((sum, item) => sum + Number(item.expectedQty || 0), 0), receivedQuantity: items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0), totalAmount: Number(record.totalAmount || 0), items
   }
@@ -1068,6 +1172,7 @@ function normalizePurchaseInbound(record, batches) {
     }))
   const remainingQuantity = items.reduce((sum, item) => sum + item.remainingQty, 0)
   const remainingTypes = [...new Set(items.filter(item => item.remainingQty > 0.0000001).map(item => item.productType))]
+  const supplierNames = [...new Set(items.map(item => String(item.supplierName || '').trim()).filter(Boolean))]
   const warehouseNames = [...new Set(activeBatches.map(batch => batch.warehouseName).filter(Boolean))]
   return {
     ...order,
@@ -1082,6 +1187,7 @@ function normalizePurchaseInbound(record, batches) {
     qualityNo: latest?.qualityNo || '',
     itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''),
     itemCount: items.length,
+    supplierNames,
     expectedQuantity: items.reduce((sum, item) => sum + item.expectedQty, 0),
     receivedQuantity: items.reduce((sum, item) => sum + item.receivedQty, 0),
     remainingQuantity,
@@ -1124,13 +1230,6 @@ async function refreshData(showMessage = true) {
   } catch (error) {
     showNotice(error?.response?.data?.message || error.message || '列表加载失败')
   } finally { loading.value = false }
-}
-
-function copyDocumentNo() {
-  const documentNo = selectedRecord.value ? getRecordNo(selectedRecord.value) : ''
-  if (!documentNo) return
-  navigator.clipboard?.writeText(documentNo)
-  showNotice(`已复制单号 ${documentNo}`)
 }
 
 onMounted(() => refreshData(false))
@@ -1263,8 +1362,7 @@ onMounted(() => refreshData(false))
 
 .button svg,
 .icon-button svg,
-.table-action svg,
-.modal-document-no svg {
+.table-action svg {
   width: 16px;
   height: 16px;
   fill: none;
@@ -1623,6 +1721,34 @@ onMounted(() => refreshData(false))
   font-size: 10px;
 }
 
+.detail-item-progress {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.detail-item-progress .progress-track {
+  width: 36px;
+  flex: 0 1 36px;
+}
+
+.detail-item-progress .progress-track i {
+  background: #0f9f78;
+}
+
+.detail-item-progress small {
+  min-width: 26px;
+  color: #7d8993;
+  font-size: 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.detail-progress-total {
+  text-align: center !important;
+}
+
 .amount-cell {
   color: #34414d !important;
   font-variant-numeric: tabular-nums;
@@ -1814,7 +1940,7 @@ onMounted(() => refreshData(false))
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: 16px;
   background: rgba(21, 31, 40, 0.46);
 }
 
@@ -1830,6 +1956,7 @@ onMounted(() => refreshData(false))
 }
 
 .detail-modal-header {
+  position: relative;
   display: flex;
   justify-content: space-between;
   gap: 20px;
@@ -1844,28 +1971,45 @@ onMounted(() => refreshData(false))
 }
 
 .modal-document-no {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
+  display: block;
+  width: fit-content;
   padding: 0;
-  background: transparent;
   color: var(--accent-dark);
-  cursor: pointer;
+  cursor: default;
   font-size: 12px;
 }
 
 .modal-close {
+  position: absolute;
+  top: 14px;
+  right: 20px;
+  display: inline-flex;
   align-self: flex-start;
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
   background: transparent;
-  color: #8a969f;
-  font-size: 25px;
-  line-height: 1;
+  border: 1px solid #d7e0e8;
+  border-radius: 5px;
+  color: #536176;
+  cursor: pointer;
+}
+
+.modal-close svg {
+  display: block;
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.8;
 }
 
 .modal-close:hover {
-  color: #35434f;
+  color: #273245;
+  background: #f0f3f6;
 }
 
 .detail-modal-body {
@@ -2603,6 +2747,40 @@ onMounted(() => refreshData(false))
   font-weight: 650;
 }
 
+.summary-with-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.summary-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-pill {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding: 4px 7px;
+  color: #536a83;
+  background: #f1f4f7;
+  border-radius: 3px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.item-summary-count {
+  max-width: 100%;
+}
+
 .secondary-cell {
   color: var(--text-muted);
   font-size: 11px;
@@ -2685,9 +2863,102 @@ onMounted(() => refreshData(false))
   border-color: var(--accent-border);
 }
 
+.is-inbound .records-table {
+  min-width: 1390px;
+}
+
+.is-inbound .records-table th {
+  height: 42px;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.is-inbound .records-table td {
+  height: 54px;
+  padding: 7px 8px;
+}
+
+.is-inbound .records-table th:nth-child(1),
+.is-inbound .records-table td:nth-child(1) {
+  width: 44px;
+  padding: 0 10px;
+  text-align: center;
+}
+
+.is-inbound .records-table th:nth-child(2),
+.is-inbound .records-table td:nth-child(2) {
+  width: 135px;
+}
+
+.is-inbound .records-table th:nth-child(3),
+.is-inbound .records-table td:nth-child(3) {
+  width: 100px;
+}
+
+.is-inbound .records-table th:nth-child(4),
+.is-inbound .records-table td:nth-child(4) {
+  width: 105px;
+}
+
+.is-inbound .records-table th:nth-child(5),
+.is-inbound .records-table td:nth-child(5) {
+  width: 135px;
+}
+
+.is-inbound .records-table th:nth-child(6),
+.is-inbound .records-table td:nth-child(6) {
+  width: 160px;
+}
+
+.is-inbound .records-table th:nth-child(7),
+.is-inbound .records-table td:nth-child(7) {
+  width: 160px;
+  text-align: right;
+}
+
+.is-inbound .records-table th:nth-child(8),
+.is-inbound .records-table td:nth-child(8) {
+  width: 88px;
+}
+
+.is-inbound .records-table th:nth-child(9),
+.is-inbound .records-table td:nth-child(9) {
+  width: 110px;
+  text-align: right;
+}
+
+.is-inbound .records-table th:nth-child(10),
+.is-inbound .records-table td:nth-child(10) {
+  width: 100px;
+}
+
 .is-inbound .records-table th:nth-child(11),
 .is-inbound .records-table td:nth-child(11) {
+  width: 110px;
+}
+
+.is-inbound .records-table th:nth-child(12),
+.is-inbound .records-table td:nth-child(12) {
   width: 170px;
+  text-align: center;
+}
+
+.is-inbound .quantity-cell {
+  gap: 3px;
+  white-space: nowrap;
+}
+
+.is-inbound .quantity-cell span {
+  white-space: nowrap;
+}
+
+.is-inbound .progress-column {
+  text-align: center;
+}
+
+.is-inbound .progress-cell {
+  justify-content: center;
+  margin-top: 0;
 }
 
 .supplement-action {
@@ -2761,13 +3032,13 @@ onMounted(() => refreshData(false))
   --text-secondary: #596579;
   --text-muted: #8a96a8;
   z-index: 2147482000;
-  padding: 24px;
+  padding: 16px;
   background: rgba(15, 23, 42, 0.42);
   backdrop-filter: blur(1px);
 }
 
 .detail-modal {
-  width: min(960px, calc(100vw - 48px));
+  width: min(1200px, calc(100vw - 32px));
   max-height: min(880px, calc(100vh - 48px));
   color: var(--text);
   background: #f4f7f9;
@@ -2831,27 +3102,6 @@ onMounted(() => refreshData(false))
   font-weight: 600;
 }
 
-.modal-close {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  align-items: center;
-  justify-content: center;
-  color: #68758a;
-  border-radius: 5px;
-  font-size: 0;
-}
-
-.modal-close svg {
-  width: 20px;
-  height: 20px;
-}
-
-.modal-close:hover {
-  color: #273245;
-  background: #f0f3f6;
-}
-
 .detail-modal-body {
   padding: 18px;
   background: #f4f7f9;
@@ -2892,7 +3142,8 @@ onMounted(() => refreshData(false))
 .meta-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px 22px;
-  margin: 17px 0;
+  margin: 0;
+  padding: 18px 16px;
 }
 
 .meta-grid span,
@@ -2935,6 +3186,84 @@ onMounted(() => refreshData(false))
   border-top: 1px solid #edf1f5;
 }
 
+.detail-items-table tfoot td {
+  height: 45px;
+  background: #f8fafc;
+  border-top: 1px solid #dfe5ec;
+  color: #283548;
+  font-weight: 650;
+}
+
+.detail-items-table tfoot .detail-total-label,
+.detail-items-table tfoot td:nth-child(3) {
+  text-align: left;
+}
+
+.batch-items-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.batch-items-table th,
+.batch-items-table td {
+  overflow: hidden;
+  padding-right: 7px;
+  padding-left: 7px;
+  text-overflow: ellipsis;
+}
+
+.batch-items-table tbody td {
+  border-top: 0;
+  border-bottom: 1px solid #edf1f5;
+  vertical-align: middle;
+}
+
+.detail-items-table.batch-items-table thead th,
+.detail-items-table.batch-items-table tbody td {
+  text-align: left;
+}
+
+.detail-items-table.batch-items-table tbody td.batch-quantity {
+  text-align: right;
+}
+
+.batch-items-table th:nth-child(1) {
+  width: 10%;
+}
+
+.batch-items-table th:nth-child(2) {
+  width: 18%;
+}
+
+.batch-items-table th:nth-child(3) {
+  width: 17%;
+}
+
+.batch-items-table th:nth-child(4) {
+  width: 7%;
+}
+
+.batch-items-table th:nth-child(5) {
+  width: 8%;
+}
+
+.batch-items-table th:nth-child(6) {
+  width: 11%;
+}
+
+.batch-items-table th:nth-child(7) {
+  width: 12%;
+}
+
+.batch-items-table th:nth-child(8) {
+  width: 8%;
+}
+
+.batch-items-table th:nth-child(9) {
+  width: 9%;
+}
+
 .detail-items-table th:nth-last-child(-n + 3),
 .detail-items-table td:nth-last-child(-n + 3) {
   text-align: right;
@@ -2952,6 +3281,10 @@ onMounted(() => refreshData(false))
   padding: 13px 18px;
   background: #fff;
   border-top: 1px solid var(--border);
+}
+
+.detail-modal-footer .footer-actions {
+  margin-left: auto;
 }
 
 @media (max-width: 1280px) {
