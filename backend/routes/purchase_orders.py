@@ -353,6 +353,7 @@ def _serialize_order(conn, row, include_items=True):
     order["createdBy"] = order.pop("created_by", "") or ""
     order["createdAt"] = order.pop("created_at", "") or ""
     order["updatedAt"] = order.pop("updated_at", "") or ""
+    order["inboundDeletedAt"] = order.pop("inbound_deleted_at", None)
     if include_items:
         items = conn.execute(
             "SELECT * FROM purchase_order_items WHERE order_id = ? ORDER BY line_no, id",
@@ -499,7 +500,13 @@ def get_available_inbound(order_id):
             return jsonify({"success": False, "message": "采购订单不存在"}), 404
         if row["status"] not in ("approved", "partial"):
             return jsonify({"success": False, "message": "采购订单尚未审核，不能创建入库单"}), 409
-        return jsonify(_serialize_order(conn, row))
+        order = _serialize_order(conn, row)
+        first_inbound = conn.execute(
+            "SELECT document_no FROM stock_inbounds WHERE purchase_order_id = ? ORDER BY id LIMIT 1",
+            (order_id,),
+        ).fetchone()
+        order["inboundDocumentNo"] = first_inbound["document_no"] if first_inbound else ""
+        return jsonify(order)
 
 
 @purchase_orders_bp.route("/purchase-orders", methods=["POST"])

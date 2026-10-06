@@ -3415,9 +3415,11 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 - 审核会重新校验每行采购数量、启用供应商和采购单价，成功后状态变为 `approved`，并记录审核人和审核时间。
 - `DELETE /api/purchase-orders/{id}/audit` 只允许反审核 `approved` 订单；只要已有入库数量就返回 HTTP `409`。
 - `GET /api/purchase-orders/{id}/available-inbound` 只允许 `approved` 或 `partial` 订单。
-  入库明细应把采购明细 ID 写入 `purchaseOrderItemId`，并把采购订单 ID 写入 `purchaseOrderId`。
-- 关联入库审核时，实收数量不能超过采购订单剩余数量；成功后订单自动变为 `partial` 或 `completed`。
-  入库反审核会回退已入库数量并恢复订单状态。
+  响应额外返回 `inboundDocumentNo`（首批入库单号，无批次时为空）。入库明细应把采购明细 ID 写入 `purchaseOrderItemId`，并把采购订单 ID 写入 `purchaseOrderId`。
+- 关联入库允许实收数量超过采购数量；审核成功后按实际数量累计，订单自动变为 `partial` 或 `completed`。`remainingQty` 最低为 `0`，反审核按实际累计数量恢复状态。
+- 采购入库列表按采购订单合并显示，不按原材料/成品或剩余数量拆行。未完成且没有待审核批次时，原行显示“补充入库”；补充表单只显示未完成的采购明细，数量默认使用剩余数量。
+- 同一采购订单的各入库批次共用 `documentNo`，每批保留独立的 `id`、`documentDate`、`createdAt` 和审核状态。默认列表接口及全部入库台账仍返回每批记录。
+- 采购订单响应增加 `inboundDeletedAt`：采购入库整组删除后设置此时间，采购入库列表不再生成该订单的待入库占位行；从采购订单重新创建入库时清空此标记。
 
 常见错误状态码：订单不存在 `404`；状态不允许当前操作 `409`；字段校验失败 `400`；
 缺少对应后台权限 `403`。
@@ -3683,8 +3685,8 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 
 | 参数 | 类型 | 草稿必填 | 审核必填 | 说明 |
 |------|------|------|------|------|
-| `documentNo` | string | 否 | 否 | 为空时由后端生成 `RK + YYYYMMDD + 至少三位ID` |
-| `documentDate` | string | 是 | 是 | 单据日期，建议使用 `YYYY-MM-DD` |
+| `documentNo` | string | 否 | 否 | 首批为空时由后端生成 `RK + YYYYMMDD + 至少三位ID`；同一采购订单后续批次由后端沿用首批单号，其他采购单/独立入库不得重号 |
+| `documentDate` | string | 是 | 是 | 本批入库日期，使用 `YYYY-MM-DD`；补充入库默认当天并独立保存，`createdAt` 记录服务端保存时间 |
 | `type` | string | 是 | 是 | `raw-material` 或 `finished-product` |
 | `storeId` | integer | 否 | 否 | 门店 ID |
 | `warehouseId` | integer | 是 | 是 | 默认目标仓库 ID，必须存在；未指定明细仓库时使用此仓库 |
@@ -3703,13 +3705,13 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 | 参数 | 类型 | 审核必填 | 说明 |
 |------|------|----------|------|
 | `productId` | integer | 业务必填 | 物料 ID；按入库类型关联 `products` 或 `raw_material_products` |
-| `purchaseOrderItemId` | integer | 关联入库时必填 | 关联采购订单明细 ID；审核关联入库时用于校验剩余数量 |
+| `purchaseOrderItemId` | integer | 关联入库时必填 | 关联采购订单明细 ID；审核时校验物料和类型关联，并累计实际入库数量，不限制超量 |
 | `productCode` | string | 否 | 物料编码；请求也兼容 `code` |
 | `productName` | string | 否 | 物料名称快照；请求也兼容 `name`，前端选择物料后自动填充 |
 | `warehouseId` | integer | 否 | 该行目标仓库 ID，必须存在；省略时继承单据的 `warehouseId`，响应也返回此字段；审核按各行仓库写入库存和流水 |
 | `specification` | string | 否 | 规格型号 |
 | `unit` | string | 否 | 基本计量单位文本 |
-| `expectedQty` | number | 否 | 应收数量 |
+| `expectedQty` | number | 否 | 本批应收数量；补充入库表单默认采购明细剩余数量，关联订单时前端只读 |
 | `receivedQty` | number | 是 | 实收数量，必须大于 `0` |
 | `binCode` | string | 否 | 货位编码 |
 | `batchNo` | string | 是 | 批次号 |
@@ -3821,6 +3823,25 @@ totalAmount = receivedQty × unitPrice + taxAmount
 已审核单据不能直接红冲，返回 HTTP `409`，消息为“已审核单据不能直接删除，请先反审核”；入库单不存在时返回 HTTP `404`。
 
 再次删除已红冲单据时，成功响应增加 `deleted: true`，消息为“已红冲入库单已删除”。重新启用使用 `POST /api/stock-inbounds/{id}/restart`，将 `cancelled` 恢复为 `draft`，返回更新后的 `stockIn`；其他状态返回 HTTP `409`。
+
+#### 采购入库批量删除
+
+- **URL**: `/api/purchase-inbounds/bulk-delete`
+- **Method**: `POST`
+- **权限**: `admin.purchase.order.delete`；涉及已审核批次还需 `admin.inventory.stock_inbound.audit`
+
+```json
+{
+  "purchaseOrderIds": [12, 13],
+  "inboundIds": [20]
+}
+```
+
+`purchaseOrderIds` 删除整条采购入库及其所有批次，保留采购订单并设置 `inboundDeletedAt`；`inboundIds` 仅用于没有关联采购订单的原材料入库。两个数组分别最多 500 项，不允许删除生产入库或单独删除关联采购订单的一批。
+
+已审核批次同步回退库存余额、成品库存、库存流水和采购明细累计数量，未审核批次不影响库存。全部删除在同一事务内完成，库存已消耗不足以回退时返回 HTTP `409`，不会部分删除；权限不足返回 `403`。
+
+成功返回 `{ "success": true, "message": "采购入库记录已删除", "deletedCount": 3 }`，其中 `deletedCount` 为删除的实际入库批次数。
 
 ### 11.10 获取库存余额
 

@@ -13,7 +13,7 @@ export function useBusinessDocument(props) {
     return withDocumentDraft(props, reactive(usePurchaseOrderDocument(props)))
   }
   if (props.documentType === 'purchase') {
-    return withDocumentDraft(props, reactive({ ...usePurchaseDocument(props), config }))
+    return withDocumentDraft(props, reactive(usePurchaseDocument(props)))
   }
   const sale = props.documentType === 'sale'
   const state = sale

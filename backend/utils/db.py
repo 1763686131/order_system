@@ -1361,16 +1361,16 @@ def _ensure_stock_inbound_schema(conn):
             "ON suppliers(store_id, status)"
         )
 
-        cursor.execute(
-            """
-            CREATE TABLE IF NOT EXISTS stock_inbounds (
+        inbound_definition = """
+            (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                document_no TEXT NOT NULL UNIQUE,
+                document_no TEXT NOT NULL,
                 document_date TEXT,
                 receipt_type TEXT NOT NULL,
                 store_id INTEGER,
                 warehouse_id INTEGER,
                 supplier_id INTEGER,
+                purchase_order_id INTEGER,
                 workshop TEXT,
                 inspector TEXT,
                 quality_no TEXT,
@@ -1385,6 +1385,52 @@ def _ensure_stock_inbound_schema(conn):
                 updated_at TEXT
             )
             """
+        cursor.execute(f"CREATE TABLE IF NOT EXISTS stock_inbounds {inbound_definition}")
+        number_is_unique = any(
+            index['unique'] and [
+                column['name']
+                for column in cursor.execute(f'PRAGMA index_info("{index["name"]}")')
+            ] == ['document_no']
+            for index in conn.execute('PRAGMA index_list(stock_inbounds)').fetchall()
+        )
+        if number_is_unique:
+            # Batch IDs remain unique; batches of one purchase share a document number.
+            columns = ', '.join(
+                f'"{column["name"]}"'
+                for column in cursor.execute('PRAGMA table_info(stock_inbounds)')
+            )
+            sequence = cursor.execute(
+                "SELECT seq FROM sqlite_sequence WHERE name = 'stock_inbounds'"
+            ).fetchone()
+            conn.commit()
+            conn.execute('PRAGMA foreign_keys = OFF')
+            try:
+                conn.execute('BEGIN')
+                cursor.execute(f"CREATE TABLE stock_inbounds_batches {inbound_definition}")
+                cursor.execute(
+                    f'INSERT INTO stock_inbounds_batches ({columns}) '
+                    f'SELECT {columns} FROM stock_inbounds'
+                )
+                cursor.execute('DROP TABLE stock_inbounds')
+                cursor.execute('ALTER TABLE stock_inbounds_batches RENAME TO stock_inbounds')
+                if sequence:
+                    updated_sequence = cursor.execute(
+                        "UPDATE sqlite_sequence SET seq = MAX(seq, ?) WHERE name = 'stock_inbounds'",
+                        (sequence['seq'],),
+                    )
+                    if updated_sequence.rowcount == 0:
+                        cursor.execute(
+                            "INSERT INTO sqlite_sequence (name, seq) VALUES ('stock_inbounds', ?)",
+                            (sequence['seq'],),
+                        )
+                conn.commit()
+            except Exception:
+                conn.rollback()
+                raise
+            finally:
+                conn.execute('PRAGMA foreign_keys = ON')
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_stock_inbounds_number ON stock_inbounds(document_no)"
         )
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_stock_inbounds_filter "
@@ -1634,6 +1680,7 @@ def _ensure_purchase_order_schema(conn):
             'other_fees': "ALTER TABLE purchase_orders ADD COLUMN other_fees REAL NOT NULL DEFAULT 0",
             'settlement_account': "ALTER TABLE purchase_orders ADD COLUMN settlement_account TEXT",
             'current_payment': "ALTER TABLE purchase_orders ADD COLUMN current_payment REAL NOT NULL DEFAULT 0",
+            'inbound_deleted_at': "ALTER TABLE purchase_orders ADD COLUMN inbound_deleted_at TEXT",
         }
         for column, statement in purchase_order_migrations.items():
             if column not in purchase_order_columns:

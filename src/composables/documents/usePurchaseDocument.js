@@ -189,7 +189,8 @@ export function usePurchaseDocument(props) {
       supplierId: data.supplierId ? String(data.supplierId) : '',
       supplierName: data.supplierName || '',
       warehouseId: defaultWarehouse ? String(defaultWarehouse.warehouseId) : '',
-      documentDate: data.orderDate || localDate(),
+      documentDate: localDate(),
+      documentNo: data.inboundDocumentNo || '',
       remark: data.remark || '',
       items: remainingItems.map(item => ({
         ...blankItem(), purchaseOrderItemId: item.orderItemId || item.id || '',
@@ -225,6 +226,17 @@ export function usePurchaseDocument(props) {
     readOnly.value = props.action === 'view' || isLockedInbound(form.value.status)
   }
   const restoreDraft = async draft => {
+    if (!props.documentId && draft?.savedDocumentId) {
+      try {
+        const saved = await request({ url: `/stock-inbounds/${draft.savedDocumentId}`, method: 'GET' })
+        if (isLockedInbound(saved.status)) return false
+      } catch (error) {
+        if (error?.response?.status !== 404) {
+          showNotice(error?.response?.data?.message || error.message || '读取已保存批次失败', 'error')
+        }
+        return false
+      }
+    }
     const savedForm = JSON.parse(JSON.stringify(draft?.form || {}))
     const savedType = normalizeInboundType(savedForm.type || inboundType.value)
     if (savedType !== inboundType.value) {
@@ -234,7 +246,7 @@ export function usePurchaseDocument(props) {
       } catch (error) {
         loadFailed.value = true
         showNotice(error?.response?.data?.message || error.message || '加载进货商品失败', 'error')
-        return
+        return false
       }
     }
     form.value = {
@@ -251,6 +263,7 @@ export function usePurchaseDocument(props) {
     name: 'admin-purchase-inbound-create',
     query: {
       ...(purchaseOrderId.value ? { purchaseOrderId: purchaseOrderId.value } : {}),
+      ...(props.supplement ? { supplement: '1' } : {}),
       productType: normalizeInboundType(type)
     }
   })
@@ -305,7 +318,7 @@ export function usePurchaseDocument(props) {
 
   return {
     ...validation, validateForm, restoreDraft,
-    config: DOCUMENT_TYPES.purchase, inboundType, inboundTypes, changeInboundType, form, stores, suppliers: filteredSuppliers, filteredWarehouses, products: productOptions, productsForItem, units, getProductStock,
+    config: { ...DOCUMENT_TYPES.purchase, title: props.supplement ? '补充入库' : '进货单', dateLabel: '入库日期' }, inboundType, inboundTypes, changeInboundType, form, stores, suppliers: filteredSuppliers, filteredWarehouses, products: productOptions, productsForItem, units, getProductStock,
     currentCreatorName, selectedStore, selectedSupplier, selectedWarehouse, savedDocumentId, purchaseOrderId, purchaseOrder, saving, loading, loadFailed, readOnly, notice,
     taxEnabled: computed({ get: () => form.value.taxEnabled, set: value => { form.value.taxEnabled = value; form.value.items.forEach(item => { item.taxRate = value ? Number(item.taxRate) || 13 : 0; calculateRow(item) }) } }),
     totalPackages, totalQuantity, totalAmount, totalTaxAmount, totalIncludedAmount, money,

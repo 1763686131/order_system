@@ -113,7 +113,7 @@
                 <template v-if="!isPurchaseOrder">
                   <td><select v-if="item.productId" v-model="item.warehouseId" class="purchase-cell-select" :ref="element => setFieldRef(`item-warehouse-${index}`, element)" aria-label="所属仓库" @focus="activatePurchaseCell(item, 'warehouse')" @blur="activePurchaseCell = ''" @change="ui.onItemWarehouseChange(item); dismissHint(`item-warehouse-${index}`)"><option value="">{{ purchaseCellPlaceholder(item, 'warehouse', ui.form.storeId ? '请选择仓库' : '请先选择门店') }}</option><option v-for="warehouse in ui.filteredWarehouses" :key="warehouse.id" :value="String(warehouse.id)">{{ warehouse.name }}</option></select></td>
                   <td class="right">{{ item.productId ? money(item.currentStock) : '' }}</td>
-                  <td><input v-if="isPurchase" v-model.number="item.expectedQty" :ref="element => setFieldRef(`item-expected-${index}`, element)" aria-label="应收数量" type="number" min="0" step="0.0001" /><input v-else v-model.number="item.packages" aria-label="件数" type="number" min="0" step="0.01" @input="ui.onPackagesInput(index)" /></td>
+                  <td><input v-if="isPurchase" v-model.number="item.expectedQty" :readonly="Boolean(ui.purchaseOrderId)" :ref="element => setFieldRef(`item-expected-${index}`, element)" aria-label="应收数量" type="number" min="0" step="0.0001" /><input v-else v-model.number="item.packages" aria-label="件数" type="number" min="0" step="0.01" @input="ui.onPackagesInput(index)" /></td>
                 </template>
                 <td><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.quantity" :ref="element => setFieldRef(`item-quantity-${index}`, element)" :aria-label="isPurchaseOrder ? '采购数量' : '数量'" type="number" :min="isPurchaseOrder ? '0.0001' : '0'" step="0.0001" :required="isPurchaseOrder" @input="ui.onQuantityInput(index); dismissHint(`item-quantity-${index}`)" /><span v-else class="blank-cell"></span></td>
                 <td v-if="isPurchaseOrder">
@@ -238,6 +238,7 @@ const props = defineProps({
   action: { type: String, default: 'create', validator: value => DOCUMENT_ACTIONS.includes(value) },
   documentId: { type: Number, default: null },
   purchaseOrderId: { type: Number, default: null },
+  supplement: { type: Boolean, default: false },
   printOnOpen: { type: Boolean, default: false },
   productType: { type: String, default: 'finished-product' }
 })

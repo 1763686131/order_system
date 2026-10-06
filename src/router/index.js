@@ -273,6 +273,7 @@ const routes = [
           documentType: 'purchase',
           action: 'create',
           purchaseOrderId: route.query.purchaseOrderId ? Number(route.query.purchaseOrderId) : null,
+          supplement: route.query.supplement === '1',
           productType: route.query.productType || 'raw-material'
         }),
         meta: { requiresAuth: true, documentForm: true }

@@ -14,8 +14,8 @@ from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
 from utils.notifications import create_audit_notifications, complete_audit_notifications
-from utils.auth import require_admin_permission
-from utils.permission_catalog import ADMIN_AUDIT_NOTIFICATION_PERMISSIONS
+from utils.auth import admin_permission_granted, require_admin_permission
+from utils.permission_catalog import ADMIN_AUDIT_NOTIFICATION_PERMISSIONS, ADMIN_PURCHASE_ORDER_PERMISSIONS
 
 
 stock_inbounds_bp = Blueprint(
@@ -335,8 +335,14 @@ def _document_values(conn, data, existing=None, for_post=False):
     if require_valid and not any(item['received_qty'] > 0 for item in items):
         raise ValueError('审核至少需要 1 条有效物料明细')
     total_quantity = sum(Decimal(str(item['received_qty'])) for item in items)
-    total_tax = sum(Decimal(str(item['tax_amount'])) for item in items).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
-    total_amount = sum(Decimal(str(item['total_amount'])) for item in items).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+    total_tax = sum(
+        (Decimal(str(item['tax_amount'])) for item in items),
+        Decimal('0'),
+    ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+    total_amount = sum(
+        (Decimal(str(item['total_amount'])) for item in items),
+        Decimal('0'),
+    ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
     return {
         'document_no': _clean_text(data.get('documentNo', data.get('document_no', existing.get('document_no', ''))), 80),
         'document_date': document_date,
@@ -359,13 +365,13 @@ def _document_values(conn, data, existing=None, for_post=False):
 
 
 def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt_type, require_valid=False):
-    """Validate inbound quantities against the remaining approved purchase order."""
+    """Validate the purchase association without limiting the actual received quantity."""
     order = conn.execute(
         'SELECT * FROM purchase_orders WHERE id = ?', (purchase_order_id,)
     ).fetchone()
     if not order:
         raise ValueError('关联的采购订单不存在')
-    if order['status'] not in ('approved', 'partial'):
+    if order['status'] not in ('approved', 'partial', 'completed'):
         raise ValueError('只有已审核或部分入库的采购订单可以入库')
     if supplier_id is not None and order['supplier_id'] is not None and order['supplier_id'] != supplier_id:
         raise ValueError('入库供应商必须与采购订单一致')
@@ -399,8 +405,6 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt
             if not item.get(item_field) and order_item[order_field]:
                 item[item_field] = order_item[order_field]
         remaining = float(order_item['ordered_qty'] or 0) - float(order_item['received_qty'] or 0)
-        if float(item.get('received_qty') or 0) > remaining + 0.0000001:
-            raise ValueError('本次入库数量不能超过采购订单剩余数量')
         if item.get('expected_qty') is None:
             item['expected_qty'] = max(remaining, 0)
         if item.get('unit_price') is None and order_item['unit_price'] is not None:
@@ -637,7 +641,11 @@ def _update_purchase_receipts(conn, purchase_order_id, item_rows, direction=1):
         ''',
         (purchase_order_id,),
     ).fetchone()['quantity']
-    new_status = 'completed' if float(remaining or 0) <= 0.0000001 else 'partial' if direction > 0 else 'approved'
+    received = conn.execute(
+        'SELECT COALESCE(SUM(received_qty), 0) AS quantity FROM purchase_order_items WHERE order_id = ?',
+        (purchase_order_id,),
+    ).fetchone()['quantity']
+    new_status = 'completed' if float(remaining or 0) <= 0.0000001 else 'partial' if float(received or 0) > 0.0000001 else 'approved'
     conn.execute(
         'UPDATE purchase_orders SET status = ?, updated_at = ? WHERE id = ? AND status <> \'cancelled\'',
         (new_status, _now(), purchase_order_id),
@@ -667,6 +675,21 @@ def _insert_items(conn, inbound_id, receipt_type, items):
 
 def _document_insert(conn, values):
     now = _now()
+    purchase_order_id = values.get('purchase_order_id')
+    if purchase_order_id:
+        previous = conn.execute(
+            'SELECT document_no FROM stock_inbounds WHERE purchase_order_id = ? ORDER BY id LIMIT 1',
+            (purchase_order_id,),
+        ).fetchone()
+        if previous:
+            values['document_no'] = previous['document_no']
+        draft = conn.execute(
+            "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? AND receipt_type = ? AND status = 'draft'",
+            (purchase_order_id, values['receipt_type']),
+        ).fetchone()
+        if draft:
+            raise ValueError('该采购订单已有同类型待审核入库批次，请先处理')
+    _validate_document_number(conn, values['document_no'], purchase_order_id)
     cursor = conn.execute(
         '''
         INSERT INTO stock_inbounds (
@@ -687,12 +710,30 @@ def _document_insert(conn, values):
     inbound_id = cursor.lastrowid
     if not values['document_no']:
         generated = f"RK{values['document_date'].replace('-', '')[:8]}{inbound_id:03d}"
+        _validate_document_number(conn, generated, purchase_order_id, inbound_id)
         conn.execute('UPDATE stock_inbounds SET document_no = ? WHERE id = ?', (generated, inbound_id))
     row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
     _insert_items(conn, inbound_id, values['receipt_type'], values['items'])
+    if purchase_order_id:
+        conn.execute(
+            'UPDATE purchase_orders SET inbound_deleted_at = NULL WHERE id = ?',
+            (purchase_order_id,),
+        )
     if _is_audited(values['status']):
         _post_items(conn, row, [dict(item, id=item.get('id')) for item in values['items']])
     return conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+
+
+def _validate_document_number(conn, document_no, purchase_order_id, exclude_id=0):
+    if not document_no:
+        return
+    duplicate = conn.execute(
+        'SELECT 1 FROM stock_inbounds WHERE document_no = ? AND id <> ? '
+        'AND (? IS NULL OR purchase_order_id IS NOT ?) LIMIT 1',
+        (document_no, exclude_id, purchase_order_id, purchase_order_id),
+    ).fetchone()
+    if duplicate:
+        raise ValueError('入库单号已被其他单据使用')
 
 
 def _existing_values(conn, inbound_id):
@@ -761,9 +802,6 @@ def create_stock_inbound():
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
-        # A duplicate user-supplied document number is a client error.
-        if 'UNIQUE constraint failed: stock_inbounds.document_no' in str(exc):
-            return jsonify({'success': False, 'message': '入库单号已存在'}), 409
         return jsonify({'success': False, 'message': '入库单保存失败', 'detail': str(exc)}), 500
 
 
@@ -782,8 +820,11 @@ def update_stock_inbound(inbound_id):
                 if _is_audited(old_row['status']):
                     return jsonify({'success': False, 'message': '已审核单据不可修改'}), 409
                 values = _document_values(conn, data, existing=old_values)
+                if values.get('purchase_order_id') != old_row['purchase_order_id']:
+                    raise ValueError('不能修改入库批次关联的采购订单')
                 now = _now()
-                document_no = values['document_no'] or old_row['document_no']
+                document_no = old_row['document_no'] if old_row['purchase_order_id'] else values['document_no'] or old_row['document_no']
+                _validate_document_number(conn, document_no, values.get('purchase_order_id'), inbound_id)
                 conn.execute(
                     '''
                     UPDATE stock_inbounds SET document_no = ?, document_date = ?, receipt_type = ?,
@@ -810,8 +851,6 @@ def update_stock_inbound(inbound_id):
     except ValueError as exc:
         return jsonify({'success': False, 'message': str(exc)}), 400
     except Exception as exc:
-        if 'UNIQUE constraint failed: stock_inbounds.document_no' in str(exc):
-            return jsonify({'success': False, 'message': '入库单号已存在'}), 409
         return jsonify({'success': False, 'message': '入库单更新失败', 'detail': str(exc)}), 500
 
 
@@ -831,6 +870,76 @@ def cancel_stock_inbound(inbound_id):
         conn.execute("UPDATE stock_inbounds SET status = 'cancelled', updated_at = ? WHERE id = ?", (_now(), inbound_id))
         complete_audit_notifications(conn, "stock_inbound", inbound_id)
         return jsonify({'success': True, 'message': '入库单已作废'})
+
+
+@stock_inbounds_bp.route('/purchase-inbounds/bulk-delete', methods=['POST'])
+@require_admin_permission(ADMIN_PURCHASE_ORDER_PERMISSIONS['delete'])
+def delete_purchase_inbounds():
+    data = request.get_json(silent=True) or {}
+    try:
+        selections = {}
+        for field in ('purchaseOrderIds', 'inboundIds'):
+            raw_ids = data.get(field, [])
+            if not isinstance(raw_ids, list) or len(raw_ids) > 500:
+                raise ValueError('删除 ID 必须是最多 500 项的数组')
+            ids = {_required_int(value, '删除 ID') for value in raw_ids}
+            if any(value <= 0 for value in ids):
+                raise ValueError('删除 ID 必须为正整数')
+            selections[field] = ids
+        order_ids = selections['purchaseOrderIds']
+        inbound_ids = selections['inboundIds']
+        if not order_ids and not inbound_ids:
+            raise ValueError('请先勾选需要删除的入库记录')
+        with _write_lock:
+            with get_db() as conn:
+                orders = []
+                if order_ids:
+                    placeholders = ','.join('?' for _ in order_ids)
+                    orders = conn.execute(
+                        f'SELECT id FROM purchase_orders WHERE id IN ({placeholders})',
+                        tuple(order_ids),
+                    ).fetchall()
+                    if len(orders) != len(order_ids):
+                        raise ValueError('部分采购订单不存在，请刷新列表')
+                    inbound_ids.update(row['id'] for row in conn.execute(
+                        f'SELECT id FROM stock_inbounds WHERE purchase_order_id IN ({placeholders})',
+                        tuple(order_ids),
+                    ).fetchall())
+                rows = []
+                if inbound_ids:
+                    placeholders = ','.join('?' for _ in inbound_ids)
+                    rows = conn.execute(
+                        f'SELECT * FROM stock_inbounds WHERE id IN ({placeholders}) ORDER BY id DESC',
+                        tuple(inbound_ids),
+                    ).fetchall()
+                    if len(rows) != len(inbound_ids):
+                        raise ValueError('部分入库记录不存在，请刷新列表')
+                    if any(row['receipt_type'] != 'raw-material' and row['purchase_order_id'] is None for row in rows):
+                        raise ValueError('不能通过采购页面删除生产入库记录')
+                    if any(row['purchase_order_id'] and row['purchase_order_id'] not in order_ids for row in rows):
+                        raise ValueError('关联采购订单的入库记录必须按采购单整组删除')
+                    if any(_is_audited(row['status']) for row in rows) and not admin_permission_granted(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS['stock_inbound']):
+                        return jsonify({'success': False, 'message': '删除已审核入库需要入库审核权限'}), 403
+                for row in rows:
+                    if _is_audited(row['status']):
+                        items = [dict(item) for item in conn.execute(
+                            'SELECT * FROM stock_inbound_items WHERE inbound_id = ?', (row['id'],)
+                        ).fetchall()]
+                        _reverse_posted_items(conn, row)
+                        _update_purchase_receipts(conn, row['purchase_order_id'], items, direction=-1)
+                    complete_audit_notifications(conn, 'stock_inbound', row['id'])
+                    conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (row['id'],))
+                    conn.execute('DELETE FROM stock_inbounds WHERE id = ?', (row['id'],))
+                for order in orders:
+                    conn.execute(
+                        'UPDATE purchase_orders SET inbound_deleted_at = ?, updated_at = ? WHERE id = ?',
+                        (_now(), _now(), order['id']),
+                    )
+                return jsonify({'success': True, 'message': '采购入库记录已删除', 'deletedCount': len(rows)})
+    except ValueError as exc:
+        return jsonify({'success': False, 'message': str(exc)}), 409
+    except Exception as exc:
+        return jsonify({'success': False, 'message': '删除失败', 'detail': str(exc)}), 500
 
 
 @stock_inbounds_bp.route('/stock-inbounds/<int:inbound_id>/restart', methods=['POST'])
