@@ -4,7 +4,7 @@
       <div class="top-info-bar">
         <fieldset class="header-fields" :disabled="fieldsDisabled">
           <h2>{{ ui.config.title }}</h2>
-          <label v-if="isPurchase && !ui.savedDocumentId && ui.inboundTypes.length > 1" class="info-group">
+          <label v-if="isPurchase && !ui.purchaseOrderId && !ui.savedDocumentId && ui.inboundTypes.length > 1" class="info-group">
             <span>入库类型</span>
             <select :value="ui.inboundType" @change="ui.changeInboundType($event.target.value)">
               <option v-for="type in ui.inboundTypes" :key="type" :value="type">{{ type === 'finished-product' ? '成品' : '原材料' }}</option>

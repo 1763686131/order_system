@@ -31,6 +31,7 @@ export function purchasePayload(form) {
     status: 'draft',
     items: form.items.filter(item => item.productId).map(item => ({
       productId: Number(item.productId),
+      productType: item.productType || type,
       purchaseOrderItemId: item.purchaseOrderItemId ? Number(item.purchaseOrderItemId) : null,
       warehouseId: Number(item.warehouseId || form.warehouseId),
       code: item.productCode,

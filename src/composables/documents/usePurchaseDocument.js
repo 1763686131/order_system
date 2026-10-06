@@ -8,7 +8,7 @@ import { useDocumentValidation } from './useDocumentValidation'
 const BLANK_ROWS = 8
 let rowKey = 0
 const blankItem = () => ({
-  key: ++rowKey,
+  key: ++rowKey, productType: '',
   purchaseOrderItemId: '', productId: '', productCode: '', goodsName: '', specification: '', unit: '', warehouseId: '', warehouseName: '', expectedQty: '',
   quantity: '', price: '', taxRate: 0, amount: 0, taxAmount: 0, taxIncludedAmount: 0,
   batchNo: '', binCode: '', remark: ''
@@ -56,7 +56,9 @@ export function usePurchaseDocument(props) {
       return product.enabled !== false && Array.isArray(storeIds) && storeIds.some(id => String(id) === String(form.value.storeId))
     })
   })
-  const productsForItem = item => productOptions.value.filter(product => !product.warehouseId || String(product.warehouseId) === String(item?.warehouseId || form.value.warehouseId))
+  const productsForItem = item => productOptions.value.filter(product =>
+    product.productType === (item?.productType || inboundType.value)
+    && (!product.warehouseId || String(product.warehouseId) === String(item?.warehouseId || form.value.warehouseId)))
   const selectedStore = computed(() => stores.value.find(item => String(item.id) === String(form.value.storeId)))
   const selectedSupplier = computed(() => suppliers.value.find(item => String(item.id) === String(form.value.supplierId)))
   const selectedWarehouse = computed(() => warehouses.value.find(item => String(item.id) === String(form.value.warehouseId)))
@@ -104,10 +106,17 @@ export function usePurchaseDocument(props) {
     }
     form.value.items = blankRows()
   }
-  const getProductStock = (product, item = {}) => stockBalances.value.filter(balance => String(balance.productId) === String(product.id) && String(balance.storeId) === String(form.value.storeId) && String(balance.warehouseId) === String(item.warehouseId || form.value.warehouseId)).reduce((sum, balance) => sum + Number(balance.quantity || 0), 0)
+  const getProductStock = (product, item = {}) => stockBalances.value.filter(balance =>
+    balance.productType === product.productType
+    && String(balance.productId) === String(product.id)
+    && String(balance.storeId) === String(form.value.storeId)
+    && String(balance.warehouseId) === String(item.warehouseId || form.value.warehouseId))
+    .reduce((sum, balance) => sum + Number(balance.quantity || 0), 0)
   const onItemWarehouseChange = item => {
     item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
-    const product = productOptions.value.find(candidate => String(candidate.id) === String(item.productId))
+    const product = productOptions.value.find(candidate =>
+      candidate.productType === (item.productType || inboundType.value)
+      && String(candidate.id) === String(item.productId))
     if (product) item.currentStock = getProductStock(product, item)
   }
   const onProductChange = item => {
@@ -116,6 +125,7 @@ export function usePurchaseDocument(props) {
       Object.assign(item, blankItem(), { key: item.key })
       return
     }
+    item.productType = product.productType
     item.productCode = product.code || ''
     item.goodsName = product.name || ''
     item.specification = product.specification || ''
@@ -130,21 +140,25 @@ export function usePurchaseDocument(props) {
   const addRow = index => form.value.items.splice(index + 1, 0, blankItem())
   const removeRow = index => { if (form.value.items.length > 1) form.value.items.splice(index, 1) }
   const loadData = async () => {
-    const productUrl = inboundType.value === 'raw-material' ? '/raw-material-products' : '/products'
+    const productTypes = purchaseOrderId.value
+      ? ['raw-material', 'finished-product']
+      : [inboundType.value]
+    const productUrls = productTypes.map(type => type === 'raw-material' ? '/raw-material-products' : '/products')
     const [storeData, supplierData, warehouseData, productData, unitData, stockData] = await Promise.all([
       request({ url: '/stores', method: 'GET' }),
       request({ url: '/suppliers', method: 'GET' }),
       request({ url: '/warehouses', method: 'GET' }),
-      request({ url: productUrl, method: 'GET' }),
+      Promise.all(productUrls.map(url => request({ url, method: 'GET' }))),
       request({ url: '/products/units/measurements', method: 'GET' }),
-      request({ url: '/stock-balances', method: 'GET', params: { type: inboundType.value } })
+      Promise.all(productTypes.map(type => request({ url: '/stock-balances', method: 'GET', params: { type } })))
     ])
     stores.value = Array.isArray(storeData) ? storeData.filter(item => item.status !== 'inactive') : []
     suppliers.value = Array.isArray(supplierData) ? supplierData.filter(item => item.status !== 'inactive') : []
     warehouses.value = Array.isArray(warehouseData) ? warehouseData : []
-    products.value = Array.isArray(productData) ? productData : []
+    products.value = productData.flatMap((entries, index) =>
+      (Array.isArray(entries) ? entries : []).map(product => ({ ...product, productType: productTypes[index] })))
     units.value = Array.isArray(unitData) ? unitData : []
-    stockBalances.value = Array.isArray(stockData) ? stockData : []
+    stockBalances.value = stockData.flatMap(entries => Array.isArray(entries) ? entries : [])
   }
   const normalizeInbound = data => {
     setInboundType(data.type)
@@ -163,7 +177,7 @@ export function usePurchaseDocument(props) {
       taxEnabled: (data.items || []).some(item => Number(item.taxRate) > 0),
       attachments: data.attachments || [],
       items: (data.items || []).map(item => ({
-        ...blankItem(), purchaseOrderItemId: item.purchaseOrderItemId || '', productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '', warehouseId: String(item.warehouseId || data.warehouseId || ''), warehouseName: warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId || data.warehouseId))?.name || '',
+        ...blankItem(), productType: normalizeInboundType(item.productType || data.type), purchaseOrderItemId: item.purchaseOrderItemId || '', productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '', warehouseId: String(item.warehouseId || data.warehouseId || ''), warehouseName: warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId || data.warehouseId))?.name || '',
         goodsName: item.productName || item.goodsName || '', specification: item.specification || '', unit: item.unit || '',
         expectedQty: item.expectedQty ?? '', quantity: item.receivedQty ?? '', price: item.unitPrice ?? '',
         taxRate: Number(item.taxRate || 0), amount: Number(item.totalAmount || 0) - Number(item.taxAmount || 0),
@@ -176,7 +190,6 @@ export function usePurchaseDocument(props) {
   const normalizePurchaseOrder = data => {
     const remainingItems = (data.items || [])
       .filter(item => Number(item.remainingQty ?? item.orderedQty ?? 0) > 0)
-      .filter(item => normalizeInboundType(item.productType) === inboundType.value)
     purchaseOrder.value = data
     purchaseOrderId.value = data.orderId || data.id || purchaseOrderId.value
     form.value.purchaseOrderId = purchaseOrderId.value
@@ -193,7 +206,7 @@ export function usePurchaseDocument(props) {
       documentNo: data.inboundDocumentNo || '',
       remark: data.remark || '',
       items: remainingItems.map(item => ({
-        ...blankItem(), purchaseOrderItemId: item.orderItemId || item.id || '',
+        ...blankItem(), productType: normalizeInboundType(item.productType), purchaseOrderItemId: item.orderItemId || item.id || '',
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
@@ -218,10 +231,11 @@ export function usePurchaseDocument(props) {
       return
     }
     const data = await request({ url: `/stock-inbounds/${props.documentId}`, method: 'GET' })
+    purchaseOrderId.value = data.purchaseOrderId || null
     if (data.type !== inboundType.value) {
       setInboundType(data.type)
-      await loadData()
     }
+    if (purchaseOrderId.value) await loadData()
     normalizeInbound(data)
     readOnly.value = props.action === 'view' || isLockedInbound(form.value.status)
   }

@@ -233,7 +233,7 @@ def _product_exists(conn, receipt_type, product_id):
     return conn.execute(f'SELECT 1 FROM {table} WHERE id = ?', (product_id,)).fetchone() is not None
 
 
-def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default_warehouse_id=None):
+def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default_warehouse_id=None, allow_mixed_types=False):
     if raw_items is None:
         raw_items = []
     if not isinstance(raw_items, list):
@@ -244,6 +244,9 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
         if not isinstance(raw, dict):
             continue
         product_id = _optional_int(raw.get('productId', raw.get('product_id')), '物料ID')
+        product_type = _type(raw.get('productType', raw.get('product_type', receipt_type)))
+        if not allow_mixed_types and product_type != receipt_type:
+            raise ValueError('入库明细类型与单据类型不一致')
         purchase_order_item_id = _optional_int(
             raw.get('purchaseOrderItemId', raw.get('purchase_order_item_id')), 'purchase order item id'
         )
@@ -265,7 +268,7 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
             raise ValueError('每条明细必须选择物料')
         if require_valid and product_id is None:
             raise ValueError('审核明细必须关联有效物料')
-        if product_id is not None and not _product_exists(conn, receipt_type, product_id):
+        if product_id is not None and not _product_exists(conn, product_type, product_id):
             raise ValueError(f'物料 ID {product_id} 不存在')
         if require_valid and received <= 0:
             raise ValueError('实收数量必须大于 0')
@@ -282,6 +285,7 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
             raise ValueError('明细仓库不存在')
 
         normalized.append({
+            'product_type': product_type,
             'purchase_order_item_id': purchase_order_item_id,
             'product_id': product_id,
             'warehouse_id': warehouse_id,
@@ -329,7 +333,14 @@ def _document_values(conn, data, existing=None, for_post=False):
             raise ValueError('供应商不存在或已停用')
     if not conn.execute('SELECT 1 FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone():
         raise ValueError('目标仓库不存在')
-    items = _normalize_items(conn, receipt_type, data.get('items', existing.get('_items', [])), require_valid, default_warehouse_id=warehouse_id)
+    items = _normalize_items(
+        conn,
+        receipt_type,
+        data.get('items', existing.get('_items', [])),
+        require_valid,
+        default_warehouse_id=warehouse_id,
+        allow_mixed_types=purchase_order_id is not None,
+    )
     if purchase_order_id is not None:
         _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt_type, require_valid=require_valid)
     if require_valid and not any(item['received_qty'] > 0 for item in items):
@@ -392,7 +403,7 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt
         order_item = order_items.get(int(link_id))
         if not order_item:
             raise ValueError('关联的采购订单明细不存在')
-        if order_item['product_type'] != receipt_type:
+        if order_item['product_type'] != item['product_type']:
             raise ValueError('入库类型与采购订单明细类型不一致')
         if item.get('product_id') is not None and order_item['product_id'] != item['product_id']:
             raise ValueError('入库物料与采购订单明细不一致')
@@ -428,8 +439,9 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt
         raise ValueError('采购入库必须关联采购订单明细')
 
 
-def _serialize_item(row, default_warehouse_id=None):
+def _serialize_item(row, default_warehouse_id=None, default_product_type=None):
     item = dict(row)
+    item['productType'] = item.pop('product_type', None) or default_product_type
     item['purchaseOrderItemId'] = item.pop('purchase_order_item_id', None)
     item['productId'] = item.pop('product_id', None)
     item['warehouseId'] = item.pop('warehouse_id', None) or default_warehouse_id
@@ -486,7 +498,10 @@ def _serialize_document(conn, row, include_items=True):
             'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id',
             (row['id'],),
         ).fetchall()
-        document['items'] = [_serialize_item(item, document['warehouseId']) for item in items]
+        document['items'] = [
+            _serialize_item(item, document['warehouseId'], document['type'])
+            for item in items
+        ]
         linked_suppliers = {
             item['id']: item
             for item in conn.execute(
@@ -514,9 +529,10 @@ def _serialize_document(conn, row, include_items=True):
 
 def _post_items(conn, document_row, item_rows):
     """Apply an audited document in the caller's transaction."""
-    receipt_type = document_row['receipt_type']
+    default_type = document_row['receipt_type']
     now = _now()
     for item in item_rows:
+        receipt_type = item.get('product_type') or default_type
         qty = float(item['received_qty'] or 0)
         if qty <= 0 or item['product_id'] is None:
             continue
@@ -664,7 +680,7 @@ def _insert_items(conn, inbound_id, receipt_type, items):
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
-                inbound_id, line_no, receipt_type, item['product_id'], item.get('purchase_order_item_id'), item['warehouse_id'], item['product_code'],
+                inbound_id, line_no, item.get('product_type') or receipt_type, item['product_id'], item.get('purchase_order_item_id'), item['warehouse_id'], item['product_code'],
                 item['product_name'], item['specification'], item['unit'], item['expected_qty'],
                 item['received_qty'], item['bin_code'], item['batch_no'], item['unit_price'],
                 item['tax_rate'], item['tax_amount'], item['total_amount'], item['remark'],
@@ -684,11 +700,11 @@ def _document_insert(conn, values):
         if previous:
             values['document_no'] = previous['document_no']
         draft = conn.execute(
-            "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? AND receipt_type = ? AND status = 'draft'",
-            (purchase_order_id, values['receipt_type']),
+            "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? AND status = 'draft'",
+            (purchase_order_id,),
         ).fetchone()
         if draft:
-            raise ValueError('该采购订单已有同类型待审核入库批次，请先处理')
+            raise ValueError('该采购订单已有待审核入库批次，请先处理')
     _validate_document_number(conn, values['document_no'], purchase_order_id)
     cursor = conn.execute(
         '''

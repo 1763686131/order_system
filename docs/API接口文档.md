@@ -43,14 +43,15 @@
 
 采购申请路由为 `/admin/purchase/orders/create`、`/admin/purchase/orders/edit/:id`、`/admin/purchase/orders/audit/:id` 和 `/admin/purchase/orders/:id`，对应本节的 `/api/purchase-orders` 接口。审核通过后，前端通过 `/api/purchase-orders/{id}/available-inbound` 读取可入库明细，再使用带 `purchaseOrderId`、`purchaseOrderItemId` 的入库请求创建采购入库单。
 
-采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。创建路由可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；从采购申请创建时，页面按仍有剩余数量的明细类型自动切换。混合采购申请在待入库列表按类型拆分，表单可选择入库类型，每张入库单只载入对应类型的剩余明细。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?businessType=purchase`，只展示原材料采购和关联采购申请的成品采购入库，不混入生产完工入库。`StockRecordList.vue` 不传业务类型筛选，保留全部入库记录，并按商品类型和采购申请关联显示正确的业务名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
+采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。独立入库可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；关联采购申请入库时，一张入库单载入所有仍有剩余数量的明细，明细可同时包含原材料和成品，并按每行 `productType` 校验和过账。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?businessType=purchase`，只展示采购入库，不混入生产完工入库。`StockRecordList.vue` 不传业务类型筛选，保留全部入库记录，并按商品类型和采购申请关联显示正确的业务名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
 
-`documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交 `raw-material` 或 `finished-product`，状态仍为 `draft`，并将界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。原材料商品来源为 `/api/raw-material-products`、库存来源为 `/api/stock-balances?type=raw-material`；成品商品来源为 `/api/products`、库存来源为 `/api/stock-balances?type=finished-product`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。
+`documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交单据默认类型，并在每条明细提交 `productType`；关联采购申请允许同一单据包含两种商品类型，独立入库仍要求明细类型与表头一致。状态为 `draft`，界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。原材料商品来源为 `/api/raw-material-products`、库存来源为 `/api/stock-balances?type=raw-material`；成品商品来源为 `/api/products`、库存来源为 `/api/stock-balances?type=finished-product`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。
 
 入库接口只负责到货数量、仓库、批次和库存过账，不负责采购订单的付款、供应商应付余额或付款流水。采购订单的付款字段只通过 `/api/purchase-orders` 保存和返回；保存采购申请或入库草稿都不会立即增加库存，必须分别完成采购订单审核和入库审核。金额最终由各接口重新校验与计算。
 
 ## 版本历史
 
+- **v5.8** (2026-10-06，混合类型采购入库) - 关联采购入库一次载入全部未完成明细，支持同一单据混合原材料和成品并按行类型过账
 - **v5.7** (2026-10-06，采购成品入库适配) - 采购进货表单按入库类型切换原材料/成品商品、库存和请求体；采购申请关联入库支持成品明细；入库列表同时展示两类入库记录
 - **v5.6** (2026-10-05，采购申请与付款字段) - 新增采购订单查询、新建、编辑、删除、审核、反审核和可入库明细接口；采购明细支持逐行供应商、仓库、采购数量、可选单价和金额；新增采购人、制单人、付款金额、其它费用、结算账户、本次付款及应付汇总字段；明确采购申请、采购入库和库存审核的边界
 - **v5.5** (2026-10-03，原材料出库流程完善) - 新增后台完整录入出库单接口；原材料出库草稿支持多行原材料和成品入库明细；后台修改不受触屏端原材料白名单限制；审核接口按明细批量扣减原材料库存并批量创建成品入库；补充触屏辅助输入与后台审核边界
@@ -3574,7 +3575,7 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `type` | string | 否 | `raw-material` 或 `finished-product` |
+| `type` | string | 否 | 按入库单表头默认类型筛选：`raw-material` 或 `finished-product`；关联采购入库的商品行另有各自的 `productType` |
 | `businessType` | string | 否 | `purchase`（原材料采购及关联采购申请的成品采购入库）或 `production`（未关联采购申请的成品生产完工入库）；不传时返回全部入库记录 |
 | `status` | string | 否 | `draft`、`reviewed`、历史兼容 `posted` 或 `cancelled` |
 
@@ -3603,7 +3604,7 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
         "id": 28,
         "inbound_id": 12,
         "line_no": 1,
-        "product_type": "raw-material",
+        "productType": "raw-material",
         "productId": 3,
         "productCode": "RM-003",
         "productName": "轻质碳酸钙",
@@ -3705,6 +3706,7 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 | 参数 | 类型 | 审核必填 | 说明 |
 |------|------|----------|------|
 | `productId` | integer | 业务必填 | 物料 ID；按入库类型关联 `products` 或 `raw_material_products` |
+| `productType` | string | 关联采购时是 | `raw-material` 或 `finished-product`；独立入库省略时使用表头 `type`，关联采购时按对应采购明细类型校验并入账 |
 | `purchaseOrderItemId` | integer | 关联入库时必填 | 关联采购订单明细 ID；审核时校验物料和类型关联，并累计实际入库数量，不限制超量 |
 | `productCode` | string | 否 | 物料编码；请求也兼容 `code` |
 | `productName` | string | 否 | 物料名称快照；请求也兼容 `name`，前端选择物料后自动填充 |
