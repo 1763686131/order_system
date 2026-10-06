@@ -4,6 +4,12 @@
       <div class="top-info-bar">
         <fieldset class="header-fields" :disabled="fieldsDisabled">
           <h2>{{ ui.config.title }}</h2>
+          <label v-if="isPurchase && !ui.savedDocumentId && ui.inboundTypes.length > 1" class="info-group">
+            <span>入库类型</span>
+            <select :value="ui.inboundType" @change="ui.changeInboundType($event.target.value)">
+              <option v-for="type in ui.inboundTypes" :key="type" :value="type">{{ type === 'finished-product' ? '成品' : '原材料' }}</option>
+            </select>
+          </label>
           <label class="info-group">
             <span>{{ isPurchaseOrder ? '申请门店' : '门店' }}<b v-if="isPurchaseOrder"> *</b></span>
             <select v-model="ui.form.storeId" :disabled="fieldsDisabled || (isPurchase && Boolean(ui.purchaseOrderId))" :ref="element => setFieldRef('storeId', element)" @change="handleStoreChange">
@@ -11,10 +17,10 @@
               <option v-for="store in ui.stores" :key="store.id" :value="isSale ? store.id : String(store.id)">{{ store.name }}</option>
             </select>
           </label>
-          <label v-if="!isPurchaseOrder" class="info-group">
+          <label v-if="!isPurchaseOrder && (!isPurchase || isMaterial || ui.purchaseOrderId)" class="info-group">
             <span>{{ ui.config.partyLabel }}</span>
             <input v-if="isPurchase && ui.purchaseOrderId" type="text" :value="ui.form.supplierName || '供应商详见采购申请明细'" readonly />
-            <select v-else-if="isPurchase" v-model="ui.form.supplierId" :disabled="fieldsDisabled" :required="!ui.purchaseOrderId" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
+            <select v-else-if="isPurchase" v-model="ui.form.supplierId" :disabled="fieldsDisabled" :required="!ui.purchaseOrderId && isMaterial" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
               <option value="">请选择供应商</option>
               <option v-for="supplier in ui.suppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName || supplier.name }}</option>
             </select>
@@ -94,8 +100,8 @@
                 </td>
                 <td>
                   <input v-if="isPurchaseOrder" v-model="item.goodsName" class="purchase-cell-input" :ref="element => setProductInputRef(index, element)" type="text" autocomplete="off" aria-label="商品" :placeholder="purchaseProductPlaceholder(item)" @focus="activatePurchaseCell(item, 'product'); ui.showProductDropdown(index)" @blur="activePurchaseCell = ''; ui.hideProductDropdown(index)" @input="ui.onProductInput(index); dismissHint(`item-product-${index}`)" @keydown.escape.prevent="ui.closeProductDropdown?.()" />
-                  <select v-else-if="isPurchase" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" aria-label="物料" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
-                    <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? '请选择物料' : '请先选择门店') }}</option>
+                  <select v-else-if="isPurchase" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" :aria-label="isMaterial ? '物料' : '商品'" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
+                    <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? `请选择${isMaterial ? '物料' : '商品'}` : '请先选择门店') }}</option>
                     <option v-if="item.productId && !ui.products.some(product => String(product.id) === String(item.productId))" :value="item.productId">{{ item.goodsName }}</option>
                     <option v-for="product in ui.productsForItem(item)" :key="product.id" :value="String(product.id)">{{ product.code ? `${product.code} · ` : '' }}{{ product.name }}</option>
                   </select>
@@ -114,7 +120,7 @@
                   <input v-if="item.productId" :value="ui.supplierDropdownOpen && ui.focusedSupplierRow === index ? ui.supplierSearch : item.supplierName" class="purchase-cell-input" :ref="element => setSupplierInputRef(index, element)" type="text" autocomplete="off" :required="ui.auditMode" aria-label="采购供应商" :placeholder="purchaseCellPlaceholder(item, 'supplier', ui.auditMode ? '请选择采购供应商' : '暂不指定（选填）')" @focus="activatePurchaseCell(item, 'supplier'); ui.openSupplierDropdown(index)" @blur="activePurchaseCell = ''; ui.hideSupplierDropdown(index)" @input="ui.handleSupplierSearchInput(index, $event); dismissHint(`item-supplier-${index}`)" @keydown.escape.prevent="ui.closeSupplierDropdown?.()" />
                   <span v-else class="blank-cell"></span>
                 </td>
-                <td><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.price" :ref="element => setFieldRef(`item-price-${index}`, element)" :aria-label="isPurchaseOrder ? '采购单价' : '单价'" :required="isPurchaseOrder && ui.auditMode" type="number" min="0" :step="isMaterial ? '0.0001' : '0.01'" @input="ui.onPriceInput(index); dismissHint(`item-price-${index}`)" /><span v-else class="blank-cell"></span></td>
+                <td><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.price" :ref="element => setFieldRef(`item-price-${index}`, element)" :aria-label="isPurchaseOrder ? '采购单价' : '单价'" :required="isPurchaseOrder && ui.auditMode" type="number" min="0" :step="isPurchase ? '0.0001' : '0.01'" @input="ui.onPriceInput(index); dismissHint(`item-price-${index}`)" /><span v-else class="blank-cell"></span></td>
                 <template v-if="ui.taxEnabled">
                   <td><input v-if="item.productId" v-model.number="item.taxRate" :ref="element => setFieldRef(`item-tax-${index}`, element)" aria-label="税率" type="number" min="0" max="100" step="0.01" @input="ui.onTaxRateInput(index)" /></td>
                   <td><input v-if="item.productId" v-model.number="item.taxIncludedPrice" aria-label="含税单价" type="number" min="0" step="0.01" @input="ui.onIncludedPriceInput(index)" /></td>
@@ -252,7 +258,7 @@ const purchaseProductPlaceholder = item => {
   if (ui.categoriesForItem?.(item)?.length && !item.categoryId) return '请先选择分类'
   return '搜索或选择商品'
 }
-const isMaterial = computed(() => isPurchase.value)
+const isMaterial = computed(() => isPurchase.value && ui.form.type !== 'finished-product')
 const isSalesDocument = computed(() => isSale.value || isReturn.value)
 const formatMoney = value => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fieldsDisabled = computed(() => ui.loading || ui.loadFailed || ui.readOnly || ui.saving)

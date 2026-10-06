@@ -28,7 +28,7 @@
 
 ### 公共单据表单调用约定
 
-销售订单、销售退货、原材料采购申请和原材料进货页面统一使用
+销售订单、销售退货、采购申请和采购进货页面统一使用
 `src/components/admin/BusinessDocumentForm.vue`，由
 `src/composables/documents/useBusinessDocument.js` 选择业务模块。界面复用不改变各单据的后端接口契约。
 
@@ -36,21 +36,22 @@
 | --- | --- | --- | --- | --- |
 | `sale` | `useSalesDocument.js` | `POST /api/orders`、`PUT /api/orders/{id}` | 客户；`discountAmount` 为折扣后金额，另有 `otherFees`、`currentPayment` | `sale` |
 | `sale-return` | `useReturnDocument.js` | `POST /api/returns`、`PUT /api/returns/{id}` | 客户；`returnAmount`、`refundAmount`，核销金额为两者差额 | `return` |
-| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、原材料明细；逐行供应商、采购人、制单人、付款金额、其它费用、结算账户和本次付款 | 暂不提供打印入口 |
-| `purchase` | `usePurchaseDocument.js` | `POST /api/stock-inbounds`、`PUT /api/stock-inbounds/{id}` | 供应商；原材料入库数量、单价、税额、价税合计 | `purchase` |
+| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、原材料/成品明细；逐行供应商、采购人、制单人、付款金额、其它费用、结算账户和本次付款 | 暂不提供打印入口 |
+| `purchase` | `usePurchaseDocument.js` | `POST /api/stock-inbounds`、`PUT /api/stock-inbounds/{id}` | 按 `type` 切换原材料/成品入库数量、单价、税额、价税合计；原材料需要供应商，成品不强制供应商 | `purchase` |
 
 公共组件的 `action`（`create`、`edit`、`copy`、`view`）和 `documentId` 是前端路由参数，不是提交给这些业务接口的通用字段。销售复制使用 `/admin/sales/create?copyFrom=<id>`，读取源订单后按新增接口保存；新增/编辑/复制/查看不能代替服务端的审核状态或权限校验。
 
 采购申请路由为 `/admin/purchase/orders/create`、`/admin/purchase/orders/edit/:id`、`/admin/purchase/orders/audit/:id` 和 `/admin/purchase/orders/:id`，对应本节的 `/api/purchase-orders` 接口。审核通过后，前端通过 `/api/purchase-orders/{id}/available-inbound` 读取可入库明细，再使用带 `purchaseOrderId`、`purchaseOrderItemId` 的入库请求创建采购入库单。
 
-原材料进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?type=raw-material`，并关联供应商和仓库名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
+采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。创建路由可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；从采购申请创建时，页面按仍有剩余数量的明细类型自动切换。混合采购申请在待入库列表按类型拆分，表单可选择入库类型，每张入库单只载入对应类型的剩余明细。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表同时读取原材料和成品入库记录，并关联供应商和仓库名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
 
-`documentModels.js` 的 `purchasePayload()` 固定提交 `type: 'raw-material'`、`status: 'draft'`，将界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。商品来源为 `/api/raw-material-products`，库存来源为 `/api/stock-balances?type=raw-material`；成品生产入库仍由库存入库弹窗处理。
+`documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交 `raw-material` 或 `finished-product`，状态仍为 `draft`，并将界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。原材料商品来源为 `/api/raw-material-products`、库存来源为 `/api/stock-balances?type=raw-material`；成品商品来源为 `/api/products`、库存来源为 `/api/stock-balances?type=finished-product`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。
 
 入库接口只负责到货数量、仓库、批次和库存过账，不负责采购订单的付款、供应商应付余额或付款流水。采购订单的付款字段只通过 `/api/purchase-orders` 保存和返回；保存采购申请或入库草稿都不会立即增加库存，必须分别完成采购订单审核和入库审核。金额最终由各接口重新校验与计算。
 
 ## 版本历史
 
+- **v5.7** (2026-10-06，采购成品入库适配) - 采购进货表单按入库类型切换原材料/成品商品、库存和请求体；采购申请关联入库支持成品明细；入库列表同时展示两类入库记录
 - **v5.6** (2026-10-05，采购申请与付款字段) - 新增采购订单查询、新建、编辑、删除、审核、反审核和可入库明细接口；采购明细支持逐行供应商、仓库、采购数量、可选单价和金额；新增采购人、制单人、付款金额、其它费用、结算账户、本次付款及应付汇总字段；明确采购申请、采购入库和库存审核的边界
 - **v5.5** (2026-10-03，原材料出库流程完善) - 新增后台完整录入出库单接口；原材料出库草稿支持多行原材料和成品入库明细；后台修改不受触屏端原材料白名单限制；审核接口按明细批量扣减原材料库存并批量创建成品入库；补充触屏辅助输入与后台审核边界
 - **v5.4** (2026-09-30，文档修订) - 补充公共录入组件与业务适配器的 API 对应关系；按当前实现修正入库草稿/审核、红冲、退货退款核销规则，无新增业务接口
@@ -3229,13 +3230,13 @@ volumes:
 ## 11. 供应商与入库管理
 
 采购订单申请接口由 `backend/routes/purchase_orders.py` 提供，采购入库和库存过账接口由
-`backend/routes/stock_inbounds.py` 提供。本模块覆盖原材料采购申请、采购入库和成品生产完工入库，
+`backend/routes/stock_inbounds.py` 提供。本模块覆盖原材料/成品采购申请、采购入库和成品生产完工入库，
 其中采购订单申请接口详见上方 11.0，以下接口负责供应商档案、入库单和库存流水。
 
 入库单有以下两种类型：
 
-- `raw-material`：原材料采购入库，审核时必须关联有效供应商
-- `finished-product`：成品生产完工入库，生产车间/班组为选填字段
+- `raw-material`：原材料采购入库，审核时必须关联有效供应商或已审核采购申请
+- `finished-product`：成品采购或生产完工入库，生产车间/班组为选填字段；采购入库通过采购申请明细关联供应商
 
 入库单状态由保存草稿、审核和红冲等动作决定：
 
@@ -3349,8 +3350,9 @@ volumes:
 
 | 字段 | 类型 | 申请阶段 | 审核阶段 | 说明 |
 | --- | --- | --- | --- | --- |
-| `productId` | integer | 否* | 否* | 原材料 ID；填写后由后端补全名称、编码、规格和单位 |
-| `productName` | string | 是* | 是* | 物料名称快照；`productId` 和名称至少填写一个 |
+| `productType` | string | 否 | 否 | `raw-material`（默认）或 `finished-product`，决定商品 ID 所属档案表 |
+| `productId` | integer | 否* | 否* | 原材料或成品 ID；填写后由后端补全名称、编码、规格和单位 |
+| `productName` | string | 是* | 是* | 商品名称快照；`productId` 和名称至少填写一个 |
 | `warehouseId` | integer | 否 | 否 | 申请阶段可预填仓库，入库前仍可调整 |
 | `orderedQty` | number | 是 | 是 | 采购数量，必须大于 `0` |
 | `supplierId` | integer | 否 | 是 | 逐行采购供应商，必须为启用供应商 |
@@ -3686,7 +3688,7 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 | `storeId` | integer | 否 | 否 | 门店 ID |
 | `warehouseId` | integer | 是 | 是 | 默认目标仓库 ID，必须存在；未指定明细仓库时使用此仓库 |
 | `supplierId` | integer | 否 | 原材料必填 | 供应商 ID，原材料审核时必须有效且为 `active` |
-| `purchaseOrderId` | integer | 否 | 否 | 关联已审核采购订单；关联采购申请入库时使用 |
+| `purchaseOrderId` | integer | 否 | 否 | 关联已审核采购订单；原材料和成品采购入库均保留此关联，审核后回写采购明细的已入库数量 |
 | `workshop` | string | 否 | 否 | 成品生产车间/班组，当前为选填 |
 | `inspector` | string | 否 | 否 | 检验员 |
 | `qualityNo` | string | 否 | 否 | 质检单号 |
@@ -3767,7 +3769,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 > `attachments` 当前只把文件名、大小、MIME 类型等 JSON 元数据写入入库单，尚未提供附件二进制上传接口。
 
-上方“审核必填”列表示审核已保存单据时的校验条件，不表示 `POST /stock-inbounds` 可以直接过账。新建请求传入 `reviewed` 或 `posted` 返回 HTTP `400`，消息为“请先保存待审核单据，再调用审核接口”。当前公共进货表单保存前已校验门店、供应商、仓库、日期、物料、正数实收数量和批次号，前端要求比后端草稿接口更严格。
+上方“审核必填”列表示审核已保存单据时的校验条件，不表示 `POST /stock-inbounds` 可以直接过账。新建请求传入 `reviewed` 或 `posted` 返回 HTTP `400`，消息为“请先保存待审核单据，再调用审核接口”。当前公共进货表单保存前已校验门店、仓库、日期、商品、正数实收数量和批次号；原材料入库还要求供应商，成品入库不强制供应商。前端要求比后端草稿接口更严格。
 
 ### 11.8 修改入库草稿
 

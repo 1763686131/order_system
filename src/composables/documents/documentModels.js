@@ -15,12 +15,13 @@ export const isLockedInbound = status => ['reviewed', 'posted', 'cancelled', 're
 
 // Keep inbound wire fields separate from sales/return fields, even where labels match.
 export function purchasePayload(form) {
+  const type = form.type === 'finished-product' ? 'finished-product' : 'raw-material'
   return {
     documentNo: form.documentNo,
     documentDate: form.documentDate,
-    type: 'raw-material',
+    type,
     storeId: Number(form.storeId),
-    supplierId: form.supplierId ? Number(form.supplierId) : null,
+    supplierId: type === 'raw-material' && form.supplierId ? Number(form.supplierId) : null,
     purchaseOrderId: form.purchaseOrderId ? Number(form.purchaseOrderId) : null,
     warehouseId: Number(form.warehouseId),
     inspector: form.inspector,
@@ -49,22 +50,24 @@ export function purchasePayload(form) {
 
 export function validatePurchase(form, onInvalid = () => {}) {
   const invalid = (key, message) => { onInvalid(key, message); return message }
+  const isRawMaterial = form.type !== 'finished-product'
+  const itemLabel = isRawMaterial ? '物料' : '商品'
   if (!form.storeId) return invalid('storeId', '请选择门店。')
-  if (!form.supplierId && !form.purchaseOrderId) return invalid('supplierId', '请选择供应商。')
+  if (isRawMaterial && !form.supplierId && !form.purchaseOrderId) return invalid('supplierId', '请选择供应商。')
   if (!form.warehouseId) return invalid('warehouseId', '请选择仓库。')
   if (!form.documentDate) return invalid('documentDate', '请选择单据日期。')
   const items = form.items.filter(item => item.productId)
-  if (!items.length) return invalid('item-product-0', '请至少选择一条物料。')
+  if (!items.length) return invalid('item-product-0', `请至少选择一条${itemLabel}。`)
   for (const [index, item] of form.items.entries()) {
     if (!item.productId) continue
     if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return invalid(`item-quantity-${index}`, '实收数量必须大于 0。')
-    if (!item.batchNo?.trim()) return invalid(`item-batch-${index}`, '请填写物料的批次号。')
+    if (!item.batchNo?.trim()) return invalid(`item-batch-${index}`, `请填写${itemLabel}的批次号。`)
     if (!Number.isFinite(Number(item.price)) || Number(item.price) < 0) return invalid(`item-price-${index}`, '单价必须为非负数。')
     if (!Number.isFinite(Number(item.expectedQty || 0)) || Number(item.expectedQty || 0) < 0) return invalid(`item-expected-${index}`, '应收数量必须为非负数。')
     if (form.taxEnabled && (!Number.isFinite(Number(item.taxRate)) || Number(item.taxRate) < 0 || Number(item.taxRate) > 100)) return invalid(`item-tax-${index}`, '税率必须在 0 到 100 之间。')
   }
   const unmatchedIndex = form.items.findIndex(item => item.goodsName && !item.productId)
-  if (unmatchedIndex !== -1) return invalid(`item-product-${unmatchedIndex}`, '请从物料列表选择有效物料。')
+  if (unmatchedIndex !== -1) return invalid(`item-product-${unmatchedIndex}`, `请从${itemLabel}列表选择有效${itemLabel}。`)
   return ''
 }
 

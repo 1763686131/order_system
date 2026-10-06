@@ -331,7 +331,7 @@ def _document_values(conn, data, existing=None, for_post=False):
         raise ValueError('目标仓库不存在')
     items = _normalize_items(conn, receipt_type, data.get('items', existing.get('_items', [])), require_valid, default_warehouse_id=warehouse_id)
     if purchase_order_id is not None:
-        _validate_purchase_link(conn, purchase_order_id, supplier_id, items, require_valid=require_valid)
+        _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt_type, require_valid=require_valid)
     if require_valid and not any(item['received_qty'] > 0 for item in items):
         raise ValueError('审核至少需要 1 条有效物料明细')
     total_quantity = sum(Decimal(str(item['received_qty'])) for item in items)
@@ -344,7 +344,7 @@ def _document_values(conn, data, existing=None, for_post=False):
         'store_id': store_id,
         'warehouse_id': warehouse_id,
         'supplier_id': supplier_id if receipt_type == 'raw-material' else None,
-        'purchase_order_id': purchase_order_id if receipt_type == 'raw-material' else None,
+        'purchase_order_id': purchase_order_id,
         'workshop': workshop if receipt_type == 'finished-product' else '',
         'inspector': _clean_text(data.get('inspector', existing.get('inspector', '')), 80),
         'quality_no': _clean_text(data.get('qualityNo', data.get('quality_no', existing.get('quality_no', ''))), 80),
@@ -358,7 +358,7 @@ def _document_values(conn, data, existing=None, for_post=False):
     }
 
 
-def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, require_valid=False):
+def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt_type, require_valid=False):
     """Validate inbound quantities against the remaining approved purchase order."""
     order = conn.execute(
         'SELECT * FROM purchase_orders WHERE id = ?', (purchase_order_id,)
@@ -386,6 +386,8 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, require
         order_item = order_items.get(int(link_id))
         if not order_item:
             raise ValueError('关联的采购订单明细不存在')
+        if order_item['product_type'] != receipt_type:
+            raise ValueError('入库类型与采购订单明细类型不一致')
         if item.get('product_id') is not None and order_item['product_id'] != item['product_id']:
             raise ValueError('入库物料与采购订单明细不一致')
         for item_field, order_field in (

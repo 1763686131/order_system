@@ -873,7 +873,7 @@ async function createRecord() {
     return
   }
   if (candidates.length === 1) {
-    router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: candidates[0].purchaseOrderId } })
+    router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: candidates[0].purchaseOrderId, productType: candidates[0].type } })
     return
   }
   showNotice('请打开采购订单详情后选择需要入库的订单')
@@ -886,7 +886,7 @@ function editRecord(record) {
     return
   }
   if (record.status === 'pending' && record.purchaseOrderId) {
-    router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: record.purchaseOrderId } })
+    router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: record.purchaseOrderId, productType: record.type } })
     return
   }
   router.push({ name: 'admin-purchase-inbound-edit', params: { id: record.id } })
@@ -941,8 +941,9 @@ function normalizeInbound(record) {
   }
 }
 
-function normalizePendingInbound(record) {
+function normalizePendingInbound(record, type) {
   const items = (record.items || record.orderItems || [])
+    .filter(item => (item.productType || 'raw-material') === type)
     .map(item => ({
       ...item,
       goodsName: item.productName || item.goodsName || '',
@@ -955,7 +956,8 @@ function normalizePendingInbound(record) {
     .filter(item => item.expectedQty > 0)
   return {
     ...record,
-    id: `purchase-order-${record.orderId}`,
+    id: `purchase-order-${record.orderId}-${type}`,
+    type,
     purchaseOrderId: record.orderId,
     inboundNo: record.orderNo || '',
     documentDate: record.orderDate || '',
@@ -978,16 +980,24 @@ async function refreshData(showMessage = true) {
   loading.value = true
   try {
     if (isInbound.value) {
-      const [inboundData, approvedData, partialData] = await Promise.all([
+      const [rawInboundData, finishedInboundData, approvedData, partialData] = await Promise.all([
         request({ url: '/stock-inbounds', method: 'GET', params: { type: 'raw-material' } }),
+        request({ url: '/stock-inbounds', method: 'GET', params: { type: 'finished-product' } }),
         request({ url: '/purchase-orders', method: 'GET', params: { status: 'approved' } }),
         request({ url: '/purchase-orders', method: 'GET', params: { status: 'partial' } })
       ])
-      const actualRecords = (Array.isArray(inboundData) ? inboundData : []).map(normalizeInbound)
-      const draftOrderIds = new Set(actualRecords.filter(record => record.status === 'draft' && record.purchaseOrderId).map(record => String(record.purchaseOrderId)))
+      const actualRecords = [
+        ...(Array.isArray(rawInboundData) ? rawInboundData : []),
+        ...(Array.isArray(finishedInboundData) ? finishedInboundData : [])
+      ].map(normalizeInbound)
+      const draftOrderTypes = new Set(actualRecords
+        .filter(record => record.status === 'draft' && record.purchaseOrderId)
+        .map(record => `${record.purchaseOrderId}:${record.type}`))
       const pendingOrders = [...(Array.isArray(approvedData) ? approvedData : []), ...(Array.isArray(partialData) ? partialData : [])]
-        .filter(order => !draftOrderIds.has(String(order.orderId || order.id)))
-        .map(normalizePendingInbound)
+        .flatMap(order => ['raw-material', 'finished-product']
+          .filter(type => !draftOrderTypes.has(`${order.orderId || order.id}:${type}`))
+          .map(type => normalizePendingInbound(order, type))
+          .filter(record => record.items.length))
       inboundRecords.value = [...pendingOrders, ...actualRecords]
     } else {
       const data = await request({ url: '/purchase-orders', method: 'GET' })

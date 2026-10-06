@@ -24,8 +24,12 @@ export function usePurchaseDocument(props) {
   const warehouses = ref([])
   const products = ref([])
   const units = ref([])
+  const normalizeInboundType = value => String(value || '').toLowerCase() === 'finished-product'
+    ? 'finished-product'
+    : 'raw-material'
+  const inboundType = ref(normalizeInboundType(props.productType))
   const form = ref({
-    storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: props.purchaseOrderId || null, documentDate: localDate(), documentNo: '',
+    type: inboundType.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: props.purchaseOrderId || null, documentDate: localDate(), documentNo: '',
     inspector: '', qualityNo: '', remark: '', taxEnabled: false, items: blankRows(),
     attachments: [], status: 'draft'
   })
@@ -35,6 +39,11 @@ export function usePurchaseDocument(props) {
   const savedDocumentId = ref(props.documentId)
   const purchaseOrderId = ref(props.purchaseOrderId || null)
   const purchaseOrder = ref(null)
+  const inboundTypes = computed(() => purchaseOrder.value
+    ? [...new Set((purchaseOrder.value.items || [])
+      .filter(item => Number(item.remainingQty ?? item.orderedQty ?? 0) > 0)
+      .map(item => normalizeInboundType(item.productType)))]
+    : ['raw-material', 'finished-product'])
   const notice = ref({ visible: false, type: 'success', message: '' })
   const readOnly = ref(props.action === 'view')
   const stockBalances = ref([])
@@ -63,6 +72,10 @@ export function usePurchaseDocument(props) {
     showNotice.timer = window.setTimeout(() => { notice.value.visible = false }, type === 'error' ? 5000 : 3000)
   }
   const calculateRow = item => Object.assign(item, inboundAmounts(item, form.value.taxEnabled))
+  const setInboundType = value => {
+    inboundType.value = normalizeInboundType(value)
+    form.value.type = inboundType.value
+  }
   const onStoreChange = () => {
     if (purchaseOrderId.value) {
       form.value.warehouseId = ''
@@ -117,13 +130,14 @@ export function usePurchaseDocument(props) {
   const addRow = index => form.value.items.splice(index + 1, 0, blankItem())
   const removeRow = index => { if (form.value.items.length > 1) form.value.items.splice(index, 1) }
   const loadData = async () => {
+    const productUrl = inboundType.value === 'raw-material' ? '/raw-material-products' : '/products'
     const [storeData, supplierData, warehouseData, productData, unitData, stockData] = await Promise.all([
       request({ url: '/stores', method: 'GET' }),
       request({ url: '/suppliers', method: 'GET' }),
       request({ url: '/warehouses', method: 'GET' }),
-      request({ url: '/raw-material-products', method: 'GET' }),
+      request({ url: productUrl, method: 'GET' }),
       request({ url: '/products/units/measurements', method: 'GET' }),
-      request({ url: '/stock-balances', method: 'GET', params: { type: 'raw-material' } })
+      request({ url: '/stock-balances', method: 'GET', params: { type: inboundType.value } })
     ])
     stores.value = Array.isArray(storeData) ? storeData.filter(item => item.status !== 'inactive') : []
     suppliers.value = Array.isArray(supplierData) ? supplierData.filter(item => item.status !== 'inactive') : []
@@ -133,10 +147,12 @@ export function usePurchaseDocument(props) {
     stockBalances.value = Array.isArray(stockData) ? stockData : []
   }
   const normalizeInbound = data => {
+    setInboundType(data.type)
     purchaseOrderId.value = data.purchaseOrderId || null
     form.value.purchaseOrderId = purchaseOrderId.value
     form.value = {
       ...form.value,
+      type: inboundType.value,
       storeId: data.storeId ? String(data.storeId) : '',
       supplierId: data.supplierId ? String(data.supplierId) : '',
       supplierName: data.supplierName || '',
@@ -158,27 +174,31 @@ export function usePurchaseDocument(props) {
     form.value.items.filter(item => item.productId).forEach(onItemWarehouseChange)
   }
   const normalizePurchaseOrder = data => {
+    const remainingItems = (data.items || [])
+      .filter(item => Number(item.remainingQty ?? item.orderedQty ?? 0) > 0)
+      .filter(item => normalizeInboundType(item.productType) === inboundType.value)
     purchaseOrder.value = data
     purchaseOrderId.value = data.orderId || data.id || purchaseOrderId.value
     form.value.purchaseOrderId = purchaseOrderId.value
-    const defaultWarehouse = (data.items || []).find(item => item.warehouseId && warehouses.value.some(warehouse =>
+    const defaultWarehouse = remainingItems.find(item => item.warehouseId && warehouses.value.some(warehouse =>
       String(warehouse.id) === String(item.warehouseId) && String(warehouse.storeId ?? warehouse.store_id) === String(data.storeId)))
     form.value = {
       ...form.value,
+      type: inboundType.value,
       storeId: data.storeId ? String(data.storeId) : '',
       supplierId: data.supplierId ? String(data.supplierId) : '',
       supplierName: data.supplierName || '',
       warehouseId: defaultWarehouse ? String(defaultWarehouse.warehouseId) : '',
       documentDate: data.orderDate || localDate(),
       remark: data.remark || '',
-      items: (data.items || []).map(item => ({
+      items: remainingItems.map(item => ({
         ...blankItem(), purchaseOrderItemId: item.orderItemId || item.id || '',
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
         expectedQty: item.remainingQty ?? item.orderedQty ?? '', quantity: item.remainingQty ?? item.orderedQty ?? '',
         price: item.unitPrice ?? '', amount: 0
-      })).concat(blankRows()).slice(0, Math.max(BLANK_ROWS, (data.items || []).length + 1))
+      })).concat(blankRows()).slice(0, Math.max(BLANK_ROWS, remainingItems.length + 1))
     }
     form.value.items.filter(item => item.productId).forEach(item => { item.warehouseId = item.warehouseId || form.value.warehouseId; onItemWarehouseChange(item); calculateRow(item) })
   }
@@ -186,15 +206,54 @@ export function usePurchaseDocument(props) {
     if (!props.documentId) {
       if (props.purchaseOrderId) {
         const data = await request({ url: `/purchase-orders/${props.purchaseOrderId}/available-inbound`, method: 'GET' })
+        purchaseOrder.value = data
+        const type = inboundTypes.value.includes(inboundType.value) ? inboundType.value : inboundTypes.value[0]
+        if (type && type !== inboundType.value) {
+          setInboundType(type)
+          await loadData()
+        }
         normalizePurchaseOrder(data)
       }
       return
     }
     const data = await request({ url: `/stock-inbounds/${props.documentId}`, method: 'GET' })
-    if (data.type !== 'raw-material') throw new Error('此页面只支持原材料进货单')
+    if (data.type !== inboundType.value) {
+      setInboundType(data.type)
+      await loadData()
+    }
     normalizeInbound(data)
     readOnly.value = props.action === 'view' || isLockedInbound(form.value.status)
   }
+  const restoreDraft = async draft => {
+    const savedForm = JSON.parse(JSON.stringify(draft?.form || {}))
+    const savedType = normalizeInboundType(savedForm.type || inboundType.value)
+    if (savedType !== inboundType.value) {
+      setInboundType(savedType)
+      try {
+        await loadData()
+      } catch (error) {
+        loadFailed.value = true
+        showNotice(error?.response?.data?.message || error.message || '加载进货商品失败', 'error')
+        return
+      }
+    }
+    form.value = {
+      ...form.value,
+      ...savedForm,
+      type: savedType,
+      items: Array.isArray(savedForm.items) ? savedForm.items : blankRows()
+    }
+    purchaseOrderId.value = form.value.purchaseOrderId || null
+    savedDocumentId.value = draft?.savedDocumentId ?? props.documentId
+    rowKey = Math.max(rowKey, ...form.value.items.map(item => Number(item.key) || 0))
+  }
+  const changeInboundType = type => router.push({
+    name: 'admin-purchase-inbound-create',
+    query: {
+      ...(purchaseOrderId.value ? { purchaseOrderId: purchaseOrderId.value } : {}),
+      productType: normalizeInboundType(type)
+    }
+  })
   const printTemplateDialogOpen = ref(false)
   const printPreviewVisible = ref(false)
   const selectedPrintTemplate = ref(null)
@@ -235,7 +294,7 @@ export function usePurchaseDocument(props) {
     if (readOnly.value) return
     purchaseOrderId.value = null
     purchaseOrder.value = null
-    form.value = { ...form.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: blankRows(), taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
+    form.value = { ...form.value, type: inboundType.value, storeId: '', supplierId: '', supplierName: '', warehouseId: '', purchaseOrderId: null, documentDate: localDate(), items: blankRows(), taxEnabled: false, inspector: '', qualityNo: '', remark: '' }
     if (!props.documentId) { savedDocumentId.value = null; form.value.documentNo = ''; form.value.attachments = [] }
   }
   const close = () => router.push({ name: 'admin-purchase-inbound' })
@@ -245,8 +304,8 @@ export function usePurchaseDocument(props) {
   onBeforeUnmount(() => window.clearTimeout(showNotice.timer))
 
   return {
-    ...validation, validateForm,
-    config: DOCUMENT_TYPES.purchase, form, stores, suppliers: filteredSuppliers, filteredWarehouses, products: productOptions, productsForItem, units, getProductStock,
+    ...validation, validateForm, restoreDraft,
+    config: DOCUMENT_TYPES.purchase, inboundType, inboundTypes, changeInboundType, form, stores, suppliers: filteredSuppliers, filteredWarehouses, products: productOptions, productsForItem, units, getProductStock,
     currentCreatorName, selectedStore, selectedSupplier, selectedWarehouse, savedDocumentId, purchaseOrderId, purchaseOrder, saving, loading, loadFailed, readOnly, notice,
     taxEnabled: computed({ get: () => form.value.taxEnabled, set: value => { form.value.taxEnabled = value; form.value.items.forEach(item => { item.taxRate = value ? Number(item.taxRate) || 13 : 0; calculateRow(item) }) } }),
     totalPackages, totalQuantity, totalAmount, totalTaxAmount, totalIncludedAmount, money,

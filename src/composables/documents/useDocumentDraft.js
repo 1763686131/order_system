@@ -50,7 +50,7 @@ export function useDocumentDraft(props, ui) {
     if (loading || ui.loadFailed || ui.readOnly) return
     const saved = store.drafts[type]
     if (saved?.path === path) {
-      if (ui.restoreDraft) ui.restoreDraft(saved)
+      if (ui.restoreDraft) await ui.restoreDraft(saved)
       else {
         ui.form = JSON.parse(JSON.stringify(saved.form))
         if (type === 'purchase') ui.savedDocumentId = saved.savedDocumentId ?? props.documentId

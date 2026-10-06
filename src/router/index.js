@@ -269,7 +269,12 @@ const routes = [
         path: 'purchase/inbound/create',
         name: 'admin-purchase-inbound-create',
         component: () => import('@/components/admin/BusinessDocumentForm.vue'),
-        props: route => ({ documentType: 'purchase', action: 'create', purchaseOrderId: route.query.purchaseOrderId ? Number(route.query.purchaseOrderId) : null }),
+        props: route => ({
+          documentType: 'purchase',
+          action: 'create',
+          purchaseOrderId: route.query.purchaseOrderId ? Number(route.query.purchaseOrderId) : null,
+          productType: route.query.productType || 'raw-material'
+        }),
         meta: { requiresAuth: true, documentForm: true }
       },
       {
