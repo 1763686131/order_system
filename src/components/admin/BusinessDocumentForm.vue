@@ -93,11 +93,7 @@
                   <span v-else class="blank-cell"></span>
                 </td>
                 <td>
-                  <select v-if="isPurchaseOrder" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" aria-label="商品" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
-                    <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? (item.warehouseId ? '请选择商品' : '请先选择仓库') : '请先选择门店') }}</option>
-                    <option v-if="item.productId && !ui.products.some(product => String(product.id) === String(item.productId))" :value="item.productId">{{ item.goodsName }}</option>
-                    <option v-for="product in ui.productsForItem(item)" :key="product.id" :value="String(product.id)">{{ product.code ? `${product.code} · ` : '' }}{{ product.name }}</option>
-                  </select>
+                  <input v-if="isPurchaseOrder" v-model="item.goodsName" class="purchase-cell-input" :ref="element => setProductInputRef(index, element)" type="text" autocomplete="off" aria-label="商品" :placeholder="purchaseProductPlaceholder(item)" @focus="activatePurchaseCell(item, 'product'); ui.showProductDropdown(index)" @blur="activePurchaseCell = ''; ui.hideProductDropdown(index)" @input="ui.onProductInput(index); dismissHint(`item-product-${index}`)" @keydown.escape.prevent="ui.closeProductDropdown?.()" />
                   <select v-else-if="isPurchase" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" aria-label="物料" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
                     <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? '请选择物料' : '请先选择门店') }}</option>
                     <option v-if="item.productId && !ui.products.some(product => String(product.id) === String(item.productId))" :value="item.productId">{{ item.goodsName }}</option>
@@ -200,7 +196,7 @@
     </form>
 
     <Teleport to="body">
-      <div v-if="isSalesDocument && ui.activeProductRow && !ui.readOnly" :ref="ui.setProductDropdownRef" class="document-dropdown product-dropdown" :style="ui.productDropdownStyle" @pointerdown.stop @mousedown.prevent>
+      <div v-if="(isSalesDocument || isPurchaseOrder) && ui.activeProductRow && !ui.readOnly" :ref="ui.setProductDropdownRef" class="document-dropdown product-dropdown" :style="ui.productDropdownStyle" @pointerdown.stop @mousedown.prevent>
         <div class="product-option dropdown-heading"><span>编号</span><span>名称</span><span>规格</span><span>单位</span><span>库存</span><span>备注</span></div>
         <button v-for="product in ui.activeProductRow.filteredProducts" :key="product.id" type="button" class="product-option" @click="ui.selectProduct(ui.focusedRow, product)"><span>{{ product.code || '-' }}</span><span>{{ product.name }}</span><span>{{ product.specification || '-' }}</span><span>{{ ui.getUnitName(product.unitId) || product.unit || '-' }}</span><span>{{ money(ui.getProductStock(product, ui.activeProductRow)) }}</span><span :title="product.notes || product.remark">{{ product.notes || product.remark || '-' }}</span></button>
         <div v-if="!ui.activeProductRow.filteredProducts.length" class="dropdown-empty">暂无匹配商品</div>
@@ -247,6 +243,13 @@ const hasPurchaseOrderItems = computed(() => isPurchaseOrder.value && ui.form.it
 const activePurchaseCell = ref('')
 const activatePurchaseCell = (item, field) => { activePurchaseCell.value = `${item.key}-${field}` }
 const purchaseCellPlaceholder = (item, field, message) => activePurchaseCell.value === `${item.key}-${field}` ? message : ''
+const purchaseProductPlaceholder = item => {
+  if (activePurchaseCell.value !== `${item.key}-product`) return ''
+  if (!ui.form.storeId) return '请先选择门店'
+  if (!item.warehouseId) return '请先选择仓库'
+  if (ui.categoriesForItem?.(item)?.length && !item.categoryId) return '请先选择分类'
+  return '搜索或选择商品'
+}
 const isMaterial = computed(() => isPurchase.value)
 const isSalesDocument = computed(() => isSale.value || isReturn.value)
 const formatMoney = value => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

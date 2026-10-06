@@ -1,4 +1,4 @@
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
@@ -29,6 +29,10 @@ export function usePurchaseOrderDocument(props) {
   const bankAccounts = ref([])
   const savedDocumentId = ref(props.documentId)
   const notice = ref({ visible: false, type: 'success', message: '' })
+  const focusedRow = ref(-1)
+  const productInputRefs = new Map()
+  const productDropdownRef = ref(null)
+  const productDropdownStyle = ref({})
   let rowKey = 0
   let noticeTimer
   let redirectTimer
@@ -36,7 +40,7 @@ export function usePurchaseOrderDocument(props) {
     key: ++rowKey, orderItemId: null, productId: '', productCode: '', goodsName: '',
     specification: '', unit: '', productType: '', categoryId: '', categoryName: '',
     warehouseId: '', warehouseName: '', quantity: '', supplierId: '', supplierName: '',
-    price: '', amount: '', remark: ''
+    price: '', amount: '', remark: '', showDropdown: false, filteredProducts: []
   })
   const blankForm = () => {
     const orderDate = localDate()
@@ -102,8 +106,103 @@ export function usePurchaseOrderDocument(props) {
   }
   const productsForItem = item => products.value
     .filter(product => product.enabled !== false && productMatchesItem(product, item))
+  const getUnitName = unitId => units.value.find(unit => String(unit.id) === String(unitId))?.name || ''
+  const getProductStock = product => Number(product?.currentStock ?? product?.stock ?? 0)
+  const activeProductRow = computed(() => {
+    const item = form.value.items[focusedRow.value]
+    return item?.showDropdown ? item : null
+  })
+  const setProductInputRef = (index, element) => {
+    if (element) productInputRefs.set(index, element)
+    else productInputRefs.delete(index)
+  }
+  const setProductDropdownRef = element => { productDropdownRef.value = element }
+  const updateProductDropdownPosition = () => {
+    const input = productInputRefs.get(focusedRow.value)
+    const item = activeProductRow.value
+    if (!input || !item) {
+      productDropdownStyle.value = {}
+      return
+    }
+
+    const rect = input.getBoundingClientRect()
+    const viewportPadding = 12
+    const gap = 4
+    const dropdownWidth = Math.min(720, Math.max(280, window.innerWidth - viewportPadding * 2))
+    const estimatedHeight = Math.min(300, Math.max(42, item.filteredProducts.length * 42 + 42))
+    const availableBelow = Math.max(80, window.innerHeight - rect.bottom - viewportPadding)
+    const availableAbove = Math.max(80, rect.top - viewportPadding)
+    const shouldOpenAbove = availableBelow < Math.min(estimatedHeight, 220) && availableAbove > availableBelow
+    const maxHeight = Math.min(300, shouldOpenAbove ? availableAbove : availableBelow)
+    const top = shouldOpenAbove
+      ? Math.max(viewportPadding, rect.top - maxHeight - gap)
+      : rect.bottom + gap
+    const left = Math.min(
+      Math.max(viewportPadding, rect.left),
+      Math.max(viewportPadding, window.innerWidth - dropdownWidth - viewportPadding)
+    )
+
+    productDropdownStyle.value = {
+      top: `${Math.round(top)}px`,
+      left: `${Math.round(left)}px`,
+      width: `${Math.round(dropdownWidth)}px`,
+      maxHeight: `${Math.round(maxHeight)}px`
+    }
+  }
+  const canOpenProductDropdown = item => Boolean(
+    form.value.storeId &&
+    item?.warehouseId &&
+    !(categoriesForItem(item).length && !item.categoryId)
+  )
+  const productMatchesSearch = (product, searchText) => {
+    const keyword = String(searchText || '').trim().toLowerCase()
+    if (!keyword) return true
+    return [product.code, product.name, product.specification]
+      .filter(Boolean)
+      .some(value => String(value).toLowerCase().includes(keyword))
+  }
+  const filterProducts = index => {
+    const item = form.value.items[index]
+    if (!item) return
+    if (!canOpenProductDropdown(item)) {
+      item.showDropdown = false
+      item.filteredProducts = []
+      if (focusedRow.value === index) productDropdownStyle.value = {}
+      return
+    }
+
+    item.filteredProducts = productsForItem(item)
+      .filter(product => productMatchesSearch(product, item.goodsName))
+      .slice(0, 80)
+    item.showDropdown = true
+    focusedRow.value = index
+    nextTick(updateProductDropdownPosition)
+  }
+  const showProductDropdown = index => {
+    const item = form.value.items[index]
+    if (!item || !canOpenProductDropdown(item)) return
+    focusedRow.value = index
+    item.showDropdown = true
+    filterProducts(index)
+  }
+  const hideProductDropdown = index => {
+    window.setTimeout(() => {
+      const item = form.value.items[index]
+      if (!item) return
+      item.showDropdown = false
+      if (focusedRow.value === index) productDropdownStyle.value = {}
+    }, 180)
+  }
+  const closeProductDropdown = () => {
+    form.value.items.forEach(item => {
+      item.showDropdown = false
+      item.filteredProducts = []
+    })
+    focusedRow.value = -1
+    productDropdownStyle.value = {}
+  }
   const clearProductSelection = item => Object.assign(item, {
-    productId: '', productCode: '', goodsName: '', specification: '', unit: '', price: '', amount: ''
+    productId: '', productCode: '', goodsName: '', specification: '', unit: '', productType: '', price: '', amount: ''
   })
   const auditMode = computed(() => props.action === 'audit' && form.value.status === 'pending')
   const readOnly = computed(() => props.action === 'view' ||
@@ -160,8 +259,32 @@ export function usePurchaseOrderDocument(props) {
     item.goodsName = product.name || ''
     item.productType = product.productType
     item.specification = product.specification || ''
-    item.unit = units.value.find(unit => String(unit.id) === String(product.unitId))?.name || product.unit || ''
+    item.unit = getUnitName(product.unitId) || product.unit || ''
     calculateRow(item)
+  }
+  const onProductInput = index => {
+    const item = form.value.items[index]
+    if (!item) return
+    const searchText = item.goodsName
+    if (item.productId) {
+      clearProductSelection(item)
+      item.goodsName = searchText
+    }
+    filterProducts(index)
+  }
+  const selectProduct = (index, product) => {
+    const item = form.value.items[index]
+    if (!item || !product) return
+    item.productId = String(product.id)
+    item.productType = product.productType || ''
+    item.productCode = product.code || ''
+    item.goodsName = product.name || ''
+    item.specification = product.specification || ''
+    item.unit = getUnitName(product.unitId) || product.unit || ''
+    calculateRow(item)
+    item.showDropdown = false
+    item.filteredProducts = []
+    if (focusedRow.value === index) productDropdownStyle.value = {}
   }
   const onCategoryChange = item => {
     const category = categoriesForItem(item).find(candidate => String(candidate.id) === String(item.categoryId))
@@ -171,6 +294,7 @@ export function usePurchaseOrderDocument(props) {
     }
   }
   const onItemWarehouseChange = item => {
+    closeProductDropdown()
     const warehouse = warehouses.value.find(candidate => String(candidate.id) === String(item.warehouseId))
     item.warehouseName = warehouse?.name || ''
     if (!categoriesForItem(item).some(category => String(category.id) === String(item.categoryId))) {
@@ -184,6 +308,7 @@ export function usePurchaseOrderDocument(props) {
     }
   }
   const onStoreChange = () => {
+    closeProductDropdown()
     form.value.items.forEach(item => {
       if (item.warehouseId && !filteredWarehouses.value.some(warehouse => String(warehouse.id) === String(item.warehouseId))) {
         item.warehouseId = ''
@@ -287,6 +412,8 @@ export function usePurchaseOrderDocument(props) {
     validation.dismissValidationHint()
   }
   onMounted(async () => {
+    window.addEventListener('resize', updateProductDropdownPosition)
+    window.addEventListener('scroll', updateProductDropdownPosition, true)
     try {
       const [storeData, supplierData, warehouseData, rawMaterialData, finishedProductData, unitData] = await Promise.all([
         request({ url: '/stores', method: 'GET' }), request({ url: '/suppliers', method: 'GET' }),
@@ -328,13 +455,20 @@ export function usePurchaseOrderDocument(props) {
   onBeforeUnmount(() => {
     window.clearTimeout(noticeTimer)
     window.clearTimeout(redirectTimer)
+    window.removeEventListener('resize', updateProductDropdownPosition)
+    window.removeEventListener('scroll', updateProductDropdownPosition, true)
+    productInputRefs.clear()
   })
   return {
     ...validation, config, form, loading, loadFailed, saving, readOnly, auditMode, statusLabel,
     stores, suppliers, filteredWarehouses, products, savedDocumentId, notice, totalQuantity, totalAmount,
     currentCreatorName, creatorNameStyle, purchasePeople, storeBankAccounts,
     supplierPayable, purchaseOrderPayable, currentPayable,
-    productsForItem, categoriesForItem, addRow, removeRow, onProductChange, onCategoryChange,
+    productsForItem, categoriesForItem, addRow, removeRow, onProductChange, onProductInput, selectProduct,
+    showProductDropdown, hideProductDropdown, closeProductDropdown, activeProductRow, focusedRow,
+    productDropdownRef, productDropdownStyle, setProductInputRef, setProductDropdownRef,
+    getUnitName, getProductStock,
+    onCategoryChange,
     onItemWarehouseChange, onStoreChange, onDateChange, onExpectedDateInput, restoreDraft,
     validateForm, save, clearForm, close,
     onQuantityInput: index => calculateRow(form.value.items[index]),
