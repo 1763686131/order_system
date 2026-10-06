@@ -20,8 +20,9 @@ export function purchasePayload(form) {
     documentNo: form.documentNo,
     documentDate: form.documentDate,
     type,
+    documentSource: form.purchaseOrderId ? 'purchase-order' : 'other',
     storeId: Number(form.storeId),
-    supplierId: type === 'raw-material' && form.supplierId ? Number(form.supplierId) : null,
+    supplierId: form.purchaseOrderId && type === 'raw-material' && form.supplierId ? Number(form.supplierId) : null,
     purchaseOrderId: form.purchaseOrderId ? Number(form.purchaseOrderId) : null,
     warehouseId: Number(form.warehouseId),
     inspector: form.inspector,
@@ -54,7 +55,6 @@ export function validatePurchase(form, onInvalid = () => {}) {
   const isRawMaterial = form.type !== 'finished-product'
   const itemLabel = isRawMaterial ? '物料' : '商品'
   if (!form.storeId) return invalid('storeId', '请选择门店。')
-  if (isRawMaterial && !form.supplierId && !form.purchaseOrderId) return invalid('supplierId', '请选择供应商。')
   if (!form.warehouseId) return invalid('warehouseId', '请选择仓库。')
   if (!form.documentDate) return invalid('documentDate', '请选择单据日期。')
   const items = form.items.filter(item => item.productId)

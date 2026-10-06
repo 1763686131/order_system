@@ -984,16 +984,7 @@ async function createRecord() {
     router.push({ name: 'admin-purchase-order-create' })
     return
   }
-  const candidates = inboundRecords.value.filter(record => record.status === 'pending' && record.purchaseOrderId)
-  if (!candidates.length) {
-    showNotice('暂无已审核且有剩余数量的采购订单，请先审核采购订单')
-    return
-  }
-  if (candidates.length === 1) {
-    editRecord(candidates[0])
-    return
-  }
-  showNotice('请在列表中选择需要入库的采购单')
+  router.push({ name: 'admin-purchase-inbound-create' })
 }
 
 function editRecord(record) {

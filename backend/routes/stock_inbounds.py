@@ -325,10 +325,24 @@ def _document_values(conn, data, existing=None, for_post=False):
         data.get('purchaseOrderId', data.get('purchase_order_id', existing.get('purchase_order_id'))),
         '采购订单ID',
     )
+    source_value = data.get(
+        'documentSource',
+        data.get('document_source', existing.get('document_source')),
+    )
+    if purchase_order_id is not None:
+        document_source = 'purchase-order'
+    elif source_value in (None, ''):
+        document_source = existing.get('document_source') or (
+            'other' if receipt_type == 'raw-material' else 'production'
+        )
+    else:
+        document_source = _clean_text(source_value, 40).lower()
+        if document_source not in ('other', 'production'):
+            raise ValueError('独立入库的单据来源无效')
+    if purchase_order_id is None and supplier_id is not None:
+        raise ValueError('有供应商的原材料请通过采购订单入库')
     workshop = _clean_text(data.get('workshop', data.get('productionWorkshop', existing.get('workshop', ''))), 80)
     if receipt_type == 'raw-material' and require_valid:
-        if supplier_id is None and purchase_order_id is None:
-            raise ValueError('请选择供应商')
         if supplier_id is not None and not conn.execute("SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)).fetchone():
             raise ValueError('供应商不存在或已停用')
     if not conn.execute('SELECT 1 FROM warehouses WHERE id = ?', (warehouse_id,)).fetchone():
@@ -362,6 +376,7 @@ def _document_values(conn, data, existing=None, for_post=False):
         'warehouse_id': warehouse_id,
         'supplier_id': supplier_id if receipt_type == 'raw-material' else None,
         'purchase_order_id': purchase_order_id,
+        'document_source': document_source,
         'workshop': workshop if receipt_type == 'finished-product' else '',
         'inspector': _clean_text(data.get('inspector', existing.get('inspector', '')), 80),
         'quality_no': _clean_text(data.get('qualityNo', data.get('quality_no', existing.get('quality_no', ''))), 80),
@@ -479,6 +494,7 @@ def _serialize_document(conn, row, include_items=True):
     document['warehouseId'] = document.pop('warehouse_id', None)
     document['supplierId'] = document.pop('supplier_id', None)
     document['purchaseOrderId'] = document.pop('purchase_order_id', None)
+    document['documentSource'] = document.pop('document_source', 'other')
     document['supplierName'] = supplier['supplier_name'] if supplier else ''
     document['warehouseName'] = warehouse['name'] if warehouse else ''
     document['storeName'] = store['name'] if store else ''
@@ -710,14 +726,14 @@ def _document_insert(conn, values):
         '''
         INSERT INTO stock_inbounds (
             document_no, document_date, receipt_type, store_id, warehouse_id,
-            supplier_id, purchase_order_id, workshop, inspector, quality_no, remark, attachments,
+            supplier_id, purchase_order_id, document_source, workshop, inspector, quality_no, remark, attachments,
             status, total_quantity, total_tax, total_amount, posted_at, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ''',
         (
             values['document_no'] or f'TEMP-{now.replace(" ", "").replace(":", "").replace("-", "")}-{threading.get_ident()}',
             values['document_date'], values['receipt_type'], values['store_id'], values['warehouse_id'],
-            values['supplier_id'], values.get('purchase_order_id'), values['workshop'], values['inspector'], values['quality_no'],
+            values['supplier_id'], values.get('purchase_order_id'), values['document_source'], values['workshop'], values['inspector'], values['quality_no'],
             values['remark'], json.dumps(values['attachments'], ensure_ascii=False), values['status'],
             values['total_quantity'], values['total_tax'], values['total_amount'],
             now if _is_audited(values['status']) else None, now, now,
@@ -773,9 +789,9 @@ def list_stock_inbounds():
         sql = 'SELECT * FROM stock_inbounds WHERE 1 = 1'
         params = []
         if business_type == 'purchase':
-            sql += " AND (receipt_type = 'raw-material' OR purchase_order_id IS NOT NULL)"
+            sql += " AND document_source IN ('other', 'purchase-order')"
         elif business_type == 'production':
-            sql += " AND receipt_type = 'finished-product' AND purchase_order_id IS NULL"
+            sql += " AND receipt_type = 'finished-product' AND document_source = 'production'"
         if receipt_type:
             sql += ' AND receipt_type = ?'
             params.append(_type(receipt_type))
@@ -812,7 +828,7 @@ def create_stock_inbound():
                     "stock_inbound",
                     row["id"],
                     row["document_no"],
-                    f"采购入库单 {row['document_no']} 已提交，请及时审核。",
+                    f"入库单 {row['document_no']} 已提交，请及时审核。",
                 )
                 return jsonify({'success': True, 'message': '入库单保存成功', 'stockIn': _serialize_document(conn, row), 'id': row['id']}), 201
     except ValueError as exc:
@@ -844,14 +860,14 @@ def update_stock_inbound(inbound_id):
                 conn.execute(
                     '''
                     UPDATE stock_inbounds SET document_no = ?, document_date = ?, receipt_type = ?,
-                        store_id = ?, warehouse_id = ?, supplier_id = ?, purchase_order_id = ?, workshop = ?, inspector = ?,
+                        store_id = ?, warehouse_id = ?, supplier_id = ?, purchase_order_id = ?, document_source = ?, workshop = ?, inspector = ?,
                         quality_no = ?, remark = ?, attachments = ?, status = ?, total_quantity = ?,
                         total_tax = ?, total_amount = ?, posted_at = ?, updated_at = ?
                     WHERE id = ?
                     ''',
                     (
                         document_no, values['document_date'], values['receipt_type'], values['store_id'],
-                        values['warehouse_id'], values['supplier_id'], values.get('purchase_order_id'), values['workshop'], values['inspector'],
+                        values['warehouse_id'], values['supplier_id'], values.get('purchase_order_id'), values['document_source'], values['workshop'], values['inspector'],
                         values['quality_no'], values['remark'], json.dumps(values['attachments'], ensure_ascii=False),
                         values['status'], values['total_quantity'], values['total_tax'], values['total_amount'],
                         now if _is_audited(values['status']) else None, now, inbound_id,
@@ -930,7 +946,7 @@ def delete_purchase_inbounds():
                     ).fetchall()
                     if len(rows) != len(inbound_ids):
                         raise ValueError('部分入库记录不存在，请刷新列表')
-                    if any(row['receipt_type'] != 'raw-material' and row['purchase_order_id'] is None for row in rows):
+                    if any(row['document_source'] == 'production' for row in rows):
                         raise ValueError('不能通过采购页面删除生产入库记录')
                     if any(row['purchase_order_id'] and row['purchase_order_id'] not in order_ids for row in rows):
                         raise ValueError('关联采购订单的入库记录必须按采购单整组删除')
@@ -979,7 +995,7 @@ def restart_stock_inbound(inbound_id):
                 "stock_inbound",
                 inbound_id,
                 updated["document_no"],
-                f"采购入库单 {updated['document_no']} 已重新提交，请及时审核。",
+                f"入库单 {updated['document_no']} 已重新提交，请及时审核。",
                 event_version=f"restart:{now}",
             )
             return jsonify({
@@ -1065,7 +1081,7 @@ def reverse_audit_stock_inbound(inbound_id):
                     "stock_inbound",
                     inbound_id,
                     updated["document_no"],
-                    f"采购入库单 {updated['document_no']} 已反审核，请重新审核。",
+                    f"入库单 {updated['document_no']} 已反审核，请重新审核。",
                     event_version=f"reverse:{now}",
                 )
                 return jsonify({

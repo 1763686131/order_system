@@ -43,14 +43,16 @@
 
 采购申请路由为 `/admin/purchase/orders/create`、`/admin/purchase/orders/edit/:id`、`/admin/purchase/orders/audit/:id` 和 `/admin/purchase/orders/:id`，对应本节的 `/api/purchase-orders` 接口。审核通过后，前端通过 `/api/purchase-orders/{id}/available-inbound` 读取可入库明细，再使用带 `purchaseOrderId`、`purchaseOrderItemId` 的入库请求创建采购入库单。
 
-采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。独立入库可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；关联采购申请入库时，一张入库单载入所有仍有剩余数量的明细，明细可同时包含原材料和成品，并按每行 `productType` 校验和过账。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?businessType=purchase`，只展示采购入库，不混入生产完工入库。`StockRecordList.vue` 不传业务类型筛选，保留全部入库记录，并按商品类型和采购申请关联显示正确的业务名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
+采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。采购入库列表的“新增入库单”直接创建独立入库，不要求关联采购申请；独立其他入库不选择供应商，有供应商的原材料采购必须从采购订单关联入库。表单显示“单据来源”，采购订单关联单据保存为 `purchase-order` 并显示“采购订单”，独立采购入库保存为 `other` 并显示“其他入库”。独立入库可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；关联采购申请入库时，一张入库单载入所有仍有剩余数量的明细，明细可同时包含原材料和成品，并按每行 `productType` 校验和过账。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?businessType=purchase`，按单据来源展示采购订单入库与其他入库，不混入生产完工入库。`StockRecordList.vue` 不传业务类型筛选，保留全部入库记录，并按单据来源、商品类型和采购申请关联显示正确的业务名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
 
-`documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交单据默认类型，并在每条明细提交 `productType`；关联采购申请允许同一单据包含两种商品类型，独立入库仍要求明细类型与表头一致。状态为 `draft`，界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。原材料商品来源为 `/api/raw-material-products`、库存来源为 `/api/stock-balances?type=raw-material`；成品商品来源为 `/api/products`、库存来源为 `/api/stock-balances?type=finished-product`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。
+`documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交单据默认类型、`documentSource` 和每条明细的 `productType`；`documentSource` 可为 `purchase-order` 或 `other`，由后端根据采购订单关联再次校验。独立其他入库不选择供应商；请求若在没有 `purchaseOrderId` 时提交 `supplierId`，后端返回错误并要求改走采购订单流程。关联采购申请允许同一单据包含两种商品类型，独立入库仍要求明细类型与表头一致。状态为 `draft`，界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。原材料商品来源为 `/api/raw-material-products`、库存来源为 `/api/stock-balances?type=raw-material`；成品商品来源为 `/api/products`、库存来源为 `/api/stock-balances?type=finished-product`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。
 
 入库接口只负责到货数量、仓库、批次和库存过账，不负责采购订单的付款、供应商应付余额或付款流水。采购订单的付款字段只通过 `/api/purchase-orders` 保存和返回；保存采购申请或入库草稿都不会立即增加库存，必须分别完成采购订单审核和入库审核。金额最终由各接口重新校验与计算。
 
 ## 版本历史
 
+- **v5.10** (2026-10-06，独立入库供应商规则) - 独立其他入库不再选择供应商；有供应商的入库须关联采购订单，前后端均校验
+- **v5.9** (2026-10-06，独立采购入库来源) - 新增持久化单据来源，采购入库列表开放独立入库并与生产完工入库分开筛选，库存台账按来源显示业务类型
 - **v5.8** (2026-10-06，混合类型采购入库) - 关联采购入库一次载入全部未完成明细，支持同一单据混合原材料和成品并按行类型过账
 - **v5.7** (2026-10-06，采购成品入库适配) - 采购进货表单按入库类型切换原材料/成品商品、库存和请求体；采购申请关联入库支持成品明细；入库列表同时展示两类入库记录
 - **v5.6** (2026-10-05，采购申请与付款字段) - 新增采购订单查询、新建、编辑、删除、审核、反审核和可入库明细接口；采购明细支持逐行供应商、仓库、采购数量、可选单价和金额；新增采购人、制单人、付款金额、其它费用、结算账户、本次付款及应付汇总字段；明确采购申请、采购入库和库存审核的边界
@@ -3689,9 +3691,10 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 | `documentNo` | string | 否 | 否 | 首批为空时由后端生成 `RK + YYYYMMDD + 至少三位ID`；同一采购订单后续批次由后端沿用首批单号，其他采购单/独立入库不得重号 |
 | `documentDate` | string | 是 | 是 | 本批入库日期，使用 `YYYY-MM-DD`；补充入库默认当天并独立保存，`createdAt` 记录服务端保存时间 |
 | `type` | string | 是 | 是 | `raw-material` 或 `finished-product` |
+| `documentSource` | string | 否 | 否 | `purchase-order`、`other` 或 `production`；关联采购订单时由后端固定为 `purchase-order`。独立采购入库传 `other`；未指定的原材料入库按 `other`、成品入库按 `production` 处理 |
 | `storeId` | integer | 否 | 否 | 门店 ID |
 | `warehouseId` | integer | 是 | 是 | 默认目标仓库 ID，必须存在；未指定明细仓库时使用此仓库 |
-| `supplierId` | integer | 否 | 原材料必填 | 供应商 ID，原材料审核时必须有效且为 `active` |
+| `supplierId` | integer | 否 | 否 | 供应商 ID；仅允许关联采购订单的入库使用，独立入库不能填写供应商 |
 | `purchaseOrderId` | integer | 否 | 否 | 关联已审核采购订单；原材料和成品采购入库均保留此关联，审核后回写采购明细的已入库数量 |
 | `workshop` | string | 否 | 否 | 成品生产车间/班组，当前为选填 |
 | `inspector` | string | 否 | 否 | 检验员 |
@@ -3839,7 +3842,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 }
 ```
 
-`purchaseOrderIds` 删除整条采购入库及其所有批次，保留采购订单并设置 `inboundDeletedAt`；`inboundIds` 仅用于没有关联采购订单的原材料入库。两个数组分别最多 500 项，不允许删除生产入库或单独删除关联采购订单的一批。
+`purchaseOrderIds` 删除整条采购入库及其所有批次，保留采购订单并设置 `inboundDeletedAt`；`inboundIds` 用于没有关联采购订单的其他入库，包括原材料和成品。两个数组分别最多 500 项，不允许删除生产完工入库或单独删除关联采购订单的一批。
 
 已审核批次同步回退库存余额、成品库存、库存流水和采购明细累计数量，未审核批次不影响库存。全部删除在同一事务内完成，库存已消耗不足以回退时返回 HTTP `409`，不会部分删除；权限不足返回 `403`。
 

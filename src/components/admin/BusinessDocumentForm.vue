@@ -17,7 +17,7 @@
               <option v-for="store in ui.stores" :key="store.id" :value="isSale ? store.id : String(store.id)">{{ store.name }}</option>
             </select>
           </label>
-          <label v-if="!isPurchaseOrder && (!isPurchase || isMaterial || ui.purchaseOrderId)" class="info-group">
+          <label v-if="!isPurchaseOrder && (!isPurchase || ui.purchaseOrderId)" class="info-group">
             <span>{{ ui.config.partyLabel }}</span>
             <input v-if="isPurchase && ui.purchaseOrderId" type="text" :value="ui.form.supplierName || '供应商详见采购申请明细'" readonly />
             <select v-else-if="isPurchase" v-model="ui.form.supplierId" :disabled="fieldsDisabled" :required="!ui.purchaseOrderId && isMaterial" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
@@ -54,6 +54,7 @@
             <label class="info-group logistics-field"><span>物流服务</span><select v-model="ui.form.logisticsService" @change="dismissHint('logisticsService')"><option v-for="service in ui.logisticsServiceOptions" :key="service" :value="service">{{ service }}</option></select></label>
           </template>
           <template v-else>
+            <label class="info-group"><span>单据来源</span><input :value="ui.documentSource" type="text" readonly /></label>
             <label class="info-group"><span>检验员</span><input v-model="ui.form.inspector" type="text" /></label>
             <label class="info-group"><span>质检单号</span><input v-model="ui.form.qualityNo" type="text" /></label>
           </template>

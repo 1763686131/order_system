@@ -62,6 +62,7 @@ export function usePurchaseDocument(props) {
   const selectedStore = computed(() => stores.value.find(item => String(item.id) === String(form.value.storeId)))
   const selectedSupplier = computed(() => suppliers.value.find(item => String(item.id) === String(form.value.supplierId)))
   const selectedWarehouse = computed(() => warehouses.value.find(item => String(item.id) === String(form.value.warehouseId)))
+  const documentSource = computed(() => purchaseOrderId.value ? '采购订单' : '其他入库')
   const totalPackages = computed(() => form.value.items.reduce((sum, item) => sum + (Number(item.expectedQty) || 0), 0))
   const totalQuantity = computed(() => form.value.items.reduce((sum, item) => sum + (Number(item.quantity) || 0), 0))
   const totalAmount = computed(() => form.value.items.reduce((sum, item) => sum + (Number(item.amount) || 0), 0))
@@ -333,7 +334,7 @@ export function usePurchaseDocument(props) {
   return {
     ...validation, validateForm, restoreDraft,
     config: { ...DOCUMENT_TYPES.purchase, title: props.supplement ? '补充入库' : '进货单', dateLabel: '入库日期' }, inboundType, inboundTypes, changeInboundType, form, stores, suppliers: filteredSuppliers, filteredWarehouses, products: productOptions, productsForItem, units, getProductStock,
-    currentCreatorName, selectedStore, selectedSupplier, selectedWarehouse, savedDocumentId, purchaseOrderId, purchaseOrder, saving, loading, loadFailed, readOnly, notice,
+    currentCreatorName, selectedStore, selectedSupplier, selectedWarehouse, documentSource, savedDocumentId, purchaseOrderId, purchaseOrder, saving, loading, loadFailed, readOnly, notice,
     taxEnabled: computed({ get: () => form.value.taxEnabled, set: value => { form.value.taxEnabled = value; form.value.items.forEach(item => { item.taxRate = value ? Number(item.taxRate) || 13 : 0; calculateRow(item) }) } }),
     totalPackages, totalQuantity, totalAmount, totalTaxAmount, totalIncludedAmount, money,
     addRow, removeRow, calculateRow, onProductChange, onStoreChange, onWarehouseChange, onItemWarehouseChange, save, clearForm, close, showNotice,

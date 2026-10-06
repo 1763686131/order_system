@@ -1371,6 +1371,7 @@ def _ensure_stock_inbound_schema(conn):
                 warehouse_id INTEGER,
                 supplier_id INTEGER,
                 purchase_order_id INTEGER,
+                document_source TEXT NOT NULL DEFAULT 'production',
                 workshop TEXT,
                 inspector TEXT,
                 quality_no TEXT,
@@ -1386,6 +1387,34 @@ def _ensure_stock_inbound_schema(conn):
             )
             """
         cursor.execute(f"CREATE TABLE IF NOT EXISTS stock_inbounds {inbound_definition}")
+        inbound_columns = {
+            row['name'] for row in cursor.execute('PRAGMA table_info(stock_inbounds)')
+        }
+        if 'document_source' not in inbound_columns:
+            cursor.execute(
+                "ALTER TABLE stock_inbounds ADD COLUMN document_source TEXT NOT NULL DEFAULT 'production'"
+            )
+            if 'purchase_order_id' in inbound_columns:
+                cursor.execute(
+                    """
+                    UPDATE stock_inbounds
+                    SET document_source = CASE
+                        WHEN purchase_order_id IS NOT NULL THEN 'purchase-order'
+                        WHEN receipt_type = 'raw-material' THEN 'other'
+                        ELSE 'production'
+                    END
+                    """
+                )
+            else:
+                cursor.execute(
+                    """
+                    UPDATE stock_inbounds
+                    SET document_source = CASE
+                        WHEN receipt_type = 'raw-material' THEN 'other'
+                        ELSE 'production'
+                    END
+                    """
+                )
         number_is_unique = any(
             index['unique'] and [
                 column['name']
@@ -1748,6 +1777,12 @@ def _ensure_purchase_order_schema(conn):
         }
         if 'purchase_order_id' not in inbound_columns:
             cursor.execute('ALTER TABLE stock_inbounds ADD COLUMN purchase_order_id INTEGER')
+        cursor.execute(
+            """
+            UPDATE stock_inbounds SET document_source = 'purchase-order'
+            WHERE purchase_order_id IS NOT NULL AND document_source <> 'purchase-order'
+            """
+        )
         inbound_item_columns = {
             row['name'] for row in cursor.execute('PRAGMA table_info(stock_inbound_items)')
         }
