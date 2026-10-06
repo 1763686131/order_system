@@ -43,7 +43,7 @@
 
 采购申请路由为 `/admin/purchase/orders/create`、`/admin/purchase/orders/edit/:id`、`/admin/purchase/orders/audit/:id` 和 `/admin/purchase/orders/:id`，对应本节的 `/api/purchase-orders` 接口。审核通过后，前端通过 `/api/purchase-orders/{id}/available-inbound` 读取可入库明细，再使用带 `purchaseOrderId`、`purchaseOrderItemId` 的入库请求创建采购入库单。
 
-采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。创建路由可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；从采购申请创建时，页面按仍有剩余数量的明细类型自动切换。混合采购申请在待入库列表按类型拆分，表单可选择入库类型，每张入库单只载入对应类型的剩余明细。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表同时读取原材料和成品入库记录，并关联供应商和仓库名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
+采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。创建路由可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；从采购申请创建时，页面按仍有剩余数量的明细类型自动切换。混合采购申请在待入库列表按类型拆分，表单可选择入库类型，每张入库单只载入对应类型的剩余明细。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?businessType=purchase`，只展示原材料采购和关联采购申请的成品采购入库，不混入生产完工入库。`StockRecordList.vue` 不传业务类型筛选，保留全部入库记录，并按商品类型和采购申请关联显示正确的业务名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
 
 `documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交 `raw-material` 或 `finished-product`，状态仍为 `draft`，并将界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。原材料商品来源为 `/api/raw-material-products`、库存来源为 `/api/stock-balances?type=raw-material`；成品商品来源为 `/api/products`、库存来源为 `/api/stock-balances?type=finished-product`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。
 
@@ -3573,6 +3573,7 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
 | `type` | string | 否 | `raw-material` 或 `finished-product` |
+| `businessType` | string | 否 | `purchase`（原材料采购及关联采购申请的成品采购入库）或 `production`（未关联采购申请的成品生产完工入库）；不传时返回全部入库记录 |
 | `status` | string | 否 | `draft`、`reviewed`、历史兼容 `posted` 或 `cancelled` |
 
 **响应示例**:

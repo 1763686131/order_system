@@ -980,16 +980,12 @@ async function refreshData(showMessage = true) {
   loading.value = true
   try {
     if (isInbound.value) {
-      const [rawInboundData, finishedInboundData, approvedData, partialData] = await Promise.all([
-        request({ url: '/stock-inbounds', method: 'GET', params: { type: 'raw-material' } }),
-        request({ url: '/stock-inbounds', method: 'GET', params: { type: 'finished-product' } }),
+      const [inboundData, approvedData, partialData] = await Promise.all([
+        request({ url: '/stock-inbounds', method: 'GET', params: { businessType: 'purchase' } }),
         request({ url: '/purchase-orders', method: 'GET', params: { status: 'approved' } }),
         request({ url: '/purchase-orders', method: 'GET', params: { status: 'partial' } })
       ])
-      const actualRecords = [
-        ...(Array.isArray(rawInboundData) ? rawInboundData : []),
-        ...(Array.isArray(finishedInboundData) ? finishedInboundData : [])
-      ].map(normalizeInbound)
+      const actualRecords = (Array.isArray(inboundData) ? inboundData : []).map(normalizeInbound)
       const draftOrderTypes = new Set(actualRecords
         .filter(record => record.status === 'draft' && record.purchaseOrderId)
         .map(record => `${record.purchaseOrderId}:${record.type}`))

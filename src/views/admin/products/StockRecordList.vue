@@ -738,6 +738,11 @@ const normalizeItem = (item = {}, index) => {
 }
 
 const businessTypeLabel = record => {
+  if (!isOutbound.value && firstValue(record.purchaseOrderId, record.purchase_order_id)) {
+    return normalizeMaterialType(record, Array.isArray(record.items) ? record.items : []) === 'finished-product'
+      ? '成品采购入库'
+      : '原材料采购入库'
+  }
   const type = String(firstValue(record.businessType, record.receiptType, record.type, '')).toLowerCase()
   const labels = isOutbound.value
     ? {

@@ -709,9 +709,16 @@ def _existing_values(conn, inbound_id):
 def list_stock_inbounds():
     receipt_type = request.args.get('type')
     status = request.args.get('status')
+    business_type = _clean_text(request.args.get('businessType')).lower()
+    if business_type not in ('', 'purchase', 'production'):
+        return jsonify({'success': False, 'message': '入库业务类型无效'}), 400
     with get_db() as conn:
         sql = 'SELECT * FROM stock_inbounds WHERE 1 = 1'
         params = []
+        if business_type == 'purchase':
+            sql += " AND (receipt_type = 'raw-material' OR purchase_order_id IS NOT NULL)"
+        elif business_type == 'production':
+            sql += " AND receipt_type = 'finished-product' AND purchase_order_id IS NULL"
         if receipt_type:
             sql += ' AND receipt_type = ?'
             params.append(_type(receipt_type))
