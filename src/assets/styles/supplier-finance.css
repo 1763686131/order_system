@@ -2,6 +2,7 @@
 .supplier-finance-page { padding: 20px; background: #f4f7f8; min-height: 100%; }
 .supplier-finance-page *, .supplier-finance-dialog * { box-sizing: border-box; letter-spacing: 0; }
 .supplier-finance-page h1, .supplier-finance-dialog h2 { margin: 0; font-size: 18px; }
+.supplier-finance-dialog h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .sf-header, .sf-toolbar, .sf-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 0; }
 .sf-header { justify-content: space-between; }
 .sf-toolbar { border-bottom: 1px solid #e2e8f0; }
@@ -42,6 +43,23 @@
 .sf-dialog-body { overflow: auto; padding: 14px 18px; }
 .sf-form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .sf-form-grid .wide { grid-column: 1 / -1; }
+.sf-section-title { margin-top: 14px; }
+.sf-section-title h3 { font-size: 14px; margin: 0; }
+.sf-check { display: flex; align-items: center; gap: 8px; color: #596579; min-height: 36px; }
+.sf-check input { accent-color: #0f9f78; width: 16px; height: 16px; flex: none; }
+.sf-meta { display: flex; flex-wrap: wrap; gap: 14px; padding: 16px 0 0; color: #8a96a8; font-size: 12px; }
+.sf-allocation-table { min-width: 1000px; }
+.sf-allocation-table th:first-child { width: 210px; }
+.sf-allocation-table input { text-align: right; }
+.sf-confirm-layer { z-index: 3600; }
+.sf-confirm-dialog { max-width: 460px; }
+.sf-confirm-dialog p { line-height: 1.7; margin: 0; }
+.sf-attachments { padding: 18px 0 4px; }
+.sf-attachment-list { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 10px; }
+.sf-attachment-list li { display: flex; align-items: center; gap: 6px; max-width: 100%; }
+.sf-attachment-list a { color: #08745a; overflow-wrap: anywhere; }
+.sf-file-input { display: none; }
+.sf-disabled { opacity: .45; }
 @media (max-width: 780px) {
   .supplier-finance-page { padding: 12px; }
   .sf-form-grid { grid-template-columns: 1fr; }
@@ -57,3 +75,5 @@
   .sf-print-surface .sf-table-scroll { overflow: visible; }
   .sf-print-surface .sf-table { min-width: 0; width: 100%; font-size: 10px; }
 }
+.sf-plain-fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
+.sf-inline-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }

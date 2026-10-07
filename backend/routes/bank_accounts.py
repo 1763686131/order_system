@@ -115,6 +115,14 @@ def _account_row(conn, account_id):
     ).fetchone()
 
 
+def _supplier_finance_referenced(conn, account_id):
+    for table in ("supplier_payments", "bank_account_transactions"):
+        if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)).fetchone():
+            if conn.execute(f"SELECT 1 FROM {table} WHERE bank_account_id=? LIMIT 1", (account_id,)).fetchone():
+                return True
+    return False
+
+
 def _validate_payload(conn, data, existing=None):
     store_value = _payload_value(
         data,
@@ -448,6 +456,11 @@ def update_bank_account(account_id):
                 if not existing:
                     return jsonify({"success": False, "message": "银行账户不存在"}), 404
                 values = _validate_payload(conn, request.get_json(silent=True) or {}, existing)
+                if _supplier_finance_referenced(conn, account_id):
+                    if values["store_id"] != existing["store_id"] or values["account_number"] != existing["account_number"]:
+                        return jsonify({"success": False, "message": "该账户已被供应商付款引用，不能修改所属门店或银行账号"}), 409
+                    if values["balance"] != _money(existing["balance"]):
+                        return jsonify({"success": False, "message": "该账户已关联供应商付款，余额须通过业务审核或反审核变动"}), 409
                 if values["is_default"]:
                     conn.execute(
                         """
@@ -507,6 +520,8 @@ def delete_bank_account(account_id):
                 ).fetchone()
                 if not account:
                     return jsonify({"success": False, "message": "银行账户不存在"}), 404
+                if _supplier_finance_referenced(conn, account_id):
+                    return jsonify({"success": False, "message": "该账户已被供应商付款或银行流水引用，不能删除"}), 409
 
                 references = []
                 match_values = [

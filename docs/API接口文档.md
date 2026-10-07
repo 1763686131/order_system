@@ -51,6 +51,8 @@
 
 ## 版本历史
 
+- **v5.13** (2026-10-07，采购第三阶段闭环) - 新增采购退货、供应商退款、正式对账快照与期间锁定；退货与销售退货保持独立
+- **v5.12** (2026-10-06，采购第二阶段闭环) - 新增供应商付款草稿/审核/反审核、银行流水、独立预付款/贷项核销、采购发票登记与多来源分配、见票付款规则和私有附件接口
 - **v5.11** (2026-10-06，采购第一阶段闭环) - 新增实际入库应付、独立入库供应商归属、采购费用归属、应付汇总/内部对账/期初/基础开票状态接口；增加版本、幂等和数据范围校验；不迁移旧 `suppliers.payable`
 - **v5.10** (2026-10-06，独立入库供应商规则) - 独立其他入库不再选择供应商；有供应商的入库须关联采购订单，前后端均校验
 - **v5.9** (2026-10-06，独立采购入库来源) - 新增持久化单据来源，采购入库列表开放独立入库并与生产完工入库分开筛选，库存台账按来源显示业务类型
@@ -3249,7 +3251,7 @@ volumes:
 - `posted`：历史兼容状态，按已审核处理
 - `cancelled`：已红冲/作废，未审核单据可红冲，已红冲单据可重新启用
 
-当前进货表单使用 `draft` 保存。新建和修改接口拒绝直接传入 `reviewed` 或 `posted`；写入库存必须调用 `POST /api/stock-inbounds/{id}/audit`，反审核调用同路径的 `DELETE`。供应商付款、供应商应付余额和付款流水不属于当前入库接口字段。
+当前进货表单使用 `draft` 保存。新建和修改接口拒绝直接传入 `reviewed` 或 `posted`；写入库存必须调用 `POST /api/stock-inbounds/{id}/audit`，反审核调用同路径的 `DELETE`。供应商付款、供应商应付余额和付款流水不属于当前入库接口字段，统一通过采购财务接口处理。
 
 ### 11.0 采购订单申请、审核与关联入库
 
@@ -3377,8 +3379,8 @@ currentPayable = max(0, orderPayable - currentPayment)
 supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额合计
 ```
 
-`supplierPayable` 是供应商主档当前余额的查询汇总，不会因为保存采购申请或采购入库草稿自动入账。
-供应商付款流水仍需通过后续财务业务实现。
+`supplierPayable` 是历史兼容字段，不作为当前供应商账务依据，不会因为保存采购申请或采购入库草稿自动入账。
+供应商付款流水由第二阶段的供应商付款接口产生，采购订单的历史付款字段仍不代表真实付款。
 
 **成功响应**：新建返回 HTTP `201`，修改返回 HTTP `200`。
 
@@ -4336,7 +4338,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 - **修改**：`PUT /api/bank-accounts/<id>`，请求字段与新增相同，未传字段沿用原值。
 - **删除**：`DELETE /api/bank-accounts/<id>`。
 
-已被订单、收款单或退货单的 `settlement_account` 使用的账户不能删除，接口返回 `409`。修改或删除账户时，系统会清理不再使用的本系统银行卡图片文件；外部 URL 和历史自由文本不会被删除。
+已被订单、收款单、退货单、供应商付款或银行流水使用的账户不能删除，接口返回 `409`；已有供应商付款流水的账户不能换门店、银行账号或直接改余额。修改或删除账户时，系统会清理不再使用的本系统银行卡图片文件；外部 URL 和历史自由文本不会被删除。
 
 ### 14.5 上传银行卡背景图
 
@@ -6154,7 +6156,220 @@ SQLite 支持**多读一写**模式：
 
 费用请求包含 `supplierId`、`purchaseOrderItemId`、可选 `inboundItemId`、`expenseType`、`amountExcludingTax`、`taxAmount`、`includeInPayable`、`includeInInventoryCost`、`remark`。供应商必须与采购商品行一致；确认时必须明确未审核入库批次的明细。未确认或未明确归属的费用不能入账，不自动平均分摊。入库审核时应付计入已确认的含税费用，库存成本计入已确认的未税费用。
 
-第二阶段的供应商付款、付款核销、银行联动、完整发票登记/分配，以及第三阶段的采购退货、退款、正式对账期间锁定尚未实现。员工费用仅为前端页面临时状态，没有后端实体或真实审核/付款接口。
+第二阶段接口已实现，契约见下节。第三阶段接口见文末“采购模块第三阶段新增接口”。员工费用仍仅为前端页面临时状态，没有后端实体或真实审核/付款接口。
+
+## 采购模块第二阶段新增接口（v5.12）
+
+金额单位为元，供应商账务、分配和银行流水使用整数分。付款状态为 `draft/audited/reversed/cancelled`，发票状态为 `draft/confirmed/reversed/cancelled`。草稿不影响应付、库存或银行；有过审核/确认历史的单据删除后保留为 `cancelled`，原流水及冲销记录不删除。
+
+编辑、删除、审核、反审核、发票确认/撤销和余额核销必须携带当前 `version`；过期返回 `409`。新增、审核、撤销和余额核销支持 `Idempotency-Key` 请求头或 `idempotencyKey` 请求字段。同一键不同请求返回 `409`，重复审核不再次扣款。业务动作在一个 `BEGIN IMMEDIATE` 事务中重读余额并提交。所有接口校验登录权限和门店数据范围。
+
+### 供应商付款
+
+| 方法 | 地址 | 权限 |
+| --- | --- | --- |
+| `GET` | `/api/supplier-payments`、`/api/supplier-payments/{id}`、`/api/supplier-payments/next-number` | `admin.route.finance.supplier_payments` |
+| `POST` | `/api/supplier-payments` | `admin.finance.supplier_payment.create` |
+| `PUT` / `DELETE` | `/api/supplier-payments/{id}` | `admin.finance.supplier_payment.edit` / `delete` |
+| `POST` | `/api/supplier-payments/{id}/audit` | `admin.finance.supplier_payment.audit` |
+| `POST` | `/api/supplier-payments/{id}/reverse-audit` | `admin.finance.supplier_payment.reverse_audit` |
+
+列表接受 `supplierId/storeId/status/startDate/endDate/keyword`，返回 `{items,total}`；日期按 `businessDate`。详情直接返回付款对象；写入响应为 `{success,payment}`，首次新增返回 `201`。单号按 `FKYYYYMMDDNNN` 自动生成，取号接口接受 `date`，返回 `{documentNo}`。
+
+付款草稿示例：
+
+```json
+{
+  "supplierId": 3,
+  "storeId": 1,
+  "businessDate": "2026-10-06",
+  "paymentDate": "2026-10-06",
+  "bankAccountId": 2,
+  "paymentMethod": "bank-transfer",
+  "paymentAmount": 1200,
+  "unbilledReason": "发票待供应商补寄",
+  "invoiceOverride": false,
+  "attachments": [],
+  "remark": "",
+  "idempotencyKey": "unique-payment-create",
+  "allocations": [{"payableTransactionId": 15, "amount": 1000}]
+}
+```
+
+审核请求为 `{version,idempotencyKey}`，使用已保存草稿的核销明细重新校验，不接受临时覆盖分配。付款必须大于零、银行账户须归属所选门店、各来源须属同一供应商/门店且未冲销/未锁定；业务日期不得早于来源应付。核销合计不能超过付款额或来源最新未付余额。差额自动成为 `advanceAmount`，本例新增预付款 200 元；不会自动抵扣其它应付。
+
+审核一次性扣减银行余额、写 `bank_account_transactions`、写供应商 `PAYMENT/ADVANCE_PAYMENT` 流水并更新来源 `allocatedAmount`。余额不足返回 `409`，整个事务回滚。详情包含 `paymentAmount/allocatedAmount/advanceAmount/allocations/bankTransactions` 和制单、审核、撤销时间/操作人；银行流水包含 `change/balanceAfter/reversalOfId`。
+
+反审核追加冲销流水并恢复核销及银行余额；新增预付款已被使用时必须先撤销后续余额核销。付款或来源被锁定时不能反审核。有审核历史的付款单供应商、门店不能改写，银行账户不可删除、不可换门店/账号或直接改余额。
+
+### 来源选择与独立余额核销
+
+| 方法 | 地址 | 用途 |
+| --- | --- | --- |
+| `GET` | `/api/supplier-finance/options` | 授权门店、启用供应商、银行账户、见票付款规则 |
+| `GET` | `/api/suppliers/{id}/{kind}/allocatable` | `kind` 为 `payables/prepayments/credits/invoice-payables`，可传 `storeId` |
+| `POST` | `/api/suppliers/{id}/prepayments/{transactionId}/allocate` | 预付款核销 |
+| `POST` | `/api/suppliers/{id}/credits/{transactionId}/allocate` | 贷项核销 |
+| `GET` | `/api/supplier-balance-allocations` | 按 `supplierId/storeId` 查核销记录及来源分配 |
+| `POST` | `/api/supplier-balance-allocations/{id}/reverse` | 撤销核销，恢复应付和对应余额 |
+
+来源选择/选项需付款、发票或应付菜单权限之一。来源响应为 `{items,balance}`，每项包含账务流水摘要、`version` 和 `availableAmount`，已锁定/已冲销来源不提供分配。期初应付可付款核销，不可登记采购发票。
+
+余额写入和历史查看需 `admin.route.finance.payables`；使用或撤销预付款另需 `admin.finance.supplier_prepayment.allocate`，贷项另需 `admin.finance.supplier_credit.allocate`。请求为 `{version,businessDate,allocations:[{payableTransactionId,amount}],unbilledReason,invoiceOverride,remark,idempotencyKey}`；`version` 对应余额来源。业务日期不得早于余额/应付来源。核销总额不得超过来源可用余额，预付款与贷项分别计算。余额核销不改变银行余额。
+
+余额核销返回 `{success,allocation}`，首次成功为 `201`；历史返回 `{items}`，每项包括 `documentNo/sourceTransactionId/sourceDocumentNo/kind/businessDate/status/version/createdBy/auditedAt/reversedAt/unbilledReason/invoiceOverride/allocations`。
+
+应付汇总的 `asOf` 按账务业务日期计算历史余额、已核销和账龄，不使用今天的来源累计核销值；开票金额/状态展示当前登记结果，不作为历史发票快照。采购订单/入库应付汇总只统计有效入库原始应付，不把付款流水重复计作采购金额。
+
+### 无票付款规则
+
+`GET /api/supplier-finance/rules` 需付款菜单权限，返回 `{paymentRequireInvoice}`。`PUT` 同地址另需 `admin.finance.supplier_payment.rules`，请求开关必须为布尔值，默认 `false`。
+
+无论开关是否开启，涉及未开票、部分开票或差异来源的实际付款/余额核销均须填写 `unbilledReason`。开关开启后只允许 `billed/not_required` 来源，除非草稿明确 `invoiceOverride:true` 且本次审核人具备 `admin.finance.supplier_payment.invoice_override`。纯新增预付款没有应付来源，不受开票来源限制。
+
+### 采购发票登记
+
+| 方法 | 地址 | 权限 |
+| --- | --- | --- |
+| `GET` | `/api/purchase-invoices`、`/api/purchase-invoices/{id}` | `admin.route.purchase.invoices` |
+| `POST` | `/api/purchase-invoices` | `admin.purchase.invoice.create` |
+| `PUT` / `DELETE` | `/api/purchase-invoices/{id}` | `admin.purchase.invoice.edit` / `delete` |
+| `POST` | `/api/purchase-invoices/{id}/confirm` | `admin.purchase.invoice.confirm` |
+| `POST` | `/api/purchase-invoices/{id}/reverse-confirm` | `admin.purchase.invoice.reverse_confirm` |
+
+列表支持 `supplierId/storeId/status/invoiceNo/startDate/endDate/keyword/hasDifference=true或false`，返回 `{items,total}`；详情直接返回发票对象，写入返回 `{success,invoice}`。发票号码在同一供应商下唯一，供应商和门店保存后不可更改。
+
+```json
+{
+  "supplierId": 3,
+  "storeId": 1,
+  "invoiceNo": "INV-20261006",
+  "invoiceDate": "2026-10-06",
+  "businessDate": "2026-10-06",
+  "invoiceType": "vat-special",
+  "amountExcludingTax": 1000,
+  "taxAmount": 100,
+  "amountIncludingTax": 1100,
+  "hasDifference": false,
+  "differenceReason": "",
+  "attachments": [],
+  "remark": "",
+  "idempotencyKey": "unique-invoice-create",
+  "allocations": [{"payableTransactionId": 15, "quantity": 10, "amountExcludingTax": 1000, "taxAmount": 100}]
+}
+```
+
+来源只允许有效已审核采购入库应付；支持一票多来源、多票部分覆盖。总额/税额/未税额均须等于明细合计，累计分配含税额加第一阶段基础已开票金额不能超过原始应付，超额返回 `409`。含税额为未税额加税额；税额与来源比例快照偏差超过 1 分，或填写数量与累计实际入库数量不一致时，标记 `hasDifference` 并要求原因。数量为 0 表示不登记数量，仍按金额控制分配。可手工声明其它开票差异并填写原因。
+
+确认/撤销请求为 `{version,idempotencyKey}`。确认仅更新来源 `billedAmount/invoiceStatus/invoiceRemark` 和正式分配/事件记录，不新增应付、不改变库存、履约或银行。撤销恢复其它仍有效发票加基础开票状态的汇总，已付款保持不变，锁定来源不可撤销。
+
+第一阶段基础开票登记作为 `manual_billed_cents/manual_invoice_status` 保留；已有有效正式发票分配的来源返回 `invoiceManaged:true`，基础状态接口不能覆盖，必须通过正式发票处理。全部正式发票撤销后基础值恢复。
+
+### 私有财务附件
+
+`POST /api/supplier-finance/attachments` 使用 multipart 字段 `storeId/attachment`，需付款或发票新增/编辑权限。支持 PDF/JPG/PNG/WEBP，单文件最多 10MB、单据最多 10 个附件，校验扩展名、MIME 和文件头。返回 `{name,url}`，单据 `attachments` 使用该对象数组。
+
+`GET /api/supplier-finance/attachments/{token}` 需付款/发票/应付菜单权限之一并校验附件门店，强制下载且私有禁止缓存；不可经 `/uploads/supplier-finance/...` 公共路径访问。单据保存会验证附件确为已上传且属于当前门店。
+
+### 数据结构与部署
+
+新增 `supplier_payments/supplier_payment_allocations/supplier_balance_allocations/supplier_settlement_allocations/bank_account_transactions/purchase_invoices/purchase_invoice_allocations/purchase_invoice_events/supplier_finance_attachments`，由现有数据库初始化自动创建。部署前备份数据库和 `uploads/`，重启后端后首次访问完成结构升级；不导入旧应付/历史付款，也不回填历史已审核入库。
+
+普通角色需显式授予新增中文权限分类“供应商付款”“采购发票登记”“采购退货”“供应商退款”和“供应商正式对账”；余额核销还需应付页面权限。专项测试使用临时数据库：`py -3 -m unittest discover -s backend/tests -v`。
+
+## 采购模块第三阶段新增接口（v5.13）
+
+金额单位为元，库存数量沿用入库明细精度，供应商账务和银行流水使用整数分。采购退货与销售退货是两套独立业务：采购退货只处理采购入库批次、供应商账务和供应商贷项，销售退货继续使用 `/api/returns`，不共用单据表、库存规则或权限。
+
+第三阶段的新增写接口均校验登录身份、权限、门店/仓库数据范围、当前 `version` 和业务期间。创建、审核、反审核、退款和对账确认支持 `Idempotency-Key` 请求头或 `idempotencyKey` 请求字段；业务动作在 `BEGIN IMMEDIATE` 事务中完成，重复提交不重复扣库存、账务或银行余额。
+
+### 采购退货
+
+| 方法 | 地址 | 权限 |
+| --- | --- | --- |
+| `GET` | `/api/purchase-returns/options` | `admin.route.purchase.returns` |
+| `GET` | `/api/suppliers/{id}/purchase-return-sources?storeId=...` | `admin.route.purchase.returns` |
+| `GET` / `POST` | `/api/purchase-returns` | 查询：`admin.route.purchase.returns`；新增：`admin.purchase.return.create` |
+| `GET` | `/api/purchase-returns/{id}` | `admin.route.purchase.returns` |
+| `PUT` / `DELETE` | `/api/purchase-returns/{id}` | `admin.purchase.return.edit` / `admin.purchase.return.delete` |
+| `POST` | `/api/purchase-returns/{id}/audit` | `admin.purchase.return.audit` |
+| `POST` | `/api/purchase-returns/{id}/reverse-audit` | `admin.purchase.return.reverse_audit` |
+
+列表支持 `supplierId/storeId/status/startDate/endDate/keyword`，返回 `{items,total}`。来源接口只返回已审核、已确认供应商应付的原材料入库明细，并附带原入库单号、批次、货位、原入库单价、已退数量和可退数量。采购退货单号按 `THYYYYMMDDNNN` 生成。
+
+新增或修改请求示例：
+
+```json
+{
+  "supplierId": 3,
+  "storeId": 1,
+  "businessDate": "2026-10-07",
+  "remark": "供应商确认退货",
+  "idempotencyKey": "unique-purchase-return-create",
+  "items": [
+    {
+      "inboundItemId": 101,
+      "quantity": 10,
+      "returnAmount": 120,
+      "differenceReason": "供应商确认金额高于原库存成本"
+    }
+  ]
+}
+```
+
+退货数量不能超过原入库批次剩余可退数量和当前库存；退货日期不能早于来源应付日期。库存按原入库价格快照扣减，供应商应付按 `returnAmount` 优先冲减该来源尚未核销的应付，超出部分进入供应商贷项；库存原始成本与供应商确认退货金额不一致时，必须填写 `differenceReason`，并记录独立的退货价格调整流水。退货不回减采购订单累计入库数量，也不改变采购订单履约状态。
+
+退货审核返回 `{success,purchaseReturn}`，审核后生成采购退货出库流水和供应商账务流水；反审核追加冲销账务流水、恢复原批次库存并返回 `reversed`。已正式对账锁定的来源、期间或单据不能审核/反审核。已有审核历史的退货删除请求不应替代反审核流程。
+
+### 供应商退款
+
+| 方法 | 地址 | 权限 |
+| --- | --- | --- |
+| `GET` | `/api/supplier-refunds/options` | `admin.route.finance.supplier_refunds` |
+| `GET` | `/api/suppliers/{id}/supplier-refund-credits?storeId=...` | `admin.route.finance.supplier_refunds` |
+| `GET` | `/api/supplier-refunds`、`/api/supplier-refunds/{id}`、`/api/supplier-refunds/next-number` | `admin.route.finance.supplier_refunds` |
+| `POST` | `/api/supplier-refunds` | `admin.finance.supplier_refund.create` |
+| `PUT` / `DELETE` | `/api/supplier-refunds/{id}` | `admin.finance.supplier_refund.edit` / `admin.finance.supplier_refund.delete` |
+| `POST` | `/api/supplier-refunds/{id}/audit` | `admin.finance.supplier_refund.audit` |
+| `POST` | `/api/supplier-refunds/{id}/reverse-audit` | `admin.finance.supplier_refund.reverse_audit` |
+
+退款单只能分配采购退货产生的有效贷项，不能关联普通应付、预付款或销售退货。请求包含 `supplierId/storeId/bankAccountId/businessDate/refundDate/refundAmount/allocations/remark`，其中 `allocations` 为 `{creditTransactionId,amount}` 数组，分配合计必须等于 `refundAmount`。业务日期和退款日期不能早于贷项日期；银行账户必须属于所选门店；单号按 `TKYYYYMMDDNNN` 生成。
+
+退款审核增加银行账户余额、写入 `bank_account_transactions` 的供应商退款入账流水，并以贷项核销流水减少可用贷项。反审核追加银行冲销流水和贷项恢复流水，恢复银行余额与贷项可用额。已使用或已锁定贷项、银行余额不足以执行反审核、以及已确认对账期间内的退款操作均返回 `409`。
+
+### 供应商正式对账
+
+| 方法 | 地址 | 权限 |
+| --- | --- | --- |
+| `GET` | `/api/supplier-reconciliations/options` | `admin.route.finance.supplier_reconciliations` |
+| `GET` / `POST` | `/api/supplier-reconciliations` | 查询：`admin.route.finance.supplier_reconciliations`；新建：`admin.finance.supplier_reconciliation.create` |
+| `GET` | `/api/supplier-reconciliations/{id}` | `admin.route.finance.supplier_reconciliations` |
+| `POST` | `/api/supplier-reconciliations/{id}/refresh` | `admin.finance.supplier_reconciliation.create` |
+| `POST` | `/api/supplier-reconciliations/{id}/confirm` | `admin.finance.supplier_reconciliation.confirm` |
+| `POST` | `/api/supplier-reconciliations/{id}/cancel` | `admin.finance.supplier_reconciliation.cancel` |
+
+列表支持 `supplierId/storeId/status/periodStart/periodEnd/keyword`，返回 `{items,total}`。新建请求包含 `supplierId/storeId/periodStart/periodEnd/idempotencyKey`，期间不能与同一供应商/门店已有草稿或已确认对账重叠；系统生成 `DZYYYYMMDDNNN` 单号和不可直接覆盖的账务快照。快照包括 `opening`、`changes`、`closing`、`items`，并分别保存应付、预付款和贷项。
+
+确认请求示例：
+
+```json
+{
+  "version": 2,
+  "idempotencyKey": "unique-reconciliation-confirm",
+  "supplierBalances": {
+    "payableBalance": 1200,
+    "prepaymentBalance": 0,
+    "creditBalance": 70
+  },
+  "supplierContact": "供应商联系人",
+  "confirmationNote": "电话确认无异议",
+  "differenceReason": ""
+}
+```
+
+确认前服务端会重新生成快照并与草稿快照比较；期间账务发生变化时返回 `409`，必须先调用 `refresh` 并使用新 `version`。供应商确认余额与系统快照不一致时必须填写 `differenceReason`。确认成功后记录确认人、确认时间、确认备注，并锁定该供应商/门店截至 `periodEnd` 的账务流水、采购入库应付、付款、发票、采购退货和退款单；锁定期间内的新写入、修改、审核、反审核或开票变更均被拒绝。取消仅允许未确认草稿，正式确认不可直接取消。
+
+第三阶段新增表由现有数据库初始化自动创建，包括 `purchase_returns/purchase_return_items/purchase_return_stock_events/supplier_refunds/supplier_refund_allocations/supplier_reconciliations`。部署前备份数据库和 `uploads/`；专项测试使用临时数据库，不读取或修改现有业务数据库。
 
 ## 技术支持
 

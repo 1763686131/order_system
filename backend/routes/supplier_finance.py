@@ -8,7 +8,8 @@ from utils.auth import current_identity, require_admin_permission
 from utils.db import get_db
 from utils.supplier_ledger import (
     FinanceError, amount, balance, business_date, cents, check_scope, check_version,
-    effective_sql, idempotent_result, now, post_inbound_payables, save_operation, scope_sql,
+    effective_sql, idempotent_result, now, post_inbound_payables, returned_payable_cents,
+    save_operation, scope_sql,
 )
 
 
@@ -19,6 +20,8 @@ def finance_errors(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
         try:
+            if request.is_json and request.content_length and not isinstance(request.get_json(silent=True), dict):
+                raise FinanceError("请求体必须是 JSON 对象")
             return view(*args, **kwargs)
         except FinanceError as exc:
             return jsonify({"success": False, "message": str(exc)}), exc.status
@@ -178,24 +181,38 @@ def list_payables():
         from datetime import datetime
         cutoff = datetime.strptime(as_of or now()[:10], "%Y-%m-%d").date()
         reversal_ids = {row["reversal_of_id"] for row in ledger if row["reversal_of_id"]}
+        historical_allocated = {}
+        historical_returned = {}
+        for row in ledger:
+            if row["source_type"] in ("supplier_payment", "supplier_balance") and row["source_item_id"]:
+                target = row["source_item_id"]
+                historical_allocated[target] = historical_allocated.get(target, 0) - row["payable_delta_cents"]
+            if row["source_type"] == "purchase_return" and row["source_item_id"]:
+                target = row["source_item_id"]
+                historical_returned[target] = historical_returned.get(target, 0) - row["payable_delta_cents"]
         grouped = {}
         for row in ledger:
             result = grouped.setdefault(row["supplier_id"], {
                 "payableCents": 0, "prepaymentCents": 0, "creditCents": 0,
                 "confirmedCents": 0, "allocatedCents": 0, "billedCents": 0,
+                "returnedCents": 0,
                 "aging": {"0-30": 0, "31-60": 0, "61-90": 0, "90+": 0},
             })
             result["payableCents"] += row["payable_delta_cents"]
             result["prepaymentCents"] += row["prepayment_delta_cents"]
             result["creditCents"] += row["credit_delta_cents"]
-            if not row["reversal_of_id"] and row["id"] not in reversal_ids:
+            if (not row["reversal_of_id"] and row["id"] not in reversal_ids
+                    and row["transaction_type"] in ("INITIAL", "PURCHASE_INBOUND", "INDEPENDENT_PURCHASE_INBOUND")):
                 principal = row["amount_including_tax_cents"]
+                allocated = historical_allocated.get(row["id"], 0) if as_of else row["allocated_cents"]
+                returned = historical_returned.get(row["id"], 0) if as_of else returned_payable_cents(conn, row["id"])
                 result["confirmedCents"] += principal if row["payable_delta_cents"] >= 0 else 0
-                result["allocatedCents"] += row["allocated_cents"]
+                result["allocatedCents"] += allocated
+                result["returnedCents"] += returned
                 result["billedCents"] += row["billed_cents"]
                 days = max(0, (cutoff - datetime.strptime(row["business_date"], "%Y-%m-%d").date()).days)
                 bucket = "0-30" if days <= 30 else "31-60" if days <= 60 else "61-90" if days <= 90 else "90+"
-                result["aging"][bucket] += max(0, row["payable_delta_cents"] - row["allocated_cents"])
+                result["aging"][bucket] += max(0, row["payable_delta_cents"] - allocated - returned)
         results = []
         for supplier in conn.execute("SELECT id, supplier_name, supplier_code, store_id FROM suppliers ORDER BY supplier_name"):
             if supplier["store_id"] is not None:
@@ -211,12 +228,15 @@ def list_payables():
             payable = data.get("payableCents", 0)
             prepayment, credit = data.get("prepaymentCents", 0), data.get("creditCents", 0)
             confirmed, allocated, billed = data.get("confirmedCents", 0), data.get("allocatedCents", 0), data.get("billedCents", 0)
+            returned = data.get("returnedCents", 0)
             results.append({
                 "supplierId": supplier["id"], "supplierName": supplier["supplier_name"],
                 "supplierCode": supplier["supplier_code"] or "", "storeId": supplier["store_id"],
                 "payableBalance": amount(payable), "prepaymentBalance": amount(prepayment),
                 "creditBalance": amount(credit), "netSettlement": amount(payable - prepayment - credit),
-                "confirmedPayable": amount(confirmed), "allocatedAmount": amount(allocated),
+                "confirmedPayable": amount(max(0, confirmed - returned)), "allocatedAmount": amount(allocated),
+                "returnedAmount": amount(returned),
+                "unpaidAmount": amount(max(0, confirmed - allocated - returned)),
                 "billedAmount": amount(billed), "unbilledAmount": amount(max(0, confirmed - billed)),
                 "aging": {key: amount(value) for key, value in buckets.items()},
                 "paymentStatus": "not_confirmed" if not data else "paid" if payable == 0 and prepayment == 0 and credit == 0
@@ -241,6 +261,7 @@ def serialize_transaction(row):
         "allocatedAmount": amount(row["allocated_cents"]), "billedAmount": amount(row["billed_cents"]),
         "unbilledAmount": amount(max(0, row["amount_including_tax_cents"] - row["billed_cents"])),
         "invoiceStatus": row["invoice_status"], "invoiceRemark": row["invoice_remark"],
+        "invoiceManaged": bool(row["invoice_managed"]),
         "version": row["version"], "reversalOfId": row["reversal_of_id"], "remark": row["remark"],
     }
 
@@ -268,7 +289,8 @@ def supplier_statement(supplier_id):
         running = {"payable": 0, "prepayment": 0, "credit": 0}
         opening = dict(running)
         period, changes = [], dict(running)
-        reversed_ids = {row["reversal_of_id"] for row in rows if row["reversal_of_id"]}
+        reversed_ids = {row["reversal_of_id"] for row in rows
+                        if row["reversal_of_id"] and (not end or row["business_date"] <= end)}
         for row in rows:
             if end and row["business_date"] > end:
                 break
@@ -318,6 +340,8 @@ def initial_balance(supplier_id):
         replay, token = idempotent_result(conn, f"supplier:{supplier_id}:{store_id}:initial", data)
         if replay:
             return jsonify(replay)
+        from utils.supplier_periods import ensure_period_open
+        ensure_period_open(conn, supplier_id, store_id, date)
         if conn.execute(
             "SELECT 1 FROM supplier_account_transactions WHERE supplier_id = ? AND store_id = ?",
             (supplier_id, store_id),
@@ -358,8 +382,12 @@ def update_invoice_status(transaction_id):
             raise FinanceError("应付来源不存在或已冲销", 404)
         if row["source_type"] != "stock_inbound":
             raise FinanceError("仅采购入库应付可登记基础开票状态", 409)
+        if row["invoice_managed"]:
+            raise FinanceError("该应付已有正式发票分配，请通过发票登记调整", 409)
         check_scope(row["store_id"])
         check_version(data, row)
+        if row["locked_at"]:
+            raise FinanceError("应付来源已被正式对账锁定，不能修改开票状态", 409)
         billed = cents(data.get("billedAmount", 0))
         if status == "unbilled" and billed != 0:
             raise FinanceError("未开票金额必须为零")
@@ -375,8 +403,10 @@ def update_invoice_status(transaction_id):
             raise FinanceError("开票差异必须填写备注")
         conn.execute(
             """UPDATE supplier_account_transactions SET invoice_status = ?, billed_cents = ?, invoice_remark = ?,
+               manual_invoice_status = ?, manual_billed_cents = ?, manual_invoice_remark = ?,
                invoice_updated_by = ?, invoice_updated_at = ?, version = version + 1 WHERE id = ?""",
-            (status, billed, str(data.get("invoiceRemark", ""))[:500], current_identity(), now(), transaction_id),
+            (status, billed, str(data.get("invoiceRemark", ""))[:500],
+             status, billed, str(data.get("invoiceRemark", ""))[:500], current_identity(), now(), transaction_id),
         )
         updated = conn.execute("SELECT * FROM supplier_account_transactions WHERE id = ?", (transaction_id,)).fetchone()
         return jsonify({"success": True, "transaction": serialize_transaction(updated)})

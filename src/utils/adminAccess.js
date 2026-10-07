@@ -22,6 +22,8 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
     ORDERS: 'admin.route.purchase.orders',
     SUPPLIERS: 'admin.route.purchase.suppliers',
     INBOUND: 'admin.route.purchase.inbound',
+    INVOICES: 'admin.route.purchase.invoices',
+    RETURNS: 'admin.route.purchase.returns',
     INBOUND_SETTLEMENT: 'admin.route.purchase.inbound_settlement'
   },
   INVENTORY: {
@@ -34,6 +36,9 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
   },
   FINANCE: {
     PAYABLES: 'admin.route.finance.payables',
+    SUPPLIER_PAYMENTS: 'admin.route.finance.supplier_payments',
+    SUPPLIER_REFUNDS: 'admin.route.finance.supplier_refunds',
+    SUPPLIER_RECONCILIATIONS: 'admin.route.finance.supplier_reconciliations',
     EMPLOYEE_EXPENSES: 'admin.route.finance.employee_expenses',
     RECEIVABLES: 'admin.route.finance.receivables',
     PAYMENT_HISTORY: 'admin.route.finance.payment_history',
@@ -68,6 +73,11 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.SUPPLIERS, path: '/admin/purchase/suppliers' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND, path: '/admin/purchase/inbound' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT, path: '/admin/purchase/inbound-settlement' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INVOICES, path: '/admin/purchase/invoices' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS, path: '/admin/purchase/returns' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS, path: '/admin/finance/supplier-payments' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS, path: '/admin/finance/supplier-refunds' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS, path: '/admin/finance/supplier-reconciliations' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES, path: '/admin/finance/payables' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES, path: '/admin/finance/employee-expenses' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS, path: '/admin/inventory' },
@@ -98,6 +108,11 @@ export function getDefaultAdminPath(userStore) {
 }
 
 export function getAdminRoutePermission(path = '') {
+  if (/^\/admin\/purchase\/invoices(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INVOICES
+  if (/^\/admin\/purchase\/returns(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS
+  if (/^\/admin\/finance\/supplier-payments(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS
+  if (/^\/admin\/finance\/supplier-refunds(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS
+  if (/^\/admin\/finance\/supplier-reconciliations(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS
   if (/^\/admin\/purchase\/inbound-settlement(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT
   if (/^\/admin\/finance\/(payables|supplier-statement)(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
   if (/^\/admin\/finance\/employee-expenses(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES

@@ -12,8 +12,8 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `5.6` |
-| 文档更新 | `2026-10-05` |
+| 权限/API 文档版本 | `5.12` |
+| 文档更新 | `2026-10-06` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -28,7 +28,9 @@
 - 门店、仓库、客户、供应商和单位等基础资料管理
 - 客户与供应商列表共用 `PartyList.vue`，按实体类型切换字段、接口和财务文案
 - 客户期初欠款、储值余额和应收欠款汇总
-- 供应商应付欠款读取采购业务维护的 `payable` 字段
+- 供应商应付、预付款和贷项读取独立账务流水，按实际入库确认应付
+- 供应商付款草稿、审核、反审核、银行流水及独立余额核销
+- 采购发票登记、部分分配、确认/撤销和见票付款规则
 - 收款历史、收款单草稿、附件、打印和 Excel 导出
 - 收款单审核入账、反审核回滚及客户账户流水追溯
 - 成品库存与原材料库存查询
@@ -95,6 +97,15 @@ npm run dev
 
 开发环境中，Vite 会把 `/api` 请求代理到 `http://localhost:7899`。
 
+并行验收新版本时，可在后端目录运行 `..\.venv\Scripts\python.exe -m flask --app app run --host 127.0.0.1 --port 7900`，在项目根目录的另一个终端执行：
+
+```powershell
+$env:API_PROXY_TARGET = "http://127.0.0.1:7900"
+npm run dev -- --host 127.0.0.1 --port 3011 --strictPort
+```
+
+此方式连接当前业务数据库，登录后会按新版本补齐表结构；不要在多个页面同时编辑同一业务单据。仅试用模拟数据请使用下文的隔离预览命令。
+
 ### 构建前端
 
 ```powershell
@@ -150,6 +161,12 @@ order_system/
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
 │  │  ├─ raw_material_products.py    # 原材料商品档案接口
 │  │  ├─ purchase_orders.py          # 原材料采购申请、审核和关联入库
+│  │  ├─ supplier_finance.py         # 供应商应付、内部对账、期初和费用归属
+│  │  ├─ supplier_payments.py        # 付款审核、银行流水、余额核销和私有附件
+│  │  ├─ purchase_invoices.py        # 发票登记、来源分配、确认和撤销
+│  │  ├─ purchase_returns.py         # 采购退货、批次库存、应付冲减和贷项
+│  │  ├─ supplier_refunds.py         # 供应商贷项退款和银行入账
+│  │  ├─ supplier_reconciliations.py # 正式对账快照、确认和期间锁定
 │  │  ├─ stock_inbounds.py           # 供应商、入库单、审核、库存余额和流水
 │  │  ├─ material_outbounds.py        # 原材料出库触屏辅助、后台录入、审核和库存扣减
 │  │  ├─ stores.py                   # 门店接口
@@ -172,6 +189,9 @@ order_system/
 │  │  ├─ system_settings.py          # 系统配置读取和更新
 │  │  ├─ user_helpers.py             # 当前用户和账号关系辅助逻辑
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
+│  │  ├─ supplier_ledger.py          # 采购入库应付、供应商流水和来源汇总
+│  │  ├─ supplier_settlement.py      # 付款、余额核销、银行及发票共同校验
+│  │  ├─ supplier_periods.py         # 正式对账期间锁定与写入校验
 │  │  └─ db_helper.py                # 历史数据兼容读写
 │  ├─ tools/                         # 数据备份等维护脚本
 │  ├─ Dockerfile
@@ -217,6 +237,14 @@ order_system/
 │  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制模板、变量、绑定和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  ├─ PartyList.vue             # 客户/供应商共用列表、详情、编辑和财务展示
+│  │  │  ├─ purchase/                # 供应商归属、费用、付款/发票与核销复用组件
+│  │  │  │  ├─ PurchaseExpenseDialog.vue       # 采购费用归属、确认和删除费用草稿
+│  │  │  │  ├─ SupplierAssignmentDialog.vue    # 独立入库逐行补录供应商并确认应付
+│  │  │  │  ├─ PayableAllocationTable.vue      # 付款核销和采购发票分配明细表
+│  │  │  │  ├─ SupplierAttachments.vue         # 供应商付款/发票附件上传和移除
+│  │  │  │  ├─ SupplierBalanceDialog.vue       # 供应商预付款/贷项核销及历史记录
+│  │  │  │  ├─ SupplierDocumentDialog.vue      # 供应商付款和采购发票新增、审核弹窗
+│  │  │  │  └─ SupplierDocumentList.vue        # 供应商付款/采购发票共用列表
 │  │  │  └─ StoreFormModal.vue       # 门店维护弹窗
 │  │  ├─ print/
 │  │  │  ├─ PrintDesignerEditor.vue  # 可视化模板设计器封装
@@ -244,6 +272,8 @@ order_system/
 │  │     ├─ purchase/                # 采购管理
 │  │     │  ├─ PurchaseList.vue      # 采购订单/采购入库共用列表；按路由 mode 显示字段
 │  │     │  ├─ PurchaseInboundSettlement.vue # 待补供应商独立入库结算
+│  │     │  ├─ PurchaseInvoices.vue  # 采购发票登记入口
+│  │     │  ├─ PurchaseReturns.vue   # 采购退货、批次来源和审核/反审核
 │  │     │  └─ SupplierList.vue      # 供应商管理入口，封装 PartyList 的 supplier 模式
 │  │     ├─ inventory/               # 仓库管理
 │  │     │  └─ WarehouseManage.vue   # 仓库档案和启停维护
@@ -253,6 +283,9 @@ order_system/
 │  │     │  ├─ BankAccounts.vue      # 银行账户管理和余额展示
 │  │     │  ├─ DebtDetails.vue       # 应收/应付欠款详情
 │  │     │  ├─ Payables.vue          # 供应商应付、预付款、贷项汇总
+│  │     │  ├─ SupplierPayments.vue # 供应商付款入口
+│  │     │  ├─ SupplierRefunds.vue  # 供应商贷项退款入口
+│  │     │  ├─ SupplierReconciliations.vue # 供应商正式对账与锁期
 │  │     │  ├─ SupplierStatement.vue # 供应商内部对账、打印和导出
 │  │     │  ├─ EmployeeExpenses.vue  # 员工费用前端临时原型
 │  │     │  ├─ ExpressCourierReconciliation.vue # 快递运费对账
@@ -320,7 +353,7 @@ order_system/
 | `customer` | `/api/customers` | `balance`、`initialReceivable`、`receivable` | 储值余额、期初欠款、应收欠款 |
 | `supplier` | `/api/suppliers` | `payable` | 欠款金额、应付欠款 |
 
-客户页面允许维护储值余额和期初欠款。供应商接口当前只返回采购业务维护的 `payable`，因此供应商欠款在列表、详情和编辑窗口中只读展示，不在供应商档案表单中伪造可保存的期初金额字段。供应商的联系人、银行信息、税号和备注仍可正常编辑。
+客户页面允许维护储值余额和期初欠款。供应商余额读取新的供应商账务流水，档案中只读展示，期初通过“供应商应付”页面录入。旧 `suppliers.payable` 不作为当前账务依据。供应商的联系人、银行信息、税号和备注仍可正常编辑。
 
 `CustomerList.vue` 和 `SupplierList.vue` 保留原有页面入口与对外方法名，路由无需调整。新增第三类往来单位时，应优先扩展共享组件的实体配置、字段标准化和请求映射。
 
@@ -492,6 +525,8 @@ import {
 | `/admin/purchase/inbound/edit/:id` | 修改未审核进货单（公共表单） | `/api/stock-inbounds/:id` |
 | `/admin/purchase/inbound/:id` | 查看、打印进货单（公共表单） | `/api/stock-inbounds/:id`、`/api/print-templates` |
 | `/admin/purchase/inbound-settlement` | 待补供应商独立入库结算 | `/api/stock-inbounds/:id/settlement`、`/assign-supplier`、`/confirm-payable` |
+| `/admin/purchase/invoices` | 采购发票登记、分配、确认和撤销 | `/api/purchase-invoices` |
+| `/admin/purchase/returns` | 采购退货、批次库存扣减、应付冲减和贷项 | `/api/purchase-returns` |
 | `/admin/inventory` | 成品库存 | `/api/products/inventory` |
 | `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances`、`/api/stock-movements` |
 | `/admin/inventory/material-outbounds` | 原材料出库录入、修改、审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbounds/admin`、`/api/material-outbound-settings` |
@@ -508,6 +543,9 @@ import {
 | `/admin/finance/receivables` | 应收欠款 | `/api/customers/receivables` |
 | `/admin/finance/payment-history` | 收款历史 | `/api/payment-receipts` |
 | `/admin/finance/payables` | 供应商应付、预付款和贷项 | `/api/suppliers/payables`、`/api/suppliers/:id/initial-balances` |
+| `/admin/finance/supplier-payments` | 供应商付款、审核、反审核和银行流水 | `/api/supplier-payments` |
+| `/admin/finance/supplier-refunds` | 供应商贷项退款、审核、反审核和银行入账 | `/api/supplier-refunds` |
+| `/admin/finance/supplier-reconciliations` | 供应商正式对账、快照确认和期间锁定 | `/api/supplier-reconciliations` |
 | `/admin/finance/supplier-statement/:supplierId` | 供应商内部对账、打印和导出 | `/api/suppliers/:id/debt-details`、`/api/supplier-payables/:id/invoice` |
 | `/admin/finance/employee-expenses` | 员工采购/费用报销前端原型 | 仅页面临时状态，不调用正式财务接口 |
 | `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
@@ -523,9 +561,13 @@ import {
 
 采购订单记录申请、合同/金额估算和履约承诺，采购入库记录实际到货和库存位置；两者均先保存草稿，分别审核后才进入下一环节。关联入库审核按实际数量确认供应商应付，独立入库按 `none` 或 `pending_supplier` 处理。采购入库的审核、反审核、红冲、重新启用和删除在“库存 / 入库记录”页面完成。
 
-采购申请提供采购人、制单人、合同/金额估算和费用估算；已移除“本次付款”输入。旧 `currentPayment`、结算账户等字段仅为历史兼容，不代表真实付款。供应商余额以新流水为准，真实付款/银行联动放在后续阶段。采购列表将履约、开票和付款状态分开。
+采购申请提供采购人、制单人、合同/金额估算和费用估算；已移除“本次付款”输入。旧 `currentPayment`、结算账户等字段仅为历史兼容，不代表真实付款。真实付款仅通过“财务 / 供应商付款”保存草稿、审核并扣减银行余额；超出核销金额自动成为独立预付款。采购列表将履约、开票和付款状态分开。
 
-采购第一阶段新增逻辑集中在 `backend/utils/supplier_ledger.py` 和 `backend/routes/supplier_finance.py`，前端复用 `src/components/admin/purchase/SupplierAssignmentDialog.vue`、`PurchaseExpenseDialog.vue` 与 `src/assets/styles/supplier-finance.css`。新表在首次数据库访问时自动创建，不迁移旧 `suppliers.payable`，不回填历史已审核入库应付。普通角色需在权限组中授予新的应付、对账、供应商归属和费用权限。供应商付款、完整发票分配、采购退货/退款、正式对账锁定仍属后续阶段。
+第一阶段应付/归属逻辑集中在 `supplier_ledger.py/supplier_finance.py`，第二阶段付款、余额核销和发票逻辑集中在 `supplier_settlement.py/supplier_payments.py/purchase_invoices.py`，第三阶段退货、退款和正式对账分别集中在 `purchase_returns.py/supplier_refunds.py/supplier_reconciliations.py`，期间控制由 `supplier_periods.py` 统一处理。前端复用 `src/components/admin/purchase/` 下的归属、费用、付款/发票、退货和核销组件及 `supplier-finance.css`。新表在重启后端后的首次数据库访问时自动创建，不迁移旧 `suppliers.payable`，不回填历史已审核入库应付。部署前备份数据库和上传目录，普通角色在权限组中授予新的中文付款、发票、退货、退款、正式对账及核销权限。采购退货与销售退货保持独立。
+
+“供应商应付”右侧余额操作查看/核销预付款和贷项；核销不再次扣款。付款审核默认允许未开票来源，但必须填写原因；“见票付款”开关开启后须先开票，或由具备豁免权限的审核人确认。“采购 / 采购发票登记”支持多来源、多发票部分覆盖；正式发票分配不生成新应付，撤销发票不撤销已发生付款。财务附件按登录和门店范围私有下载。
+
+第二、三阶段回归命令曾使用临时数据库专项测试；当前测试文件已清理，正式运行不依赖额外预览服务。
 
 ### 公共单据录入组件
 

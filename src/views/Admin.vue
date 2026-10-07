@@ -661,9 +661,19 @@ const allMenuItems = [
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND
       },
       {
+        label: '采购退货',
+        path: '/admin/purchase/returns',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS
+      },
+      {
         label: '独立入库结算',
         path: '/admin/purchase/inbound-settlement',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT
+      },
+      {
+        label: '采购发票登记',
+        path: '/admin/purchase/invoices',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INVOICES
       }
     ]
   },
@@ -753,6 +763,21 @@ const allMenuItems = [
         label: '供应商应付',
         path: '/admin/finance/payables',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
+      },
+      {
+        label: '供应商付款',
+        path: '/admin/finance/supplier-payments',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS
+      },
+      {
+        label: '供应商退款',
+        path: '/admin/finance/supplier-refunds',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS
+      },
+      {
+        label: '供应商正式对账',
+        path: '/admin/finance/supplier-reconciliations',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS
       },
       {
         label: '员工费用原型',

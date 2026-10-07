@@ -37,6 +37,36 @@ const routes = [
     redirect: '/admin/dashboard',
     children: [
       {
+        path: 'finance/supplier-payments',
+        name: 'admin-supplier-payments',
+        component: () => import('@/views/admin/finance/SupplierPayments.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'finance/supplier-refunds',
+        name: 'admin-supplier-refunds',
+        component: () => import('@/views/admin/finance/SupplierRefunds.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'finance/supplier-reconciliations',
+        name: 'admin-supplier-reconciliations',
+        component: () => import('@/views/admin/finance/SupplierReconciliations.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'purchase/invoices',
+        name: 'admin-purchase-invoices',
+        component: () => import('@/views/admin/purchase/PurchaseInvoices.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'purchase/returns',
+        name: 'admin-purchase-returns',
+        component: () => import('@/views/admin/purchase/PurchaseReturns.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'finance/payables',
         name: 'admin-finance-payables',
         component: () => import('@/views/admin/finance/Payables.vue'),

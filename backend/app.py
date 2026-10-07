@@ -110,6 +110,11 @@ from routes.logistics_copy import logistics_copy_bp
 from routes.stock_inbounds import stock_inbounds_bp
 from routes.purchase_orders import purchase_orders_bp
 from routes.supplier_finance import supplier_finance_bp
+from routes.supplier_payments import supplier_payments_bp
+from routes.purchase_invoices import purchase_invoices_bp
+from routes.purchase_returns import purchase_returns_bp
+from routes.supplier_refunds import supplier_refunds_bp
+from routes.supplier_reconciliations import supplier_reconciliations_bp
 from routes.material_outbounds import material_outbounds_bp
 from routes.payment_receipts import payment_receipts_bp
 from routes.returns import returns_bp
@@ -140,6 +145,11 @@ app.register_blueprint(logistics_copy_bp)
 app.register_blueprint(stock_inbounds_bp)
 app.register_blueprint(purchase_orders_bp)
 app.register_blueprint(supplier_finance_bp)
+app.register_blueprint(supplier_payments_bp)
+app.register_blueprint(purchase_invoices_bp)
+app.register_blueprint(purchase_returns_bp)
+app.register_blueprint(supplier_refunds_bp)
+app.register_blueprint(supplier_reconciliations_bp)
 app.register_blueprint(material_outbounds_bp)
 app.register_blueprint(payment_receipts_bp)
 app.register_blueprint(returns_bp)
@@ -200,6 +210,8 @@ from flask import request, jsonify
 @app.route('/uploads/<path:filename>')
 def uploaded_file(filename):
     """访问上传的文件"""
+    if filename.replace("\\", "/").startswith("supplier-finance/"):
+        abort(404)
     if filename.startswith('chat-attachments/'):
         abort(404)
 

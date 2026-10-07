@@ -11,9 +11,34 @@ from utils.db import get_db
 
 _RULES = (
     (
+        r"/api/purchase-returns(?:/\d+(?:/(?:audit|reverse-audit))?)?",
+        {"POST", "PUT", "DELETE"},
+        "purchase",
+        "采购退货",
+        "purchase_return",
+    ),
+    (
+        r"/api/supplier-refunds(?:/\d+(?:/(?:audit|reverse-audit))?)?",
+        {"POST", "PUT", "DELETE"},
+        "supplier_finance",
+        "供应商退款",
+        "supplier_refund",
+    ),
+    (
+        r"/api/supplier-reconciliations(?:/\d+/(?:refresh|confirm|cancel))?",
+        {"POST"},
+        "supplier_finance",
+        "供应商正式对账",
+        "supplier_reconciliation",
+    ),
+    (
         r"/api/(?:stock-inbounds/\d+/(?:assign-supplier|confirm-payable)|"
         r"suppliers/\d+/initial-balances|supplier-payables/\d+/invoice|"
-        r"purchase-orders/\d+/expenses|purchase-expenses/\d+(?:/confirm)?)",
+        r"purchase-orders/\d+/expenses|purchase-expenses/\d+(?:/confirm)?|"
+        r"supplier-payments(?:/\d+(?:/(?:audit|reverse-audit))?)?|"
+        r"purchase-invoices(?:/\d+(?:/(?:confirm|reverse-confirm))?)?|"
+        r"suppliers/\d+/(?:prepayments|credits)/\d+/allocate|"
+        r"supplier-balance-allocations/\d+/reverse|supplier-finance/(?:rules|attachments(?:/[^/]+)?))",
         {"POST", "PUT", "DELETE"},
         "inventory",
         "采购与供应商账务",
@@ -186,7 +211,7 @@ def _request_action(rule, path, method, status_code):
         return "update"
     if path.endswith("/avatar"):
         return "update" if method == "POST" else "delete"
-    if path.endswith("/attachments") and method == "POST":
+    if path.startswith("/api/supplier-finance/attachments") and method == "POST":
         return "create"
     if path.startswith("/api/upload/bank-") and method == "POST":
         return "update"
@@ -195,6 +220,8 @@ def _request_action(rule, path, method, status_code):
     if path.startswith("/api/material-outbounds/") and method == "DELETE":
         return "delete"
     if path.endswith("/audit"):
+        return "update"
+    if path.endswith(("/reverse-audit", "/confirm", "/reverse-confirm", "/allocate", "/reverse", "/confirm-payable", "/assign-supplier")):
         return "update"
     if path.endswith("/restart"):
         return "update"
@@ -309,7 +336,8 @@ def _target_from_response(response):
             return _safe_text(payload[key], 100)
     for key in (
         "data", "employee", "order", "receipt", "account", "template",
-        "record", "department",
+        "record", "department", "payment", "invoice", "allocation",
+        "purchaseReturn", "refund", "reconciliation",
     ):
         value = payload.get(key)
         if isinstance(value, dict) and value.get("id") is not None:

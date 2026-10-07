@@ -135,6 +135,8 @@ def ensure_schema(conn):
         CREATE INDEX IF NOT EXISTS idx_purchase_expenses_inbound
             ON purchase_expense_lines(inbound_item_id, status);
     """)
+    from utils.supplier_settlement import ensure_schema as ensure_settlement_schema
+    ensure_settlement_schema(conn)
     conn.commit()
 
 
@@ -223,18 +225,30 @@ def balance(conn, supplier_id, store_id=None, as_of=None):
     }
 
 
+def returned_payable_cents(conn, payable_transaction_id, as_of=None):
+    date_clause = " AND business_date <= ?" if as_of else ""
+    params = (payable_transaction_id, business_date(as_of)) if as_of else (payable_transaction_id,)
+    row = conn.execute(
+        f"""SELECT COALESCE(SUM(payable_delta_cents), 0) value
+            FROM supplier_account_transactions
+            WHERE source_type = 'purchase_return' AND source_item_id = ? {date_clause}""",
+        params,
+    ).fetchone()
+    return max(0, -row["value"])
+
+
 def source_summary(conn, field, value):
     if field not in ("purchase_order_id", "source_id"):
         raise ValueError("Invalid supplier source")
-    extra = " AND t.source_type = 'stock_inbound'" if field == "source_id" else ""
     scoped, params = scope_sql()
     rows = conn.execute(
         f"SELECT * FROM supplier_account_transactions t WHERE t.{field} = ? "
-        f"AND {effective_sql()} {extra} {scoped}", (value, *params),
+        f"AND t.source_type = 'stock_inbound' AND {effective_sql()} {scoped}", (value, *params),
     ).fetchall()
     confirmed = sum(row["amount_including_tax_cents"] for row in rows)
     allocated = sum(row["allocated_cents"] for row in rows)
     billed = sum(row["billed_cents"] for row in rows)
+    returned = sum(returned_payable_cents(conn, row["id"]) for row in rows)
     invoice_status = (
         "not_required" if not rows else
         "difference" if any(row["invoice_status"] == "difference" for row in rows) else
@@ -242,8 +256,8 @@ def source_summary(conn, field, value):
         "partial" if billed > 0 else "unbilled"
     )
     return {
-        "confirmedPayable": amount(confirmed), "allocatedAmount": amount(allocated),
-        "unpaidAmount": amount(max(0, confirmed - allocated)),
+        "confirmedPayable": amount(max(0, confirmed - returned)), "allocatedAmount": amount(allocated),
+        "returnedAmount": amount(returned), "unpaidAmount": amount(max(0, confirmed - allocated - returned)),
         "billedAmount": amount(billed), "unbilledAmount": amount(max(0, confirmed - billed)),
         "invoiceStatus": invoice_status,
         "paymentStatus": "not_confirmed" if not rows else
@@ -267,6 +281,8 @@ def post_inbound_payables(conn, document, items):
         ).fetchone()
         if not supplier or supplier["status"] != "active" or supplier["store_id"] not in (None, document["store_id"]):
             raise FinanceError("供应商不存在、已停用或不属于该门店")
+        from utils.supplier_periods import ensure_period_open
+        ensure_period_open(conn, supplier_id, document["store_id"], document["document_date"])
         expenses = conn.execute(
             "SELECT * FROM purchase_expense_lines WHERE inbound_item_id = ?", (item["id"],)
         ).fetchall()
@@ -303,7 +319,18 @@ def reverse_inbound_payables(conn, document):
     ).fetchall()
     if any(row["allocated_cents"] or row["locked_at"] or row["billed_cents"] for row in rows):
         raise FinanceError("应付已被核销、开票或对账引用，请先解除后续业务", 409)
+    returned = conn.execute(
+        """SELECT 1 FROM purchase_return_items i
+           JOIN purchase_returns r ON r.id = i.return_id
+           JOIN stock_inbound_items inbound ON inbound.id = i.inbound_item_id
+           WHERE inbound.inbound_id = ? AND r.status = 'audited' LIMIT 1""",
+        (document["id"],),
+    ).fetchone()
+    if returned:
+        raise FinanceError("该入库批次已有已审核采购退货，不能反审核", 409)
+    from utils.supplier_periods import ensure_period_open
     for row in rows:
+        ensure_period_open(conn, row["supplier_id"], row["store_id"], row["business_date"])
         conn.execute(
             """INSERT INTO supplier_account_transactions (
                 supplier_id, store_id, business_date, audited_at, created_by, transaction_type,

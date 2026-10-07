@@ -88,6 +88,8 @@ ADMIN_ROUTE_BRANCH_PERMISSIONS = {
         "orders": "admin.route.purchase.orders",
         "suppliers": "admin.route.purchase.suppliers",
         "inbound": "admin.route.purchase.inbound",
+        "invoices": "admin.route.purchase.invoices",
+        "returns": "admin.route.purchase.returns",
     },
     "inventory": {
         "products": "admin.route.inventory.products",
@@ -99,6 +101,11 @@ ADMIN_ROUTE_BRANCH_PERMISSIONS = {
     },
     "finance": {
         "receivables": "admin.route.finance.receivables",
+        "payables": "admin.route.finance.payables",
+        "supplier_payments": "admin.route.finance.supplier_payments",
+        "supplier_refunds": "admin.route.finance.supplier_refunds",
+        "supplier_reconciliations": "admin.route.finance.supplier_reconciliations",
+        "employee_expenses": "admin.route.finance.employee_expenses",
         "payment_history": "admin.route.finance.payment_history",
         "bank_accounts": "admin.route.finance.bank_accounts",
         "logistics_truck": "admin.route.finance.logistics_truck",
@@ -287,6 +294,11 @@ PERMISSION_MODULES = [
                 "description": "显示并访问采购入库管理",
             },
             {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["returns"],
+                "name": "访问采购退货",
+                "description": "显示并访问采购退货单及退货表单",
+            },
+            {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["products"],
                 "name": "访问成品库存",
                 "description": "显示并访问成品库存",
@@ -320,6 +332,16 @@ PERMISSION_MODULES = [
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["receivables"],
                 "name": "访问应收欠款",
                 "description": "显示并访问应收欠款和债务详情",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["supplier_refunds"],
+                "name": "访问供应商退款",
+                "description": "显示并访问供应商退款和银行入账",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["supplier_reconciliations"],
+                "name": "访问供应商正式对账",
+                "description": "显示并访问正式对账确认和期间锁定",
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["payment_history"],
@@ -701,6 +723,12 @@ _ROUTE_PERMISSION_MODULES = [
         [ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"]],
     ),
     (
+        "admin_purchase_returns",
+        "采购退货",
+        "管理采购退货单和库存退回",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["returns"]],
+    ),
+    (
         "admin_product_inventory",
         "成品库存",
         "控制成品库存页面访问",
@@ -738,6 +766,18 @@ _ROUTE_PERMISSION_MODULES = [
         "应收管理",
         "控制应收欠款和债务详情页面访问",
         [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["receivables"]],
+    ),
+    (
+        "admin_supplier_refunds",
+        "供应商退款",
+        "管理供应商贷项退款和银行入账",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["supplier_refunds"]],
+    ),
+    (
+        "admin_supplier_reconciliations",
+        "供应商正式对账",
+        "管理供应商确认、对账快照和期间锁定",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["supplier_reconciliations"]],
     ),
     (
         "admin_payment_history",
@@ -844,6 +884,73 @@ PERMISSION_MODULES.extend([
                 ("admin.purchase.inbound.assign_supplier", "补录明细供应商"),
                 ("admin.purchase.inbound.confirm_payable", "确认独立入库应付"),
             ]
+        ],
+    },
+    {
+        "code": "admin_supplier_payments",
+        "name": "供应商付款",
+        "description": "供应商付款单、应付核销、预付款和贷项使用",
+        "permissions": [
+            {"code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["supplier_payments"], "name": "访问供应商付款", "description": "访问供应商付款页面"},
+            {"code": "admin.finance.supplier_payment.create", "name": "新增供应商付款", "description": "新增供应商付款草稿"},
+            {"code": "admin.finance.supplier_payment.edit", "name": "编辑供应商付款", "description": "修改未审核供应商付款草稿"},
+            {"code": "admin.finance.supplier_payment.delete", "name": "删除供应商付款", "description": "删除未审核供应商付款草稿"},
+            {"code": "admin.finance.supplier_payment.audit", "name": "审核供应商付款", "description": "审核付款、核销应付并扣减银行账户"},
+            {"code": "admin.finance.supplier_payment.reverse_audit", "name": "反审核供应商付款", "description": "反审核付款并恢复银行账户和应付核销"},
+            {"code": "admin.finance.supplier_payment.invoice_override", "name": "无票付款豁免", "description": "允许无票付款并填写财务原因"},
+            {"code": "admin.finance.supplier_payment.rules", "name": "维护付款规则", "description": "维护是否启用见票付款"},
+            {"code": "admin.finance.supplier_prepayment.allocate", "name": "核销供应商预付款", "description": "使用供应商预付款核销应付"},
+            {"code": "admin.finance.supplier_credit.allocate", "name": "核销供应商贷项", "description": "使用供应商贷项核销应付"},
+        ],
+    },
+    {
+        "code": "admin_purchase_invoices",
+        "name": "采购发票登记",
+        "description": "采购发票草稿、应付分配、确认和撤销确认",
+        "permissions": [
+            {"code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["invoices"], "name": "访问采购发票登记", "description": "访问采购发票登记页面"},
+            {"code": "admin.purchase.invoice.create", "name": "新增采购发票", "description": "新增采购发票登记草稿"},
+            {"code": "admin.purchase.invoice.edit", "name": "编辑采购发票", "description": "修改未确认采购发票"},
+            {"code": "admin.purchase.invoice.delete", "name": "删除采购发票", "description": "删除未确认采购发票"},
+            {"code": "admin.purchase.invoice.confirm", "name": "确认采购发票", "description": "确认发票并更新应付开票状态"},
+            {"code": "admin.purchase.invoice.reverse_confirm", "name": "撤销采购发票确认", "description": "撤销发票确认并恢复开票状态"},
+        ],
+    },
+    {
+        "code": "admin_purchase_returns",
+        "name": "采购退货",
+        "description": "采购退货草稿、审核、库存扣减及反审核",
+        "permissions": [
+            {"code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["returns"], "name": "访问采购退货", "description": "访问采购退货页面"},
+            {"code": "admin.purchase.return.create", "name": "新增采购退货", "description": "新增采购退货草稿"},
+            {"code": "admin.purchase.return.edit", "name": "编辑采购退货", "description": "编辑未审核采购退货"},
+            {"code": "admin.purchase.return.delete", "name": "删除采购退货", "description": "删除未审核采购退货"},
+            {"code": "admin.purchase.return.audit", "name": "审核采购退货", "description": "审核退货并扣减对应批次库存"},
+            {"code": "admin.purchase.return.reverse_audit", "name": "反审核采购退货", "description": "冲销退货账务并恢复库存"},
+        ],
+    },
+    {
+        "code": "admin_supplier_refunds",
+        "name": "供应商退款",
+        "description": "供应商贷项退款、银行流水及审核操作",
+        "permissions": [
+            {"code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["supplier_refunds"], "name": "访问供应商退款", "description": "访问供应商退款页面"},
+            {"code": "admin.finance.supplier_refund.create", "name": "新增供应商退款", "description": "新增供应商退款草稿"},
+            {"code": "admin.finance.supplier_refund.edit", "name": "编辑供应商退款", "description": "编辑未审核供应商退款"},
+            {"code": "admin.finance.supplier_refund.delete", "name": "删除供应商退款", "description": "删除未审核供应商退款"},
+            {"code": "admin.finance.supplier_refund.audit", "name": "审核供应商退款", "description": "审核退款并登记银行入账"},
+            {"code": "admin.finance.supplier_refund.reverse_audit", "name": "反审核供应商退款", "description": "冲销退款并恢复贷项和银行余额"},
+        ],
+    },
+    {
+        "code": "admin_supplier_reconciliations",
+        "name": "供应商正式对账",
+        "description": "供应商对账快照、确认和期间锁定",
+        "permissions": [
+            {"code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["supplier_reconciliations"], "name": "访问供应商正式对账", "description": "访问供应商正式对账页面"},
+            {"code": "admin.finance.supplier_reconciliation.create", "name": "创建供应商对账", "description": "创建或刷新供应商对账快照"},
+            {"code": "admin.finance.supplier_reconciliation.confirm", "name": "确认供应商对账", "description": "确认供应商余额并锁定对账期间"},
+            {"code": "admin.finance.supplier_reconciliation.cancel", "name": "取消供应商对账", "description": "取消尚未确认的对账草稿"},
         ],
     },
     {
