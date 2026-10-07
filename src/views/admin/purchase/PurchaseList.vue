@@ -1938,6 +1938,7 @@ onMounted(() => refreshData(false))
 .icon-button {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 5px;
   height: 36px;
   padding: 0 8px;
