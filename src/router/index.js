@@ -63,8 +63,30 @@ const routes = [
       {
         path: 'purchase/returns',
         name: 'admin-purchase-returns',
-        component: () => import('@/views/admin/purchase/PurchaseReturns.vue'),
+        component: () => import('@/views/admin/purchase/PurchaseList.vue'),
+        props: { mode: 'returns' },
         meta: { requiresAuth: true }
+      },
+      {
+        path: 'purchase/returns/create',
+        name: 'admin-purchase-return-create',
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: { documentType: 'purchase-return', action: 'create' },
+        meta: { requiresAuth: true, documentForm: true, permission: 'admin.purchase.return.create' }
+      },
+      {
+        path: 'purchase/returns/edit/:id',
+        name: 'admin-purchase-return-edit',
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'purchase-return', action: 'edit', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true, documentForm: true, permission: 'admin.purchase.return.edit' }
+      },
+      {
+        path: 'purchase/returns/:id',
+        name: 'admin-purchase-return-view',
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({ documentType: 'purchase-return', action: 'view', documentId: Number(route.params.id) }),
+        meta: { requiresAuth: true, documentForm: true }
       },
       {
         path: 'finance/payables',

@@ -129,10 +129,12 @@ def serialize_return(conn, row):
     for line in conn.execute(
         """SELECT i.*, inbound.document_no inbound_no, inbound_item.product_name,
                   inbound_item.product_code, inbound_item.unit, inbound_item.batch_no,
-                  inbound_item.bin_code, inbound_item.warehouse_id, inbound.warehouse_id inbound_warehouse_id
+                  inbound_item.bin_code, inbound_item.warehouse_id, inbound.warehouse_id inbound_warehouse_id,
+                  inbound_item.specification, w.name warehouse_name
            FROM purchase_return_items i
            JOIN stock_inbound_items inbound_item ON inbound_item.id=i.inbound_item_id
            JOIN stock_inbounds inbound ON inbound.id=inbound_item.inbound_id
+           LEFT JOIN warehouses w ON w.id=COALESCE(inbound_item.warehouse_id,inbound.warehouse_id)
            WHERE i.return_id=? ORDER BY i.line_no, i.id""", (row["id"],)
     ):
         items.append({
@@ -141,6 +143,7 @@ def serialize_return(conn, row):
             "productName": line["product_name"], "productCode": line["product_code"],
             "unit": line["unit"], "batchNo": line["batch_no"], "binCode": line["bin_code"],
             "warehouseId": line["warehouse_id"] or line["inbound_warehouse_id"],
+            "warehouseName": line["warehouse_name"] or "", "specification": line["specification"] or "",
             "quantity": float(line["quantity"]), "originalUnitPrice": amount(line["original_unit_price_cents"]),
             "originalCost": amount(line["original_cost_cents"]),
             "returnAmount": amount(line["return_amount_cents"]),
@@ -232,6 +235,7 @@ def return_sources(supplier_id):
                 "inboundDate": source["document_date"], "payableTransactionId": source["payable_id"],
                 "productId": source["product_id"], "productCode": source["product_code"],
                 "productName": source["product_name"], "unit": source["unit"],
+                "specification": source["specification"] or "",
                 "warehouseId": source["warehouse_id"] or source["inbound_warehouse_id"],
                 "warehouseName": source["warehouse_name"], "binCode": source["bin_code"],
                 "batchNo": source["batch_no"], "receivedQuantity": float(source["received_qty"] or 0),

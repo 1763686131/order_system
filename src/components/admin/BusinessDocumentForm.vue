@@ -1,5 +1,5 @@
 <template>
-  <section class="business-document-form" :data-document-type="documentType" :data-document-action="action" :aria-label="ui.config.title" :aria-busy="ui.loading">
+  <section class="business-document-form" :class="{ 'purchase-document-form': isPurchaseOrder || isPurchaseReturn }" :data-document-type="documentType" :data-document-action="action" :aria-label="ui.config.title" :aria-busy="ui.loading">
     <form novalidate @submit.prevent="submitDocument" @wheel="handleNumberWheel">
       <div class="top-info-bar">
         <fieldset class="header-fields" :disabled="fieldsDisabled">
@@ -11,35 +11,42 @@
             </select>
           </label>
           <label class="info-group">
-            <span>{{ isPurchaseOrder ? '申请门店' : '门店' }}<b v-if="isPurchaseOrder"> *</b></span>
-            <select v-model="ui.form.storeId" :disabled="fieldsDisabled || (isPurchase && Boolean(ui.purchaseOrderId))" :ref="element => setFieldRef('storeId', element)" @change="handleStoreChange">
+            <span>{{ isPurchaseOrder ? '申请门店' : '门店' }}<b v-if="isPurchaseOrder || isPurchaseReturn"> *</b></span>
+            <select v-model="ui.form.storeId" :disabled="fieldsDisabled || (isPurchase && Boolean(ui.purchaseOrderId)) || (isPurchaseReturn && ui.partyLocked)" :ref="element => setFieldRef('storeId', element)" @change="handleStoreChange">
               <option value="">请选择门店</option>
+              <option v-if="isPurchaseReturn && ui.form.storeId && !ui.stores.some(store => String(store.id) === String(ui.form.storeId))" :value="ui.form.storeId">{{ ui.form.storeName || '历史门店' }}</option>
               <option v-for="store in ui.stores" :key="store.id" :value="isSale ? store.id : String(store.id)">{{ store.name }}</option>
             </select>
           </label>
           <label v-if="!isPurchaseOrder && (!isPurchase || ui.purchaseOrderId)" class="info-group">
-            <span>{{ ui.config.partyLabel }}</span>
+            <span>{{ ui.config.partyLabel }}<b v-if="isPurchaseReturn"> *</b></span>
             <input v-if="isPurchase && ui.purchaseOrderId" type="text" :value="ui.form.supplierName || '供应商详见采购申请明细'" readonly />
+            <select v-else-if="isPurchaseReturn" v-model="ui.form.supplierId" :disabled="fieldsDisabled || ui.partyLocked" :ref="element => setFieldRef('supplierId', element)" required @change="ui.onSupplierChange(); dismissHint('supplierId')">
+              <option value="">请选择供应商</option>
+              <option v-if="ui.form.supplierId && !ui.suppliers.some(supplier => String(supplier.id) === String(ui.form.supplierId))" :value="ui.form.supplierId">{{ ui.form.supplierName || '历史供应商' }}</option>
+              <option v-for="supplier in ui.suppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName }}</option>
+            </select>
             <select v-else-if="isPurchase" v-model="ui.form.supplierId" :disabled="fieldsDisabled" :required="!ui.purchaseOrderId && isMaterial" :ref="element => setFieldRef('supplierId', element)" @change="dismissHint('supplierId')">
               <option value="">请选择供应商</option>
               <option v-for="supplier in ui.suppliers" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName || supplier.name }}</option>
             </select>
             <input v-else type="text" autocomplete="off" :ref="setCustomerInputRef" :value="ui.customerDropdownOpen ? ui.customerSearch : ui.selectedCustomerName" placeholder="请选择客户" @focus="ui.openCustomerDropdown" @input="ui.handleCustomerSearchInput" @keydown.escape.prevent="ui.closeCustomerDropdown" />
           </label>
-          <label v-if="!isPurchaseOrder" class="info-group">
+          <label v-if="!isPurchaseOrder && !isPurchaseReturn" class="info-group">
             <span>仓库</span>
             <select v-model="ui.form.warehouseId" :ref="element => setFieldRef('warehouseId', element)" @change="handleHeaderWarehouseChange">
               <option value="">请选择仓库</option>
               <option v-for="warehouse in ui.filteredWarehouses" :key="warehouse.id" :value="isSale ? warehouse.id : String(warehouse.id)">{{ warehouse.name }}</option>
             </select>
           </label>
-          <label class="info-group"><span>{{ ui.config.dateLabel || '单据日期' }}<b v-if="isPurchaseOrder"> *</b></span><input v-model="ui.form[ui.config.dateField]" :ref="element => setFieldRef('documentDate', element)" type="date" @change="ui.onDateChange?.(); dismissHint('documentDate')" /></label>
+          <label class="info-group"><span>{{ ui.config.dateLabel || '单据日期' }}<b v-if="isPurchaseOrder || isPurchaseReturn"> *</b></span><input v-model="ui.form[ui.config.dateField]" :ref="element => setFieldRef('documentDate', element)" type="date" :required="isPurchaseReturn" @change="ui.onDateChange?.(); dismissHint('documentDate')" /></label>
           <label v-if="isPurchaseOrder" class="info-group"><span>预计到货日期</span><input v-model="ui.form.expectedDate" type="date" @input="ui.onExpectedDateInput()" /></label>
           <label class="info-group"><span>单据编号</span><input v-model="ui.form[ui.config.numberField]" type="text" :readonly="!isSale" :placeholder="isSale ? '单据编号' : '保存后自动生成'" /></label>
           <label v-if="isReturn" class="info-group"><span>原订单编号</span><input v-model.trim="ui.form.originalOrderNumber" :ref="element => setFieldRef('originalOrderNumber', element)" type="text" /></label>
         </fieldset>
         <div class="toolbar-actions">
-          <label v-if="!isPurchaseOrder" class="tax-toggle"><input v-model="ui.taxEnabled" type="checkbox" :disabled="fieldsDisabled" /><span>含税</span></label>
+          <label v-if="!isPurchaseOrder && !isPurchaseReturn" class="tax-toggle"><input v-model="ui.taxEnabled" type="checkbox" :disabled="fieldsDisabled" /><span>含税</span></label>
+          <button v-if="isPurchaseReturn && !ui.readOnly" class="btn close-button" type="button" title="刷新可退批次" aria-label="刷新可退批次" :disabled="fieldsDisabled || !ui.form.storeId || !ui.form.supplierId" @click="ui.loadSources()"><RefreshCw :size="18" aria-hidden="true" /></button>
           <button type="button" class="btn btn-danger" :disabled="fieldsDisabled" @click="confirmation = 'clear'">清空</button>
           <button type="button" class="btn close-button" :disabled="ui.saving" title="关闭" aria-label="关闭" @click="requestClose"><X :size="18" :stroke-width="1.6" aria-hidden="true" /></button>
         </div>
@@ -62,8 +69,52 @@
           </template>
         </div>
 
+        <div v-if="isPurchaseReturn && !ui.readOnly && (ui.sourceLoading || ui.sourceError || (ui.form.storeId && ui.form.supplierId && !ui.sources.length))" class="return-source-state" :class="{ red: ui.sourceError }" :role="ui.sourceError ? 'alert' : 'status'">
+          {{ ui.sourceLoading ? '正在读取可退入库批次...' : ui.sourceError || '暂无可退入库批次' }}
+        </div>
         <div class="products-table-wrapper">
-          <table class="products-table">
+          <table v-if="isPurchaseReturn" class="products-table purchase-return-table">
+            <colgroup>
+              <col style="width: 40px" /><col style="width: 54px" /><col style="width: 270px" /><col style="width: 95px" /><col style="width: 105px" /><col style="width: 55px" />
+              <col style="width: 110px" /><col style="width: 100px" /><col style="width: 90px" /><col style="width: 90px" /><col style="width: 100px" /><col style="width: 110px" />
+              <col style="width: 110px" /><col style="width: 130px" /><col style="width: 180px" />
+            </colgroup>
+            <thead><tr>
+              <th>序号</th><th>操作</th><th>来源入库 / 物料<b> *</b></th><th>物料编码</th><th>规格型号</th><th>单位</th><th>所属仓库</th><th>批次号</th><th>货位编码</th>
+              <th class="right">可退数量</th><th class="right">退货数量<b> *</b></th><th class="right">原单价 (元)</th><th class="right">原成本 (元)</th><th class="right">确认退货金额<b> *</b></th><th>差异原因</th>
+            </tr></thead>
+            <tbody>
+              <tr v-for="(item, index) in ui.form.items" :key="item.key">
+                <td class="center">{{ index + 1 }}</td>
+                <td class="center"><template v-if="!ui.readOnly">
+                  <button class="btn-icon" type="button" title="在下方插入一行" aria-label="在下方插入一行" @click="ui.addRow(index)"><Plus :size="16" aria-hidden="true" /></button>
+                  <button class="btn-icon remove" type="button" title="删除此行" aria-label="删除此行" :disabled="ui.form.items.length === 1" @click="ui.removeRow(index)"><Trash2 :size="15" aria-hidden="true" /></button>
+                </template></td>
+                <td>
+                  <input v-if="ui.readOnly" :value="ui.sourceLabel(item)" :title="ui.sourceLabel(item)" type="text" aria-label="来源入库明细" readonly />
+                  <select v-else :value="item.inboundItemId" :ref="element => setFieldRef(`item-source-${index}`, element)" class="purchase-cell-select" :aria-label="`第${index + 1}行来源入库明细`" :disabled="!ui.form.supplierId || !ui.form.storeId" @change="ui.selectSource(index, $event.target.value); dismissHint(`item-source-${index}`)">
+                    <option value="">请选择来源入库明细</option>
+                    <option v-if="item.inboundItemId && !ui.sourceFor(item)" :value="item.inboundItemId" disabled>{{ ui.sourceLabel(item) }}（已不可退）</option>
+                    <option v-for="source in ui.sourcesForItem(item)" :key="source.inboundItemId" :value="source.inboundItemId">{{ ui.sourceLabel(source) }}</option>
+                  </select>
+                </td>
+                <td class="muted" :title="item.productCode">{{ item.productCode }}</td>
+                <td><input :value="item.specification" type="text" aria-label="规格型号" readonly /></td>
+                <td><input :value="item.unit" type="text" aria-label="单位" readonly /></td>
+                <td><input :value="item.warehouseName || (item.warehouseId ? `仓库 #${item.warehouseId}` : '')" type="text" aria-label="所属仓库" readonly /></td>
+                <td><input :value="item.batchNo" type="text" aria-label="批次号" readonly /></td>
+                <td><input :value="item.binCode" type="text" aria-label="货位编码" readonly /></td>
+                <td class="right">{{ item.inboundItemId ? (ui.readOnly ? '-' : ui.sourceFor(item)?.availableQuantity ?? '-') : '' }}</td>
+                <td><input v-if="item.inboundItemId" v-model.number="item.quantity" :ref="element => setFieldRef(`item-quantity-${index}`, element)" :aria-label="`第${index + 1}行退货数量`" type="number" min="0.0001" :max="ui.readOnly ? undefined : ui.sourceFor(item)?.availableQuantity" step="0.0001" required @input="ui.onQuantityInput(index); dismissHint(`item-quantity-${index}`)" /><span v-else class="blank-cell"></span></td>
+                <td class="right">{{ item.inboundItemId ? money(item.originalUnitPrice) : '' }}</td>
+                <td class="right">{{ item.inboundItemId ? money(ui.originalCost(item)) : '' }}</td>
+                <td><input v-if="item.inboundItemId" v-model.number="item.returnAmount" :ref="element => setFieldRef(`item-return-amount-${index}`, element)" :aria-label="`第${index + 1}行确认退货金额`" type="number" min="0" step="0.01" required @input="dismissHint(`item-return-amount-${index}`)" /><span v-else class="blank-cell"></span></td>
+                <td><input v-if="item.inboundItemId" v-model.trim="item.differenceReason" :ref="element => setFieldRef(`item-difference-${index}`, element)" :aria-label="`第${index + 1}行差异原因`" :title="item.differenceReason" type="text" maxlength="500" :required="ui.hasDifference(item)" @input="dismissHint(`item-difference-${index}`)" /><span v-else class="blank-cell"></span></td>
+              </tr>
+              <tr class="total-row"><td colspan="10" class="center">合计</td><td class="right">{{ money(ui.totalQuantity) }}</td><td></td><td class="right">{{ money(ui.totalOriginalCost) }}</td><td class="right">{{ money(ui.totalReturnAmount) }}</td><td></td></tr>
+            </tbody>
+          </table>
+          <table v-else class="products-table">
             <colgroup>
               <col style="width: 40px" /><col style="width: 54px" /><col v-if="isPurchaseOrder" style="width: 125px" /><col v-if="isPurchaseOrder" style="width: 88px" /><col style="width: 170px" /><col v-if="isPurchaseOrder" style="width: 82px" /><col style="width: 105px" /><col style="width: 55px" />
               <template v-if="!isPurchaseOrder"><col style="width: 130px" /><col style="width: 95px" /><col style="width: 90px" /></template>
@@ -168,8 +219,9 @@
                 </select>
               </span>
             </label>
-            <label v-if="isPurchaseOrder" class="info-group"><span>制单人</span><input :value="ui.currentCreatorName" :style="ui.creatorNameStyle" type="text" readonly /></label>
-            <label class="info-group wide"><span>{{ isPurchaseOrder ? '申请备注' : '备注信息' }}</span><input v-model="ui.form[ui.config.remarkField]" type="text" :maxlength="isPurchaseOrder ? 500 : isPurchase ? 200 : 1000" :placeholder="isPurchaseOrder ? '申请用途、交期等补充说明' : undefined" /></label>
+            <label v-if="isPurchaseOrder || isPurchaseReturn" class="info-group"><span>制单人</span><input :value="ui.currentCreatorName" :style="ui.creatorNameStyle" type="text" readonly /></label>
+            <label class="info-group wide"><span>{{ isPurchaseOrder ? '申请备注' : '备注信息' }}</span><input v-model="ui.form[ui.config.remarkField]" type="text" :maxlength="isPurchaseOrder || isPurchaseReturn ? 500 : isPurchase ? 200 : 1000" :placeholder="isPurchaseOrder ? '申请用途、交期等补充说明' : undefined" /></label>
+            <label v-if="isPurchaseReturn && ui.form.auditedBy" class="info-group"><span>审核人</span><input :value="ui.form.auditedBy" type="text" readonly /></label>
             <label v-if="isSalesDocument" class="info-group"><span>包装</span><select v-model="ui.form.packaging" @change="ui.handlePackagingChange?.()"><option v-for="packaging in ui.packagingOptions" :key="packaging" :value="packaging">{{ packaging }}</option><option v-if="isSale" :value="ui.ADD_PACKAGING_VALUE">新增包装...</option></select></label>
             <template v-if="isSale"><label class="info-group"><span>折扣后金额</span><input v-model.number="ui.form.discountAmount" type="number" min="0" step="0.01" /></label><label class="info-group"><span>其他费用</span><input v-model.number="ui.form.otherFees" type="number" min="0" step="0.01" /></label></template>
             <template v-if="isReturn"><label class="info-group"><span>应退金额</span><input v-model.number="ui.form.returnAmount" :ref="element => setFieldRef('returnAmount', element)" type="number" min="0" step="0.01" /></label><label class="info-group"><span>本次退款</span><input v-model.number="ui.form.refundAmount" :ref="element => setFieldRef('refundAmount', element)" type="number" min="0" step="0.01" /></label></template>
@@ -183,19 +235,34 @@
             <template v-if="isSale"><span>客户欠款 <strong>{{ money(ui.customerReceivable) }}</strong></span><span>本单应收 <strong>{{ money(ui.shouldReceive) }}</strong></span><label class="info-group"><span>本次收款</span><input v-model.number="ui.form.currentPayment" type="number" min="0" step="0.01" /></label><span>本单欠款 <strong class="red">{{ money(ui.currentDebt) }}</strong></span></template>
             <template v-else-if="isReturn"><span>商品合计 <strong>{{ money(ui.taxEnabled ? ui.totalIncludedAmount : ui.totalAmount) }}</strong></span><span>核销金额 <strong>{{ money(Number(ui.form.returnAmount || 0) - Number(ui.form.refundAmount || 0)) }}</strong></span><span>本次退款 <strong class="red">{{ money(ui.form.refundAmount) }}</strong></span></template>
             <template v-else-if="isPurchaseOrder"><span class="document-status" :class="`status-${ui.form.status}`">{{ ui.statusLabel }}</span><span>估算/合同合计 <strong>{{ formatMoney(ui.purchaseOrderPayable) }}</strong></span><span>已确认应付 <strong>{{ formatMoney(ui.form.confirmedPayable) }}</strong></span><span>已核销 <strong>{{ formatMoney(ui.form.allocatedAmount) }}</strong></span><span>未付应付 <strong class="red">{{ formatMoney(ui.currentPayable) }}</strong></span></template>
+            <template v-else-if="isPurchaseReturn">
+              <span class="document-status" :class="`status-${ui.form.status}`">{{ ui.statusLabel }}</span>
+              <span>原库存成本 <strong>{{ formatMoney(ui.totalOriginalCost) }}</strong></span><span>确认退货金额 <strong>{{ formatMoney(ui.totalReturnAmount) }}</strong></span><span>价格差异 <strong :class="{ red: ui.totalDifference !== 0 }">{{ formatMoney(ui.totalDifference) }}</strong></span>
+              <template v-if="ui.form.status === 'audited'"><span>冲减应付 <strong>{{ formatMoney(ui.totalAppliedPayable) }}</strong></span><span>形成贷项 <strong>{{ formatMoney(ui.totalCreditAmount) }}</strong></span></template>
+              <span v-if="ui.form.lockedAt" class="red">已锁期</span>
+            </template>
             <template v-else><span>入库数量 <strong>{{ money(ui.totalQuantity) }}</strong></span><span>入库金额 <strong>{{ money(ui.totalAmount) }}</strong></span><span v-if="ui.taxEnabled">税额 <strong>{{ money(ui.totalTaxAmount) }}</strong></span><span>价税合计 <strong>{{ money(ui.totalIncludedAmount) }}</strong></span></template>
             <div v-if="isPurchaseOrder && !ui.readOnly" class="document-actions">
               <button class="btn" type="button" @click="requestClose">取消</button>
               <button v-if="!ui.auditMode" class="btn btn-secondary" type="button" @click="submitDocument($event, 'draft')"><Save :size="16" aria-hidden="true" />保存草稿</button>
               <button class="btn btn-primary" type="submit"><Check v-if="ui.auditMode" :size="16" aria-hidden="true" /><Send v-else :size="16" aria-hidden="true" />{{ ui.saving ? (ui.auditMode ? '审核中...' : '保存中...') : (ui.auditMode ? '补充并审核通过' : '提交审核') }}</button>
             </div>
-            <button v-else-if="!isPurchaseOrder" class="btn btn-primary save-button" type="submit">{{ ui.saving ? '保存中...' : '保存并打印' }}</button>
+            <div v-else-if="isPurchaseReturn && !ui.readOnly" class="document-actions">
+              <button class="btn" type="button" @click="requestClose">取消</button>
+              <button class="btn btn-primary" type="submit"><Save :size="16" aria-hidden="true" />{{ ui.saving ? '保存中...' : '保存草稿' }}</button>
+            </div>
+            <button v-else-if="!isPurchaseOrder && !isPurchaseReturn" class="btn btn-primary save-button" type="submit">{{ ui.saving ? '保存中...' : '保存并打印' }}</button>
           </div>
         </div>
       </fieldset>
       <footer v-if="ui.loading || ui.loadFailed || ui.readOnly" class="document-footer">
         <span v-if="ui.loading" role="status">加载中...</span><span v-else-if="ui.loadFailed" class="red" role="alert">加载失败，请刷新后重试</span><span v-else-if="ui.readOnly">只读 · {{ ui.statusLabel || ui.form.status || '单据详情' }}</span>
-        <button v-if="isPurchaseOrder" class="btn" type="button" :disabled="ui.saving" @click="requestClose">返回列表</button>
+        <template v-if="isPurchaseReturn && !ui.loading && !ui.loadFailed">
+          <button v-if="ui.canEdit" class="btn" type="button" :disabled="ui.saving" @click="ui.edit()"><Pencil :size="16" aria-hidden="true" />编辑</button>
+          <button v-if="ui.canAudit" class="btn btn-primary" type="button" :disabled="ui.saving" @click="confirmation = 'audit'"><Check :size="16" aria-hidden="true" />审核退货</button>
+          <button v-if="ui.canReverseAudit" class="btn btn-danger" type="button" :disabled="ui.saving" @click="confirmation = 'reverse-audit'"><RotateCcw :size="16" aria-hidden="true" />反审核</button>
+        </template>
+        <button v-if="isPurchaseOrder || isPurchaseReturn" class="btn" type="button" :disabled="ui.saving" @click="requestClose">返回列表</button>
         <button v-if="ui.config.printType && ui.readOnly && !ui.loading && !ui.loadFailed" class="btn" type="button" @click="ui.openPrint?.()">打印</button>
       </footer>
     </form>
@@ -217,9 +284,9 @@
         <div v-if="ui.supplierTotalPages > 1" class="dropdown-pagination"><button type="button" aria-label="上一页供应商" :disabled="ui.supplierPage <= 1" @click="ui.changeSupplierPage(ui.supplierPage - 1)">&lsaquo;</button><span>{{ ui.supplierPage }} / {{ ui.supplierTotalPages }}</span><button type="button" aria-label="下一页供应商" :disabled="ui.supplierPage >= ui.supplierTotalPages" @click="ui.changeSupplierPage(ui.supplierPage + 1)">&rsaquo;</button></div>
       </div>
       <div v-if="ui.validationHint?.key" :ref="ui.setValidationHintRef" class="validation-hint" :class="ui.validationHintPlacement" :style="ui.validationHintStyle" role="alert"><TriangleAlert :size="18" aria-hidden="true" /><span><template v-for="(part, index) in validationMessageParts" :key="index"><strong v-if="part.important">{{ part.text }}</strong><template v-else>{{ part.text }}</template></template></span></div>
-      <div v-if="ui.notice?.visible" class="page-notice" :class="{ error: ui.notice.type === 'error', 'purchase-order-notice': isPurchaseOrder }" :role="ui.notice.type === 'error' ? 'alert' : 'status'"><template v-if="isPurchaseOrder"><CircleAlert v-if="ui.notice.type === 'error'" :size="19" aria-hidden="true" /><CircleCheck v-else :size="19" aria-hidden="true" /></template>{{ ui.notice.message }}</div>
+      <div v-if="ui.notice?.visible" class="page-notice" :class="{ error: ui.notice.type === 'error', 'purchase-order-notice': isPurchaseOrder || isPurchaseReturn }" :role="ui.notice.type === 'error' ? 'alert' : 'status'"><template v-if="isPurchaseOrder || isPurchaseReturn"><CircleAlert v-if="ui.notice.type === 'error'" :size="19" aria-hidden="true" /><CircleCheck v-else :size="19" aria-hidden="true" /></template>{{ ui.notice.message }}</div>
     </Teleport>
-    <CustomModal :visible="Boolean(confirmation)" :title="confirmation === 'clear' ? '确认清空' : '确认关闭'" :message="confirmation === 'clear' ? '确定清空当前填写的数据？' : '确定关闭当前单据？'" @confirm="confirmAction" @cancel="confirmation = ''" />
+    <CustomModal :visible="Boolean(confirmation)" :title="confirmationContent.title" :message="confirmationContent.message" @confirm="confirmAction" @cancel="confirmation = ''" />
     <CustomModal :visible="Boolean(ui.showModal)" :title="ui.modalTitle || '操作失败'" :message="ui.modalMessage || ''" :show-cancel="false" type="error" @confirm="ui.closeModal?.()" @cancel="ui.closeModal?.()" />
     <PrintTemplateSelector v-if="ui.config.printType" :visible="ui.printTemplateDialogOpen" :business-type="ui.config.printType" :title="`${ui.config.title}打印`" :document-number="ui.printNumber" @close="ui.closePrintTemplateDialog" @preview="ui.previewSelectedPrintTemplate" @print="ui.printSelectedPrintTemplate" />
     <OrderPrintPreview v-if="ui.config.printType" :visible="ui.printPreviewVisible" :template="ui.selectedPrintTemplate" :variables="ui.printVariables" :printer="ui.selectedPrintPrinter" :auto-print="ui.printPreviewAutoPrint" @close="ui.closePrintPreview" />
@@ -228,7 +295,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { Check, CircleAlert, CircleCheck, Plus, Save, Send, Trash2, TriangleAlert, X } from '@lucide/vue'
+import { Check, CircleAlert, CircleCheck, Pencil, Plus, RefreshCw, RotateCcw, Save, Send, Trash2, TriangleAlert, X } from '@lucide/vue'
 import CustomModal from '@/components/CustomModal.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
@@ -250,6 +317,7 @@ const isSale = computed(() => props.documentType === 'sale')
 const isReturn = computed(() => props.documentType === 'sale-return')
 const isPurchase = computed(() => props.documentType === 'purchase')
 const isPurchaseOrder = computed(() => props.documentType === 'purchase-order')
+const isPurchaseReturn = computed(() => props.documentType === 'purchase-return')
 const hasPurchaseOrderItems = computed(() => isPurchaseOrder.value && ui.form.items.some(item => item.productId))
 const activePurchaseCell = ref('')
 const activatePurchaseCell = (item, field) => { activePurchaseCell.value = `${item.key}-${field}` }
@@ -264,7 +332,7 @@ const purchaseProductPlaceholder = item => {
 const isMaterial = computed(() => isPurchase.value && ui.form.type !== 'finished-product')
 const isSalesDocument = computed(() => isSale.value || isReturn.value)
 const formatMoney = value => Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fieldsDisabled = computed(() => ui.loading || ui.loadFailed || ui.readOnly || ui.saving)
+const fieldsDisabled = computed(() => ui.loading || ui.loadFailed || ui.readOnly || ui.saving || (isPurchaseReturn.value && ui.sourceLoading))
 const salespersonLabel = computed(() => {
   const name = ui.form.salesPerson
   if (!name) return '请选择业务员'
@@ -276,6 +344,12 @@ const purchasePersonLabel = computed(() => {
   return ui.purchasePeople.some(employee => employee.displayName === name) ? name : `${name}（历史记录）`
 })
 const confirmation = ref('')
+const confirmationContent = computed(() => ({
+  clear: { title: '确认清空', message: '确定清空当前填写的数据？' },
+  close: { title: '确认关闭', message: '确定关闭当前单据？' },
+  audit: { title: '审核采购退货', message: '确认审核该采购退货？审核后将扣减对应批次库存，并冲减应付或形成供应商贷项。' },
+  'reverse-audit': { title: '反审核采购退货', message: '确认反审核该采购退货？系统将冲销对应账务并恢复库存。' }
+}[confirmation.value] || {}))
 const requestClose = () => {
   if (ui.saving) return
   if (ui.readOnly || ui.loadFailed) emit('close')
@@ -337,6 +411,7 @@ const confirmAction = () => {
   const action = confirmation.value
   confirmation.value = ''
   if (action === 'clear') ui.clearForm()
+  else if (['audit', 'reverse-audit'].includes(action)) ui.performAction?.(action)
   else {
     ui.discardDraft?.()
     emit('close')
@@ -425,50 +500,55 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .validation-hint.above::before { bottom: -6px; border-right: 1px solid #cbd2d8; border-bottom: 1px solid #cbd2d8; }
 .page-notice { position: fixed; z-index: 4500; top: 78px; left: 50%; max-width: calc(100vw - 24px); transform: translateX(-50%); padding: 11px 18px; background: #ecf9f3; color: #08755e; border: 1px solid #b5e5d8; border-radius: 5px; box-shadow: 0 6px 20px #17212b18; }
 .page-notice.error { background: #fff; color: #b5363e; border-color: #d4dde3; }
-.business-document-form[data-document-type="purchase-order"] { min-width: 0; margin: 20px; border-color: #e2e8f0; border-radius: 7px; }
-.business-document-form[data-document-type="purchase-order"] .top-info-bar,
-.business-document-form[data-document-type="purchase-order"] .finance-row-full,
-.business-document-form[data-document-type="purchase-order"] .finance-row { padding: 14px 20px; }
-.business-document-form[data-document-type="purchase-order"] b { color: #dc3545; }
-.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 0; width: 100%; }
-.business-document-form[data-document-type="purchase-order"] .products-table td { font-size: 12px; }
-.business-document-form[data-document-type="purchase-order"] .products-table td input,
-.business-document-form[data-document-type="purchase-order"] .products-table td select { height: 28px; }
-.business-document-form[data-document-type="purchase-order"] .products-table td .purchase-cell-select,
+.business-document-form.purchase-document-form { min-width: 0; margin: 20px; border-color: #e2e8f0; border-radius: 7px; }
+.business-document-form.purchase-document-form .top-info-bar,
+.business-document-form.purchase-document-form .finance-row-full,
+.business-document-form.purchase-document-form .finance-row { padding: 14px 20px; }
+.business-document-form.purchase-document-form b { color: #dc3545; }
+.business-document-form.purchase-document-form .products-table { min-width: 0; width: 100%; }
+.business-document-form.purchase-document-form .products-table td { font-size: 12px; }
+.business-document-form.purchase-document-form .products-table td input,
+.business-document-form.purchase-document-form .products-table td select { height: 28px; }
+.business-document-form.purchase-document-form .products-table td .purchase-cell-select,
 .business-document-form[data-document-type="purchase"] .products-table td .purchase-cell-select { appearance: none; padding-right: 20px; background-image: none; }
-.business-document-form[data-document-type="purchase-order"] .products-table td .purchase-cell-select:focus,
+.business-document-form.purchase-document-form .products-table td .purchase-cell-select:focus,
 .business-document-form[data-document-type="purchase"] .products-table td .purchase-cell-select:focus { border-color: #0f9f78; background-color: #fff; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23172033'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 5px center; background-size: 10px 6px; }
-.business-document-form[data-document-type="purchase-order"] .products-table tbody tr:not(.total-row):hover { background: #f4fbf8; }
-.business-document-form[data-document-type="purchase-order"] .products-table th.right { text-align: right; }
-.business-document-form[data-document-type="purchase-order"] .muted { color: #596579; text-overflow: ellipsis; white-space: nowrap; }
-.business-document-form[data-document-type="purchase-order"] .blank-cell { display: block; min-height: 28px; }
-.business-document-form[data-document-type="purchase-order"] .info-group input { height: 38px; }
-.business-document-form[data-document-type="purchase-order"] .btn { min-height: 38px; border-radius: 5px; font-size: 13px; font-weight: 600; }
-.business-document-form[data-document-type="purchase-order"] .btn-primary { background: #0f9f78; border-color: #0f9f78; }
-.business-document-form[data-document-type="purchase-order"] .btn-primary:hover:not(:disabled) { background: #08745a; border-color: #08745a; }
-.business-document-form[data-document-type="purchase-order"] .btn-secondary { color: #08745a; background: #e9f8f3; border-color: #a9e5d2; }
-.business-document-form[data-document-type="purchase-order"] button:focus-visible { outline: 2px solid #0f9f78; outline-offset: 2px; }
+.business-document-form.purchase-document-form .products-table tbody tr:not(.total-row):hover { background: #f4fbf8; }
+.business-document-form.purchase-document-form .products-table th.right { text-align: right; }
+.business-document-form.purchase-document-form .muted { color: #596579; text-overflow: ellipsis; white-space: nowrap; }
+.business-document-form.purchase-document-form .blank-cell { display: block; min-height: 28px; }
+.business-document-form.purchase-document-form .info-group input { height: 38px; }
+.business-document-form.purchase-document-form .btn { min-height: 38px; border-radius: 5px; font-size: 13px; font-weight: 600; }
+.business-document-form.purchase-document-form .btn-primary { background: #0f9f78; border-color: #0f9f78; }
+.business-document-form.purchase-document-form .btn-primary:hover:not(:disabled) { background: #08745a; border-color: #08745a; }
+.business-document-form.purchase-document-form .btn-secondary { color: #08745a; background: #e9f8f3; border-color: #a9e5d2; }
+.business-document-form.purchase-document-form button:focus-visible { outline: 2px solid #0f9f78; outline-offset: 2px; }
+.business-document-form.purchase-document-form .purchase-return-table { min-width: 1700px; }
+.return-source-state { padding: 10px 20px; color: #65727e; border-bottom: 1px solid #e3e8ec; }
+.return-source-state.red { color: #b5363e; }
 .btn-icon { display: inline-flex; align-items: center; justify-content: center; padding: 0; vertical-align: middle; }
 .document-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-left: auto; }
 .document-status { display: inline-flex; align-items: center; min-height: 25px; padding: 3px 9px; border-radius: 999px; background: #f1f2f4; color: #596579; font-size: 12px; font-weight: 600; }
 .document-status.status-pending, .document-status.status-partial { background: #fff3df; color: #a4510b; }
 .document-status.status-approved { background: #e7f5f8; color: #16647a; }
+.document-status.status-audited { background: #e7f5f8; color: #16647a; }
+.document-status.status-reversed { background: #fff3df; color: #a4510b; }
 .document-status.status-completed { background: #eaf8f1; color: #13734f; }
 .document-status.status-cancelled { color: #b4232f; }
 .page-notice.purchase-order-notice { top: 24px; display: flex; align-items: center; gap: 9px; min-height: 44px; max-width: min(520px, calc(100vw - 32px)); color: #172033; background: #fff; border-color: #dfe5ec; border-radius: 6px; font-size: 13px; font-weight: 600; line-height: 1.5; overflow-wrap: anywhere; box-shadow: 0 10px 30px #0f172a29; }
 .purchase-order-notice svg { flex: none; color: #0f9f78; }
 .purchase-order-notice.error svg { color: #dc3545; }
 @media (max-width: 780px) {
-  .business-document-form[data-document-type="purchase-order"] { margin: 12px; }
-  .business-document-form[data-document-type="purchase-order"] .top-info-bar,
-  .business-document-form[data-document-type="purchase-order"] .finance-row-full,
-  .business-document-form[data-document-type="purchase-order"] .finance-row { gap: 10px; padding: 12px; }
-  .business-document-form[data-document-type="purchase-order"] .top-info-bar h2 { flex-basis: 100%; }
-  .business-document-form[data-document-type="purchase-order"] .info-group { flex: 1 1 240px; }
-  .business-document-form[data-document-type="purchase-order"] .info-group input,
-  .business-document-form[data-document-type="purchase-order"] .info-group select { flex: 1; width: 0; }
-  .business-document-form[data-document-type="purchase-order"] .toolbar-actions { width: 100%; justify-content: flex-end; }
-  .business-document-form[data-document-type="purchase-order"] .finance-row > .document-status { flex-basis: auto; }
+  .business-document-form.purchase-document-form { margin: 12px; }
+  .business-document-form.purchase-document-form .top-info-bar,
+  .business-document-form.purchase-document-form .finance-row-full,
+  .business-document-form.purchase-document-form .finance-row { gap: 10px; padding: 12px; }
+  .business-document-form.purchase-document-form .top-info-bar h2 { flex-basis: 100%; }
+  .business-document-form.purchase-document-form .info-group { flex: 1 1 240px; }
+  .business-document-form.purchase-document-form .info-group input,
+  .business-document-form.purchase-document-form .info-group select { flex: 1; width: 0; }
+  .business-document-form.purchase-document-form .toolbar-actions { width: 100%; justify-content: flex-end; }
+  .business-document-form.purchase-document-form .finance-row > .document-status { flex-basis: auto; }
   .document-actions { width: 100%; justify-content: flex-end; }
 }
 @media (max-width: 700px) {

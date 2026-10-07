@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 
 const STORAGE_KEY = 'admin_business_document_drafts'
-const TYPES = ['sale-return', 'purchase', 'purchase-order']
+const TYPES = ['sale-return', 'purchase', 'purchase-order', 'purchase-return']
 
 function readDrafts() {
   try {

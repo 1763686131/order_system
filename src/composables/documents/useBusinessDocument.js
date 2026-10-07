@@ -4,6 +4,7 @@ import { useSalesDocument } from './useSalesDocument'
 import { useReturnDocument } from './useReturnDocument'
 import { usePurchaseDocument } from './usePurchaseDocument'
 import { usePurchaseOrderDocument } from './usePurchaseOrderDocument'
+import { usePurchaseReturnDocument } from './usePurchaseReturnDocument'
 import { useDocumentDraft } from './useDocumentDraft'
 
 export function useBusinessDocument(props) {
@@ -14,6 +15,9 @@ export function useBusinessDocument(props) {
   }
   if (props.documentType === 'purchase') {
     return withDocumentDraft(props, reactive(usePurchaseDocument(props)))
+  }
+  if (props.documentType === 'purchase-return') {
+    return withDocumentDraft(props, reactive(usePurchaseReturnDocument(props)))
   }
   const sale = props.documentType === 'sale'
   const state = sale
@@ -54,7 +58,7 @@ export function useBusinessDocument(props) {
 function withDocumentDraft(props, ui) {
   const { discardDraft } = useDocumentDraft(props, ui)
   ui.discardDraft = discardDraft
-  if (props.documentType === 'purchase-order') {
+  if (['purchase-order', 'purchase-return'].includes(props.documentType)) {
     const save = ui.save
     ui.save = async status => {
       const saved = await save(status)

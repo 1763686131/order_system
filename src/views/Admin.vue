@@ -102,7 +102,7 @@
             <button v-for="draft in dockedDocuments" :key="draft.type" :data-dock-type="draft.type" :class="['document-dock-shortcut', `is-${draft.type}`, { 'is-docking': dockingDocument?.type === draft.type, 'is-arriving': receivedDockType === draft.type }]" type="button" :disabled="Boolean(dockingDocument)" :title="`返回${draft.title}`" :aria-label="`返回${draft.title}`" @click="restoreDockedDocument(draft)">
               <FilePenLine v-if="draft.type === 'edit'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <FilePlus2 v-else-if="['sale', 'purchase-order'].includes(draft.type)" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
-              <RotateCcw v-else-if="draft.type === 'sale-return'" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
+              <RotateCcw v-else-if="['sale-return', 'purchase-return'].includes(draft.type)" class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <PackageCheck v-else class="document-dock-icon" :size="18" :stroke-width="1.7" aria-hidden="true" />
               <span class="document-dock-dot" aria-hidden="true"></span>
               <span v-if="dockingDocument?.type === draft.type || receivedDockType === draft.type" class="document-dock-feedback" role="status">{{ dockingDocument?.type === draft.type ? '收起到这里' : '已收起 · 点击继续' }}</span>
@@ -935,12 +935,16 @@ const dockedDocuments = computed(() => {
     const draft = documentDraftStore.drafts['purchase-order']
     add({ type: 'purchase-order', title: draft?.action === 'audit' ? '采购申请审核' : '采购申请', path: draft?.path })
   }
+  if (userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS)) {
+    const draft = documentDraftStore.drafts['purchase-return']
+    add({ type: 'purchase-return', title: '采购退货单', path: draft?.path })
+  }
   if (dockingDocument.value) {
     const existingIndex = documents.findIndex(document => document.type === dockingDocument.value.type)
     if (existingIndex !== -1) documents.splice(existingIndex, 1)
     documents.push(dockingDocument.value)
   }
-  const order = ['sale', 'edit', 'sale-return', 'purchase-order', 'purchase']
+  const order = ['sale', 'edit', 'sale-return', 'purchase-order', 'purchase', 'purchase-return']
   return documents.sort((left, right) => order.indexOf(left.type) - order.indexOf(right.type))
 })
 
@@ -954,6 +958,10 @@ const currentMenuLabel = computed(() => {
   }
   if (currentPath.value.startsWith('/admin/purchase/inbound/')) {
     return `采购/${route.name === 'admin-purchase-inbound-create' ? '新增' : route.name === 'admin-purchase-inbound-edit' ? '修改' : '查看'}进货单`
+  }
+  if (currentPath.value.startsWith('/admin/purchase/returns/')) {
+    const action = route.name === 'admin-purchase-return-create' ? '新增' : route.name === 'admin-purchase-return-edit' ? '修改' : '查看'
+    return `采购/${action}采购退货单`
   }
   if (currentPath.value.startsWith('/admin/sales/returns/edit/')) {
     return route.query.productType === 'raw-material'
@@ -1046,6 +1054,7 @@ const navigateTo = (path) => {
 const documentListPath = (type) => {
   if (type === 'purchase-order') return '/admin/purchase/orders'
   if (type === 'purchase') return '/admin/purchase/inbound'
+  if (type === 'purchase-return') return '/admin/purchase/returns'
   if (type === 'sale-return') return '/admin/sales/returns'
   return '/admin/sales'
 }

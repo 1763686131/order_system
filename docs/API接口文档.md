@@ -6297,6 +6297,8 @@ SQLite 支持**多读一写**模式：
 
 列表支持 `supplierId/storeId/status/startDate/endDate/keyword`，返回 `{items,total}`。来源接口只返回已审核、已确认供应商应付的原材料入库明细，并附带原入库单号、批次、货位、原入库单价、已退数量和可退数量。采购退货单号按 `THYYYYMMDDNNN` 生成。
 
+来源明细同时返回 `warehouseName` 和 `specification`。采购退货列表、详情以及保存/审核响应中的明细同样返回 `warehouseName`、`specification`，用于公共录入表单展示仓库和规格；已审核或锁期单据的查看不需要调用可退批次接口。
+
 新增或修改请求示例：
 
 ```json

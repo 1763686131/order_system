@@ -2,7 +2,8 @@ export const DOCUMENT_TYPES = Object.freeze({
   sale: { title: '销售订单', partyLabel: '客户', partyField: 'customerId', dateField: 'orderDate', numberField: 'orderNumber', remarkField: 'orderRemark', specField: 'spec', includedField: 'totalAmount', printType: 'sale', showPackages: true },
   'sale-return': { title: '销售退货单', partyLabel: '客户', partyField: 'customerId', dateField: 'returnDate', numberField: 'returnNumber', remarkField: 'remark', specField: 'specification', includedField: 'taxIncludedAmount', printType: 'return', showPackages: true },
   purchase: { title: '进货单', partyLabel: '供应商', partyField: 'supplierId', dateField: 'documentDate', numberField: 'documentNo', remarkField: 'remark', specField: 'specification', includedField: 'taxIncludedAmount', printType: 'purchase', showPackages: false },
-  'purchase-order': { title: '采购申请', dateLabel: '申请日期', dateField: 'orderDate', numberField: 'orderNo', remarkField: 'remark', specField: 'specification', showPackages: false }
+  'purchase-order': { title: '采购申请', dateLabel: '申请日期', dateField: 'orderDate', numberField: 'orderNo', remarkField: 'remark', specField: 'specification', showPackages: false },
+  'purchase-return': { title: '采购退货单', partyLabel: '供应商', partyField: 'supplierId', dateLabel: '退货日期', dateField: 'businessDate', numberField: 'documentNo', remarkField: 'remark', showPackages: false }
 })
 
 export const DOCUMENT_ACTIONS = ['create', 'edit', 'copy', 'view', 'audit']
@@ -141,4 +142,67 @@ export function inboundAmounts(item, taxEnabled) {
   const base = (Number(item.quantity) || 0) * (Number(item.price) || 0)
   const taxAmount = Number((base * (taxEnabled ? Number(item.taxRate) || 0 : 0) / 100).toFixed(2))
   return { amount: Number(base.toFixed(2)), taxAmount, taxIncludedAmount: Number((base + taxAmount).toFixed(2)), taxIncludedPrice: Number(((Number(item.price) || 0) * (1 + (taxEnabled ? Number(item.taxRate) || 0 : 0) / 100)).toFixed(4)) }
+}
+
+export const purchaseReturnStatusLabels = {
+  draft: '草稿', audited: '已审核', reversed: '已反审核', cancelled: '已取消'
+}
+
+export function purchaseReturnOriginalCost(item) {
+  const unitPriceCents = Math.round(Number(item.originalUnitPrice || 0) * 100)
+  return Math.round(unitPriceCents * Number(item.quantity || 0)) / 100
+}
+
+export function purchaseReturnPayload(form) {
+  return {
+    supplierId: Number(form.supplierId),
+    storeId: Number(form.storeId),
+    businessDate: form.businessDate,
+    remark: form.remark || '',
+    ...(form.version ? { version: form.version } : {}),
+    items: form.items.filter(item => item.inboundItemId).map(item => ({
+      inboundItemId: Number(item.inboundItemId),
+      quantity: Number(item.quantity),
+      returnAmount: Number(item.returnAmount),
+      differenceReason: item.differenceReason?.trim() || ''
+    }))
+  }
+}
+
+export function validatePurchaseReturn(form, sources, onInvalid = () => {}) {
+  const invalid = (key, message) => { onInvalid(key, message); return message }
+  const hasValue = value => value !== '' && value != null
+  if (!form.storeId) return invalid('storeId', '请选择门店。')
+  if (!form.supplierId) return invalid('supplierId', '请选择供应商。')
+  if (!form.businessDate) return invalid('documentDate', '请选择退货日期。')
+  const items = form.items.filter(item => item.inboundItemId)
+  if (!items.length) return invalid('item-source-0', '请至少选择一条来源入库明细。')
+  if (items.length > 300) return invalid('item-source-0', '退货明细不能超过 300 项。')
+  const seen = new Set()
+  for (const [index, item] of form.items.entries()) {
+    if (!item.inboundItemId) {
+      if (hasValue(item.quantity) || hasValue(item.returnAmount) || item.differenceReason?.trim()) {
+        return invalid(`item-source-${index}`, '请先选择来源入库明细。')
+      }
+      continue
+    }
+    const source = sources.find(row => Number(row.inboundItemId) === Number(item.inboundItemId))
+    if (!source) return invalid(`item-source-${index}`, '来源入库明细已不可退，请刷新批次后重新选择。')
+    if (seen.has(Number(item.inboundItemId))) return invalid(`item-source-${index}`, '同一入库明细不能重复选择。')
+    seen.add(Number(item.inboundItemId))
+    if (!hasValue(item.quantity) || !Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) {
+      return invalid(`item-quantity-${index}`, '退货数量必须大于 0。')
+    }
+    if (Number(item.quantity) > Number(source.availableQuantity)) {
+      return invalid(`item-quantity-${index}`, '退货数量不能超过该批次可退数量或当前库存。')
+    }
+    if (!hasValue(item.returnAmount) || !Number.isFinite(Number(item.returnAmount)) || Number(item.returnAmount) < 0) {
+      return invalid(`item-return-amount-${index}`, '确认退货金额必须为非负数。')
+    }
+    if (Math.round(purchaseReturnOriginalCost({ originalUnitPrice: source.originalUnitPrice, quantity: item.quantity }) * 100) !== Math.round(Number(item.returnAmount) * 100)
+      && !item.differenceReason?.trim()) {
+      return invalid(`item-difference-${index}`, '退货金额与原成本不一致时必须填写差异原因。')
+    }
+  }
+  return ''
 }

@@ -1,5 +1,228 @@
 <template>
-  <div class="purchase-list-page" :class="{ 'is-inbound': isInbound }">
+  <div class="purchase-list-page" :class="{ 'is-inbound': isInbound, 'is-return': isReturn }">
+    <template v-if="isReturn">
+      <section class="search-panel">
+        <div class="search-grid return-search-grid">
+          <label class="search-field keyword-field">
+            <span class="field-label">单号 / 供应商</span>
+            <span class="input-with-icon">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5"></circle>
+                <path d="m16 16 4.5 4.5"></path>
+              </svg>
+              <input v-model.trim="returnFilters.keyword" type="search" placeholder="单号、供应商、门店" @keyup.enter="applyReturnFilters" />
+            </span>
+          </label>
+          <label class="search-field">
+            <span class="field-label">门店</span>
+            <select v-model="returnFilters.storeId" @change="onReturnStoreChange">
+              <option value="">全部授权门店</option>
+              <option v-for="store in returnOptions.stores" :key="store.id" :value="String(store.id)">{{ store.name }}</option>
+            </select>
+          </label>
+          <label class="search-field">
+            <span class="field-label">供应商</span>
+            <select v-model="returnFilters.supplierId">
+              <option value="">全部供应商</option>
+              <option v-for="supplier in returnSuppliersForFilter" :key="supplier.id" :value="String(supplier.id)">{{ supplier.supplierName }}</option>
+            </select>
+          </label>
+          <div class="search-field date-field">
+            <span class="field-label">业务日期</span>
+            <div class="date-range">
+              <input v-model="returnFilters.startDate" type="date" :max="returnFilters.endDate || undefined" aria-label="开始日期" />
+              <span aria-hidden="true">至</span>
+              <input v-model="returnFilters.endDate" type="date" :min="returnFilters.startDate || undefined" aria-label="结束日期" />
+            </div>
+          </div>
+          <label class="search-field">
+            <span class="field-label">状态</span>
+            <select v-model="returnFilters.status">
+              <option value="all">全部状态</option>
+              <option v-for="option in returnStatusOptions" :key="option.key" :value="option.key">{{ option.label }}</option>
+            </select>
+          </label>
+          <div class="search-actions">
+            <button class="button button-primary" type="button" @click="applyReturnFilters">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="11" cy="11" r="6.5"></circle>
+                <path d="m16 16 4.5 4.5"></path>
+              </svg>
+              查询
+            </button>
+            <button class="button button-ghost" type="button" @click="resetReturnFilters">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 4v6h6"></path>
+                <path d="M5.3 15a8 8 0 1 0 .4-8.3L4 10"></path>
+              </svg>
+              重置
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="records-panel">
+        <header class="records-toolbar">
+          <div class="toolbar-filters">
+            <div class="toolbar-heading">
+              <div class="page-kicker">采购执行</div>
+              <h1>采购退货</h1>
+            </div>
+            <div class="status-filter-slider" role="tablist" aria-label="采购退货状态筛选">
+              <button
+                v-for="tab in returnStatusTabs"
+                :key="tab.key"
+                :class="['slider-tab', { active: returnFilters.status === tab.key }]"
+                type="button"
+                role="tab"
+                :aria-selected="returnFilters.status === tab.key"
+                @click="setReturnStatusFilter(tab.key)"
+              >
+                {{ tab.label }}
+                <span class="count-badge">{{ tab.count }}</span>
+              </button>
+            </div>
+          </div>
+          <div class="toolbar-actions">
+            <span class="record-count">共 {{ returnFilteredRecords.length }} 条记录</span>
+            <button class="icon-button refresh-button" type="button" title="刷新列表" @click="refreshData">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20 11a8.1 8.1 0 0 0-14.8-4L3 10"></path>
+                <path d="M3 4v6h6"></path>
+                <path d="M4 13a8.1 8.1 0 0 0 14.8 4L21 14"></path>
+                <path d="M21 20v-6h-6"></path>
+              </svg>
+            </button>
+            <button v-if="canReturn('create')" class="button button-primary" type="button" @click="createReturn">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+              新增采购退货
+            </button>
+          </div>
+        </header>
+
+        <div v-if="returnError" class="notice-bar return-error" role="alert">{{ returnError }}</div>
+        <div class="return-summary">
+          <span>单据数<strong>{{ returnFilteredRecords.length }}</strong></span>
+          <span>已审核退货金额<strong>{{ formatMoney(returnAuditedTotal) }}</strong></span>
+          <span>已审核单据<strong>{{ returnAuditedCount }}</strong></span>
+        </div>
+        <div class="table-scroll">
+          <table class="records-table return-records-table">
+            <thead>
+              <tr>
+                <th>退货单号</th>
+                <th>供应商 / 门店</th>
+                <th>业务日期</th>
+                <th>明细数</th>
+                <th>原成本</th>
+                <th>确认退货金额</th>
+                <th>状态</th>
+                <th>制单 / 审核</th>
+                <th class="action-column">操作</th>
+              </tr>
+            </thead>
+            <tbody v-if="loading">
+              <tr v-for="index in 6" :key="`return-skeleton-${index}`" class="skeleton-row">
+                <td v-for="column in 9" :key="column"><span></span></td>
+              </tr>
+            </tbody>
+            <tbody v-else-if="returnPaginatedRecords.length">
+              <tr v-for="record in returnPaginatedRecords" :key="record.id" class="record-row">
+                <td>
+                  <button class="document-link" type="button" @click="openReturnDetail(record)">
+                    {{ record.documentNo }}
+                  </button>
+                </td>
+                <td>
+                  <div class="primary-cell">{{ record.supplierName }}</div>
+                  <div class="secondary-cell">{{ record.storeName }}</div>
+                </td>
+                <td class="date-cell">{{ formatDate(record.businessDate) }}</td>
+                <td>{{ record.items?.length || 0 }}</td>
+                <td class="amount-cell">¥ {{ formatMoney(record.originalCost) }}</td>
+                <td class="amount-cell">¥ {{ formatMoney(record.returnAmount) }}</td>
+                <td>
+                  <span class="status-tag" :class="`status-${returnStatusClass(record.status)}`">
+                    <i></i>{{ returnStatusLabels[record.status] || record.status }}
+                  </span>
+                  <div v-if="record.lockedAt" class="secondary-cell">已锁期</div>
+                </td>
+                <td>
+                  <div class="primary-cell">{{ record.createdBy || '-' }}</div>
+                  <div class="secondary-cell">{{ record.auditedBy || '-' }}</div>
+                </td>
+                <td class="action-column" @click.stop>
+                  <div class="row-actions">
+                    <button class="table-action" type="button" title="查看详情" @click="openReturnDetail(record)">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
+                        <circle cx="12" cy="12" r="2.5"></circle>
+                      </svg>
+                    </button>
+                    <button v-if="record.status === 'draft' && !record.lockedAt && canReturn('edit')" class="table-action" type="button" title="编辑草稿" @click="editReturn(record)">
+                      <Pencil :size="15" aria-hidden="true" />
+                    </button>
+                    <button v-if="['draft', 'reversed'].includes(record.status) && !record.lockedAt && canReturn('audit')" class="table-action audit-action" type="button" title="审核退货" @click="confirmReturnAction(record, 'audit')">
+                      <Check :size="15" aria-hidden="true" />
+                    </button>
+                    <button v-if="record.status === 'audited' && !record.lockedAt && canReturn('reverse_audit')" class="table-action" type="button" title="反审核" @click="confirmReturnAction(record, 'reverse-audit')">
+                      <RotateCcw :size="15" aria-hidden="true" />
+                    </button>
+                    <button v-if="record.status === 'draft' && !record.lockedAt && canReturn('delete')" class="table-action danger" type="button" title="删除草稿" @click="confirmReturnAction(record, 'delete')">
+                      <Trash2 :size="15" aria-hidden="true" />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+            <tbody v-else>
+              <tr>
+                <td colspan="9" class="empty-cell">
+                  <div class="empty-state">
+                    <div class="empty-icon">
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11l2.5 2.5v13a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5Z"></path>
+                        <path d="M8 8h8M8 12h8M8 16h5"></path>
+                      </svg>
+                    </div>
+                    <strong>暂无采购退货记录</strong>
+                    <span>调整筛选条件，或创建一张新的采购退货单</span>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <div class="selection-summary">共 {{ returnFilteredRecords.length }} 条</div>
+          <div class="pagination">
+            <span>共 {{ returnFilteredRecords.length }} 条</span>
+            <button type="button" :disabled="returnCurrentPage === 1" @click="returnCurrentPage -= 1">上一页</button>
+            <button
+              v-for="page in returnPageNumbers"
+              :key="page"
+              type="button"
+              :class="{ active: page === returnCurrentPage }"
+              @click="returnCurrentPage = page"
+            >
+              {{ page }}
+            </button>
+            <button type="button" :disabled="returnCurrentPage === returnTotalPages" @click="returnCurrentPage += 1">下一页</button>
+          </div>
+        </div>
+      </section>
+      <CustomModal
+        :visible="Boolean(returnPendingAction)"
+        :title="returnActionTitle"
+        :message="returnActionMessage"
+        @confirm="actReturn"
+        @cancel="returnPendingAction = null"
+      />
+    </template>
+    <template v-else>
     <Transition name="notice">
       <div v-if="notice" class="page-notice" role="status">
         <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -595,34 +818,39 @@
       @confirm="deleteSelected"
       @cancel="deleteConfirmOpen = false"
     />
+    </template>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Trash2, ReceiptText, Wallet } from '@lucide/vue'
+import { Check, Pencil, Plus, ReceiptText, RotateCcw, Trash2, Wallet } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { ADMIN_PURCHASE_ORDER_PERMISSIONS } from '@/utils/accessControl'
 import PurchaseExpenseDialog from '@/components/admin/purchase/PurchaseExpenseDialog.vue'
 import SupplierAssignmentDialog from '@/components/admin/purchase/SupplierAssignmentDialog.vue'
-import { invoiceLabels, paymentLabels, fulfillmentLabel } from '@/utils/supplierFinance'
+import { purchaseReturnStatusLabels } from '@/composables/documents/documentModels'
+import { invoiceLabels, operationKey, paymentLabels, fulfillmentLabel } from '@/utils/supplierFinance'
 
 const props = defineProps({
   mode: {
     type: String,
     default: 'orders',
-    validator: value => ['orders', 'inbound'].includes(value)
+    validator: value => ['orders', 'inbound', 'returns'].includes(value)
   }
 })
 
 const router = useRouter()
 const userStore = useUserStore()
 const isInbound = computed(() => props.mode === 'inbound')
+const isReturn = computed(() => props.mode === 'returns')
 const canAudit = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT))
 const canDelete = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.DELETE))
+const canReturn = action => userStore.hasPerm(`admin.purchase.return.${action}`)
+const returnStatusLabels = purchaseReturnStatusLabels
 
 const mockOrders = [
   {
@@ -822,6 +1050,67 @@ const orderRecords = ref(cloneRecords(mockOrders))
 const inboundRecords = ref(cloneRecords(mockInbounds))
 const emptyFilters = () => ({ keyword: '', status: 'all', startDate: '', endDate: '', invoiceStatus: '', paymentStatus: '' })
 const filters = ref(emptyFilters())
+const returnOptions = ref({ stores: [], suppliers: [] })
+const returnRecords = ref([])
+const returnError = ref('')
+const returnPendingAction = ref(null)
+const returnFilters = ref({ keyword: '', storeId: '', supplierId: '', status: 'all', startDate: '', endDate: '' })
+const returnCurrentPage = ref(1)
+const returnPageSize = 30
+const returnSuppliersForFilter = computed(() => returnOptions.value.suppliers.filter(row =>
+  !returnFilters.value.storeId || !row.storeId || Number(row.storeId) === Number(returnFilters.value.storeId)
+))
+const returnStatusTabs = computed(() => {
+  const statuses = [
+    { key: 'all', label: '全部' },
+    { key: 'draft', label: returnStatusLabels.draft },
+    { key: 'audited', label: returnStatusLabels.audited },
+    { key: 'reversed', label: returnStatusLabels.reversed },
+    { key: 'cancelled', label: returnStatusLabels.cancelled }
+  ]
+  return statuses.map(tab => ({
+    ...tab,
+    count: tab.key === 'all'
+      ? returnRecords.value.length
+      : returnRecords.value.filter(record => record.status === tab.key).length
+  }))
+})
+const returnStatusOptions = computed(() => returnStatusTabs.value.filter(tab => tab.key !== 'all'))
+const returnFilteredRecords = computed(() => {
+  const filters = returnFilters.value
+  const keyword = filters.keyword.toLowerCase()
+  return returnRecords.value
+    .filter(record => {
+      const searchable = [record.documentNo, record.supplierName, record.storeName, record.remark].join(' ').toLowerCase()
+      const date = record.businessDate || ''
+      return (!keyword || searchable.includes(keyword))
+        && (filters.status === 'all' || record.status === filters.status)
+        && (!filters.storeId || String(record.storeId) === String(filters.storeId))
+        && (!filters.supplierId || String(record.supplierId) === String(filters.supplierId))
+        && (!filters.startDate || date >= filters.startDate)
+        && (!filters.endDate || date <= filters.endDate)
+    })
+    .sort((a, b) => String(b.businessDate || '').localeCompare(String(a.businessDate || '')))
+})
+const returnTotalPages = computed(() => Math.max(1, Math.ceil(returnFilteredRecords.value.length / returnPageSize)))
+const returnPaginatedRecords = computed(() => {
+  const start = (returnCurrentPage.value - 1) * returnPageSize
+  return returnFilteredRecords.value.slice(start, start + returnPageSize)
+})
+const returnPageNumbers = computed(() => Array.from({ length: returnTotalPages.value }, (_, index) => index + 1))
+const returnAudited = computed(() => returnRecords.value.filter(record => record.status === 'audited'))
+const returnAuditedCount = computed(() => returnAudited.value.length)
+const returnAuditedTotal = computed(() => returnAudited.value.reduce((sum, record) => sum + Number(record.returnAmount || 0), 0))
+const returnActionTitle = computed(() => ({
+  audit: '审核采购退货',
+  'reverse-audit': '反审核采购退货',
+  delete: '删除采购退货'
+}[returnPendingAction.value?.action] || '确认操作'))
+const returnActionMessage = computed(() => ({
+  audit: '确认审核该采购退货？审核后将扣减对应批次库存，并冲减应付或形成供应商贷项。',
+  'reverse-audit': '确认反审核该采购退货？系统将冲销对应账务并恢复库存。',
+  delete: '确定删除该采购退货草稿？'
+}[returnPendingAction.value?.action] || ''))
 const expenseOrderId = ref(null)
 const settlementInboundId = ref(null)
 const canReadSettlement = computed(() => userStore.hasPerm('admin.purchase.inbound.settlement.read'))
@@ -913,8 +1202,12 @@ watch(
   () => props.mode,
   () => {
     filters.value = emptyFilters()
+    returnFilters.value = { keyword: '', storeId: '', supplierId: '', status: 'all', startDate: '', endDate: '' }
     currentPage.value = 1
+    returnCurrentPage.value = 1
     selectedIds.value = new Set()
+    returnPendingAction.value = null
+    returnError.value = ''
     closeDetail()
     refreshData(false)
   }
@@ -930,6 +1223,10 @@ watch(
 
 watch(totalPages, value => {
   if (currentPage.value > value) currentPage.value = value
+})
+
+watch(returnTotalPages, value => {
+  if (returnCurrentPage.value > value) returnCurrentPage.value = value
 })
 
 function recordDate(record) {
@@ -1008,6 +1305,69 @@ function getStatusClass(status) {
   if (status === 'partial') return 'processing'
   if (status === 'completed' || status === 'posted') return 'completed'
   return 'rejected'
+}
+
+function returnStatusClass(status) {
+  if (status === 'draft' || status === 'reversed') return 'pending'
+  if (status === 'audited') return 'completed'
+  return 'rejected'
+}
+
+function applyReturnFilters() {
+  returnCurrentPage.value = 1
+}
+
+function resetReturnFilters() {
+  returnFilters.value = { keyword: '', storeId: '', supplierId: '', status: 'all', startDate: '', endDate: '' }
+}
+
+function setReturnStatusFilter(status) {
+  returnFilters.value.status = status
+  returnCurrentPage.value = 1
+}
+
+function onReturnStoreChange() {
+  if (!returnSuppliersForFilter.value.some(row => String(row.id) === String(returnFilters.value.supplierId))) {
+    returnFilters.value.supplierId = ''
+  }
+}
+
+function createReturn() {
+  router.push({ name: 'admin-purchase-return-create' })
+}
+
+function openReturnDetail(record) {
+  router.push({ name: 'admin-purchase-return-view', params: { id: record.id } })
+}
+
+function editReturn(record) {
+  router.push({ name: 'admin-purchase-return-edit', params: { id: record.id } })
+}
+
+function confirmReturnAction(record, action) {
+  if (!loading.value) returnPendingAction.value = { row: record, action }
+}
+
+async function actReturn() {
+  if (!returnPendingAction.value || loading.value) return
+  const { row, action } = returnPendingAction.value
+  returnPendingAction.value = null
+  loading.value = true
+  returnError.value = ''
+  try {
+    const suffix = action === 'delete' ? '' : `/${action}`
+    const response = await request({
+      url: `/purchase-returns/${row.id}${suffix}`,
+      method: action === 'delete' ? 'DELETE' : 'POST',
+      data: { version: row.version, idempotencyKey: operationKey() }
+    })
+    if (response?.success === false) throw new Error(response.message || '操作失败')
+    await refreshData(false)
+  } catch (error) {
+    returnError.value = error?.response?.data?.message || error.message || '操作失败'
+  } finally {
+    loading.value = false
+  }
 }
 
 function canEdit(record) {
@@ -1285,6 +1645,17 @@ function normalizePurchaseInbound(record, batches) {
 async function refreshData(showMessage = true) {
   loading.value = true
   try {
+    if (isReturn.value) {
+      const [options, result] = await Promise.all([
+        request.get('/purchase-returns/options'),
+        request.get('/purchase-returns')
+      ])
+      returnOptions.value = options || { stores: [], suppliers: [] }
+      returnRecords.value = result?.items || []
+      returnError.value = ''
+      if (showMessage) showNotice('采购退货列表已刷新')
+      return
+    }
     if (isInbound.value) {
       const [inboundData, orderData] = await Promise.all([
         request({ url: '/stock-inbounds', method: 'GET', params: { businessType: 'purchase' } }),
@@ -1310,7 +1681,9 @@ async function refreshData(showMessage = true) {
     selectedIds.value = new Set([...selectedIds.value].filter(id => availableIds.has(id)))
     if (showMessage) showNotice('列表已刷新')
   } catch (error) {
-    showNotice(error?.response?.data?.message || error.message || '列表加载失败')
+    const message = error?.response?.data?.message || error.message || '列表加载失败'
+    if (isReturn.value) returnError.value = message
+    else showNotice(message)
   } finally { loading.value = false }
 }
 
@@ -3392,6 +3765,101 @@ onMounted(() => refreshData(false))
   margin-left: auto;
 }
 
+.is-return .return-search-grid {
+  grid-template-columns: minmax(220px, 1.25fr) repeat(2, minmax(150px, 0.8fr)) minmax(250px, 1.2fr) minmax(140px, 0.7fr) auto;
+}
+
+.is-return .return-summary {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 13px 16px;
+  color: var(--text-secondary);
+  background: #fbfcfd;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+
+.is-return .return-summary span {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.is-return .return-summary strong {
+  color: var(--accent-dark);
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.is-return .return-error {
+  display: flex;
+  margin: 14px 16px 0;
+}
+
+.is-return .return-records-table {
+  min-width: 1180px;
+  table-layout: fixed;
+}
+
+.is-return .return-records-table th,
+.is-return .return-records-table td {
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.is-return .return-records-table th:nth-child(1),
+.is-return .return-records-table td:nth-child(1) {
+  width: 145px;
+}
+
+.is-return .return-records-table th:nth-child(2),
+.is-return .return-records-table td:nth-child(2) {
+  width: 210px;
+}
+
+.is-return .return-records-table th:nth-child(3),
+.is-return .return-records-table td:nth-child(3) {
+  width: 105px;
+}
+
+.is-return .return-records-table th:nth-child(4),
+.is-return .return-records-table td:nth-child(4) {
+  width: 72px;
+  text-align: center;
+}
+
+.is-return .return-records-table th:nth-child(5),
+.is-return .return-records-table td:nth-child(5),
+.is-return .return-records-table th:nth-child(6),
+.is-return .return-records-table td:nth-child(6) {
+  width: 130px;
+  text-align: right;
+}
+
+.is-return .return-records-table th:nth-child(7),
+.is-return .return-records-table td:nth-child(7) {
+  width: 105px;
+}
+
+.is-return .return-records-table th:nth-child(8),
+.is-return .return-records-table td:nth-child(8) {
+  width: 150px;
+}
+
+.is-return .return-records-table th:nth-child(9),
+.is-return .return-records-table td:nth-child(9) {
+  width: 150px;
+}
+
+.is-return .return-records-table .action-column {
+  text-align: center;
+}
+
+.is-return .return-records-table .audit-action {
+  color: var(--accent-dark);
+}
+
 @media (max-width: 1280px) {
   .search-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3495,6 +3963,15 @@ onMounted(() => refreshData(false))
 
   .page-notice {
     top: 12px;
+  }
+
+  .is-return .return-search-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .is-return .return-summary {
+    flex-wrap: wrap;
+    gap: 10px 18px;
   }
 }
 </style>
