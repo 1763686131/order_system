@@ -117,6 +117,7 @@
                 <th>供应商 / 门店</th>
                 <th>业务日期</th>
                 <th>明细数</th>
+                <th>退货数量</th>
                 <th>原成本</th>
                 <th>确认退货金额</th>
                 <th>状态</th>
@@ -126,7 +127,7 @@
             </thead>
             <tbody v-if="loading">
               <tr v-for="index in 6" :key="`return-skeleton-${index}`" class="skeleton-row">
-                <td v-for="column in 9" :key="column"><span></span></td>
+                <td v-for="column in 10" :key="column"><span></span></td>
               </tr>
             </tbody>
             <tbody v-else-if="returnPaginatedRecords.length">
@@ -142,6 +143,7 @@
                 </td>
                 <td class="date-cell">{{ formatDate(record.businessDate) }}</td>
                 <td>{{ record.items?.length || 0 }}</td>
+                <td class="quantity-cell">{{ returnQuantityLabel(record) }}</td>
                 <td class="amount-cell">¥ {{ formatMoney(record.originalCost) }}</td>
                 <td class="amount-cell">¥ {{ formatMoney(record.returnAmount) }}</td>
                 <td>
@@ -180,7 +182,7 @@
             </tbody>
             <tbody v-else>
               <tr>
-                <td colspan="9" class="empty-cell">
+                <td colspan="10" class="empty-cell">
                   <div class="empty-state">
                     <div class="empty-icon">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -1311,6 +1313,18 @@ function returnStatusClass(status) {
   if (status === 'draft' || status === 'reversed') return 'pending'
   if (status === 'audited') return 'completed'
   return 'rejected'
+}
+
+function returnQuantityLabel(record) {
+  const items = record.items || []
+  const quantitiesByUnit = new Map()
+  items.forEach(item => {
+    const unit = String(item.unit || '').trim()
+    quantitiesByUnit.set(unit, (quantitiesByUnit.get(unit) || 0) + Number(item.quantity || 0))
+  })
+  return [...quantitiesByUnit.entries()]
+    .map(([unit, quantity]) => `${Number(quantity).toLocaleString('zh-CN', { maximumFractionDigits: 4 })}${unit ? ` ${unit}` : ''}`)
+    .join(' / ') || '0'
 }
 
 function applyReturnFilters() {
@@ -3195,11 +3209,15 @@ onMounted(() => refreshData(false))
 }
 
 .record-row:hover {
-  background: rgba(var(--accent-rgb), 0.08);
+  background: rgba(var(--accent-rgb), 0.18) !important;
 }
 
 .record-row.selected {
-  background: rgba(var(--accent-rgb), 0.12);
+  background: rgba(var(--accent-rgb), 0.12) !important;
+}
+
+.record-row.selected:hover {
+  background: rgba(var(--accent-rgb), 0.18) !important;
 }
 
 .document-link {
@@ -3766,14 +3784,102 @@ onMounted(() => refreshData(false))
 }
 
 .is-return .return-search-grid {
-  grid-template-columns: minmax(220px, 1.25fr) repeat(2, minmax(150px, 0.8fr)) minmax(250px, 1.2fr) minmax(140px, 0.7fr) auto;
+  grid-template-columns: minmax(210px, 1.2fr) minmax(120px, 0.6fr) minmax(110px, 0.55fr) minmax(220px, 1.1fr) minmax(120px, 0.6fr) auto !important;
+  gap: 10px;
+}
+
+.is-return .search-panel {
+  padding: 14px 16px;
+  margin-bottom: 12px;
+}
+
+.is-return .search-field {
+  gap: 5px;
+}
+
+.is-return .search-field input,
+.is-return .search-field select {
+  height: 36px;
+}
+
+.is-return .date-range {
+  grid-template-columns: minmax(104px, 1fr) auto minmax(104px, 1fr);
+  gap: 5px;
+}
+
+.is-return .search-actions {
+  gap: 7px;
+}
+
+.is-return .search-actions .button {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.is-return .records-toolbar {
+  min-height: 56px;
+  padding: 8px 14px;
+}
+
+.is-return .toolbar-filters {
+  gap: 8px;
+}
+
+.is-return .toolbar-heading {
+  gap: 5px;
+  padding-right: 2px;
+}
+
+.is-return .toolbar-heading h1 {
+  font-size: 15px;
+}
+
+.is-return .status-filter-slider {
+  gap: 3px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 3px;
+  border-radius: 6px;
+}
+
+.is-return .slider-tab {
+  flex: 0 0 auto;
+  height: 32px;
+  gap: 5px;
+  padding: 0 10px;
+  border-radius: 5px;
+  font-size: 12px;
+}
+
+.is-return .count-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 10px;
+}
+
+.is-return .toolbar-actions {
+  gap: 6px;
+}
+
+.is-return .toolbar-actions .button {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 11px;
+}
+
+.is-return .toolbar-actions .icon-button {
+  width: 34px;
+  height: 34px;
 }
 
 .is-return .return-summary {
   display: flex;
   align-items: center;
-  gap: 24px;
-  padding: 13px 16px;
+  gap: 18px;
+  padding: 9px 14px;
   color: var(--text-secondary);
   background: #fbfcfd;
   border-bottom: 1px solid var(--border);
@@ -3788,7 +3894,7 @@ onMounted(() => refreshData(false))
 
 .is-return .return-summary strong {
   color: var(--accent-dark);
-  font-size: 16px;
+  font-size: 15px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -3798,69 +3904,116 @@ onMounted(() => refreshData(false))
 }
 
 .is-return .return-records-table {
-  min-width: 1180px;
+  width: 100%;
+  min-width: 1120px !important;
   table-layout: fixed;
 }
 
 .is-return .return-records-table th,
 .is-return .return-records-table td {
-  padding-right: 10px;
-  padding-left: 10px;
+  padding-right: 8px;
+  padding-left: 8px;
 }
 
 .is-return .return-records-table th:nth-child(1),
 .is-return .return-records-table td:nth-child(1) {
-  width: 145px;
+  width: 9%;
 }
 
 .is-return .return-records-table th:nth-child(2),
 .is-return .return-records-table td:nth-child(2) {
-  width: 210px;
+  width: 15%;
 }
 
 .is-return .return-records-table th:nth-child(3),
 .is-return .return-records-table td:nth-child(3) {
-  width: 105px;
+  width: 9%;
 }
 
 .is-return .return-records-table th:nth-child(4),
 .is-return .return-records-table td:nth-child(4) {
-  width: 72px;
+  width: 6%;
   text-align: center;
 }
 
 .is-return .return-records-table th:nth-child(5),
-.is-return .return-records-table td:nth-child(5),
-.is-return .return-records-table th:nth-child(6),
-.is-return .return-records-table td:nth-child(6) {
-  width: 130px;
-  text-align: right;
+.is-return .return-records-table td:nth-child(5) {
+  width: 10%;
+  display: table-cell;
+  text-align: center;
+  white-space: nowrap;
 }
 
+.is-return .return-records-table th:nth-child(6),
+.is-return .return-records-table td:nth-child(6),
 .is-return .return-records-table th:nth-child(7),
 .is-return .return-records-table td:nth-child(7) {
-  width: 105px;
+  width: 11.5%;
+  text-align: right;
 }
 
 .is-return .return-records-table th:nth-child(8),
 .is-return .return-records-table td:nth-child(8) {
-  width: 150px;
+  width: 8%;
 }
 
 .is-return .return-records-table th:nth-child(9),
 .is-return .return-records-table td:nth-child(9) {
-  width: 150px;
+  width: 10%;
+}
+
+.is-return .return-records-table th:nth-child(10),
+.is-return .return-records-table td:nth-child(10) {
+  width: 10%;
 }
 
 .is-return .return-records-table .action-column {
+  width: 10% !important;
   text-align: center;
+}
+
+.is-return .return-records-table .primary-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .is-return .return-records-table .audit-action {
   color: var(--accent-dark);
 }
 
+.records-table th.action-column,
+.records-table td.action-column,
+.records-table .skeleton-row td:last-child {
+  position: sticky;
+  right: 0;
+  background-clip: padding-box;
+  box-shadow: -8px 0 12px -10px rgba(15, 23, 42, 0.42);
+}
+
+.records-table th.action-column {
+  z-index: 4;
+  background-color: #f8fafc;
+}
+
+.records-table td.action-column,
+.records-table .skeleton-row td:last-child {
+  z-index: 2;
+}
+
+.records-table td.action-column {
+  background-color: transparent !important;
+}
+
+.records-table .skeleton-row td:last-child {
+  background-color: #fff;
+}
+
 @media (max-width: 1280px) {
+  .is-return .return-search-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
   .search-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3966,7 +4119,7 @@ onMounted(() => refreshData(false))
   }
 
   .is-return .return-search-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: 1fr !important;
   }
 
   .is-return .return-summary {
