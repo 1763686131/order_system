@@ -4009,6 +4009,70 @@ onMounted(() => refreshData(false))
   background-color: #fff;
 }
 
+/* Keep the three purchase tables dense horizontally without changing row height. */
+.purchase-list-page .search-grid {
+  column-gap: 5px;
+}
+
+.purchase-list-page .search-field {
+  gap: 7px;
+}
+
+.purchase-list-page .date-range {
+  gap: 5px;
+}
+
+.purchase-list-page .button {
+  padding-right: 10px;
+  padding-left: 10px;
+}
+
+.purchase-list-page .records-toolbar {
+  gap: 10px;
+}
+
+.purchase-list-page .toolbar-filters,
+.purchase-list-page .toolbar-actions {
+  gap: 6px;
+}
+
+.purchase-list-page .status-filter-slider {
+  gap: 3px;
+}
+
+.purchase-list-page .slider-tab {
+  gap: 4px;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.purchase-list-page .records-table th,
+.purchase-list-page .records-table td {
+  padding-right: 5px;
+  padding-left: 5px;
+}
+
+.purchase-list-page .records-table th:nth-child(1),
+.purchase-list-page .records-table td:nth-child(1) {
+  width: 38px;
+  padding-right: 5px;
+  padding-left: 5px;
+}
+
+.purchase-list-page .row-actions {
+  gap: 3px;
+}
+
+.purchase-list-page .table-action {
+  width: 27px;
+}
+
+.purchase-list-page .supplement-action {
+  min-width: 80px;
+  padding-right: 5px;
+  padding-left: 5px;
+}
+
 @media (max-width: 1280px) {
   .is-return .return-search-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
