@@ -450,7 +450,7 @@
                 <input
                   type="checkbox"
                   :checked="isSelected(record.id)"
-                  :disabled="isInbound && record.status === 'pending_review'"
+                  :disabled="isInbound && record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)"
                   :aria-label="`选择${getRecordNo(record)}`"
                   @click.stop
                   @change="toggleSelection(record.id)"
@@ -516,7 +516,7 @@
                     </svg>
                   </button>
                   <button
-                    v-if="isInbound && record.status === 'pending_review'"
+                    v-if="isInbound && canDeleteApplication && record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)"
                     class="table-action danger"
                     type="button"
                     title="删除未审核采购申请"
@@ -871,7 +871,7 @@
                   </svg>
                   打印入库单
                 </button>
-                <button v-if="isInbound && selectedRecord.status === 'pending_review'" class="button button-danger" type="button" @click="confirmDeleteApplication(selectedRecord)">
+                <button v-if="isInbound && canDeleteApplication && selectedRecord.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(selectedRecord.status)" class="button button-danger" type="button" @click="confirmDeleteApplication(selectedRecord)">
                   <Trash2 :size="16" aria-hidden="true" />删除申请
                 </button>
                 <button v-if="isInbound && selectedRecord.status === 'pending'" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
@@ -881,7 +881,7 @@
                   <Plus :size="16" aria-hidden="true" />补充入库
                 </button>
                 <button v-if="canEdit(selectedRecord) && !(isInbound && selectedRecord.status === 'pending')" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
-                  {{ isInbound ? '编辑入库单' : '编辑采购申请' }}
+                  {{ isInbound ? (selectedRecord.sourceType === 'inbound-application' ? '编辑采购申请' : '编辑入库单') : '编辑采购申请' }}
                 </button>
               </div>
             </footer>
@@ -1296,7 +1296,9 @@ const paginatedRecords = computed(() => {
 })
 const pageNumbers = computed(() => Array.from({ length: totalPages.value }, (_, index) => index + 1))
 const currentPageIds = computed(() => paginatedRecords.value
-  .filter(record => !isInbound.value || record.status !== 'pending_review')
+  .filter(record => !isInbound.value || !(
+    record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)
+  ))
   .map(record => record.id))
 const isAllPageSelected = computed(() => currentPageIds.value.length > 0 && currentPageIds.value.every(id => selectedIds.value.has(id)))
 const isSomePageSelected = computed(() => currentPageIds.value.some(id => selectedIds.value.has(id)) && !isAllPageSelected.value)
@@ -1513,7 +1515,9 @@ async function actReturn() {
 
 function canEdit(record) {
   return isInbound.value
-    ? record.status === 'pending' || Boolean(record.editableInboundId)
+    ? (record.sourceType === 'inbound-application' && record.status === 'draft')
+      || record.status === 'pending'
+      || Boolean(record.editableInboundId)
     : userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT) && ['draft', 'pending'].includes(record.status)
 }
 
@@ -1613,7 +1617,9 @@ function clearSelection() {
 
 function confirmDeleteApplication(record) {
   if (!canDeleteApplication.value || !isInbound.value || deleting.value || loading.value ||
-    record?.status !== 'pending_review' || !record.purchaseOrderId) return
+    record?.sourceType !== 'inbound-application' ||
+    !['draft', 'pending_review'].includes(record.status) ||
+    !record.purchaseOrderId) return
   applicationDeleteTarget.value = record
   deleteTargets.value = []
   deleteConfirmOpen.value = true
@@ -1697,6 +1703,10 @@ function editRecord(record) {
   if (!isInbound.value) {
     if (canEdit(record)) router.push({ name: 'admin-purchase-order-edit', params: { id: record.id } })
     else router.push({ name: 'admin-purchase-order-view', params: { id: record.id } })
+    return
+  }
+  if (record.sourceType === 'inbound-application' && record.status === 'draft') {
+    router.push({ name: 'admin-purchase-inbound-application-edit', params: { id: record.purchaseOrderId } })
     return
   }
   if (record.status === 'pending' && record.purchaseOrderId) {
@@ -1850,8 +1860,16 @@ function normalizePurchaseInbound(record, batches) {
     remainingQuantity,
     remainingTypes,
     totalAmount: auditedBatches.length ? auditedBatches.reduce((sum, batch) => sum + batch.totalAmount, 0) : order.totalAmount,
-    status: record.status === 'pending' ? 'pending_review' : draft ? 'draft' : auditedBatches.length ? (remainingQuantity > 0.0000001 ? 'partial' : 'reviewed') : 'pending',
-    remark: record.remark || (record.status === 'pending' ? '采购申请待审核' : '采购订单已审核，等待选择仓库入库'),
+    status: record.status === 'pending'
+      ? 'pending_review'
+      : record.sourceType === 'inbound-application' && record.status === 'draft'
+        ? 'draft'
+        : draft ? 'draft' : auditedBatches.length ? (remainingQuantity > 0.0000001 ? 'partial' : 'reviewed') : 'pending',
+    remark: record.remark || (
+      record.status === 'pending' ? '采购申请待审核'
+        : record.status === 'draft' ? '采购申请草稿'
+          : '采购订单已审核，等待选择仓库入库'
+    ),
     items,
     batches
   }
@@ -1886,7 +1904,7 @@ async function refreshData(showMessage = true) {
       const purchaseRecords = (Array.isArray(orderData) ? orderData : [])
         .filter(order => !order.inboundDeletedAt && (
           ['approved', 'partial', 'completed'].includes(order.status) ||
-          (order.sourceType === 'inbound-application' && order.status === 'pending') ||
+          (order.sourceType === 'inbound-application' && ['draft', 'pending'].includes(order.status)) ||
           batchesByOrder.has(String(order.orderId || order.id))
         ))
         .map(order => normalizePurchaseInbound(order, batchesByOrder.get(String(order.orderId || order.id)) || []))
@@ -1894,7 +1912,9 @@ async function refreshData(showMessage = true) {
       inboundRecords.value = [...purchaseRecords, ...actualRecords.filter(record => !record.purchaseOrderId)]
     } else {
       const data = await request({ url: '/purchase-orders', method: 'GET' })
-      orderRecords.value = (Array.isArray(data) ? data : []).map(normalizeOrder)
+      orderRecords.value = (Array.isArray(data) ? data : [])
+        .filter(order => !(order.sourceType === 'inbound-application' && order.status === 'draft'))
+        .map(normalizeOrder)
     }
     const availableIds = new Set(sourceRecords.value.map(record => record.id))
     selectedIds.value = new Set([...selectedIds.value].filter(id => availableIds.has(id)))

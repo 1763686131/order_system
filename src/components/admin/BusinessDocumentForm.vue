@@ -282,7 +282,7 @@
             <template v-else><span>入库数量 <strong>{{ money(ui.totalQuantity) }}</strong></span><span>入库金额 <strong>{{ money(ui.totalAmount) }}</strong></span><span v-if="ui.taxEnabled">税额 <strong>{{ money(ui.totalTaxAmount) }}</strong></span><span>价税合计 <strong>{{ money(ui.totalIncludedAmount) }}</strong></span></template>
             <div v-if="isPurchaseOrder && !ui.readOnly" class="document-actions">
               <button class="btn" type="button" @click="requestClose">取消</button>
-              <button v-if="!ui.auditMode && !isPurchaseApplication" class="btn btn-secondary" type="button" @click="submitDocument($event, 'draft')"><Save :size="16" aria-hidden="true" />保存草稿</button>
+              <button v-if="!ui.auditMode" class="btn btn-secondary" type="button" @click="submitDocument($event, 'draft')"><Save :size="16" aria-hidden="true" />保存草稿</button>
               <button class="btn btn-primary" type="submit"><Check v-if="ui.auditMode" :size="16" aria-hidden="true" /><Send v-else :size="16" aria-hidden="true" />{{ ui.saving ? (ui.auditMode ? '审核中...' : '保存中...') : (ui.auditMode ? '补充并审核通过' : '提交审核') }}</button>
             </div>
             <div v-else-if="isPurchaseReturn && !ui.readOnly" class="document-actions">
@@ -362,7 +362,7 @@ const hasPurchaseOrderItems = computed(() => isPurchaseOrder.value && ui.form.it
 const applicationStockLabel = item => {
   if (!item.productId) return ''
   const product = ui.productsForItem(item).find(candidate => String(candidate.id) === String(item.productId))
-  const stock = product ? ui.getProductStock(product) : item.currentStock
+  const stock = product ? ui.getProductStock(product, item) : item.currentStock
   return stock == null ? '' : `${money(stock)}${item.unit ? ` ${item.unit}` : ''}`
 }
 const activePurchaseCell = ref('')

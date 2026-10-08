@@ -263,7 +263,12 @@ def _order_values(conn, data, existing=None, audit=False):
     check_scope(store_id)
     items = _normalize_items(
         conn, data.get("items"), existing.get("_items"), store_id,
-        preserve_request=bool(existing) and (audit or existing.get("source_type") == "inbound-application"),
+        preserve_request=bool(existing) and (
+            audit or (
+                existing.get("source_type") == "inbound-application"
+                and existing.get("status") != "draft"
+            )
+        ),
     )
     # Keep existing callers that submit one master supplier compatible.
     if supplier_id is not None:
@@ -731,8 +736,78 @@ def create_purchase_application():
         )}
         for item in raw_items if isinstance(item, dict)
     ]
-    application["status"] = "pending"
+    application["status"] = data.get("status", "pending")
     return _create_purchase_order(application, "inbound-application")
+
+
+@purchase_orders_bp.route("/purchase-inbound-applications/<int:order_id>", methods=["PUT"])
+@require_admin_permission(ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"])
+def update_purchase_application(order_id):
+    data = request.get_json(silent=True) or {}
+    application = {
+        key: data.get(key) for key in (
+            "orderDate", "expectedDate", "storeId", "creator", "remark", "status", "version",
+        )
+    }
+    raw_items = data.get("items")
+    if not isinstance(raw_items, list):
+        return jsonify({"success": False, "message": "采购申请明细必须是数组"}), 400
+    application["items"] = [
+        {key: item.get(key) for key in (
+            "id", "orderItemId", "productType", "productId", "productCode", "productName",
+            "warehouseId", "categoryId", "categoryName", "specification", "unit", "orderedQty", "remark",
+        )}
+        for item in raw_items if isinstance(item, dict)
+    ]
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                row, existing = _existing_values(conn, order_id)
+                if not row or row["source_type"] != "inbound-application":
+                    return jsonify({"success": False, "message": "采购申请不存在"}), 404
+                if row["status"] != "draft":
+                    return jsonify({"success": False, "message": "只有草稿状态的采购申请可以编辑"}), 409
+                check_scope(row["store_id"])
+                check_version(data, row)
+                values = _order_values(conn, application, existing)
+                now = _now()
+                conn.execute(
+                    """
+                    UPDATE purchase_orders SET order_no = ?, order_date = ?, expected_date = ?, store_id = ?,
+                        supplier_id = ?, remark = ?, purchaser = ?, creator = ?, payment_amount = ?,
+                        other_fees = ?, settlement_account = ?, current_payment = ?, invoice_required = ?,
+                        payment_method = ?, payment_account_id = ?, status = ?,
+                        total_quantity = ?, total_amount = ?, updated_at = ?, version = version + 1
+                    WHERE id = ?
+                    """,
+                    (
+                        values["order_no"] or row["order_no"], values["order_date"], values["expected_date"],
+                        values["store_id"], values["supplier_id"], values["remark"], values["purchaser"],
+                        values["creator"], values["payment_amount"], values["other_fees"],
+                        values["settlement_account"], values["current_payment"], values["invoice_required"],
+                        values["payment_method"], values["payment_account_id"], values["status"],
+                        values["total_quantity"], values["total_amount"], now, order_id,
+                    ),
+                )
+                conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
+                _insert_items(conn, order_id, values["items"])
+                updated = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
+                if values["status"] == "pending":
+                    create_audit_notifications(
+                        conn, "purchase_order", order_id, updated["order_no"],
+                        f"采购订单 {updated['order_no']} 已提交，请及时审核。",
+                        event_version=f"submitted:{now}",
+                    )
+                return jsonify({"success": True, "purchaseOrder": _serialize_order(conn, updated)})
+    except FinanceError as exc:
+        return jsonify({"success": False, "message": str(exc)}), exc.status
+    except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+    except Exception as exc:
+        if "UNIQUE constraint failed: purchase_orders.order_no" in str(exc):
+            return jsonify({"success": False, "message": "采购订单号已存在"}), 409
+        return jsonify({"success": False, "message": "采购申请更新失败", "detail": str(exc)}), 500
 
 
 def _create_purchase_order(data, source_type):
@@ -888,7 +963,7 @@ def delete_purchase_inbound_application(order_id):
                 ).fetchone()
                 if not row or row["source_type"] != "inbound-application":
                     return jsonify({"success": False, "message": "采购申请不存在"}), 404
-                if row["status"] != "pending":
+                if row["status"] not in ("draft", "pending"):
                     return jsonify({"success": False, "message": "采购订单审核通过后不能删除"}), 409
                 check_scope(row["store_id"])
                 check_version(request.get_json(silent=True) or {}, row)

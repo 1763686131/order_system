@@ -28,6 +28,7 @@ export function usePurchaseOrderDocument(props) {
   const units = ref([])
   const employees = ref([])
   const bankAccounts = ref([])
+  const stockBalances = ref([])
   const visiblePaymentAccountId = ref(null)
   const savedDocumentId = ref(props.documentId)
   const notice = ref({ visible: false, type: 'success', message: '' })
@@ -140,7 +141,17 @@ export function usePurchaseOrderDocument(props) {
   const productsForItem = item => products.value
     .filter(product => product.enabled !== false && productMatchesItem(product, item))
   const getUnitName = unitId => units.value.find(unit => String(unit.id) === String(unitId))?.name || ''
-  const getProductStock = product => Number(product?.currentStock ?? product?.stock ?? 0)
+  const getProductStock = (product, item = {}) => {
+    if (!stockBalances.value.length) return Number(product?.currentStock ?? product?.stock ?? 0)
+    return stockBalances.value
+      .filter(balance =>
+        String(balance.productType || '') === String(product?.productType || '') &&
+        String(balance.productId) === String(product?.id) &&
+        (!form.value.storeId || String(balance.storeId) === String(form.value.storeId)) &&
+        (!item.warehouseId || String(balance.warehouseId) === String(item.warehouseId))
+      )
+      .reduce((sum, balance) => sum + (Number(balance.quantity) || 0), 0)
+  }
   const activeProductRow = computed(() => {
     const item = form.value.items[focusedRow.value]
     return item?.showDropdown ? item : null
@@ -321,8 +332,9 @@ export function usePurchaseOrderDocument(props) {
   })
   const auditMode = computed(() => props.action === 'audit' && form.value.status === 'pending')
   const lockRequestedItems = computed(() => auditMode.value ||
-    Boolean(savedDocumentId.value && form.value.sourceType === 'inbound-application'))
+    Boolean(savedDocumentId.value && form.value.sourceType === 'inbound-application' && form.value.status !== 'draft'))
   const readOnly = computed(() => props.action === 'view' ||
+    Boolean(applicationMode.value && savedDocumentId.value && form.value.status !== 'draft') ||
     (props.action === 'audit' && !auditMode.value) ||
     !['draft', 'pending'].includes(form.value.status))
   const config = computed(() => ({
@@ -568,7 +580,11 @@ export function usePurchaseOrderDocument(props) {
     try {
       const id = savedDocumentId.value
       const response = await request({
-        url: isAudit ? `/purchase-orders/${id}/audit` : id ? `/purchase-orders/${id}` : applicationMode.value ? '/purchase-inbound-applications' : '/purchase-orders',
+        url: isAudit
+          ? `/purchase-orders/${id}/audit`
+          : applicationMode.value
+            ? id ? `/purchase-inbound-applications/${id}` : '/purchase-inbound-applications'
+            : id ? `/purchase-orders/${id}` : '/purchase-orders',
         method: isAudit ? 'POST' : id ? 'PUT' : 'POST',
         data: purchaseOrderPayload(form.value, isAudit ? 'pending' : status)
       })
@@ -598,13 +614,19 @@ export function usePurchaseOrderDocument(props) {
     window.addEventListener('resize', updateSupplierDropdownPosition)
     window.addEventListener('scroll', updateSupplierDropdownPosition, true)
     try {
-      const [storeData, supplierData, warehouseData, rawMaterialData, finishedProductData, unitData] = await Promise.all([
+      const [storeData, supplierData, warehouseData, rawMaterialData, finishedProductData, unitData, stockData] = await Promise.all([
         request({ url: '/stores', method: 'GET' }),
         applicationMode.value ? Promise.resolve([]) : request({ url: '/suppliers', method: 'GET' }),
         request({ url: '/warehouses', method: 'GET' }),
         request({ url: '/raw-material-products', method: 'GET' }),
         request({ url: '/products', method: 'GET' }),
         request({ url: '/products/units/measurements', method: 'GET' }),
+        applicationMode.value
+          ? Promise.all([
+              request({ url: '/stock-balances', method: 'GET', params: { type: 'raw-material' } }),
+              request({ url: '/stock-balances', method: 'GET', params: { type: 'finished-product' } })
+            ])
+          : Promise.resolve([])
       ])
       const [directoryResult, bankAccountResult] = await Promise.allSettled([
         applicationMode.value ? Promise.resolve(null) : request({ url: '/admin/directory', method: 'GET' }),
@@ -618,6 +640,7 @@ export function usePurchaseOrderDocument(props) {
       rawMaterialProducts.value = Array.isArray(rawMaterialData) ? rawMaterialData.filter(item => item.enabled !== false) : []
       finishedProducts.value = Array.isArray(finishedProductData) ? finishedProductData.filter(item => item.enabled !== false) : []
       units.value = Array.isArray(unitData) ? unitData : []
+      stockBalances.value = stockData.flatMap(entries => Array.isArray(entries) ? entries : [])
       employees.value = Array.isArray(directoryData?.employees)
         ? directoryData.employees.map(employee => ({
             ...employee,
