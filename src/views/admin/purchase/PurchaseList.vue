@@ -542,6 +542,15 @@
                     ✓
                   </button>
                   <button
+                    v-if="canReverseAudit(record)"
+                    class="table-action"
+                    type="button"
+                    title="反审核采购订单"
+                    @click="confirmOrderReverseAudit(record)"
+                  >
+                    <RotateCcw :size="15" aria-hidden="true" />
+                  </button>
+                  <button
                     v-if="canEdit(record)"
                     class="table-action"
                     type="button"
@@ -783,6 +792,9 @@
                 <button v-if="!isInbound && selectedRecord.status === 'pending' && canAudit" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
                 </button>
+                <button v-if="canReverseAudit(selectedRecord)" class="button button-secondary" type="button" @click="confirmOrderReverseAudit(selectedRecord)">
+                  <RotateCcw :size="16" aria-hidden="true" />反审核采购订单
+                </button>
                 <button v-if="!isInbound && ['approved', 'partial'].includes(selectedRecord.status)" class="button button-secondary" type="button" @click="router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: selectedRecord.id } })">
                   创建采购入库单
                 </button>
@@ -820,6 +832,13 @@
       @confirm="deleteSelected"
       @cancel="deleteConfirmOpen = false"
     />
+    <CustomModal
+      :visible="Boolean(orderReverseAuditTarget)"
+      title="反审核采购订单"
+      message="确认反审核该采购订单？已有入库或费用引用的订单不能反审核。"
+      @confirm="reverseAuditOrder"
+      @cancel="orderReverseAuditTarget = null"
+    />
     </template>
   </div>
 </template>
@@ -851,6 +870,7 @@ const isInbound = computed(() => props.mode === 'inbound')
 const isReturn = computed(() => props.mode === 'returns')
 const canAudit = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT))
 const canDelete = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.DELETE))
+const canReverseAuditPermission = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.REVERSE_AUDIT))
 const canReturn = action => userStore.hasPerm(`admin.purchase.return.${action}`)
 const returnStatusLabels = purchaseReturnStatusLabels
 
@@ -1129,6 +1149,7 @@ const detailTotals = computed(() => (selectedRecord.value?.items || []).reduce((
 const detailModalOpen = ref(false)
 const notice = ref('')
 const deleting = ref(false)
+const orderReverseAuditTarget = ref(null)
 const deleteConfirmOpen = ref(false)
 const deleteTargets = ref([])
 const deleteConfirmMessage = computed(() => `确定删除选中的 ${deleteTargets.value.length} 条采购入库及全部批次吗？已审核批次将回退库存和累计入库数量，采购订单保留。`)
@@ -1388,6 +1409,41 @@ function canEdit(record) {
   return isInbound.value
     ? record.status === 'pending' || Boolean(record.editableInboundId)
     : userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT) && ['draft', 'pending'].includes(record.status)
+}
+
+function canReverseAudit(record) {
+  return !isInbound.value
+    && canReverseAuditPermission.value
+    && record.status === 'approved'
+    && !record.hasInbound
+    && Number(record.inboundCount || 0) === 0
+    && Number(record.receivedQuantity || 0) <= 0
+}
+
+function confirmOrderReverseAudit(record) {
+  if (!loading.value && canReverseAudit(record)) orderReverseAuditTarget.value = record
+}
+
+async function reverseAuditOrder() {
+  const record = orderReverseAuditTarget.value
+  if (!record || loading.value) return
+  orderReverseAuditTarget.value = null
+  loading.value = true
+  try {
+    const response = await request({
+      url: `/purchase-orders/${record.id}/audit`,
+      method: 'DELETE',
+      data: { version: record.version }
+    })
+    if (response?.success === false) throw new Error(response.message || '反审核失败')
+    closeDetail()
+    await refreshData(false)
+    showNotice('采购订单已反审核')
+  } catch (error) {
+    showNotice(error?.response?.data?.message || error.message || '反审核失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 function canSupplement(record) {

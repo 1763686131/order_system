@@ -160,7 +160,7 @@ order_system/
 │  │  ├─ returns.py                  # 销售/原材料退货草稿、审核、退款和库存联动
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
 │  │  ├─ raw_material_products.py    # 原材料商品档案接口
-│  │  ├─ purchase_orders.py          # 原材料采购申请、审核和关联入库
+│  │  ├─ purchase_orders.py          # 采购申请、已付金额、对公扣款、审核和关联入库
 │  │  ├─ supplier_finance.py         # 供应商应付、内部对账、期初和费用归属
 │  │  ├─ supplier_payments.py        # 付款审核、银行流水、余额核销和私有附件
 │  │  ├─ purchase_invoices.py        # 发票登记、来源分配、确认和撤销
@@ -210,7 +210,7 @@ order_system/
 │  │     ├─ useDocumentValidation.js # 字段就地校验提示与定位
 │  │     ├─ useSalesDocument.js      # 销售订单草稿、复制、历史价格、结算和保存
 │  │     ├─ useReturnDocument.js     # 销售/原材料退货、退款核销、保存和打印
-│  │     ├─ usePurchaseOrderDocument.js # 原材料采购申请、逐行供应商、保存和审核
+│  │     ├─ usePurchaseOrderDocument.js # 采购申请、逐行供应商、付款/发票字段、余额显隐和审核
 │  │     ├─ usePurchaseDocument.js   # 原材料进货、供应商、入库保存和打印
 │  │     └─ usePurchaseReturnDocument.js # 采购退货来源批次、可退数量、金额差异、草稿和详情操作
 │  ├─ stores/
@@ -562,9 +562,9 @@ import {
 路由通过 `mode: 'orders'`、`mode: 'inbound'` 或 `mode: 'returns'` 切换标题、筛选条件、表格列和操作；页面样式写在组件内的 `<style scoped>`，切换路由会重置筛选。
 采购订单已接入 `/api/purchase-orders`，支持新增申请、编辑、审核和查看。申请阶段可以暂不填写逐行供应商、单价和金额，审核时必须补齐供应商和单价；审核通过后从采购订单发起关联入库，补充仓库、应收数量和实收数量。
 
-采购订单记录申请、合同/金额估算和履约承诺，采购入库记录实际到货和库存位置；两者均先保存草稿，分别审核后才进入下一环节。关联入库审核按实际数量确认供应商应付，独立入库按 `none` 或 `pending_supplier` 处理。采购入库的审核、反审核、红冲、重新启用和删除在“库存 / 入库记录”页面完成。
+采购订单记录申请、折后金额、其它费用、已付金额和履约承诺，采购入库记录实际到货和库存位置；两者分别审核后进入下一环节。关联入库审核按实际数量确认供应商应付，独立入库按 `none` 或 `pending_supplier` 处理。采购入库的审核、反审核、红冲、重新启用和删除在“库存 / 入库记录”页面完成。
 
-采购申请提供采购人、制单人、合同/金额估算和费用估算；已移除“本次付款”输入。旧 `currentPayment`、结算账户等字段仅为历史兼容，不代表真实付款。真实付款仅通过“财务 / 供应商付款”保存草稿、审核并扣减银行余额；超出核销金额自动成为独立预付款。采购列表将履约、开票和付款状态分开。
+采购申请提供折后金额（默认随明细合计填充）、其它费用、已付金额、付款方式和“需要发票”。付款方式为现金、微信、承兑、公对公、其它；公对公选择本门店预设账户，眼睛按钮切换最新余额显隐，其它需填写付款说明。保存采购申请时，对公账户按已付金额扣款，余额不足则整个保存事务回滚；编辑时冲销原扣款并重新入账，删除未审核采购单时退回原扣款。未入库的未付应付为折后金额加其它费用减已付金额。关联入库确认应付后自动核销采购单已付金额，不再次扣款；后续剩余应付仍可通过供应商付款模块支付。采购列表将履约、开票和付款状态分开，已审核且没有入库的订单提供反审核入口。
 
 第一阶段应付/归属逻辑集中在 `supplier_ledger.py/supplier_finance.py`，第二阶段付款、余额核销和发票逻辑集中在 `supplier_settlement.py/supplier_payments.py/purchase_invoices.py`，第三阶段退货、退款和正式对账分别集中在 `purchase_returns.py/supplier_refunds.py/supplier_reconciliations.py`，期间控制由 `supplier_periods.py` 统一处理。前端复用 `src/components/admin/purchase/` 下的归属、费用、付款/发票、退货和核销组件及 `supplier-finance.css`。新表在重启后端后的首次数据库访问时自动创建，不迁移旧 `suppliers.payable`，不回填历史已审核入库应付。部署前备份数据库和上传目录，普通角色在权限组中授予新的中文付款、发票、退货、退款、正式对账及核销权限。采购退货与销售退货保持独立。
 

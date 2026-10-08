@@ -90,6 +90,10 @@ export function purchaseOrderPayload(form, status = 'pending') {
     paymentAmount: hasValue(form.paymentAmount) ? Number(form.paymentAmount) : null,
     otherFees: hasValue(form.otherFees) ? Number(form.otherFees) : 0,
     settlementAccount: form.settlementAccount || '',
+    invoiceRequired: Boolean(form.invoiceRequired),
+    paymentMethod: form.paymentMethod || '',
+    paymentAccountId: form.paymentAccountId ? Number(form.paymentAccountId) : null,
+    currentPayment: hasValue(form.currentPayment) ? Number(form.currentPayment) : 0,
     remark: form.remark,
     status,
     items: form.items.filter(item => item.productId).map(item => ({
@@ -118,13 +122,23 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
   if (!form.storeId) return invalid('storeId', '请选择申请门店。')
   if (!form.orderDate) return invalid('documentDate', '请填写申请日期。')
   if (hasValue(form.paymentAmount) && (!Number.isFinite(Number(form.paymentAmount)) || Number(form.paymentAmount) < 0)) {
-    return invalid('paymentAmount', '合同金额必须为非负数。')
+    return invalid('paymentAmount', '折后金额必须为非负数。')
   }
   if (hasValue(form.otherFees) && (!Number.isFinite(Number(form.otherFees)) || Number(form.otherFees) < 0)) {
     return invalid('otherFees', '其它费用必须为非负数。')
   }
   if (hasValue(form.currentPayment) && (!Number.isFinite(Number(form.currentPayment)) || Number(form.currentPayment) < 0)) {
-    return invalid('currentPayment', '本次付款必须为非负数。')
+    return invalid('currentPayment', '已付金额必须为非负数。')
+  }
+  const totalAmount = form.items.reduce((sum, item) => sum + (item.productId ? Number(item.amount) || 0 : 0), 0)
+  const payable = (hasValue(form.paymentAmount) ? Number(form.paymentAmount) : totalAmount) + (Number(form.otherFees) || 0)
+  if (Number(form.currentPayment || 0) > payable) return invalid('currentPayment', '已付金额不能大于折后金额与其它费用合计。')
+  if (Number(form.currentPayment || 0) > 0 && !form.paymentMethod) return invalid('paymentMethod', '填写已付金额时请选择付款方式。')
+  if (Number(form.currentPayment || 0) > 0 && form.paymentMethod === 'bank_transfer' && !form.paymentAccountId) {
+    return invalid('paymentAccountId', '请选择对公付款账户。')
+  }
+  if (Number(form.currentPayment || 0) > 0 && form.paymentMethod === 'other' && !String(form.settlementAccount || '').trim()) {
+    return invalid('settlementAccount', '请填写其它付款方式说明。')
   }
   if (!form.items.some(item => item.productId)) return invalid('item-product-0', '请至少选择一条商品。')
   for (const [index, item] of form.items.entries()) {

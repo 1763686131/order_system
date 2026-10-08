@@ -749,7 +749,7 @@ def _update_purchase_receipts(conn, purchase_order_id, item_rows, direction=1):
     ).fetchone()['quantity']
     new_status = 'completed' if float(remaining or 0) <= 0.0000001 else 'partial' if float(received or 0) > 0.0000001 else 'approved'
     conn.execute(
-        'UPDATE purchase_orders SET status = ?, updated_at = ? WHERE id = ? AND status <> \'cancelled\'',
+        'UPDATE purchase_orders SET status = ?, updated_at = ?, version = version + 1 WHERE id = ? AND status <> \'cancelled\'',
         (new_status, _now(), purchase_order_id),
     )
 

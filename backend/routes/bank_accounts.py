@@ -10,6 +10,8 @@ from flask import Blueprint, jsonify, request
 from werkzeug.utils import secure_filename
 
 from utils.db import get_db
+from utils.auth import get_current_user, require_login
+from utils.access_scope import accessible_scope_ids
 from utils.system_settings import (
     DEFAULT_BANK_CARD_BG_PATH,
     DEFAULT_BANK_ICON_PATH,
@@ -344,18 +346,27 @@ def list_bank_accounts():
 
 
 @bank_accounts_bp.route("/options", methods=["GET"])
+@require_login
 def list_bank_account_options():
     """Return the small payload used by settlement-account selectors."""
     store_id = request.args.get("storeId", type=int)
+    include_balance = str(request.args.get("includeBalance") or "").lower() in {"1", "true", "yes"}
     with get_db() as conn:
         sql = """
             SELECT a.id, a.store_id, a.account_name, a.account_number,
-                   a.bank_name, a.is_default, s.name AS store_name
+                   a.bank_name, a.balance, a.is_default, s.name AS store_name
             FROM bank_accounts a
             LEFT JOIN stores s ON s.id = a.store_id
             WHERE 1 = 1
         """
         params = []
+        allowed_stores = accessible_scope_ids(get_current_user(), "store")
+        if allowed_stores is not None:
+            if allowed_stores:
+                sql += f" AND a.store_id IN ({','.join('?' for _ in allowed_stores)})"
+                params.extend(sorted(allowed_stores))
+            else:
+                sql += " AND 0 = 1"
         if store_id is not None:
             sql += " AND a.store_id = ?"
             params.append(store_id)
@@ -372,6 +383,7 @@ def list_bank_account_options():
             "isDefault": bool(row["is_default"]),
             "label": f"{row['account_name']}（{row['bank_name']}）",
             "value": row["account_name"],
+            **({"balance": round(float(row["balance"] or 0), 2)} if include_balance else {}),
         }
         for row in rows
     ]

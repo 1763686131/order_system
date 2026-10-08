@@ -36,7 +36,7 @@
 | --- | --- | --- | --- | --- |
 | `sale` | `useSalesDocument.js` | `POST /api/orders`、`PUT /api/orders/{id}` | 客户；`discountAmount` 为折扣后金额，另有 `otherFees`、`currentPayment` | `sale` |
 | `sale-return` | `useReturnDocument.js` | `POST /api/returns`、`PUT /api/returns/{id}` | 客户；`returnAmount`、`refundAmount`，核销金额为两者差额 | `return` |
-| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、原材料/成品明细；逐行供应商、采购人、制单人、合同/金额估算和费用估算 | 暂不提供打印入口 |
+| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、逐行供应商；折后金额、其它费用、已付金额、付款方式、对公账户及需发票标记 | 暂不提供打印入口 |
 | `purchase` | `usePurchaseDocument.js` | `POST /api/stock-inbounds`、`PUT /api/stock-inbounds/{id}` | 按 `type` 切换商品、数量、单价和税额；关联采购单按明细供应商确认应付，独立入库使用结算类型 | `purchase` |
 
 公共组件的 `action`（`create`、`edit`、`copy`、`view`）和 `documentId` 是前端路由参数，不是提交给这些业务接口的通用字段。销售复制使用 `/admin/sales/create?copyFrom=<id>`，读取源订单后按新增接口保存；新增/编辑/复制/查看不能代替服务端的审核状态或权限校验。
@@ -47,7 +47,7 @@
 
 `documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交单据默认类型、`documentSource` 和每条明细的 `productType`；`documentSource` 可为 `purchase-order` 或 `other`，由后端根据采购订单关联再次校验。独立其他入库不选择供应商；请求若在没有 `purchaseOrderId` 时提交 `supplierId`，后端返回错误并要求改走采购订单流程。关联采购申请允许同一单据包含两种商品类型，独立入库仍要求明细类型与表头一致。状态为 `draft`，界面的 `quantity`、`price`、`goodsName` 分别转换为 `receivedQty`、`unitPrice`、`name`。原材料商品来源为 `/api/raw-material-products`、库存来源为 `/api/stock-balances?type=raw-material`；成品商品来源为 `/api/products`、库存来源为 `/api/stock-balances?type=finished-product`。进货保存响应中的 `id` 或 `stockIn.id` 用于后续 `PUT`，避免连续保存重复新增。
 
-采购订单审核只形成采购承诺，不产生供应商应付，也不扣减银行账户。`paymentAmount`、`currentPayment`、`settlementAccount` 仅作为历史/估算字段兼容保留，不作为真实付款状态依据。关联采购入库审核后，按实际审核数量、明细供应商、单价和税额快照写入新的供应商账务流水；独立 `none` 入库只写库存，独立 `pending_supplier` 入库先写库存，待财务补录供应商并确认应付。保存采购申请或入库草稿不会入账。完整新增契约见文末“采购模块第一阶段新增接口”。
+采购订单审核只形成采购承诺，不直接产生供应商应付。采购申请的 `paymentAmount` 为折后金额，`currentPayment` 为已付金额；选择 `bank_transfer` 时，保存申请即校验并扣减所选对公账户，余额不足整笔事务回滚。关联采购入库审核后，按实际数量、明细供应商、单价和税额确认应付，并自动核销订单已付金额，不再次扣款；独立 `none` 入库只写库存，独立 `pending_supplier` 入库先写库存，待财务补录供应商并确认应付。入库草稿不产生应付。完整契约见采购订单接口及文末各阶段接口。
 
 ## 版本历史
 
@@ -3310,10 +3310,13 @@ volumes:
   "storeId": 1,
   "purchaser": "采购员",
   "creator": "当前账户",
-  "paymentAmount": null,
+  "paymentAmount": 10000,
   "otherFees": 0,
-  "settlementAccount": "对公账户",
-  "currentPayment": 0,
+  "settlementAccount": "",
+  "currentPayment": 5000,
+  "invoiceRequired": true,
+  "paymentMethod": "bank_transfer",
+  "paymentAccountId": 3,
   "remark": "门店原材料申请",
   "status": "pending",
   "items": [
@@ -3339,15 +3342,18 @@ volumes:
 | 字段 | 类型 | 必填 | 说明 |
 | --- | --- | --- | --- |
 | `orderNo` | string | 否 | 为空时由后端按 `CG + 日期 + ID` 生成 |
-| `orderDate` | string | 是 | 申请日期，建议 `YYYY-MM-DD` |
+| `orderDate` | string | 是 | 申请日期，格式为 `YYYY-MM-DD` |
 | `expectedDate` | string | 否 | 预计到货日期；前端默认申请日期后 7 天 |
-| `storeId` | integer | 否 | 申请门店 ID；明细仓库如填写必须属于该门店 |
+| `storeId` | integer | 是 | 申请门店 ID；明细仓库和对公账户必须属于该门店 |
 | `purchaser` | string | 否 | 采购人；申请阶段可先留空 |
 | `creator` | string | 否 | 制单人名称快照 |
-| `paymentAmount` | number/null | 否 | 手工指定本单采购金额；为空时按明细金额合计计算 |
+| `paymentAmount` | number/null | 否 | 折后金额；省略时使用明细金额合计，前端默认随合计填充 |
 | `otherFees` | number | 否 | 其它费用，默认 `0`，不能为负数 |
-| `settlementAccount` | string | 否 | 结算账户名称快照 |
-| `currentPayment` | number | 否 | 本次付款，默认 `0`，不能为负数 |
+| `settlementAccount` | string | 条件 | 其它付款方式的说明；对公账户名称由后端写入快照 |
+| `currentPayment` | number | 否 | 已付金额，默认 `0`；不得超过折后金额与其它费用合计 |
+| `invoiceRequired` | boolean | 否 | 需要发票，默认 `false`；关联入库应付继承此标记 |
+| `paymentMethod` | string | 条件 | 已付金额大于零时必填：`cash`、`wechat`、`acceptance`、`bank_transfer`、`other` |
+| `paymentAccountId` | integer/null | 条件 | 公对公付款时选择本门店银行账户 ID |
 | `remark` | string | 否 | 单据备注，最多 500 字符 |
 | `status` | string | 否 | 默认 `draft`；提交审核使用 `pending` |
 | `items` | array | 是 | 至少一条有效采购明细 |
@@ -3374,13 +3380,16 @@ volumes:
 **应付字段计算**：
 
 ```text
-orderPayable = (paymentAmount（有值时）或 totalAmount) + otherFees
-currentPayable = max(0, orderPayable - currentPayment)
-supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额合计
+estimatedAmount = paymentAmount + otherFees
+未确认入库应付时：currentPayable = max(0, estimatedAmount - currentPayment)
+已确认入库应付时：currentPayable = max(0, confirmedPayable - allocatedAmount)
+orderPayable = confirmedPayable
+supplierPayable = 所选明细供应商在 supplier_account_transactions 中的应付余额合计
 ```
 
-`supplierPayable` 是历史兼容字段，不作为当前供应商账务依据，不会因为保存采购申请或采购入库草稿自动入账。
-供应商付款流水由第二阶段的供应商付款接口产生，采购订单的历史付款字段仍不代表真实付款。
+保存采购申请不新增供应商应付。公对公已付金额生成 `purchase_order_payment` 银行流水；编辑冲销原扣款后重记，删除未审核申请退回原扣款，余额不足返回 `409` 并回滚整个事务。现金、微信、承兑、其它只记录付款信息，不改变银行账户。关联入库审核后，按有效入库应付来源顺序自动核销订单已付金额；入库反审核释放这部分核销，不退回或重复扣减银行余额。后续供应商付款仍使用第二阶段付款接口。
+
+对公账户选项使用 `GET /api/bank-accounts/options?storeId={id}`，按登录账号的门店范围过滤。默认响应不含余额；点击眼睛图标时附加 `includeBalance=1` 获取各账户的最新 `balance`。
 
 **成功响应**：新建返回 HTTP `201`，修改返回 HTTP `200`。
 
@@ -3397,14 +3406,19 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
     "status": "pending",
     "purchaser": "采购员",
     "creator": "当前账户",
-    "paymentAmount": null,
+    "paymentAmount": 10000,
     "otherFees": 0,
-    "settlementAccount": "对公账户",
-    "currentPayment": 0,
+    "settlementAccount": "对公账户名称",
+    "currentPayment": 5000,
+    "paidAmount": 5000,
+    "invoiceRequired": true,
+    "paymentMethod": "bank_transfer",
+    "paymentAccountId": 3,
     "totalQuantity": 10,
     "totalAmount": 0,
     "orderPayable": 0,
-    "currentPayable": 0,
+    "estimatedAmount": 10000,
+    "currentPayable": 5000,
     "supplierPayable": 0,
     "items": []
   }
@@ -3419,7 +3433,7 @@ supplierPayable = 所选明细供应商在 suppliers.payable 中的应付余额�
 - `POST /api/purchase-orders/{id}/audit` 只接受 `pending` 订单。可以不带请求体，审核已保存的明细；
   如果需要在审核时修改表头或明细，应提交包含 `items` 的完整请求，以补齐供应商、单价、仓库或付款信息。
 - 审核会重新校验每行采购数量、启用供应商和采购单价，成功后状态变为 `approved`，并记录审核人和审核时间。
-- `DELETE /api/purchase-orders/{id}/audit` 只允许反审核 `approved` 订单；只要已有入库数量就返回 HTTP `409`。
+- `DELETE /api/purchase-orders/{id}/audit` 只允许反审核 `approved` 订单；已有入库单（含草稿）、入库数量或采购费用引用时返回 HTTP `409`。
 - `GET /api/purchase-orders/{id}/available-inbound` 只允许 `approved` 或 `partial` 订单。
   响应额外返回 `inboundDocumentNo`（首批入库单号，无批次时为空）。入库明细应把采购明细 ID 写入 `purchaseOrderItemId`，并把采购订单 ID 写入 `purchaseOrderId`。
 - 关联入库允许实收数量超过采购数量；审核成功后按实际数量累计，订单自动变为 `partial` 或 `completed`。`remainingQty` 最低为 `0`，反审核按实际累计数量恢复状态。
@@ -4373,7 +4387,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 ### 14.7 账户余额与业务单据
 
-`balance` 使用两位小数保存账户余额。审核业务单据时才产生余额变化，草稿保存和修改不改变账户余额：
+`balance` 使用两位小数保存账户余额。销售和独立财务单据审核时产生余额变化；采购申请的公对公已付金额在保存时即扣款，编辑时冲销后重记，删除未审核申请时退回：
 
 | 业务动作 | 账户余额变化 |
 | --- | --- |
@@ -4382,6 +4396,9 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 | 收款单反审核 | 减少原 `paymentAmount` |
 | 退货单审核 | 减少 `refundAmount`，实退金额核销不产生现金变化 |
 | 退货单反审核 | 加回原 `refundAmount` |
+| 保存采购申请，公对公且已付金额大于零 | 扣减 `currentPayment`；余额不足则整单回滚 |
+| 修改采购申请对公付款 | 冲销原扣款，再按新已付金额扣款 |
+| 删除未审核采购申请 | 退回该采购单的对公扣款 |
 
 例如客户应收 5000 元，退货实退金额 500 元、本次退款 0 元：客户应收核销为 4500 元，银行账户余额不变化。
 
@@ -6101,7 +6118,7 @@ SQLite 支持**多读一写**模式：
 
 ## 采购模块第一阶段新增接口（v5.11）
 
-以下规则覆盖前文 v5.6 的采购应付公式。账务唯一来源为新建的 `supplier_account_transactions`，不读取、写入或迁移旧 `suppliers.payable`。采购订单的 `estimatedAmount` 表示合同/金额估算，`confirmedPayable` 和 `orderPayable` 表示有效已审核入库应付，`allocatedAmount` 表示已核销金额，`unpaidAmount` 和 `currentPayable` 表示未付应付。第一阶段无真实付款核销接口，不能从历史 `currentPayment` 推算付款状态。
+账务唯一来源为 `supplier_account_transactions`，不读取或写入 `suppliers.payable`。采购订单的 `estimatedAmount` 为折后金额加其它费用，`confirmedPayable` 和 `orderPayable` 为有效已审核入库应付，`allocatedAmount` 包括订单已付金额自动核销与后续付款核销，`unpaidAmount` 和 `currentPayable` 为未付应付。尚未确认入库应付时，未付金额按订单金额减 `currentPayment` 计算，付款状态根据已付金额计算。
 
 履约字段包括 `progressBasis`（`quantity`/`lines`）、`fulfillmentProgress`（0-100）、`completedLineCount`、`totalLineCount`；明细返回实际 `receivedQty`、`overReceivedQty` 和封顶的 `fulfillmentProgress`。超收数量计入库存和应付，完成订单不能新增补充入库。
 

@@ -208,7 +208,7 @@
               </span>
             </label>
             <label v-if="isSalesDocument" class="info-group"><span>制单人</span><input :value="ui.currentCreatorName" :style="ui.creatorNameStyle" type="text" readonly /></label>
-            <label v-if="isPurchaseOrder" class="info-group purchaser-field">
+            <label v-if="isPurchaseOrder" class="info-group purchaser-field purchase-order-purchaser">
               <span>采购人</span>
               <span class="salesperson-control">
                 <span class="salesperson-sizer" aria-hidden="true">{{ purchasePersonLabel }}</span>
@@ -219,22 +219,49 @@
                 </select>
               </span>
             </label>
-            <label v-if="isPurchaseOrder || isPurchaseReturn" class="info-group"><span>制单人</span><input :value="ui.currentCreatorName" :style="ui.creatorNameStyle" type="text" readonly /></label>
-            <label class="info-group wide"><span>{{ isPurchaseOrder ? '申请备注' : '备注信息' }}</span><input v-model="ui.form[ui.config.remarkField]" type="text" :maxlength="isPurchaseOrder || isPurchaseReturn ? 500 : isPurchase ? 200 : 1000" :placeholder="isPurchaseOrder ? '申请用途、交期等补充说明' : undefined" /></label>
+            <label v-if="isPurchaseOrder || isPurchaseReturn" class="info-group purchase-order-creator"><span>制单人</span><input :value="ui.currentCreatorName" :style="ui.creatorNameStyle" type="text" readonly /></label>
+            <label class="info-group wide purchase-order-remark"><span>{{ isPurchaseOrder ? '申请备注' : '备注信息' }}</span><input v-model="ui.form[ui.config.remarkField]" type="text" :maxlength="isPurchaseOrder || isPurchaseReturn ? 500 : isPurchase ? 200 : 1000" :placeholder="isPurchaseOrder ? '申请用途、交期等补充说明' : undefined" /></label>
             <label v-if="isPurchaseReturn && ui.form.auditedBy" class="info-group"><span>审核人</span><input :value="ui.form.auditedBy" type="text" readonly /></label>
             <label v-if="isSalesDocument" class="info-group"><span>包装</span><select v-model="ui.form.packaging" @change="ui.handlePackagingChange?.()"><option v-for="packaging in ui.packagingOptions" :key="packaging" :value="packaging">{{ packaging }}</option><option v-if="isSale" :value="ui.ADD_PACKAGING_VALUE">新增包装...</option></select></label>
             <template v-if="isSale"><label class="info-group"><span>折扣后金额</span><input v-model.number="ui.form.discountAmount" type="number" min="0" step="0.01" /></label><label class="info-group"><span>其他费用</span><input v-model.number="ui.form.otherFees" type="number" min="0" step="0.01" /></label></template>
             <template v-if="isReturn"><label class="info-group"><span>应退金额</span><input v-model.number="ui.form.returnAmount" :ref="element => setFieldRef('returnAmount', element)" type="number" min="0" step="0.01" /></label><label class="info-group"><span>本次退款</span><input v-model.number="ui.form.refundAmount" :ref="element => setFieldRef('refundAmount', element)" type="number" min="0" step="0.01" /></label></template>
             <template v-if="isPurchaseOrder">
-              <label class="info-group"><span>估算/合同金额</span><input v-model.number="ui.form.paymentAmount" :ref="element => setFieldRef('paymentAmount', element)" type="number" min="0" step="0.01" /></label>
-              <label class="info-group"><span>费用估算</span><input v-model.number="ui.form.otherFees" :ref="element => setFieldRef('otherFees', element)" type="number" min="0" step="0.01" /></label>
+              <label class="info-group purchase-order-amount"><span>折后金额</span><input v-model.number="ui.form.paymentAmount" :ref="element => setFieldRef('paymentAmount', element)" type="number" min="0" step="0.01" @input="ui.markPaymentAmountManual()" /></label>
+              <label class="info-group purchase-order-fees"><span>其它费用</span><input v-model.number="ui.form.otherFees" :ref="element => setFieldRef('otherFees', element)" type="number" min="0" step="0.01" /></label>
+              <label class="info-group purchase-order-paid"><span>已付金额</span><input v-model.number="ui.form.currentPayment" :ref="element => setFieldRef('currentPayment', element)" type="number" min="0" :max="ui.purchaseOrderPayable" step="0.01" /></label>
+              <label class="invoice-toggle"><input v-model="ui.form.invoiceRequired" type="checkbox" /><span>需要发票</span></label>
+              <div class="purchase-order-payment-row">
+                <label class="info-group">
+                  <span>付款方式</span>
+                  <select v-model="ui.form.paymentMethod" :ref="element => setFieldRef('paymentMethod', element)" @change="ui.onPaymentMethodChange()">
+                    <option value="">请选择付款方式</option>
+                    <option value="cash">现金</option><option value="wechat">微信</option>
+                    <option value="acceptance">承兑</option><option value="bank_transfer">公对公</option><option value="other">其它</option>
+                  </select>
+                </label>
+                <div v-if="ui.form.paymentMethod === 'bank_transfer'" class="info-group payment-account-field">
+                  <span>对公账户</span>
+                  <div class="payment-account-control">
+                    <select v-model="ui.form.paymentAccountId" :ref="element => setFieldRef('paymentAccountId', element)" @change="ui.hidePaymentAccountBalance()">
+                      <option value="">请选择账户</option>
+                      <option v-for="account in ui.storeBankAccounts" :key="account.id" :value="String(account.id)">{{ account.label }}</option>
+                    </select>
+                    <button type="button" class="balance-toggle" :disabled="!ui.selectedPaymentAccount || ui.accountBalanceLoading" :title="ui.paymentBalanceVisible ? '隐藏账户余额' : '显示账户余额'" :aria-label="ui.paymentBalanceVisible ? '隐藏账户余额' : '显示账户余额'" :aria-pressed="ui.paymentBalanceVisible" @click="ui.togglePaymentAccountBalance()">
+                      <Eye v-if="ui.paymentBalanceVisible" :size="16" aria-hidden="true" />
+                      <EyeOff v-else :size="16" aria-hidden="true" />
+                    </button>
+                    <strong v-if="ui.paymentBalanceVisible" class="account-balance">余额 ¥ {{ formatMoney(ui.selectedPaymentAccount?.balance) }}</strong>
+                  </div>
+                </div>
+                <label v-else-if="ui.form.paymentMethod === 'other'" class="info-group"><span>付款说明</span><input v-model.trim="ui.form.settlementAccount" :ref="element => setFieldRef('settlementAccount', element)" type="text" maxlength="160" /></label>
+              </div>
             </template>
             <label v-if="isSalesDocument" class="info-group"><span>结算账户</span><select v-model="ui.form.settlementAccount"><option value="">请选择结算账户</option><option v-if="ui.form.settlementAccount && !ui.storeBankAccounts.some(account => (account.value || account.accountName) === ui.form.settlementAccount)" :value="ui.form.settlementAccount">{{ ui.form.settlementAccount }}</option><option v-for="account in ui.storeBankAccounts" :key="account.id" :value="account.value || account.accountName">{{ account.label || account.accountName }}</option></select></label>
           </div>
           <div class="finance-row">
             <template v-if="isSale"><span>客户欠款 <strong>{{ money(ui.customerReceivable) }}</strong></span><span>本单应收 <strong>{{ money(ui.shouldReceive) }}</strong></span><label class="info-group"><span>本次收款</span><input v-model.number="ui.form.currentPayment" type="number" min="0" step="0.01" /></label><span>本单欠款 <strong class="red">{{ money(ui.currentDebt) }}</strong></span></template>
             <template v-else-if="isReturn"><span>商品合计 <strong>{{ money(ui.taxEnabled ? ui.totalIncludedAmount : ui.totalAmount) }}</strong></span><span>核销金额 <strong>{{ money(Number(ui.form.returnAmount || 0) - Number(ui.form.refundAmount || 0)) }}</strong></span><span>本次退款 <strong class="red">{{ money(ui.form.refundAmount) }}</strong></span></template>
-            <template v-else-if="isPurchaseOrder"><span class="document-status" :class="`status-${ui.form.status}`">{{ ui.statusLabel }}</span><span>估算/合同合计 <strong>{{ formatMoney(ui.purchaseOrderPayable) }}</strong></span><span>已确认应付 <strong>{{ formatMoney(ui.form.confirmedPayable) }}</strong></span><span>已核销 <strong>{{ formatMoney(ui.form.allocatedAmount) }}</strong></span><span>未付应付 <strong class="red">{{ formatMoney(ui.currentPayable) }}</strong></span></template>
+            <template v-else-if="isPurchaseOrder"><span class="document-status" :class="`status-${ui.form.status}`">{{ ui.statusLabel }}</span><span>本单应付 <strong>{{ formatMoney(ui.purchaseOrderPayable) }}</strong></span><span>已付金额 <strong>{{ formatMoney(ui.form.currentPayment) }}</strong></span><span v-if="ui.readOnly">已确认应付 <strong>{{ formatMoney(ui.form.confirmedPayable) }}</strong></span><span v-if="ui.readOnly">已核销 <strong>{{ formatMoney(ui.form.allocatedAmount) }}</strong></span><span>未付应付 <strong class="red">{{ formatMoney(ui.currentPayable) }}</strong></span></template>
             <template v-else-if="isPurchaseReturn">
               <span class="document-status" :class="`status-${ui.form.status}`">{{ ui.statusLabel }}</span>
               <span>原库存成本 <strong>{{ formatMoney(ui.totalOriginalCost) }}</strong></span><span>确认退货金额 <strong>{{ formatMoney(ui.totalReturnAmount) }}</strong></span><span>价格差异 <strong :class="{ red: ui.totalDifference !== 0 }">{{ formatMoney(ui.totalDifference) }}</strong></span>
@@ -295,7 +322,7 @@
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { Check, CircleAlert, CircleCheck, Pencil, Plus, RefreshCw, RotateCcw, Save, Send, Trash2, TriangleAlert, X } from '@lucide/vue'
+import { Check, CircleAlert, CircleCheck, Eye, EyeOff, Pencil, Plus, RefreshCw, RotateCcw, Save, Send, Trash2, TriangleAlert, X } from '@lucide/vue'
 import CustomModal from '@/components/CustomModal.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
@@ -478,6 +505,14 @@ button:disabled { cursor: default; opacity: .5; }
 .finance-row-full { border-bottom: 0; }
 .finance-row { gap: 22px; background: #fbfcfc; }
 .finance-row strong { margin-left: 8px; font-variant-numeric: tabular-nums; color: #08755e; }
+.invoice-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: #46535f; }
+.invoice-toggle input { accent-color: #159a7c; }
+.payment-account-field { max-width: 100%; }
+.payment-account-control { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; }
+.info-group .payment-account-control select { width: 220px; max-width: 100%; }
+.balance-toggle { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 32px; height: 34px; padding: 0; border: 1px solid #d4dde3; border-radius: 4px; color: #08755e; background: #fff; cursor: pointer; }
+.balance-toggle:hover:not(:disabled) { background: #eaf7f2; }
+.account-balance { color: #08755e; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .red, .finance-row .red { color: #b5363e; }
 .save-button { margin-left: auto; font-weight: 600; }
 .document-footer { display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 8px 14px; }
@@ -518,6 +553,30 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .business-document-form.purchase-document-form .muted { color: #596579; text-overflow: ellipsis; white-space: nowrap; }
 .business-document-form.purchase-document-form .blank-cell { display: block; min-height: 28px; }
 .business-document-form.purchase-document-form .info-group input { height: 38px; }
+.business-document-form[data-document-type="purchase-order"] .finance-row-full {
+  display: grid;
+  grid-template-columns: max-content max-content minmax(260px, 1fr) repeat(3, max-content) max-content;
+  align-items: center;
+  column-gap: 10px;
+  row-gap: 10px;
+}
+.business-document-form[data-document-type="purchase-order"] .finance-row-full .info-group { gap: 5px; }
+.business-document-form[data-document-type="purchase-order"] .finance-row-full .info-group input[type="number"] { width: 110px; }
+.business-document-form[data-document-type="purchase-order"] .finance-row-full select,
+.business-document-form[data-document-type="purchase-order"] .balance-toggle { height: 38px; }
+.business-document-form[data-document-type="purchase-order"] .purchase-order-remark { min-width: 0; }
+.business-document-form[data-document-type="purchase-order"] .purchase-order-remark input { min-width: 0; width: 100%; }
+.business-document-form[data-document-type="purchase-order"] .purchase-order-payment-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+.business-document-form[data-document-type="purchase-order"] .purchase-order-payment-row .payment-account-field { flex: 0 1 auto; }
+.business-document-form[data-document-type="purchase-order"] .purchase-order-payment-row .payment-account-control { flex-wrap: nowrap; }
 .business-document-form.purchase-document-form .btn { min-height: 38px; border-radius: 5px; font-size: 13px; font-weight: 600; }
 .business-document-form.purchase-document-form .btn-primary { background: #0f9f78; border-color: #0f9f78; }
 .business-document-form.purchase-document-form .btn-primary:hover:not(:disabled) { background: #08745a; border-color: #08745a; }
@@ -549,6 +608,12 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
   .business-document-form.purchase-document-form .info-group select { flex: 1; width: 0; }
   .business-document-form.purchase-document-form .toolbar-actions { width: 100%; justify-content: flex-end; }
   .business-document-form.purchase-document-form .finance-row > .document-status { flex-basis: auto; }
+  .business-document-form[data-document-type="purchase-order"] .payment-account-field { flex-direction: column; align-items: stretch; }
+  .business-document-form[data-document-type="purchase-order"] .payment-account-control { width: 100%; }
+  .business-document-form[data-document-type="purchase-order"] .payment-account-control select { flex: 1 1 180px; width: auto; }
+  .business-document-form[data-document-type="purchase-order"] .finance-row-full .info-group input[type="number"] { width: 0; }
+  .business-document-form[data-document-type="purchase-order"] .finance-row-full { display: flex; }
+  .business-document-form[data-document-type="purchase-order"] .purchase-order-payment-row { flex: 0 0 100%; }
   .document-actions { width: 100%; justify-content: flex-end; }
 }
 @media (max-width: 700px) {

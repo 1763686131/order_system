@@ -27,6 +27,7 @@ export function usePurchaseOrderDocument(props) {
   const units = ref([])
   const employees = ref([])
   const bankAccounts = ref([])
+  const visiblePaymentAccountId = ref(null)
   const savedDocumentId = ref(props.documentId)
   const notice = ref({ visible: false, type: 'success', message: '' })
   const focusedRow = ref(-1)
@@ -54,8 +55,9 @@ export function usePurchaseOrderDocument(props) {
     const orderDate = localDate()
     return {
       orderNo: '', storeId: '', orderDate, expectedDate: dateAfter(orderDate),
-      expectedDateAuto: true, purchaser: '', creator: '', paymentAmount: '', otherFees: 0,
-      settlementAccount: '', currentPayment: 0, remark: '', status: 'draft',
+      expectedDateAuto: true, purchaser: '', creator: '', paymentAmount: 0, paymentAmountTouched: false, otherFees: 0,
+      settlementAccount: '', invoiceRequired: false, paymentMethod: '', paymentAccountId: '',
+      currentPayment: 0, remark: '', status: 'draft',
       items: Array.from({ length: 8 }, blankItem)
     }
   }
@@ -76,6 +78,13 @@ export function usePurchaseOrderDocument(props) {
     .filter(account => String(account.storeId ?? account.store_id) === String(form.value.storeId))
     .slice()
     .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault))))
+  const selectedPaymentAccount = computed(() =>
+    storeBankAccounts.value.find(account => String(account.id) === String(form.value.paymentAccountId)) || null
+  )
+  const paymentBalanceVisible = computed(() =>
+    Boolean(form.value.paymentAccountId) && visiblePaymentAccountId.value === Number(form.value.paymentAccountId)
+  )
+  const accountBalanceLoading = ref(false)
   watch(currentCreatorName, creator => {
     if (!form.value.creator || form.value.status === 'draft') form.value.creator = creator
   }, { immediate: true })
@@ -329,7 +338,10 @@ export function usePurchaseOrderDocument(props) {
       : totalAmount.value
     return Math.max(0, base + (Number(form.value.otherFees) || 0))
   })
-  const currentPayable = computed(() => Number(form.value.unpaidAmount || 0))
+  const currentPayable = computed(() => {
+    if (form.value.payableCount) return Number(form.value.unpaidAmount || 0)
+    return Math.max(0, purchaseOrderPayable.value - (Number(form.value.currentPayment) || 0))
+  })
   const supplierPayable = computed(() => {
     const selectedSupplierIds = new Set(
       form.value.items
@@ -350,6 +362,49 @@ export function usePurchaseOrderDocument(props) {
     const hasValue = value => value !== '' && value != null
     if (hasValue(item.price) && hasValue(item.quantity)) {
       item.amount = Number((Number(item.price) * Number(item.quantity)).toFixed(2))
+    }
+  }
+  watch(totalAmount, value => {
+    if (form.value.paymentAmount === '' || form.value.paymentAmount == null || !form.value.paymentAmountTouched) {
+      form.value.paymentAmount = Number(value.toFixed(2))
+    }
+  })
+  const markPaymentAmountManual = () => { form.value.paymentAmountTouched = true }
+  const onPaymentMethodChange = () => {
+    visiblePaymentAccountId.value = null
+    form.value.paymentAccountId = form.value.paymentMethod === 'bank_transfer' && storeBankAccounts.value.length
+      ? String(storeBankAccounts.value[0].id)
+      : ''
+    if (form.value.paymentMethod !== 'other') form.value.settlementAccount = ''
+  }
+  const hidePaymentAccountBalance = () => {
+    visiblePaymentAccountId.value = null
+  }
+  const togglePaymentAccountBalance = async () => {
+    if (!form.value.paymentAccountId || accountBalanceLoading.value) return
+    const accountId = Number(form.value.paymentAccountId)
+    if (visiblePaymentAccountId.value === accountId) {
+      visiblePaymentAccountId.value = null
+      return
+    }
+    accountBalanceLoading.value = true
+    const storeId = form.value.storeId
+    try {
+      const response = await request({
+        url: '/bank-accounts/options', method: 'GET',
+        params: { storeId, includeBalance: 1 }
+      })
+      bankAccounts.value = [
+        ...bankAccounts.value.filter(account => String(account.storeId) !== String(storeId)),
+        ...response.data
+      ]
+      if (Number(form.value.paymentAccountId) === accountId && selectedPaymentAccount.value) {
+        visiblePaymentAccountId.value = accountId
+      }
+    } catch (error) {
+      showNotice(error?.response?.data?.message || error.message || '获取账户余额失败', 'error')
+    } finally {
+      accountBalanceLoading.value = false
     }
   }
   const onProductChange = item => {
@@ -415,6 +470,10 @@ export function usePurchaseOrderDocument(props) {
   const onStoreChange = () => {
     closeProductDropdown()
     closeSupplierDropdown()
+    form.value.paymentAccountId = form.value.paymentMethod === 'bank_transfer' && storeBankAccounts.value.length
+      ? String(storeBankAccounts.value[0].id)
+      : ''
+    visiblePaymentAccountId.value = null
     form.value.items.forEach(item => {
       if (item.warehouseId && !filteredWarehouses.value.some(warehouse => String(warehouse.id) === String(item.warehouseId))) {
         item.warehouseId = ''
@@ -447,11 +506,16 @@ export function usePurchaseOrderDocument(props) {
       storeId: data.storeId ? String(data.storeId) : '', purchaser: data.purchaser || '',
       creator: data.creator || currentCreatorName.value,
       paymentAmount: data.paymentAmount ?? '',
+      paymentAmountTouched: data.paymentAmount != null,
       otherFees: data.otherFees ?? 0,
       settlementAccount: data.settlementAccount || '',
+      invoiceRequired: Boolean(data.invoiceRequired),
+      paymentMethod: data.paymentMethod || '',
+      paymentAccountId: data.paymentAccountId ? String(data.paymentAccountId) : '',
       currentPayment: data.currentPayment ?? 0,
       remark: data.remark || '', status: data.status || 'draft',
       confirmedPayable: data.confirmedPayable || 0, unpaidAmount: data.unpaidAmount || 0,
+      payableCount: data.payableCount || 0,
       billedAmount: data.billedAmount || 0, allocatedAmount: data.allocatedAmount || 0,
       items: (data.items || []).map(item => ({
         ...blankItem(), orderItemId: item.orderItemId || item.id,
@@ -587,6 +651,8 @@ export function usePurchaseOrderDocument(props) {
     handleSupplierSearchInput, selectSupplier, changeSupplierPage,
     onCategoryChange,
     onItemWarehouseChange, onStoreChange, onDateChange, onExpectedDateInput, restoreDraft,
+    visiblePaymentAccountId, selectedPaymentAccount, paymentBalanceVisible, accountBalanceLoading,
+    markPaymentAmountManual, onPaymentMethodChange, hidePaymentAccountBalance, togglePaymentAccountBalance,
     validateForm, save, clearForm, close,
     onQuantityInput: index => calculateRow(form.value.items[index]),
     onPriceInput: index => calculateRow(form.value.items[index])

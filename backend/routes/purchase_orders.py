@@ -12,7 +12,7 @@ from utils.db import get_db
 from utils.notifications import create_audit_notifications, complete_audit_notifications
 from utils.permission_catalog import ADMIN_PURCHASE_ORDER_PERMISSIONS
 from utils.supplier_ledger import (
-    FinanceError, balance, check_scope, check_version, idempotent_result, save_operation, scope_sql, source_summary,
+    FinanceError, balance, business_date, cents, check_scope, check_version, idempotent_result, save_operation, scope_sql, source_summary,
 )
 
 
@@ -20,6 +20,7 @@ purchase_orders_bp = Blueprint("purchase_orders", __name__, url_prefix="/api")
 _write_lock = threading.Lock()
 _MONEY_QUANT = Decimal("0.01")
 _STATUSES = {"draft", "pending", "approved", "partial", "completed", "cancelled", "rejected"}
+_PAYMENT_METHODS = {"cash", "wechat", "acceptance", "bank_transfer", "other"}
 
 
 def _now():
@@ -226,9 +227,7 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
 
 def _order_values(conn, data, existing=None):
     existing = existing or {}
-    order_date = _text(data.get("orderDate", data.get("order_date", existing.get("order_date"))), 20)
-    if not order_date:
-        raise ValueError("请选择申请日期")
+    order_date = business_date(data.get("orderDate", data.get("order_date", existing.get("order_date"))))
     supplier_value = data.get("supplierId", data.get("supplier_id", existing.get("supplier_id")))
     supplier_id = _optional_int(supplier_value, "供应商ID")
     if supplier_id is not None and not conn.execute(
@@ -260,17 +259,51 @@ def _order_values(conn, data, existing=None):
         Decimal("0"),
     ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
     payment_value = data.get("paymentAmount", data.get("payment_amount", existing.get("payment_amount")))
-    payment_amount = None if payment_value in (None, "") else _number(payment_value)
-    other_fees = _number(data.get("otherFees", data.get("other_fees", existing.get("other_fees", 0))))
+    payment_amount = total_amount if payment_value in (None, "") else _number(payment_value).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+    other_fees = _number(data.get("otherFees", data.get("other_fees", existing.get("other_fees", 0)))).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
     current_payment = _number(
         data.get("currentPayment", data.get("current_payment", existing.get("current_payment", 0)))
+    ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+    invoice_required = data.get("invoiceRequired", existing.get("invoice_required", False))
+    if not isinstance(invoice_required, (bool, int)) or invoice_required not in (True, False, 0, 1):
+        raise ValueError("需发票必须是布尔值")
+    payment_method = _text(data.get("paymentMethod", existing.get("payment_method", ""))).lower()
+    if payment_method and payment_method not in _PAYMENT_METHODS:
+        raise ValueError("付款方式无效")
+    payment_account_id = _optional_int(
+        data.get("paymentAccountId", existing.get("payment_account_id")),
+        "对公账户ID",
     )
     if payment_amount is not None and payment_amount < 0:
-        raise ValueError("付款金额不能为负数")
+        raise ValueError("折后金额不能为负数")
     if other_fees < 0:
         raise ValueError("其它费用不能为负数")
     if current_payment < 0:
-        raise ValueError("本次付款不能为负数")
+        raise ValueError("已付金额不能为负数")
+    payable = (payment_amount if payment_amount is not None else total_amount) + other_fees
+    if current_payment > payable:
+        raise ValueError("已付金额不能大于折后金额与其它费用合计")
+    if current_payment > 0 and not payment_method:
+        raise ValueError("填写已付金额时请选择付款方式")
+    settlement_account = _text(
+        data.get("settlementAccount", data.get("settlement_account", existing.get("settlement_account"))),
+        160,
+    )
+    if payment_method == "bank_transfer":
+        if current_payment > 0 and payment_account_id is None:
+            raise ValueError("请选择对公付款账户")
+        if payment_account_id is not None:
+            account = conn.execute(
+                "SELECT account_name FROM bank_accounts WHERE id = ? AND store_id = ?",
+                (payment_account_id, store_id),
+            ).fetchone()
+            if not account:
+                raise ValueError("对公付款账户不存在或不属于申请门店")
+            settlement_account = account["account_name"]
+    else:
+        payment_account_id = None
+    if payment_method == "other" and current_payment > 0 and not settlement_account:
+        raise ValueError("请填写其它付款方式说明")
     return {
         "order_no": _text(data.get("orderNo", data.get("order_no", existing.get("order_no"))), 80),
         "order_date": order_date,
@@ -282,11 +315,11 @@ def _order_values(conn, data, existing=None):
         "creator": _text(data.get("creator", existing.get("creator")), 80),
         "payment_amount": float(payment_amount) if payment_amount is not None else None,
         "other_fees": float(other_fees),
-        "settlement_account": _text(
-            data.get("settlementAccount", data.get("settlement_account", existing.get("settlement_account"))),
-            160,
-        ),
+        "settlement_account": settlement_account,
         "current_payment": float(current_payment),
+        "invoice_required": int(bool(invoice_required)),
+        "payment_method": payment_method,
+        "payment_account_id": payment_account_id,
         "status": requested_status,
         "items": items,
         "total_quantity": float(total_quantity),
@@ -348,6 +381,10 @@ def _serialize_order(conn, row, include_items=True):
     order["otherFees"] = order.pop("other_fees", 0) or 0
     order["settlementAccount"] = order.pop("settlement_account", "") or ""
     order["currentPayment"] = order.pop("current_payment", 0) or 0
+    order["paidAmount"] = order["currentPayment"]
+    order["invoiceRequired"] = bool(order.pop("invoice_required", 0))
+    order["paymentMethod"] = order.pop("payment_method", "") or ""
+    order["paymentAccountId"] = order.pop("payment_account_id", None)
     order["totalQuantity"] = order.pop("total_quantity", 0) or 0
     order["totalAmount"] = order.pop("total_amount", 0) or 0
     order["auditedBy"] = order.pop("audited_by", "") or ""
@@ -405,7 +442,17 @@ def _serialize_order(conn, row, include_items=True):
     order["estimatedAmount"] = max(0.0, order_payable_base + float(order["otherFees"] or 0))
     order.update(source_summary(conn, "purchase_order_id", row["id"]))
     order["orderPayable"] = order["confirmedPayable"]
-    order["currentPayable"] = order["unpaidAmount"]
+    order["currentPayable"] = (
+        order["unpaidAmount"] if order["payableCount"] else
+        max(0.0, round(order["estimatedAmount"] - float(order["currentPayment"]), 2))
+    )
+    order["unpaidAmount"] = order["currentPayable"]
+    if not order["payableCount"]:
+        order["invoiceStatus"] = "unbilled" if order["invoiceRequired"] else "not_required"
+        order["paymentStatus"] = (
+            "paid" if order["currentPayable"] <= 0 else
+            "partial" if order["currentPayment"] > 0 else "unpaid"
+        )
     order["supplierPayable"] = _supplier_payable(conn, selected_supplier_ids)
     items = order.get("items", [])
     units = {item["unit"] for item in items}
@@ -413,6 +460,11 @@ def _serialize_order(conn, row, include_items=True):
     order["completedLineCount"] = sum(item["remainingQty"] <= 0.0000001 for item in items)
     order["totalLineCount"] = len(items)
     order["receivedQuantity"] = sum(item["receivedQty"] for item in items)
+    order["inboundCount"] = conn.execute(
+        "SELECT COUNT(*) AS count FROM stock_inbounds WHERE purchase_order_id = ?",
+        (row["id"],),
+    ).fetchone()["count"]
+    order["hasInbound"] = order["inboundCount"] > 0
     order["fulfillmentProgress"] = min(100, round(
         (order["receivedQuantity"] / order["totalQuantity"] if order["progressBasis"] == "quantity" and order["totalQuantity"]
          else order["completedLineCount"] / len(items) if items else 0) * 100, 2))
@@ -478,6 +530,76 @@ def _make_order_no(order_date, order_id):
     return f"CG{str(order_date).replace('-', '')[:8]}{int(order_id):04d}"
 
 
+def _reverse_order_bank_payment(conn, order_id):
+    original = conn.execute(
+        """SELECT t.* FROM bank_account_transactions t
+           WHERE t.source_type = 'purchase_order_payment' AND t.source_id = ?
+             AND t.reversal_of_id IS NULL
+             AND NOT EXISTS (
+                 SELECT 1 FROM bank_account_transactions r WHERE r.reversal_of_id = t.id
+             )
+           ORDER BY t.id DESC LIMIT 1""",
+        (order_id,),
+    ).fetchone()
+    if not original:
+        return
+    account = conn.execute(
+        "SELECT * FROM bank_accounts WHERE id = ? AND store_id = ?",
+        (original["bank_account_id"], original["store_id"]),
+    ).fetchone()
+    if not account:
+        raise FinanceError("原对公账户不存在，无法冲销付款", 409)
+    balance_cents = cents(account["balance"], nonnegative=False)
+    restored_cents = balance_cents - original["delta_cents"]
+    reversal_date = max(_now()[:10], original["business_date"])
+    conn.execute(
+        """INSERT INTO bank_account_transactions (
+            bank_account_id, store_id, business_date, source_type, source_id, document_no,
+            document_version, delta_cents, balance_after_cents, created_by, created_at, reversal_of_id
+        ) VALUES (?, ?, ?, 'purchase_order_payment', ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            account["id"], original["store_id"], reversal_date, order_id, original["document_no"],
+            original["document_version"], -original["delta_cents"], restored_cents,
+            current_identity(), _now(), original["id"],
+        ),
+    )
+    conn.execute(
+        "UPDATE bank_accounts SET balance = ?, updated_at = ? WHERE id = ?",
+        (float(Decimal(restored_cents) / 100), _now(), account["id"]),
+    )
+
+
+def _post_order_bank_payment(conn, order):
+    payment_cents = cents(order["current_payment"])
+    if order["payment_method"] != "bank_transfer" or payment_cents <= 0:
+        return
+    account = conn.execute(
+        "SELECT * FROM bank_accounts WHERE id = ? AND store_id = ?",
+        (order["payment_account_id"], order["store_id"]),
+    ).fetchone()
+    if not account:
+        raise FinanceError("对公付款账户不存在或不属于申请门店", 409)
+    balance_cents = cents(account["balance"], nonnegative=False)
+    if balance_cents < payment_cents:
+        raise FinanceError("对公账户余额不足，无法入账", 409)
+    balance_after = balance_cents - payment_cents
+    business_date = order["order_date"]
+    conn.execute(
+        """INSERT INTO bank_account_transactions (
+            bank_account_id, store_id, business_date, source_type, source_id, document_no,
+            document_version, delta_cents, balance_after_cents, created_by, created_at
+        ) VALUES (?, ?, ?, 'purchase_order_payment', ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            account["id"], order["store_id"], business_date, order["id"], order["order_no"],
+            order["version"], -payment_cents, balance_after, current_identity(), _now(),
+        ),
+    )
+    conn.execute(
+        "UPDATE bank_accounts SET balance = ?, updated_at = ? WHERE id = ?",
+        (float(Decimal(balance_after) / 100), _now(), account["id"]),
+    )
+
+
 @purchase_orders_bp.route("/purchase-orders", methods=["GET"])
 def list_purchase_orders():
     requested_status = _text(request.args.get("status"))
@@ -541,6 +663,7 @@ def create_purchase_order():
     try:
         with _write_lock:
             with get_db() as conn:
+                conn.execute("BEGIN IMMEDIATE")
                 values = _order_values(conn, data)
                 now = _now()
                 cursor = conn.execute(
@@ -548,15 +671,16 @@ def create_purchase_order():
                     INSERT INTO purchase_orders (
                         order_no, order_date, expected_date, store_id, supplier_id, remark,
                         purchaser, creator, payment_amount, other_fees, settlement_account,
-                        current_payment, status, total_quantity, total_amount, created_by,
-                        created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        current_payment, invoice_required, payment_method, payment_account_id,
+                        status, total_quantity, total_amount, created_by, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         values["order_no"] or f"TEMP-{now.replace(' ', '').replace(':', '').replace('-', '')}",
                         values["order_date"], values["expected_date"], values["store_id"], values["supplier_id"],
                         values["remark"], values["purchaser"], values["creator"], values["payment_amount"],
                         values["other_fees"], values["settlement_account"], values["current_payment"],
+                        values["invoice_required"], values["payment_method"], values["payment_account_id"],
                         values["status"], values["total_quantity"], values["total_amount"],
                         current_identity(), now, now,
                     ),
@@ -569,6 +693,7 @@ def create_purchase_order():
                     )
                 _insert_items(conn, order_id, values["items"])
                 row = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
+                _post_order_bank_payment(conn, row)
                 if values["status"] == "pending":
                     create_audit_notifications(
                         conn, "purchase_order", order_id, row["order_no"],
@@ -606,11 +731,13 @@ def update_purchase_order(order_id):
                     return jsonify({"success": False, "message": "已有入库数量的采购订单不能编辑"}), 409
                 values = _order_values(conn, data, existing)
                 now = _now()
+                _reverse_order_bank_payment(conn, order_id)
                 conn.execute(
                     """
                     UPDATE purchase_orders SET order_no = ?, order_date = ?, expected_date = ?, store_id = ?,
                         supplier_id = ?, remark = ?, purchaser = ?, creator = ?, payment_amount = ?,
-                        other_fees = ?, settlement_account = ?, current_payment = ?, status = ?,
+                        other_fees = ?, settlement_account = ?, current_payment = ?, invoice_required = ?,
+                        payment_method = ?, payment_account_id = ?, status = ?,
                         total_quantity = ?, total_amount = ?, updated_at = ?, version = version + 1
                     WHERE id = ?
                     """,
@@ -618,13 +745,15 @@ def update_purchase_order(order_id):
                         values["order_no"] or row["order_no"], values["order_date"], values["expected_date"],
                         values["store_id"], values["supplier_id"], values["remark"], values["purchaser"],
                         values["creator"], values["payment_amount"], values["other_fees"],
-                        values["settlement_account"], values["current_payment"], values["status"],
+                        values["settlement_account"], values["current_payment"], values["invoice_required"],
+                        values["payment_method"], values["payment_account_id"], values["status"],
                         values["total_quantity"], values["total_amount"], now, order_id,
                     ),
                 )
                 conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
                 _insert_items(conn, order_id, values["items"])
                 updated = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
+                _post_order_bank_payment(conn, updated)
                 if row["status"] == "pending" and values["status"] != "pending":
                     complete_audit_notifications(conn, "purchase_order", order_id)
                 if values["status"] == "pending":
@@ -664,6 +793,7 @@ def delete_purchase_order(order_id):
                 "SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ?", (order_id,)
             ).fetchone():
                 return jsonify({"success": False, "message": "订单已被入库或费用引用，不能删除"}), 409
+            _reverse_order_bank_payment(conn, order_id)
             complete_audit_notifications(conn, "purchase_order", order_id)
             conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
             conn.execute("DELETE FROM purchase_orders WHERE id = ?", (order_id,))
@@ -700,11 +830,13 @@ def audit_purchase_order(order_id):
                 master_supplier_id = _validate_audit_items(conn, audit_items, audit_values["store_id"] if audit_values else row["store_id"])
                 if audit_values is not None:
                     now = _now()
+                    _reverse_order_bank_payment(conn, order_id)
                     conn.execute(
                         """
                         UPDATE purchase_orders SET order_no = ?, order_date = ?, expected_date = ?,
                             store_id = ?, supplier_id = ?, remark = ?, purchaser = ?, creator = ?,
                             payment_amount = ?, other_fees = ?, settlement_account = ?, current_payment = ?,
+                            invoice_required = ?, payment_method = ?, payment_account_id = ?,
                             status = ?, total_quantity = ?, total_amount = ?, updated_at = ?
                         WHERE id = ?
                         """,
@@ -714,6 +846,8 @@ def audit_purchase_order(order_id):
                             audit_values["remark"], audit_values["purchaser"], audit_values["creator"],
                             audit_values["payment_amount"], audit_values["other_fees"],
                             audit_values["settlement_account"], audit_values["current_payment"],
+                            audit_values["invoice_required"], audit_values["payment_method"],
+                            audit_values["payment_account_id"],
                             "pending", audit_values["total_quantity"], audit_values["total_amount"], now, order_id,
                         ),
                     )
@@ -726,6 +860,8 @@ def audit_purchase_order(order_id):
                 )
                 complete_audit_notifications(conn, "purchase_order", order_id)
                 updated = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
+                if audit_values is not None:
+                    _post_order_bank_payment(conn, updated)
                 return jsonify(save_operation(conn, token, {"success": True, "message": "采购订单审核成功", "purchaseOrder": _serialize_order(conn, updated)}))
     except FinanceError as exc:
         return jsonify({"success": False, "message": str(exc)}), exc.status

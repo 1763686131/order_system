@@ -1583,6 +1583,9 @@ def _ensure_purchase_order_schema(conn):
                 other_fees REAL NOT NULL DEFAULT 0,
                 settlement_account TEXT,
                 current_payment REAL NOT NULL DEFAULT 0,
+                invoice_required INTEGER NOT NULL DEFAULT 0,
+                payment_method TEXT NOT NULL DEFAULT '',
+                payment_account_id INTEGER,
                 status TEXT NOT NULL DEFAULT 'draft',
                 total_quantity REAL NOT NULL DEFAULT 0,
                 total_amount REAL NOT NULL DEFAULT 0,
@@ -1632,6 +1635,9 @@ def _ensure_purchase_order_schema(conn):
                     other_fees REAL NOT NULL DEFAULT 0,
                     settlement_account TEXT,
                     current_payment REAL NOT NULL DEFAULT 0,
+                    invoice_required INTEGER NOT NULL DEFAULT 0,
+                    payment_method TEXT NOT NULL DEFAULT '',
+                    payment_account_id INTEGER,
                     status TEXT NOT NULL DEFAULT 'draft',
                     total_quantity REAL NOT NULL DEFAULT 0,
                     total_amount REAL NOT NULL DEFAULT 0,
@@ -1648,11 +1654,12 @@ def _ensure_purchase_order_schema(conn):
                 INSERT INTO purchase_orders (
                     id, order_no, order_date, expected_date, store_id, supplier_id,
                     remark, purchaser, creator, payment_amount, other_fees,
-                    settlement_account, current_payment, status, total_quantity,
+                    settlement_account, current_payment, invoice_required, payment_method,
+                    payment_account_id, status, total_quantity,
                     total_amount, audited_by, audited_at, created_by, created_at, updated_at
                 )
                 SELECT id, order_no, order_date, expected_date, store_id, supplier_id,
-                       remark, NULL, NULL, NULL, 0, NULL, 0, status, total_quantity,
+                       remark, NULL, NULL, NULL, 0, NULL, 0, 0, '', NULL, status, total_quantity,
                        total_amount, audited_by, audited_at, created_by, created_at, updated_at
                 FROM purchase_orders_legacy
                 '''
@@ -1711,6 +1718,9 @@ def _ensure_purchase_order_schema(conn):
             'other_fees': "ALTER TABLE purchase_orders ADD COLUMN other_fees REAL NOT NULL DEFAULT 0",
             'settlement_account': "ALTER TABLE purchase_orders ADD COLUMN settlement_account TEXT",
             'current_payment': "ALTER TABLE purchase_orders ADD COLUMN current_payment REAL NOT NULL DEFAULT 0",
+            'invoice_required': "ALTER TABLE purchase_orders ADD COLUMN invoice_required INTEGER NOT NULL DEFAULT 0",
+            'payment_method': "ALTER TABLE purchase_orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT ''",
+            'payment_account_id': "ALTER TABLE purchase_orders ADD COLUMN payment_account_id INTEGER",
             'inbound_deleted_at': "ALTER TABLE purchase_orders ADD COLUMN inbound_deleted_at TEXT",
         }
         for column, statement in purchase_order_migrations.items():

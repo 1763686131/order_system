@@ -250,7 +250,7 @@ def source_summary(conn, field, value):
     billed = sum(row["billed_cents"] for row in rows)
     returned = sum(returned_payable_cents(conn, row["id"]) for row in rows)
     invoice_status = (
-        "not_required" if not rows else
+        "not_required" if not rows or all(row["invoice_status"] == "not_required" for row in rows) else
         "difference" if any(row["invoice_status"] == "difference" for row in rows) else
         "billed" if all(row["invoice_status"] in ("billed", "not_required") for row in rows) else
         "partial" if billed > 0 else "unbilled"
@@ -258,7 +258,10 @@ def source_summary(conn, field, value):
     return {
         "confirmedPayable": amount(max(0, confirmed - returned)), "allocatedAmount": amount(allocated),
         "returnedAmount": amount(returned), "unpaidAmount": amount(max(0, confirmed - allocated - returned)),
-        "billedAmount": amount(billed), "unbilledAmount": amount(max(0, confirmed - billed)),
+        "billedAmount": amount(billed), "unbilledAmount": amount(sum(
+            max(0, row["amount_including_tax_cents"] - row["billed_cents"])
+            for row in rows if row["invoice_status"] != "not_required"
+        )),
         "invoiceStatus": invoice_status,
         "paymentStatus": "not_confirmed" if not rows else
                          "paid" if confirmed <= allocated else "partial" if allocated else "unpaid",
@@ -270,6 +273,10 @@ def post_inbound_payables(conn, document, items):
     linked = bool(document["purchase_order_id"])
     if not linked and document["settlement_type"] != "pending_supplier":
         return
+    order = conn.execute(
+        "SELECT * FROM purchase_orders WHERE id = ?", (document["purchase_order_id"],)
+    ).fetchone() if linked else None
+    invoice_status = "unbilled" if not order or order["invoice_required"] else "not_required"
     for item in items:
         supplier_id = item.get("supplier_id")
         if not supplier_id:
@@ -298,17 +305,91 @@ def post_inbound_payables(conn, document, items):
                 source_type, source_id, source_item_id, source_document_no,
                 purchase_order_id, purchase_order_item_id, product_name,
                 amount_excluding_tax_cents, tax_amount_cents, amount_including_tax_cents,
-                payable_delta_cents, document_version
-            ) VALUES (?, ?, ?, ?, ?, ?, 'stock_inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                payable_delta_cents, document_version, invoice_status, manual_invoice_status
+            ) VALUES (?, ?, ?, ?, ?, ?, 'stock_inbound', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (supplier_id, document["store_id"], business_date(document["document_date"]), now(),
              current_identity(), "PURCHASE_INBOUND" if linked else "INDEPENDENT_PURCHASE_INBOUND",
              document["id"], item["id"], document["document_no"], document["purchase_order_id"],
              item.get("purchase_order_item_id"), item["product_name"], base, tax, base + tax,
-             base + tax, document["version"]),
+             base + tax, document["version"], invoice_status, invoice_status),
         )
         conn.execute(
             "UPDATE stock_inbound_items SET payable_transaction_id = ? WHERE id = ?",
             (cursor.lastrowid, item["id"]),
+        )
+    if order:
+        _allocate_order_payment(conn, order)
+
+
+def _allocate_order_payment(conn, order):
+    from utils.supplier_settlement import apply_allocations, payable_available_cents
+    from utils.supplier_periods import ensure_period_open
+
+    allocated = conn.execute(
+        """SELECT COALESCE(SUM(amount_cents), 0) value FROM supplier_settlement_allocations
+           WHERE source_type = 'purchase_order_payment' AND source_id = ? AND active = 1""",
+        (order["id"],),
+    ).fetchone()["value"]
+    remaining = cents(order["current_payment"]) - allocated
+    if remaining <= 0:
+        return
+    rows = conn.execute(
+        f"""SELECT * FROM supplier_account_transactions t
+            WHERE purchase_order_id = ? AND source_type = 'stock_inbound' AND {effective_sql()}
+            ORDER BY business_date, source_id, source_item_id""", (order["id"],),
+    ).fetchall()
+    # Attribute the entry payment as batches confirm their suppliers and payables.
+    for row in rows:
+        value = min(remaining, payable_available_cents(conn, row))
+        if value <= 0:
+            continue
+        date = max(row["business_date"], order["order_date"])
+        ensure_period_open(conn, row["supplier_id"], row["store_id"], date)
+        payment = {
+            "supplier_id": row["supplier_id"], "store_id": row["store_id"],
+            "business_date": date, "document_no": order["order_no"],
+            "version": order["version"], "remark": "采购订单已付金额核销",
+        }
+        apply_allocations(conn, payment, "purchase_order_payment", order["id"], [(row, value)])
+        remaining -= value
+        if remaining <= 0:
+            break
+
+
+def _reverse_order_payment_allocations(conn, row):
+    entries = conn.execute(
+        """SELECT a.id allocation_id, a.amount_cents, a.ledger_transaction_id, t.*
+           FROM supplier_settlement_allocations a
+           JOIN supplier_account_transactions t ON t.id = a.ledger_transaction_id
+           WHERE a.payable_transaction_id = ? AND a.source_type = 'purchase_order_payment'
+             AND a.active = 1""", (row["id"],),
+    ).fetchall()
+    if sum(entry["amount_cents"] for entry in entries) != row["allocated_cents"]:
+        raise FinanceError("应付已被后续付款核销，请先解除后续业务", 409)
+    if any(entry["locked_at"] for entry in entries):
+        raise FinanceError("采购订单付款核销已被对账锁定，不能反审核入库", 409)
+    for entry in entries:
+        conn.execute(
+            """INSERT INTO supplier_account_transactions (
+                supplier_id, store_id, business_date, audited_at, created_by, transaction_type,
+                source_type, source_id, source_item_id, source_document_no, document_version,
+                purchase_order_id, purchase_order_item_id, product_name, payable_delta_cents,
+                reversal_of_id, invoice_status, remark
+            ) VALUES (?, ?, ?, ?, ?, 'PAYMENT_REVERSAL', 'purchase_order_payment', ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                      'not_required', '入库反审核退回采购订单已付金额核销')""",
+            (entry["supplier_id"], entry["store_id"], max(now()[:10], entry["business_date"]),
+             now(), current_identity(), entry["source_id"], row["id"], entry["source_document_no"],
+             entry["document_version"], entry["purchase_order_id"], entry["purchase_order_item_id"],
+             entry["product_name"], -entry["payable_delta_cents"], entry["ledger_transaction_id"]),
+        )
+        conn.execute(
+            "UPDATE supplier_settlement_allocations SET active = 0, reversed_at = ? WHERE id = ?",
+            (now(), entry["allocation_id"]),
+        )
+    if entries:
+        conn.execute(
+            "UPDATE supplier_account_transactions SET allocated_cents = 0, version = version + 1 WHERE id = ?",
+            (row["id"],),
         )
 
 
@@ -317,8 +398,8 @@ def reverse_inbound_payables(conn, document):
         f"SELECT * FROM supplier_account_transactions t WHERE source_type = 'stock_inbound' "
         f"AND source_id = ? AND {effective_sql()}", (document["id"],),
     ).fetchall()
-    if any(row["allocated_cents"] or row["locked_at"] or row["billed_cents"] for row in rows):
-        raise FinanceError("应付已被核销、开票或对账引用，请先解除后续业务", 409)
+    if any(row["locked_at"] or row["billed_cents"] for row in rows):
+        raise FinanceError("应付已被开票或对账引用，请先解除后续业务", 409)
     returned = conn.execute(
         """SELECT 1 FROM purchase_return_items i
            JOIN purchase_returns r ON r.id = i.return_id
@@ -331,6 +412,7 @@ def reverse_inbound_payables(conn, document):
     from utils.supplier_periods import ensure_period_open
     for row in rows:
         ensure_period_open(conn, row["supplier_id"], row["store_id"], row["business_date"])
+        _reverse_order_payment_allocations(conn, row)
         conn.execute(
             """INSERT INTO supplier_account_transactions (
                 supplier_id, store_id, business_date, audited_at, created_by, transaction_type,
