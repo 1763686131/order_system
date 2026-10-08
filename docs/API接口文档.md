@@ -3350,7 +3350,7 @@ volumes:
 | `paymentAmount` | number/null | 否 | 折后金额；省略时使用明细金额合计，前端默认随合计填充 |
 | `otherFees` | number | 否 | 其它费用，默认 `0`，不能为负数 |
 | `settlementAccount` | string | 条件 | 其它付款方式的说明；对公账户名称由后端写入快照 |
-| `currentPayment` | number | 否 | 已付金额，默认 `0`；不得超过折后金额与其它费用合计 |
+| `currentPayment` | number | 否 | 已付金额，默认 `0`；允许超过折后金额与其它费用合计，超出部分计为预付款 |
 | `invoiceRequired` | boolean | 否 | 需要发票，默认 `false`；关联入库应付继承此标记 |
 | `paymentMethod` | string | 条件 | 已付金额大于零时必填：`cash`、`wechat`、`acceptance`、`bank_transfer`、`other` |
 | `paymentAccountId` | integer/null | 条件 | 公对公付款时选择本门店银行账户 ID |
@@ -3384,10 +3384,14 @@ estimatedAmount = paymentAmount + otherFees
 未确认入库应付时：currentPayable = max(0, estimatedAmount - currentPayment)
 已确认入库应付时：currentPayable = max(0, confirmedPayable - allocatedAmount)
 orderPayable = confirmedPayable
+采购订单列表展示使用 estimatedAmount 作为应付金额，currentPayment 作为付款金额。
+estimatedUnpaidAmount = max(0, estimatedAmount - currentPayment)
+prepaidAmount = max(0, currentPayment - estimatedAmount)
+purchasePaymentStatus = prepaid / paid / partial / unpaid
 supplierPayable = 所选明细供应商在 supplier_account_transactions 中的应付余额合计
 ```
 
-保存采购申请不新增供应商应付。公对公已付金额生成 `purchase_order_payment` 银行流水；编辑冲销原扣款后重记，删除未审核申请退回原扣款，余额不足返回 `409` 并回滚整个事务。现金、微信、承兑、其它只记录付款信息，不改变银行账户。关联入库审核后，按有效入库应付来源顺序自动核销订单已付金额；入库反审核释放这部分核销，不退回或重复扣减银行余额。后续供应商付款仍使用第二阶段付款接口。
+保存采购申请不新增供应商应付。已付金额允许大于估算金额，超出部分作为预付款展示；公对公已付金额生成 `purchase_order_payment` 银行流水，账户余额不足仍返回 `409` 并回滚整个事务。编辑冲销原扣款后重记，删除未审核申请退回原扣款；现金、微信、承兑、其它只记录付款信息，不改变银行账户。关联入库审核后，按有效入库应付来源顺序自动核销订单已付金额；入库反审核释放这部分核销，不退回或重复扣减银行余额。后续供应商付款仍使用第二阶段付款接口。
 
 对公账户选项使用 `GET /api/bank-accounts/options?storeId={id}`，按登录账号的门店范围过滤。默认响应不含余额；点击眼睛图标时附加 `includeBalance=1` 获取各账户的最新 `balance`。
 
@@ -3403,6 +3407,7 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
     "orderDate": "2026-10-05",
     "expectedDate": "2026-10-12",
     "storeId": 1,
+    "storeName": "总部店",
     "status": "pending",
     "purchaser": "采购员",
     "creator": "当前账户",
@@ -3418,6 +3423,9 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
     "totalAmount": 0,
     "orderPayable": 0,
     "estimatedAmount": 10000,
+    "estimatedUnpaidAmount": 5000,
+    "prepaidAmount": 0,
+    "purchasePaymentStatus": "partial",
     "currentPayable": 5000,
     "supplierPayable": 0,
     "items": []

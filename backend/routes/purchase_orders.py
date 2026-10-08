@@ -280,9 +280,6 @@ def _order_values(conn, data, existing=None):
         raise ValueError("其它费用不能为负数")
     if current_payment < 0:
         raise ValueError("已付金额不能为负数")
-    payable = (payment_amount if payment_amount is not None else total_amount) + other_fees
-    if current_payment > payable:
-        raise ValueError("已付金额不能大于折后金额与其它费用合计")
     if current_payment > 0 and not payment_method:
         raise ValueError("填写已付金额时请选择付款方式")
     settlement_account = _text(
@@ -373,6 +370,10 @@ def _serialize_order(conn, row, include_items=True):
     order["orderDate"] = order.pop("order_date", "")
     order["expectedDate"] = order.pop("expected_date", "") or ""
     order["storeId"] = order.pop("store_id", None)
+    store = conn.execute(
+        "SELECT name FROM stores WHERE id = ?", (order["storeId"],)
+    ).fetchone()
+    order["storeName"] = store["name"] if store else ""
     order["supplierId"] = order.pop("supplier_id", None)
     order["supplierName"] = supplier["supplier_name"] if supplier else ""
     order["purchaser"] = order.pop("purchaser", "") or ""
@@ -441,6 +442,16 @@ def _serialize_order(conn, row, include_items=True):
     )
     order["estimatedAmount"] = max(0.0, order_payable_base + float(order["otherFees"] or 0))
     order.update(source_summary(conn, "purchase_order_id", row["id"]))
+    estimated_amount = float(order["estimatedAmount"] or 0)
+    current_payment = float(order["currentPayment"] or 0)
+    order["estimatedUnpaidAmount"] = max(0.0, round(estimated_amount - current_payment, 2))
+    order["prepaidAmount"] = max(0.0, round(current_payment - estimated_amount, 2))
+    order["purchasePaymentStatus"] = (
+        "prepaid" if order["prepaidAmount"] > 0 else
+        "paid" if order["estimatedUnpaidAmount"] <= 0 else
+        "partial" if current_payment > 0 else
+        "unpaid"
+    )
     order["orderPayable"] = order["confirmedPayable"]
     order["currentPayable"] = (
         order["unpaidAmount"] if order["payableCount"] else

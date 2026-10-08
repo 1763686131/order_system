@@ -130,9 +130,6 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
   if (hasValue(form.currentPayment) && (!Number.isFinite(Number(form.currentPayment)) || Number(form.currentPayment) < 0)) {
     return invalid('currentPayment', '已付金额必须为非负数。')
   }
-  const totalAmount = form.items.reduce((sum, item) => sum + (item.productId ? Number(item.amount) || 0 : 0), 0)
-  const payable = (hasValue(form.paymentAmount) ? Number(form.paymentAmount) : totalAmount) + (Number(form.otherFees) || 0)
-  if (Number(form.currentPayment || 0) > payable) return invalid('currentPayment', '已付金额不能大于折后金额与其它费用合计。')
   if (Number(form.currentPayment || 0) > 0 && !form.paymentMethod) return invalid('paymentMethod', '填写已付金额时请选择付款方式。')
   if (Number(form.currentPayment || 0) > 0 && form.paymentMethod === 'bank_transfer' && !form.paymentAccountId) {
     return invalid('paymentAccountId', '请选择对公付款账户。')

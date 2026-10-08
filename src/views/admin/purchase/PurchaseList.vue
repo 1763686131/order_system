@@ -294,7 +294,7 @@
           <span class="field-label">付款状态</span>
           <select v-model="filters.paymentStatus">
             <option value="">全部</option>
-            <option v-for="(label, key) in paymentLabels" :key="key" :value="key">{{ label }}</option>
+            <option v-for="(label, key) in paymentFilterLabels" :key="key" :value="key">{{ label }}</option>
           </select>
         </label>
 
@@ -399,22 +399,26 @@
               <th>{{ isInbound ? '入库单号' : '采购单号' }}</th>
               <th>{{ isInbound ? '入库日期' : '申请日期' }}</th>
               <th v-if="isInbound">仓库</th>
+              <th v-else>门店</th>
               <th>供应商</th>
               <th>{{ isInbound ? '商品物品名称' : '物料摘要' }}</th>
-              <th>{{ isInbound ? '入库数量/总数量' : '采购数量' }}</th>
+              <th>{{ isInbound ? '入库数量/总数量' : '计划采购数量' }}</th>
               <th v-if="isInbound">进度</th>
-              <th v-if="!isInbound">仓库</th>
-              <th>估算 / 已确认应付</th>
+              <th>{{ isInbound ? '估算 / 已确认应付' : '应付金额' }}</th>
+              <template v-if="!isInbound">
+                <th class="finance-column amount-cell">付款金额</th>
+                <th class="finance-column payment-status-cell">付款状态</th>
+              </template>
               <th>{{ isInbound ? '入库状态' : '履约状态' }}</th>
               <th class="finance-column">开票状态</th>
-              <th class="finance-column">付款状态</th>
+              <th v-if="isInbound" class="finance-column">付款状态</th>
               <th>备注</th>
               <th class="action-column">操作</th>
             </tr>
           </thead>
           <tbody v-if="loading">
             <tr v-for="index in 6" :key="`skeleton-${index}`" class="skeleton-row">
-              <td v-for="column in (isInbound ? 14 : 13)" :key="column"><span></span></td>
+              <td v-for="column in 14" :key="column"><span></span></td>
             </tr>
           </tbody>
           <tbody v-else-if="paginatedRecords.length">
@@ -443,32 +447,26 @@
               </td>
               <td class="date-cell">{{ formatDate(recordDate(record)) }}</td>
               <td v-if="isInbound">{{ record.warehouseName }}</td>
+              <td v-else>{{ record.storeName || '—' }}</td>
               <td>
                 <div v-if="supplierNamesFor(record).length > 1" class="summary-with-count" :title="supplierNamesFor(record).join('、')">
                   <span class="primary-cell summary-name">{{ supplierNamesFor(record)[0] }}</span>
                   <span class="summary-pill">供应商+{{ supplierNamesFor(record).length }}</span>
                 </div>
                 <div v-else class="primary-cell">{{ supplierNamesFor(record)[0] || record.supplierName || '—' }}</div>
-                <div class="secondary-cell">{{ isInbound ? record.inspector : record.contact }}</div>
+                <div v-if="isInbound" class="secondary-cell">{{ record.inspector }}</div>
               </td>
               <td>
-                <template v-if="isInbound">
-                  <div v-if="itemNamesFor(record).length > 1" class="summary-with-count item-summary-count" :title="itemNamesFor(record).join('、')">
-                    <span class="primary-cell summary-name">{{ itemNamesFor(record)[0] }}</span>
-                    <span class="summary-pill">商品+{{ itemNamesFor(record).length }}</span>
-                  </div>
-                  <div v-else class="primary-cell item-summary">{{ itemNamesFor(record)[0] || '—' }}</div>
-                </template>
-                <template v-else>
-                  <div class="primary-cell item-summary">{{ record.itemSummary }}</div>
-                  <div class="secondary-cell">{{ record.itemCount }} 项物料</div>
-                </template>
+                <div v-if="itemNamesFor(record).length > 1" class="summary-with-count item-summary-count" :title="itemNamesFor(record).join('、')">
+                  <span class="primary-cell summary-name">{{ itemNamesFor(record)[0] }}</span>
+                  <span class="summary-pill">商品+{{ itemNamesFor(record).length }}</span>
+                </div>
+                <div v-else class="primary-cell item-summary">{{ itemNamesFor(record)[0] || '—' }}</div>
               </td>
               <td>
                 <div class="quantity-cell">
-                  <strong>{{ receiptLabel(record) }}</strong>
+                  <strong>{{ isInbound ? receiptLabel(record) : plannedQuantityLabel(record) }}</strong>
                 </div>
-                <div v-if="!isInbound" class="secondary-cell">已入库 / 计划</div>
               </td>
               <td v-if="isInbound" class="progress-column">
                 <div class="progress-cell">
@@ -479,24 +477,21 @@
                   <span v-else>—</span>
                 </div>
               </td>
-              <td v-if="!isInbound">
-                <div v-if="warehouseNamesFor(record).length > 1" class="summary-with-count" :title="warehouseNamesFor(record).join('、')">
-                  <span class="primary-cell summary-name">{{ warehouseNamesFor(record)[0] }}</span>
-                  <span class="summary-pill">仓库+{{ warehouseNamesFor(record).length }}</span>
-                </div>
-                <div v-else class="primary-cell">{{ warehouseNamesFor(record)[0] || record.warehouseName || '—' }}</div>
-              </td>
               <td class="amount-cell">
-                <div>¥ {{ formatMoney(record.estimatedAmount ?? record.totalAmount) }}</div>
-                <div class="secondary-cell">应付 ¥ {{ formatMoney(record.confirmedPayable) }}</div>
+                <div>¥ {{ formatMoney(isInbound ? (record.estimatedAmount ?? record.totalAmount) : record.estimatedAmount) }}</div>
+                <div v-if="isInbound" class="secondary-cell">应付 ¥ {{ formatMoney(record.confirmedPayable) }}</div>
               </td>
+              <template v-if="!isInbound">
+                <td class="finance-column amount-cell">¥ {{ formatMoney(record.currentPayment) }}</td>
+                <td class="finance-column payment-status-cell">{{ purchasePaymentLabel(record) }}</td>
+              </template>
               <td>
                 <span class="status-tag" :class="`status-${getStatusClass(record.status)}`">
                   <i></i>{{ getStatusLabel(record.status) }}
                 </span>
               </td>
               <td class="finance-column">{{ invoiceLabels[record.invoiceStatus] || '无需开票' }}</td>
-              <td class="finance-column">
+              <td v-if="isInbound" class="finance-column">
                 <div>{{ paymentLabels[record.paymentStatus] || '未确认应付' }}</div>
                 <div class="secondary-cell">未付 ¥ {{ formatMoney(record.unpaidAmount) }}</div>
               </td>
@@ -568,7 +563,7 @@
           </tbody>
           <tbody v-else>
             <tr>
-              <td :colspan="isInbound ? 14 : 13" class="empty-cell">
+              <td colspan="14" class="empty-cell">
                 <div class="empty-state">
                   <div class="empty-icon">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -868,6 +863,9 @@ const router = useRouter()
 const userStore = useUserStore()
 const isInbound = computed(() => props.mode === 'inbound')
 const isReturn = computed(() => props.mode === 'returns')
+const paymentFilterLabels = computed(() => isInbound.value ? paymentLabels : {
+  unpaid: '未付款', partial: '部分付款', paid: '已结清', prepaid: '增加预付'
+})
 const canAudit = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT))
 const canDelete = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.DELETE))
 const canReverseAuditPermission = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.REVERSE_AUDIT))
@@ -1136,7 +1134,7 @@ const returnActionMessage = computed(() => ({
 const expenseOrderId = ref(null)
 const settlementInboundId = ref(null)
 const canReadSettlement = computed(() => userStore.hasPerm('admin.purchase.inbound.settlement.read'))
-const loading = ref(false)
+const loading = ref(true)
 const currentPage = ref(1)
 const pageSize = 30
 const selectedIds = ref(new Set())
@@ -1197,6 +1195,7 @@ const filteredRecords = computed(() => {
       const searchable = [
         isInbound.value ? record.inboundNo : record.orderNo,
         record.supplierName,
+        record.storeName,
         record.warehouseName,
         record.itemSummary
       ].join(' ').toLowerCase()
@@ -1204,7 +1203,7 @@ const filteredRecords = computed(() => {
       return (!keyword || searchable.includes(keyword))
         && (status === 'all' || record.status === status)
         && (!invoiceStatus || record.invoiceStatus === invoiceStatus)
-        && (!paymentStatus || record.paymentStatus === paymentStatus)
+        && (!paymentStatus || (isInbound.value ? record.paymentStatus : record.purchasePaymentStatus) === paymentStatus)
         && (!startDate || date >= startDate)
         && (!endDate || date <= endDate)
     })
@@ -1283,6 +1282,17 @@ function receiptLabel(record) {
     return hasMixedUnits(record) ? `${record.items.length} 行` : `${formatNumber(record.receivedQuantity)} ${record.items?.[0]?.unit || ''}`
   }
   return fulfillmentLabel(record)
+}
+function plannedQuantityLabel(record) {
+  if (record.progressBasis === 'lines' || hasMixedUnits(record)) {
+    return `${record.totalLineCount || record.itemCount || 0} 行`
+  }
+  return `${formatNumber(record.totalQuantity)} ${record.items?.[0]?.unit || ''}`.trim()
+}
+function purchasePaymentLabel(record) {
+  if (record.purchasePaymentStatus === 'prepaid') return `增加预付 ¥ ${formatMoney(record.prepaidAmount)}`
+  if (record.purchasePaymentStatus !== 'paid') return `未付 ¥ ${formatMoney(record.estimatedUnpaidAmount)}`
+  return '已结清'
 }
 function canOpenExpenses(record) {
   return userStore.hasPerm('admin.route.purchase.orders') &&
@@ -1590,8 +1600,22 @@ function printRecord(record) {
 function exportRecords() {
   const rows = filteredRecords.value
   if (!rows.length) { showNotice('当前没有可导出的记录'); return }
-  const headers = isInbound.value ? ['入库单号', '日期', '供应商', '实收数量', '金额', '状态'] : ['采购单号', '日期', '供应商', '采购数量', '金额', '状态']
-  const lines = rows.map(record => [getRecordNo(record), recordDate(record), record.supplierName, quantityValue(record), record.totalAmount, getStatusLabel(record.status)])
+  const headers = isInbound.value
+    ? ['入库单号', '日期', '供应商', '实收数量', '金额', '状态']
+    : ['采购单号', '申请日期', '门店', '供应商', '计划采购数量', '应付金额', '付款金额', '付款状态', '履约状态']
+  const lines = isInbound.value
+    ? rows.map(record => [getRecordNo(record), recordDate(record), record.supplierName, quantityValue(record), record.totalAmount, getStatusLabel(record.status)])
+    : rows.map(record => [
+        getRecordNo(record),
+        recordDate(record),
+        record.storeName,
+        record.supplierName,
+        plannedQuantityLabel(record),
+        record.estimatedAmount,
+        record.currentPayment,
+        purchasePaymentLabel(record),
+        getStatusLabel(record.status)
+      ])
   const csv = [headers, ...lines].map(line => line.map(value => `"${String(value ?? '').replace(/"/g, '""')}"`).join(',')).join('\n')
   const blob = new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8' })
   const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = `${isInbound.value ? '采购入库' : '采购订单'}.csv`; link.click(); URL.revokeObjectURL(link.href)
@@ -1647,6 +1671,7 @@ function normalizeOrder(record) {
     ...record, id: record.orderId || record.id, orderNo: record.orderNo || '', purchaseDate: record.orderDate || '',
     status: record.status === 'confirmed' ? 'approved' : (record.status || 'draft'),
     supplierName: record.supplierName || lineSupplierNames.join('、') || '待采购审核', supplierNames: lineSupplierNames,
+    storeName: record.storeName || '',
     warehouseName: record.warehouseName || record.warehouse_name || lineWarehouseNames.join('、'), warehouseNames: lineWarehouseNames,
     contact: record.createdBy || '',
     itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''),
@@ -4128,6 +4153,96 @@ onMounted(() => refreshData(false))
   min-width: 80px;
   padding-right: 5px;
   padding-left: 5px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table {
+  min-width: 1540px !important;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th,
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td {
+  text-align: left !important;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table .checkbox-column,
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table .action-column {
+  text-align: center !important;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table .amount-cell,
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(7),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(8) {
+  text-align: right !important;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table .payment-status-cell {
+  white-space: nowrap;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(2),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(2) {
+  width: 138px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(3),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(3) {
+  width: 96px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(4),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(4) {
+  width: 112px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(5),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(5) {
+  width: 145px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(6),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(6) {
+  width: 174px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(7),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(7) {
+  width: 128px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(8),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(8) {
+  width: 124px;
+  text-align: right;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(9),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(9) {
+  width: 116px !important;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(10),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(10) {
+  width: 180px !important;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(11),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(11) {
+  width: 102px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(12),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(12) {
+  width: 98px !important;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(13),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(13) {
+  width: 90px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(14),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(14) {
+  width: 96px !important;
 }
 
 @media (max-width: 1280px) {
