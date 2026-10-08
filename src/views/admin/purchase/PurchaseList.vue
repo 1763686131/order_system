@@ -283,14 +283,14 @@
           </select>
         </label>
 
-        <label class="search-field">
+        <label v-if="!isInbound" class="search-field">
           <span class="field-label">开票状态</span>
           <select v-model="filters.invoiceStatus">
             <option value="">全部</option>
             <option v-for="(label, key) in invoiceLabels" :key="key" :value="key">{{ label }}</option>
           </select>
         </label>
-        <label class="search-field">
+        <label v-if="!isInbound" class="search-field">
           <span class="field-label">付款状态</span>
           <select v-model="filters.paymentStatus">
             <option value="">全部</option>
@@ -407,21 +407,20 @@
               <th>{{ isInbound ? '商品物品名称' : '物料摘要' }}</th>
               <th>{{ isInbound ? '入库数量/总数量' : '计划采购数量' }}</th>
               <th v-if="isInbound">进度</th>
-              <th>{{ isInbound ? '估算 / 已确认应付' : '应付金额' }}</th>
+              <th v-if="!isInbound">应付金额</th>
               <template v-if="!isInbound">
                 <th class="finance-column amount-cell">付款金额</th>
                 <th class="finance-column payment-status-cell">付款状态</th>
               </template>
               <th>{{ isInbound ? '入库状态' : '履约状态' }}</th>
-              <th class="finance-column">开票状态</th>
-              <th v-if="isInbound" class="finance-column">付款状态</th>
+              <th v-if="!isInbound" class="finance-column">开票状态</th>
               <th>备注</th>
               <th class="action-column">操作</th>
             </tr>
           </thead>
           <tbody v-if="loading">
             <tr v-for="index in 6" :key="`skeleton-${index}`" class="skeleton-row">
-              <td v-for="column in 14" :key="column"><span></span></td>
+              <td v-for="column in recordTableColumnCount" :key="column"><span></span></td>
             </tr>
           </tbody>
           <tbody v-else-if="paginatedRecords.length">
@@ -481,9 +480,8 @@
                   <span v-else>—</span>
                 </div>
               </td>
-              <td class="amount-cell">
+              <td v-if="!isInbound" class="amount-cell">
                 <div>¥ {{ formatMoney(isInbound ? (record.estimatedAmount ?? record.totalAmount) : record.estimatedAmount) }}</div>
-                <div v-if="isInbound" class="secondary-cell">应付 ¥ {{ formatMoney(record.confirmedPayable) }}</div>
               </td>
               <template v-if="!isInbound">
                 <td class="finance-column amount-cell">¥ {{ formatMoney(record.currentPayment) }}</td>
@@ -494,11 +492,7 @@
                   <i></i>{{ getStatusLabel(record.status) }}
                 </span>
               </td>
-              <td class="finance-column">{{ invoiceLabels[record.invoiceStatus] || '无需开票' }}</td>
-              <td v-if="isInbound" class="finance-column">
-                <div>{{ paymentLabels[record.paymentStatus] || '未确认应付' }}</div>
-                <div class="secondary-cell">未付 ¥ {{ formatMoney(record.unpaidAmount) }}</div>
-              </td>
+              <td v-if="!isInbound" class="finance-column">{{ invoiceLabels[record.invoiceStatus] || '无需开票' }}</td>
               <td class="remark-cell" :title="record.remark || ''">{{ record.remark || '—' }}</td>
               <td class="action-column" @click.stop>
                 <div class="row-actions">
@@ -507,6 +501,15 @@
                       <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
                       <circle cx="12" cy="12" r="2.5"></circle>
                     </svg>
+                  </button>
+                  <button
+                    v-if="isInbound && record.status === 'pending_review'"
+                    class="table-action danger"
+                    type="button"
+                    title="删除未审核采购申请"
+                    @click="confirmDeleteApplication(record)"
+                  >
+                    <Trash2 :size="15" aria-hidden="true" />
                   </button>
                   <button
                     v-if="isInbound && record.inboundId"
@@ -567,7 +570,7 @@
           </tbody>
           <tbody v-else>
             <tr>
-              <td colspan="14" class="empty-cell">
+              <td :colspan="recordTableColumnCount" class="empty-cell">
                 <div class="empty-state">
                   <div class="empty-icon">
                     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -611,6 +614,7 @@
         <div v-if="detailModalOpen && selectedRecord" class="detail-modal-layer" @click.self="closeDetail">
           <article
             class="detail-modal"
+            :class="{ 'is-inbound': isInbound }"
             role="dialog"
             aria-modal="true"
             :aria-label="isInbound ? '采购入库详情' : '采购订单详情'"
@@ -628,7 +632,7 @@
                 </span>
                 <div>
                   <span class="modal-kicker">{{ isInbound ? 'PURCHASE INBOUND' : 'PURCHASE ORDER' }}</span>
-                  <h2>{{ isInbound ? '采购入库详情' : '采购订单详情' }}</h2>
+                  <h2>{{ isInbound ? '采购入库申请详情' : '采购订单详情' }}</h2>
                   <div class="modal-document-no">{{ getRecordNo(selectedRecord) }}</div>
                 </div>
               </div>
@@ -640,7 +644,31 @@
             </header>
 
             <div class="detail-modal-body">
-              <div class="detail-overview">
+              <div v-if="isInbound" class="detail-overview inbound-detail-overview">
+                <div>
+                  <span class="detail-label">{{ selectedRecord.purchaseOrderId ? '申请日期' : '入库日期' }}</span>
+                  <strong>{{ formatDate(recordDate(selectedRecord)) }}</strong>
+                </div>
+                <div>
+                  <span class="detail-label">申请总数量</span>
+                  <strong>{{ detailQuantityLabel(selectedRecord, 'orderedQty') }}</strong>
+                </div>
+                <div>
+                  <span class="detail-label">采购数量</span>
+                  <strong>{{ !selectedRecord.purchaseOrderId ? '—' : selectedRecord.actualTotalQuantity == null ? '待补充' : detailQuantityLabel(selectedRecord, 'actualPurchaseQty') }}</strong>
+                </div>
+                <div>
+                  <span class="detail-label">实收数量</span>
+                  <strong>{{ detailQuantityLabel(selectedRecord, 'receivedQty') }}</strong>
+                </div>
+                <div>
+                  <span class="detail-label">当前状态</span>
+                  <span class="status-tag large" :class="`status-${getStatusClass(selectedRecord.status)}`">
+                    <i></i>{{ getStatusLabel(selectedRecord.status) }}
+                  </span>
+                </div>
+              </div>
+              <div v-else class="detail-overview">
                 <div>
                   <span class="detail-label">当前状态</span>
                   <span class="status-tag large" :class="`status-${getStatusClass(selectedRecord.status)}`">
@@ -648,16 +676,16 @@
                   </span>
                 </div>
                 <div>
-                  <span class="detail-label">{{ isInbound ? '入库日期' : '申请日期' }}</span>
+                  <span class="detail-label">申请日期</span>
                   <strong>{{ formatDate(recordDate(selectedRecord)) }}</strong>
                 </div>
                 <div>
-                  <span class="detail-label">{{ isInbound ? '含税金额' : '采购金额' }}</span>
+                  <span class="detail-label">采购金额</span>
                   <strong class="overview-amount">¥ {{ formatMoney(selectedRecord.totalAmount) }}</strong>
                 </div>
               </div>
 
-              <section class="detail-section">
+              <section v-if="!isInbound" class="detail-section">
                 <div class="section-heading"><h3>采购结算</h3><span>{{ receiptLabel(selectedRecord) }}</span></div>
                 <div class="meta-grid">
                   <div><span>已确认应付</span><strong>¥ {{ formatMoney(selectedRecord.confirmedPayable) }}</strong></div>
@@ -668,7 +696,7 @@
                 </div>
               </section>
 
-              <section class="detail-section">
+              <section v-if="!isInbound" class="detail-section">
                 <div class="section-heading">
                   <h3>基础信息</h3>
                   <span>共 {{ selectedRecord.itemCount }} 项物料</span>
@@ -684,24 +712,36 @@
               <section class="detail-section">
                 <div class="section-heading">
                   <h3>采购物料明细</h3>
-                  <span>{{ receiptLabel(selectedRecord) }}</span>
+                  <span>{{ isInbound ? `共 ${selectedRecord.itemCount} 项物料` : receiptLabel(selectedRecord) }}</span>
                 </div>
                 <div class="detail-items-scroll">
-                  <table class="detail-items-table">
+                  <table class="detail-items-table" :class="{ 'inbound-items-table': isInbound }">
+                    <colgroup v-if="isInbound">
+                      <col style="width: 115px">
+                      <col style="width: 130px">
+                      <col style="width: 130px">
+                      <col style="width: 75px">
+                      <col style="width: 160px">
+                      <col style="width: 160px">
+                      <col style="width: 140px">
+                      <col style="width: 115px">
+                      <col>
+                    </colgroup>
                     <thead>
                       <tr>
                         <th>物料编码</th>
                         <th>物料名称</th>
                         <th>规格型号</th>
                         <th>单位</th>
-                        <th>采购供应商</th>
+                        <th v-if="!isInbound">采购供应商</th>
+                        <th v-if="isInbound">申请数量</th>
                         <th>{{ isInbound ? '应收数量' : '申请数量' }}</th>
                         <th v-if="!isInbound">实际采购数量</th>
                         <th>累计实收</th>
                         <th>履约进度</th>
-                        <th>{{ isInbound ? '含税单价' : '采购单价' }}</th>
-                        <th>金额</th>
-                        <th v-if="isInbound">批次 / 库位</th>
+                        <th v-if="isInbound">备注</th>
+                        <th v-if="!isInbound">采购单价</th>
+                        <th v-if="!isInbound">金额</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -710,7 +750,8 @@
                         <td>{{ item.goodsName }}</td>
                         <td>{{ item.specification || '—' }}</td>
                         <td>{{ item.unit }}</td>
-                        <td :title="item.supplierName || selectedRecord.supplierName">{{ item.supplierName || (isInbound ? selectedRecord.supplierName || '—' : '待补充') }}</td>
+                        <td v-if="!isInbound" :title="item.supplierName || selectedRecord.supplierName">{{ item.supplierName || '待补充' }}</td>
+                        <td v-if="isInbound">{{ item.orderedQty == null ? '—' : formatNumber(item.orderedQty) }}</td>
                         <td>{{ formatNumber(isInbound ? item.expectedQty : item.quantity) }}</td>
                         <td v-if="!isInbound">{{ item.actualPurchaseQty == null ? '待补充' : formatNumber(item.actualPurchaseQty) }}</td>
                         <td>
@@ -725,29 +766,38 @@
                             <small>{{ itemProgress(item) }}%</small>
                           </div>
                         </td>
-                        <td>{{ item.price == null ? '待补充' : `¥ ${formatMoney(item.price)}` }}</td>
-                        <td>{{ item.amount == null ? '待补充' : `¥ ${formatMoney(item.amount)}` }}</td>
-                        <td v-if="isInbound">{{ item.batchNo || '—' }} / {{ item.binCode || '—' }}</td>
+                        <td v-if="isInbound" class="item-remark-cell" :title="item.remark || ''">{{ item.remark || '—' }}</td>
+                        <td v-if="!isInbound">{{ item.price == null ? '待补充' : `¥ ${formatMoney(item.price)}` }}</td>
+                        <td v-if="!isInbound">{{ item.amount == null ? '待补充' : `¥ ${formatMoney(item.amount)}` }}</td>
                       </tr>
                     </tbody>
                     <tfoot>
                       <tr>
-                        <td colspan="4" class="detail-total-label">合计</td>
-                        <td>—</td>
-                        <td>{{ hasMixedUnits(selectedRecord) ? '—' : formatNumber(detailTotals.plannedQuantity) }}</td>
-                        <td v-if="!isInbound">{{ selectedRecord.actualTotalQuantity == null || hasMixedUnits(selectedRecord) ? '—' : formatNumber(selectedRecord.actualTotalQuantity) }}</td>
-                        <td>{{ hasMixedUnits(selectedRecord) ? '—' : formatNumber(detailTotals.receivedQuantity) }}</td>
-                        <td class="detail-progress-total">—</td>
-                        <td>—</td>
-                        <td>¥ {{ formatMoney(detailTotals.amount) }}</td>
-                        <td v-if="isInbound"></td>
+                        <template v-if="isInbound">
+                          <td colspan="4" class="detail-total-label">合计</td>
+                          <td>{{ detailQuantityLabel(selectedRecord, 'orderedQty') }}</td>
+                          <td>{{ detailQuantityLabel(selectedRecord, 'expectedQty') }}</td>
+                          <td>{{ detailQuantityLabel(selectedRecord, 'receivedQty') }}</td>
+                          <td class="detail-progress-total">—</td>
+                          <td></td>
+                        </template>
+                        <template v-else>
+                          <td colspan="4" class="detail-total-label">合计</td>
+                          <td>—</td>
+                          <td>{{ hasMixedUnits(selectedRecord) ? '—' : formatNumber(detailTotals.plannedQuantity) }}</td>
+                          <td>{{ selectedRecord.actualTotalQuantity == null || hasMixedUnits(selectedRecord) ? '—' : formatNumber(selectedRecord.actualTotalQuantity) }}</td>
+                          <td>{{ hasMixedUnits(selectedRecord) ? '—' : formatNumber(detailTotals.receivedQuantity) }}</td>
+                          <td class="detail-progress-total">—</td>
+                          <td>—</td>
+                          <td>¥ {{ formatMoney(detailTotals.amount) }}</td>
+                        </template>
                       </tr>
                     </tfoot>
                   </table>
                 </div>
               </section>
 
-              <section v-if="isInbound && selectedRecord.batches?.length" class="detail-section">
+              <section v-if="!isInbound && selectedRecord.batches?.length" class="detail-section">
                 <div class="section-heading">
                   <h3>入库批次</h3>
                   <span>共 {{ selectedRecord.batches.length }} 批</span>
@@ -785,7 +835,7 @@
 
             <footer class="detail-modal-footer">
               <div class="footer-actions">
-                <button v-if="canOpenExpenses(selectedRecord)" class="button button-secondary" type="button" @click="openExpenses(selectedRecord)">
+                <button v-if="!isInbound && canOpenExpenses(selectedRecord)" class="button button-secondary" type="button" @click="openExpenses(selectedRecord)">
                   <ReceiptText :size="16" aria-hidden="true" />采购费用
                 </button>
                 <button v-if="isInbound && !selectedRecord.purchaseOrderId && selectedRecord.settlementType === 'pending_supplier' && canReadSettlement" class="button button-secondary" type="button" @click="openSettlement(selectedRecord)">
@@ -808,6 +858,9 @@
                   </svg>
                   打印入库单
                 </button>
+                <button v-if="isInbound && selectedRecord.status === 'pending_review'" class="button button-danger" type="button" @click="confirmDeleteApplication(selectedRecord)">
+                  <Trash2 :size="16" aria-hidden="true" />删除申请
+                </button>
                 <button v-if="isInbound && selectedRecord.status === 'pending'" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
                   创建采购入库单
                 </button>
@@ -827,7 +880,7 @@
     <SupplierAssignmentDialog v-if="settlementInboundId" :inbound-id="settlementInboundId" @close="settlementInboundId = null" @updated="refreshData(false)" />
     <CustomModal
       :visible="deleteConfirmOpen"
-      title="确认批量删除"
+      :title="applicationDeleteTarget ? '确认删除采购申请' : '确认批量删除'"
       :message="deleteConfirmMessage"
       confirm-text="删除"
       :danger="true"
@@ -875,6 +928,7 @@ const paymentFilterLabels = computed(() => isInbound.value ? paymentLabels : {
 })
 const canAudit = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT))
 const canDelete = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.DELETE))
+const canDeleteApplication = computed(() => userStore.hasPerm('admin.route.purchase.inbound'))
 const canReverseAuditPermission = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.REVERSE_AUDIT))
 const canReturn = action => userStore.hasPerm(`admin.purchase.return.${action}`)
 const returnStatusLabels = purchaseReturnStatusLabels
@@ -1142,6 +1196,7 @@ const expenseOrderId = ref(null)
 const settlementInboundId = ref(null)
 const canReadSettlement = computed(() => userStore.hasPerm('admin.purchase.inbound.settlement.read'))
 const loading = ref(true)
+const recordTableColumnCount = computed(() => isInbound.value ? 11 : 14)
 const currentPage = ref(1)
 const pageSize = 30
 const selectedIds = ref(new Set())
@@ -1154,10 +1209,13 @@ const detailTotals = computed(() => (selectedRecord.value?.items || []).reduce((
 const detailModalOpen = ref(false)
 const notice = ref('')
 const deleting = ref(false)
+const applicationDeleteTarget = ref(null)
 const orderReverseAuditTarget = ref(null)
 const deleteConfirmOpen = ref(false)
 const deleteTargets = ref([])
-const deleteConfirmMessage = computed(() => `确定删除选中的 ${deleteTargets.value.length} 条采购入库及全部批次吗？已审核批次将回退库存和累计入库数量，采购订单保留。`)
+const deleteConfirmMessage = computed(() => applicationDeleteTarget.value
+  ? `确定删除未审核采购申请 ${getRecordNo(applicationDeleteTarget.value)}？删除后不能恢复。`
+  : `确定删除选中的 ${deleteTargets.value.length} 条采购入库及全部批次吗？已审核批次将回退库存和累计入库数量，采购订单保留。`)
 
 const sourceRecords = computed(() => (isInbound.value ? inboundRecords.value : orderRecords.value))
 
@@ -1276,6 +1334,21 @@ function formatDate(value) {
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 2 })
+}
+
+function detailQuantityLabel(record, field) {
+  const totals = new Map()
+  for (const item of record.items || []) {
+    const value = field === 'orderedQty'
+      ? item.orderedQty ?? item.expectedQty
+      : item[field]
+    if (value == null || value === '') continue
+    const unit = String(item.unit || '').trim()
+    totals.set(unit, (totals.get(unit) || 0) + Number(value || 0))
+  }
+  return [...totals]
+    .map(([unit, value]) => `${formatNumber(value)}${unit ? ` ${unit}` : ''}`)
+    .join(' / ') || '—'
 }
 
 function itemProgress(item) {
@@ -1525,17 +1598,40 @@ function clearSelection() {
   selectedIds.value = new Set()
 }
 
+function confirmDeleteApplication(record) {
+  if (!canDeleteApplication.value || !isInbound.value || deleting.value || loading.value ||
+    record?.status !== 'pending_review' || !record.purchaseOrderId) return
+  applicationDeleteTarget.value = record
+  deleteTargets.value = []
+  deleteConfirmOpen.value = true
+}
+
 function confirmDeleteSelected() {
   if (!canDelete.value || deleting.value || loading.value) return
+  applicationDeleteTarget.value = null
   deleteTargets.value = inboundRecords.value.filter(record => selectedIds.value.has(record.id))
   if (deleteTargets.value.length) deleteConfirmOpen.value = true
 }
 
 async function deleteSelected() {
-  if (deleting.value || !deleteTargets.value.length) return
+  if (deleting.value || (!applicationDeleteTarget.value && !deleteTargets.value.length)) return
   deleteConfirmOpen.value = false
   deleting.value = true
   try {
+    if (applicationDeleteTarget.value) {
+      const record = applicationDeleteTarget.value
+      const response = await request({
+        url: `/purchase-inbound-applications/${record.purchaseOrderId}`,
+        method: 'DELETE',
+        data: { version: record.version }
+      })
+      if (!response?.success) throw new Error(response?.message || '删除采购申请失败')
+      clearSelection()
+      closeDetail()
+      await refreshData(false)
+      showNotice('采购申请已删除')
+      return
+    }
     const response = await request({
       url: '/purchase-inbounds/bulk-delete',
       method: 'POST',
@@ -1554,6 +1650,7 @@ async function deleteSelected() {
   } finally {
     deleting.value = false
     deleteTargets.value = []
+    applicationDeleteTarget.value = null
   }
 }
 
@@ -3455,8 +3552,11 @@ onMounted(() => refreshData(false))
   border-color: var(--accent-border);
 }
 
+.table-action.danger { color: #b4232f; }
+.table-action.danger:hover { color: #9f1c27; background: #fff1f2; border-color: #f0b9bf; }
+
 .is-inbound .records-table {
-  min-width: 1390px;
+  min-width: 1280px;
 }
 
 .is-inbound .records-table th {
@@ -3494,45 +3594,53 @@ onMounted(() => refreshData(false))
 
 .is-inbound .records-table th:nth-child(5),
 .is-inbound .records-table td:nth-child(5) {
-  width: 135px;
+  width: 150px;
 }
 
 .is-inbound .records-table th:nth-child(6),
 .is-inbound .records-table td:nth-child(6) {
-  width: 160px;
+  width: 200px;
 }
 
 .is-inbound .records-table th:nth-child(7),
 .is-inbound .records-table td:nth-child(7) {
-  width: 160px;
+  width: 145px;
   text-align: right;
 }
 
 .is-inbound .records-table th:nth-child(8),
 .is-inbound .records-table td:nth-child(8) {
-  width: 88px;
+  width: 90px;
 }
 
 .is-inbound .records-table th:nth-child(9),
 .is-inbound .records-table td:nth-child(9) {
-  width: 110px;
-  text-align: right;
+  width: 105px;
 }
 
 .is-inbound .records-table th:nth-child(10),
 .is-inbound .records-table td:nth-child(10) {
-  width: 100px;
+  width: 180px;
 }
 
 .is-inbound .records-table th:nth-child(11),
 .is-inbound .records-table td:nth-child(11) {
   width: 110px;
+  text-align: center;
 }
 
-.is-inbound .records-table th:nth-child(12),
-.is-inbound .records-table td:nth-child(12) {
-  width: 170px;
-  text-align: center;
+.is-inbound .detail-overview { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.is-inbound .inbound-detail-overview > div:last-child {
+  width: max-content;
+  align-items: flex-start;
+  justify-self: start;
+}
+.is-inbound .inbound-detail-overview .status-tag {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: max-content;
+  white-space: nowrap;
 }
 
 .is-inbound .quantity-cell {
@@ -3761,6 +3869,23 @@ onMounted(() => refreshData(false))
 
 .detail-items-table {
   min-width: 820px;
+}
+
+.inbound-items-table {
+  width: 100%;
+  min-width: 1160px;
+  table-layout: fixed;
+}
+
+.is-inbound .detail-items-table.inbound-items-table th,
+.is-inbound .detail-items-table.inbound-items-table td {
+  text-align: left;
+  font-variant-numeric: tabular-nums;
+}
+
+.inbound-items-table .item-remark-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .detail-items-table th {
@@ -4363,6 +4488,9 @@ onMounted(() => refreshData(false))
   .meta-grid {
     grid-template-columns: 1fr 1fr;
   }
+
+.is-inbound .detail-overview { grid-template-columns: 1fr 1fr; }
+.is-inbound .inbound-detail-overview > div:last-child { grid-column: 1 / -1; }
 
   .page-notice {
     top: 12px;

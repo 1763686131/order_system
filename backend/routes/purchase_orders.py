@@ -876,6 +876,36 @@ def delete_purchase_order(order_id):
             return jsonify({"success": True, "deleted": True})
 
 
+@purchase_orders_bp.route("/purchase-inbound-applications/<int:order_id>", methods=["DELETE"])
+@require_admin_permission(ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"])
+def delete_purchase_inbound_application(order_id):
+    try:
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                row = conn.execute(
+                    "SELECT * FROM purchase_orders WHERE id = ?", (order_id,)
+                ).fetchone()
+                if not row or row["source_type"] != "inbound-application":
+                    return jsonify({"success": False, "message": "采购申请不存在"}), 404
+                if row["status"] != "pending":
+                    return jsonify({"success": False, "message": "采购订单审核通过后不能删除"}), 409
+                check_scope(row["store_id"])
+                check_version(request.get_json(silent=True) or {}, row)
+                if conn.execute(
+                    "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? "
+                    "UNION ALL SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ? LIMIT 1",
+                    (order_id, order_id),
+                ).fetchone():
+                    return jsonify({"success": False, "message": "采购申请已被入库或费用引用，不能删除"}), 409
+                complete_audit_notifications(conn, "purchase_order", order_id)
+                conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
+                conn.execute("DELETE FROM purchase_orders WHERE id = ?", (order_id,))
+                return jsonify({"success": True, "deleted": True})
+    except FinanceError as exc:
+        return jsonify({"success": False, "message": str(exc)}), exc.status
+
+
 @purchase_orders_bp.route("/purchase-orders/<int:order_id>/audit", methods=["POST"])
 @require_admin_permission(ADMIN_PURCHASE_ORDER_PERMISSIONS["audit"])
 def audit_purchase_order(order_id):
