@@ -45,7 +45,7 @@
           <label v-if="isReturn" class="info-group"><span>原订单编号</span><input v-model.trim="ui.form.originalOrderNumber" :ref="element => setFieldRef('originalOrderNumber', element)" type="text" /></label>
         </fieldset>
         <div class="toolbar-actions">
-          <label v-if="!isPurchaseOrder && !isPurchaseReturn" class="tax-toggle"><input v-model="ui.taxEnabled" type="checkbox" :disabled="fieldsDisabled" /><span>含税</span></label>
+          <label v-if="!isPurchaseOrder && !isPurchaseReturn && !hidePurchaseAmounts" class="tax-toggle"><input v-model="ui.taxEnabled" type="checkbox" :disabled="fieldsDisabled" /><span>含税</span></label>
           <button v-if="isPurchaseReturn && !ui.readOnly" class="btn close-button" type="button" title="刷新可退批次" aria-label="刷新可退批次" :disabled="fieldsDisabled || !ui.form.storeId || !ui.form.supplierId" @click="ui.loadSources()"><RefreshCw :size="18" aria-hidden="true" /></button>
           <button type="button" class="btn btn-danger" :disabled="fieldsDisabled || ui.lockRequestedItems" @click="confirmation = 'clear'">清空</button>
           <button type="button" class="btn close-button" :disabled="ui.saving" title="关闭" aria-label="关闭" @click="requestClose"><X :size="18" :stroke-width="1.6" aria-hidden="true" /></button>
@@ -62,8 +62,6 @@
           </template>
           <template v-else>
             <label class="info-group"><span>单据来源</span><input :value="ui.documentSource" type="text" readonly /></label>
-            <label v-if="!ui.purchaseOrderId" class="info-group"><span>结算归属</span><select v-model="ui.form.settlementType"><option value="none">无需结算</option><option value="pending_supplier">待补供应商</option></select></label>
-            <label v-if="!ui.purchaseOrderId && ui.form.settlementType === 'pending_supplier'" class="info-group wide"><span>结算备注</span><input v-model="ui.form.settlementRemark" maxlength="500" type="text" /></label>
             <label class="info-group"><span>检验员</span><input v-model="ui.form.inspector" type="text" /></label>
             <label class="info-group"><span>质检单号</span><input v-model="ui.form.qualityNo" type="text" /></label>
           </template>
@@ -358,7 +356,7 @@ const isPurchase = computed(() => props.documentType === 'purchase')
 const isPurchaseOrder = computed(() => props.documentType === 'purchase-order')
 const isPurchaseApplication = computed(() => isPurchaseOrder.value && props.applicationMode)
 const isPurchaseReturn = computed(() => props.documentType === 'purchase-return')
-const hidePurchaseAmounts = computed(() => isPurchase.value && props.action === 'create')
+const hidePurchaseAmounts = computed(() => isPurchase.value && !ui.readOnly && (props.action === 'create' || !ui.purchaseOrderId))
 const showLineAmounts = computed(() => !isPurchaseApplication.value && !hidePurchaseAmounts.value)
 const showTaxColumns = computed(() => showLineAmounts.value && ui.taxEnabled)
 const hasPurchaseOrderItems = computed(() => isPurchaseOrder.value && ui.form.items.some(item => item.productId))

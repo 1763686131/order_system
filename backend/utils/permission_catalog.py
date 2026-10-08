@@ -874,14 +874,14 @@ PERMISSION_MODULES.extend([
     },
     {
         "code": "admin_purchase_settlement",
-        "name": "独立入库结算",
-        "description": "待补供应商入库财务归属",
+        "name": "采购审核",
+        "description": "仓库先入库，采购补齐供应商、单价与结算归属",
         "permissions": [
             {"code": code, "name": name, "description": name}
             for code, name in [
-                ("admin.route.purchase.inbound_settlement", "访问独立入库结算"),
-                ("admin.purchase.inbound.settlement.read", "查看待补供应商入库"),
-                ("admin.purchase.inbound.assign_supplier", "补录明细供应商"),
+                ("admin.route.purchase.inbound_settlement", "访问采购审核"),
+                ("admin.purchase.inbound.settlement.read", "查看采购入库审核"),
+                ("admin.purchase.inbound.assign_supplier", "补录供应商、单价及结算归属"),
                 ("admin.purchase.inbound.confirm_payable", "确认独立入库应付"),
             ]
         ],

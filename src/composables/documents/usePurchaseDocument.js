@@ -2,6 +2,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
+import { operationKey } from '@/utils/supplierFinance'
 import { DOCUMENT_TYPES, inboundAmounts, isLockedInbound, localDate, money, purchasePayload, validatePurchase } from './documentModels'
 import { useDocumentValidation } from './useDocumentValidation'
 
@@ -34,6 +35,7 @@ export function usePurchaseDocument(props) {
     attachments: [], status: 'draft', settlementType: 'none', settlementRemark: '', version: null,
   })
   const saving = ref(false)
+  let pendingSave = null
   const loading = ref(true)
   const loadFailed = ref(false)
   const savedDocumentId = ref(props.documentId)
@@ -133,7 +135,7 @@ export function usePurchaseDocument(props) {
     item.unit = units.value.find(unit => String(unit.id) === String(product.unitId))?.name || product.unit || ''
     item.warehouseId = item.warehouseId || form.value.warehouseId || ''
     item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
-    item.price = Number(product.price || 0)
+    item.price = purchaseOrderId.value ? Number(product.price || 0) : ''
     item.currentStock = getProductStock(product, item)
     item.taxRate = form.value.taxEnabled ? 13 : 0
     calculateRow(item)
@@ -311,14 +313,19 @@ export function usePurchaseDocument(props) {
     saving.value = true
     try {
       const id = savedDocumentId.value
-      const response = await request({ url: id ? `/stock-inbounds/${id}` : '/stock-inbounds', method: id ? 'PUT' : 'POST', data: purchasePayload(form.value) })
+      const data = purchasePayload(form.value)
+      const signature = JSON.stringify({ id, data })
+      if (pendingSave?.signature !== signature) pendingSave = { signature, key: operationKey() }
+      const response = await request({ url: id ? `/stock-inbounds/${id}` : '/stock-inbounds', method: id ? 'PUT' : 'POST', data: { ...data, idempotencyKey: pendingSave.key } })
       if (!response?.success) throw new Error(response?.message || '保存失败')
       const saved = response.stockIn || {}
       savedDocumentId.value = response.id || saved.id || id
-      form.value.documentNo = saved.documentNo || form.value.documentNo
-      form.value.version = saved.version ?? form.value.version
-      showNotice('进货单保存成功')
+      normalizeInbound(saved)
+      pendingSave = null
+      readOnly.value = isLockedInbound(saved.status)
+      showNotice(response.message || '进货单保存成功')
       openPrint()
+      return true
     } catch (error) {
       showNotice(error?.response?.data?.message || error.message || '进货单保存失败', 'error')
     } finally { saving.value = false }

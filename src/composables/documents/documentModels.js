@@ -22,8 +22,9 @@ export function purchasePayload(form) {
     documentDate: form.documentDate,
     type,
     documentSource: form.purchaseOrderId ? 'purchase-order' : 'other',
-    settlementType: form.purchaseOrderId ? 'none' : form.settlementType || 'none',
+    settlementType: form.purchaseOrderId ? 'none' : 'pending_supplier',
     settlementRemark: form.settlementRemark || '',
+    postOnSave: !form.purchaseOrderId,
     ...(form.version ? { version: form.version } : {}),
     storeId: Number(form.storeId),
     supplierId: form.purchaseOrderId && type === 'raw-material' && form.supplierId ? Number(form.supplierId) : null,
@@ -67,7 +68,7 @@ export function validatePurchase(form, onInvalid = () => {}) {
     if (!item.productId) continue
     if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return invalid(`item-quantity-${index}`, '实收数量必须大于 0。')
     if (!item.batchNo?.trim()) return invalid(`item-batch-${index}`, `请填写${itemLabel}的批次号。`)
-    if (!Number.isFinite(Number(item.price)) || Number(item.price) < 0) return invalid(`item-price-${index}`, '单价必须为非负数。')
+    if (form.purchaseOrderId && (!Number.isFinite(Number(item.price)) || Number(item.price) < 0)) return invalid(`item-price-${index}`, '单价必须为非负数。')
     if (!Number.isFinite(Number(item.expectedQty || 0)) || Number(item.expectedQty || 0) < 0) return invalid(`item-expected-${index}`, '应收数量必须为非负数。')
     if (form.taxEnabled && (!Number.isFinite(Number(item.taxRate)) || Number(item.taxRate) < 0 || Number(item.taxRate) > 100)) return invalid(`item-tax-${index}`, '税率必须在 0 到 100 之间。')
   }

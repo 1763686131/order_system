@@ -7,7 +7,7 @@ export const paymentLabels = {
 }
 export const settlementLabels = {
   not_required: '无需结算', pending_inbound: '待入库确认',
-  pending_supplier: '待补供应商', supplier_assigned: '已补供应商/待确认',
+  pending_supplier: '待补采购信息', supplier_assigned: '待审核确认',
   payable_confirmed: '应付已确认'
 }
 export const businessLabels = {

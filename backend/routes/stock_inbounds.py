@@ -601,10 +601,55 @@ def _serialize_document(conn, row, include_items=True):
         'payable_confirmed' if document['payableCount'] else
         'pending_inbound' if document['purchaseOrderId'] else
         'supplier_assigned' if document['settlementType'] == 'pending_supplier' and
-            document.get('items') and all(item['supplierId'] for item in document['items']) else
+            document.get('items') and all(item['supplierId'] and item['unitPrice'] is not None for item in document['items']) else
         'pending_supplier' if document['settlementType'] == 'pending_supplier' else 'not_required'
     )
     return document
+
+
+def _post_saved_inbound(conn, row, values):
+    """Post a saved draft in the caller's transaction, without a second request."""
+    inbound_id = row['id']
+    if row['status'] != 'draft':
+        raise FinanceError('只有待审核单据可以审核', 409)
+    if conn.execute(
+        "SELECT 1 FROM stock_movements WHERE movement_type = 'in' AND source_document_id = ? LIMIT 1",
+        (inbound_id,),
+    ).fetchone():
+        raise FinanceError('该单据已有库存流水，请先检查数据状态', 409)
+    checked = _document_values(conn, values, existing=values, for_post=True)
+    for item in checked['items']:
+        conn.execute(
+            """UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ?,
+               unit_price = ?, tax_amount = ?, total_amount = ? WHERE id = ? AND inbound_id = ?""",
+            (item['supplier_id'], item['supplier_assignment_status'], item['unit_price'],
+             item['tax_amount'], item['total_amount'], item['id'], inbound_id),
+        )
+    items = [dict(item) for item in conn.execute(
+        'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id', (inbound_id,),
+    ).fetchall()]
+    now = _now()
+    conn.execute(
+        """UPDATE stock_inbounds SET status = 'reviewed', posted_at = ?, updated_at = ?,
+           audited_by = ?, version = version + 1, total_tax = ?, total_amount = ? WHERE id = ?""",
+        (now, now, current_identity(), checked['total_tax'], checked['total_amount'], inbound_id),
+    )
+    audited = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
+    _post_items(conn, audited, items)
+    if audited['purchase_order_id']:
+        post_inbound_payables(conn, audited, items)
+    _update_purchase_receipts(conn, audited['purchase_order_id'], items, direction=1)
+    complete_audit_notifications(conn, 'stock_inbound', inbound_id)
+    return audited
+
+
+def _post_on_save_requested(data):
+    value = data.get('postOnSave', False)
+    if not isinstance(value, bool):
+        raise ValueError('postOnSave 必须为布尔值')
+    if value and not admin_permission_granted(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS['stock_inbound']):
+        raise FinanceError('保存并入库需要入库审核权限', 403)
+    return value
 
 
 def _post_items(conn, document_row, item_rows):
@@ -921,21 +966,40 @@ def create_stock_inbound():
     data = request.get_json(silent=True) or {}
     requested_status = str(data.get('status') or 'draft').lower()
     try:
+        post_on_save = _post_on_save_requested(data)
         if _is_audited(requested_status):
             return jsonify({'success': False, 'message': '请先保存待审核单据，再调用审核接口'}), 400
         with _write_lock:
             with get_db() as conn:
                 conn.execute('BEGIN IMMEDIATE')
                 values = _document_values(conn, data)
+                if post_on_save:
+                    if values['purchase_order_id'] or values['document_source'] != 'other':
+                        raise ValueError('保存并入库仅用于独立进货单')
+                    values['settlement_type'] = 'pending_supplier'
+                replay, token = idempotent_result(conn, 'inbound:create', data)
+                if replay:
+                    check_scope(replay['stockIn']['storeId'], [
+                        item['warehouseId'] for item in replay['stockIn']['items']
+                    ])
+                    return jsonify(replay)
                 row = _document_insert(conn, values)
-                create_audit_notifications(
-                    conn,
-                    "stock_inbound",
-                    row["id"],
-                    row["document_no"],
-                    f"入库单 {row['document_no']} 已提交，请及时审核。",
-                )
-                return jsonify({'success': True, 'message': '入库单保存成功', 'stockIn': _serialize_document(conn, row), 'id': row['id']}), 201
+                if post_on_save:
+                    row, saved_values = _existing_values(conn, row['id'])
+                    row = _post_saved_inbound(conn, row, saved_values)
+                else:
+                    create_audit_notifications(
+                        conn,
+                        "stock_inbound",
+                        row["id"],
+                        row["document_no"],
+                        f"入库单 {row['document_no']} 已提交，请及时审核。",
+                    )
+                return jsonify(save_operation(conn, token, {
+                    'success': True,
+                    'message': '进货单保存成功，实收数量已入库' if post_on_save else '入库单保存成功',
+                    'stockIn': _serialize_document(conn, row), 'id': row['id'],
+                })), 201
     except FinanceError as exc:
         return jsonify({'success': False, 'message': str(exc)}), exc.status
     except ValueError as exc:
@@ -949,6 +1013,7 @@ def update_stock_inbound(inbound_id):
     data = request.get_json(silent=True) or {}
     requested_status = str(data.get('status') or '').lower()
     try:
+        post_on_save = _post_on_save_requested(data)
         if _is_audited(requested_status):
             return jsonify({'success': False, 'message': '请通过审核接口变更审核状态'}), 400
         with _write_lock:
@@ -957,6 +1022,10 @@ def update_stock_inbound(inbound_id):
                 old_row, old_values = _existing_values(conn, inbound_id)
                 if not old_row:
                     return jsonify({'success': False, 'message': '入库单不存在'}), 404
+                check_scope(old_row['store_id'], [item['warehouse_id'] for item in old_values['_items']])
+                replay, token = idempotent_result(conn, f'inbound:{inbound_id}:update', data)
+                if replay:
+                    return jsonify(replay)
                 if _is_audited(old_row['status']):
                     return jsonify({'success': False, 'message': '已审核单据不可修改'}), 409
                 check_scope(old_row['store_id'])
@@ -965,6 +1034,10 @@ def update_stock_inbound(inbound_id):
                                 '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?)', (inbound_id,)).fetchone():
                     raise FinanceError('请先删除或取消该批次的费用归属，再修改入库明细', 409)
                 values = _document_values(conn, data, existing=old_values)
+                if post_on_save:
+                    if old_row['status'] != 'draft' or values['purchase_order_id'] or values['document_source'] != 'other':
+                        raise ValueError('保存并入库仅用于独立进货草稿')
+                    values['settlement_type'] = 'pending_supplier'
                 if values.get('purchase_order_id') != old_row['purchase_order_id']:
                     raise ValueError('不能修改入库批次关联的采购订单')
                 now = _now()
@@ -996,7 +1069,14 @@ def update_stock_inbound(inbound_id):
                     new_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                     _post_items(conn, new_row, [dict(item, id=item.get('id')) for item in values['items']])
                 row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
-                return jsonify({'success': True, 'message': '入库单更新成功', 'stockIn': _serialize_document(conn, row)})
+                if post_on_save:
+                    row, saved_values = _existing_values(conn, inbound_id)
+                    row = _post_saved_inbound(conn, row, saved_values)
+                return jsonify(save_operation(conn, token, {
+                    'success': True,
+                    'message': '进货单保存成功，实收数量已入库' if post_on_save else '入库单更新成功',
+                    'stockIn': _serialize_document(conn, row),
+                }))
     except FinanceError as exc:
         return jsonify({'success': False, 'message': str(exc)}), exc.status
     except ValueError as exc:
@@ -1182,40 +1262,7 @@ def audit_stock_inbound(inbound_id):
                 if _is_audited(row['status']):
                     return jsonify(save_operation(conn, token, {'success': True, 'stockIn': _serialize_document(conn, row)}))
                 check_version(data, row)
-                if row['status'] != 'draft':
-                    return jsonify({'success': False, 'message': '只有待审核单据可以审核'}), 409
-                movement_exists = conn.execute(
-                    "SELECT 1 FROM stock_movements WHERE movement_type = 'in' AND source_document_id = ? LIMIT 1",
-                    (inbound_id,),
-                ).fetchone()
-                if movement_exists:
-                    return jsonify({'success': False, 'message': '该单据已有库存流水，请先检查数据状态'}), 409
-
-                # 重新按审核规则校验供应商、物料、数量和批次。
-                checked = _document_values(conn, values, existing=values, for_post=True)
-                for item in checked['items']:
-                    conn.execute(
-                        """UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ?,
-                           unit_price = ?, tax_amount = ?, total_amount = ? WHERE id = ? AND inbound_id = ?""",
-                        (item['supplier_id'], item['supplier_assignment_status'], item['unit_price'],
-                         item['tax_amount'], item['total_amount'], item['id'], inbound_id),
-                    )
-                item_rows = conn.execute(
-                    'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id',
-                    (inbound_id,),
-                ).fetchall()
-                now = _now()
-                conn.execute(
-                    """UPDATE stock_inbounds SET status = 'reviewed', posted_at = ?, updated_at = ?,
-                       audited_by = ?, version = version + 1, total_tax = ?, total_amount = ? WHERE id = ?""",
-                    (now, now, current_identity(), checked['total_tax'], checked['total_amount'], inbound_id),
-                )
-                audited_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
-                _post_items(conn, audited_row, [dict(item) for item in item_rows])
-                if audited_row['purchase_order_id']:
-                    post_inbound_payables(conn, audited_row, [dict(item) for item in item_rows])
-                _update_purchase_receipts(conn, audited_row['purchase_order_id'], [dict(item) for item in item_rows], direction=1)
-                complete_audit_notifications(conn, "stock_inbound", inbound_id)
+                audited_row = _post_saved_inbound(conn, row, values)
                 return jsonify(save_operation(conn, token, {
                     'success': True,
                     'message': '入库单审核成功，库存已更新',

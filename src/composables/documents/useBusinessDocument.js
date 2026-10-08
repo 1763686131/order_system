@@ -58,7 +58,7 @@ export function useBusinessDocument(props) {
 function withDocumentDraft(props, ui) {
   const { discardDraft } = useDocumentDraft(props, ui)
   ui.discardDraft = discardDraft
-  if (['purchase-order', 'purchase-return'].includes(props.documentType)) {
+  if (['purchase', 'purchase-order', 'purchase-return'].includes(props.documentType)) {
     const save = ui.save
     ui.save = async status => {
       const saved = await save(status)

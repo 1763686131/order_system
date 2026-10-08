@@ -272,7 +272,7 @@ order_system/
 │  │     │  └─ CustomerList.vue      # 客户管理入口，封装 PartyList 的 customer 模式
 │  │     ├─ purchase/                # 采购管理
 │  │     │  ├─ PurchaseList.vue      # 采购订单/采购入库/采购退货共用列表；按路由 mode 显示字段
-│  │     │  ├─ PurchaseInboundSettlement.vue # 待补供应商独立入库结算
+│  │     │  ├─ PurchaseInboundSettlement.vue # 独立进货单采购审核及采购信息补录
 │  │     │  ├─ PurchaseInvoices.vue  # 采购发票登记入口
 │  │     │  └─ SupplierList.vue      # 供应商管理入口，封装 PartyList 的 supplier 模式
 │  │     ├─ inventory/               # 仓库管理
@@ -524,7 +524,7 @@ import {
 | `/admin/purchase/inbound/create` | 新增进货单（公共表单） | `/api/stock-inbounds`、门店/供应商/仓库/原材料/单位/库存余额接口 |
 | `/admin/purchase/inbound/edit/:id` | 修改未审核进货单（公共表单） | `/api/stock-inbounds/:id` |
 | `/admin/purchase/inbound/:id` | 查看、打印进货单（公共表单） | `/api/stock-inbounds/:id`、`/api/print-templates` |
-| `/admin/purchase/inbound-settlement` | 待补供应商独立入库结算 | `/api/stock-inbounds/:id/settlement`、`/assign-supplier`、`/confirm-payable` |
+| `/admin/purchase/inbound-settlement` | 采购审核：补齐供应商、单价和结算归属 | `/api/stock-inbounds/:id/settlement`、`/assign-supplier`、`/confirm-payable` |
 | `/admin/purchase/invoices` | 采购发票登记、分配、确认和撤销 | `/api/purchase-invoices` |
 | `/admin/purchase/returns` | 采购退货、批次库存扣减、应付冲减和贷项 | `/api/purchase-returns` |
 | `/admin/purchase/returns/create` | 新增采购退货（公共表单） | `/api/purchase-returns/options`、`/api/suppliers/:id/purchase-return-sources`、`/api/purchase-returns` |
@@ -562,7 +562,7 @@ import {
 路由通过 `mode: 'orders'`、`mode: 'inbound'` 或 `mode: 'returns'` 切换标题、筛选条件、表格列和操作；页面样式写在组件内的 `<style scoped>`，切换路由会重置筛选。
 采购订单已接入 `/api/purchase-orders`，支持新增申请、编辑、审核和查看。申请阶段可以暂不填写逐行供应商、单价和金额，审核时必须补齐供应商和单价；审核通过后从采购订单发起关联入库，补充仓库、应收数量和实收数量。
 
-采购订单记录申请、折后金额、其它费用、已付金额和履约承诺，采购入库记录实际到货和库存位置；两者分别审核后进入下一环节。关联入库审核按实际数量确认供应商应付，独立入库按 `none` 或 `pending_supplier` 处理。采购入库的审核、反审核、红冲、重新启用和删除在“库存 / 入库记录”页面完成。
+采购订单记录申请、折后金额、其它费用、已付金额和履约承诺，关联采购入库记录实际到货和库存位置，原有采购申请审核后关联入库流程保持不变。独立进货单采用“仓库先入库、采购后审核”：仓库录入实收数量、仓库和批次后，点击保存即在同一事务中审核入库，默认标记 `pending_supplier`；采购人员进入“采购 / 采购审核”补齐逐行供应商、单价、税率、结算归属和备注，再确认应付。也可在采购审核选择 `none` 无需结算。补录采购信息不重复增加库存，补价会同步重算原入库流水成本。反审核、红冲、重新启用和删除仍在库存记录页面完成。
 
 采购申请提供折后金额（默认随明细合计填充）、其它费用、已付金额、付款方式和“需要发票”。付款方式为现金、微信、承兑、公对公、其它；公对公选择本门店预设账户，眼睛按钮切换最新余额显隐，其它需填写付款说明。保存采购申请时，对公账户按已付金额扣款，余额不足则整个保存事务回滚；编辑时冲销原扣款并重新入账，删除未审核采购单时退回原扣款。未入库的未付应付为折后金额加其它费用减已付金额。关联入库确认应付后自动核销采购单已付金额，不再次扣款；后续剩余应付仍可通过供应商付款模块支付。采购列表将履约、开票和付款状态分开，已审核且没有入库的订单提供反审核入口。
 
@@ -605,7 +605,7 @@ import {
 
 采购退货新增、编辑和详情统一进入公共表单，不再使用列表内的独立录入弹窗。明细必须选择该门店、供应商已确认应付的可退原材料入库批次，仓库、批次、货位和原单价由来源带出且只读；可编辑表单默认 8 行，空行不提交，同一来源不能重复选择，退货数量不能超过可退数量，确认退货金额与原成本不一致时必须填写差异原因。已保存退货的门店、供应商不可更换；只读详情使用历史明细快照，不依赖可退批次接口。切换菜单保留独立采购退货草稿，保存或确认关闭后清除；编辑草稿恢复时校验服务端版本。保存仍只生成草稿，审核才扣库存并冲减应付或形成贷项。
 
-进货单保存使用 `/api/stock-inbounds`，按商品类型提交并固定 `status: 'draft'`；保存不增加库存，需在入库记录页面审核。首次保存 ID 用于后续修改。关联入库审核按实际数量确认新账务应付；`none` 独立入库只写库存，`pending_supplier` 独立入库待财务补录供应商后再确认应付。
+进货单保存使用 `/api/stock-inbounds`。独立进货单提交 `status: 'draft'`、`postOnSave: true` 和幂等键，由后端在同一事务中保存并审核为 `reviewed`，实收数量立即入库；此操作仍要求 `admin.inventory.stock_inbound.audit` 权限，失败整笔回滚。仓库录入页不展示结算归属、结算备注和单价金额，供应商及采购单价留空；保存后转为只读并清除会话草稿。关联采购订单入库及其他不传 `postOnSave` 的接口调用仍只保存草稿，再由入库审核写库存。采购审核继续使用现有归属/应付接口，权限代码不变；已确认应付的采购信息不得直接改写。
 
 ## 员工与头像关键接口
 
@@ -678,15 +678,15 @@ import {
 | `DELETE` | `/api/suppliers/:id` | 删除或停用供应商 |
 | `GET` | `/api/stock-inbounds` | 查询入库单列表 |
 | `GET` | `/api/stock-inbounds/:id` | 查询入库单及明细 |
-| `POST` | `/api/stock-inbounds` | 提交待审核入库单 |
-| `PUT` | `/api/stock-inbounds/:id` | 修改未审核入库单 |
+| `POST` | `/api/stock-inbounds` | 保存草稿；独立进货传 `postOnSave: true` 时原子保存并入库 |
+| `PUT` | `/api/stock-inbounds/:id` | 修改未审核入库单；独立草稿可同时保存并入库 |
 | `POST` | `/api/stock-inbounds/:id/audit` | 审核并写入库存 |
 | `DELETE` | `/api/stock-inbounds/:id/audit` | 反审核并回退库存 |
 | `DELETE` | `/api/stock-inbounds/:id` | 红冲，或删除已红冲单据 |
 | `POST` | `/api/stock-inbounds/:id/restart` | 重新启用已红冲单据 |
 | `GET` | `/api/stock-balances` | 查询库存数量、平均成本和库存金额 |
-| `GET` | `/api/stock-inbounds/:id/settlement` | 查询待补供应商独立入库 |
-| `POST` | `/api/stock-inbounds/:id/assign-supplier` | 按入库明细补录供应商 |
+| `GET` | `/api/stock-inbounds/:id/settlement` | 查询独立进货单采购审核信息 |
+| `POST` | `/api/stock-inbounds/:id/assign-supplier` | 按明细补录供应商、单价、税率及结算归属，重算成本但不重复入库 |
 | `POST` | `/api/stock-inbounds/:id/confirm-payable` | 确认独立入库应付，不重复写库存 |
 
 完整字段定义和请求示例见 [API 接口文档](docs/API接口文档.md)。
@@ -1090,9 +1090,9 @@ docker restart my_order_app
 
 草稿保存和修改不会改变银行账户余额。审核销售订单或收款单时增加实际收款，退货单审核时仅按“本次退款”减少余额；反审核会回退相反金额。实退金额用于核销客户应收，不等同于现金退款。
 
-### 提交入库单后库存没有变化
+### 保存入库单后库存没有变化
 
-提交审核只创建待审核单据。请进入“入库记录”，打开单据抽屉并点击“审核”。只有审核接口成功返回后，库存才会增加。
+独立进货单的“保存”会同时审核入库，需要入库审核权限；校验或权限失败时不会留下部分单据。关联采购订单入库及其他普通草稿保存仍需进入“入库记录”审核。供应商、采购单价及结算信息在“采购 / 采购审核”补齐，不影响已入库数量。
 
 ### 为什么后台修改原材料时不再提示触屏端可操作范围
 

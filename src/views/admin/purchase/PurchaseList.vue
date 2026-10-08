@@ -504,6 +504,7 @@
                 <span class="status-tag" :class="`status-${getStatusClass(record.status)}`">
                   <i></i>{{ getStatusLabel(record.status) }}
                 </span>
+                <div v-if="isInbound && !record.purchaseOrderId && record.settlementType === 'pending_supplier'" class="secondary-cell">{{ settlementLabels[record.financialStatus] }}</div>
               </td>
               <td v-if="!isInbound" class="finance-column">{{ invoiceLabels[record.invoiceStatus] || '无需开票' }}</td>
               <td class="remark-cell" :title="record.remark || ''">{{ record.remark || '—' }}</td>
@@ -514,6 +515,9 @@
                       <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
                       <circle cx="12" cy="12" r="2.5"></circle>
                     </svg>
+                  </button>
+                  <button v-if="canReviewInbound(record)" class="table-action audit-action" type="button" title="采购审核" aria-label="采购审核" @click="openSettlement(record)">
+                    <Check :size="15" aria-hidden="true" />
                   </button>
                   <button
                     v-if="isInbound && canDeleteApplication && record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)"
@@ -851,8 +855,8 @@
                 <button v-if="!isInbound && canOpenExpenses(selectedRecord)" class="button button-secondary" type="button" @click="openExpenses(selectedRecord)">
                   <ReceiptText :size="16" aria-hidden="true" />采购费用
                 </button>
-                <button v-if="isInbound && !selectedRecord.purchaseOrderId && selectedRecord.settlementType === 'pending_supplier' && canReadSettlement" class="button button-secondary" type="button" @click="openSettlement(selectedRecord)">
-                  <Wallet :size="16" aria-hidden="true" />供应商归属
+                <button v-if="canReviewInbound(selectedRecord)" class="button button-secondary" type="button" @click="openSettlement(selectedRecord)">
+                  <Wallet :size="16" aria-hidden="true" />采购审核
                 </button>
                 <button v-if="!isInbound && selectedRecord.status === 'pending' && canAudit" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
@@ -922,7 +926,7 @@ import { ADMIN_PURCHASE_ORDER_PERMISSIONS } from '@/utils/accessControl'
 import PurchaseExpenseDialog from '@/components/admin/purchase/PurchaseExpenseDialog.vue'
 import SupplierAssignmentDialog from '@/components/admin/purchase/SupplierAssignmentDialog.vue'
 import { purchaseReturnStatusLabels } from '@/composables/documents/documentModels'
-import { invoiceLabels, operationKey, paymentLabels, fulfillmentLabel } from '@/utils/supplierFinance'
+import { invoiceLabels, operationKey, paymentLabels, fulfillmentLabel, settlementLabels } from '@/utils/supplierFinance'
 
 const props = defineProps({
   mode: {
@@ -1405,6 +1409,10 @@ function openSettlement(record) {
   const id = record.inboundId
   closeDetail()
   settlementInboundId.value = id
+}
+function canReviewInbound(record) {
+  return isInbound.value && !record.purchaseOrderId && record.documentSource === 'other'
+    && ['reviewed', 'posted'].includes(record.status) && canReadSettlement.value
 }
 
 function formatMoney(value) {
