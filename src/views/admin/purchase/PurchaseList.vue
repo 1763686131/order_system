@@ -408,6 +408,7 @@
                   type="checkbox"
                   :checked="isAllPageSelected"
                   :indeterminate="isSomePageSelected"
+                  :disabled="!currentPageIds.length"
                   aria-label="选择当前页"
                   @change="togglePageSelection"
                 />
@@ -450,10 +451,10 @@
                 <input
                   type="checkbox"
                   :checked="isSelected(record.id)"
-                  :disabled="isInbound && record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)"
+                  :disabled="!canSelectForDeletion(record)"
                   :aria-label="`选择${getRecordNo(record)}`"
                   @click.stop
-                  @change="toggleSelection(record.id)"
+                  @change="toggleSelection(record)"
                 />
               </td>
               <td>
@@ -514,15 +515,6 @@
                       <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
                       <circle cx="12" cy="12" r="2.5"></circle>
                     </svg>
-                  </button>
-                  <button
-                    v-if="isInbound && canDeleteApplication && record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)"
-                    class="table-action danger"
-                    type="button"
-                    title="删除未审核采购申请"
-                    @click="confirmDeleteApplication(record)"
-                  >
-                    <Trash2 :size="15" aria-hidden="true" />
                   </button>
                   <button
                     v-if="isInbound && record.inboundId"
@@ -868,9 +860,6 @@
                   </svg>
                   打印入库单
                 </button>
-                <button v-if="isInbound && canDeleteApplication && selectedRecord.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(selectedRecord.status)" class="button button-danger" type="button" @click="confirmDeleteApplication(selectedRecord)">
-                  <Trash2 :size="16" aria-hidden="true" />删除申请
-                </button>
                 <button v-if="isInbound && selectedRecord.status === 'pending'" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
                   创建采购入库单
                 </button>
@@ -889,7 +878,7 @@
     <PurchaseExpenseDialog v-if="expenseOrderId" :order-id="expenseOrderId" @close="expenseOrderId = null" @updated="refreshData(false)" />
     <CustomModal
       :visible="deleteConfirmOpen"
-      :title="applicationDeleteTarget ? '确认删除采购申请' : '确认批量删除'"
+      title="确认批量删除"
       :message="deleteConfirmMessage"
       confirm-text="删除"
       :danger="true"
@@ -936,7 +925,6 @@ const paymentFilterLabels = computed(() => isInbound.value ? paymentLabels : {
 })
 const canAudit = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT))
 const canDelete = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.DELETE))
-const canDeleteApplication = computed(() => userStore.hasPerm('admin.route.purchase.inbound'))
 const canReverseAuditPermission = computed(() => userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.REVERSE_AUDIT))
 const canReturn = action => userStore.hasPerm(`admin.purchase.return.${action}`)
 const returnStatusLabels = purchaseReturnStatusLabels
@@ -1215,13 +1203,11 @@ const detailTotals = computed(() => (selectedRecord.value?.items || []).reduce((
 const detailModalOpen = ref(false)
 const notice = ref('')
 const deleting = ref(false)
-const applicationDeleteTarget = ref(null)
 const orderReverseAuditTarget = ref(null)
 const deleteConfirmOpen = ref(false)
 const deleteTargets = ref([])
-const deleteConfirmMessage = computed(() => applicationDeleteTarget.value
-  ? `确定删除未审核采购申请 ${getRecordNo(applicationDeleteTarget.value)}？删除后不能恢复。`
-  : `确定删除选中的 ${deleteTargets.value.length} 条采购入库及全部批次吗？已审核批次将回退库存和累计入库数量，采购订单保留。`)
+const deleteConfirmMessage = computed(() =>
+  `确定批量删除选中的 ${deleteTargets.value.length} 条草稿或待采购审核记录吗？已入库记录会同步回退库存。`)
 
 const sourceRecords = computed(() => (isInbound.value ? inboundRecords.value : orderRecords.value))
 
@@ -1230,6 +1216,7 @@ const statusTabs = computed(() => {
     ? [
         { key: 'all', label: '全部' },
         { key: 'pending_review', label: '待审核' },
+        { key: 'received_pending_review', label: '已入库未审核' },
         { key: 'pending', label: '待入库' },
         { key: 'draft', label: '草稿' },
         { key: 'partial', label: '部分入库' },
@@ -1289,9 +1276,7 @@ const paginatedRecords = computed(() => {
 })
 const pageNumbers = computed(() => Array.from({ length: totalPages.value }, (_, index) => index + 1))
 const currentPageIds = computed(() => paginatedRecords.value
-  .filter(record => !isInbound.value || !(
-    record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)
-  ))
+  .filter(canSelectForDeletion)
   .map(record => record.id))
 const isAllPageSelected = computed(() => currentPageIds.value.length > 0 && currentPageIds.value.every(id => selectedIds.value.has(id)))
 const isSomePageSelected = computed(() => currentPageIds.value.some(id => selectedIds.value.has(id)) && !isAllPageSelected.value)
@@ -1418,7 +1403,7 @@ function getStatusLabel(status) {
 }
 
 function getStatusClass(status) {
-  if (status === 'pending' || status === 'pending_review' || status === 'draft') return 'pending'
+  if (status === 'pending' || status === 'pending_review' || status === 'received_pending_review' || status === 'draft') return 'pending'
   if (status === 'approved' || status === 'reviewed') return 'confirmed'
   if (status === 'partial') return 'processing'
   if (status === 'completed' || status === 'posted') return 'completed'
@@ -1579,9 +1564,21 @@ function setStatusFilter(status) {
   currentPage.value = 1
 }
 
-function toggleSelection(id) {
+function canSelectForDeletion(record) {
+  if (!isInbound.value || !canDelete.value || !record || record.procurementAuditedAt) return false
+  if (record.sourceType === 'inbound-application') {
+    return Number(record.purchaseOrderId) > 0
+      && ['draft', 'pending_review'].includes(record.status)
+  }
+  return !record.purchaseOrderId
+    && Number(record.inboundId) > 0
+    && ['draft', 'pending_review', 'received_pending_review'].includes(record.status)
+}
+
+function toggleSelection(record) {
+  if (!canSelectForDeletion(record)) return
   const next = new Set(selectedIds.value)
-  next.has(id) ? next.delete(id) : next.add(id)
+  next.has(record.id) ? next.delete(record.id) : next.add(record.id)
   selectedIds.value = next
 }
 
@@ -1603,48 +1600,32 @@ function clearSelection() {
   selectedIds.value = new Set()
 }
 
-function confirmDeleteApplication(record) {
-  if (!canDeleteApplication.value || !isInbound.value || deleting.value || loading.value ||
-    record?.sourceType !== 'inbound-application' ||
-    !['draft', 'pending_review'].includes(record.status) ||
-    !record.purchaseOrderId) return
-  applicationDeleteTarget.value = record
-  deleteTargets.value = []
-  deleteConfirmOpen.value = true
-}
-
 function confirmDeleteSelected() {
   if (!canDelete.value || deleting.value || loading.value) return
-  applicationDeleteTarget.value = null
-  deleteTargets.value = inboundRecords.value.filter(record => selectedIds.value.has(record.id))
+  deleteTargets.value = inboundRecords.value.filter(record =>
+    selectedIds.value.has(record.id) && canSelectForDeletion(record)
+  )
   if (deleteTargets.value.length) deleteConfirmOpen.value = true
 }
 
 async function deleteSelected() {
-  if (deleting.value || (!applicationDeleteTarget.value && !deleteTargets.value.length)) return
+  if (deleting.value || !deleteTargets.value.length) return
   deleteConfirmOpen.value = false
   deleting.value = true
   try {
-    if (applicationDeleteTarget.value) {
-      const record = applicationDeleteTarget.value
-      const response = await request({
-        url: `/purchase-inbound-applications/${record.purchaseOrderId}`,
-        method: 'DELETE',
-        data: { version: record.version }
-      })
-      if (!response?.success) throw new Error(response?.message || '删除采购申请失败')
-      clearSelection()
-      closeDetail()
-      await refreshData(false)
-      showNotice('采购申请已删除')
-      return
-    }
     const response = await request({
       url: '/purchase-inbounds/bulk-delete',
       method: 'POST',
       data: {
-        purchaseOrderIds: deleteTargets.value.filter(record => record.purchaseOrderId).map(record => record.purchaseOrderId),
-        inboundIds: deleteTargets.value.filter(record => !record.purchaseOrderId).map(record => record.inboundId)
+        purchaseApplicationIds: deleteTargets.value
+          .filter(record => record.sourceType === 'inbound-application')
+          .map(record => record.purchaseOrderId),
+        purchaseOrderIds: deleteTargets.value
+          .filter(record => record.sourceType !== 'inbound-application' && record.purchaseOrderId)
+          .map(record => record.purchaseOrderId),
+        inboundIds: deleteTargets.value
+          .filter(record => record.sourceType !== 'inbound-application' && !record.purchaseOrderId)
+          .map(record => record.inboundId)
       }
     })
     if (!response?.success) throw new Error(response?.message || '删除失败')
@@ -1657,7 +1638,6 @@ async function deleteSelected() {
   } finally {
     deleting.value = false
     deleteTargets.value = []
-    applicationDeleteTarget.value = null
   }
 }
 
@@ -1809,8 +1789,14 @@ function normalizeOrder(record) {
 function normalizeInbound(record) {
   const items = (record.items || []).map(item => ({ ...item, goodsName: item.productName || item.goodsName || '', quantity: item.receivedQty || 0, price: item.unitPrice, amount: item.totalAmount }))
   const supplierNames = [...new Set(items.map(item => String(item.supplierName || '').trim()).filter(Boolean))]
+  const status = !record.procurementAuditedAt
+    && !record.purchaseOrderId
+    && record.documentSource === 'other'
+    && ['reviewed', 'posted'].includes(record.status)
+    ? 'received_pending_review'
+    : record.status
   return {
-    ...record, id: record.id, inboundId: record.id, editableInboundId: record.status === 'draft' ? record.id : null, inboundNo: record.documentNo || '', documentDate: record.documentDate || '', supplierName: record.supplierName || supplierNames.join('、'), supplierNames,
+    ...record, status, id: record.id, inboundId: record.id, editableInboundId: record.status === 'draft' ? record.id : null, inboundNo: record.documentNo || '', documentDate: record.documentDate || '', supplierName: record.supplierName || supplierNames.join('、'), supplierNames,
     warehouseName: record.warehouseName || '', inspector: record.inspector || '', qualityNo: record.qualityNo || '', itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''), itemCount: items.length,
     expectedQuantity: items.reduce((sum, item) => sum + Number(item.expectedQty || 0), 0), receivedQuantity: items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0), totalAmount: Number(record.totalAmount || 0), items
   }
@@ -1912,7 +1898,9 @@ async function refreshData(showMessage = true) {
         .filter(order => !(order.sourceType === 'inbound-application' && order.status === 'draft'))
         .map(normalizeOrder)
     }
-    const availableIds = new Set(sourceRecords.value.map(record => record.id))
+    const availableIds = new Set(sourceRecords.value
+      .filter(record => !isInbound.value || canSelectForDeletion(record))
+      .map(record => record.id))
     selectedIds.value = new Set([...selectedIds.value].filter(id => availableIds.has(id)))
     if (showMessage) showNotice('列表已刷新')
   } catch (error) {

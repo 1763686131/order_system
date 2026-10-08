@@ -771,6 +771,8 @@ def audit_received_purchase_order(inbound_id):
                     return jsonify(replay)
                 if row["status"] not in ("reviewed", "posted"):
                     raise FinanceError("仓库尚未完成入库，不能进入采购审核", 409)
+                if row["procurement_audited_at"]:
+                    raise FinanceError("该入库单已完成采购审核", 409)
                 check_version(data, row)
                 requested = data.get("items")
                 if not isinstance(requested, list) or len(requested) != len(items):
@@ -809,6 +811,16 @@ def audit_received_purchase_order(inbound_id):
                     item["payable_transaction_id"] for item in current_items
                 ):
                     post_inbound_payables(conn, updated, current_items)
+                audited_at = _now()
+                conn.execute(
+                    """UPDATE stock_inbounds SET procurement_audited_by = ?,
+                       procurement_audited_at = ?, version = version + 1, updated_at = ?
+                       WHERE id = ?""",
+                    (current_identity(), audited_at, audited_at, inbound_id),
+                )
+                updated = conn.execute(
+                    "SELECT * FROM stock_inbounds WHERE id = ?", (inbound_id,)
+                ).fetchone()
                 return jsonify(save_operation(conn, token, {
                     "success": True, "message": "采购审核完成，库存数量保持不变",
                     "purchaseOrder": _serialize_received_purchase_order(conn, updated),

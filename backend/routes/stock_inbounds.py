@@ -545,6 +545,8 @@ def _serialize_document(conn, row, include_items=True):
     document['documentSource'] = document.pop('document_source', 'other')
     document['settlementType'] = document.pop('settlement_type', 'none')
     document['settlementRemark'] = document.pop('settlement_remark', '')
+    document['procurementAuditedBy'] = document.pop('procurement_audited_by', None)
+    document['procurementAuditedAt'] = document.pop('procurement_audited_at', None)
     document['auditedBy'] = document.pop('audited_by', '')
     document['reversedAt'] = document.pop('reversed_at', None)
     document.update(source_summary(conn, 'source_id', row['id']))
@@ -1130,7 +1132,7 @@ def delete_purchase_inbounds():
     data = request.get_json(silent=True) or {}
     try:
         selections = {}
-        for field in ('purchaseOrderIds', 'inboundIds'):
+        for field in ('purchaseApplicationIds', 'purchaseOrderIds', 'inboundIds'):
             raw_ids = data.get(field, [])
             if not isinstance(raw_ids, list) or len(raw_ids) > 500:
                 raise ValueError('删除 ID 必须是最多 500 项的数组')
@@ -1138,22 +1140,51 @@ def delete_purchase_inbounds():
             if any(value <= 0 for value in ids):
                 raise ValueError('删除 ID 必须为正整数')
             selections[field] = ids
+        application_ids = selections['purchaseApplicationIds']
         order_ids = selections['purchaseOrderIds']
         inbound_ids = selections['inboundIds']
-        if not order_ids and not inbound_ids:
+        if not application_ids and not order_ids and not inbound_ids:
             raise ValueError('请先勾选需要删除的入库记录')
+        if application_ids.intersection(order_ids):
+            raise ValueError('采购申请不能重复提交删除')
         with _write_lock:
             with get_db() as conn:
                 conn.execute('BEGIN IMMEDIATE')
+                applications = []
+                if application_ids:
+                    placeholders = ','.join('?' for _ in application_ids)
+                    applications = conn.execute(
+                        f"SELECT * FROM purchase_orders WHERE id IN ({placeholders})",
+                        tuple(application_ids),
+                    ).fetchall()
+                    if len(applications) != len(application_ids):
+                        raise ValueError('部分采购申请不存在，请刷新列表')
+                    if any(
+                        row['source_type'] != 'inbound-application'
+                        or row['status'] not in ('draft', 'pending')
+                        for row in applications
+                    ):
+                        raise FinanceError('只有草稿或待审核采购申请可以删除', 409)
+                    for row in applications:
+                        check_scope(row['store_id'])
+                    for order_id in application_ids:
+                        if conn.execute(
+                            'SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? '
+                            'UNION ALL SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ? LIMIT 1',
+                            (order_id, order_id),
+                        ).fetchone():
+                            raise FinanceError('采购申请已关联入库或费用，不能删除', 409)
                 orders = []
                 if order_ids:
                     placeholders = ','.join('?' for _ in order_ids)
                     orders = conn.execute(
-                        f'SELECT id FROM purchase_orders WHERE id IN ({placeholders})',
+                        f'SELECT * FROM purchase_orders WHERE id IN ({placeholders})',
                         tuple(order_ids),
                     ).fetchall()
                     if len(orders) != len(order_ids):
                         raise ValueError('部分采购订单不存在，请刷新列表')
+                    for order in orders:
+                        check_scope(order['store_id'])
                     inbound_ids.update(row['id'] for row in conn.execute(
                         f'SELECT id FROM stock_inbounds WHERE purchase_order_id IN ({placeholders})',
                         tuple(order_ids),
@@ -1169,6 +1200,8 @@ def delete_purchase_inbounds():
                         raise ValueError('部分入库记录不存在，请刷新列表')
                     if any(row['document_source'] == 'production' for row in rows):
                         raise ValueError('不能通过采购页面删除生产入库记录')
+                    if any(row['procurement_audited_at'] for row in rows):
+                        raise FinanceError('采购审核通过的入库单不能删除', 409)
                     if any(row['purchase_order_id'] and row['purchase_order_id'] not in order_ids for row in rows):
                         raise ValueError('关联采购订单的入库记录必须按采购单整组删除')
                     if any(_is_audited(row['status']) for row in rows) and not admin_permission_granted(ADMIN_AUDIT_NOTIFICATION_PERMISSIONS['stock_inbound']):
@@ -1187,12 +1220,19 @@ def delete_purchase_inbounds():
                                  '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?)', (row['id'],))
                     conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (row['id'],))
                     conn.execute('DELETE FROM stock_inbounds WHERE id = ?', (row['id'],))
+                for order in applications:
+                    complete_audit_notifications(conn, 'purchase_order', order['id'])
+                    conn.execute('DELETE FROM purchase_order_items WHERE order_id = ?', (order['id'],))
+                    conn.execute('DELETE FROM purchase_orders WHERE id = ?', (order['id'],))
                 for order in orders:
                     conn.execute(
                         'UPDATE purchase_orders SET inbound_deleted_at = ?, updated_at = ? WHERE id = ?',
                         (_now(), _now(), order['id']),
                     )
-                return jsonify({'success': True, 'message': '采购入库记录已删除', 'deletedCount': len(rows)})
+                return jsonify({
+                    'success': True, 'message': '所选采购入库记录已删除',
+                    'deletedCount': len(rows) + len(applications),
+                })
     except FinanceError as exc:
         return jsonify({'success': False, 'message': str(exc)}), exc.status
     except ValueError as exc:

@@ -80,6 +80,8 @@ def update_inbound_purchasing(conn, row, items, data):
     from utils.supplier_periods import ensure_period_open
 
     inbound_id = row["id"]
+    if row["procurement_audited_at"]:
+        raise FinanceError("采购信息已审核，不能再次修改", 409)
     if row["status"] not in ("reviewed", "posted"):
         raise FinanceError("请先完成仓库入库，再补录采购信息", 409)
     settlement_type = data.get("settlementType", row["settlement_type"])
@@ -194,6 +196,8 @@ def confirm_payable(inbound_id):
             return jsonify(replay)
         if row["status"] not in ("reviewed", "posted"):
             raise FinanceError("只有已审核入库可以确认应付", 409)
+        if row["procurement_audited_at"]:
+            raise FinanceError("采购信息已审核", 409)
         if items and all(item["payable_transaction_id"] for item in items):
             return jsonify(save_operation(conn, token, {"success": True, "stockIn": serialize_inbound(conn, row)}))
         check_version(data, row)

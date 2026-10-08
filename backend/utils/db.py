@@ -1383,6 +1383,8 @@ def _ensure_stock_inbound_schema(conn):
                 total_quantity REAL NOT NULL DEFAULT 0,
                 total_tax REAL NOT NULL DEFAULT 0,
                 total_amount REAL NOT NULL DEFAULT 0,
+                procurement_audited_by TEXT,
+                procurement_audited_at TEXT,
                 posted_at TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT
@@ -1417,6 +1419,10 @@ def _ensure_stock_inbound_schema(conn):
                     END
                     """
                 )
+        if 'procurement_audited_by' not in inbound_columns:
+            cursor.execute('ALTER TABLE stock_inbounds ADD COLUMN procurement_audited_by TEXT')
+        if 'procurement_audited_at' not in inbound_columns:
+            cursor.execute('ALTER TABLE stock_inbounds ADD COLUMN procurement_audited_at TEXT')
         number_is_unique = any(
             index['unique'] and [
                 column['name']

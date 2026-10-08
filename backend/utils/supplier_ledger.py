@@ -137,6 +137,23 @@ def ensure_schema(conn):
     """)
     from utils.supplier_settlement import ensure_schema as ensure_settlement_schema
     ensure_settlement_schema(conn)
+    audited_operations = conn.execute(
+        """SELECT operation, created_at FROM supplier_finance_operations
+           WHERE operation LIKE 'received-purchase:%:audit'"""
+    ).fetchall()
+    for operation in audited_operations:
+        parts = operation["operation"].split(":")
+        if len(parts) != 3 or parts[0] != "received-purchase" or parts[2] != "audit":
+            continue
+        try:
+            inbound_id = int(parts[1])
+        except ValueError:
+            continue
+        conn.execute(
+            """UPDATE stock_inbounds SET procurement_audited_at = ?
+               WHERE id = ? AND procurement_audited_at IS NULL""",
+            (operation["created_at"], inbound_id),
+        )
     conn.commit()
 
 
