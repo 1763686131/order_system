@@ -15,6 +15,7 @@ function dateAfter(dateText, days = 7) {
 export function usePurchaseOrderDocument(props) {
   const router = useRouter()
   const userStore = useUserStore()
+  const applicationMode = computed(() => Boolean(props.applicationMode))
   const validation = useDocumentValidation()
   const loading = ref(true)
   const loadFailed = ref(false)
@@ -48,7 +49,7 @@ export function usePurchaseOrderDocument(props) {
   const blankItem = () => ({
     key: ++rowKey, orderItemId: null, productId: '', productCode: '', goodsName: '',
     specification: '', unit: '', productType: '', categoryId: '', categoryName: '',
-    warehouseId: '', warehouseName: '', quantity: '', supplierId: '', supplierName: '',
+    warehouseId: '', warehouseName: '', quantity: '', actualQuantity: '', supplierId: '', supplierName: '',
     price: '', amount: '', remark: '', showDropdown: false, filteredProducts: []
   })
   const blankForm = () => {
@@ -57,7 +58,7 @@ export function usePurchaseOrderDocument(props) {
       orderNo: '', storeId: '', orderDate, expectedDate: dateAfter(orderDate),
       expectedDateAuto: true, purchaser: '', creator: '', paymentAmount: 0, paymentAmountTouched: false, otherFees: 0,
       settlementAccount: '', invoiceRequired: false, paymentMethod: '', paymentAccountId: '',
-      currentPayment: 0, remark: '', status: 'draft',
+      currentPayment: 0, remark: '', status: 'draft', sourceType: applicationMode.value ? 'inbound-application' : 'purchase-order',
       items: Array.from({ length: 8 }, blankItem)
     }
   }
@@ -212,7 +213,7 @@ export function usePurchaseOrderDocument(props) {
   }
   const showProductDropdown = index => {
     const item = form.value.items[index]
-    if (!item || !canOpenProductDropdown(item)) return
+    if (!item || lockRequestedItems.value || !canOpenProductDropdown(item)) return
     focusedRow.value = index
     item.showDropdown = true
     filterProducts(index)
@@ -319,6 +320,8 @@ export function usePurchaseOrderDocument(props) {
     productId: '', productCode: '', goodsName: '', specification: '', unit: '', productType: '', price: '', amount: ''
   })
   const auditMode = computed(() => props.action === 'audit' && form.value.status === 'pending')
+  const lockRequestedItems = computed(() => auditMode.value ||
+    Boolean(savedDocumentId.value && form.value.sourceType === 'inbound-application'))
   const readOnly = computed(() => props.action === 'view' ||
     (props.action === 'audit' && !auditMode.value) ||
     !['draft', 'pending'].includes(form.value.status))
@@ -331,6 +334,7 @@ export function usePurchaseOrderDocument(props) {
     completed: '已完成', cancelled: '已取消'
   }[form.value.status] || form.value.status))
   const totalQuantity = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.quantity) || 0 : 0), 0))
+  const totalActualQuantity = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.actualQuantity) || 0 : 0), 0))
   const totalAmount = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.amount) || 0 : 0), 0))
   const purchaseOrderPayable = computed(() => {
     const base = form.value.paymentAmount !== '' && form.value.paymentAmount != null
@@ -360,8 +364,11 @@ export function usePurchaseOrderDocument(props) {
   }
   const calculateRow = item => {
     const hasValue = value => value !== '' && value != null
-    if (hasValue(item.price) && hasValue(item.quantity)) {
-      item.amount = Number((Number(item.price) * Number(item.quantity)).toFixed(2))
+    const quantity = hasValue(item.actualQuantity) ? item.actualQuantity : item.quantity
+    if (hasValue(item.price) && hasValue(quantity)) {
+      item.amount = Number((Number(item.price) * Number(quantity)).toFixed(2))
+    } else {
+      item.amount = ''
     }
   }
   watch(totalAmount, value => {
@@ -492,11 +499,11 @@ export function usePurchaseOrderDocument(props) {
   }
   const onExpectedDateInput = () => { form.value.expectedDateAuto = false }
   const addRow = index => {
-    if (readOnly.value || saving.value) return
+    if (readOnly.value || saving.value || lockRequestedItems.value) return
     form.value.items.splice(index + 1, 0, blankItem())
   }
   const removeRow = index => {
-    if (!readOnly.value && !saving.value && form.value.items.length > 1) form.value.items.splice(index, 1)
+    if (!readOnly.value && !saving.value && !lockRequestedItems.value && form.value.items.length > 1) form.value.items.splice(index, 1)
   }
   const normalize = data => {
     const orderDate = data.orderDate || localDate()
@@ -506,14 +513,14 @@ export function usePurchaseOrderDocument(props) {
       storeId: data.storeId ? String(data.storeId) : '', purchaser: data.purchaser || '',
       creator: data.creator || currentCreatorName.value,
       paymentAmount: data.paymentAmount ?? '',
-      paymentAmountTouched: data.paymentAmount != null,
+      paymentAmountTouched: data.paymentAmount != null && Number(data.paymentAmount) !== Number(data.totalAmount),
       otherFees: data.otherFees ?? 0,
       settlementAccount: data.settlementAccount || '',
       invoiceRequired: Boolean(data.invoiceRequired),
       paymentMethod: data.paymentMethod || '',
       paymentAccountId: data.paymentAccountId ? String(data.paymentAccountId) : '',
       currentPayment: data.currentPayment ?? 0,
-      remark: data.remark || '', status: data.status || 'draft',
+      remark: data.remark || '', status: data.status || 'draft', sourceType: data.sourceType,
       confirmedPayable: data.confirmedPayable || 0, unpaidAmount: data.unpaidAmount || 0,
       payableCount: data.payableCount || 0,
       billedAmount: data.billedAmount || 0, allocatedAmount: data.allocatedAmount || 0,
@@ -524,11 +531,13 @@ export function usePurchaseOrderDocument(props) {
         productType: item.productType === 'finished-product' ? 'finished-product' : '',
         categoryId: item.categoryId ? String(item.categoryId) : '', categoryName: item.categoryName || '',
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
-        quantity: item.orderedQty ?? '', supplierId: item.supplierId ? String(item.supplierId) : '',
+        quantity: item.orderedQty ?? '',
+        actualQuantity: item.actualPurchaseQty ?? (props.action === 'audit' ? item.orderedQty : ''),
+        supplierId: item.supplierId ? String(item.supplierId) : '',
         supplierName: item.supplierName || '', price: item.unitPrice ?? '', amount: item.amount ?? '', remark: item.remark || ''
       }))
     }
-    const minimumRows = readOnly.value ? 1 : 8
+    const minimumRows = readOnly.value || lockRequestedItems.value ? 1 : 8
     while (form.value.items.length < minimumRows) form.value.items.push(blankItem())
   }
   const restoreDraft = draft => {
@@ -549,7 +558,7 @@ export function usePurchaseOrderDocument(props) {
     validation.dismissValidationHint()
     return !validatePurchaseOrder(form.value, auditMode.value, validation.showValidationHint)
   }
-  const close = () => router.push({ name: 'admin-purchase-orders' })
+  const close = () => router.push({ name: applicationMode.value ? 'admin-purchase-inbound' : 'admin-purchase-orders' })
   const save = async (status = 'pending') => {
     if (saving.value || readOnly.value || loading.value || loadFailed.value || !validateForm()) return false
     const isAudit = auditMode.value
@@ -559,7 +568,7 @@ export function usePurchaseOrderDocument(props) {
     try {
       const id = savedDocumentId.value
       const response = await request({
-        url: isAudit ? `/purchase-orders/${id}/audit` : id ? `/purchase-orders/${id}` : '/purchase-orders',
+        url: isAudit ? `/purchase-orders/${id}/audit` : id ? `/purchase-orders/${id}` : applicationMode.value ? '/purchase-inbound-applications' : '/purchase-orders',
         method: isAudit ? 'POST' : id ? 'PUT' : 'POST',
         data: purchaseOrderPayload(form.value, isAudit ? 'pending' : status)
       })
@@ -578,7 +587,7 @@ export function usePurchaseOrderDocument(props) {
     }
   }
   const clearForm = () => {
-    if (readOnly.value || saving.value) return
+    if (readOnly.value || saving.value || lockRequestedItems.value) return
     const { orderNo, status } = form.value
     form.value = { ...blankForm(), orderNo, status }
     validation.dismissValidationHint()
@@ -590,15 +599,16 @@ export function usePurchaseOrderDocument(props) {
     window.addEventListener('scroll', updateSupplierDropdownPosition, true)
     try {
       const [storeData, supplierData, warehouseData, rawMaterialData, finishedProductData, unitData] = await Promise.all([
-        request({ url: '/stores', method: 'GET' }), request({ url: '/suppliers', method: 'GET' }),
+        request({ url: '/stores', method: 'GET' }),
+        applicationMode.value ? Promise.resolve([]) : request({ url: '/suppliers', method: 'GET' }),
         request({ url: '/warehouses', method: 'GET' }),
         request({ url: '/raw-material-products', method: 'GET' }),
         request({ url: '/products', method: 'GET' }),
         request({ url: '/products/units/measurements', method: 'GET' }),
       ])
       const [directoryResult, bankAccountResult] = await Promise.allSettled([
-        request({ url: '/admin/directory', method: 'GET' }),
-        request({ url: '/bank-accounts/options', method: 'GET' })
+        applicationMode.value ? Promise.resolve(null) : request({ url: '/admin/directory', method: 'GET' }),
+        applicationMode.value ? Promise.resolve(null) : request({ url: '/bank-accounts/options', method: 'GET' })
       ])
       const directoryData = directoryResult.status === 'fulfilled' ? directoryResult.value : null
       const bankAccountData = bankAccountResult.status === 'fulfilled' ? bankAccountResult.value : null
@@ -637,8 +647,8 @@ export function usePurchaseOrderDocument(props) {
     supplierInputRefs.clear()
   })
   return {
-    ...validation, config, form, loading, loadFailed, saving, readOnly, auditMode, statusLabel,
-    stores, suppliers, filteredWarehouses, products, savedDocumentId, notice, totalQuantity, totalAmount,
+    ...validation, config, form, loading, loadFailed, saving, readOnly, auditMode, applicationMode, lockRequestedItems, statusLabel,
+    stores, suppliers, filteredWarehouses, products, savedDocumentId, notice, totalQuantity, totalActualQuantity, totalAmount,
     currentCreatorName, creatorNameStyle, purchasePeople, storeBankAccounts,
     supplierPayable, purchaseOrderPayable, currentPayable,
     productsForItem, categoriesForItem, addRow, removeRow, onProductChange, onProductInput, selectProduct,
@@ -655,6 +665,7 @@ export function usePurchaseOrderDocument(props) {
     markPaymentAmountManual, onPaymentMethodChange, hidePaymentAccountBalance, togglePaymentAccountBalance,
     validateForm, save, clearForm, close,
     onQuantityInput: index => calculateRow(form.value.items[index]),
+    onActualQuantityInput: index => calculateRow(form.value.items[index]),
     onPriceInput: index => calculateRow(form.value.items[index])
   }
 }

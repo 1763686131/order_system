@@ -473,7 +473,7 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt
         ):
             if not item.get(item_field) and order_item[order_field]:
                 item[item_field] = order_item[order_field]
-        remaining = float(order_item['ordered_qty'] or 0) - float(order_item['received_qty'] or 0)
+        remaining = float(order_item['actual_purchase_qty']) - float(order_item['received_qty'] or 0)
         if item.get('expected_qty') is None:
             item['expected_qty'] = max(remaining, 0)
         if item.get('unit_price') is None and order_item['unit_price'] is not None:
@@ -737,8 +737,8 @@ def _update_purchase_receipts(conn, purchase_order_id, item_rows, direction=1):
         )
     remaining = conn.execute(
         '''
-        SELECT COALESCE(SUM(CASE WHEN ordered_qty > received_qty
-                                THEN ordered_qty - received_qty ELSE 0 END), 0) AS quantity
+        SELECT COALESCE(SUM(CASE WHEN actual_purchase_qty > received_qty
+                                THEN actual_purchase_qty - received_qty ELSE 0 END), 0) AS quantity
         FROM purchase_order_items WHERE order_id = ?
         ''',
         (purchase_order_id,),
@@ -790,10 +790,10 @@ def _document_insert(conn, values):
             raise ValueError('入库门店必须与采购订单一致')
         for item in values['items']:
             order_item = conn.execute(
-                'SELECT ordered_qty, received_qty FROM purchase_order_items WHERE id = ?',
+                'SELECT actual_purchase_qty, received_qty FROM purchase_order_items WHERE id = ?',
                 (item['purchase_order_item_id'],),
             ).fetchone()
-            if order_item and order_item['received_qty'] >= order_item['ordered_qty']:
+            if order_item and order_item['received_qty'] >= order_item['actual_purchase_qty']:
                 raise FinanceError('已完成的采购明细不能补充入库', 409)
         previous = conn.execute(
             'SELECT document_no FROM stock_inbounds WHERE purchase_order_id = ? ORDER BY id LIMIT 1',

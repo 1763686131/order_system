@@ -41,7 +41,7 @@ export function usePurchaseDocument(props) {
   const purchaseOrder = ref(null)
   const inboundTypes = computed(() => purchaseOrder.value
     ? [...new Set((purchaseOrder.value.items || [])
-      .filter(item => Number(item.remainingQty ?? item.orderedQty ?? 0) > 0)
+      .filter(item => Number(item.remainingQty) > 0)
       .map(item => normalizeInboundType(item.productType)))]
     : ['raw-material', 'finished-product'])
   const notice = ref({ visible: false, type: 'success', message: '' })
@@ -194,7 +194,7 @@ export function usePurchaseDocument(props) {
   }
   const normalizePurchaseOrder = data => {
     const remainingItems = (data.items || [])
-      .filter(item => Number(item.remainingQty ?? item.orderedQty ?? 0) > 0)
+      .filter(item => Number(item.remainingQty) > 0)
     purchaseOrder.value = data
     purchaseOrderId.value = data.orderId || data.id || purchaseOrderId.value
     form.value.purchaseOrderId = purchaseOrderId.value
@@ -215,7 +215,7 @@ export function usePurchaseDocument(props) {
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
-        expectedQty: item.remainingQty ?? item.orderedQty ?? '', quantity: item.remainingQty ?? item.orderedQty ?? '',
+        expectedQty: item.remainingQty, quantity: item.remainingQty,
         price: item.unitPrice ?? '', amount: 0
       })).concat(blankRows()).slice(0, Math.max(BLANK_ROWS, remainingItems.length + 1))
     }

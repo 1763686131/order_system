@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, request
 from utils.auth import current_identity, require_admin_permission
 from utils.db import get_db
 from utils.notifications import create_audit_notifications, complete_audit_notifications
-from utils.permission_catalog import ADMIN_PURCHASE_ORDER_PERMISSIONS
+from utils.permission_catalog import ADMIN_PURCHASE_ORDER_PERMISSIONS, ADMIN_ROUTE_BRANCH_PERMISSIONS
 from utils.supplier_ledger import (
     FinanceError, balance, business_date, cents, check_scope, check_version, idempotent_result, save_operation, scope_sql, source_summary,
 )
@@ -81,7 +81,7 @@ def _product_exists(conn, product_type, product_id):
     ).fetchone() is not None
 
 
-def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
+def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preserve_request=False):
     if raw_items is None:
         raw_items = existing_items or []
     if not isinstance(raw_items, list):
@@ -92,6 +92,13 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
         for item in (existing_items or [])
         if item.get("id") is not None
     }
+    if preserve_request:
+        submitted_ids = [
+            _optional_int(item.get("id", item.get("orderItemId")), "明细ID")
+            for item in raw_items if isinstance(item, dict) and item.get("productId", item.get("product_id"))
+        ]
+        if len(submitted_ids) != len(existing_by_id) or set(submitted_ids) != set(existing_by_id):
+            raise ValueError("采购申请明细不能增删，请在原明细中填写实际采购数量")
     normalized = []
     for raw in raw_items:
         if not isinstance(raw, dict):
@@ -137,17 +144,29 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
 
         ordered = _number(raw.get("orderedQty", raw.get("quantity", raw.get("qty"))))
         if ordered <= 0:
-            raise ValueError("采购数量必须大于 0")
+            raise ValueError("申请数量必须大于 0")
+        if preserve_request and (
+            ordered != _number(existing["ordered_qty"])
+            or product_id != existing["product_id"]
+            or product_type != existing["product_type"]
+        ):
+            raise ValueError("申请物料和申请数量不能修改，请填写实际采购数量")
+        actual_value = raw.get("actualPurchaseQty", raw.get(
+            "actual_purchase_qty", existing.get("actual_purchase_qty") if existing else None
+        ))
+        actual = None if actual_value in (None, "") else _number(actual_value)
+        if actual is not None and actual <= 0:
+            raise ValueError("实际采购数量必须大于 0")
+        purchase_quantity = actual if actual is not None else ordered
         price_value = raw.get("unitPrice", raw.get("price"))
         unit_price = None if price_value in (None, "") else _number(price_value)
         if unit_price is not None and unit_price < 0:
             raise ValueError("采购单价不能为负数")
         amount_value = raw.get("amount", raw.get("totalAmount"))
         amount = (
-            _number(amount_value)
-            if amount_value not in (None, "")
-            else (ordered * unit_price).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+            (purchase_quantity * unit_price).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
             if unit_price is not None
+            else _number(amount_value) if amount_value not in (None, "")
             else None
         )
         if amount is not None and amount < 0:
@@ -214,6 +233,7 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
                 "specification": specification,
                 "unit": unit,
                 "ordered_qty": float(ordered),
+                "actual_purchase_qty": float(actual) if actual is not None else None,
                 "received_qty": float(received),
                 "unit_price": float(unit_price) if unit_price is not None else None,
                 "amount": float(amount) if amount is not None else None,
@@ -225,7 +245,7 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None):
     return normalized
 
 
-def _order_values(conn, data, existing=None):
+def _order_values(conn, data, existing=None, audit=False):
     existing = existing or {}
     order_date = business_date(data.get("orderDate", data.get("order_date", existing.get("order_date"))))
     supplier_value = data.get("supplierId", data.get("supplier_id", existing.get("supplier_id")))
@@ -241,7 +261,10 @@ def _order_values(conn, data, existing=None):
     if store_id is None or not conn.execute('SELECT 1 FROM stores WHERE id = ?', (store_id,)).fetchone():
         raise ValueError("请选择有效申请门店")
     check_scope(store_id)
-    items = _normalize_items(conn, data.get("items"), existing.get("_items"), store_id)
+    items = _normalize_items(
+        conn, data.get("items"), existing.get("_items"), store_id,
+        preserve_request=bool(existing) and (audit or existing.get("source_type") == "inbound-application"),
+    )
     # Keep existing callers that submit one master supplier compatible.
     if supplier_id is not None:
         for item in items:
@@ -253,7 +276,9 @@ def _order_values(conn, data, existing=None):
         if len(item_suppliers) == 1 and all(item["supplier_id"] is not None for item in items)
         else None
     )
-    total_quantity = sum(Decimal(str(item["ordered_qty"])) for item in items)
+    total_quantity = sum(Decimal(str(
+        item["actual_purchase_qty"] if item["actual_purchase_qty"] is not None else item["ordered_qty"]
+    )) for item in items)
     total_amount = sum(
         (Decimal(str(item["amount"])) for item in items if item["amount"] is not None),
         Decimal("0"),
@@ -334,6 +359,8 @@ def _supplier_payable(conn, supplier_ids):
 def _serialize_item(row):
     item = dict(row)
     ordered = float(item.pop("ordered_qty", 0) or 0)
+    actual = item.pop("actual_purchase_qty")
+    purchase_quantity = float(actual) if actual is not None else ordered
     received = float(item.pop("received_qty", 0) or 0)
     amount = item.pop("amount", None)
     item["orderItemId"] = item.pop("id", None)
@@ -349,10 +376,12 @@ def _serialize_item(row):
     item["specification"] = item.pop("specification", "") or ""
     item["unit"] = item.pop("unit", "") or ""
     item["orderedQty"] = ordered
+    item["actualPurchaseQty"] = float(actual) if actual is not None else None
+    item["effectivePurchaseQty"] = purchase_quantity
     item["receivedQty"] = received
-    item["remainingQty"] = max(0, ordered - received)
-    item["overReceivedQty"] = max(0, received - ordered)
-    item["fulfillmentProgress"] = min(100, round(received / ordered * 100, 2)) if ordered else 0
+    item["remainingQty"] = max(0, purchase_quantity - received)
+    item["overReceivedQty"] = max(0, received - purchase_quantity)
+    item["fulfillmentProgress"] = min(100, round(received / purchase_quantity * 100, 2)) if purchase_quantity else 0
     item["unitPrice"] = item.pop("unit_price", None)
     item["amount"] = amount
     item["supplierId"] = supplier_id
@@ -367,6 +396,7 @@ def _serialize_order(conn, row, include_items=True):
     ).fetchone()
     order["orderId"] = order.pop("id", None)
     order["orderNo"] = order.pop("order_no", "")
+    order["sourceType"] = order.pop("source_type")
     order["orderDate"] = order.pop("order_date", "")
     order["expectedDate"] = order.pop("expected_date", "") or ""
     order["storeId"] = order.pop("store_id", None)
@@ -466,6 +496,11 @@ def _serialize_order(conn, row, include_items=True):
         )
     order["supplierPayable"] = _supplier_payable(conn, selected_supplier_ids)
     items = order.get("items", [])
+    order["requestedTotalQuantity"] = sum(item["orderedQty"] for item in items)
+    order["actualTotalQuantity"] = (
+        sum(item["actualPurchaseQty"] for item in items)
+        if items and all(item["actualPurchaseQty"] is not None for item in items) else None
+    )
     units = {item["unit"] for item in items}
     order["progressBasis"] = "quantity" if len(units) == 1 else "lines"
     order["completedLineCount"] = sum(item["remainingQty"] <= 0.0000001 for item in items)
@@ -503,14 +538,14 @@ def _insert_items(conn, order_id, items):
             INSERT INTO purchase_order_items (
                 order_id, line_no, product_type, product_id, product_code, product_name,
                 supplier_id, warehouse_id, category_id, category_name, specification, unit,
-                ordered_qty, received_qty, unit_price, amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ordered_qty, actual_purchase_qty, received_qty, unit_price, amount, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id, item["line_no"], item["product_type"], item["product_id"],
                 item["product_code"], item["product_name"], item["supplier_id"], item["warehouse_id"],
                 item["category_id"], item["category_name"], item["specification"], item["unit"],
-                item["ordered_qty"], item["received_qty"], item["unit_price"], item["amount"], item["remark"],
+                item["ordered_qty"], item["actual_purchase_qty"], item["received_qty"], item["unit_price"], item["amount"], item["remark"],
             ),
         )
         item["id"] = cursor.lastrowid
@@ -521,6 +556,8 @@ def _validate_audit_items(conn, items, store_id):
         raise ValueError("采购订单没有有效明细")
     if any(float(item.get("ordered_qty") or 0) <= 0 for item in items):
         raise ValueError("采购数量必须大于 0")
+    if any(item.get("actual_purchase_qty") is None or float(item["actual_purchase_qty"]) <= 0 for item in items):
+        raise ValueError("审核前请为每项物料补充实际采购数量")
     if any(item.get("supplier_id") is None for item in items):
         raise ValueError("审核前请为每项物料补充采购供应商")
     if any(item.get("unit_price") is None for item in items):
@@ -671,6 +708,34 @@ def get_available_inbound(order_id):
 @require_admin_permission(ADMIN_PURCHASE_ORDER_PERMISSIONS["create"])
 def create_purchase_order():
     data = request.get_json(silent=True) or {}
+    return _create_purchase_order(data, "purchase-order")
+
+
+@purchase_orders_bp.route("/purchase-inbound-applications", methods=["POST"])
+@require_admin_permission(ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"])
+def create_purchase_application():
+    data = request.get_json(silent=True) or {}
+    # Warehouse applications cannot submit purchasing or payment information.
+    application = {
+        key: data.get(key) for key in (
+            "orderDate", "expectedDate", "storeId", "creator", "remark",
+        )
+    }
+    raw_items = data.get("items")
+    if not isinstance(raw_items, list):
+        return jsonify({"success": False, "message": "采购申请明细必须是数组"}), 400
+    application["items"] = [
+        {key: item.get(key) for key in (
+            "productType", "productId", "productCode", "productName", "warehouseId",
+            "categoryId", "categoryName", "specification", "unit", "orderedQty", "remark",
+        )}
+        for item in raw_items if isinstance(item, dict)
+    ]
+    application["status"] = "pending"
+    return _create_purchase_order(application, "inbound-application")
+
+
+def _create_purchase_order(data, source_type):
     try:
         with _write_lock:
             with get_db() as conn:
@@ -683,8 +748,8 @@ def create_purchase_order():
                         order_no, order_date, expected_date, store_id, supplier_id, remark,
                         purchaser, creator, payment_amount, other_fees, settlement_account,
                         current_payment, invoice_required, payment_method, payment_account_id,
-                        status, total_quantity, total_amount, created_by, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        status, total_quantity, total_amount, created_by, created_at, updated_at, source_type
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         values["order_no"] or f"TEMP-{now.replace(' ', '').replace(':', '').replace('-', '')}",
@@ -693,7 +758,7 @@ def create_purchase_order():
                         values["other_fees"], values["settlement_account"], values["current_payment"],
                         values["invoice_required"], values["payment_method"], values["payment_account_id"],
                         values["status"], values["total_quantity"], values["total_amount"],
-                        current_identity(), now, now,
+                        current_identity(), now, now, source_type,
                     ),
                 )
                 order_id = cursor.lastrowid
@@ -836,7 +901,7 @@ def audit_purchase_order(order_id):
                 audit_items = existing["_items"]
                 audit_values = None
                 if data.get("items") is not None:
-                    audit_values = _order_values(conn, {**data, "status": "pending"}, existing)
+                    audit_values = _order_values(conn, {**data, "status": "pending"}, existing, audit=True)
                     audit_items = audit_values["items"]
                 master_supplier_id = _validate_audit_items(conn, audit_items, audit_values["store_id"] if audit_values else row["store_id"])
                 if audit_values is not None:

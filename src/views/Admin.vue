@@ -656,7 +656,7 @@ const allMenuItems = [
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.SUPPLIERS
       },
       {
-        label: '采购入库',
+        label: '采购入库申请',
         path: '/admin/purchase/inbound',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND
       },
@@ -931,8 +931,12 @@ const dockedDocuments = computed(() => {
     const draft = documentDraftStore.drafts.purchase
     add({ type: 'purchase', title: '采购入库单', path: draft?.path })
   }
-  if (userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS)) {
-    const draft = documentDraftStore.drafts['purchase-order']
+  const purchaseOrderDraft = documentDraftStore.drafts['purchase-order']
+  const warehouseApplicationDraft = purchaseOrderDraft?.path?.startsWith('/admin/purchase/inbound/application/')
+  if (userStore.hasPerm(warehouseApplicationDraft
+    ? ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND
+    : ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS)) {
+    const draft = purchaseOrderDraft
     add({ type: 'purchase-order', title: draft?.action === 'audit' ? '采购申请审核' : '采购申请', path: draft?.path })
   }
   if (userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS)) {
@@ -957,6 +961,7 @@ const currentMenuLabel = computed(() => {
     return `采购/${action}采购申请`
   }
   if (currentPath.value.startsWith('/admin/purchase/inbound/')) {
+    if (route.name === 'admin-purchase-inbound-application-create') return '采购/新增采购申请'
     return `采购/${route.name === 'admin-purchase-inbound-create' ? '新增' : route.name === 'admin-purchase-inbound-edit' ? '修改' : '查看'}进货单`
   }
   if (currentPath.value.startsWith('/admin/purchase/returns/')) {
@@ -1060,6 +1065,7 @@ const documentListPath = (type) => {
 }
 
 const handleDocumentClose = () => {
+  if (route.name === 'admin-purchase-inbound-application-create') return router.push('/admin/purchase/inbound')
   const type = document.querySelector('.business-document-form')?.dataset.documentType
   return router.push(documentListPath(type))
 }

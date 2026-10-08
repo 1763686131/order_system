@@ -290,8 +290,8 @@ PERMISSION_MODULES = [
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"],
-                "name": "访问采购入库",
-                "description": "显示并访问采购入库管理",
+                "name": "访问采购入库申请",
+                "description": "显示采购入库申请页面，可提交采购申请并办理入库",
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["returns"],
@@ -718,8 +718,8 @@ _ROUTE_PERMISSION_MODULES = [
     ),
     (
         "admin_purchase_inbound",
-        "采购入库",
-        "控制采购入库页面访问",
+        "采购入库申请",
+        "控制采购入库申请页面访问和申请提交",
         [ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["inbound"]],
     ),
     (

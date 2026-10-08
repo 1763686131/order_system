@@ -322,7 +322,7 @@
         <div class="toolbar-filters">
           <div class="toolbar-heading">
             <div class="page-kicker">{{ isInbound ? '采购执行' : '采购管理' }}</div>
-            <h1>{{ isInbound ? '采购入库' : '采购订单' }}</h1>
+            <h1>{{ isInbound ? '采购入库申请' : '采购订单' }}</h1>
           </div>
 
           <div class="status-filter-slider" role="tablist" aria-label="采购状态筛选">
@@ -362,6 +362,9 @@
               <path d="M4 21h16"></path>
             </svg>
             导出 Excel
+          </button>
+          <button v-if="isInbound" class="button button-ghost" type="button" @click="router.push({ name: 'admin-purchase-inbound-application-create' })">
+            <Plus :size="16" aria-hidden="true" />申请采购
           </button>
           <button class="button button-primary" type="button" @click="createRecord">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -435,6 +438,7 @@
                 <input
                   type="checkbox"
                   :checked="isSelected(record.id)"
+                  :disabled="isInbound && record.status === 'pending_review'"
                   :aria-label="`选择${getRecordNo(record)}`"
                   @click.stop
                   @change="toggleSelection(record.id)"
@@ -691,7 +695,8 @@
                         <th>规格型号</th>
                         <th>单位</th>
                         <th>采购供应商</th>
-                        <th>计划数量</th>
+                        <th>{{ isInbound ? '应收数量' : '申请数量' }}</th>
+                        <th v-if="!isInbound">实际采购数量</th>
                         <th>累计实收</th>
                         <th>履约进度</th>
                         <th>{{ isInbound ? '含税单价' : '采购单价' }}</th>
@@ -706,7 +711,8 @@
                         <td>{{ item.specification || '—' }}</td>
                         <td>{{ item.unit }}</td>
                         <td :title="item.supplierName || selectedRecord.supplierName">{{ item.supplierName || (isInbound ? selectedRecord.supplierName || '—' : '待补充') }}</td>
-                        <td>{{ formatNumber(item.expectedQty ?? item.quantity) }}</td>
+                        <td>{{ formatNumber(isInbound ? item.expectedQty : item.quantity) }}</td>
+                        <td v-if="!isInbound">{{ item.actualPurchaseQty == null ? '待补充' : formatNumber(item.actualPurchaseQty) }}</td>
                         <td>
                           {{ formatNumber(item.receivedQty ?? 0) }}
                           <small v-if="Number(item.receivedQty) > Number(item.expectedQty ?? item.quantity)" class="secondary-cell">超收 {{ formatNumber(Number(item.receivedQty) - Number(item.expectedQty ?? item.quantity)) }}</small>
@@ -729,6 +735,7 @@
                         <td colspan="4" class="detail-total-label">合计</td>
                         <td>—</td>
                         <td>{{ hasMixedUnits(selectedRecord) ? '—' : formatNumber(detailTotals.plannedQuantity) }}</td>
+                        <td v-if="!isInbound">{{ selectedRecord.actualTotalQuantity == null || hasMixedUnits(selectedRecord) ? '—' : formatNumber(selectedRecord.actualTotalQuantity) }}</td>
                         <td>{{ hasMixedUnits(selectedRecord) ? '—' : formatNumber(detailTotals.receivedQuantity) }}</td>
                         <td class="detail-progress-total">—</td>
                         <td>—</td>
@@ -1140,7 +1147,7 @@ const pageSize = 30
 const selectedIds = ref(new Set())
 const selectedRecord = ref(null)
 const detailTotals = computed(() => (selectedRecord.value?.items || []).reduce((totals, item) => ({
-  plannedQuantity: totals.plannedQuantity + Number(item.expectedQty ?? item.quantity ?? 0),
+  plannedQuantity: totals.plannedQuantity + Number(isInbound.value ? item.expectedQty : item.quantity),
   receivedQuantity: totals.receivedQuantity + Number(item.receivedQty ?? item.quantity ?? 0),
   amount: totals.amount + Number(item.amount ?? item.totalAmount ?? 0)
 }), { plannedQuantity: 0, receivedQuantity: 0, amount: 0 }))
@@ -1158,6 +1165,7 @@ const statusTabs = computed(() => {
   const statuses = isInbound.value
     ? [
         { key: 'all', label: '全部' },
+        { key: 'pending_review', label: '待审核' },
         { key: 'pending', label: '待入库' },
         { key: 'draft', label: '草稿' },
         { key: 'partial', label: '部分入库' },
@@ -1216,7 +1224,9 @@ const paginatedRecords = computed(() => {
   return filteredRecords.value.slice(start, start + pageSize)
 })
 const pageNumbers = computed(() => Array.from({ length: totalPages.value }, (_, index) => index + 1))
-const currentPageIds = computed(() => paginatedRecords.value.map(record => record.id))
+const currentPageIds = computed(() => paginatedRecords.value
+  .filter(record => !isInbound.value || record.status !== 'pending_review')
+  .map(record => record.id))
 const isAllPageSelected = computed(() => currentPageIds.value.length > 0 && currentPageIds.value.every(id => selectedIds.value.has(id)))
 const isSomePageSelected = computed(() => currentPageIds.value.some(id => selectedIds.value.has(id)) && !isAllPageSelected.value)
 
@@ -1287,7 +1297,7 @@ function plannedQuantityLabel(record) {
   if (record.progressBasis === 'lines' || hasMixedUnits(record)) {
     return `${record.totalLineCount || record.itemCount || 0} 行`
   }
-  return `${formatNumber(record.totalQuantity)} ${record.items?.[0]?.unit || ''}`.trim()
+  return `${formatNumber(record.requestedTotalQuantity)} ${record.items?.[0]?.unit || ''}`.trim()
 }
 function purchasePaymentLabel(record) {
   if (record.purchasePaymentStatus === 'prepaid') return `增加预付 ¥ ${formatMoney(record.prepaidAmount)}`
@@ -1333,7 +1343,7 @@ function getStatusLabel(status) {
 }
 
 function getStatusClass(status) {
-  if (status === 'pending' || status === 'draft') return 'pending'
+  if (status === 'pending' || status === 'pending_review' || status === 'draft') return 'pending'
   if (status === 'approved' || status === 'reviewed') return 'confirmed'
   if (status === 'partial') return 'processing'
   if (status === 'completed' || status === 'posted') return 'completed'
@@ -1657,7 +1667,7 @@ function normalizeOrder(record) {
     ...item,
     goodsName: item.productName || item.goodsName || '',
     quantity: item.orderedQty || 0,
-    expectedQty: item.orderedQty || 0,
+    expectedQty: item.effectivePurchaseQty,
     price: item.unitPrice,
     amount: item.amount
   }))
@@ -1700,9 +1710,9 @@ function normalizePurchaseInbound(record, batches) {
     .map(item => ({
       ...item,
       goodsName: item.productName || item.goodsName || '',
-      expectedQty: Number(item.orderedQty || 0),
+      expectedQty: Number(item.effectivePurchaseQty),
       receivedQty: Number(item.receivedQty || 0),
-      remainingQty: Math.max(0, Number(item.orderedQty || 0) - Number(item.receivedQty || 0)),
+      remainingQty: Number(item.remainingQty),
       quantity: Number(item.receivedQty || 0),
       price: item.unitPrice,
       amount: item.unitPrice == null ? null : Number((Number(item.receivedQty || 0) * Number(item.unitPrice)).toFixed(2))
@@ -1719,7 +1729,7 @@ function normalizePurchaseInbound(record, batches) {
     purchaseOrderId: order.id,
     inboundNo: latest?.inboundNo || record.orderNo || '',
     documentDate: latest?.documentDate || record.orderDate || '',
-    warehouseName: warehouseNames.join('、') || '待选择入库仓库',
+    warehouseName: warehouseNames.join('、') || order.warehouseName || '待选择入库仓库',
     inspector: latest?.inspector || '',
     qualityNo: latest?.qualityNo || '',
     itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''),
@@ -1730,8 +1740,8 @@ function normalizePurchaseInbound(record, batches) {
     remainingQuantity,
     remainingTypes,
     totalAmount: auditedBatches.length ? auditedBatches.reduce((sum, batch) => sum + batch.totalAmount, 0) : order.totalAmount,
-    status: draft ? 'draft' : auditedBatches.length ? (remainingQuantity > 0.0000001 ? 'partial' : 'reviewed') : 'pending',
-    remark: record.remark || '采购订单已审核，等待选择仓库入库',
+    status: record.status === 'pending' ? 'pending_review' : draft ? 'draft' : auditedBatches.length ? (remainingQuantity > 0.0000001 ? 'partial' : 'reviewed') : 'pending',
+    remark: record.remark || (record.status === 'pending' ? '采购申请待审核' : '采购订单已审核，等待选择仓库入库'),
     items,
     batches
   }
@@ -1764,7 +1774,11 @@ async function refreshData(showMessage = true) {
         batchesByOrder.get(key).push(record)
       })
       const purchaseRecords = (Array.isArray(orderData) ? orderData : [])
-        .filter(order => !order.inboundDeletedAt && (['approved', 'partial', 'completed'].includes(order.status) || batchesByOrder.has(String(order.orderId || order.id))))
+        .filter(order => !order.inboundDeletedAt && (
+          ['approved', 'partial', 'completed'].includes(order.status) ||
+          (order.sourceType === 'inbound-application' && order.status === 'pending') ||
+          batchesByOrder.has(String(order.orderId || order.id))
+        ))
         .map(order => normalizePurchaseInbound(order, batchesByOrder.get(String(order.orderId || order.id)) || []))
         .filter(record => record.items.length)
       inboundRecords.value = [...purchaseRecords, ...actualRecords.filter(record => !record.purchaseOrderId)]

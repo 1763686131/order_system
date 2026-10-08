@@ -108,6 +108,7 @@ export function purchaseOrderPayload(form, status = 'pending') {
       specification: item.specification,
       unit: item.unit,
       orderedQty: Number(item.quantity),
+      actualPurchaseQty: hasValue(item.actualQuantity) ? Number(item.actualQuantity) : null,
       supplierId: item.supplierId ? Number(item.supplierId) : null,
       unitPrice: hasValue(item.price) ? Number(item.price) : null,
       amount: hasValue(item.amount) ? Number(item.amount) : null,
@@ -140,7 +141,11 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
   if (!form.items.some(item => item.productId)) return invalid('item-product-0', '请至少选择一条商品。')
   for (const [index, item] of form.items.entries()) {
     if (!item.productId) continue
-    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return invalid(`item-quantity-${index}`, '采购数量必须大于 0。')
+    if (!Number.isFinite(Number(item.quantity)) || Number(item.quantity) <= 0) return invalid(`item-quantity-${index}`, '申请数量必须大于 0。')
+    if (audit && !hasValue(item.actualQuantity)) return invalid(`item-actual-quantity-${index}`, '审核前请为每项物料补充实际采购数量。')
+    if (hasValue(item.actualQuantity) && (!Number.isFinite(Number(item.actualQuantity)) || Number(item.actualQuantity) <= 0)) {
+      return invalid(`item-actual-quantity-${index}`, '实际采购数量必须大于 0。')
+    }
     if (audit && !item.supplierId) return invalid(`item-supplier-${index}`, '审核前请为每项物料补充采购供应商。')
     if (audit && !hasValue(item.price)) return invalid(`item-price-${index}`, '审核前请为每项物料补充采购单价。')
     if (hasValue(item.price) && (!Number.isFinite(Number(item.price)) || Number(item.price) < 0)) return invalid(`item-price-${index}`, '采购单价必须为非负数。')

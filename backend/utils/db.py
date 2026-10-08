@@ -1586,6 +1586,7 @@ def _ensure_purchase_order_schema(conn):
                 invoice_required INTEGER NOT NULL DEFAULT 0,
                 payment_method TEXT NOT NULL DEFAULT '',
                 payment_account_id INTEGER,
+                source_type TEXT NOT NULL DEFAULT 'purchase-order',
                 status TEXT NOT NULL DEFAULT 'draft',
                 total_quantity REAL NOT NULL DEFAULT 0,
                 total_amount REAL NOT NULL DEFAULT 0,
@@ -1722,6 +1723,7 @@ def _ensure_purchase_order_schema(conn):
             'payment_method': "ALTER TABLE purchase_orders ADD COLUMN payment_method TEXT NOT NULL DEFAULT ''",
             'payment_account_id': "ALTER TABLE purchase_orders ADD COLUMN payment_account_id INTEGER",
             'inbound_deleted_at': "ALTER TABLE purchase_orders ADD COLUMN inbound_deleted_at TEXT",
+            'source_type': "ALTER TABLE purchase_orders ADD COLUMN source_type TEXT NOT NULL DEFAULT 'purchase-order'",
         }
         for column, statement in purchase_order_migrations.items():
             if column not in purchase_order_columns:
@@ -1751,6 +1753,7 @@ def _ensure_purchase_order_schema(conn):
                 specification TEXT,
                 unit TEXT,
                 ordered_qty REAL NOT NULL DEFAULT 0,
+                actual_purchase_qty REAL,
                 received_qty REAL NOT NULL DEFAULT 0,
                 unit_price REAL,
                 amount REAL,
@@ -1770,6 +1773,8 @@ def _ensure_purchase_order_schema(conn):
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN category_id INTEGER')
         if 'category_name' not in purchase_item_columns:
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN category_name TEXT')
+        if 'actual_purchase_qty' not in purchase_item_columns:
+            cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN actual_purchase_qty REAL')
         cursor.execute(
             '''
             UPDATE purchase_order_items SET supplier_id = (
