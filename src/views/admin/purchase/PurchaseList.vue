@@ -388,6 +388,19 @@
 
       <div class="table-scroll">
         <table class="records-table">
+          <colgroup v-if="isInbound">
+            <col style="width: 38px">
+            <col style="width: 150px">
+            <col style="width: 110px">
+            <col style="width: 120px">
+            <col style="width: 140px">
+            <col style="width: 170px">
+            <col style="width: 140px">
+            <col style="width: 90px">
+            <col style="width: 115px">
+            <col>
+            <col style="width: 170px">
+          </colgroup>
           <thead>
             <tr>
               <th class="checkbox-column">
@@ -3556,77 +3569,41 @@ onMounted(() => refreshData(false))
 .table-action.danger:hover { color: #9f1c27; background: #fff1f2; border-color: #f0b9bf; }
 
 .is-inbound .records-table {
-  min-width: 1280px;
+  width: 100%;
+  min-width: 1420px !important;
+  table-layout: fixed;
 }
 
 .is-inbound .records-table th {
   height: 42px;
-  padding-right: 8px;
-  padding-left: 8px;
+  text-align: left;
 }
 
 .is-inbound .records-table td {
   height: 54px;
-  padding: 7px 8px;
-}
-
-.is-inbound .records-table th:nth-child(1),
-.is-inbound .records-table td:nth-child(1) {
-  width: 44px;
-  padding: 0 10px;
-  text-align: center;
-}
-
-.is-inbound .records-table th:nth-child(2),
-.is-inbound .records-table td:nth-child(2) {
-  width: 135px;
-}
-
-.is-inbound .records-table th:nth-child(3),
-.is-inbound .records-table td:nth-child(3) {
-  width: 100px;
-}
-
-.is-inbound .records-table th:nth-child(4),
-.is-inbound .records-table td:nth-child(4) {
-  width: 105px;
-}
-
-.is-inbound .records-table th:nth-child(5),
-.is-inbound .records-table td:nth-child(5) {
-  width: 150px;
-}
-
-.is-inbound .records-table th:nth-child(6),
-.is-inbound .records-table td:nth-child(6) {
-  width: 200px;
-}
-
-.is-inbound .records-table th:nth-child(7),
-.is-inbound .records-table td:nth-child(7) {
-  width: 145px;
-  text-align: right;
-}
-
-.is-inbound .records-table th:nth-child(8),
-.is-inbound .records-table td:nth-child(8) {
-  width: 90px;
-}
-
-.is-inbound .records-table th:nth-child(9),
-.is-inbound .records-table td:nth-child(9) {
-  width: 105px;
+  text-align: left;
 }
 
 .is-inbound .records-table th:nth-child(10),
 .is-inbound .records-table td:nth-child(10) {
-  width: 180px;
+  width: auto !important;
 }
 
-.is-inbound .records-table th:nth-child(11),
-.is-inbound .records-table td:nth-child(11) {
-  width: 110px;
-  text-align: center;
+.is-inbound .records-table .checkbox-column,
+.is-inbound .records-table .action-column {
+  text-align: center !important;
+}
+
+.is-inbound .records-table .quantity-cell {
+  justify-content: flex-start;
+}
+
+.is-inbound .records-table .progress-column {
+  text-align: left;
+}
+
+.is-inbound .records-table .progress-cell {
+  justify-content: flex-start;
 }
 
 .is-inbound .detail-overview { grid-template-columns: repeat(5, minmax(0, 1fr)); }

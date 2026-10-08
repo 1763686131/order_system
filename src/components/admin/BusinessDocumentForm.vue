@@ -116,19 +116,25 @@
           </table>
           <table v-else class="products-table">
             <colgroup>
-              <col style="width: 40px" /><col style="width: 54px" /><col v-if="isPurchaseOrder" style="width: 125px" /><col v-if="isPurchaseOrder" style="width: 88px" /><col style="width: 170px" /><col v-if="isPurchaseOrder" style="width: 82px" /><col style="width: 105px" /><col style="width: 55px" />
+              <col style="width: 40px" /><col :style="{ width: isPurchaseApplication ? '72px' : '54px' }" />
+              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '145px' : '125px' }" />
+              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '108px' : '88px' }" />
+              <col :style="{ width: isPurchaseApplication ? '220px' : '170px' }" />
+              <col v-if="isPurchaseApplication" style="width: 120px" />
+              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '90px' : '82px' }" />
+              <col :style="{ width: isPurchaseApplication ? '150px' : '105px' }" /><col :style="{ width: isPurchaseApplication ? '70px' : '55px' }" />
               <template v-if="!isPurchaseOrder"><col style="width: 130px" /><col style="width: 95px" /><col style="width: 90px" /></template>
-              <col style="width: 88px" /><col v-if="isPurchaseOrder && !isPurchaseApplication" style="width: 110px" /><col v-if="isPurchaseOrder && !isPurchaseApplication" style="width: 125px" /><col v-if="!isPurchaseApplication" style="width: 100px" />
+              <col :style="{ width: isPurchaseApplication ? '110px' : '88px' }" /><col v-if="isPurchaseOrder && !isPurchaseApplication" style="width: 110px" /><col v-if="isPurchaseOrder && !isPurchaseApplication" style="width: 125px" /><col v-if="!isPurchaseApplication" style="width: 100px" />
               <template v-if="ui.taxEnabled"><col style="width: 80px" /><col style="width: 110px" /></template>
               <col v-if="!isPurchaseApplication" style="width: 110px" />
               <template v-if="ui.taxEnabled"><col v-if="!isSale" style="width: 100px" /><col style="width: 110px" /></template>
               <template v-if="isPurchase"><col style="width: 140px" /><col style="width: 110px" /></template>
-              <col style="width: 110px" />
+              <col v-if="isPurchaseApplication" /><col v-else style="width: 110px" />
             </colgroup>
             <thead><tr>
-              <th>序号</th><th>操作</th><th v-if="isPurchaseOrder">所属仓库</th><th v-if="isPurchaseOrder">分类</th><th>{{ isPurchaseOrder ? '商品信息' : isMaterial ? '物料信息' : '商品信息' }}<b v-if="isPurchaseOrder"> *</b></th><th v-if="isPurchaseOrder">编码</th><th>规格型号</th><th>单位</th>
+              <th>序号</th><th>操作</th><th v-if="isPurchaseOrder">所属仓库</th><th v-if="isPurchaseOrder">分类</th><th>{{ isPurchaseOrder ? '商品信息' : isMaterial ? '物料信息' : '商品信息' }}<b v-if="isPurchaseOrder"> *</b></th><th v-if="isPurchaseApplication">当前库存</th><th v-if="isPurchaseOrder">编码</th><th>规格型号</th><th>单位</th>
               <template v-if="!isPurchaseOrder"><th>所属仓库</th><th>当前库存</th><th>{{ isPurchase ? '应收数量' : '件数' }}</th></template>
-              <th :class="{ right: isPurchaseOrder }">{{ isPurchaseOrder ? '申请数量' : isPurchase ? '实收数量' : '数量' }}<b v-if="isPurchaseOrder"> *</b></th>
+              <th :class="{ right: isPurchaseOrder && !isPurchaseApplication }">{{ isPurchaseOrder ? '申请数量' : isPurchase ? '实收数量' : '数量' }}<b v-if="isPurchaseOrder"> *</b></th>
               <th v-if="isPurchaseOrder && !isPurchaseApplication" class="right">实际采购数量<b v-if="ui.auditMode"> *</b></th>
               <th v-if="isPurchaseOrder && !isPurchaseApplication">采购供应商<b v-if="ui.auditMode"> *</b></th><th v-if="!isPurchaseApplication" :class="{ right: isPurchaseOrder }">{{ isPurchaseOrder ? '采购单价 (元)' : '单价 (元)' }}<b v-if="isPurchaseOrder && ui.auditMode"> *</b></th>
               <template v-if="ui.taxEnabled"><th>税率 (%)</th><th>含税单价</th></template>
@@ -162,6 +168,7 @@
                   </select>
                   <input v-else v-model="item.goodsName" :ref="element => setProductInputRef(index, element)" type="text" aria-label="商品" autocomplete="off" @focus="ui.showProductDropdown(index)" @blur="ui.hideProductDropdown(index)" @input="ui.onProductInput(index)" />
                 </td>
+                <td v-if="isPurchaseApplication" class="purchase-stock-cell">{{ applicationStockLabel(item) }}</td>
                 <td v-if="isPurchaseOrder" class="muted" :title="item.productCode">{{ item.productCode }}</td>
                 <td><input v-model="item[ui.config.specField]" type="text" readonly /></td>
                 <td><input v-model="item.unit" type="text" readonly /></td>
@@ -187,9 +194,9 @@
                 <td><input v-if="!isPurchaseOrder || item.productId" v-model="item.remark" aria-label="行备注" type="text" :maxlength="isPurchaseOrder ? 500 : undefined" /><span v-else class="blank-cell"></span></td>
               </tr>
               <tr class="total-row">
-                <td :colspan="isPurchaseOrder ? 8 : 7" class="center">合计</td>
+                <td :colspan="isPurchaseOrder ? (isPurchaseApplication ? 9 : 8) : 7" :class="{ center: !isPurchaseApplication }">合计</td>
                 <td v-if="!isPurchaseOrder" class="right"><input v-if="isSale" v-model.number="ui.totalPackages" aria-label="总件数" type="number" min="0" @input="ui.onTotalPackagesManualInput" /><span v-else>{{ money(ui.totalPackages) }}</span></td>
-                <td class="right">{{ isPurchaseOrder && !hasPurchaseOrderItems ? '' : money(ui.totalQuantity) }}</td>
+                <td :class="{ right: !isPurchaseApplication }">{{ isPurchaseOrder && !hasPurchaseOrderItems ? '' : money(ui.totalQuantity) }}</td>
                 <td v-if="isPurchaseOrder && !isPurchaseApplication" class="right">{{ hasPurchaseOrderItems ? money(ui.totalActualQuantity) : '' }}</td>
                 <td v-if="!isPurchaseApplication" :colspan="isPurchaseOrder ? 2 : ui.taxEnabled ? 3 : 1"></td>
                 <td v-if="!isPurchaseApplication" class="right">{{ isPurchaseOrder && !hasPurchaseOrderItems ? '' : money(ui.totalAmount) }}</td><template v-if="ui.taxEnabled"><td v-if="!isSale" class="right">{{ money(ui.totalTaxAmount) }}</td><td class="right">{{ money(ui.totalIncludedAmount) }}</td></template><td :colspan="isPurchase ? 3 : 1"></td>
@@ -352,6 +359,12 @@ const isPurchaseOrder = computed(() => props.documentType === 'purchase-order')
 const isPurchaseApplication = computed(() => isPurchaseOrder.value && props.applicationMode)
 const isPurchaseReturn = computed(() => props.documentType === 'purchase-return')
 const hasPurchaseOrderItems = computed(() => isPurchaseOrder.value && ui.form.items.some(item => item.productId))
+const applicationStockLabel = item => {
+  if (!item.productId) return ''
+  const product = ui.productsForItem(item).find(candidate => String(candidate.id) === String(item.productId))
+  const stock = product ? ui.getProductStock(product) : item.currentStock
+  return stock == null ? '' : `${money(stock)}${item.unit ? ` ${item.unit}` : ''}`
+}
 const activePurchaseCell = ref('')
 const activatePurchaseCell = (item, field) => { activePurchaseCell.value = `${item.key}-${field}` }
 const purchaseCellPlaceholder = (item, field, message) => activePurchaseCell.value === `${item.key}-${field}` ? message : ''
@@ -569,7 +582,15 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .business-document-form[data-document-type="purchase-order"] .finance-row-full .info-group { gap: 5px; }
 .business-document-form[data-document-type="purchase-order"].purchase-application-form .finance-row-full { display: flex; }
 .business-document-form[data-document-type="purchase-order"] .products-table { min-width: 1350px; }
-.business-document-form[data-document-type="purchase-order"].purchase-application-form .products-table { min-width: 900px; }
+.business-document-form[data-document-type="purchase-order"].purchase-application-form .products-table { width: 100%; min-width: 1360px; table-layout: fixed; }
+.business-document-form.purchase-application-form .products-table th,
+.business-document-form.purchase-application-form .products-table td,
+.business-document-form.purchase-application-form .products-table td.right,
+.business-document-form.purchase-application-form .products-table th.right { text-align: left; }
+.business-document-form.purchase-application-form .products-table td input[type="number"] { text-align: left; }
+.business-document-form.purchase-application-form .products-table .purchase-stock-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.business-document-form.purchase-application-form .products-table td:nth-child(2) { white-space: nowrap; }
+.business-document-form.purchase-application-form .products-table td:nth-child(2) .btn-icon { flex: 0 0 24px; }
 .business-document-form[data-document-type="purchase-order"] .finance-row-full .info-group input[type="number"] { width: 110px; }
 .business-document-form[data-document-type="purchase-order"] .finance-row-full select,
 .business-document-form[data-document-type="purchase-order"] .balance-toggle { height: 38px; }
