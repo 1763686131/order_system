@@ -504,7 +504,6 @@
                 <span class="status-tag" :class="`status-${getStatusClass(record.status)}`">
                   <i></i>{{ getStatusLabel(record.status) }}
                 </span>
-                <div v-if="isInbound && !record.purchaseOrderId && record.settlementType === 'pending_supplier'" class="secondary-cell">{{ settlementLabels[record.financialStatus] }}</div>
               </td>
               <td v-if="!isInbound" class="finance-column">{{ invoiceLabels[record.invoiceStatus] || '无需开票' }}</td>
               <td class="remark-cell" :title="record.remark || ''">{{ record.remark || '—' }}</td>
@@ -515,9 +514,6 @@
                       <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
                       <circle cx="12" cy="12" r="2.5"></circle>
                     </svg>
-                  </button>
-                  <button v-if="canReviewInbound(record)" class="table-action audit-action" type="button" title="采购审核" aria-label="采购审核" @click="openSettlement(record)">
-                    <Check :size="15" aria-hidden="true" />
                   </button>
                   <button
                     v-if="isInbound && canDeleteApplication && record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)"
@@ -855,9 +851,6 @@
                 <button v-if="!isInbound && canOpenExpenses(selectedRecord)" class="button button-secondary" type="button" @click="openExpenses(selectedRecord)">
                   <ReceiptText :size="16" aria-hidden="true" />采购费用
                 </button>
-                <button v-if="canReviewInbound(selectedRecord)" class="button button-secondary" type="button" @click="openSettlement(selectedRecord)">
-                  <Wallet :size="16" aria-hidden="true" />采购审核
-                </button>
                 <button v-if="!isInbound && selectedRecord.status === 'pending' && canAudit" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
                 </button>
@@ -894,7 +887,6 @@
       </Transition>
     </Teleport>
     <PurchaseExpenseDialog v-if="expenseOrderId" :order-id="expenseOrderId" @close="expenseOrderId = null" @updated="refreshData(false)" />
-    <SupplierAssignmentDialog v-if="settlementInboundId" :inbound-id="settlementInboundId" @close="settlementInboundId = null" @updated="refreshData(false)" />
     <CustomModal
       :visible="deleteConfirmOpen"
       :title="applicationDeleteTarget ? '确认删除采购申请' : '确认批量删除'"
@@ -918,15 +910,14 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, Pencil, Plus, ReceiptText, RotateCcw, Trash2, Wallet } from '@lucide/vue'
+import { Check, Pencil, Plus, ReceiptText, RotateCcw, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { ADMIN_PURCHASE_ORDER_PERMISSIONS } from '@/utils/accessControl'
 import PurchaseExpenseDialog from '@/components/admin/purchase/PurchaseExpenseDialog.vue'
-import SupplierAssignmentDialog from '@/components/admin/purchase/SupplierAssignmentDialog.vue'
 import { purchaseReturnStatusLabels } from '@/composables/documents/documentModels'
-import { invoiceLabels, operationKey, paymentLabels, fulfillmentLabel, settlementLabels } from '@/utils/supplierFinance'
+import { invoiceLabels, operationKey, paymentLabels, fulfillmentLabel } from '@/utils/supplierFinance'
 
 const props = defineProps({
   mode: {
@@ -1210,8 +1201,6 @@ const returnActionMessage = computed(() => ({
   delete: '确定删除该采购退货草稿？'
 }[returnPendingAction.value?.action] || ''))
 const expenseOrderId = ref(null)
-const settlementInboundId = ref(null)
-const canReadSettlement = computed(() => userStore.hasPerm('admin.purchase.inbound.settlement.read'))
 const loading = ref(true)
 const recordTableColumnCount = computed(() => isInbound.value ? 11 : 14)
 const currentPage = ref(1)
@@ -1405,16 +1394,6 @@ function openExpenses(record) {
   closeDetail()
   expenseOrderId.value = id
 }
-function openSettlement(record) {
-  const id = record.inboundId
-  closeDetail()
-  settlementInboundId.value = id
-}
-function canReviewInbound(record) {
-  return isInbound.value && !record.purchaseOrderId && record.documentSource === 'other'
-    && ['reviewed', 'posted'].includes(record.status) && canReadSettlement.value
-}
-
 function formatMoney(value) {
   return Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
@@ -1522,6 +1501,7 @@ async function actReturn() {
 }
 
 function canEdit(record) {
+  if (record.sourceType === 'warehouse-inbound') return false
   return isInbound.value
     ? (record.sourceType === 'inbound-application' && record.status === 'draft')
       || record.status === 'pending'
@@ -1709,6 +1689,10 @@ async function createRecord() {
 
 function editRecord(record) {
   if (!isInbound.value) {
+    if (record.sourceType === 'warehouse-inbound') {
+      auditRecord(record)
+      return
+    }
     if (canEdit(record)) router.push({ name: 'admin-purchase-order-edit', params: { id: record.id } })
     else router.push({ name: 'admin-purchase-order-view', params: { id: record.id } })
     return
@@ -1727,7 +1711,11 @@ function editRecord(record) {
 function auditRecord(record) {
   if (isInbound.value || record.status !== 'pending' || !canAudit.value) return
   closeDetail()
-  router.push({ name: 'admin-purchase-order-audit', params: { id: record.id } })
+  router.push({
+    name: 'admin-purchase-order-audit',
+    params: { id: record.sourceType === 'warehouse-inbound' ? record.inboundId : record.id },
+    query: record.sourceType === 'warehouse-inbound' ? { sourceType: 'warehouse-inbound' } : {}
+  })
 }
 
 function printRecord(record) {
@@ -1900,7 +1888,7 @@ async function refreshData(showMessage = true) {
     if (isInbound.value) {
       const [inboundData, orderData] = await Promise.all([
         request({ url: '/stock-inbounds', method: 'GET', params: { businessType: 'purchase' } }),
-        request({ url: '/purchase-orders', method: 'GET' })
+        request({ url: '/purchase-orders', method: 'GET', params: { excludeWarehouseInbound: 1 } })
       ])
       const actualRecords = (Array.isArray(inboundData) ? inboundData : []).map(normalizeInbound)
       const batchesByOrder = new Map()

@@ -23,8 +23,7 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
     SUPPLIERS: 'admin.route.purchase.suppliers',
     INBOUND: 'admin.route.purchase.inbound',
     INVOICES: 'admin.route.purchase.invoices',
-    RETURNS: 'admin.route.purchase.returns',
-    INBOUND_SETTLEMENT: 'admin.route.purchase.inbound_settlement'
+    RETURNS: 'admin.route.purchase.returns'
   },
   INVENTORY: {
     PRODUCTS: 'admin.route.inventory.products',
@@ -72,7 +71,6 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS, path: '/admin/purchase/orders' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.SUPPLIERS, path: '/admin/purchase/suppliers' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND, path: '/admin/purchase/inbound' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT, path: '/admin/purchase/inbound-settlement' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INVOICES, path: '/admin/purchase/invoices' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS, path: '/admin/purchase/returns' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS, path: '/admin/finance/supplier-payments' },
@@ -113,7 +111,6 @@ export function getAdminRoutePermission(path = '') {
   if (/^\/admin\/finance\/supplier-payments(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS
   if (/^\/admin\/finance\/supplier-refunds(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS
   if (/^\/admin\/finance\/supplier-reconciliations(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS
-  if (/^\/admin\/purchase\/inbound-settlement(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT
   if (/^\/admin\/finance\/(payables|supplier-statement)(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
   if (/^\/admin\/finance\/employee-expenses(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES
   if (path === '/admin/dashboard') return ADMIN_ROUTE_PERMISSIONS.DASHBOARD

@@ -4,6 +4,7 @@ import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { DOCUMENT_TYPES, localDate, purchaseOrderPayload, validatePurchaseOrder } from './documentModels'
 import { useDocumentValidation } from './useDocumentValidation'
+import { operationKey } from '@/utils/supplierFinance'
 
 function dateAfter(dateText, days = 7) {
   const date = new Date(`${dateText}T00:00:00`)
@@ -16,6 +17,7 @@ export function usePurchaseOrderDocument(props) {
   const router = useRouter()
   const userStore = useUserStore()
   const applicationMode = computed(() => Boolean(props.applicationMode))
+  const warehouseInboundMode = computed(() => props.sourceType === 'warehouse-inbound')
   const validation = useDocumentValidation()
   const loading = ref(true)
   const loadFailed = ref(false)
@@ -48,10 +50,11 @@ export function usePurchaseOrderDocument(props) {
   let noticeTimer
   let redirectTimer
   const blankItem = () => ({
-    key: ++rowKey, orderItemId: null, productId: '', productCode: '', goodsName: '',
+    key: ++rowKey, orderItemId: null, inboundItemId: null, productId: '', productCode: '', goodsName: '',
     specification: '', unit: '', productType: '', categoryId: '', categoryName: '',
     warehouseId: '', warehouseName: '', quantity: '', actualQuantity: '', supplierId: '', supplierName: '',
-    price: '', amount: '', remark: '', showDropdown: false, filteredProducts: []
+    price: '', taxRate: 0, taxAmount: 0, taxIncludedAmount: 0, batchNo: '', binCode: '',
+    amount: '', remark: '', showDropdown: false, filteredProducts: []
   })
   const blankForm = () => {
     const orderDate = localDate()
@@ -59,7 +62,9 @@ export function usePurchaseOrderDocument(props) {
       orderNo: '', storeId: '', orderDate, expectedDate: dateAfter(orderDate),
       expectedDateAuto: true, purchaser: '', creator: '', paymentAmount: 0, paymentAmountTouched: false, otherFees: 0,
       settlementAccount: '', invoiceRequired: false, paymentMethod: '', paymentAccountId: '',
-      currentPayment: 0, remark: '', status: 'draft', sourceType: applicationMode.value ? 'inbound-application' : 'purchase-order',
+      currentPayment: 0, remark: '', status: 'draft',
+      sourceType: warehouseInboundMode.value ? 'warehouse-inbound' : applicationMode.value ? 'inbound-application' : 'purchase-order',
+      settlementType: 'pending_supplier', settlementRemark: '',
       items: Array.from({ length: 8 }, blankItem)
     }
   }
@@ -331,7 +336,7 @@ export function usePurchaseOrderDocument(props) {
     productId: '', productCode: '', goodsName: '', specification: '', unit: '', productType: '', price: '', amount: ''
   })
   const auditMode = computed(() => props.action === 'audit' && form.value.status === 'pending')
-  const lockRequestedItems = computed(() => auditMode.value ||
+  const lockRequestedItems = computed(() => auditMode.value || warehouseInboundMode.value ||
     Boolean(savedDocumentId.value && form.value.sourceType === 'inbound-application' && form.value.status !== 'draft'))
   const readOnly = computed(() => props.action === 'view' ||
     Boolean(applicationMode.value && savedDocumentId.value && form.value.status !== 'draft') ||
@@ -339,7 +344,9 @@ export function usePurchaseOrderDocument(props) {
     !['draft', 'pending'].includes(form.value.status))
   const config = computed(() => ({
     ...DOCUMENT_TYPES['purchase-order'],
-    title: auditMode.value ? '审核采购申请' : readOnly.value ? '采购申请详情' : savedDocumentId.value ? '编辑采购申请' : '新增采购申请'
+    title: warehouseInboundMode.value
+      ? auditMode.value ? '审核仓库入库采购信息' : '仓库入库详情'
+      : auditMode.value ? '审核采购申请' : readOnly.value ? '采购申请详情' : savedDocumentId.value ? '编辑采购申请' : '新增采购申请'
   }))
   const statusLabel = computed(() => ({
     draft: '草稿', pending: '待审核', approved: '已审核', partial: '部分入库',
@@ -348,6 +355,8 @@ export function usePurchaseOrderDocument(props) {
   const totalQuantity = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.quantity) || 0 : 0), 0))
   const totalActualQuantity = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.actualQuantity) || 0 : 0), 0))
   const totalAmount = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.amount) || 0 : 0), 0))
+  const totalTaxAmount = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.taxAmount) || 0 : 0), 0))
+  const totalTaxIncludedAmount = computed(() => totalAmount.value + totalTaxAmount.value)
   const purchaseOrderPayable = computed(() => {
     const base = form.value.paymentAmount !== '' && form.value.paymentAmount != null
       ? Number(form.value.paymentAmount) || 0
@@ -382,6 +391,10 @@ export function usePurchaseOrderDocument(props) {
     } else {
       item.amount = ''
     }
+    const base = Number(item.amount) || 0
+    item.taxAmount = Number((base * (Number(item.taxRate) || 0) / 100).toFixed(2))
+    item.taxIncludedAmount = Number((base + item.taxAmount).toFixed(2))
+    item.taxIncludedPrice = Number(((Number(item.price) || 0) * (1 + (Number(item.taxRate) || 0) / 100)).toFixed(4))
   }
   watch(totalAmount, value => {
     if (form.value.paymentAmount === '' || form.value.paymentAmount == null || !form.value.paymentAmountTouched) {
@@ -532,12 +545,15 @@ export function usePurchaseOrderDocument(props) {
       paymentMethod: data.paymentMethod || '',
       paymentAccountId: data.paymentAccountId ? String(data.paymentAccountId) : '',
       currentPayment: data.currentPayment ?? 0,
-      remark: data.remark || '', status: data.status || 'draft', sourceType: data.sourceType,
+      remark: data.remark || '', status: data.status || 'draft',
+      sourceType: data.sourceType || form.value.sourceType,
+      settlementType: data.settlementType || 'pending_supplier',
+      settlementRemark: data.settlementRemark || '',
       confirmedPayable: data.confirmedPayable || 0, unpaidAmount: data.unpaidAmount || 0,
       payableCount: data.payableCount || 0,
       billedAmount: data.billedAmount || 0, allocatedAmount: data.allocatedAmount || 0,
       items: (data.items || []).map(item => ({
-        ...blankItem(), orderItemId: item.orderItemId || item.id,
+        ...blankItem(), orderItemId: item.orderItemId || item.id, inboundItemId: item.inboundItemId || null,
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
         productType: item.productType === 'finished-product' ? 'finished-product' : '',
@@ -546,9 +562,15 @@ export function usePurchaseOrderDocument(props) {
         quantity: item.orderedQty ?? '',
         actualQuantity: item.actualPurchaseQty ?? (props.action === 'audit' ? item.orderedQty : ''),
         supplierId: item.supplierId ? String(item.supplierId) : '',
-        supplierName: item.supplierName || '', price: item.unitPrice ?? '', amount: item.amount ?? '', remark: item.remark || ''
+        supplierName: item.supplierName || '', price: item.unitPrice ?? '', taxRate: Number(item.taxRate) || 0,
+        taxAmount: Number(item.taxAmount) || 0,
+        taxIncludedAmount: Number(item.totalAmount ?? item.taxIncludedAmount) || 0,
+        taxIncludedPrice: Number(item.taxIncludedPrice) || 0,
+        batchNo: item.batchNo || '', binCode: item.binCode || '',
+        amount: item.amount ?? '', remark: item.remark || ''
       }))
     }
+    form.value.items.forEach(calculateRow)
     const minimumRows = readOnly.value || lockRequestedItems.value ? 1 : 8
     while (form.value.items.length < minimumRows) form.value.items.push(blankItem())
   }
@@ -568,7 +590,9 @@ export function usePurchaseOrderDocument(props) {
   }
   const validateForm = () => {
     validation.dismissValidationHint()
-    return !validatePurchaseOrder(form.value, auditMode.value, validation.showValidationHint)
+    const requireSupplierAndPrice = auditMode.value &&
+      (!warehouseInboundMode.value || form.value.settlementType !== 'none')
+    return !validatePurchaseOrder(form.value, requireSupplierAndPrice, validation.showValidationHint)
   }
   const close = () => router.push({ name: applicationMode.value ? 'admin-purchase-inbound' : 'admin-purchase-orders' })
   const save = async (status = 'pending') => {
@@ -579,20 +603,49 @@ export function usePurchaseOrderDocument(props) {
     let savedSuccessfully = false
     try {
       const id = savedDocumentId.value
+      const receivedInboundPayload = {
+        version: form.value.version,
+        idempotencyKey: operationKey(),
+        settlementType: form.value.settlementType,
+        settlementRemark: form.value.settlementRemark || '',
+        storeId: Number(form.value.storeId),
+        orderDate: form.value.orderDate,
+        items: form.value.items.filter(item => item.productId).map(item => ({
+          inboundItemId: Number(item.inboundItemId),
+          orderedQty: Number(item.quantity),
+          actualPurchaseQty: Number(item.actualQuantity),
+          receivedQty: Number(item.quantity),
+          productId: Number(item.productId),
+          productType: item.productType || 'raw-material',
+          warehouseId: item.warehouseId ? Number(item.warehouseId) : null,
+          batchNo: item.batchNo || '',
+          supplierId: item.supplierId ? Number(item.supplierId) : null,
+          unitPrice: item.price === '' || item.price == null ? null : Number(item.price),
+          taxRate: Number(item.taxRate) || 0
+        }))
+      }
       const response = await request({
         url: isAudit
-          ? `/purchase-orders/${id}/audit`
+          ? warehouseInboundMode.value
+            ? `/purchase-orders/inbound/${id}/audit`
+            : `/purchase-orders/${id}/audit`
           : applicationMode.value
             ? id ? `/purchase-inbound-applications/${id}` : '/purchase-inbound-applications'
             : id ? `/purchase-orders/${id}` : '/purchase-orders',
         method: isAudit ? 'POST' : id ? 'PUT' : 'POST',
-        data: purchaseOrderPayload(form.value, isAudit ? 'pending' : status)
+        data: warehouseInboundMode.value
+          ? receivedInboundPayload
+          : purchaseOrderPayload(form.value, isAudit ? 'pending' : status)
       })
       if (!response?.success) throw new Error(response?.message || '保存失败')
       savedSuccessfully = true
-      savedDocumentId.value = response.id || response.purchaseOrder?.orderId || response.purchaseOrder?.id || id
+      savedDocumentId.value = warehouseInboundMode.value
+        ? response.purchaseOrder?.inboundId || id
+        : response.id || response.purchaseOrder?.orderId || response.purchaseOrder?.id || id
       if (response.purchaseOrder) normalize(response.purchaseOrder)
-      showNotice(isAudit ? '采购申请已审核通过' : status === 'pending' ? '采购申请已提交审核' : '采购申请草稿已保存')
+      showNotice(warehouseInboundMode.value
+        ? '采购信息已补齐，入库数量未变'
+        : isAudit ? '采购申请已审核通过' : status === 'pending' ? '采购申请已提交审核' : '采购申请草稿已保存')
       redirectTimer = window.setTimeout(close, 500)
       return true
     } catch (error) {
@@ -651,7 +704,12 @@ export function usePurchaseOrderDocument(props) {
         ? bankAccountData.data
         : (Array.isArray(bankAccountData?.items) ? bankAccountData.items : [])
       form.value.creator = currentCreatorName.value
-      if (props.documentId) normalize(await request({ url: `/purchase-orders/${props.documentId}`, method: 'GET' }))
+      if (props.documentId) {
+        const url = warehouseInboundMode.value
+          ? `/purchase-orders/inbound/${props.documentId}`
+          : `/purchase-orders/${props.documentId}`
+        normalize(await request({ url, method: 'GET' }))
+      }
     } catch (error) {
       loadFailed.value = true
       showNotice(error?.response?.data?.message || error.message || '加载采购申请资料失败', 'error')
@@ -670,8 +728,8 @@ export function usePurchaseOrderDocument(props) {
     supplierInputRefs.clear()
   })
   return {
-    ...validation, config, form, loading, loadFailed, saving, readOnly, auditMode, applicationMode, lockRequestedItems, statusLabel,
-    stores, suppliers, filteredWarehouses, products, savedDocumentId, notice, totalQuantity, totalActualQuantity, totalAmount,
+    ...validation, config, form, loading, loadFailed, saving, readOnly, auditMode, applicationMode, warehouseInboundMode, lockRequestedItems, statusLabel,
+    stores, suppliers, filteredWarehouses, products, savedDocumentId, notice, totalQuantity, totalActualQuantity, totalAmount, totalTaxAmount, totalTaxIncludedAmount,
     currentCreatorName, creatorNameStyle, purchasePeople, storeBankAccounts,
     supplierPayable, purchaseOrderPayable, currentPayable,
     productsForItem, categoriesForItem, addRow, removeRow, onProductChange, onProductInput, selectProduct,
@@ -689,6 +747,7 @@ export function usePurchaseOrderDocument(props) {
     validateForm, save, clearForm, close,
     onQuantityInput: index => calculateRow(form.value.items[index]),
     onActualQuantityInput: index => calculateRow(form.value.items[index]),
-    onPriceInput: index => calculateRow(form.value.items[index])
+    onPriceInput: index => calculateRow(form.value.items[index]),
+    onTaxRateInput: index => calculateRow(form.value.items[index])
   }
 }

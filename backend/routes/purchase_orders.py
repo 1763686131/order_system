@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from flask import Blueprint, jsonify, request
 
-from utils.auth import current_identity, require_admin_permission
+from utils.auth import admin_permission_granted, current_identity, require_admin_permission
 from utils.db import get_db
 from utils.notifications import create_audit_notifications, complete_audit_notifications
 from utils.permission_catalog import ADMIN_PURCHASE_ORDER_PERMISSIONS, ADMIN_ROUTE_BRANCH_PERMISSIONS
@@ -522,6 +522,48 @@ def _serialize_order(conn, row, include_items=True):
     return order
 
 
+def _serialize_received_purchase_order(conn, row):
+    """Expose a received warehouse document in the procurement order queue."""
+    from routes.stock_inbounds import _serialize_document
+
+    inbound = _serialize_document(conn, row)
+    items = []
+    for source in inbound["items"]:
+        warehouse = conn.execute(
+            "SELECT name FROM warehouses WHERE id = ?", (source["warehouseId"],),
+        ).fetchone()
+        quantity = float(source["receivedQty"])
+        items.append({
+            **source, "orderItemId": source["id"], "inboundItemId": source["id"],
+            "warehouseName": warehouse["name"] if warehouse else "",
+            "orderedQty": quantity, "actualPurchaseQty": quantity,
+            "effectivePurchaseQty": quantity, "remainingQty": 0,
+            "fulfillmentProgress": 100,
+            "amount": None if source["unitPrice"] is None else
+                round(source["totalAmount"] - source["taxAmount"], 2),
+        })
+    completed = inbound["financialStatus"] in ("payable_confirmed", "not_required")
+    return {
+        **inbound, "orderId": f"warehouse-inbound-{row['id']}",
+        "sourceType": "warehouse-inbound", "inboundId": row["id"],
+        "orderNo": inbound["documentNo"], "orderDate": inbound["documentDate"],
+        "status": "completed" if completed else "pending",
+        "inboundStatus": inbound["status"], "expectedDate": inbound["documentDate"],
+        "items": items, "orderItems": items,
+        "requestedTotalQuantity": inbound["totalQuantity"],
+        "actualTotalQuantity": inbound["totalQuantity"],
+        "receivedQuantity": inbound["totalQuantity"], "fulfillmentProgress": 100,
+        "progressBasis": "quantity" if len({item["unit"] for item in items}) == 1 else "lines",
+        "completedLineCount": len(items), "totalLineCount": len(items),
+        "inboundCount": 1, "hasInbound": True, "batches": [inbound],
+        "estimatedAmount": inbound["totalAmount"], "paymentAmount": inbound["totalAmount"],
+        "currentPayment": inbound["allocatedAmount"], "otherFees": 0,
+        "estimatedUnpaidAmount": inbound["unpaidAmount"], "prepaidAmount": 0,
+        "purchasePaymentStatus": inbound["paymentStatus"],
+        "creator": inbound.get("created_by", ""), "purchaser": "",
+    }
+
+
 def _existing_values(conn, order_id):
     row = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
     if not row:
@@ -668,10 +710,112 @@ def list_purchase_orders():
                 params.append(requested_status)
             sql += " ORDER BY order_date DESC, id DESC"
             rows = conn.execute(sql, params).fetchall()
-            return jsonify([_serialize_order(conn, row) for row in rows])
+            orders = [_serialize_order(conn, row) for row in rows]
+            can_read_purchase_orders = admin_permission_granted(
+                ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["orders"]
+            )
+            if can_read_purchase_orders and request.args.get("excludeWarehouseInbound") != "1":
+                scoped, inbound_params = scope_sql(alias="stock_inbounds")
+                received = conn.execute(
+                    """SELECT * FROM stock_inbounds WHERE purchase_order_id IS NULL
+                       AND document_source = 'other' AND status IN ('reviewed', 'posted')"""
+                    + scoped + " ORDER BY document_date DESC, id DESC", inbound_params,
+                ).fetchall()
+                for row in received:
+                    order = _serialize_received_purchase_order(conn, row)
+                    if not requested_status or order["status"] == requested_status:
+                        orders.append(order)
+            orders.sort(key=lambda order: (order["orderDate"], order["createdAt"]), reverse=True)
+            return jsonify(orders)
     except FinanceError as exc:
         return jsonify({"success": False, "message": str(exc)}), exc.status
     except ValueError as exc:
+        return jsonify({"success": False, "message": str(exc)}), 400
+
+
+@purchase_orders_bp.route("/purchase-orders/inbound/<int:inbound_id>", methods=["GET"])
+@require_admin_permission(ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["orders"])
+def get_received_purchase_order(inbound_id):
+    from routes.supplier_finance import inbound_row
+
+    if not admin_permission_granted(ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["orders"]):
+        return jsonify({"success": False, "message": "无权查看采购订单"}), 403
+    try:
+        with get_db() as conn:
+            row, _ = inbound_row(conn, inbound_id, require_pending=False)
+            if row["status"] not in ("reviewed", "posted"):
+                raise FinanceError("仓库尚未完成入库，不能进入采购审核", 409)
+            return jsonify(_serialize_received_purchase_order(conn, row))
+    except FinanceError as exc:
+        return jsonify({"success": False, "message": str(exc)}), exc.status
+
+
+@purchase_orders_bp.route("/purchase-orders/inbound/<int:inbound_id>/audit", methods=["POST"])
+@require_admin_permission(ADMIN_PURCHASE_ORDER_PERMISSIONS["audit"])
+def audit_received_purchase_order(inbound_id):
+    from routes.supplier_finance import inbound_row, update_inbound_purchasing
+    from utils.supplier_ledger import post_inbound_payables
+
+    if not admin_permission_granted(ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["orders"]):
+        return jsonify({"success": False, "message": "无权查看采购订单"}), 403
+    data = request.get_json(silent=True) or {}
+    try:
+        if not isinstance(data, dict):
+            raise ValueError("请求体必须是 JSON 对象")
+        with _write_lock:
+            with get_db() as conn:
+                conn.execute("BEGIN IMMEDIATE")
+                row, items = inbound_row(conn, inbound_id, require_pending=False)
+                replay, token = idempotent_result(conn, f"received-purchase:{inbound_id}:audit", data)
+                if replay:
+                    return jsonify(replay)
+                if row["status"] not in ("reviewed", "posted"):
+                    raise FinanceError("仓库尚未完成入库，不能进入采购审核", 409)
+                check_version(data, row)
+                requested = data.get("items")
+                if not isinstance(requested, list) or len(requested) != len(items):
+                    raise ValueError("采购审核必须提交全部入库明细")
+                by_id = {item["id"]: item for item in items}
+                submitted_ids = set()
+                for item in requested:
+                    if not isinstance(item, dict):
+                        raise ValueError("采购明细格式不正确")
+                    item_id = _required_int(item.get("inboundItemId"), "入库明细ID")
+                    source = by_id.get(item_id)
+                    if not source or item_id in submitted_ids:
+                        raise ValueError("采购明细必须对应原入库单且不能重复")
+                    submitted_ids.add(item_id)
+                    for field in ("orderedQty", "actualPurchaseQty", "receivedQty"):
+                        if field in item and _number(item[field]) != _number(source["received_qty"]):
+                            raise ValueError("仓库实收数量不能由采购审核修改")
+                    for field, column in (
+                        ("productId", "product_id"), ("warehouseId", "warehouse_id"),
+                    ):
+                        if field in item and _optional_int(item[field], field) != source[column]:
+                            raise ValueError("仓库入库物料和仓库不能由采购审核修改")
+                    for field, column in (("batchNo", "batch_no"), ("productType", "product_type")):
+                        if field in item and item[field] != source[column]:
+                            raise ValueError("仓库入库类型和批次不能由采购审核修改")
+                if data.get("storeId") is not None and _optional_int(data["storeId"], "门店") != row["store_id"]:
+                    raise ValueError("入库门店不能由采购审核修改")
+                if data.get("orderDate") is not None and data["orderDate"] != row["document_date"]:
+                    raise ValueError("入库日期不能由采购审核修改")
+                updated = update_inbound_purchasing(conn, row, items, data)
+                current_items = [dict(item) for item in conn.execute(
+                    "SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id",
+                    (inbound_id,),
+                ).fetchall()]
+                if updated["settlement_type"] == "pending_supplier" and not all(
+                    item["payable_transaction_id"] for item in current_items
+                ):
+                    post_inbound_payables(conn, updated, current_items)
+                return jsonify(save_operation(conn, token, {
+                    "success": True, "message": "采购审核完成，库存数量保持不变",
+                    "purchaseOrder": _serialize_received_purchase_order(conn, updated),
+                }))
+    except FinanceError as exc:
+        return jsonify({"success": False, "message": str(exc)}), exc.status
+    except (ValueError, TypeError) as exc:
         return jsonify({"success": False, "message": str(exc)}), 400
 
 

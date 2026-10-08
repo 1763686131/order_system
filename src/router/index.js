@@ -108,12 +108,6 @@ const routes = [
         meta: { requiresAuth: true, permission: 'admin.finance.employee_expense.read' }
       },
       {
-        path: 'purchase/inbound-settlement',
-        name: 'admin-purchase-inbound-settlement',
-        component: () => import('@/views/admin/purchase/PurchaseInboundSettlement.vue'),
-        meta: { requiresAuth: true, permission: 'admin.purchase.inbound.settlement.read' }
-      },
-      {
         path: 'dashboard',
         name: 'admin-dashboard',
         component: () => import('@/views/admin/Dashboard.vue'),
@@ -313,7 +307,12 @@ const routes = [
         path: 'purchase/orders/audit/:id',
         name: 'admin-purchase-order-audit',
         component: () => import('@/components/admin/BusinessDocumentForm.vue'),
-        props: route => ({ documentType: 'purchase-order', action: 'audit', documentId: Number(route.params.id) }),
+        props: route => ({
+          documentType: 'purchase-order',
+          action: 'audit',
+          documentId: Number(route.params.id),
+          sourceType: route.query.sourceType
+        }),
         meta: { requiresAuth: true, documentForm: true, permission: ADMIN_PURCHASE_ORDER_PERMISSIONS.AUDIT }
       },
       {

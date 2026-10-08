@@ -666,11 +666,6 @@ const allMenuItems = [
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS
       },
       {
-        label: '采购审核',
-        path: '/admin/purchase/inbound-settlement',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND_SETTLEMENT
-      },
-      {
         label: '采购发票登记',
         path: '/admin/purchase/invoices',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INVOICES

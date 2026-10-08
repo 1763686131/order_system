@@ -74,6 +74,98 @@ def get_settlement(inbound_id):
         return jsonify(serialize_inbound(conn, row))
 
 
+def update_inbound_purchasing(conn, row, items, data):
+    """Update procurement fields inside the caller's transaction."""
+    from routes.stock_inbounds import _normalize_items
+    from utils.supplier_periods import ensure_period_open
+
+    inbound_id = row["id"]
+    if row["status"] not in ("reviewed", "posted"):
+        raise FinanceError("请先完成仓库入库，再补录采购信息", 409)
+    settlement_type = data.get("settlementType", row["settlement_type"])
+    if settlement_type not in ("none", "pending_supplier"):
+        raise FinanceError("结算归属只能为无需结算或供应商结算")
+    requested = data.get("items")
+    if not isinstance(requested, list) or not requested:
+        raise FinanceError("请提供需要补录的入库明细")
+    by_id = {item["id"]: item for item in items}
+    assignments, seen = [], set()
+    for item in requested:
+        if not isinstance(item, dict):
+            raise FinanceError("明细格式不正确")
+        item_id = positive_id(item.get("inboundItemId"))
+        supplier_id = positive_id(item.get("supplierId")) if settlement_type == "pending_supplier" else None
+        if item_id not in by_id:
+            raise FinanceError("入库明细不属于当前单据", 404)
+        if item_id in seen:
+            raise FinanceError("同一入库明细不能重复归属")
+        seen.add(item_id)
+        source = by_id[item_id]
+        if supplier_id:
+            supplier = supplier_row(conn, supplier_id)
+            if supplier["status"] != "active" or supplier["store_id"] not in (None, row["store_id"]):
+                raise FinanceError("供应商已停用或不属于入库门店")
+            ensure_period_open(conn, supplier_id, row["store_id"], row["document_date"])
+        pricing = _normalize_items(
+            conn, row["receipt_type"], [{
+                **source,
+                "unitPrice": item.get("unitPrice", source["unit_price"]),
+                "taxRate": item.get("taxRate", source["tax_rate"]),
+            }], default_warehouse_id=row["warehouse_id"],
+        )[0]
+        if settlement_type == "pending_supplier" and pricing["unit_price"] is None:
+            raise FinanceError("请补齐每条入库明细的采购单价")
+        changes = (
+            source["supplier_id"] != supplier_id
+            or source["unit_price"] != pricing["unit_price"]
+            or source["tax_rate"] != pricing["tax_rate"]
+            or row["settlement_type"] != settlement_type
+        )
+        if source["payable_transaction_id"] and changes:
+            raise FinanceError("已确认应付的采购信息不能修改，请先反审核入库", 409)
+        assignments.append((item_id, supplier_id, pricing, changes))
+    if settlement_type != row["settlement_type"] and seen != set(by_id):
+        raise FinanceError("变更结算归属必须提交全部入库明细")
+    remark = str(data.get("settlementRemark", row["settlement_remark"]))[:500]
+    unchanged = not any(entry[3] for entry in assignments) and remark == row["settlement_remark"]
+    if not unchanged:
+        check_version(data, row)
+        if any(item["payable_transaction_id"] for item in items):
+            raise FinanceError("已确认应付的采购信息不能修改，请先反审核入库", 409)
+        for item_id, supplier_id, pricing, _ in assignments:
+            conn.execute(
+                """UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ?,
+                   supplier_assigned_by = ?, supplier_assigned_at = ?, unit_price = ?, tax_rate = ?,
+                   tax_amount = ?, total_amount = ? WHERE id = ?""",
+                (supplier_id, "confirmed" if supplier_id else "not_required",
+                 current_identity(), now(), pricing["unit_price"], pricing["tax_rate"],
+                 pricing["tax_amount"], pricing["total_amount"], item_id),
+            )
+            expense_cost = conn.execute(
+                """SELECT COALESCE(SUM(amount_excluding_tax_cents), 0) AS amount
+                   FROM purchase_expense_lines WHERE inbound_item_id = ?
+                   AND status = 'confirmed' AND include_in_inventory_cost = 1""", (item_id,),
+            ).fetchone()["amount"] / 100
+            # Revalue the original movement only; received stock is already posted.
+            conn.execute(
+                """UPDATE stock_movements SET unit_price = ?, tax_rate = ?, total_amount = ?
+                   WHERE movement_type = 'in' AND source_document_id = ? AND source_item_id = ?""",
+                (float(pricing["unit_price"] or 0) + expense_cost / pricing["received_qty"],
+                 pricing["tax_rate"], pricing["total_amount"] + expense_cost, inbound_id, item_id),
+            )
+        totals = conn.execute(
+            """SELECT COALESCE(SUM(tax_amount), 0) tax, COALESCE(SUM(total_amount), 0) amount
+               FROM stock_inbound_items WHERE inbound_id = ?""", (inbound_id,),
+        ).fetchone()
+        conn.execute(
+            """UPDATE stock_inbounds SET version = version + 1, settlement_type = ?,
+               settlement_remark = ?, total_tax = ?, total_amount = ?, updated_at = ? WHERE id = ?""",
+            (settlement_type, remark, amount(cents(totals["tax"])),
+             amount(cents(totals["amount"])), now(), inbound_id),
+        )
+    return conn.execute("SELECT * FROM stock_inbounds WHERE id = ?", (inbound_id,)).fetchone()
+
+
 @supplier_finance_bp.route("/stock-inbounds/<int:inbound_id>/assign-supplier", methods=["POST"])
 @require_admin_permission("admin.purchase.inbound.assign_supplier")
 @finance_errors
@@ -85,92 +177,7 @@ def assign_supplier(inbound_id):
         replay, token = idempotent_result(conn, f"inbound:{inbound_id}:assign-supplier", data)
         if replay:
             return jsonify(replay)
-        if row["status"] not in ("reviewed", "posted"):
-            raise FinanceError("请先完成仓库入库，再补录采购信息", 409)
-        settlement_type = data.get("settlementType", row["settlement_type"])
-        if settlement_type not in ("none", "pending_supplier"):
-            raise FinanceError("结算归属只能为无需结算或供应商结算")
-        requested = data.get("items")
-        if not isinstance(requested, list) or not requested:
-            raise FinanceError("请提供需要补录的入库明细")
-        by_id = {item["id"]: item for item in items}
-        assignments, seen = [], set()
-        for item in requested:
-            if not isinstance(item, dict):
-                raise FinanceError("明细格式不正确")
-            item_id = positive_id(item.get("inboundItemId"))
-            supplier_id = positive_id(item.get("supplierId")) if settlement_type == "pending_supplier" else None
-            if item_id not in by_id:
-                raise FinanceError("入库明细不属于当前单据", 404)
-            if item_id in seen:
-                raise FinanceError("同一入库明细不能重复归属")
-            seen.add(item_id)
-            source = by_id[item_id]
-            if supplier_id:
-                supplier = supplier_row(conn, supplier_id)
-                if supplier["status"] != "active" or supplier["store_id"] not in (None, row["store_id"]):
-                    raise FinanceError("供应商已停用或不属于入库门店")
-                from utils.supplier_periods import ensure_period_open
-                ensure_period_open(conn, supplier_id, row["store_id"], row["document_date"])
-            from routes.stock_inbounds import _normalize_items
-            pricing = _normalize_items(
-                conn, row["receipt_type"], [{
-                    **source,
-                    "unitPrice": item.get("unitPrice", source["unit_price"]),
-                    "taxRate": item.get("taxRate", source["tax_rate"]),
-                }], default_warehouse_id=row["warehouse_id"],
-            )[0]
-            if settlement_type == "pending_supplier" and pricing["unit_price"] is None:
-                raise FinanceError("请补齐每条入库明细的采购单价")
-            changes = (
-                source["supplier_id"] != supplier_id
-                or source["unit_price"] != pricing["unit_price"]
-                or source["tax_rate"] != pricing["tax_rate"]
-                or row["settlement_type"] != settlement_type
-            )
-            if source["payable_transaction_id"] and changes:
-                raise FinanceError("已确认应付的采购信息不能修改，请先反审核入库", 409)
-            assignments.append((item_id, supplier_id, pricing, changes))
-        if settlement_type != row["settlement_type"] and seen != set(by_id):
-            raise FinanceError("变更结算归属必须提交全部入库明细")
-        remark = str(data.get("settlementRemark", row["settlement_remark"]))[:500]
-        unchanged = not any(entry[3] for entry in assignments) and remark == row["settlement_remark"]
-        if not unchanged:
-            check_version(data, row)
-            if any(item["payable_transaction_id"] for item in items):
-                raise FinanceError("已确认应付的采购信息不能修改，请先反审核入库", 409)
-            for item_id, supplier_id, pricing, _ in assignments:
-                conn.execute(
-                    """UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ?,
-                       supplier_assigned_by = ?, supplier_assigned_at = ?, unit_price = ?, tax_rate = ?,
-                       tax_amount = ?, total_amount = ? WHERE id = ?""",
-                    (supplier_id, "confirmed" if supplier_id else "not_required",
-                     current_identity(), now(), pricing["unit_price"], pricing["tax_rate"],
-                     pricing["tax_amount"], pricing["total_amount"], item_id),
-                )
-                expense_cost = conn.execute(
-                    """SELECT COALESCE(SUM(amount_excluding_tax_cents), 0) AS amount
-                       FROM purchase_expense_lines WHERE inbound_item_id = ?
-                       AND status = 'confirmed' AND include_in_inventory_cost = 1""", (item_id,),
-                ).fetchone()["amount"] / 100
-                # Revalue the original movement only; received stock is already posted.
-                conn.execute(
-                    """UPDATE stock_movements SET unit_price = ?, tax_rate = ?, total_amount = ?
-                       WHERE movement_type = 'in' AND source_document_id = ? AND source_item_id = ?""",
-                    (float(pricing["unit_price"] or 0) + expense_cost / pricing["received_qty"],
-                     pricing["tax_rate"], pricing["total_amount"] + expense_cost, inbound_id, item_id),
-                )
-            totals = conn.execute(
-                """SELECT COALESCE(SUM(tax_amount), 0) tax, COALESCE(SUM(total_amount), 0) amount
-                   FROM stock_inbound_items WHERE inbound_id = ?""", (inbound_id,),
-            ).fetchone()
-            conn.execute(
-                """UPDATE stock_inbounds SET version = version + 1, settlement_type = ?,
-                   settlement_remark = ?, total_tax = ?, total_amount = ?, updated_at = ? WHERE id = ?""",
-                (settlement_type, remark, amount(cents(totals["tax"])),
-                 amount(cents(totals["amount"])), now(), inbound_id),
-            )
-        updated = conn.execute("SELECT * FROM stock_inbounds WHERE id = ?", (inbound_id,)).fetchone()
+        updated = update_inbound_purchasing(conn, row, items, data)
         return jsonify(save_operation(conn, token, {"success": True, "stockIn": serialize_inbound(conn, updated)}))
 
 
