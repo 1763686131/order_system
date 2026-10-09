@@ -1505,6 +1505,8 @@ def _ensure_stock_inbound_schema(conn):
         }
         if 'warehouse_id' not in inbound_item_columns:
             cursor.execute('ALTER TABLE stock_inbound_items ADD COLUMN warehouse_id INTEGER')
+        if 'tax_included_price' not in inbound_item_columns:
+            cursor.execute('ALTER TABLE stock_inbound_items ADD COLUMN tax_included_price REAL')
         cursor.execute(
             "CREATE INDEX IF NOT EXISTS idx_stock_inbound_items_inbound "
             "ON stock_inbound_items(inbound_id, line_no)"
@@ -1787,6 +1789,8 @@ def _ensure_purchase_order_schema(conn):
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0')
         if 'tax_amount' not in purchase_item_columns:
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0')
+        if 'tax_included_price' not in purchase_item_columns:
+            cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN tax_included_price REAL')
         cursor.execute(
             '''
             UPDATE purchase_order_items SET supplier_id = (

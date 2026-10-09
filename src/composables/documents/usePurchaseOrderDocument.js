@@ -58,7 +58,7 @@ export function usePurchaseOrderDocument(props) {
     key: ++rowKey, orderItemId: null, inboundItemId: null, productId: '', productCode: '', goodsName: '',
     specification: '', unit: '', productType: '', categoryId: '', categoryName: '',
     warehouseId: '', warehouseName: '', quantity: '', actualQuantity: '', supplierId: '', supplierName: '',
-    price: '', taxRate: 13, taxAmount: 0, taxIncludedAmount: '', taxIncludedPrice: '', batchNo: '', binCode: '',
+    price: '', precisePrice: '', priceBasis: 'exclusive', taxRate: 13, taxAmount: 0, taxIncludedAmount: '', taxIncludedPrice: '', batchNo: '', binCode: '',
     amount: '', remark: '', showDropdown: false, filteredProducts: []
   })
   const blankForm = () => {
@@ -338,7 +338,7 @@ export function usePurchaseOrderDocument(props) {
     nextTick(updateSupplierDropdownPosition)
   }
   const clearProductSelection = item => Object.assign(item, {
-    productId: '', productCode: '', goodsName: '', specification: '', unit: '', productType: '', price: '', amount: ''
+    productId: '', productCode: '', goodsName: '', specification: '', unit: '', productType: '', price: '', precisePrice: '', priceBasis: 'exclusive', amount: '', taxIncludedPrice: ''
   })
   const auditMode = computed(() => props.action === 'audit' && form.value.status === 'pending')
   const lockRequestedItems = computed(() => auditMode.value || warehouseInboundMode.value ||
@@ -396,7 +396,13 @@ export function usePurchaseOrderDocument(props) {
   const calculateRow = item => {
     const hasValue = value => value !== '' && value != null
     const quantity = hasValue(item.actualQuantity) ? item.actualQuantity : item.quantity
-    const amounts = inboundAmounts({ ...item, quantity }, form.value.invoiceRequired)
+    if (!form.value.invoiceRequired) item.priceBasis = 'exclusive'
+    if (item.priceBasis === 'included' && hasValue(item.taxIncludedPrice)) {
+      item.precisePrice = Number(item.taxIncludedPrice) * 100 / (100 + (Number(item.taxRate) || 0))
+      item.price = Number(item.precisePrice.toFixed(4))
+    }
+    const price = hasValue(item.precisePrice) ? item.precisePrice : item.price
+    const amounts = inboundAmounts({ ...item, price, quantity }, form.value.invoiceRequired)
     item.amount = hasValue(item.price) && hasValue(quantity) ? amounts.amount : ''
     item.taxAmount = amounts.taxAmount
     item.taxIncludedAmount = item.amount === '' ? '' : amounts.taxIncludedAmount
@@ -577,7 +583,10 @@ export function usePurchaseOrderDocument(props) {
         quantity: item.orderedQty ?? '',
         actualQuantity: item.actualPurchaseQty ?? (props.action === 'audit' ? item.orderedQty : ''),
         supplierId: item.supplierId ? String(item.supplierId) : '',
-        supplierName: item.supplierName || '', price: item.unitPrice ?? '',
+        supplierName: item.supplierName || '',
+        price: item.unitPrice == null ? '' : Number(Number(item.unitPrice).toFixed(4)),
+        precisePrice: item.unitPrice ?? '',
+        priceBasis: item.priceBasis === 'included' ? 'included' : 'exclusive',
         taxRate: !firstProcurement && invoiceRequired ? Number(item.taxRate ?? 13) : 13,
         taxAmount: Number(item.taxAmount) || 0,
         taxIncludedAmount: Number(item.totalAmount ?? item.taxIncludedAmount) || 0,
@@ -601,6 +610,7 @@ export function usePurchaseOrderDocument(props) {
     form.value.invoiceRequired ??= true
     form.value.items = form.value.items.map(item => ({
       productType: '', categoryId: '', categoryName: '', warehouseId: '', warehouseName: '', ...item,
+      precisePrice: item.precisePrice ?? '',
       taxRate: item.taxRate ?? 13
     }))
     form.value.items.forEach(calculateRow)
@@ -646,7 +656,11 @@ export function usePurchaseOrderDocument(props) {
           warehouseId: item.warehouseId ? Number(item.warehouseId) : null,
           batchNo: item.batchNo || '',
           supplierId: item.supplierId ? Number(item.supplierId) : null,
-          unitPrice: item.price === '' || item.price == null ? null : Number(item.price),
+          unitPrice: item.precisePrice === '' || item.precisePrice == null
+            ? item.price === '' || item.price == null ? null : Number(item.price)
+            : Number(item.precisePrice),
+          taxIncludedPrice: form.value.invoiceRequired && item.priceBasis === 'included' && item.taxIncludedPrice !== '' && item.taxIncludedPrice != null
+            ? Number(item.taxIncludedPrice) : null,
           taxRate: form.value.invoiceRequired ? Number(item.taxRate) || 0 : 0
         }))
       }
@@ -822,13 +836,23 @@ export function usePurchaseOrderDocument(props) {
     printSelectedPrintTemplate: (template, printer) => openPrintTemplate(template, printer, true),
     onQuantityInput: index => calculateRow(form.value.items[index]),
     onActualQuantityInput: index => calculateRow(form.value.items[index]),
-    onPriceInput: index => calculateRow(form.value.items[index]),
+    onPriceInput: index => {
+      const item = form.value.items[index]
+      item.precisePrice = ''
+      item.priceBasis = 'exclusive'
+      calculateRow(item)
+    },
     onTaxRateInput: index => calculateRow(form.value.items[index]),
     onIncludedPriceInput: index => {
       const item = form.value.items[index]
-      item.price = item.taxIncludedPrice === '' || item.taxIncludedPrice == null
-        ? ''
-        : Number((Number(item.taxIncludedPrice) / (1 + (Number(item.taxRate) || 0) / 100)).toFixed(4))
+      item.priceBasis = 'included'
+      if (item.taxIncludedPrice === '' || item.taxIncludedPrice == null) {
+        item.price = ''
+        item.precisePrice = ''
+      } else {
+        item.precisePrice = Number(item.taxIncludedPrice) * 100 / (100 + (Number(item.taxRate) || 0))
+        item.price = Number(item.precisePrice.toFixed(4))
+      }
       calculateRow(item)
     }
   }

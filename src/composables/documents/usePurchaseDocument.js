@@ -11,7 +11,7 @@ let rowKey = 0
 const blankItem = () => ({
   key: ++rowKey, productType: '',
   purchaseOrderItemId: '', productId: '', productCode: '', goodsName: '', specification: '', unit: '', warehouseId: '', warehouseName: '', expectedQty: '',
-  quantity: '', price: '', taxRate: 0, amount: 0, taxAmount: 0, taxIncludedAmount: 0,
+  quantity: '', price: '', precisePrice: '', priceBasis: 'exclusive', taxIncludedPrice: '', taxRate: 0, amount: 0, taxAmount: 0, taxIncludedAmount: 0,
   batchNo: '', binCode: '', remark: ''
 })
 const blankRows = () => Array.from({ length: BLANK_ROWS }, blankItem)
@@ -76,7 +76,15 @@ export function usePurchaseDocument(props) {
     window.clearTimeout(showNotice.timer)
     showNotice.timer = window.setTimeout(() => { notice.value.visible = false }, type === 'error' ? 5000 : 3000)
   }
-  const calculateRow = item => Object.assign(item, inboundAmounts(item, form.value.taxEnabled))
+  const calculateRow = item => {
+    if (!form.value.taxEnabled) item.priceBasis = 'exclusive'
+    if (item.priceBasis === 'included' && item.taxIncludedPrice !== '' && item.taxIncludedPrice != null) {
+      item.precisePrice = Number(item.taxIncludedPrice) * 100 / (100 + (Number(item.taxRate) || 0))
+      item.price = Number(item.precisePrice.toFixed(4))
+    }
+    const price = item.precisePrice !== '' && item.precisePrice != null ? item.precisePrice : item.price
+    Object.assign(item, inboundAmounts({ ...item, price }, form.value.taxEnabled))
+  }
   const setInboundType = value => {
     inboundType.value = normalizeInboundType(value)
     form.value.type = inboundType.value
@@ -136,6 +144,9 @@ export function usePurchaseDocument(props) {
     item.warehouseId = item.warehouseId || form.value.warehouseId || ''
     item.warehouseName = warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId))?.name || ''
     item.price = purchaseOrderId.value ? Number(product.price || 0) : ''
+    item.precisePrice = ''
+    item.priceBasis = 'exclusive'
+    item.taxIncludedPrice = ''
     item.currentStock = getProductStock(product, item)
     item.taxRate = form.value.taxEnabled ? 13 : 0
     calculateRow(item)
@@ -189,7 +200,9 @@ export function usePurchaseDocument(props) {
       items: (data.items || []).map(item => ({
         ...blankItem(), productType: normalizeInboundType(item.productType || data.type), purchaseOrderItemId: item.purchaseOrderItemId || '', productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '', warehouseId: String(item.warehouseId || data.warehouseId || ''), warehouseName: warehouses.value.find(warehouse => String(warehouse.id) === String(item.warehouseId || data.warehouseId))?.name || '',
         goodsName: item.productName || item.goodsName || '', specification: item.specification || '', unit: item.unit || '',
-        expectedQty: item.expectedQty ?? '', quantity: item.receivedQty ?? '', price: item.unitPrice ?? '',
+        expectedQty: item.expectedQty ?? '', quantity: item.receivedQty ?? '',
+        price: item.unitPrice == null ? '' : Number(Number(item.unitPrice).toFixed(4)), precisePrice: item.unitPrice ?? '',
+        priceBasis: item.priceBasis === 'included' ? 'included' : 'exclusive', taxIncludedPrice: item.taxIncludedPrice ?? '',
         taxRate: Number(item.taxRate || 0), amount: Number(item.totalAmount || 0) - Number(item.taxAmount || 0),
         taxAmount: Number(item.taxAmount || 0), taxIncludedAmount: Number(item.totalAmount || 0), batchNo: item.batchNo || '',
         binCode: item.binCode || '', remark: item.remark || ''
@@ -222,7 +235,9 @@ export function usePurchaseDocument(props) {
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
         expectedQty: item.remainingQty, quantity: item.remainingQty,
-        price: item.unitPrice ?? '', taxRate: Number(item.taxRate) || 0, amount: 0
+        price: item.unitPrice == null ? '' : Number(Number(item.unitPrice).toFixed(4)), precisePrice: item.unitPrice ?? '',
+        priceBasis: item.priceBasis === 'included' ? 'included' : 'exclusive', taxIncludedPrice: item.taxIncludedPrice ?? '',
+        taxRate: Number(item.taxRate) || 0, amount: 0
       })).concat(blankRows()).slice(0, Math.max(BLANK_ROWS, remainingItems.length + 1))
     }
     form.value.items.filter(item => item.productId).forEach(item => { item.warehouseId = item.warehouseId || form.value.warehouseId; onItemWarehouseChange(item); calculateRow(item) })
@@ -358,8 +373,15 @@ export function usePurchaseDocument(props) {
     taxEnabled: computed({ get: () => form.value.taxEnabled, set: value => { form.value.taxEnabled = value; form.value.items.forEach(item => { item.taxRate = value ? Number(item.taxRate) || 13 : 0; calculateRow(item) }) } }),
     totalPackages, totalQuantity, totalAmount, totalTaxAmount, totalIncludedAmount, money,
     addRow, removeRow, calculateRow, onProductChange, onStoreChange, onWarehouseChange, onItemWarehouseChange, save, clearForm, close, showNotice,
-    onQuantityInput: index => calculateRow(form.value.items[index]), onPriceInput: index => calculateRow(form.value.items[index]), onTaxRateInput: index => calculateRow(form.value.items[index]),
-    onIncludedPriceInput: index => { const item = form.value.items[index]; item.price = Number((Number(item.taxIncludedPrice || 0) / (1 + Number(item.taxRate || 0) / 100)).toFixed(4)); calculateRow(item) },
+    onQuantityInput: index => calculateRow(form.value.items[index]),
+    onPriceInput: index => { const item = form.value.items[index]; item.precisePrice = ''; item.priceBasis = 'exclusive'; calculateRow(item) },
+    onTaxRateInput: index => calculateRow(form.value.items[index]),
+    onIncludedPriceInput: index => {
+      const item = form.value.items[index]
+      item.priceBasis = 'included'
+      if (item.taxIncludedPrice === '' || item.taxIncludedPrice == null) { item.price = ''; item.precisePrice = '' }
+      calculateRow(item)
+    },
     printTemplateDialogOpen, printPreviewVisible, selectedPrintTemplate, selectedPrintPrinter, printPreviewAutoPrint,
     closePrintTemplateDialog, closePrintPreview, openPrint,
     previewSelectedPrintTemplate: (template, printer) => openPrintTemplate(template, printer, false),

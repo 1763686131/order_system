@@ -337,8 +337,11 @@ def post_inbound_payables(conn, document, items):
         ).fetchall()
         if any(line["status"] != "confirmed" for line in expenses):
             raise FinanceError("该批次仍有未确认的采购费用，请先完成费用归属")
-        base = cents(Decimal(str(item["received_qty"])) * Decimal(str(item["unit_price"])))
         tax = cents(item["tax_amount"])
+        base = (
+            cents(item["total_amount"]) - tax if item.get("tax_included_price") is not None
+            else cents(Decimal(str(item["received_qty"])) * Decimal(str(item["unit_price"])))
+        )
         base += sum(line["amount_excluding_tax_cents"] for line in expenses if line["include_in_payable"])
         tax += sum(line["tax_amount_cents"] for line in expenses if line["include_in_payable"])
         if payable_totals is not None:

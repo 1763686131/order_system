@@ -1,3 +1,7 @@
+import DecimalJs from 'decimal.js'
+
+const Decimal = DecimalJs.clone({ precision: 28, rounding: DecimalJs.ROUND_HALF_UP })
+
 export const DOCUMENT_TYPES = Object.freeze({
   sale: { title: '销售订单', partyLabel: '客户', partyField: 'customerId', dateField: 'orderDate', numberField: 'orderNumber', remarkField: 'orderRemark', specField: 'spec', includedField: 'totalAmount', printType: 'sale', showPackages: true },
   'sale-return': { title: '销售退货单', partyLabel: '客户', partyField: 'customerId', dateField: 'returnDate', numberField: 'returnNumber', remarkField: 'remark', specField: 'specification', includedField: 'taxIncludedAmount', printType: 'return', showPackages: true },
@@ -51,7 +55,11 @@ export function purchasePayload(form) {
       unit: item.unit,
       expectedQty: item.expectedQty === '' || item.expectedQty == null ? null : Number(item.expectedQty),
       receivedQty: Number(item.quantity),
-      unitPrice: item.price === '' || item.price == null ? null : Number(item.price),
+      unitPrice: item.precisePrice !== '' && item.precisePrice != null
+        ? Number(item.precisePrice)
+        : item.price === '' || item.price == null ? null : Number(item.price),
+      taxIncludedPrice: form.taxEnabled && item.priceBasis === 'included' && item.taxIncludedPrice !== '' && item.taxIncludedPrice != null
+        ? Number(item.taxIncludedPrice) : null,
       taxRate: form.taxEnabled ? Number(item.taxRate) || 0 : 0,
       batchNo: item.batchNo,
       binCode: item.binCode,
@@ -116,7 +124,9 @@ export function purchaseOrderPayload(form, status = 'pending') {
       orderedQty: Number(item.quantity),
       actualPurchaseQty: hasValue(item.actualQuantity) ? Number(item.actualQuantity) : null,
       supplierId: item.supplierId ? Number(item.supplierId) : null,
-      unitPrice: hasValue(item.price) ? Number(item.price) : null,
+      unitPrice: hasValue(item.precisePrice) ? Number(item.precisePrice) : hasValue(item.price) ? Number(item.price) : null,
+      taxIncludedPrice: form.invoiceRequired && item.priceBasis === 'included' && hasValue(item.taxIncludedPrice)
+        ? Number(item.taxIncludedPrice) : null,
       taxRate: form.invoiceRequired ? Number(item.taxRate) || 0 : 0,
       amount: hasValue(item.amount) ? Number(item.amount) : null,
       remark: item.remark
@@ -173,9 +183,30 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
 }
 
 export function inboundAmounts(item, taxEnabled) {
-  const base = (Number(item.quantity) || 0) * (Number(item.price) || 0)
-  const taxAmount = Number((base * (taxEnabled ? Number(item.taxRate) || 0 : 0) / 100).toFixed(2))
-  return { amount: Number(base.toFixed(2)), taxAmount, taxIncludedAmount: Number((base + taxAmount).toFixed(2)), taxIncludedPrice: Number(((Number(item.price) || 0) * (1 + (taxEnabled ? Number(item.taxRate) || 0 : 0) / 100)).toFixed(4)) }
+  const decimal = value => {
+    if (value === '' || value == null) return new Decimal(0)
+    const number = Number(value)
+    return Number.isFinite(number) ? new Decimal(String(value)) : new Decimal(0)
+  }
+  if (taxEnabled && item.priceBasis === 'included' && item.taxIncludedPrice !== '' && item.taxIncludedPrice != null) {
+    const includedAmount = decimal(item.quantity).times(decimal(item.taxIncludedPrice))
+    const taxRate = decimal(item.taxRate)
+    const amount = includedAmount.times(100).div(Decimal(100).plus(taxRate))
+      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+    const taxIncludedAmount = includedAmount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+    const taxAmount = decimal(taxIncludedAmount).minus(decimal(amount))
+      .toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+    return { amount, taxAmount, taxIncludedAmount, taxIncludedPrice: decimal(item.taxIncludedPrice).toNumber() }
+  }
+  const base = decimal(item.quantity).times(decimal(item.price))
+  const amount = base.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+  const taxRate = taxEnabled ? decimal(item.taxRate) : Decimal(0)
+  const taxAmount = base.times(taxRate).div(100)
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+  const taxIncludedAmount = decimal(amount).plus(decimal(taxAmount))
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toNumber()
+  const taxIncludedPrice = decimal(item.price).times(Decimal(1).plus(taxRate.div(100))).toDecimalPlaces(4).toNumber()
+  return { amount, taxAmount, taxIncludedAmount, taxIncludedPrice }
 }
 
 export const purchaseReturnStatusLabels = {

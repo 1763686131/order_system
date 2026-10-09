@@ -3381,7 +3381,8 @@ volumes:
 | `warehouseId` | integer | 否 | 否 | 申请阶段可预填仓库，入库前仍可调整 |
 | `orderedQty` | number | 是 | 是 | 采购数量，必须大于 `0` |
 | `supplierId` | integer | 否 | 是 | 逐行采购供应商，必须为启用供应商 |
-| `unitPrice` | number | 条件 | 是 | 采购单价，不能为负数；申请勾选 `invoiceRequired: true` 时也必填 |
+| `unitPrice` | number | 条件 | 条件 | 未税采购单价，不能为负数；需要发票或审核时必须有单价，可由 `taxIncludedPrice` 反算。由含税单价反算时允许提交高于界面显示精度的值，服务端按实际单价精度计算行金额和税额 |
+| `taxIncludedPrice` | number/null | 否 | 否 | 含税价录入时提交原始含税单价，服务端用该值反算未税单价，并按有效数量乘含税单价计算含税金额；`null` 表示以未税单价计价 |
 | `taxRate` | number | 否 | 否 | 税点百分数，范围 0–100；`invoiceRequired: true` 时新明细缺省为 13，否则按 0 计算；已保存的 0 税点保留 |
 | `amount` | number | 否 | 否 | 行金额；省略时由 `orderedQty × unitPrice` 计算 |
 | `receivedQty` | number | 否 | 否 | 已入库数量，范围为 `0` 到采购数量 |
@@ -3407,7 +3408,7 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
 
 明细响应包含 `taxRate`、`taxAmount`、`taxIncludedPrice`、`taxIncludedAmount`，表头增加 `totalTaxAmount`、`totalTaxIncludedAmount`；`totalAmount` 仍为不含税合计。`paymentAmount` 缺省使用含税合计，客户端手动填写的折后金额仍优先；税额由后端按有效采购数量（实际采购数量优先）和单价计算，不信任客户端传入的税额。关联入库继承已审核采购明细税点，按本批实收数量重算税额。
 
-采购订单新增、编辑、补齐审核和详情的“需要发票”统一位于顶部第一排；前端新增及首次补齐未定价的仓库单据默认勾选，已保存的开票选择和税点保留。勾选后在采购单价右侧依次展示含税单价、税点及含税金额，含税单价及自动计算的含税金额必填；客户端仍提交 `unitPrice` 和 `taxRate`，服务端校验单价并计算税额，不接受用客户端金额替代缺失单价。仓库申请和直接入库无需结算流程不要求采购金额。底部仍保留完整财务字段，直接入库单的结算归属仍位于申请备注右侧。
+采购订单新增、编辑、补齐审核和详情的“需要发票”统一位于顶部第一排；前端新增及首次补齐未定价的仓库单据默认勾选，已保存的开票选择和税点保留。勾选后在采购单价右侧依次展示含税单价、税点及含税金额，含税单价及自动计算的含税金额必填。从含税价录入时，客户端提交未舍入的未税 `unitPrice`、原始 `taxIncludedPrice` 和 `taxRate`；服务端以原始含税单价为准重新计算：含税金额为有效数量乘含税单价，未税金额由完整精度反算，税额为两者差额，均按分四舍五入。计价来源存入明细的 `tax_included_price`，响应 `priceBasis: included`，编辑、审核、直接入库补价和关联入库均保留该口径。未税价录入时提交 `taxIncludedPrice: null`，响应 `priceBasis: exclusive`，仍按未税单价计算税额。服务端不信任客户端行金额。仓库申请和直接入库无需结算流程不要求采购金额。底部仍保留完整财务字段，直接入库单的结算归属仍位于申请备注右侧。
 
 保存采购申请不新增供应商应付。已付金额允许大于估算金额，超出部分作为预付款展示；公对公已付金额生成 `purchase_order_payment` 银行流水，账户余额不足仍返回 `409` 并回滚整个事务。编辑冲销原扣款后重记，删除未审核申请退回原扣款；现金、微信、承兑、其它只记录付款信息，不改变银行账户。关联入库保存过账后，按有效入库应付来源顺序自动核销订单已付金额；反审核释放这部分核销，不退回或重复扣减银行余额。后续供应商付款仍使用第二阶段付款接口。
 
@@ -3765,7 +3766,8 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
 | `receivedQty` | number | 是 | 实收数量，必须大于 `0` |
 | `binCode` | string | 否 | 货位编码 |
 | `batchNo` | string | 是 | 批次号 |
-| `unitPrice` | number | 否 | 单价；前端限制 4 位小数 |
+| `unitPrice` | number | 否 | 未税单价；前端显示 4 位小数，含税反算值提交完整精度 |
+| `taxIncludedPrice` | number/null | 否 | 原始含税单价；非空时以该价格计算含税金额，关联入库继承采购明细的计价来源 |
 | `taxRate` | number | 否 | 百分数，例如 `13` 代表 13%，不是 `0.13` |
 | `remark` | string | 否 | 行备注 |
 
@@ -3774,8 +3776,16 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
 金额字段由服务端重新计算，不信任客户端传入值：
 
 ```text
-taxAmount = receivedQty × unitPrice × taxRate ÷ 100
-totalAmount = receivedQty × unitPrice + taxAmount
+未税价录入：
+amount = round(receivedQty × unitPrice, 2)
+taxAmount = round(receivedQty × unitPrice × taxRate ÷ 100, 2)
+totalAmount = amount + taxAmount
+
+含税价录入：
+unitPrice = taxIncludedPrice ÷ (1 + taxRate ÷ 100)
+amount = round(receivedQty × unitPrice, 2)
+totalAmount = round(receivedQty × taxIncludedPrice, 2)
+taxAmount = totalAmount - amount
 ```
 
 行税额、行价税合计和单据汇总均使用十进制定点计算，金额保留 2 位小数。

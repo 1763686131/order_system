@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
+from utils.purchase_pricing import purchase_line_amounts
 from utils.notifications import create_audit_notifications, complete_audit_notifications
 from utils.auth import admin_permission_granted, require_admin_permission, current_identity
 from utils.supplier_ledger import (
@@ -272,8 +273,12 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
         tax_rate = _number(raw.get('taxRate', raw.get('tax_rate', 0)), Decimal('0'))
         if tax_rate < 0 or tax_rate > 100:
             raise ValueError('税率必须在 0 到 100 之间')
-        tax_amount = (received * (price or Decimal('0')) * tax_rate / Decimal('100')).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
-        total_amount = (received * (price or Decimal('0')) + tax_amount).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+        included_value = raw.get('taxIncludedPrice', raw.get('tax_included_price'))
+        included_price = None if included_value in (None, '') else _number(included_value)
+        if included_price is not None and included_price < 0:
+            raise ValueError('含税单价不能为负数')
+        pricing = purchase_line_amounts(received, price, tax_rate, included_price)
+        price = pricing['unit_price']
 
         has_any = product_id is not None or name or received != 0 or raw.get('batchNo', raw.get('batch_no'))
         if not has_any:
@@ -314,8 +319,9 @@ def _normalize_items(conn, receipt_type, raw_items, require_valid=False, default
             'batch_no': batch_no,
             'unit_price': float(price) if price is not None else None,
             'tax_rate': float(tax_rate),
-            'tax_amount': float(tax_amount),
-            'total_amount': float(total_amount),
+            'tax_included_price': pricing['tax_included_price'],
+            'tax_amount': pricing['tax_amount'],
+            'total_amount': pricing['total_amount'],
             'remark': _clean_text(raw.get('remark', ''), 500),
             'supplier_id': _optional_int(raw.get('supplierId', raw.get('supplier_id')), '明细供应商'),
         })
@@ -485,15 +491,12 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt
         received = Decimal(str(item.get('received_qty') or 0))
         unit_price = Decimal(str(item.get('unit_price') or 0))
         tax_rate = Decimal(str(item.get('tax_rate') or 0))
-        tax_amount = (received * unit_price * tax_rate / Decimal('100')).quantize(
-            _MONEY_QUANT, rounding=ROUND_HALF_UP
-        )
-        item['tax_amount'] = float(tax_amount)
-        item['total_amount'] = float(
-            (received * unit_price + tax_amount).quantize(
-                _MONEY_QUANT, rounding=ROUND_HALF_UP
-            )
-        )
+        included_price = order_item['tax_included_price'] if order['invoice_required'] else None
+        if item.get('unit_price') != order_item['unit_price']:
+            included_price = None
+        pricing = purchase_line_amounts(received, unit_price, tax_rate, included_price)
+        for field in ('unit_price', 'tax_included_price', 'tax_amount', 'total_amount'):
+            item[field] = pricing[field]
     if require_valid and linked == 0:
         raise ValueError('采购入库必须关联采购订单明细')
 
@@ -512,6 +515,13 @@ def _serialize_item(row, default_warehouse_id=None, default_product_type=None):
     item['batchNo'] = item.pop('batch_no', '') or ''
     item['unitPrice'] = item.pop('unit_price', None)
     item['taxRate'] = item.pop('tax_rate', 0)
+    included_price = item.pop('tax_included_price', None)
+    item['priceBasis'] = 'included' if included_price is not None else 'exclusive'
+    item['taxIncludedPrice'] = included_price if included_price is not None else (
+        float((_number(item['unitPrice']) * (1 + _number(item['taxRate']) / 100)).quantize(
+            Decimal('0.0001'), rounding=ROUND_HALF_UP
+        )) if item['unitPrice'] is not None else None
+    )
     item['taxAmount'] = item.pop('tax_amount', 0)
     item['totalAmount'] = item.pop('total_amount', 0)
     item['supplierId'] = item.pop('supplier_id', None)
@@ -624,9 +634,9 @@ def _post_saved_inbound(conn, row, values):
     for item in checked['items']:
         conn.execute(
             """UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ?,
-               unit_price = ?, tax_rate = ?, tax_amount = ?, total_amount = ? WHERE id = ? AND inbound_id = ?""",
+               unit_price = ?, tax_included_price = ?, tax_rate = ?, tax_amount = ?, total_amount = ? WHERE id = ? AND inbound_id = ?""",
             (item['supplier_id'], item['supplier_assignment_status'], item['unit_price'],
-             item['tax_rate'], item['tax_amount'], item['total_amount'], item['id'], inbound_id),
+             item.get('tax_included_price'), item['tax_rate'], item['tax_amount'], item['total_amount'], item['id'], inbound_id),
         )
     items = [dict(item) for item in conn.execute(
         'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id', (inbound_id,),
@@ -809,15 +819,15 @@ def _insert_items(conn, inbound_id, receipt_type, items):
             INSERT INTO stock_inbound_items (
                 inbound_id, line_no, product_type, product_id, purchase_order_item_id, warehouse_id, product_code,
                 product_name, specification, unit, expected_qty, received_qty,
-                bin_code, batch_no, unit_price, tax_rate, tax_amount,
+                bin_code, batch_no, unit_price, tax_included_price, tax_rate, tax_amount,
                 total_amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''',
             (
                 inbound_id, line_no, item.get('product_type') or receipt_type, item['product_id'], item.get('purchase_order_item_id'), item['warehouse_id'], item['product_code'],
                 item['product_name'], item['specification'], item['unit'], item['expected_qty'],
                 item['received_qty'], item['bin_code'], item['batch_no'], item['unit_price'],
-                item['tax_rate'], item['tax_amount'], item['total_amount'], item['remark'],
+                item.get('tax_included_price'), item['tax_rate'], item['tax_amount'], item['total_amount'], item['remark'],
             ),
         )
         item['id'] = cursor.lastrowid

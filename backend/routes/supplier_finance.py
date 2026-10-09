@@ -112,6 +112,10 @@ def update_inbound_purchasing(conn, row, items, data):
             conn, row["receipt_type"], [{
                 **source,
                 "unitPrice": item.get("unitPrice", source["unit_price"]),
+                "taxIncludedPrice": item.get("taxIncludedPrice", (
+                    source.get("tax_included_price")
+                    if "unitPrice" not in item or item["unitPrice"] == source["unit_price"] else None
+                )),
                 "taxRate": item.get("taxRate", source["tax_rate"]),
             }], default_warehouse_id=row["warehouse_id"],
         )[0]
@@ -120,6 +124,7 @@ def update_inbound_purchasing(conn, row, items, data):
         changes = (
             source["supplier_id"] != supplier_id
             or source["unit_price"] != pricing["unit_price"]
+            or source.get("tax_included_price") != pricing["tax_included_price"]
             or source["tax_rate"] != pricing["tax_rate"]
             or row["settlement_type"] != settlement_type
         )
@@ -137,10 +142,10 @@ def update_inbound_purchasing(conn, row, items, data):
         for item_id, supplier_id, pricing, _ in assignments:
             conn.execute(
                 """UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ?,
-                   supplier_assigned_by = ?, supplier_assigned_at = ?, unit_price = ?, tax_rate = ?,
+                   supplier_assigned_by = ?, supplier_assigned_at = ?, unit_price = ?, tax_included_price = ?, tax_rate = ?,
                    tax_amount = ?, total_amount = ? WHERE id = ?""",
                 (supplier_id, "confirmed" if supplier_id else "not_required",
-                 current_identity(), now(), pricing["unit_price"], pricing["tax_rate"],
+                 current_identity(), now(), pricing["unit_price"], pricing["tax_included_price"], pricing["tax_rate"],
                  pricing["tax_amount"], pricing["total_amount"], item_id),
             )
             expense_cost = conn.execute(

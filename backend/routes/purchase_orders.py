@@ -9,6 +9,7 @@ from flask import Blueprint, jsonify, request
 
 from utils.auth import admin_permission_granted, current_identity, require_admin_permission
 from utils.db import get_db
+from utils.purchase_pricing import purchase_line_amounts
 from utils.notifications import create_audit_notifications, complete_audit_notifications
 from utils.permission_catalog import ADMIN_PURCHASE_ORDER_PERMISSIONS, ADMIN_ROUTE_BRANCH_PERMISSIONS
 from utils.supplier_ledger import (
@@ -163,7 +164,11 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preser
         unit_price = None if price_value in (None, "") else _number(price_value)
         if unit_price is not None and unit_price < 0:
             raise ValueError("采购单价不能为负数")
-        if tax_enabled and unit_price is None:
+        included_value = raw.get("taxIncludedPrice", raw.get("tax_included_price"))
+        included_price = None if not tax_enabled or included_value in (None, "") else _number(included_value)
+        if included_price is not None and included_price < 0:
+            raise ValueError("含税单价不能为负数")
+        if tax_enabled and unit_price is None and included_price is None:
             raise ValueError("需要发票时请填写含税单价，以计算含税金额")
         amount_value = raw.get("amount", raw.get("totalAmount"))
         amount = (
@@ -181,6 +186,11 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preser
             raise ValueError("税点必须在 0 到 100 之间")
         tax_base = purchase_quantity * unit_price if unit_price is not None else (amount or Decimal("0"))
         tax_amount = (tax_base * tax_rate / Decimal("100")).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+        if included_price is not None:
+            pricing = purchase_line_amounts(purchase_quantity, unit_price, tax_rate, included_price)
+            unit_price = _number(pricing["unit_price"])
+            amount = _number(pricing["amount"])
+            tax_amount = _number(pricing["tax_amount"])
         warehouse_value = raw.get(
             "warehouseId",
             raw.get("warehouse_id", existing.get("warehouse_id") if existing else None),
@@ -246,6 +256,7 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preser
                 "actual_purchase_qty": float(actual) if actual is not None else None,
                 "received_qty": float(received),
                 "unit_price": float(unit_price) if unit_price is not None else None,
+                "tax_included_price": float(included_price) if included_price is not None else None,
                 "tax_rate": float(tax_rate),
                 "tax_amount": float(tax_amount),
                 "amount": float(amount) if amount is not None else None,
@@ -416,7 +427,9 @@ def _serialize_item(row):
         float((_number(amount) + _number(item["taxAmount"])).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP))
         if amount is not None else None
     )
-    item["taxIncludedPrice"] = (
+    included_price = item.pop("tax_included_price", None)
+    item["priceBasis"] = "included" if included_price is not None else "exclusive"
+    item["taxIncludedPrice"] = included_price if included_price is not None else (
         float((_number(item["unitPrice"]) * (1 + _number(item["taxRate"]) / 100)).quantize(
             Decimal("0.0001"), rounding=ROUND_HALF_UP
         )) if item["unitPrice"] is not None else None
@@ -641,15 +654,15 @@ def _insert_items(conn, order_id, items):
             INSERT INTO purchase_order_items (
                 order_id, line_no, product_type, product_id, product_code, product_name,
                 supplier_id, warehouse_id, category_id, category_name, specification, unit,
-                ordered_qty, actual_purchase_qty, received_qty, unit_price, tax_rate, tax_amount, amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ordered_qty, actual_purchase_qty, received_qty, unit_price, tax_included_price, tax_rate, tax_amount, amount, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id, item["line_no"], item["product_type"], item["product_id"],
                 item["product_code"], item["product_name"], item["supplier_id"], item["warehouse_id"],
                 item["category_id"], item["category_name"], item["specification"], item["unit"],
                 item["ordered_qty"], item["actual_purchase_qty"], item["received_qty"], item["unit_price"],
-                item["tax_rate"], item["tax_amount"], item["amount"], item["remark"],
+                item.get("tax_included_price"), item["tax_rate"], item["tax_amount"], item["amount"], item["remark"],
             ),
         )
         item["id"] = cursor.lastrowid
