@@ -428,7 +428,7 @@ def add_ledger(conn, document, source_type, source_id, source_item_id, kind,
 def apply_allocations(conn, document, source_type, source_id, entries,
                       balance_source=None, balance_kind=None):
     for row, value in entries:
-        kind = "PAYMENT" if source_type in ("supplier_payment", "purchase_order_payment") else (
+        kind = "PAYMENT" if source_type in ("supplier_payment", "purchase_order_payment", "purchase_inbound_payment") else (
             "PREPAYMENT_ALLOCATION" if balance_kind == "prepayment" else "CREDIT_ALLOCATION"
         )
         ledger_id = add_ledger(

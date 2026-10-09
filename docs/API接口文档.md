@@ -43,6 +43,10 @@
 
 采购申请路由为 `/admin/purchase/orders/create`、`/admin/purchase/orders/edit/:id`、`/admin/purchase/orders/audit/:id` 和 `/admin/purchase/orders/:id`，对应本节的 `/api/purchase-orders` 接口。审核通过后，前端通过 `/api/purchase-orders/{id}/available-inbound` 读取可入库明细，再使用带 `purchaseOrderId`、`purchaseOrderItemId` 的入库请求创建采购入库单。
 
+采购订单审核页对采购申请单和直接入库单统一使用采购申请明细列及完整底部财务区域，默认补足 8 行，空白行不提交。直接入库单通过 `sourceType=warehouse-inbound` 读取 `GET /api/purchase-orders/inbound/{id}`，提交 `POST /api/purchase-orders/inbound/{id}/audit`；补齐采购及财务信息，原入库物料、仓库、实收数量及批次不变。两类单据均展示采购人、申请备注、折后金额、其它费用、已付金额、需要发票、付款方式、本单应付和未付应付；直接入库单仅在申请备注右侧增加结算归属，结算备注放在第二排。
+
+直接入库采购审核请求同时支持 `purchaser`、`remark`、`paymentAmount`、`otherFees`、`currentPayment`、`invoiceRequired`、`paymentMethod`、`paymentAccountId`、`settlementAccount`，财务字段校验与普通采购申请一致。字段存入采购财务快照并在读取及审核响应中回显，原仓库备注不覆盖。`paymentAmount` 缺省为明细含税合计，`paymentAmount + otherFees` 按明细金额分摊供应商应付（分币余数按比例分配）；`currentPayment` 自动核销本单应付，超额部分展示预付款。对公付款在审核事务内以 `purchase_inbound_payment` 为来源扣减门店账户，余额不足返回 `409` 并回滚全部修改；幂等重试不会重复扣款或入库。`settlementType: none` 不生成应付，也不允许填写正数已付金额。
+
 采购入库申请列表每行提供打印入口，无入库批次的记录使用 `/admin/purchase/inbound/application/:id?print=1`，通过 `GET /api/purchase-orders/{id}` 读取申请单并以仓库申请模式只读打印，复用 `purchase` 模板；有入库批次时继续打印实际入库单。打印不保存、审核或新增入库数据。“入库”和“补充入库”在行内三点菜单中显示，原有状态条件不变。
 
 采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。采购入库列表的“新增入库单”直接创建独立入库，不要求关联采购申请；独立其他入库由仓库先录入实收数量，供应商和采购单价在入库后的采购审核中补齐，也可继续通过采购订单关联入库。表单显示“单据来源”，采购订单关联单据保存为 `purchase-order` 并显示“采购订单”，独立采购入库保存为 `other` 并显示“其他入库”。独立入库可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；关联采购申请入库时，一张入库单载入所有仍有剩余数量的明细，明细可同时包含原材料和成品，并按每行 `productType` 校验和过账。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?businessType=purchase`，按单据来源展示采购订单入库与其他入库，不混入生产完工入库。`StockRecordList.vue` 不传业务类型筛选，保留全部入库记录，并按单据来源、商品类型和采购申请关联显示正确的业务名称。采购申请和采购入库是两类独立单据，不能互相替代接口。

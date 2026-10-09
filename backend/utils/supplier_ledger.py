@@ -44,6 +44,14 @@ def amount(value):
     return int(value or 0) / 100
 
 
+def inbound_purchase_finance(document):
+    try:
+        value = json.loads(dict(document).get("procurement_finance") or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def ensure_schema(conn):
     for table, columns in {
         "purchase_orders": {"version": "INTEGER NOT NULL DEFAULT 1"},
@@ -53,6 +61,7 @@ def ensure_schema(conn):
             "version": "INTEGER NOT NULL DEFAULT 1",
             "audited_by": "TEXT NOT NULL DEFAULT ''",
             "reversed_at": "TEXT",
+            "procurement_finance": "TEXT NOT NULL DEFAULT '{}'",
         },
         "stock_inbound_items": {
             "supplier_id": "INTEGER",
@@ -293,8 +302,24 @@ def post_inbound_payables(conn, document, items):
     order = conn.execute(
         "SELECT * FROM purchase_orders WHERE id = ?", (document["purchase_order_id"],)
     ).fetchone() if linked else None
-    invoice_status = "unbilled" if not order or order["invoice_required"] else "not_required"
-    for item in items:
+    finance = inbound_purchase_finance(document) if not linked else {}
+    invoice_required = order["invoice_required"] if order else finance.get("invoice_required", True)
+    invoice_status = "unbilled" if invoice_required else "not_required"
+    payable_totals = None
+    if finance:
+        # Split document-level adjustments in cents without losing rounding remainders.
+        target = cents(finance["payment_amount"]) + cents(finance["other_fees"])
+        weights = [cents(item["total_amount"]) for item in items]
+        if not sum(weights):
+            weights = [1] * len(items)
+        weight_sum = sum(weights)
+        payable_totals = [target * weight // weight_sum for weight in weights]
+        remainder_order = sorted(
+            range(len(items)), key=lambda index: target * weights[index] % weight_sum, reverse=True,
+        )
+        for index in remainder_order[:target - sum(payable_totals)]:
+            payable_totals[index] += 1
+    for index, item in enumerate(items):
         supplier_id = item.get("supplier_id")
         if not supplier_id:
             raise FinanceError("请先为每条入库明细确认供应商")
@@ -316,6 +341,13 @@ def post_inbound_payables(conn, document, items):
         tax = cents(item["tax_amount"])
         base += sum(line["amount_excluding_tax_cents"] for line in expenses if line["include_in_payable"])
         tax += sum(line["tax_amount_cents"] for line in expenses if line["include_in_payable"])
+        if payable_totals is not None:
+            total = payable_totals[index]
+            original_total = base + tax
+            tax = int((Decimal(total) * tax / original_total).quantize(
+                Decimal("1"), rounding=ROUND_HALF_UP,
+            )) if original_total else 0
+            base = total - tax
         cursor = conn.execute(
             """INSERT INTO supplier_account_transactions (
                 supplier_id, store_id, business_date, audited_at, created_by, transaction_type,
@@ -336,23 +368,29 @@ def post_inbound_payables(conn, document, items):
         )
     if order:
         _allocate_order_payment(conn, order)
+    elif finance:
+        _allocate_order_payment(conn, {
+            **finance, "id": document["id"], "order_no": document["document_no"],
+            "order_date": document["document_date"], "version": document["version"],
+        }, source_type="purchase_inbound_payment")
 
 
-def _allocate_order_payment(conn, order):
+def _allocate_order_payment(conn, order, source_type="purchase_order_payment"):
     from utils.supplier_settlement import apply_allocations, payable_available_cents
     from utils.supplier_periods import ensure_period_open
 
     allocated = conn.execute(
         """SELECT COALESCE(SUM(amount_cents), 0) value FROM supplier_settlement_allocations
-           WHERE source_type = 'purchase_order_payment' AND source_id = ? AND active = 1""",
-        (order["id"],),
+           WHERE source_type = ? AND source_id = ? AND active = 1""",
+        (source_type, order["id"]),
     ).fetchone()["value"]
     remaining = cents(order["current_payment"]) - allocated
     if remaining <= 0:
         return
+    source_column = "purchase_order_id" if source_type == "purchase_order_payment" else "source_id"
     rows = conn.execute(
         f"""SELECT * FROM supplier_account_transactions t
-            WHERE purchase_order_id = ? AND source_type = 'stock_inbound' AND {effective_sql()}
+            WHERE {source_column} = ? AND source_type = 'stock_inbound' AND {effective_sql()}
             ORDER BY business_date, source_id, source_item_id""", (order["id"],),
     ).fetchall()
     # Attribute the entry payment as batches confirm their suppliers and payables.
@@ -365,9 +403,10 @@ def _allocate_order_payment(conn, order):
         payment = {
             "supplier_id": row["supplier_id"], "store_id": row["store_id"],
             "business_date": date, "document_no": order["order_no"],
-            "version": order["version"], "remark": "采购订单已付金额核销",
+            "version": order["version"],
+            "remark": "采购订单已付金额核销" if source_type == "purchase_order_payment" else "直接入库单已付金额核销",
         }
-        apply_allocations(conn, payment, "purchase_order_payment", order["id"], [(row, value)])
+        apply_allocations(conn, payment, source_type, order["id"], [(row, value)])
         remaining -= value
         if remaining <= 0:
             break
@@ -378,7 +417,8 @@ def _reverse_order_payment_allocations(conn, row):
         """SELECT a.id allocation_id, a.amount_cents, a.ledger_transaction_id, t.*
            FROM supplier_settlement_allocations a
            JOIN supplier_account_transactions t ON t.id = a.ledger_transaction_id
-           WHERE a.payable_transaction_id = ? AND a.source_type = 'purchase_order_payment'
+           WHERE a.payable_transaction_id = ?
+             AND a.source_type IN ('purchase_order_payment', 'purchase_inbound_payment')
              AND a.active = 1""", (row["id"],),
     ).fetchall()
     if sum(entry["amount_cents"] for entry in entries) != row["allocated_cents"]:
@@ -392,10 +432,10 @@ def _reverse_order_payment_allocations(conn, row):
                 source_type, source_id, source_item_id, source_document_no, document_version,
                 purchase_order_id, purchase_order_item_id, product_name, payable_delta_cents,
                 reversal_of_id, invoice_status, remark
-            ) VALUES (?, ?, ?, ?, ?, 'PAYMENT_REVERSAL', 'purchase_order_payment', ?, ?, ?, ?, ?, ?, ?, ?, ?,
+            ) VALUES (?, ?, ?, ?, ?, 'PAYMENT_REVERSAL', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                       'not_required', '入库反审核退回采购订单已付金额核销')""",
             (entry["supplier_id"], entry["store_id"], max(now()[:10], entry["business_date"]),
-             now(), current_identity(), entry["source_id"], row["id"], entry["source_document_no"],
+             now(), current_identity(), entry["source_type"], entry["source_id"], row["id"], entry["source_document_no"],
              entry["document_version"], entry["purchase_order_id"], entry["purchase_order_item_id"],
              entry["product_name"], -entry["payable_delta_cents"], entry["ledger_transaction_id"]),
         )

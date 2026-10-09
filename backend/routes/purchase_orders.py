@@ -12,7 +12,8 @@ from utils.db import get_db
 from utils.notifications import create_audit_notifications, complete_audit_notifications
 from utils.permission_catalog import ADMIN_PURCHASE_ORDER_PERMISSIONS, ADMIN_ROUTE_BRANCH_PERMISSIONS
 from utils.supplier_ledger import (
-    FinanceError, balance, business_date, cents, check_scope, check_version, idempotent_result, save_operation, scope_sql, source_summary,
+    FinanceError, balance, business_date, cents, check_scope, check_version, idempotent_result,
+    inbound_purchase_finance, save_operation, scope_sql, source_summary,
 )
 
 
@@ -245,50 +246,7 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preser
     return normalized
 
 
-def _order_values(conn, data, existing=None, audit=False, allow_request_edit=False):
-    existing = existing or {}
-    order_date = business_date(data.get("orderDate", data.get("order_date", existing.get("order_date"))))
-    supplier_value = data.get("supplierId", data.get("supplier_id", existing.get("supplier_id")))
-    supplier_id = _optional_int(supplier_value, "供应商ID")
-    if supplier_id is not None and not conn.execute(
-        "SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)
-    ).fetchone():
-        raise ValueError("供应商不存在或已停用")
-    requested_status = _status(data.get("status", existing.get("status", "draft")))
-    if requested_status not in ("draft", "pending"):
-        raise ValueError("新建或编辑采购订单只能保存为草稿或待审核")
-    store_id = _optional_int(data.get("storeId", data.get("store_id", existing.get("store_id"))), "门店ID")
-    if store_id is None or not conn.execute('SELECT 1 FROM stores WHERE id = ?', (store_id,)).fetchone():
-        raise ValueError("请选择有效申请门店")
-    check_scope(store_id)
-    items = _normalize_items(
-        conn, data.get("items"), existing.get("_items"), store_id,
-        preserve_request=bool(existing) and (
-            audit or (
-                not allow_request_edit
-                and existing.get("source_type") == "inbound-application"
-                and existing.get("status") != "draft"
-            )
-        ),
-    )
-    # Keep existing callers that submit one master supplier compatible.
-    if supplier_id is not None:
-        for item in items:
-            if item["supplier_id"] is None:
-                item["supplier_id"] = supplier_id
-    item_suppliers = {item["supplier_id"] for item in items if item["supplier_id"] is not None}
-    supplier_id = (
-        next(iter(item_suppliers))
-        if len(item_suppliers) == 1 and all(item["supplier_id"] is not None for item in items)
-        else None
-    )
-    total_quantity = sum(Decimal(str(
-        item["actual_purchase_qty"] if item["actual_purchase_qty"] is not None else item["ordered_qty"]
-    )) for item in items)
-    total_amount = sum(
-        (Decimal(str(item["amount"])) for item in items if item["amount"] is not None),
-        Decimal("0"),
-    ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+def _purchase_finance_values(conn, data, existing, total_amount, store_id):
     payment_value = data.get("paymentAmount", data.get("payment_amount", existing.get("payment_amount")))
     payment_amount = total_amount if payment_value in (None, "") else _number(payment_value).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
     other_fees = _number(data.get("otherFees", data.get("other_fees", existing.get("other_fees", 0)))).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
@@ -333,6 +291,62 @@ def _order_values(conn, data, existing=None, audit=False, allow_request_edit=Fal
     if payment_method == "other" and current_payment > 0 and not settlement_account:
         raise ValueError("请填写其它付款方式说明")
     return {
+        "payment_amount": float(payment_amount) if payment_amount is not None else None,
+        "other_fees": float(other_fees),
+        "settlement_account": settlement_account,
+        "current_payment": float(current_payment),
+        "invoice_required": int(bool(invoice_required)),
+        "payment_method": payment_method,
+        "payment_account_id": payment_account_id,
+    }
+
+
+def _order_values(conn, data, existing=None, audit=False, allow_request_edit=False):
+    existing = existing or {}
+    order_date = business_date(data.get("orderDate", data.get("order_date", existing.get("order_date"))))
+    supplier_value = data.get("supplierId", data.get("supplier_id", existing.get("supplier_id")))
+    supplier_id = _optional_int(supplier_value, "供应商ID")
+    if supplier_id is not None and not conn.execute(
+        "SELECT 1 FROM suppliers WHERE id = ? AND status = 'active'", (supplier_id,)
+    ).fetchone():
+        raise ValueError("供应商不存在或已停用")
+    requested_status = _status(data.get("status", existing.get("status", "draft")))
+    if requested_status not in ("draft", "pending"):
+        raise ValueError("新建或编辑采购订单只能保存为草稿或待审核")
+    store_id = _optional_int(data.get("storeId", data.get("store_id", existing.get("store_id"))), "门店ID")
+    if store_id is None or not conn.execute('SELECT 1 FROM stores WHERE id = ?', (store_id,)).fetchone():
+        raise ValueError("请选择有效申请门店")
+    check_scope(store_id)
+    items = _normalize_items(
+        conn, data.get("items"), existing.get("_items"), store_id,
+        preserve_request=bool(existing) and (
+            audit or (
+                not allow_request_edit
+                and existing.get("source_type") == "inbound-application"
+                and existing.get("status") != "draft"
+            )
+        ),
+    )
+    # Keep existing callers that submit one master supplier compatible.
+    if supplier_id is not None:
+        for item in items:
+            if item["supplier_id"] is None:
+                item["supplier_id"] = supplier_id
+    item_suppliers = {item["supplier_id"] for item in items if item["supplier_id"] is not None}
+    supplier_id = (
+        next(iter(item_suppliers))
+        if len(item_suppliers) == 1 and all(item["supplier_id"] is not None for item in items)
+        else None
+    )
+    total_quantity = sum(Decimal(str(
+        item["actual_purchase_qty"] if item["actual_purchase_qty"] is not None else item["ordered_qty"]
+    )) for item in items)
+    total_amount = sum(
+        (Decimal(str(item["amount"])) for item in items if item["amount"] is not None),
+        Decimal("0"),
+    ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+    return {
+        **_purchase_finance_values(conn, data, existing, total_amount, store_id),
         "order_no": _text(data.get("orderNo", data.get("order_no", existing.get("order_no"))), 80),
         "order_date": order_date,
         "expected_date": _text(data.get("expectedDate", data.get("expected_date", existing.get("expected_date"))), 20),
@@ -341,13 +355,6 @@ def _order_values(conn, data, existing=None, audit=False, allow_request_edit=Fal
         "remark": _text(data.get("remark", existing.get("remark")), 500),
         "purchaser": _text(data.get("purchaser", existing.get("purchaser")), 80),
         "creator": _text(data.get("creator", existing.get("creator")), 80),
-        "payment_amount": float(payment_amount) if payment_amount is not None else None,
-        "other_fees": float(other_fees),
-        "settlement_account": settlement_account,
-        "current_payment": float(current_payment),
-        "invoice_required": int(bool(invoice_required)),
-        "payment_method": payment_method,
-        "payment_account_id": payment_account_id,
         "status": requested_status,
         "items": items,
         "total_quantity": float(total_quantity),
@@ -544,6 +551,14 @@ def _serialize_received_purchase_order(conn, row):
                 round(source["totalAmount"] - source["taxAmount"], 2),
         })
     completed = inbound["financialStatus"] in ("payable_confirmed", "not_required")
+    finance = inbound_purchase_finance(row)
+    payment_amount = finance.get("payment_amount", inbound["totalAmount"])
+    other_fees = finance.get("other_fees", 0)
+    current_payment = finance.get("current_payment", inbound["allocatedAmount"])
+    estimated_amount = 0 if inbound["settlementType"] == "none" else round(payment_amount + other_fees, 2)
+    payment_status = inbound["paymentStatus"] if inbound["payableCount"] else (
+        "paid" if estimated_amount <= current_payment else "partial" if current_payment else "unpaid"
+    )
     return {
         **inbound, "orderId": f"warehouse-inbound-{row['id']}",
         "sourceType": "warehouse-inbound", "inboundId": row["id"],
@@ -557,11 +572,17 @@ def _serialize_received_purchase_order(conn, row):
         "progressBasis": "quantity" if len({item["unit"] for item in items}) == 1 else "lines",
         "completedLineCount": len(items), "totalLineCount": len(items),
         "inboundCount": 1, "hasInbound": True, "batches": [inbound],
-        "estimatedAmount": inbound["totalAmount"], "paymentAmount": inbound["totalAmount"],
-        "currentPayment": inbound["allocatedAmount"], "otherFees": 0,
-        "estimatedUnpaidAmount": inbound["unpaidAmount"], "prepaidAmount": 0,
-        "purchasePaymentStatus": inbound["paymentStatus"],
-        "creator": inbound.get("created_by", ""), "purchaser": "",
+        "estimatedAmount": estimated_amount, "paymentAmount": payment_amount,
+        "currentPayment": current_payment, "otherFees": other_fees,
+        "estimatedUnpaidAmount": max(0, round(estimated_amount - current_payment, 2)),
+        "prepaidAmount": max(0, round(current_payment - estimated_amount, 2)),
+        "purchasePaymentStatus": payment_status,
+        "invoiceRequired": bool(finance.get("invoice_required", inbound["invoiceStatus"] != "not_required")),
+        "paymentMethod": finance.get("payment_method", ""),
+        "paymentAccountId": finance.get("payment_account_id"),
+        "settlementAccount": finance.get("settlement_account", ""),
+        "remark": finance.get("remark", inbound.get("remark", "")),
+        "creator": inbound.get("created_by", ""), "purchaser": finance.get("purchaser", ""),
     }
 
 
@@ -665,7 +686,7 @@ def _reverse_order_bank_payment(conn, order_id):
     )
 
 
-def _post_order_bank_payment(conn, order):
+def _post_order_bank_payment(conn, order, source_type="purchase_order_payment"):
     payment_cents = cents(order["current_payment"])
     if order["payment_method"] != "bank_transfer" or payment_cents <= 0:
         return
@@ -684,9 +705,9 @@ def _post_order_bank_payment(conn, order):
         """INSERT INTO bank_account_transactions (
             bank_account_id, store_id, business_date, source_type, source_id, document_no,
             document_version, delta_cents, balance_after_cents, created_by, created_at
-        ) VALUES (?, ?, ?, 'purchase_order_payment', ?, ?, ?, ?, ?, ?, ?)""",
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
-            account["id"], order["store_id"], business_date, order["id"], order["order_no"],
+            account["id"], order["store_id"], business_date, source_type, order["id"], order["order_no"],
             order["version"], -payment_cents, balance_after, current_identity(), _now(),
         ),
     )
@@ -804,6 +825,28 @@ def audit_received_purchase_order(inbound_id):
                 if data.get("orderDate") is not None and data["orderDate"] != row["document_date"]:
                     raise ValueError("入库日期不能由采购审核修改")
                 updated = update_inbound_purchasing(conn, row, items, data)
+                finance = {
+                    **_purchase_finance_values(
+                        conn, data, {"invoice_required": True, **inbound_purchase_finance(row)},
+                        _number(updated["total_amount"]), row["store_id"],
+                    ),
+                    "purchaser": _text(data.get("purchaser"), 80),
+                    "remark": _text(data.get("remark", row["remark"]), 500),
+                }
+                if updated["settlement_type"] == "none" and finance["current_payment"] > 0:
+                    raise ValueError("无需结算的单据不能填写已付金额")
+                conn.execute(
+                    "UPDATE stock_inbounds SET procurement_finance = ? WHERE id = ?",
+                    (json.dumps(finance, ensure_ascii=False), inbound_id),
+                )
+                updated = conn.execute(
+                    "SELECT * FROM stock_inbounds WHERE id = ?", (inbound_id,),
+                ).fetchone()
+                _post_order_bank_payment(conn, {
+                    **finance, "id": inbound_id, "store_id": row["store_id"],
+                    "order_no": row["document_no"], "order_date": row["document_date"],
+                    "version": updated["version"],
+                }, source_type="purchase_inbound_payment")
                 current_items = [dict(item) for item in conn.execute(
                     "SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id",
                     (inbound_id,),

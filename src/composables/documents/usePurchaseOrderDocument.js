@@ -350,9 +350,9 @@ export function usePurchaseOrderDocument(props) {
   const config = computed(() => ({
     ...DOCUMENT_TYPES['purchase-order'],
     printType: applicationMode.value ? 'purchase' : undefined,
-    title: warehouseInboundMode.value
-      ? auditMode.value ? '审核仓库入库采购信息' : '仓库入库详情'
-      : auditMode.value ? '审核采购申请' : readOnly.value ? '采购申请详情' : savedDocumentId.value ? '编辑采购申请' : '新增采购申请'
+    title: auditMode.value ? '审核采购申请'
+      : warehouseInboundMode.value ? '仓库入库详情'
+        : readOnly.value ? '采购申请详情' : savedDocumentId.value ? '编辑采购申请' : '新增采购申请'
   }))
   const statusLabel = computed(() => ({
     draft: '草稿', pending: '待审核', approved: '已审核', partial: '部分入库',
@@ -363,10 +363,12 @@ export function usePurchaseOrderDocument(props) {
   const totalAmount = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.amount) || 0 : 0), 0))
   const totalTaxAmount = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.taxAmount) || 0 : 0), 0))
   const totalTaxIncludedAmount = computed(() => totalAmount.value + totalTaxAmount.value)
+  const purchaseAmount = computed(() => warehouseInboundMode.value ? totalTaxIncludedAmount.value : totalAmount.value)
   const purchaseOrderPayable = computed(() => {
+    if (warehouseInboundMode.value && form.value.settlementType === 'none') return 0
     const base = form.value.paymentAmount !== '' && form.value.paymentAmount != null
       ? Number(form.value.paymentAmount) || 0
-      : totalAmount.value
+      : purchaseAmount.value
     return Math.max(0, base + (Number(form.value.otherFees) || 0))
   })
   const currentPayable = computed(() => {
@@ -402,7 +404,7 @@ export function usePurchaseOrderDocument(props) {
     item.taxIncludedAmount = Number((base + item.taxAmount).toFixed(2))
     item.taxIncludedPrice = Number(((Number(item.price) || 0) * (1 + (Number(item.taxRate) || 0) / 100)).toFixed(4))
   }
-  watch(totalAmount, value => {
+  watch(purchaseAmount, value => {
     if (form.value.paymentAmount === '' || form.value.paymentAmount == null || !form.value.paymentAmountTouched) {
       form.value.paymentAmount = Number(value.toFixed(2))
     }
@@ -536,6 +538,10 @@ export function usePurchaseOrderDocument(props) {
   const removeRow = index => {
     if (!readOnly.value && !saving.value && !lockRequestedItems.value && form.value.items.length > 1) form.value.items.splice(index, 1)
   }
+  const ensureMinimumRows = () => {
+    const minimumRows = readOnly.value ? 1 : 8
+    while (form.value.items.length < minimumRows) form.value.items.push(blankItem())
+  }
   const normalize = data => {
     const orderDate = data.orderDate || localDate()
     form.value = {
@@ -577,8 +583,7 @@ export function usePurchaseOrderDocument(props) {
       }))
     }
     form.value.items.forEach(calculateRow)
-    const minimumRows = readOnly.value || lockRequestedItems.value ? 1 : 8
-    while (form.value.items.length < minimumRows) form.value.items.push(blankItem())
+    ensureMinimumRows()
   }
   const restoreDraft = draft => {
     if (props.documentId && String(draft.form?.version) !== String(form.value.version)) return false
@@ -594,9 +599,14 @@ export function usePurchaseOrderDocument(props) {
     }))
     rowKey = Math.max(rowKey, ...form.value.items.map(item => Number(item.key) || 0))
     savedDocumentId.value = draft.savedDocumentId ?? props.documentId
+    ensureMinimumRows()
   }
   const validateForm = () => {
     validation.dismissValidationHint()
+    if (warehouseInboundMode.value && form.value.settlementType === 'none' && Number(form.value.currentPayment) > 0) {
+      validation.showValidationHint('currentPayment', '无需结算的单据不能填写已付金额。')
+      return false
+    }
     const requireSupplierAndPrice = auditMode.value &&
       (!warehouseInboundMode.value || form.value.settlementType !== 'none')
     return !validatePurchaseOrder(form.value, requireSupplierAndPrice, validation.showValidationHint)
@@ -611,12 +621,11 @@ export function usePurchaseOrderDocument(props) {
     try {
       const id = savedDocumentId.value
       const receivedInboundPayload = {
+        ...purchaseOrderPayload(form.value, isAudit ? 'pending' : status),
         version: form.value.version,
         idempotencyKey: operationKey(),
         settlementType: form.value.settlementType,
         settlementRemark: form.value.settlementRemark || '',
-        storeId: Number(form.value.storeId),
-        orderDate: form.value.orderDate,
         items: form.value.items.filter(item => item.productId).map(item => ({
           inboundItemId: Number(item.inboundItemId),
           orderedQty: Number(item.quantity),
