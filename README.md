@@ -213,6 +213,8 @@ order_system/
 │  │     ├─ usePurchaseOrderDocument.js # 采购申请、逐行供应商、付款/发票字段、余额显隐和审核
 │  │     ├─ usePurchaseDocument.js   # 原材料进货、供应商、入库保存和打印
 │  │     └─ usePurchaseReturnDocument.js # 采购退货来源批次、可退数量、金额差异、草稿和详情操作
+│  ├─ directives/
+│  │  └─ resizableColumns.js         # 公共表格列宽拖动指令，支持固定总宽度和本地保存
 │  ├─ stores/
 │  │  ├─ user.js                     # 登录、用户和权限状态
 │  │  ├─ order.js                    # 销售订单状态
@@ -310,7 +312,10 @@ order_system/
 │  │  ├─ chineseMoney.js             # 金额中文大写
 │  │  ├─ supplierFinance.js          # 供应商账务标签、金额和幂等键工具
 │  │  └─ ...                         # Excel、日期、单位和通用工具
+│  ├─ main.js                        # 前端入口，全局注册 v-resizable-columns 并引入样式
 │  └─ assets/styles/                 # 本地全局样式
+│     ├─ resizable-columns.css       # 表格列宽调整手柄、拖动状态和打印隐藏样式
+│     └─ ...                         # 其它全局与业务样式
 ├─ data/
 │  ├─ order_system.db                # 当前 SQLite 业务数据库
 │  └─ backup_before_cleanup/         # 历史 JSON 备份
@@ -320,6 +325,7 @@ order_system/
 │  ├─ 打印机项目实现.md              # 打印模板、预览、浏览器打印和 C-Lodop 实现
 │  ├─ 组件样式规范.md                 # 后台页面视觉和组件复用规范
 │  ├─ 录入表单结构规范.md             # 公共单据组件、业务适配器、字段和提交规范
+│  ├─ 表格列宽拖动调整.md             # 列宽指令复用、配置参数、本地保存和交互限制
 │  └─ 权限角色分组优化方案.md        # 账号、员工、角色组和数据范围设计
 ├─ uploads/                          # 回单、头像、收款附件、报告和银行卡图片等上传文件
 │  ├─ employee-avatars/              # 员工头像，内部继续按 YYYY-MM 分目录
@@ -1153,6 +1159,7 @@ C-Lodop 地址、端口和打印机名称只保存在当前浏览器的 `localSt
 - [API 接口文档](docs/API接口文档.md)
 - [打印机项目实现](docs/打印机项目实现.md)
 - [后台列表页视觉与组件样式规范](docs/组件样式规范.md)
+- [表格列宽拖动调整](docs/表格列宽拖动调整.md)
 - [权限角色分组优化方案](docs/权限角色分组优化方案.md)
 - [BUG 及优化记录](docs/BUG及优化文档.md)
 
