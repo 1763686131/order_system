@@ -1,0 +1,48 @@
+.resizable-columns-table .table-column-resize-handle {
+  position: absolute;
+  inset: 0 0 0 auto;
+  z-index: 2;
+  display: block;
+  width: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+  user-select: none;
+}
+
+.resizable-columns-table .table-column-resize-handle::after {
+  position: absolute;
+  top: 6px;
+  right: 0;
+  bottom: 6px;
+  width: 2px;
+  background: var(--accent, #0f9f78);
+  opacity: 0;
+  content: '';
+}
+
+.resizable-columns-table .table-column-resize-handle:hover::after,
+.resizable-columns-table .table-column-resize-handle:focus-visible::after,
+.resizable-columns-table .table-column-resize-handle.is-resizing::after {
+  opacity: 1;
+}
+
+.resizable-columns-table .table-column-resize-handle:focus-visible {
+  outline: 2px solid var(--accent, #0f9f78);
+  outline-offset: -2px;
+}
+
+.is-resizing-table-column,
+.is-resizing-table-column * {
+  cursor: col-resize !important;
+  user-select: none !important;
+}
+
+@media print {
+  .resizable-columns-table .table-column-resize-handle {
+    display: none;
+  }
+}

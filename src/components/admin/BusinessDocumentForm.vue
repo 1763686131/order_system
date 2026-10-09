@@ -72,7 +72,7 @@
           {{ ui.sourceLoading ? '正在读取可退入库批次...' : ui.sourceError || '暂无可退入库批次' }}
         </div>
         <div class="products-table-wrapper">
-          <table v-if="isPurchaseReturn" class="products-table purchase-return-table">
+          <table v-if="isPurchaseReturn" v-resizable-columns="tableResizeOptions" class="products-table purchase-return-table">
             <colgroup>
               <col style="width: 40px" /><col style="width: 54px" /><col style="width: 270px" /><col style="width: 95px" /><col style="width: 105px" /><col style="width: 55px" />
               <col style="width: 110px" /><col style="width: 100px" /><col style="width: 90px" /><col style="width: 90px" /><col style="width: 100px" /><col style="width: 110px" />
@@ -113,7 +113,7 @@
               <tr class="total-row"><td colspan="10" class="center">合计</td><td class="right">{{ money(ui.totalQuantity) }}</td><td></td><td class="right">{{ money(ui.totalOriginalCost) }}</td><td class="right">{{ money(ui.totalReturnAmount) }}</td><td></td></tr>
             </tbody>
           </table>
-          <table v-else class="products-table" :class="{ 'inbound-entry-table': hidePurchaseAmounts, 'purchase-order-tax-table': isPurchaseOrder && showTaxColumns }">
+          <table v-else v-resizable-columns="tableResizeOptions" class="products-table" :class="{ 'inbound-entry-table': hidePurchaseAmounts, 'purchase-order-tax-table': isPurchaseOrder && showTaxColumns }">
             <colgroup>
               <col style="width: 40px" /><col :style="{ width: isPurchaseOrder || hidePurchaseAmounts ? '72px' : '54px' }" />
               <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '145px' : '106px' }" />
@@ -381,6 +381,11 @@ const isPurchaseReturn = computed(() => props.documentType === 'purchase-return'
 const hidePurchaseAmounts = computed(() => isPurchase.value && !ui.readOnly && (props.action === 'create' || !ui.purchaseOrderId))
 const showLineAmounts = computed(() => !isPurchaseApplication.value && !hidePurchaseAmounts.value)
 const showTaxColumns = computed(() => showLineAmounts.value && (isPurchaseOrder.value ? ui.form.invoiceRequired : ui.taxEnabled))
+const tableResizeOptions = computed(() => ({
+  storageKey: `business-document-${props.documentType}${isPurchaseApplication.value ? '-application' : ''}${hidePurchaseAmounts.value ? '-entry' : ''}`,
+  minWidth: 40,
+  resizeMode: 'fit'
+}))
 const hasPurchaseOrderItems = computed(() => isPurchaseOrder.value && ui.form.items.some(item => item.productId))
 const applicationStockLabel = item => {
   if (!item.productId) return ''
