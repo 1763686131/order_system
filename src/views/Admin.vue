@@ -646,19 +646,14 @@ const allMenuItems = [
     icon: icons.cart,
     children: [
       {
-        label: '采购订单',
-        path: '/admin/purchase/orders',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS
-      },
-      {
-        label: '供应商管理',
-        path: '/admin/purchase/suppliers',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.SUPPLIERS
-      },
-      {
         label: '采购入库申请',
         path: '/admin/purchase/inbound',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND
+      },
+      {
+        label: '采购订单',
+        path: '/admin/purchase/orders',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS
       },
       {
         label: '采购退货',
@@ -669,6 +664,11 @@ const allMenuItems = [
         label: '采购发票登记',
         path: '/admin/purchase/invoices',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INVOICES
+      },
+      {
+        label: '供应商管理',
+        path: '/admin/purchase/suppliers',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.SUPPLIERS
       }
     ]
   },
