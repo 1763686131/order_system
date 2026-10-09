@@ -114,6 +114,7 @@
             <thead>
               <tr>
                 <th>退货单号</th>
+                <th class="document-type-column">单据类型</th>
                 <th>供应商 / 门店</th>
                 <th>业务日期</th>
                 <th>明细数</th>
@@ -127,7 +128,7 @@
             </thead>
             <tbody v-if="loading">
               <tr v-for="index in 6" :key="`return-skeleton-${index}`" class="skeleton-row">
-                <td v-for="column in 10" :key="column"><span></span></td>
+                <td v-for="column in recordTableColumnCount" :key="column"><span></span></td>
               </tr>
             </tbody>
             <tbody v-else-if="returnPaginatedRecords.length">
@@ -136,6 +137,12 @@
                   <button class="document-link" type="button" @click="openReturnDetail(record)">
                     {{ record.documentNo }}
                   </button>
+                </td>
+                <td class="document-type-column">
+                  <span class="document-type-tag" :class="`type-${documentTypeFor(record).key}`">
+                    <component :is="documentTypeFor(record).icon" :size="14" aria-hidden="true" />
+                    <span>{{ documentTypeFor(record).label }}</span>
+                  </span>
                 </td>
                 <td>
                   <div class="primary-cell">{{ record.supplierName }}</div>
@@ -182,7 +189,7 @@
             </tbody>
             <tbody v-else>
               <tr>
-                <td colspan="10" class="empty-cell">
+                <td :colspan="recordTableColumnCount" class="empty-cell">
                   <div class="empty-state">
                     <div class="empty-icon">
                       <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -391,6 +398,7 @@
           <colgroup v-if="isInbound">
             <col style="width: 38px">
             <col style="width: 150px">
+            <col style="width: 120px">
             <col style="width: 110px">
             <col style="width: 120px">
             <col style="width: 140px">
@@ -415,6 +423,7 @@
                 />
               </th>
               <th>{{ isInbound ? '入库单号' : '采购单号' }}</th>
+              <th class="document-type-column">单据类型</th>
               <th>{{ isInbound ? '入库日期' : '申请日期' }}</th>
               <th v-if="isInbound">仓库</th>
               <th v-else>门店</th>
@@ -463,6 +472,12 @@
                 <button class="document-link" type="button" @click.stop="openDetail(record)">
                   {{ getRecordNo(record) }}
                 </button>
+              </td>
+              <td class="document-type-column">
+                <span class="document-type-tag" :class="`type-${documentTypeFor(record).key}`">
+                  <component :is="documentTypeFor(record).icon" :size="14" aria-hidden="true" />
+                  <span>{{ documentTypeFor(record).label }}</span>
+                </span>
               </td>
               <td class="date-cell">{{ formatDate(recordDate(record)) }}</td>
               <td v-if="isInbound">{{ record.warehouseName }}</td>
@@ -642,7 +657,7 @@
             :class="{ 'is-inbound': isInbound }"
             role="dialog"
             aria-modal="true"
-            :aria-label="isInbound ? '采购入库详情' : '采购订单详情'"
+            :aria-label="`${documentTypeFor(selectedRecord).label}详情`"
             tabindex="-1"
             @keydown.esc="closeDetail"
           >
@@ -657,7 +672,7 @@
                 </span>
                 <div>
                   <span class="modal-kicker">{{ isInbound ? 'PURCHASE INBOUND' : 'PURCHASE ORDER' }}</span>
-                  <h2>{{ isInbound ? '采购入库申请详情' : '采购订单详情' }}</h2>
+                  <h2>{{ documentTypeFor(selectedRecord).label }}详情</h2>
                   <div class="modal-document-no">{{ getRecordNo(selectedRecord) }}</div>
                 </div>
               </div>
@@ -919,7 +934,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, EllipsisVertical, Pencil, Plus, ReceiptText, RotateCcw, Trash2 } from '@lucide/vue'
+import { Check, ClipboardList, EllipsisVertical, PackageCheck, PackageX, Pencil, Plus, ReceiptText, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
@@ -940,6 +955,12 @@ const router = useRouter()
 const userStore = useUserStore()
 const isInbound = computed(() => props.mode === 'inbound')
 const isReturn = computed(() => props.mode === 'returns')
+const documentTypes = {
+  application: { key: 'application', label: '采购申请单', icon: ClipboardList },
+  inbound: { key: 'inbound', label: '直接入库单', icon: PackageCheck },
+  order: { key: 'order', label: '采购订单', icon: ShoppingCart },
+  return: { key: 'return', label: '采购退货单', icon: PackageX }
+}
 const paymentFilterLabels = computed(() => isInbound.value ? paymentLabels : {
   unpaid: '未付款', partial: '部分付款', paid: '已结清', prepaid: '增加预付'
 })
@@ -1210,7 +1231,7 @@ const returnActionMessage = computed(() => ({
 }[returnPendingAction.value?.action] || ''))
 const expenseOrderId = ref(null)
 const loading = ref(true)
-const recordTableColumnCount = computed(() => isInbound.value ? 12 : 14)
+const recordTableColumnCount = computed(() => isReturn.value ? 11 : isInbound.value ? 13 : 15)
 const currentPage = ref(1)
 const pageSize = 30
 const selectedIds = ref(new Set())
@@ -1344,6 +1365,15 @@ function recordDate(record) {
 
 function getRecordNo(record) {
   return isInbound.value ? record.inboundNo : record.orderNo
+}
+
+function documentTypeFor(record) {
+  if (isReturn.value) return documentTypes.return
+  if (record.sourceType === 'inbound-application'
+    || (isInbound.value && record.purchaseOrderId && !record.sourceType)) return documentTypes.application
+  if (record.sourceType === 'warehouse-inbound'
+    || (isInbound.value && !record.purchaseOrderId)) return documentTypes.inbound
+  return documentTypes.order
 }
 
 function formatDate(value) {
@@ -1810,11 +1840,12 @@ function exportRecords() {
   const rows = filteredRecords.value
   if (!rows.length) { showNotice('当前没有可导出的记录'); return }
   const headers = isInbound.value
-    ? ['入库单号', '日期', '供应商', '采购数量', '入库数量', '金额', '状态']
-    : ['采购单号', '申请日期', '门店', '供应商', '计划采购数量', '应付金额', '付款金额', '付款状态', '履约状态']
+    ? ['入库单号', '单据类型', '日期', '供应商', '采购数量', '入库数量', '金额', '状态']
+    : ['采购单号', '单据类型', '申请日期', '门店', '供应商', '计划采购数量', '应付金额', '付款金额', '付款状态', '履约状态']
   const lines = isInbound.value
     ? rows.map(record => [
         getRecordNo(record),
+        documentTypeFor(record).label,
         recordDate(record),
         record.supplierName,
         inboundQuantityLabel(record, 'totalQuantity'),
@@ -1824,6 +1855,7 @@ function exportRecords() {
       ])
     : rows.map(record => [
         getRecordNo(record),
+        documentTypeFor(record).label,
         recordDate(record),
         record.storeName,
         record.supplierName,
@@ -3615,6 +3647,49 @@ onBeforeUnmount(() => {
   font-size: 11px;
 }
 
+.document-type-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 26px;
+  padding: 3px 7px;
+  box-sizing: border-box;
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.document-type-tag svg {
+  flex-shrink: 0;
+}
+
+.document-type-tag.type-application {
+  color: #2457a6;
+  background: #eff5ff;
+  border-color: #cadbf5;
+}
+
+.document-type-tag.type-inbound {
+  color: #15734d;
+  background: #edf9f0;
+  border-color: #bce2c9;
+}
+
+.document-type-tag.type-order {
+  color: #086a77;
+  background: #eaf7f7;
+  border-color: #b9dfe2;
+}
+
+.document-type-tag.type-return {
+  color: #b4233d;
+  background: #fff1f3;
+  border-color: #f2c7d0;
+}
+
 .date-cell,
 .remark-cell,
 .secondary-cell {
@@ -3745,22 +3820,24 @@ onBeforeUnmount(() => {
 
 .is-inbound .records-table {
   width: 100%;
-  min-width: 1500px !important;
+  min-width: 1620px !important;
   table-layout: fixed;
 }
 
 .is-inbound .records-table th {
+  width: auto;
   height: 42px;
-  text-align: left;
+  text-align: left !important;
 }
 
 .is-inbound .records-table td {
+  width: auto;
   height: 54px;
-  text-align: left;
+  text-align: left !important;
 }
 
-.is-inbound .records-table th:nth-child(11),
-.is-inbound .records-table td:nth-child(11) {
+.is-inbound .records-table th:nth-child(12),
+.is-inbound .records-table td:nth-child(12) {
   width: auto !important;
   text-align: left !important;
 }
@@ -4280,7 +4357,7 @@ onBeforeUnmount(() => {
 
 .is-return .return-records-table {
   width: 100%;
-  min-width: 1120px !important;
+  min-width: 1240px !important;
   table-layout: fixed;
 }
 
@@ -4297,53 +4374,58 @@ onBeforeUnmount(() => {
 
 .is-return .return-records-table th:nth-child(2),
 .is-return .return-records-table td:nth-child(2) {
-  width: 15%;
+  width: 10%;
 }
 
 .is-return .return-records-table th:nth-child(3),
 .is-return .return-records-table td:nth-child(3) {
-  width: 9%;
+  width: 14%;
 }
 
 .is-return .return-records-table th:nth-child(4),
 .is-return .return-records-table td:nth-child(4) {
-  width: 6%;
-  text-align: center;
+  width: 8%;
 }
 
 .is-return .return-records-table th:nth-child(5),
 .is-return .return-records-table td:nth-child(5) {
-  width: 10%;
+  width: 5%;
+  text-align: center;
+}
+
+.is-return .return-records-table th:nth-child(6),
+.is-return .return-records-table td:nth-child(6) {
+  width: 9%;
   display: table-cell;
   text-align: center;
   white-space: nowrap;
 }
 
-.is-return .return-records-table th:nth-child(6),
-.is-return .return-records-table td:nth-child(6),
 .is-return .return-records-table th:nth-child(7),
-.is-return .return-records-table td:nth-child(7) {
-  width: 11.5%;
-  text-align: right;
-}
-
+.is-return .return-records-table td:nth-child(7),
 .is-return .return-records-table th:nth-child(8),
 .is-return .return-records-table td:nth-child(8) {
-  width: 8%;
+  width: 10%;
+  text-align: right;
 }
 
 .is-return .return-records-table th:nth-child(9),
 .is-return .return-records-table td:nth-child(9) {
-  width: 10%;
+  width: 7%;
 }
 
 .is-return .return-records-table th:nth-child(10),
 .is-return .return-records-table td:nth-child(10) {
-  width: 10%;
+  width: 9%;
+}
+
+.is-return .return-records-table th:nth-child(11),
+.is-return .return-records-table td:nth-child(11) {
+  width: 9%;
 }
 
 .is-return .return-records-table .action-column {
-  width: 10% !important;
+  width: 9% !important;
   text-align: center;
 }
 
@@ -4427,8 +4509,7 @@ onBeforeUnmount(() => {
   padding-left: 5px;
 }
 
-.purchase-list-page .records-table th:nth-child(1),
-.purchase-list-page .records-table td:nth-child(1) {
+.purchase-list-page .records-table .checkbox-column {
   width: 38px;
   padding-right: 5px;
   padding-left: 5px;
@@ -4449,7 +4530,7 @@ onBeforeUnmount(() => {
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table {
-  min-width: 1540px !important;
+  min-width: 1660px !important;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th,
@@ -4463,8 +4544,8 @@ onBeforeUnmount(() => {
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table .amount-cell,
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(7),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(8) {
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(8),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(9) {
   text-align: right !important;
 }
 
@@ -4477,65 +4558,70 @@ onBeforeUnmount(() => {
   width: 138px;
 }
 
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(3),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(3) {
-  width: 96px;
-}
-
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(4),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(4) {
-  width: 112px;
+  width: 96px;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(5),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(5) {
-  width: 145px;
+  width: 112px;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(6),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(6) {
-  width: 174px;
+  width: 145px;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(7),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(7) {
-  width: 128px;
+  width: 174px;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(8),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(8) {
-  width: 124px;
-  text-align: right;
+  width: 128px;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(9),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(9) {
-  width: 116px !important;
+  width: 124px;
+  text-align: right;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(10),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(10) {
-  width: 180px !important;
+  width: 116px !important;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(11),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(11) {
-  width: 102px;
+  width: 180px !important;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(12),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(12) {
-  width: 98px !important;
+  width: 102px;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(13),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(13) {
-  width: 90px;
+  width: 98px !important;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(14),
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(14) {
+  width: 90px;
+}
+
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(15),
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(15) {
   width: 96px !important;
+}
+
+.purchase-list-page .records-table .document-type-column {
+  width: 120px;
+  text-align: left !important;
 }
 
 @media (max-width: 1280px) {
