@@ -272,7 +272,6 @@ order_system/
 │  │     │  └─ CustomerList.vue      # 客户管理入口，封装 PartyList 的 customer 模式
 │  │     ├─ purchase/                # 采购管理
 │  │     │  ├─ PurchaseList.vue      # 采购订单/采购入库/采购退货共用列表；按路由 mode 显示字段
-│  │     │  ├─ PurchaseInboundSettlement.vue # 独立进货单采购审核及采购信息补录
 │  │     │  ├─ PurchaseInvoices.vue  # 采购发票登记入口
 │  │     │  └─ SupplierList.vue      # 供应商管理入口，封装 PartyList 的 supplier 模式
 │  │     ├─ inventory/               # 仓库管理

@@ -337,9 +337,9 @@ export function usePurchaseOrderDocument(props) {
   })
   const auditMode = computed(() => props.action === 'audit' && form.value.status === 'pending')
   const lockRequestedItems = computed(() => auditMode.value || warehouseInboundMode.value ||
-    Boolean(savedDocumentId.value && form.value.sourceType === 'inbound-application' && form.value.status !== 'draft'))
+    Boolean(!applicationMode.value && savedDocumentId.value && form.value.sourceType === 'inbound-application' && form.value.status !== 'draft'))
   const readOnly = computed(() => props.action === 'view' ||
-    Boolean(applicationMode.value && savedDocumentId.value && form.value.status !== 'draft') ||
+    Boolean(applicationMode.value && savedDocumentId.value && !['draft', 'pending'].includes(form.value.status)) ||
     (props.action === 'audit' && !auditMode.value) ||
     !['draft', 'pending'].includes(form.value.status))
   const config = computed(() => ({
@@ -575,6 +575,7 @@ export function usePurchaseOrderDocument(props) {
     while (form.value.items.length < minimumRows) form.value.items.push(blankItem())
   }
   const restoreDraft = draft => {
+    if (props.documentId && String(draft.form?.version) !== String(form.value.version)) return false
     form.value = JSON.parse(JSON.stringify(draft.form))
     form.value.purchaser ??= ''
     form.value.creator ||= currentCreatorName.value

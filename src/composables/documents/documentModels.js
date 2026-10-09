@@ -13,6 +13,11 @@ export const localDate = () => {
 }
 export const money = value => Number(value || 0).toFixed(2)
 export const isLockedInbound = status => ['reviewed', 'posted', 'cancelled', 'red-flushed'].includes(status)
+export const canEditReceivedPurchaseInbound = document => document.documentSource === 'other'
+  && !document.purchaseOrderId
+  && !document.procurementAuditedAt
+  && Number(document.payableCount || 0) === 0
+  && ['reviewed', 'posted'].includes(document.status)
 
 // Keep inbound wire fields separate from sales/return fields, even where labels match.
 export function purchasePayload(form) {

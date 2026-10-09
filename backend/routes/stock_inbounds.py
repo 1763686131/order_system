@@ -1029,24 +1029,41 @@ def update_stock_inbound(inbound_id):
                 replay, token = idempotent_result(conn, f'inbound:{inbound_id}:update', data)
                 if replay:
                     return jsonify(replay)
-                if _is_audited(old_row['status']):
+                payable_count = source_summary(conn, 'source_id', inbound_id)['payableCount']
+                if old_row['procurement_audited_at'] or payable_count:
+                    raise FinanceError('采购已审核或已确认应付的单据不可修改', 409)
+                editable_received = (
+                    _is_audited(old_row['status'])
+                    and not old_row['purchase_order_id']
+                    and old_row['document_source'] == 'other'
+                )
+                if _is_audited(old_row['status']) and not editable_received:
                     return jsonify({'success': False, 'message': '已审核单据不可修改'}), 409
                 check_scope(old_row['store_id'])
                 check_version(data, old_row)
+                if editable_received and not post_on_save:
+                    raise FinanceError('已入库未审核单据修改时必须保存并入库', 409)
                 if conn.execute('SELECT 1 FROM purchase_expense_lines WHERE inbound_item_id IN '
                                 '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?)', (inbound_id,)).fetchone():
                     raise FinanceError('请先删除或取消该批次的费用归属，再修改入库明细', 409)
                 values = _document_values(conn, data, existing=old_values)
                 if post_on_save:
-                    if old_row['status'] != 'draft' or values['purchase_order_id'] or values['document_source'] != 'other':
+                    if (old_row['status'] != 'draft' and not editable_received) or values['purchase_order_id'] or values['document_source'] != 'other':
                         raise ValueError('保存并入库仅用于独立进货草稿')
                     values['settlement_type'] = 'pending_supplier'
+                    values['status'] = 'draft'
                 should_post = post_on_save or bool(values.get('purchase_order_id'))
                 if values.get('purchase_order_id') != old_row['purchase_order_id']:
                     raise ValueError('不能修改入库批次关联的采购订单')
                 now = _now()
                 document_no = old_row['document_no'] if old_row['purchase_order_id'] else values['document_no'] or old_row['document_no']
                 _validate_document_number(conn, document_no, values.get('purchase_order_id'), inbound_id)
+                if editable_received:
+                    reverse_inbound_payables(conn, old_row)
+                    try:
+                        _reverse_posted_items(conn, old_row)
+                    except ValueError as exc:
+                        raise FinanceError('原入库库存不足以回退，不能修改该单据', 409) from exc
                 conn.execute(
                     '''
                     UPDATE stock_inbounds SET document_no = ?, document_date = ?, receipt_type = ?,

@@ -3289,6 +3289,12 @@ volumes:
 | `POST` | `/api/purchase-orders/{id}/audit` | 审核待审核订单 | `admin.purchase.order.audit` |
 | `DELETE` | `/api/purchase-orders/{id}/audit` | 反审核尚未入库的已审核订单 | `admin.purchase.order.reverse_audit` |
 
+仓库端申请使用 `POST /api/purchase-inbound-applications` 和
+`PUT /api/purchase-inbound-applications/{id}`，权限为 `admin.route.purchase.inbound`。
+修改接口允许尚未被入库或采购费用引用的 `draft`、`pending` 申请调整物料和申请数量，
+并校验 `version`；供应商、单价、付款等采购字段不接受仓库端提交。
+采购端修改或审核已提交的仓库申请时，仍不得改写原申请物料和申请数量。
+
 `status` 只能传 `draft`、`pending`、`approved`、`partial`、`completed`、
 `cancelled` 或 `rejected`。新建和编辑接口只允许保存 `draft` 或 `pending`；
 `approved`、`partial`、`completed` 由审核和采购入库流程自动产生。
@@ -3806,13 +3812,20 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 上方“审核必填”规则同样适用于 `postOnSave: true`。直接传 `reviewed` 或 `posted` 仍返回 HTTP `400`。当前公共进货表单校验门店、仓库、日期、商品、正数实收数量和批次号；独立进货无需提前填写供应商或单价，采购审核时再补齐。`postOnSave` 必须为布尔值；无入库审核权限返回 `403`，不保存部分结果。首次创建成功返回 `201`，同一幂等请求重放返回 `200`。
 
-### 11.8 修改入库草稿
+### 11.8 修改未采购审核的入库单
 
 - **URL**: `/api/stock-inbounds/<int:inbound_id>`
 - **Method**: `PUT`
 - **说明**: 修改现有未审核单据；独立草稿可提交 `postOnSave: true` 同时保存并入库，关联采购订单草稿保存时自动过账
 
 请求字段与“新建入库单”相同。保存时会替换该单据的全部明细，不是局部合并明细。
+
+来源为 `other`、无采购订单关联的独立进货单，已入库（`reviewed`/`posted`）
+但 `procurementAuditedAt` 为空且未确认应付时，也可修改。
+此时必须提交 `postOnSave: true`，仍需入库审核权限；后端在同一事务中回退原入库流水、
+替换明细并重新入库，保留单据 ID，不重复增加库存。
+原库存不足以回退、已被费用/退货引用、采购已审核或已确认应付时返回 HTTP `409`。
+修改失败整笔事务回滚；客户端应提交最新 `version` 和幂等键。
 
 **成功响应**:
 
@@ -3828,7 +3841,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 }
 ```
 
-请求直接传入 `reviewed` 或 `posted` 返回 HTTP `400`，消息为“请通过审核接口变更审核状态”。已审核单据不可再次修改，返回 HTTP `409`：
+请求直接传入 `reviewed` 或 `posted` 返回 HTTP `400`，消息为“请通过审核接口变更审核状态”。除上述独立进货单外，已入库单据不可再次修改，返回 HTTP `409`：
 
 ```json
 {

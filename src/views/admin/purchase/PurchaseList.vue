@@ -395,7 +395,8 @@
             <col style="width: 120px">
             <col style="width: 140px">
             <col style="width: 170px">
-            <col style="width: 140px">
+            <col style="width: 110px">
+            <col style="width: 110px">
             <col style="width: 90px">
             <col style="width: 115px">
             <col>
@@ -419,7 +420,8 @@
               <th v-else>门店</th>
               <th>供应商</th>
               <th>{{ isInbound ? '商品物品名称' : '物料摘要' }}</th>
-              <th>{{ isInbound ? '入库数量/总数量' : '计划采购数量' }}</th>
+              <th>{{ isInbound ? '采购数量' : '计划采购数量' }}</th>
+              <th v-if="isInbound">入库数量</th>
               <th v-if="isInbound">进度</th>
               <th v-if="!isInbound">应付金额</th>
               <template v-if="!isInbound">
@@ -482,7 +484,12 @@
               </td>
               <td>
                 <div class="quantity-cell">
-                  <strong>{{ isInbound ? receiptLabel(record) : plannedQuantityLabel(record) }}</strong>
+                  <strong>{{ isInbound ? inboundQuantityLabel(record, 'totalQuantity') : plannedQuantityLabel(record) }}</strong>
+                </div>
+              </td>
+              <td v-if="isInbound">
+                <div class="quantity-cell">
+                  <strong>{{ inboundQuantityLabel(record, 'receivedQuantity') }}</strong>
                 </div>
               </td>
               <td v-if="isInbound" class="progress-column">
@@ -507,15 +514,9 @@
                 </span>
               </td>
               <td v-if="!isInbound" class="finance-column">{{ invoiceLabels[record.invoiceStatus] || '无需开票' }}</td>
-              <td class="remark-cell" :title="record.remark || ''">{{ record.remark || '—' }}</td>
+              <td class="remark-cell" :title="record.remark || ''">{{ record.remark || '' }}</td>
               <td class="action-column" @click.stop>
                 <div class="row-actions">
-                  <button class="table-action" type="button" title="查看详情" @click="openDetail(record)">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path>
-                      <circle cx="12" cy="12" r="2.5"></circle>
-                    </svg>
-                  </button>
                   <button
                     v-if="isInbound && record.inboundId"
                     class="table-action"
@@ -540,34 +541,27 @@
                     补充入库
                   </button>
                   <button
-                    v-if="!isInbound && record.status === 'pending' && canAudit"
-                    class="table-action audit-action"
+                    v-if="canCreateInbound(record)"
+                    class="table-action supplement-action"
                     type="button"
-                    title="补充采购信息并审核"
-                    @click="auditRecord(record)"
-                  >
-                    ✓
-                  </button>
-                  <button
-                    v-if="canReverseAudit(record)"
-                    class="table-action"
-                    type="button"
-                    title="反审核采购订单"
-                    @click="confirmOrderReverseAudit(record)"
-                  >
-                    <RotateCcw :size="15" aria-hidden="true" />
-                  </button>
-                  <button
-                    v-if="canEdit(record)"
-                    class="table-action"
-                    type="button"
-                    :title="isInbound ? '编辑入库单' : '编辑采购申请'"
+                    title="创建采购入库单"
                     @click="editRecord(record)"
                   >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M12 20h9"></path>
-                      <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
-                    </svg>
+                    <Plus :size="15" aria-hidden="true" />
+                    入库
+                  </button>
+                  <button
+                    v-if="hasRowMenuActions(record)"
+                    class="table-action purchase-menu-trigger"
+                    type="button"
+                    title="更多操作"
+                    :aria-label="`${getRecordNo(record)}更多操作`"
+                    aria-haspopup="menu"
+                    :aria-expanded="actionMenuRecord?.id === record.id"
+                    @click="toggleActionMenu(record, $event)"
+                    @keydown.down.prevent="openActionMenu(record, $event)"
+                  >
+                    <EllipsisVertical :size="16" aria-hidden="true" />
                   </button>
                 </div>
               </td>
@@ -614,6 +608,32 @@
       </div>
     </section>
 
+    <Teleport to="body">
+      <div
+        v-if="actionMenuRecord"
+        ref="actionMenuElement"
+        class="purchase-row-menu"
+        role="menu"
+        :aria-label="`${getRecordNo(actionMenuRecord)}操作`"
+        :style="actionMenuStyle"
+        @keydown.esc.prevent="closeActionMenu(true)"
+        @keydown.down.prevent="moveActionMenuFocus(1)"
+        @keydown.up.prevent="moveActionMenuFocus(-1)"
+        @keydown.home.prevent="focusActionMenuItem(0)"
+        @keydown.end.prevent="focusActionMenuItem(-1)"
+        @keydown.tab="closeActionMenu()"
+      >
+        <button v-if="canEdit(actionMenuRecord)" type="button" role="menuitem" @click="runActionMenuAction('edit')">
+          <Pencil :size="15" aria-hidden="true" />修改单据
+        </button>
+        <button v-if="canAuditRecord(actionMenuRecord)" type="button" role="menuitem" @click="runActionMenuAction('audit')">
+          <Check :size="15" aria-hidden="true" />补齐采购信息并审核
+        </button>
+        <button v-if="canReverseAudit(actionMenuRecord)" type="button" role="menuitem" @click="runActionMenuAction('reverse-audit')">
+          <RotateCcw :size="15" aria-hidden="true" />反审核
+        </button>
+      </div>
+    </Teleport>
     <Teleport to="body">
       <Transition name="detail-modal">
         <div v-if="detailModalOpen && selectedRecord" class="detail-modal-layer" @click.self="closeDetail">
@@ -707,7 +727,7 @@
                   <span>共 {{ selectedRecord.itemCount }} 项物料</span>
                 </div>
                 <div class="meta-grid">
-                  <div><span>供应商</span><strong>{{ selectedRecord.supplierName }}</strong></div>
+                  <div><span>供应商</span><strong>{{ selectedRecord.supplierName || '—' }}</strong></div>
                   <div><span>收货仓库</span><strong>{{ selectedRecord.warehouseName }}</strong></div>
                   <div><span>{{ isInbound ? '验收人员' : '申请人员' }}</span><strong>{{ isInbound ? selectedRecord.inspector : selectedRecord.contact }}</strong></div>
                   <div><span>{{ isInbound ? '质检单号' : '预计到货' }}</span><strong>{{ isInbound ? selectedRecord.qualityNo || '—' : selectedRecord.expectedDate || '—' }}</strong></div>
@@ -755,7 +775,7 @@
                         <td>{{ item.goodsName }}</td>
                         <td>{{ item.specification || '—' }}</td>
                         <td>{{ item.unit }}</td>
-                        <td v-if="!isInbound" :title="item.supplierName || selectedRecord.supplierName">{{ item.supplierName || '待补充' }}</td>
+                        <td v-if="!isInbound" :title="item.supplierName || selectedRecord.supplierName">{{ item.supplierName || '—' }}</td>
                         <td v-if="isInbound">{{ item.orderedQty == null ? '—' : formatNumber(item.orderedQty) }}</td>
                         <td>{{ formatNumber(isInbound ? item.expectedQty : item.quantity) }}</td>
                         <td v-if="!isInbound">{{ item.actualPurchaseQty == null ? '待补充' : formatNumber(item.actualPurchaseQty) }}</td>
@@ -834,7 +854,7 @@
 
               <section class="detail-section remark-section">
                 <div class="section-heading"><h3>备注</h3></div>
-                <p>{{ selectedRecord.remark || '暂无备注' }}</p>
+                <p>{{ selectedRecord.remark || '' }}</p>
               </section>
             </div>
 
@@ -843,7 +863,7 @@
                 <button v-if="!isInbound && canOpenExpenses(selectedRecord)" class="button button-secondary" type="button" @click="openExpenses(selectedRecord)">
                   <ReceiptText :size="16" aria-hidden="true" />采购费用
                 </button>
-                <button v-if="!isInbound && selectedRecord.status === 'pending' && canAudit" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
+                <button v-if="canAuditRecord(selectedRecord)" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
                 </button>
                 <button v-if="canReverseAudit(selectedRecord)" class="button button-secondary" type="button" @click="confirmOrderReverseAudit(selectedRecord)">
@@ -860,14 +880,14 @@
                   </svg>
                   打印入库单
                 </button>
-                <button v-if="isInbound && selectedRecord.status === 'pending'" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
+                <button v-if="canCreateInbound(selectedRecord)" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
                   创建采购入库单
                 </button>
                 <button v-if="canSupplement(selectedRecord)" class="button button-primary" type="button" @click="supplementRecord(selectedRecord)">
                   <Plus :size="16" aria-hidden="true" />补充入库
                 </button>
-                <button v-if="canEdit(selectedRecord) && !(isInbound && selectedRecord.status === 'pending')" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
-                  {{ isInbound ? (selectedRecord.sourceType === 'inbound-application' ? '编辑采购申请' : '编辑入库单') : '编辑采购申请' }}
+                <button v-if="canEdit(selectedRecord)" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
+                  修改单据
                 </button>
               </div>
             </footer>
@@ -897,15 +917,15 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, Pencil, Plus, ReceiptText, RotateCcw, Trash2 } from '@lucide/vue'
+import { Check, EllipsisVertical, Pencil, Plus, ReceiptText, RotateCcw, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { ADMIN_PURCHASE_ORDER_PERMISSIONS } from '@/utils/accessControl'
 import PurchaseExpenseDialog from '@/components/admin/purchase/PurchaseExpenseDialog.vue'
-import { purchaseReturnStatusLabels } from '@/composables/documents/documentModels'
+import { canEditReceivedPurchaseInbound, purchaseReturnStatusLabels } from '@/composables/documents/documentModels'
 import { invoiceLabels, operationKey, paymentLabels, fulfillmentLabel } from '@/utils/supplierFinance'
 
 const props = defineProps({
@@ -1190,7 +1210,7 @@ const returnActionMessage = computed(() => ({
 }[returnPendingAction.value?.action] || ''))
 const expenseOrderId = ref(null)
 const loading = ref(true)
-const recordTableColumnCount = computed(() => isInbound.value ? 11 : 14)
+const recordTableColumnCount = computed(() => isInbound.value ? 12 : 14)
 const currentPage = ref(1)
 const pageSize = 30
 const selectedIds = ref(new Set())
@@ -1201,6 +1221,10 @@ const detailTotals = computed(() => (selectedRecord.value?.items || []).reduce((
   amount: totals.amount + Number(item.amount ?? item.totalAmount ?? 0)
 }), { plannedQuantity: 0, receivedQuantity: 0, amount: 0 }))
 const detailModalOpen = ref(false)
+const actionMenuRecord = ref(null)
+const actionMenuElement = ref(null)
+const actionMenuStyle = ref({})
+let actionMenuTrigger = null
 const notice = ref('')
 const deleting = ref(false)
 const orderReverseAuditTarget = ref(null)
@@ -1312,6 +1336,8 @@ watch(returnTotalPages, value => {
   if (returnCurrentPage.value > value) returnCurrentPage.value = value
 })
 
+watch([currentPage, () => Object.values(filters.value)], () => closeActionMenu())
+
 function recordDate(record) {
   return isInbound.value ? record.documentDate : record.purchaseDate
 }
@@ -1353,6 +1379,13 @@ function itemProgress(item) {
 function hasMixedUnits(record) {
   return new Set((record.items || []).map(item => item.unit)).size > 1
 }
+function inboundQuantityLabel(record, field) {
+  if (hasMixedUnits(record)) {
+    return detailQuantityLabel(record, field === 'totalQuantity' && record.purchaseOrderId ? 'expectedQty' : 'receivedQty')
+  }
+  const quantity = field === 'totalQuantity' ? record.totalQuantity ?? record.expectedQuantity : record.receivedQuantity
+  return `${formatNumber(quantity)} ${record.items?.[0]?.unit || ''}`.trim()
+}
 function receiptLabel(record) {
   if (isInbound.value && !record.purchaseOrderId) {
     return hasMixedUnits(record) ? `${record.items.length} 行` : `${formatNumber(record.receivedQuantity)} ${record.items?.[0]?.unit || ''}`
@@ -1387,10 +1420,6 @@ function getInboundTypeLabel(type) {
   if (type === 'finished-product') return '成品'
   if (type === 'raw-material') return '原材料'
   return '—'
-}
-
-function quantityValue(record) {
-  return isInbound.value ? record.receivedQuantity : record.totalQuantity
 }
 
 function recordProgress(record) {
@@ -1487,11 +1516,82 @@ async function actReturn() {
 
 function canEdit(record) {
   if (record.sourceType === 'warehouse-inbound') return false
-  return isInbound.value
-    ? (record.sourceType === 'inbound-application' && record.status === 'draft')
-      || record.status === 'pending'
-      || Boolean(record.editableInboundId)
-    : userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT) && ['draft', 'pending'].includes(record.status)
+  if (!isInbound.value) {
+    return userStore.hasPerm(ADMIN_PURCHASE_ORDER_PERMISSIONS.EDIT) && ['draft', 'pending'].includes(record.status)
+  }
+  if (record.procurementAuditedAt || Number(record.payableCount || 0) > 0) return false
+  if (record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)) return true
+  return Boolean(record.editableInboundId) && ['draft', 'pending_review', 'received_pending_review'].includes(record.status)
+}
+
+function canCreateInbound(record) {
+  return isInbound.value && record.status === 'pending' && Boolean(record.purchaseOrderId) && !record.editableInboundId
+}
+
+function canAuditRecord(record) {
+  return !isInbound.value && record.status === 'pending' && canAudit.value
+}
+
+function hasRowMenuActions(record) {
+  return canEdit(record) || canAuditRecord(record) || canReverseAudit(record)
+}
+
+function closeActionMenu(restoreFocus = false) {
+  const trigger = actionMenuTrigger
+  actionMenuRecord.value = null
+  actionMenuTrigger = null
+  if (restoreFocus && trigger?.isConnected) nextTick(() => trigger.focus({ preventScroll: true }))
+}
+
+function openActionMenu(record, event) {
+  if (loading.value || !hasRowMenuActions(record)) return
+  const trigger = event.currentTarget
+  const rect = trigger.getBoundingClientRect()
+  const width = 200
+  const height = (Number(canEdit(record)) + Number(canAuditRecord(record)) + Number(canReverseAudit(record))) * 36 + 12
+  actionMenuTrigger = trigger
+  actionMenuStyle.value = {
+    left: `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`,
+    top: `${rect.bottom + height + 8 > window.innerHeight
+      ? Math.max(8, rect.top - height - 6) : rect.bottom + 6}px`
+  }
+  actionMenuRecord.value = record
+  nextTick(() => focusActionMenuItem(0))
+}
+
+function toggleActionMenu(record, event) {
+  if (actionMenuRecord.value?.id === record.id) closeActionMenu(true)
+  else openActionMenu(record, event)
+}
+
+function focusActionMenuItem(index) {
+  const items = actionMenuElement.value?.querySelectorAll('[role="menuitem"]')
+  if (items?.length) items[index < 0 ? items.length - 1 : index]?.focus({ preventScroll: true })
+}
+
+function moveActionMenuFocus(direction) {
+  const items = actionMenuElement.value?.querySelectorAll('[role="menuitem"]')
+  if (!items?.length) return
+  const current = Array.from(items).indexOf(document.activeElement)
+  items[(current + direction + items.length) % items.length]?.focus({ preventScroll: true })
+}
+
+function runActionMenuAction(action) {
+  const record = actionMenuRecord.value
+  closeActionMenu(true)
+  if (!record) return
+  if (action === 'edit' && canEdit(record)) editRecord(record)
+  if (action === 'audit') auditRecord(record)
+  if (action === 'reverse-audit') confirmOrderReverseAudit(record)
+}
+
+function handleActionMenuClickOutside(event) {
+  if (!event.target.closest?.('.purchase-row-menu, .purchase-menu-trigger')) closeActionMenu()
+}
+
+function handleActionMenuViewportChange(event) {
+  if (event.type === 'scroll' && actionMenuElement.value?.contains(event.target)) return
+  closeActionMenu()
 }
 
 function canReverseAudit(record) {
@@ -1643,11 +1743,13 @@ async function deleteSelected() {
 }
 
 function openDetail(record) {
+  closeActionMenu()
   selectedRecord.value = record
   detailModalOpen.value = true
 }
 
 function closeDetail() {
+  closeActionMenu()
   detailModalOpen.value = false
   selectedRecord.value = null
 }
@@ -1678,7 +1780,7 @@ function editRecord(record) {
     else router.push({ name: 'admin-purchase-order-view', params: { id: record.id } })
     return
   }
-  if (record.sourceType === 'inbound-application' && record.status === 'draft') {
+  if (record.sourceType === 'inbound-application' && ['draft', 'pending_review'].includes(record.status)) {
     router.push({ name: 'admin-purchase-inbound-application-edit', params: { id: record.purchaseOrderId } })
     return
   }
@@ -1690,7 +1792,7 @@ function editRecord(record) {
 }
 
 function auditRecord(record) {
-  if (isInbound.value || record.status !== 'pending' || !canAudit.value) return
+  if (!canAuditRecord(record)) return
   closeDetail()
   router.push({
     name: 'admin-purchase-order-audit',
@@ -1708,10 +1810,18 @@ function exportRecords() {
   const rows = filteredRecords.value
   if (!rows.length) { showNotice('当前没有可导出的记录'); return }
   const headers = isInbound.value
-    ? ['入库单号', '日期', '供应商', '实收数量', '金额', '状态']
+    ? ['入库单号', '日期', '供应商', '采购数量', '入库数量', '金额', '状态']
     : ['采购单号', '申请日期', '门店', '供应商', '计划采购数量', '应付金额', '付款金额', '付款状态', '履约状态']
   const lines = isInbound.value
-    ? rows.map(record => [getRecordNo(record), recordDate(record), record.supplierName, quantityValue(record), record.totalAmount, getStatusLabel(record.status)])
+    ? rows.map(record => [
+        getRecordNo(record),
+        recordDate(record),
+        record.supplierName,
+        inboundQuantityLabel(record, 'totalQuantity'),
+        inboundQuantityLabel(record, 'receivedQuantity'),
+        record.totalAmount,
+        getStatusLabel(record.status)
+      ])
     : rows.map(record => [
         getRecordNo(record),
         recordDate(record),
@@ -1777,7 +1887,7 @@ function normalizeOrder(record) {
   return {
     ...record, id: record.orderId || record.id, orderNo: record.orderNo || '', purchaseDate: record.orderDate || '',
     status: record.status === 'confirmed' ? 'approved' : (record.status || 'draft'),
-    supplierName: record.supplierName || lineSupplierNames.join('、') || '待采购审核', supplierNames: lineSupplierNames,
+    supplierName: record.supplierName || lineSupplierNames.join('、'), supplierNames: lineSupplierNames,
     storeName: record.storeName || '',
     warehouseName: record.warehouseName || record.warehouse_name || lineWarehouseNames.join('、'), warehouseNames: lineWarehouseNames,
     contact: record.createdBy || '',
@@ -1796,8 +1906,10 @@ function normalizeInbound(record) {
     && ['reviewed', 'posted'].includes(record.status)
     ? 'received_pending_review'
     : record.status
+  const editableInboundId = !record.procurementAuditedAt && Number(record.payableCount || 0) === 0
+    && (record.status === 'draft' || canEditReceivedPurchaseInbound(record)) ? record.id : null
   return {
-    ...record, status, id: record.id, inboundId: record.id, editableInboundId: record.status === 'draft' ? record.id : null, inboundNo: record.documentNo || '', documentDate: record.documentDate || '', supplierName: record.supplierName || supplierNames.join('、'), supplierNames,
+    ...record, status, id: record.id, inboundId: record.id, editableInboundId, inboundNo: record.documentNo || '', documentDate: record.documentDate || '', supplierName: record.supplierName || supplierNames.join('、'), supplierNames,
     warehouseName: record.warehouseName || '', inspector: record.inspector || '', qualityNo: record.qualityNo || '', itemSummary: items.map(item => item.goodsName).filter(Boolean).slice(0, 2).join('、') + (items.length > 2 ? ' 等' : ''), itemCount: items.length,
     expectedQuantity: items.reduce((sum, item) => sum + Number(item.expectedQty || 0), 0), receivedQuantity: items.reduce((sum, item) => sum + Number(item.receivedQty || 0), 0), totalAmount: Number(record.totalAmount || 0), items
   }
@@ -1849,17 +1961,14 @@ function normalizePurchaseInbound(record, batches) {
       : record.sourceType === 'inbound-application' && record.status === 'draft'
         ? 'draft'
         : draft ? 'draft' : auditedBatches.length ? (remainingQuantity > 0.0000001 ? 'partial' : 'reviewed') : 'pending',
-    remark: record.remark || (
-      record.status === 'pending' ? '采购申请待审核'
-        : record.status === 'draft' ? '采购申请草稿'
-          : '采购订单已审核，等待选择仓库入库'
-    ),
+    remark: record.remark || '',
     items,
     batches
   }
 }
 
 async function refreshData(showMessage = true) {
+  closeActionMenu()
   loading.value = true
   try {
     if (isReturn.value) {
@@ -1912,7 +2021,19 @@ async function refreshData(showMessage = true) {
   } finally { loading.value = false }
 }
 
-onMounted(() => refreshData(false))
+onMounted(() => {
+  document.addEventListener('click', handleActionMenuClickOutside)
+  window.addEventListener('resize', handleActionMenuViewportChange)
+  window.addEventListener('scroll', handleActionMenuViewportChange, true)
+  refreshData(false)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleActionMenuClickOutside)
+  window.removeEventListener('resize', handleActionMenuViewportChange)
+  window.removeEventListener('scroll', handleActionMenuViewportChange, true)
+  window.clearTimeout(showNotice.timer)
+})
 </script>
 
 <style scoped>
@@ -3574,9 +3695,57 @@ onMounted(() => refreshData(false))
 .table-action.danger { color: #b4232f; }
 .table-action.danger:hover { color: #9f1c27; background: #fff1f2; border-color: #f0b9bf; }
 
+.purchase-menu-trigger[aria-expanded="true"] {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.purchase-row-menu {
+  position: fixed;
+  z-index: 2147481800;
+  display: grid;
+  width: 200px;
+  max-width: calc(100vw - 16px);
+  padding: 5px;
+  box-sizing: border-box;
+  color: #344054;
+  background: #fff;
+  border: 1px solid #d9e0e8;
+  border-radius: 5px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.purchase-row-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 7px 10px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.purchase-row-menu button:hover,
+.purchase-row-menu button:focus-visible {
+  color: #087f8c;
+  background: #eaf7f8;
+  outline: none;
+}
+
+.purchase-row-menu svg {
+  flex-shrink: 0;
+}
+
 .is-inbound .records-table {
   width: 100%;
-  min-width: 1420px !important;
+  min-width: 1500px !important;
   table-layout: fixed;
 }
 
@@ -3590,9 +3759,10 @@ onMounted(() => refreshData(false))
   text-align: left;
 }
 
-.is-inbound .records-table th:nth-child(10),
-.is-inbound .records-table td:nth-child(10) {
+.is-inbound .records-table th:nth-child(11),
+.is-inbound .records-table td:nth-child(11) {
   width: auto !important;
+  text-align: left !important;
 }
 
 .is-inbound .records-table .checkbox-column,
@@ -3628,7 +3798,8 @@ onMounted(() => refreshData(false))
 
 .is-inbound .quantity-cell {
   gap: 3px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .is-inbound .quantity-cell span {

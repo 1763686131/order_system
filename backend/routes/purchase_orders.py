@@ -245,7 +245,7 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preser
     return normalized
 
 
-def _order_values(conn, data, existing=None, audit=False):
+def _order_values(conn, data, existing=None, audit=False, allow_request_edit=False):
     existing = existing or {}
     order_date = business_date(data.get("orderDate", data.get("order_date", existing.get("order_date"))))
     supplier_value = data.get("supplierId", data.get("supplier_id", existing.get("supplier_id")))
@@ -265,7 +265,8 @@ def _order_values(conn, data, existing=None, audit=False):
         conn, data.get("items"), existing.get("_items"), store_id,
         preserve_request=bool(existing) and (
             audit or (
-                existing.get("source_type") == "inbound-application"
+                not allow_request_edit
+                and existing.get("source_type") == "inbound-application"
                 and existing.get("status") != "draft"
             )
         ),
@@ -922,11 +923,17 @@ def update_purchase_application(order_id):
                 row, existing = _existing_values(conn, order_id)
                 if not row or row["source_type"] != "inbound-application":
                     return jsonify({"success": False, "message": "采购申请不存在"}), 404
-                if row["status"] != "draft":
-                    return jsonify({"success": False, "message": "只有草稿状态的采购申请可以编辑"}), 409
+                if row["status"] not in ("draft", "pending"):
+                    return jsonify({"success": False, "message": "只有草稿或待审核的采购申请可以编辑"}), 409
                 check_scope(row["store_id"])
                 check_version(data, row)
-                values = _order_values(conn, application, existing)
+                if conn.execute(
+                    "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? "
+                    "UNION ALL SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ? LIMIT 1",
+                    (order_id, order_id),
+                ).fetchone():
+                    raise FinanceError("采购申请已被入库或费用引用，不能修改", 409)
+                values = _order_values(conn, application, existing, allow_request_edit=True)
                 now = _now()
                 conn.execute(
                     """
@@ -949,6 +956,8 @@ def update_purchase_application(order_id):
                 conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
                 _insert_items(conn, order_id, values["items"])
                 updated = conn.execute("SELECT * FROM purchase_orders WHERE id = ?", (order_id,)).fetchone()
+                if row["status"] == "pending" and values["status"] != "pending":
+                    complete_audit_notifications(conn, "purchase_order", order_id)
                 if values["status"] == "pending":
                     create_audit_notifications(
                         conn, "purchase_order", order_id, updated["order_no"],

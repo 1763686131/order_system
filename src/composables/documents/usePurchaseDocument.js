@@ -3,7 +3,7 @@ import { useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { operationKey } from '@/utils/supplierFinance'
-import { DOCUMENT_TYPES, inboundAmounts, isLockedInbound, localDate, money, purchasePayload, validatePurchase } from './documentModels'
+import { canEditReceivedPurchaseInbound, DOCUMENT_TYPES, inboundAmounts, isLockedInbound, localDate, money, purchasePayload, validatePurchase } from './documentModels'
 import { useDocumentValidation } from './useDocumentValidation'
 
 const BLANK_ROWS = 8
@@ -177,6 +177,9 @@ export function usePurchaseDocument(props) {
       documentDate: data.documentDate || localDate(), documentNo: data.documentNo || '',
       inspector: data.inspector || '', qualityNo: data.qualityNo || '', remark: data.remark || '',
       status: data.status || 'draft',
+      documentSource: data.documentSource || 'other',
+      procurementAuditedAt: data.procurementAuditedAt || null,
+      payableCount: Number(data.payableCount || 0),
       settlementType: data.settlementType || 'none',
       settlementRemark: data.settlementRemark || '',
       financialStatus: data.financialStatus || 'not_required',
@@ -244,7 +247,10 @@ export function usePurchaseDocument(props) {
     }
     if (purchaseOrderId.value) await loadData()
     normalizeInbound(data)
-    readOnly.value = props.action === 'view' || isLockedInbound(form.value.status)
+    readOnly.value = props.action === 'view' || Boolean(data.procurementAuditedAt) || Number(data.payableCount || 0) > 0 || (
+      isLockedInbound(form.value.status)
+      && !(props.action === 'edit' && canEditReceivedPurchaseInbound(data))
+    )
   }
   const restoreDraft = async draft => {
     if (!props.documentId && draft?.savedDocumentId) {
@@ -259,6 +265,7 @@ export function usePurchaseDocument(props) {
       }
     }
     const savedForm = JSON.parse(JSON.stringify(draft?.form || {}))
+    if (props.documentId && String(savedForm.version) !== String(form.value.version)) return false
     const savedType = normalizeInboundType(savedForm.type || inboundType.value)
     if (savedType !== inboundType.value) {
       setInboundType(savedType)
