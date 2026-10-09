@@ -117,6 +117,7 @@ export function purchaseOrderPayload(form, status = 'pending') {
       actualPurchaseQty: hasValue(item.actualQuantity) ? Number(item.actualQuantity) : null,
       supplierId: item.supplierId ? Number(item.supplierId) : null,
       unitPrice: hasValue(item.price) ? Number(item.price) : null,
+      taxRate: form.invoiceRequired ? Number(item.taxRate) || 0 : 0,
       amount: hasValue(item.amount) ? Number(item.amount) : null,
       remark: item.remark
     }))
@@ -155,6 +156,7 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
     if (audit && !item.supplierId) return invalid(`item-supplier-${index}`, '审核前请为每项物料补充采购供应商。')
     if (audit && !hasValue(item.price)) return invalid(`item-price-${index}`, '审核前请为每项物料补充采购单价。')
     if (hasValue(item.price) && (!Number.isFinite(Number(item.price)) || Number(item.price) < 0)) return invalid(`item-price-${index}`, '采购单价必须为非负数。')
+    if (form.invoiceRequired && (!Number.isFinite(Number(item.taxRate)) || Number(item.taxRate) < 0 || Number(item.taxRate) > 100)) return invalid(`item-tax-${index}`, '税点必须在 0 到 100 之间。')
     if (hasValue(item.amount) && (!Number.isFinite(Number(item.amount)) || Number(item.amount) < 0)) return invalid(`item-amount-${index}`, '金额必须为非负数。')
   }
   return ''

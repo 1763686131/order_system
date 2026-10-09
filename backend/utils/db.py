@@ -1762,6 +1762,8 @@ def _ensure_purchase_order_schema(conn):
                 actual_purchase_qty REAL,
                 received_qty REAL NOT NULL DEFAULT 0,
                 unit_price REAL,
+                tax_rate REAL NOT NULL DEFAULT 0,
+                tax_amount REAL NOT NULL DEFAULT 0,
                 amount REAL,
                 remark TEXT,
                 FOREIGN KEY(order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE
@@ -1781,6 +1783,10 @@ def _ensure_purchase_order_schema(conn):
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN category_name TEXT')
         if 'actual_purchase_qty' not in purchase_item_columns:
             cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN actual_purchase_qty REAL')
+        if 'tax_rate' not in purchase_item_columns:
+            cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0')
+        if 'tax_amount' not in purchase_item_columns:
+            cursor.execute('ALTER TABLE purchase_order_items ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0')
         cursor.execute(
             '''
             UPDATE purchase_order_items SET supplier_id = (

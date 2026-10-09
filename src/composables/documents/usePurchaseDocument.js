@@ -215,13 +215,14 @@ export function usePurchaseDocument(props) {
       documentDate: localDate(),
       documentNo: data.inboundDocumentNo || '',
       remark: data.remark || '',
+      taxEnabled: Boolean(data.invoiceRequired),
       items: remainingItems.map(item => ({
         ...blankItem(), productType: normalizeInboundType(item.productType), purchaseOrderItemId: item.orderItemId || item.id || '',
         productId: item.productId ? String(item.productId) : '', productCode: item.productCode || '',
         goodsName: item.productName || '', specification: item.specification || '', unit: item.unit || '',
         warehouseId: item.warehouseId ? String(item.warehouseId) : '', warehouseName: item.warehouseName || '',
         expectedQty: item.remainingQty, quantity: item.remainingQty,
-        price: item.unitPrice ?? '', amount: 0
+        price: item.unitPrice ?? '', taxRate: Number(item.taxRate) || 0, amount: 0
       })).concat(blankRows()).slice(0, Math.max(BLANK_ROWS, remainingItems.length + 1))
     }
     form.value.items.filter(item => item.productId).forEach(item => { item.warehouseId = item.warehouseId || form.value.warehouseId; onItemWarehouseChange(item); calculateRow(item) })

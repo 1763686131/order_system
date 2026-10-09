@@ -82,7 +82,7 @@ def _product_exists(conn, product_type, product_id):
     ).fetchone() is not None
 
 
-def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preserve_request=False):
+def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preserve_request=False, tax_enabled=False):
     if raw_items is None:
         raw_items = existing_items or []
     if not isinstance(raw_items, list):
@@ -172,6 +172,13 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preser
         )
         if amount is not None and amount < 0:
             raise ValueError("采购金额不能为负数")
+        tax_rate = _number(raw.get("taxRate", raw.get(
+            "tax_rate", existing.get("tax_rate", 13) if existing else 13
+        ))) if tax_enabled else Decimal("0")
+        if tax_rate < 0 or tax_rate > 100:
+            raise ValueError("税点必须在 0 到 100 之间")
+        tax_base = purchase_quantity * unit_price if unit_price is not None else (amount or Decimal("0"))
+        tax_amount = (tax_base * tax_rate / Decimal("100")).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
         warehouse_value = raw.get(
             "warehouseId",
             raw.get("warehouse_id", existing.get("warehouse_id") if existing else None),
@@ -237,6 +244,8 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preser
                 "actual_purchase_qty": float(actual) if actual is not None else None,
                 "received_qty": float(received),
                 "unit_price": float(unit_price) if unit_price is not None else None,
+                "tax_rate": float(tax_rate),
+                "tax_amount": float(tax_amount),
                 "amount": float(amount) if amount is not None else None,
                 "remark": _text(raw.get("remark"), 500),
             }
@@ -326,6 +335,7 @@ def _order_values(conn, data, existing=None, audit=False, allow_request_edit=Fal
                 and existing.get("status") != "draft"
             )
         ),
+        tax_enabled=bool(data.get("invoiceRequired", existing.get("invoice_required", False))),
     )
     # Keep existing callers that submit one master supplier compatible.
     if supplier_id is not None:
@@ -345,8 +355,9 @@ def _order_values(conn, data, existing=None, audit=False, allow_request_edit=Fal
         (Decimal(str(item["amount"])) for item in items if item["amount"] is not None),
         Decimal("0"),
     ).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
+    total_tax = sum((Decimal(str(item["tax_amount"])) for item in items), Decimal("0"))
     return {
-        **_purchase_finance_values(conn, data, existing, total_amount, store_id),
+        **_purchase_finance_values(conn, data, existing, total_amount + total_tax, store_id),
         "order_no": _text(data.get("orderNo", data.get("order_no", existing.get("order_no"))), 80),
         "order_date": order_date,
         "expected_date": _text(data.get("expectedDate", data.get("expected_date", existing.get("expected_date"))), 20),
@@ -397,6 +408,17 @@ def _serialize_item(row):
     item["fulfillmentProgress"] = min(100, round(received / purchase_quantity * 100, 2)) if purchase_quantity else 0
     item["unitPrice"] = item.pop("unit_price", None)
     item["amount"] = amount
+    item["taxRate"] = item.pop("tax_rate", 0) or 0
+    item["taxAmount"] = item.pop("tax_amount", 0) or 0
+    item["taxIncludedAmount"] = (
+        float((_number(amount) + _number(item["taxAmount"])).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP))
+        if amount is not None else None
+    )
+    item["taxIncludedPrice"] = (
+        float((_number(item["unitPrice"]) * (1 + _number(item["taxRate"]) / 100)).quantize(
+            Decimal("0.0001"), rounding=ROUND_HALF_UP
+        )) if item["unitPrice"] is not None else None
+    )
     item["supplierId"] = supplier_id
     item["supplierName"] = ""
     return item
@@ -478,10 +500,18 @@ def _serialize_order(conn, row, include_items=True):
         item["supplierId"] for item in order.get("items", [])
         if item.get("supplierId") is not None
     ]
+    if include_items:
+        order["totalTaxAmount"] = round(sum(item["taxAmount"] for item in order["items"]), 2)
+    else:
+        order["totalTaxAmount"] = float(conn.execute(
+            "SELECT COALESCE(SUM(tax_amount), 0) FROM purchase_order_items WHERE order_id = ?",
+            (row["id"],),
+        ).fetchone()[0])
+    order["totalTaxIncludedAmount"] = round(order["totalAmount"] + order["totalTaxAmount"], 2)
     order_payable_base = (
         float(order["paymentAmount"])
         if order["paymentAmount"] is not None
-        else float(order["totalAmount"] or 0)
+        else order["totalTaxIncludedAmount"]
     )
     order["estimatedAmount"] = max(0.0, order_payable_base + float(order["otherFees"] or 0))
     order.update(source_summary(conn, "purchase_order_id", row["id"]))
@@ -566,6 +596,8 @@ def _serialize_received_purchase_order(conn, row):
         "status": "completed" if completed else "pending",
         "inboundStatus": inbound["status"], "expectedDate": inbound["documentDate"],
         "items": items, "orderItems": items,
+        "totalTaxAmount": inbound["totalTax"],
+        "totalTaxIncludedAmount": inbound["totalAmount"],
         "requestedTotalQuantity": inbound["totalQuantity"],
         "actualTotalQuantity": inbound["totalQuantity"],
         "receivedQuantity": inbound["totalQuantity"], "fulfillmentProgress": 100,
@@ -607,14 +639,15 @@ def _insert_items(conn, order_id, items):
             INSERT INTO purchase_order_items (
                 order_id, line_no, product_type, product_id, product_code, product_name,
                 supplier_id, warehouse_id, category_id, category_name, specification, unit,
-                ordered_qty, actual_purchase_qty, received_qty, unit_price, amount, remark
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ordered_qty, actual_purchase_qty, received_qty, unit_price, tax_rate, tax_amount, amount, remark
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 order_id, item["line_no"], item["product_type"], item["product_id"],
                 item["product_code"], item["product_name"], item["supplier_id"], item["warehouse_id"],
                 item["category_id"], item["category_name"], item["specification"], item["unit"],
-                item["ordered_qty"], item["actual_purchase_qty"], item["received_qty"], item["unit_price"], item["amount"], item["remark"],
+                item["ordered_qty"], item["actual_purchase_qty"], item["received_qty"], item["unit_price"],
+                item["tax_rate"], item["tax_amount"], item["amount"], item["remark"],
             ),
         )
         item["id"] = cursor.lastrowid

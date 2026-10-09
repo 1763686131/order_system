@@ -478,6 +478,7 @@ def _validate_purchase_link(conn, purchase_order_id, supplier_id, items, receipt
             item['expected_qty'] = max(remaining, 0)
         if item.get('unit_price') is None and order_item['unit_price'] is not None:
             item['unit_price'] = order_item['unit_price']
+        item['tax_rate'] = order_item['tax_rate'] if order['invoice_required'] else 0
         # The inbound line may omit price because the purchase order already
         # carries it. Recalculate the derived tax and total fields after that
         # fallback so stock movement and document totals stay consistent.
@@ -623,9 +624,9 @@ def _post_saved_inbound(conn, row, values):
     for item in checked['items']:
         conn.execute(
             """UPDATE stock_inbound_items SET supplier_id = ?, supplier_assignment_status = ?,
-               unit_price = ?, tax_amount = ?, total_amount = ? WHERE id = ? AND inbound_id = ?""",
+               unit_price = ?, tax_rate = ?, tax_amount = ?, total_amount = ? WHERE id = ? AND inbound_id = ?""",
             (item['supplier_id'], item['supplier_assignment_status'], item['unit_price'],
-             item['tax_amount'], item['total_amount'], item['id'], inbound_id),
+             item['tax_rate'], item['tax_amount'], item['total_amount'], item['id'], inbound_id),
         )
     items = [dict(item) for item in conn.execute(
         'SELECT * FROM stock_inbound_items WHERE inbound_id = ? ORDER BY line_no, id', (inbound_id,),
