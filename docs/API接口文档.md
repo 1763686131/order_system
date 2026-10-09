@@ -45,9 +45,9 @@
 
 采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。采购入库列表的“新增入库单”直接创建独立入库，不要求关联采购申请；独立其他入库由仓库先录入实收数量，供应商和采购单价在入库后的采购审核中补齐，也可继续通过采购订单关联入库。表单显示“单据来源”，采购订单关联单据保存为 `purchase-order` 并显示“采购订单”，独立采购入库保存为 `other` 并显示“其他入库”。独立入库可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；关联采购申请入库时，一张入库单载入所有仍有剩余数量的明细，明细可同时包含原材料和成品，并按每行 `productType` 校验和过账。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?businessType=purchase`，按单据来源展示采购订单入库与其他入库，不混入生产完工入库。`StockRecordList.vue` 不传业务类型筛选，保留全部入库记录，并按单据来源、商品类型和采购申请关联显示正确的业务名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
 
-`documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交单据默认类型、`documentSource` 和每条明细的 `productType`。独立进货单提交 `status: draft`、`postOnSave: true` 和幂等键，后端原子保存并审核为 `reviewed`，只先入库实收数量，默认 `settlementType: pending_supplier`，不生成应付；仓库表单不显示结算归属、结算备注、单价和金额，`supplierId/unitPrice` 留空。采购人员在 `/admin/purchase/inbound-settlement` 的“采购审核”补齐采购信息。关联采购订单入库仍按原流程保存草稿、单独审核。独立入库仍要求明细类型与表头一致；界面的 `quantity`、`goodsName` 分别转换为 `receivedQty`、`name`。原材料商品与库存来源分别为 `/api/raw-material-products`、`/api/stock-balances?type=raw-material`；成品对应 `/api/products`、`/api/stock-balances?type=finished-product`。保存入库成功后表单只读并清除会话草稿，幂等重试不重复创建单据或增加库存。
+`documentModels.js` 的 `purchasePayload()` 根据表单 `type` 提交单据默认类型、`documentSource` 和每条明细的 `productType`。独立进货单提交 `status: draft`、`postOnSave: true` 和幂等键，后端原子保存并审核为 `reviewed`，只先入库实收数量，默认 `settlementType: pending_supplier`，不生成应付；仓库表单不显示结算归属、结算备注、单价和金额，`supplierId/unitPrice` 留空。采购人员在 `/admin/purchase/inbound-settlement` 的“采购审核”补齐采购信息。关联采购订单入库在保存时直接过账并更新采购明细实收数量，不再进入库存记录页二次审核。独立入库仍要求明细类型与表头一致；界面的 `quantity`、`goodsName` 分别转换为 `receivedQty`、`name`。原材料商品与库存来源分别为 `/api/raw-material-products`、`/api/stock-balances?type=raw-material`；成品对应 `/api/products`、`/api/stock-balances?type=finished-product`。保存入库成功后表单只读并清除会话草稿，幂等重试不重复创建单据或增加库存。
 
-采购订单审核只形成采购承诺，不直接产生供应商应付。采购申请的 `paymentAmount` 为折后金额，`currentPayment` 为已付金额；选择 `bank_transfer` 时，保存申请即校验并扣减所选对公账户，余额不足整笔事务回滚。关联采购入库审核后，按实际数量、明细供应商、单价和税额确认应付，并自动核销订单已付金额，不再次扣款；独立 `none` 入库只写库存，独立 `pending_supplier` 入库先写库存，再由采购审核补齐供应商、单价及结算信息并确认应付。入库草稿不产生应付。完整契约见采购订单接口及文末各阶段接口。
+采购订单审核只形成采购承诺，不直接产生供应商应付。采购申请的 `paymentAmount` 为折后金额，`currentPayment` 为已付金额；选择 `bank_transfer` 时，保存申请即校验并扣减所选对公账户，余额不足整笔事务回滚。关联采购入库保存过账后，按实际数量、明细供应商、单价和税额确认应付，并自动核销订单已付金额，不再次扣款；独立 `none` 入库只写库存，独立 `pending_supplier` 入库先写库存，再由采购审核补齐供应商、单价及结算信息并确认应付。入库草稿不产生应付。完整契约见采购订单接口及文末各阶段接口。
 
 ## 版本历史
 
@@ -3251,7 +3251,7 @@ volumes:
 - `posted`：历史兼容状态，按已审核处理
 - `cancelled`：已红冲/作废，未审核单据可红冲，已红冲单据可重新启用
 
-新建和修改接口仍拒绝直接传入 `reviewed` 或 `posted`。独立进货表单提交 `draft` 加 `postOnSave: true`，后端在同一事务中保存并执行入库审核，返回 `reviewed`；此操作需要原入库审核权限 `admin.inventory.stock_inbound.audit`，任何校验失败均回滚单据及库存。不传该标记的普通草稿和关联采购入库仍需另行调用 `POST /api/stock-inbounds/{id}/audit`；反审核统一调用同路径 `DELETE`。供应商付款、应付和采购补录继续通过采购财务接口处理。
+新建和修改接口仍拒绝直接传入 `reviewed` 或 `posted`。独立进货表单提交 `draft` 加 `postOnSave: true`，后端在同一事务中保存并执行入库审核，返回 `reviewed`；此操作需要原入库审核权限 `admin.inventory.stock_inbound.audit`，任何校验失败均回滚单据及库存。关联已审核采购订单的入库在保存时自动过账，并在同一事务内更新库存、入库流水、采购明细实收数量及应付；无需再调用库存记录页的审核/反审核接口。其他普通草稿仍通过 `POST /api/stock-inbounds/{id}/audit` 审核。
 
 ### 11.0 采购订单申请、审核与关联入库
 
@@ -3391,7 +3391,7 @@ purchasePaymentStatus = prepaid / paid / partial / unpaid
 supplierPayable = 所选明细供应商在 supplier_account_transactions 中的应付余额合计
 ```
 
-保存采购申请不新增供应商应付。已付金额允许大于估算金额，超出部分作为预付款展示；公对公已付金额生成 `purchase_order_payment` 银行流水，账户余额不足仍返回 `409` 并回滚整个事务。编辑冲销原扣款后重记，删除未审核申请退回原扣款；现金、微信、承兑、其它只记录付款信息，不改变银行账户。关联入库审核后，按有效入库应付来源顺序自动核销订单已付金额；入库反审核释放这部分核销，不退回或重复扣减银行余额。后续供应商付款仍使用第二阶段付款接口。
+保存采购申请不新增供应商应付。已付金额允许大于估算金额，超出部分作为预付款展示；公对公已付金额生成 `purchase_order_payment` 银行流水，账户余额不足仍返回 `409` 并回滚整个事务。编辑冲销原扣款后重记，删除未审核申请退回原扣款；现金、微信、承兑、其它只记录付款信息，不改变银行账户。关联入库保存过账后，按有效入库应付来源顺序自动核销订单已付金额；反审核释放这部分核销，不退回或重复扣减银行余额。后续供应商付款仍使用第二阶段付款接口。
 
 对公账户选项使用 `GET /api/bank-accounts/options?storeId={id}`，按登录账号的门店范围过滤。默认响应不含余额；点击眼睛图标时附加 `includeBalance=1` 获取各账户的最新 `balance`。
 
@@ -3666,7 +3666,7 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
 
 - **URL**: `/api/stock-inbounds`
 - **Method**: `POST`
-- **说明**: 默认保存 `draft` 草稿；独立进货单传 `postOnSave: true` 时原子保存并审核入库，关联采购单仍使用独立审核接口
+- **说明**: 独立进货单传 `postOnSave: true` 时原子保存并审核入库；关联已审核采购订单的入库在保存时直接过账并累计采购实收数量
 
 **请求参数**:
 
@@ -3720,7 +3720,7 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
 | `storeId` | integer | 否 | 否 | 门店 ID |
 | `warehouseId` | integer | 是 | 是 | 默认目标仓库 ID，必须存在；未指定明细仓库时使用此仓库 |
 | `supplierId` | integer | 否 | 否 | 供应商 ID；仅允许关联采购订单的入库使用，独立入库不能填写供应商 |
-| `purchaseOrderId` | integer | 否 | 否 | 关联已审核采购订单；原材料和成品采购入库均保留此关联，审核后回写采购明细的已入库数量 |
+| `purchaseOrderId` | integer | 否 | 否 | 关联已审核采购订单；原材料和成品采购入库均保留此关联，保存过账后回写采购明细的已入库数量 |
 | `workshop` | string | 否 | 否 | 成品生产车间/班组，当前为选填 |
 | `inspector` | string | 否 | 否 | 检验员 |
 | `qualityNo` | string | 否 | 否 | 质检单号 |
@@ -3810,7 +3810,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 
 - **URL**: `/api/stock-inbounds/<int:inbound_id>`
 - **Method**: `PUT`
-- **说明**: 修改现有未审核单据；独立草稿可提交 `postOnSave: true` 同时保存并入库，其他草稿审核使用 11.12 的接口
+- **说明**: 修改现有未审核单据；独立草稿可提交 `postOnSave: true` 同时保存并入库，关联采购订单草稿保存时自动过账
 
 请求字段与“新建入库单”相同。保存时会替换该单据的全部明细，不是局部合并明细。
 
@@ -3869,7 +3869,7 @@ totalAmount = receivedQty × unitPrice + taxAmount
 }
 ```
 
-`purchaseOrderIds` 删除整条采购入库及其所有批次，保留采购订单并设置 `inboundDeletedAt`；`inboundIds` 用于没有关联采购订单的其他入库，包括原材料和成品。两个数组分别最多 500 项，不允许删除生产完工入库或单独删除关联采购订单的一批。
+`purchaseOrderIds` 删除整条采购入库及其所有批次，保留采购订单并设置 `inboundDeletedAt`；采购订单审核通过后不可删除关联入库；`inboundIds` 用于没有关联采购订单的其他入库，包括原材料和成品。两个数组分别最多 500 项，不允许删除生产完工入库或单独删除关联采购订单的一批。
 
 已审核批次同步回退库存余额、成品库存、库存流水和采购明细累计数量，未审核批次不影响库存。全部删除在同一事务内完成，库存已消耗不足以回退时返回 HTTP `409`，不会部分删除；权限不足返回 `403`。
 
@@ -3995,6 +3995,8 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 `productId` 缺失时返回 HTTP `400`；`type` 无效时同样返回 HTTP `400`。
 
 ### 11.12 审核规则与数据写入
+
+本节的审核/反审核接口用于未关联采购订单的其他入库和生产入库。`purchaseOrderId` 非空的采购入库在保存时已自动过账，调用审核或反审核接口均返回 HTTP `409`。
 
 单据头和明细先由新建/修改接口保存。调用 `POST /api/stock-inbounds/{id}/audit` 审核已有入库单时，后端在同一个 SQLite 事务中执行：
 

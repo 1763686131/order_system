@@ -1566,6 +1566,7 @@ function setStatusFilter(status) {
 
 function canSelectForDeletion(record) {
   if (!isInbound.value || !canDelete.value || !record || record.procurementAuditedAt) return false
+  if (record.purchaseOrderId && ['approved', 'partial', 'completed'].includes(record.procurementStatus)) return false
   if (record.sourceType === 'inbound-application') {
     return Number(record.purchaseOrderId) > 0
       && ['draft', 'pending_review'].includes(record.status)
@@ -1829,6 +1830,7 @@ function normalizePurchaseInbound(record, batches) {
     inboundId: latest?.id || null,
     editableInboundId: draft?.id || null,
     purchaseOrderId: order.id,
+    procurementStatus: order.status,
     inboundNo: latest?.inboundNo || record.orderNo || '',
     documentDate: latest?.documentDate || record.orderDate || '',
     warehouseName: warehouseNames.join('、') || order.warehouseName || '待选择入库仓库',

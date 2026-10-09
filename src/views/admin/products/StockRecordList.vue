@@ -434,7 +434,7 @@
             <footer :class="['drawer-footer', { 'drawer-footer-readonly': isOutbound }]">
               <div v-if="!isOutbound" class="drawer-state-actions">
                 <button
-                  v-if="selectedRecord.status === 'pending'"
+                  v-if="selectedRecord.status === 'pending' && !selectedRecord.purchaseOrderId"
                   class="button button-primary"
                   type="button"
                   :disabled="documentAction.pending"
@@ -444,7 +444,7 @@
                   {{ isDocumentAction(selectedRecord, 'audit') ? '正在审核中...' : '审核' }}
                 </button>
                 <button
-                  v-else-if="selectedRecord.status === 'reviewed' || selectedRecord.status === 'posted'"
+                  v-else-if="!selectedRecord.purchaseOrderId && (selectedRecord.status === 'reviewed' || selectedRecord.status === 'posted')"
                   class="button button-secondary"
                   type="button"
                   :disabled="documentAction.pending"
@@ -807,6 +807,7 @@ const normalizeRecord = record => {
   return {
     source: record,
     id,
+    purchaseOrderId: record.purchaseOrderId ?? record.purchase_order_id ?? null,
     documentNo: String(firstValue(record.documentNo, record.document_no, record.orderNumber, record.order_number, record.code, '-')),
     documentDate: firstValue(
       record.documentDate,
@@ -1153,7 +1154,7 @@ const handleRedFlush = record => {
 }
 
 const handleReview = async record => {
-  if (isOutbound.value || record?.status !== 'pending' || !beginDocumentAction(record, 'audit')) return
+  if (isOutbound.value || record?.purchaseOrderId || record?.status !== 'pending' || !beginDocumentAction(record, 'audit')) return
   try {
     const response = await request({ url: `/stock-inbounds/${record.id}/audit`, method: 'POST' })
     const updated = applyServerRecord(record, responseRecord(response, record, 'reviewed'), 'reviewed')
@@ -1168,6 +1169,7 @@ const handleReview = async record => {
 const handleReverseAudit = async record => {
   if (
     isOutbound.value
+    || record?.purchaseOrderId
     || !['reviewed', 'posted'].includes(record?.status)
     || !beginDocumentAction(record, 'reverse-audit')
   ) return

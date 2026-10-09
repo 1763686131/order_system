@@ -979,6 +979,7 @@ def create_stock_inbound():
                     if values['purchase_order_id'] or values['document_source'] != 'other':
                         raise ValueError('保存并入库仅用于独立进货单')
                     values['settlement_type'] = 'pending_supplier'
+                should_post = post_on_save or bool(values['purchase_order_id'])
                 replay, token = idempotent_result(conn, 'inbound:create', data)
                 if replay:
                     check_scope(replay['stockIn']['storeId'], [
@@ -986,7 +987,7 @@ def create_stock_inbound():
                     ])
                     return jsonify(replay)
                 row = _document_insert(conn, values)
-                if post_on_save:
+                if should_post:
                     row, saved_values = _existing_values(conn, row['id'])
                     row = _post_saved_inbound(conn, row, saved_values)
                 else:
@@ -999,7 +1000,7 @@ def create_stock_inbound():
                     )
                 return jsonify(save_operation(conn, token, {
                     'success': True,
-                    'message': '进货单保存成功，实收数量已入库' if post_on_save else '入库单保存成功',
+                    'message': '进货单保存成功，实收数量已入库' if should_post else '入库单保存成功',
                     'stockIn': _serialize_document(conn, row), 'id': row['id'],
                 })), 201
     except FinanceError as exc:
@@ -1040,6 +1041,7 @@ def update_stock_inbound(inbound_id):
                     if old_row['status'] != 'draft' or values['purchase_order_id'] or values['document_source'] != 'other':
                         raise ValueError('保存并入库仅用于独立进货草稿')
                     values['settlement_type'] = 'pending_supplier'
+                should_post = post_on_save or bool(values.get('purchase_order_id'))
                 if values.get('purchase_order_id') != old_row['purchase_order_id']:
                     raise ValueError('不能修改入库批次关联的采购订单')
                 now = _now()
@@ -1071,12 +1073,12 @@ def update_stock_inbound(inbound_id):
                     new_row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
                     _post_items(conn, new_row, [dict(item, id=item.get('id')) for item in values['items']])
                 row = conn.execute('SELECT * FROM stock_inbounds WHERE id = ?', (inbound_id,)).fetchone()
-                if post_on_save:
+                if should_post:
                     row, saved_values = _existing_values(conn, inbound_id)
                     row = _post_saved_inbound(conn, row, saved_values)
                 return jsonify(save_operation(conn, token, {
                     'success': True,
-                    'message': '进货单保存成功，实收数量已入库' if post_on_save else '入库单更新成功',
+                    'message': '进货单保存成功，实收数量已入库' if should_post else '入库单更新成功',
                     'stockIn': _serialize_document(conn, row),
                 }))
     except FinanceError as exc:
@@ -1183,6 +1185,8 @@ def delete_purchase_inbounds():
                     ).fetchall()
                     if len(orders) != len(order_ids):
                         raise ValueError('部分采购订单不存在，请刷新列表')
+                    if any(order['status'] in ('confirmed', 'approved', 'partial', 'completed') for order in orders):
+                        raise FinanceError('采购审核通过的采购订单入库不能删除', 409)
                     for order in orders:
                         check_scope(order['store_id'])
                     inbound_ids.update(row['id'] for row in conn.execute(
@@ -1296,6 +1300,8 @@ def audit_stock_inbound(inbound_id):
                     return jsonify({'success': False, 'message': '入库单不存在'}), 404
                 check_scope(row['store_id'])
                 data = request.get_json(silent=True) or {}
+                if row['purchase_order_id']:
+                    raise FinanceError('关联采购订单的入库已在保存时自动入账，无需重复审核', 409)
                 replay, token = idempotent_result(conn, f'inbound:{inbound_id}:audit', data)
                 if replay:
                     return jsonify(replay)
@@ -1329,6 +1335,8 @@ def reverse_audit_stock_inbound(inbound_id):
                     return jsonify({'success': False, 'message': '入库单不存在'}), 404
                 check_scope(row['store_id'])
                 data = request.get_json(silent=True) or {}
+                if row['purchase_order_id']:
+                    raise FinanceError('关联采购订单的入库不使用库存记录反审核', 409)
                 replay, token = idempotent_result(conn, f'inbound:{inbound_id}:reverse', data)
                 if replay:
                     return jsonify(replay)
