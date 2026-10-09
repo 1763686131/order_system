@@ -157,6 +157,16 @@ export function validatePurchaseOrder(form, audit = false, onInvalid = () => {})
     if (audit && !hasValue(item.price)) return invalid(`item-price-${index}`, '审核前请为每项物料补充采购单价。')
     if (hasValue(item.price) && (!Number.isFinite(Number(item.price)) || Number(item.price) < 0)) return invalid(`item-price-${index}`, '采购单价必须为非负数。')
     if (form.invoiceRequired && (!Number.isFinite(Number(item.taxRate)) || Number(item.taxRate) < 0 || Number(item.taxRate) > 100)) return invalid(`item-tax-${index}`, '税点必须在 0 到 100 之间。')
+    if (form.invoiceRequired) {
+      if (!hasValue(item.taxIncludedPrice)) return invalid(`item-included-price-${index}`, '需要发票时请填写含税单价。')
+      if (!Number.isFinite(Number(item.taxIncludedPrice)) || Number(item.taxIncludedPrice) < 0) {
+        return invalid(`item-included-price-${index}`, '含税单价必须为非负数。')
+      }
+      if (!hasValue(item.taxIncludedAmount)) return invalid(`item-included-amount-${index}`, '需要发票时请填写含税单价和数量，以计算含税金额。')
+      if (!Number.isFinite(Number(item.taxIncludedAmount)) || Number(item.taxIncludedAmount) < 0) {
+        return invalid(`item-included-amount-${index}`, '含税金额必须为非负数。')
+      }
+    }
     if (hasValue(item.amount) && (!Number.isFinite(Number(item.amount)) || Number(item.amount) < 0)) return invalid(`item-amount-${index}`, '金额必须为非负数。')
   }
   return ''

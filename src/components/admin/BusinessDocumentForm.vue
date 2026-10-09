@@ -115,21 +115,21 @@
           </table>
           <table v-else class="products-table" :class="{ 'inbound-entry-table': hidePurchaseAmounts, 'purchase-order-tax-table': isPurchaseOrder && showTaxColumns }">
             <colgroup>
-              <col style="width: 40px" /><col :style="{ width: isPurchaseApplication || hidePurchaseAmounts ? '72px' : '54px' }" />
-              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '145px' : '125px' }" />
-              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '108px' : '88px' }" />
-              <col :style="{ width: isPurchaseApplication ? '220px' : '170px' }" />
+              <col style="width: 40px" /><col :style="{ width: isPurchaseOrder || hidePurchaseAmounts ? '72px' : '54px' }" />
+              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '145px' : '106px' }" />
+              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '108px' : '72px' }" />
+              <col :style="{ width: isPurchaseApplication ? '160px' : isPurchaseOrder ? '128px' : '170px' }" />
               <col v-if="isPurchaseApplication" style="width: 120px" />
-              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '90px' : '82px' }" />
-              <col :style="{ width: isPurchaseApplication ? '150px' : '105px' }" /><col :style="{ width: isPurchaseApplication ? '70px' : '55px' }" />
+              <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '90px' : '68px' }" />
+              <col :style="{ width: isPurchaseApplication ? '150px' : isPurchaseOrder ? '88px' : '105px' }" /><col :style="{ width: isPurchaseApplication ? '70px' : isPurchaseOrder ? '44px' : '55px' }" />
               <template v-if="!isPurchaseOrder"><col style="width: 130px" /><col style="width: 95px" /><col style="width: 90px" /></template>
-              <col :style="{ width: isPurchaseApplication ? '110px' : '88px' }" /><col v-if="isPurchaseOrder && !isPurchaseApplication" style="width: 110px" /><col v-if="isPurchaseOrder && !isPurchaseApplication" style="width: 125px" /><col v-if="showLineAmounts" style="width: 100px" />
-              <template v-if="showTaxColumns && isPurchaseOrder"><col style="width: 110px" /><col style="width: 80px" /><col style="width: 110px" /></template>
+              <col :style="{ width: isPurchaseApplication ? '80px' : isPurchaseOrder ? '72px' : '88px' }" /><col v-if="isPurchaseOrder && !isPurchaseApplication" style="width: 94px" /><col v-if="isPurchaseOrder && !isPurchaseApplication" style="width: 100px" /><col v-if="showLineAmounts" :style="{ width: isPurchaseOrder ? '98px' : '100px' }" />
+              <template v-if="showTaxColumns && isPurchaseOrder"><col style="width: 98px" /><col style="width: 60px" /><col style="width: 106px" /></template>
               <template v-else-if="showTaxColumns"><col style="width: 80px" /><col style="width: 110px" /></template>
-              <col v-if="showLineAmounts" style="width: 110px" />
+              <col v-if="showLineAmounts" :style="{ width: isPurchaseOrder ? '90px' : '110px' }" />
               <template v-if="showTaxColumns && !isPurchaseOrder"><col v-if="!isSale" style="width: 100px" /><col style="width: 110px" /></template>
               <template v-if="isPurchase"><col style="width: 140px" /><col style="width: 110px" /></template>
-              <col v-if="isPurchaseApplication || hidePurchaseAmounts" /><col v-else style="width: 110px" />
+              <col v-if="isPurchaseOrder || hidePurchaseAmounts" /><col v-else style="width: 110px" />
             </colgroup>
             <thead><tr>
               <th>序号</th><th>操作</th><th v-if="isPurchaseOrder">所属仓库</th><th v-if="isPurchaseOrder">分类</th><th>{{ isPurchaseOrder ? '商品信息' : isMaterial ? '物料信息' : '商品信息' }}<b v-if="isPurchaseOrder"> *</b></th><th v-if="isPurchaseApplication">当前库存</th><th v-if="isPurchaseOrder">编码</th><th>规格型号</th><th>单位</th>
@@ -137,7 +137,7 @@
               <th :class="{ right: isPurchaseOrder && !isPurchaseApplication }">{{ isPurchaseOrder ? '申请数量' : isPurchase ? '实收数量' : '数量' }}<b v-if="isPurchaseOrder"> *</b></th>
               <th v-if="isPurchaseOrder && !isPurchaseApplication" class="right">实际采购数量<b v-if="ui.auditMode"> *</b></th>
               <th v-if="isPurchaseOrder && !isPurchaseApplication">采购供应商<b v-if="ui.auditMode && (!isWarehouseInboundAudit || ui.form.settlementType !== 'none')"> *</b></th><th v-if="showLineAmounts" :class="{ right: isPurchaseOrder }">{{ isPurchaseOrder ? '采购单价 (元)' : '单价 (元)' }}<b v-if="isPurchaseOrder && ui.auditMode && (!isWarehouseInboundAudit || ui.form.settlementType !== 'none')"> *</b></th>
-              <template v-if="showTaxColumns && isPurchaseOrder"><th class="right">含税单价 (元)</th><th class="right">税点 (%)</th><th class="right">含税金额 (元)</th></template>
+              <template v-if="showTaxColumns && isPurchaseOrder"><th class="right">含税单价 (元)<b v-if="ui.invoiceAmountsRequired"> *</b></th><th class="right">税点 (%)</th><th class="right">含税金额 (元)<b v-if="ui.invoiceAmountsRequired"> *</b></th></template>
               <template v-else-if="showTaxColumns"><th>税率 (%)</th><th>含税单价</th></template>
               <th v-if="showLineAmounts" :class="{ right: isPurchaseOrder }">金额 (元)</th><template v-if="showTaxColumns && !isPurchaseOrder"><th v-if="!isSale">税额</th><th>含税金额</th></template>
               <template v-if="isPurchase"><th>批次号</th><th>货位编码</th></template><th>备注信息</th>
@@ -145,7 +145,7 @@
             <tbody>
               <tr v-for="(item, index) in ui.form.items" :key="item.key ?? index" :class="{ 'row-focused': ui.focusedRow === index }">
                 <td class="center">{{ index + 1 }}</td>
-                <td class="center"><template v-if="!isPurchaseOrder || (!ui.readOnly && !ui.lockRequestedItems)"><button class="btn-icon" type="button" title="在下方插入一行" aria-label="在下方插入一行" @click="ui.addRow(index)"><Plus :size="16" aria-hidden="true" /></button><button class="btn-icon remove" type="button" title="删除此行" aria-label="删除此行" :disabled="isPurchaseOrder && ui.form.items.length === 1" @click="ui.removeRow(index)"><Trash2 :size="15" aria-hidden="true" /></button></template></td>
+                <td class="center" :class="{ 'row-action-cell': isPurchaseOrder }"><span v-if="!isPurchaseOrder || (!ui.readOnly && !ui.lockRequestedItems)" :class="{ 'row-actions': isPurchaseOrder }"><button class="btn-icon" type="button" title="在下方插入一行" aria-label="在下方插入一行" @click="ui.addRow(index)"><Plus :size="16" aria-hidden="true" /></button><button class="btn-icon remove" type="button" title="删除此行" aria-label="删除此行" :disabled="isPurchaseOrder && ui.form.items.length === 1" @click="ui.removeRow(index)"><Trash2 :size="15" aria-hidden="true" /></button></span></td>
                 <td v-if="isPurchaseOrder">
                   <select v-model="item.warehouseId" :disabled="ui.lockRequestedItems" class="purchase-cell-select" :ref="element => setFieldRef(`item-warehouse-${index}`, element)" aria-label="所属仓库" @focus="activatePurchaseCell(item, 'warehouse')" @blur="activePurchaseCell = ''" @change="ui.onItemWarehouseChange(item); dismissHint(`item-warehouse-${index}`)">
                     <option value="">{{ purchaseCellPlaceholder(item, 'warehouse', ui.form.storeId ? '请选择仓库' : '请先选择门店') }}</option>
@@ -179,17 +179,17 @@
                   <td class="right">{{ item.productId ? money(item.currentStock) : '' }}</td>
                   <td><input v-if="isPurchase" v-model.number="item.expectedQty" :readonly="Boolean(ui.purchaseOrderId)" :ref="element => setFieldRef(`item-expected-${index}`, element)" aria-label="应收数量" type="number" min="0" step="0.0001" /><input v-else v-model.number="item.packages" aria-label="件数" type="number" min="0" step="0.01" @input="ui.onPackagesInput(index)" /></td>
                 </template>
-                <td><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.quantity" :readonly="isPurchaseOrder && ui.lockRequestedItems" :ref="element => setFieldRef(`item-quantity-${index}`, element)" :aria-label="isPurchaseOrder ? '申请数量' : '数量'" type="number" :min="isPurchaseOrder ? '0.0001' : '0'" step="0.0001" :required="isPurchaseOrder" @input="ui.onQuantityInput(index); dismissHint(`item-quantity-${index}`)" /><span v-else class="blank-cell"></span></td>
-                <td v-if="isPurchaseOrder && !isPurchaseApplication"><input v-if="item.productId" v-model.number="item.actualQuantity" :readonly="isWarehouseInboundAudit" :ref="element => setFieldRef(`item-actual-quantity-${index}`, element)" aria-label="实际采购数量" type="number" min="0.0001" step="0.0001" :required="ui.auditMode" @input="ui.onActualQuantityInput(index); dismissHint(`item-actual-quantity-${index}`)" /><span v-else class="blank-cell"></span></td>
+                <td><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.quantity" :readonly="isPurchaseOrder && ui.lockRequestedItems" :ref="element => setFieldRef(`item-quantity-${index}`, element)" :aria-label="isPurchaseOrder ? '申请数量' : '数量'" type="number" :min="isPurchaseOrder ? '0.0001' : '0'" step="0.0001" :required="isPurchaseOrder" @input="ui.onQuantityInput(index); dismissHint(`item-quantity-${index}`); dismissHint(`item-included-amount-${index}`)" /><span v-else class="blank-cell"></span></td>
+                <td v-if="isPurchaseOrder && !isPurchaseApplication"><input v-if="item.productId" v-model.number="item.actualQuantity" :readonly="isWarehouseInboundAudit" :ref="element => setFieldRef(`item-actual-quantity-${index}`, element)" aria-label="实际采购数量" type="number" min="0.0001" step="0.0001" :required="ui.auditMode" @input="ui.onActualQuantityInput(index); dismissHint(`item-actual-quantity-${index}`); dismissHint(`item-included-amount-${index}`)" /><span v-else class="blank-cell"></span></td>
                 <td v-if="isPurchaseOrder && !isPurchaseApplication">
                   <input v-if="item.productId" :value="ui.supplierDropdownOpen && ui.focusedSupplierRow === index ? ui.supplierSearch : item.supplierName" :disabled="isWarehouseInboundAudit && ui.form.settlementType === 'none'" class="purchase-cell-input" :ref="element => setSupplierInputRef(index, element)" type="text" autocomplete="off" :required="ui.auditMode && (!isWarehouseInboundAudit || ui.form.settlementType !== 'none')" aria-label="采购供应商" :placeholder="purchaseCellPlaceholder(item, 'supplier', ui.auditMode ? '请选择采购供应商' : '暂不指定（选填）')" @focus="activatePurchaseCell(item, 'supplier'); ui.openSupplierDropdown(index)" @blur="activePurchaseCell = ''; ui.hideSupplierDropdown(index)" @input="ui.handleSupplierSearchInput(index, $event); dismissHint(`item-supplier-${index}`)" @keydown.escape.prevent="ui.closeSupplierDropdown?.()" />
                   <span v-else class="blank-cell"></span>
                 </td>
-                <td v-if="showLineAmounts"><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.price" :disabled="isWarehouseInboundAudit && ui.form.settlementType === 'none'" :ref="element => setFieldRef(`item-price-${index}`, element)" :aria-label="isPurchaseOrder ? '采购单价' : '单价'" :required="isPurchaseOrder && ui.auditMode && (!isWarehouseInboundAudit || ui.form.settlementType !== 'none')" type="number" min="0" :step="isPurchase || isPurchaseOrder ? '0.0001' : '0.01'" @input="ui.onPriceInput(index); dismissHint(`item-price-${index}`)" /><span v-else class="blank-cell"></span></td>
+                <td v-if="showLineAmounts"><input v-if="!isPurchaseOrder || item.productId" v-model.number="item.price" :disabled="isWarehouseInboundAudit && ui.form.settlementType === 'none'" :ref="element => setFieldRef(`item-price-${index}`, element)" :aria-label="isPurchaseOrder ? '采购单价' : '单价'" :required="isPurchaseOrder && ui.auditMode && (!isWarehouseInboundAudit || ui.form.settlementType !== 'none')" type="number" min="0" :step="isPurchase || isPurchaseOrder ? '0.0001' : '0.01'" @input="ui.onPriceInput(index); dismissHint(`item-price-${index}`); dismissHint(`item-included-price-${index}`); dismissHint(`item-included-amount-${index}`)" /><span v-else class="blank-cell"></span></td>
                 <template v-if="showTaxColumns && isPurchaseOrder">
-                  <td><input v-if="item.productId" v-model.number="item.taxIncludedPrice" :disabled="isWarehouseInboundAudit && ui.form.settlementType === 'none'" :ref="element => setFieldRef(`item-included-price-${index}`, element)" aria-label="含税单价" type="number" min="0" step="0.0001" @input="ui.onIncludedPriceInput(index); dismissHint(`item-price-${index}`)" /><span v-else class="blank-cell"></span></td>
+                  <td><input v-if="item.productId" v-model.number="item.taxIncludedPrice" :disabled="isWarehouseInboundAudit && ui.form.settlementType === 'none'" :ref="element => setFieldRef(`item-included-price-${index}`, element)" aria-label="含税单价" type="number" min="0" step="0.0001" :required="ui.invoiceAmountsRequired" @input="ui.onIncludedPriceInput(index); dismissHint(`item-price-${index}`); dismissHint(`item-included-price-${index}`); dismissHint(`item-included-amount-${index}`)" /><span v-else class="blank-cell"></span></td>
                   <td><input v-if="item.productId" v-model.number="item.taxRate" :disabled="isWarehouseInboundAudit && ui.form.settlementType === 'none'" :ref="element => setFieldRef(`item-tax-${index}`, element)" aria-label="税点" type="number" min="0" max="100" step="0.01" @input="ui.onTaxRateInput(index); dismissHint(`item-tax-${index}`)" /><span v-else class="blank-cell"></span></td>
-                  <td class="right">{{ item.productId && item.taxIncludedAmount !== '' ? money(item.taxIncludedAmount) : '' }}</td>
+                  <td><input v-if="item.productId" :value="item.taxIncludedAmount === '' || item.taxIncludedAmount == null ? '' : money(item.taxIncludedAmount)" :ref="element => setFieldRef(`item-included-amount-${index}`, element)" aria-label="含税金额" type="number" min="0" step="0.01" :required="ui.invoiceAmountsRequired" readonly /><span v-else class="blank-cell"></span></td>
                 </template>
                 <template v-else-if="showTaxColumns">
                   <td><input v-if="item.productId" v-model.number="item.taxRate" :ref="element => setFieldRef(`item-tax-${index}`, element)" aria-label="税率" type="number" min="0" max="100" step="0.01" @input="ui.onTaxRateInput(index)" /></td>
@@ -515,7 +515,7 @@ input[type=number] { -moz-appearance: textfield; appearance: textfield; }
 input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { margin: 0; appearance: none; }
 input:focus, select:focus { outline: 2px solid #b5e5d8; outline-offset: -1px; }
 input[readonly] { background: #f8fafb; color: #64717c; }
-.toolbar-actions { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.toolbar-actions { margin-left: auto; display: flex; flex: none; align-items: center; gap: 10px; }
 .toolbar-actions .btn { min-height: 38px; font-size: 14px; }
 .close-button { width: 38px; padding: 0; }
 .tax-toggle { display: flex; align-items: center; gap: 5px; white-space: nowrap; }
@@ -549,8 +549,9 @@ button:disabled { cursor: default; opacity: .5; }
 .finance-row-full { border-bottom: 0; }
 .finance-row { gap: 22px; background: #fbfcfc; }
 .finance-row strong { margin-left: 8px; font-variant-numeric: tabular-nums; color: #08755e; }
-.invoice-toggle { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: #46535f; }
-.invoice-toggle input { accent-color: #159a7c; }
+.invoice-toggle { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; color: #46535f; cursor: pointer; }
+.top-info-bar .invoice-toggle { min-height: 38px; font-size: 16px; }
+.invoice-toggle input { flex: none; width: 20px; height: 20px; margin: 0; accent-color: #159a7c; cursor: inherit; }
 .payment-account-field { max-width: 100%; }
 .payment-account-control { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; }
 .info-group .payment-account-control select { width: 220px; max-width: 100%; }
@@ -613,9 +614,12 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .business-document-form[data-document-type="purchase-order"] .purchase-order-settlement-remark { flex: 1 1 280px; max-width: 680px; min-width: 0; }
 .business-document-form[data-document-type="purchase-order"] .purchase-order-settlement-remark input { width: 100%; min-width: 0; }
 .business-document-form[data-document-type="purchase-order"].purchase-application-form .finance-row-full { display: flex; }
-.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 1350px; }
-.business-document-form[data-document-type="purchase-order"] .products-table.purchase-order-tax-table { min-width: 1650px; }
-.business-document-form[data-document-type="purchase-order"].purchase-application-form .products-table { width: 100%; min-width: 1360px; table-layout: fixed; }
+.business-document-form[data-document-type="purchase-order"] .products-table { min-width: 1320px; }
+.business-document-form[data-document-type="purchase-order"] .products-table.purchase-order-tax-table { min-width: 1560px; }
+.business-document-form[data-document-type="purchase-order"].purchase-application-form .products-table { width: 100%; min-width: 1270px; table-layout: fixed; }
+.business-document-form[data-document-type="purchase-order"] .products-table .row-action-cell { padding: 4px 6px; white-space: nowrap; }
+.business-document-form[data-document-type="purchase-order"] .row-actions { display: inline-flex; align-items: center; flex-wrap: nowrap; gap: 4px; vertical-align: middle; }
+.business-document-form[data-document-type="purchase-order"] .row-actions .btn-icon { flex: none; }
 .business-document-form.purchase-application-form .products-table th,
 .business-document-form.purchase-application-form .products-table td,
 .business-document-form.purchase-application-form .products-table td.right,

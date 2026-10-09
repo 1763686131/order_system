@@ -66,7 +66,7 @@ export function usePurchaseOrderDocument(props) {
     return {
       orderNo: '', storeId: '', orderDate, expectedDate: dateAfter(orderDate),
       expectedDateAuto: true, purchaser: '', creator: '', paymentAmount: 0, paymentAmountTouched: false, otherFees: 0,
-      settlementAccount: '', invoiceRequired: false, paymentMethod: '', paymentAccountId: '',
+      settlementAccount: '', invoiceRequired: true, paymentMethod: '', paymentAccountId: '',
       currentPayment: 0, remark: '', status: 'draft',
       sourceType: warehouseInboundMode.value ? 'warehouse-inbound' : applicationMode.value ? 'inbound-application' : 'purchase-order',
       settlementType: 'pending_supplier', settlementRemark: '',
@@ -364,6 +364,8 @@ export function usePurchaseOrderDocument(props) {
   const totalTaxAmount = computed(() => form.value.items.reduce((sum, item) => sum + (item.productId ? Number(item.taxAmount) || 0 : 0), 0))
   const totalTaxIncludedAmount = computed(() => Number((totalAmount.value + totalTaxAmount.value).toFixed(2)))
   const purchaseAmount = totalTaxIncludedAmount
+  const invoiceAmountsRequired = computed(() => form.value.invoiceRequired && !applicationMode.value &&
+    (!warehouseInboundMode.value || form.value.settlementType !== 'none'))
   const purchaseOrderPayable = computed(() => {
     if (warehouseInboundMode.value && form.value.settlementType === 'none') return 0
     const base = form.value.paymentAmount !== '' && form.value.paymentAmount != null
@@ -541,6 +543,10 @@ export function usePurchaseOrderDocument(props) {
   }
   const normalize = data => {
     const orderDate = data.orderDate || localDate()
+    const firstProcurement = props.action === 'audit' && data.status === 'pending' &&
+      ['inbound-application', 'warehouse-inbound'].includes(data.sourceType) &&
+      (data.items || []).every(item => item.unitPrice === '' || item.unitPrice == null)
+    const invoiceRequired = firstProcurement || Boolean(data.invoiceRequired ?? true)
     form.value = {
       orderNo: data.orderNo || '', version: data.version, orderDate, expectedDate: data.expectedDate || dateAfter(orderDate),
       expectedDateAuto: !data.expectedDate || data.expectedDate === dateAfter(orderDate),
@@ -550,7 +556,7 @@ export function usePurchaseOrderDocument(props) {
       paymentAmountTouched: data.paymentAmount != null && Number(data.paymentAmount) !== Number(data.totalTaxIncludedAmount ?? data.totalAmount),
       otherFees: data.otherFees ?? 0,
       settlementAccount: data.settlementAccount || '',
-      invoiceRequired: Boolean(data.invoiceRequired),
+      invoiceRequired,
       paymentMethod: data.paymentMethod || '',
       paymentAccountId: data.paymentAccountId ? String(data.paymentAccountId) : '',
       currentPayment: data.currentPayment ?? 0,
@@ -572,7 +578,7 @@ export function usePurchaseOrderDocument(props) {
         actualQuantity: item.actualPurchaseQty ?? (props.action === 'audit' ? item.orderedQty : ''),
         supplierId: item.supplierId ? String(item.supplierId) : '',
         supplierName: item.supplierName || '', price: item.unitPrice ?? '',
-        taxRate: data.invoiceRequired ? Number(item.taxRate ?? 13) : 13,
+        taxRate: !firstProcurement && invoiceRequired ? Number(item.taxRate ?? 13) : 13,
         taxAmount: Number(item.taxAmount) || 0,
         taxIncludedAmount: Number(item.totalAmount ?? item.taxIncludedAmount) || 0,
         taxIncludedPrice: Number(item.taxIncludedPrice) || 0,
@@ -592,7 +598,7 @@ export function usePurchaseOrderDocument(props) {
     form.value.otherFees ??= 0
     form.value.settlementAccount ??= ''
     form.value.currentPayment ??= 0
-    form.value.invoiceRequired ??= false
+    form.value.invoiceRequired ??= true
     form.value.items = form.value.items.map(item => ({
       productType: '', categoryId: '', categoryName: '', warehouseId: '', warehouseName: '', ...item,
       taxRate: item.taxRate ?? 13
@@ -610,7 +616,10 @@ export function usePurchaseOrderDocument(props) {
     }
     const requireSupplierAndPrice = auditMode.value &&
       (!warehouseInboundMode.value || form.value.settlementType !== 'none')
-    return !validatePurchaseOrder(form.value, requireSupplierAndPrice, validation.showValidationHint)
+    return !validatePurchaseOrder(
+      { ...form.value, invoiceRequired: invoiceAmountsRequired.value },
+      requireSupplierAndPrice, validation.showValidationHint
+    )
   }
   const close = () => router.push({ name: applicationMode.value ? 'admin-purchase-inbound' : 'admin-purchase-orders' })
   const save = async (status = 'pending') => {
@@ -805,7 +814,7 @@ export function usePurchaseOrderDocument(props) {
     onItemWarehouseChange, onStoreChange, onDateChange, onExpectedDateInput, restoreDraft,
     visiblePaymentAccountId, selectedPaymentAccount, paymentBalanceVisible, accountBalanceLoading,
     markPaymentAmountManual, onPaymentMethodChange, hidePaymentAccountBalance, togglePaymentAccountBalance,
-    validateForm, save, clearForm, close,
+    validateForm, invoiceAmountsRequired, save, clearForm, close,
     printTemplateDialogOpen, printPreviewVisible, selectedPrintTemplate, selectedPrintPrinter, printPreviewAutoPrint,
     openPrint, closePrintTemplateDialog, closePrintPreview, printVariables,
     printNumber: computed(() => form.value.orderNo),

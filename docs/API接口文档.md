@@ -3341,8 +3341,9 @@ volumes:
       "unit": "桶",
       "orderedQty": 10,
       "supplierId": null,
-      "unitPrice": null,
-      "amount": null,
+      "unitPrice": 100,
+      "taxRate": 13,
+      "amount": 1000,
       "remark": ""
     }
   ]
@@ -3380,7 +3381,7 @@ volumes:
 | `warehouseId` | integer | 否 | 否 | 申请阶段可预填仓库，入库前仍可调整 |
 | `orderedQty` | number | 是 | 是 | 采购数量，必须大于 `0` |
 | `supplierId` | integer | 否 | 是 | 逐行采购供应商，必须为启用供应商 |
-| `unitPrice` | number | 否 | 是 | 采购单价，不能为负数 |
+| `unitPrice` | number | 条件 | 是 | 采购单价，不能为负数；申请勾选 `invoiceRequired: true` 时也必填 |
 | `taxRate` | number | 否 | 否 | 税点百分数，范围 0–100；`invoiceRequired: true` 时新明细缺省为 13，否则按 0 计算；已保存的 0 税点保留 |
 | `amount` | number | 否 | 否 | 行金额；省略时由 `orderedQty × unitPrice` 计算 |
 | `receivedQty` | number | 否 | 否 | 已入库数量，范围为 `0` 到采购数量 |
@@ -3406,7 +3407,7 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
 
 明细响应包含 `taxRate`、`taxAmount`、`taxIncludedPrice`、`taxIncludedAmount`，表头增加 `totalTaxAmount`、`totalTaxIncludedAmount`；`totalAmount` 仍为不含税合计。`paymentAmount` 缺省使用含税合计，客户端手动填写的折后金额仍优先；税额由后端按有效采购数量（实际采购数量优先）和单价计算，不信任客户端传入的税额。关联入库继承已审核采购明细税点，按本批实收数量重算税额。
 
-采购订单新增、编辑、补齐审核和详情的“需要发票”统一位于顶部第一排，勾选后在采购单价右侧依次展示含税单价、税点及含税金额，底部仍保留完整财务字段；直接入库单的结算归属仍位于申请备注右侧。
+采购订单新增、编辑、补齐审核和详情的“需要发票”统一位于顶部第一排；前端新增及首次补齐未定价的仓库单据默认勾选，已保存的开票选择和税点保留。勾选后在采购单价右侧依次展示含税单价、税点及含税金额，含税单价及自动计算的含税金额必填；客户端仍提交 `unitPrice` 和 `taxRate`，服务端校验单价并计算税额，不接受用客户端金额替代缺失单价。仓库申请和直接入库无需结算流程不要求采购金额。底部仍保留完整财务字段，直接入库单的结算归属仍位于申请备注右侧。
 
 保存采购申请不新增供应商应付。已付金额允许大于估算金额，超出部分作为预付款展示；公对公已付金额生成 `purchase_order_payment` 银行流水，账户余额不足仍返回 `409` 并回滚整个事务。编辑冲销原扣款后重记，删除未审核申请退回原扣款；现金、微信、承兑、其它只记录付款信息，不改变银行账户。关联入库保存过账后，按有效入库应付来源顺序自动核销订单已付金额；反审核释放这部分核销，不退回或重复扣减银行余额。后续供应商付款仍使用第二阶段付款接口。
 

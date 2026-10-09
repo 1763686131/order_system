@@ -163,6 +163,8 @@ def _normalize_items(conn, raw_items, existing_items=None, store_id=None, preser
         unit_price = None if price_value in (None, "") else _number(price_value)
         if unit_price is not None and unit_price < 0:
             raise ValueError("采购单价不能为负数")
+        if tax_enabled and unit_price is None:
+            raise ValueError("需要发票时请填写含税单价，以计算含税金额")
         amount_value = raw.get("amount", raw.get("totalAmount"))
         amount = (
             (purchase_quantity * unit_price).quantize(_MONEY_QUANT, rounding=ROUND_HALF_UP)
