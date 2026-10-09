@@ -410,6 +410,23 @@
             <col>
             <col style="width: 170px">
           </colgroup>
+          <colgroup v-else-if="!isReturn">
+            <col style="width: 30px">
+            <col style="width: 124px">
+            <col style="width: 108px">
+            <col style="width: 88px">
+            <col style="width: 56px">
+            <col style="width: 92px">
+            <col style="width: 110px">
+            <col style="width: 100px">
+            <col style="width: 100px">
+            <col style="width: 92px">
+            <col style="width: 120px">
+            <col style="width: 84px">
+            <col style="width: 78px">
+            <col>
+            <col style="width: 54px">
+          </colgroup>
           <thead>
             <tr>
               <th class="checkbox-column">
@@ -566,6 +583,17 @@
                     入库
                   </button>
                   <button
+                    v-if="canReverseAudit(record)"
+                    class="table-action reverse-audit-action"
+                    type="button"
+                    title="反审核采购订单"
+                    :aria-label="`反审核采购订单${getRecordNo(record)}`"
+                    :disabled="loading"
+                    @click="confirmOrderReverseAudit(record)"
+                  >
+                    <RotateCcw :size="15" aria-hidden="true" />
+                  </button>
+                  <button
                     v-if="hasRowMenuActions(record)"
                     class="table-action purchase-menu-trigger"
                     type="button"
@@ -643,9 +671,6 @@
         </button>
         <button v-if="canAuditRecord(actionMenuRecord)" type="button" role="menuitem" @click="runActionMenuAction('audit')">
           <Check :size="15" aria-hidden="true" />补齐采购信息并审核
-        </button>
-        <button v-if="canReverseAudit(actionMenuRecord)" type="button" role="menuitem" @click="runActionMenuAction('reverse-audit')">
-          <RotateCcw :size="15" aria-hidden="true" />反审核
         </button>
       </div>
     </Teleport>
@@ -1563,7 +1588,7 @@ function canAuditRecord(record) {
 }
 
 function hasRowMenuActions(record) {
-  return canEdit(record) || canAuditRecord(record) || canReverseAudit(record)
+  return canEdit(record) || canAuditRecord(record)
 }
 
 function closeActionMenu(restoreFocus = false) {
@@ -1578,7 +1603,7 @@ function openActionMenu(record, event) {
   const trigger = event.currentTarget
   const rect = trigger.getBoundingClientRect()
   const width = 200
-  const height = (Number(canEdit(record)) + Number(canAuditRecord(record)) + Number(canReverseAudit(record))) * 36 + 12
+  const height = (Number(canEdit(record)) + Number(canAuditRecord(record))) * 36 + 12
   actionMenuTrigger = trigger
   actionMenuStyle.value = {
     left: `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`,
@@ -1612,7 +1637,6 @@ function runActionMenuAction(action) {
   if (!record) return
   if (action === 'edit' && canEdit(record)) editRecord(record)
   if (action === 'audit') auditRecord(record)
-  if (action === 'reverse-audit') confirmOrderReverseAudit(record)
 }
 
 function handleActionMenuClickOutside(event) {
@@ -1625,12 +1649,15 @@ function handleActionMenuViewportChange(event) {
 }
 
 function canReverseAudit(record) {
-  return !isInbound.value
+  return props.mode === 'orders'
     && canReverseAuditPermission.value
+    && record.sourceType !== 'warehouse-inbound'
     && record.status === 'approved'
     && !record.hasInbound
     && Number(record.inboundCount || 0) === 0
-    && Number(record.receivedQuantity || 0) <= 0
+    && Number(record.receivedQuantity || 0) === 0
+    && !(record.items || []).some(item => Number(item.receivedQty || 0) > 0)
+    && !(record.batches || []).length
 }
 
 function confirmOrderReverseAudit(record) {
@@ -4530,11 +4557,14 @@ onBeforeUnmount(() => {
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table {
-  min-width: 1660px !important;
+  min-width: 1480px !important;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table th,
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table td {
+  width: auto !important;
+  padding-right: 4px;
+  padding-left: 4px;
   text-align: left !important;
 }
 
@@ -4543,80 +4573,22 @@ onBeforeUnmount(() => {
   text-align: center !important;
 }
 
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table .amount-cell,
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(8),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(9) {
-  text-align: right !important;
-}
-
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table .payment-status-cell {
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(2),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(2) {
-  width: 138px;
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table .quantity-cell {
+  justify-content: flex-start;
+  overflow-wrap: anywhere;
 }
 
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(4),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(4) {
-  width: 96px;
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table .quantity-cell strong {
+  font-size: 13px;
 }
 
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(5),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(5) {
-  width: 112px;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(6),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(6) {
-  width: 145px;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(7),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(7) {
-  width: 174px;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(8),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(8) {
-  width: 128px;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(9),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(9) {
-  width: 124px;
-  text-align: right;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(10),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(10) {
-  width: 116px !important;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(11),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(11) {
-  width: 180px !important;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(12),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(12) {
-  width: 102px;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(13),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(13) {
-  width: 98px !important;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(14),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(14) {
-  width: 90px;
-}
-
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table th:nth-child(15),
-.purchase-list-page:not(.is-inbound):not(.is-return) .records-table td:nth-child(15) {
-  width: 96px !important;
+.purchase-list-page:not(.is-inbound):not(.is-return) .records-table .remark-cell {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .purchase-list-page .records-table .document-type-column {

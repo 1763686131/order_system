@@ -1227,7 +1227,7 @@ def reverse_audit_purchase_order(order_id):
             if not row:
                 return jsonify({"success": False, "message": "采购订单不存在"}), 404
             if row["status"] not in ("approved",):
-                return jsonify({"success": False, "message": "当前采购订单不能反审核"}), 409
+                return jsonify({"success": False, "message": "只有已审核且尚未入库的采购订单可以反审核"}), 409
             try:
                 check_scope(row["store_id"])
                 check_version(request.get_json(silent=True) or {}, row)
