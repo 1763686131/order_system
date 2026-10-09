@@ -408,7 +408,7 @@
             <col style="width: 90px">
             <col style="width: 115px">
             <col>
-            <col style="width: 170px">
+            <col style="width: 76px">
           </colgroup>
           <colgroup v-else-if="!isReturn">
             <col style="width: 30px">
@@ -550,37 +550,14 @@
               <td class="action-column" @click.stop>
                 <div class="row-actions">
                   <button
-                    v-if="isInbound && record.inboundId"
+                    v-if="isInbound"
                     class="table-action"
                     type="button"
-                    title="打印入库单"
+                    title="打印单据"
+                    :aria-label="`打印${getRecordNo(record)}`"
                     @click="printRecord(record)"
                   >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M6 9V3h12v6"></path>
-                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                      <path d="M6 14h12v7H6z"></path>
-                    </svg>
-                  </button>
-                  <button
-                    v-if="canSupplement(record)"
-                    class="table-action supplement-action"
-                    type="button"
-                    title="补充入库"
-                    @click="supplementRecord(record)"
-                  >
-                    <Plus :size="15" aria-hidden="true" />
-                    补充入库
-                  </button>
-                  <button
-                    v-if="canCreateInbound(record)"
-                    class="table-action supplement-action"
-                    type="button"
-                    title="创建采购入库单"
-                    @click="editRecord(record)"
-                  >
-                    <Plus :size="15" aria-hidden="true" />
-                    入库
+                    <Printer :size="15" aria-hidden="true" />
                   </button>
                   <button
                     v-if="canReverseAudit(record)"
@@ -671,6 +648,12 @@
         </button>
         <button v-if="canAuditRecord(actionMenuRecord)" type="button" role="menuitem" @click="runActionMenuAction('audit')">
           <Check :size="15" aria-hidden="true" />补齐采购信息并审核
+        </button>
+        <button v-if="canCreateInbound(actionMenuRecord)" type="button" role="menuitem" @click="runActionMenuAction('create-inbound')">
+          <Plus :size="15" aria-hidden="true" />入库
+        </button>
+        <button v-if="canSupplement(actionMenuRecord)" type="button" role="menuitem" @click="runActionMenuAction('supplement')">
+          <Plus :size="15" aria-hidden="true" />补充入库
         </button>
       </div>
     </Teleport>
@@ -912,13 +895,8 @@
                 <button v-if="!isInbound && ['approved', 'partial'].includes(selectedRecord.status)" class="button button-secondary" type="button" @click="router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: selectedRecord.id } })">
                   创建采购入库单
                 </button>
-                <button v-if="isInbound && selectedRecord.inboundId" class="button button-secondary" type="button" @click="printRecord(selectedRecord)">
-                  <svg viewBox="0 0 24 24" aria-hidden="true">
-                    <path d="M6 9V3h12v6"></path>
-                    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                    <path d="M6 14h12v7H6z"></path>
-                  </svg>
-                  打印入库单
+                <button v-if="isInbound" class="button button-secondary" type="button" @click="printRecord(selectedRecord)">
+                  <Printer :size="16" aria-hidden="true" />打印单据
                 </button>
                 <button v-if="canCreateInbound(selectedRecord)" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
                   创建采购入库单
@@ -959,7 +937,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, ClipboardList, EllipsisVertical, PackageCheck, PackageX, Pencil, Plus, ReceiptText, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
+import { Check, ClipboardList, EllipsisVertical, PackageCheck, PackageX, Pencil, Plus, Printer, ReceiptText, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
@@ -1588,7 +1566,7 @@ function canAuditRecord(record) {
 }
 
 function hasRowMenuActions(record) {
-  return canEdit(record) || canAuditRecord(record)
+  return canEdit(record) || canAuditRecord(record) || canCreateInbound(record) || canSupplement(record)
 }
 
 function closeActionMenu(restoreFocus = false) {
@@ -1603,7 +1581,9 @@ function openActionMenu(record, event) {
   const trigger = event.currentTarget
   const rect = trigger.getBoundingClientRect()
   const width = 200
-  const height = (Number(canEdit(record)) + Number(canAuditRecord(record))) * 36 + 12
+  const height = [
+    canEdit(record), canAuditRecord(record), canCreateInbound(record), canSupplement(record)
+  ].filter(Boolean).length * 36 + 12
   actionMenuTrigger = trigger
   actionMenuStyle.value = {
     left: `${Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8))}px`,
@@ -1637,6 +1617,8 @@ function runActionMenuAction(action) {
   if (!record) return
   if (action === 'edit' && canEdit(record)) editRecord(record)
   if (action === 'audit') auditRecord(record)
+  if (action === 'create-inbound' && canCreateInbound(record)) editRecord(record)
+  if (action === 'supplement') supplementRecord(record)
 }
 
 function handleActionMenuClickOutside(event) {
@@ -1860,7 +1842,11 @@ function auditRecord(record) {
 
 function printRecord(record) {
   if (!isInbound.value) return
-  router.push({ path: `/admin/purchase/inbound/${record.inboundId}`, query: { print: '1' } })
+  if (record.inboundId) {
+    router.push({ name: 'admin-purchase-inbound-view', params: { id: record.inboundId }, query: { print: '1' } })
+  } else if (record.purchaseOrderId) {
+    router.push({ name: 'admin-purchase-inbound-application-view', params: { id: record.purchaseOrderId }, query: { print: '1' } })
+  }
 }
 
 function exportRecords() {
@@ -3874,6 +3860,10 @@ onBeforeUnmount(() => {
   text-align: center !important;
 }
 
+.is-inbound .records-table .action-column {
+  width: 76px !important;
+}
+
 .is-inbound .records-table .quantity-cell {
   justify-content: flex-start;
 }
@@ -3917,15 +3907,6 @@ onBeforeUnmount(() => {
 .is-inbound .progress-cell {
   justify-content: center;
   margin-top: 0;
-}
-
-.supplement-action {
-  width: auto;
-  min-width: 88px;
-  padding: 0 7px;
-  gap: 3px;
-  color: var(--accent-dark);
-  white-space: nowrap;
 }
 
 .empty-cell {
@@ -4548,12 +4529,6 @@ onBeforeUnmount(() => {
 
 .purchase-list-page .table-action {
   width: 27px;
-}
-
-.purchase-list-page .supplement-action {
-  min-width: 80px;
-  padding-right: 5px;
-  padding-left: 5px;
 }
 
 .purchase-list-page:not(.is-inbound):not(.is-return) .records-table {

@@ -36,12 +36,14 @@
 | --- | --- | --- | --- | --- |
 | `sale` | `useSalesDocument.js` | `POST /api/orders`、`PUT /api/orders/{id}` | 客户；`discountAmount` 为折扣后金额，另有 `otherFees`、`currentPayment` | `sale` |
 | `sale-return` | `useReturnDocument.js` | `POST /api/returns`、`PUT /api/returns/{id}` | 客户；`returnAmount`、`refundAmount`，核销金额为两者差额 | `return` |
-| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、逐行供应商；折后金额、其它费用、已付金额、付款方式、对公账户及需发票标记 | 暂不提供打印入口 |
+| `purchase-order` | `usePurchaseOrderDocument.js` | `POST /api/purchase-orders`、`PUT /api/purchase-orders/{id}`、`POST /api/purchase-orders/{id}/audit` | 门店、申请日期、预计到货日期、逐行供应商；折后金额、其它费用、已付金额、付款方式、对公账户及需发票标记 | 仓库申请模式使用 `purchase`；采购订单页不提供打印入口 |
 | `purchase` | `usePurchaseDocument.js` | `POST /api/stock-inbounds`、`PUT /api/stock-inbounds/{id}` | 按 `type` 切换商品、数量、单价和税额；关联采购单按明细供应商确认应付，独立入库使用结算类型 | `purchase` |
 
 公共组件的 `action`（`create`、`edit`、`copy`、`view`）和 `documentId` 是前端路由参数，不是提交给这些业务接口的通用字段。销售复制使用 `/admin/sales/create?copyFrom=<id>`，读取源订单后按新增接口保存；新增/编辑/复制/查看不能代替服务端的审核状态或权限校验。
 
 采购申请路由为 `/admin/purchase/orders/create`、`/admin/purchase/orders/edit/:id`、`/admin/purchase/orders/audit/:id` 和 `/admin/purchase/orders/:id`，对应本节的 `/api/purchase-orders` 接口。审核通过后，前端通过 `/api/purchase-orders/{id}/available-inbound` 读取可入库明细，再使用带 `purchaseOrderId`、`purchaseOrderItemId` 的入库请求创建采购入库单。
+
+采购入库申请列表每行提供打印入口，无入库批次的记录使用 `/admin/purchase/inbound/application/:id?print=1`，通过 `GET /api/purchase-orders/{id}` 读取申请单并以仓库申请模式只读打印，复用 `purchase` 模板；有入库批次时继续打印实际入库单。打印不保存、审核或新增入库数据。“入库”和“补充入库”在行内三点菜单中显示，原有状态条件不变。
 
 采购进货路由为 `/admin/purchase/inbound/create`、`/admin/purchase/inbound/edit/:id`、`/admin/purchase/inbound/:id`。采购入库列表的“新增入库单”直接创建独立入库，不要求关联采购申请；独立其他入库由仓库先录入实收数量，供应商和采购单价在入库后的采购审核中补齐，也可继续通过采购订单关联入库。表单显示“单据来源”，采购订单关联单据保存为 `purchase-order` 并显示“采购订单”，独立采购入库保存为 `other` 并显示“其他入库”。独立入库可通过 `?productType=raw-material` 或 `?productType=finished-product` 指定商品类型；关联采购申请入库时，一张入库单载入所有仍有剩余数量的明细，明细可同时包含原材料和成品，并按每行 `productType` 校验和过账。查看路由带 `?print=1` 时，数据加载成功后打开打印模板选择器。采购入库列表读取 `GET /api/stock-inbounds?businessType=purchase`，按单据来源展示采购订单入库与其他入库，不混入生产完工入库。`StockRecordList.vue` 不传业务类型筛选，保留全部入库记录，并按单据来源、商品类型和采购申请关联显示正确的业务名称。采购申请和采购入库是两类独立单据，不能互相替代接口。
 

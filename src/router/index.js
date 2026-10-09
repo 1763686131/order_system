@@ -361,6 +361,19 @@ const routes = [
         meta: { requiresAuth: true, documentForm: true, permission: 'admin.route.purchase.inbound' }
       },
       {
+        path: 'purchase/inbound/application/:id',
+        name: 'admin-purchase-inbound-application-view',
+        component: () => import('@/components/admin/BusinessDocumentForm.vue'),
+        props: route => ({
+          documentType: 'purchase-order',
+          action: 'view',
+          applicationMode: true,
+          documentId: Number(route.params.id),
+          printOnOpen: route.query.print === '1'
+        }),
+        meta: { requiresAuth: true, documentForm: true, permission: 'admin.route.purchase.inbound' }
+      },
+      {
         path: 'purchase/inbound/create',
         name: 'admin-purchase-inbound-create',
         component: () => import('@/components/admin/BusinessDocumentForm.vue'),

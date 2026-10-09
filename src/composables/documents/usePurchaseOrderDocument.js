@@ -34,6 +34,11 @@ export function usePurchaseOrderDocument(props) {
   const visiblePaymentAccountId = ref(null)
   const savedDocumentId = ref(props.documentId)
   const notice = ref({ visible: false, type: 'success', message: '' })
+  const printTemplateDialogOpen = ref(false)
+  const printPreviewVisible = ref(false)
+  const selectedPrintTemplate = ref(null)
+  const selectedPrintPrinter = ref(null)
+  const printPreviewAutoPrint = ref(false)
   const focusedRow = ref(-1)
   const productInputRefs = new Map()
   const productDropdownRef = ref(null)
@@ -344,6 +349,7 @@ export function usePurchaseOrderDocument(props) {
     !['draft', 'pending'].includes(form.value.status))
   const config = computed(() => ({
     ...DOCUMENT_TYPES['purchase-order'],
+    printType: applicationMode.value ? 'purchase' : undefined,
     title: warehouseInboundMode.value
       ? auditMode.value ? '审核仓库入库采购信息' : '仓库入库详情'
       : auditMode.value ? '审核采购申请' : readOnly.value ? '采购申请详情' : savedDocumentId.value ? '编辑采购申请' : '新增采购申请'
@@ -662,6 +668,50 @@ export function usePurchaseOrderDocument(props) {
     form.value = { ...blankForm(), orderNo, status }
     validation.dismissValidationHint()
   }
+  const openPrint = () => { printTemplateDialogOpen.value = true }
+  const closePrintTemplateDialog = () => { printTemplateDialogOpen.value = false }
+  const openPrintTemplate = (template, printer, autoPrint) => {
+    selectedPrintTemplate.value = template
+    selectedPrintPrinter.value = printer
+    printPreviewAutoPrint.value = autoPrint
+    printTemplateDialogOpen.value = false
+    printPreviewVisible.value = true
+  }
+  const closePrintPreview = () => {
+    printPreviewVisible.value = false
+    selectedPrintTemplate.value = null
+    selectedPrintPrinter.value = null
+    printPreviewAutoPrint.value = false
+  }
+  const printVariables = computed(() => {
+    const items = form.value.items.filter(item => item.productId).map((item, index) => ({
+      ...item,
+      index: index + 1,
+      name: item.goodsName,
+      spec: item.specification,
+      quantity: Number(item.actualQuantity !== '' && item.actualQuantity != null
+        ? item.actualQuantity : item.quantity) || 0,
+      unitPrice: item.price
+    }))
+    const supplierNames = [...new Set(items.map(item => item.supplierName).filter(Boolean))]
+    const warehouseNames = [...new Set(items.map(item => item.warehouseName).filter(Boolean))]
+    return {
+      ...form.value,
+      documentNo: form.value.orderNo,
+      documentDate: form.value.orderDate,
+      orderNumber: form.value.orderNo,
+      purchaseNumber: form.value.orderNo,
+      purchaseDate: form.value.orderDate,
+      storeName: stores.value.find(store => String(store.id) === String(form.value.storeId))?.name || '',
+      supplierName: supplierNames.join('、'),
+      warehouseName: warehouseNames.join('、'),
+      totalQuantity: items.reduce((sum, item) => sum + item.quantity, 0),
+      totalAmount: totalTaxIncludedAmount.value,
+      totalTaxAmount: totalTaxAmount.value,
+      totalTaxIncludedAmount: totalTaxIncludedAmount.value,
+      items
+    }
+  })
   onMounted(async () => {
     window.addEventListener('resize', updateProductDropdownPosition)
     window.addEventListener('scroll', updateProductDropdownPosition, true)
@@ -746,6 +796,11 @@ export function usePurchaseOrderDocument(props) {
     visiblePaymentAccountId, selectedPaymentAccount, paymentBalanceVisible, accountBalanceLoading,
     markPaymentAmountManual, onPaymentMethodChange, hidePaymentAccountBalance, togglePaymentAccountBalance,
     validateForm, save, clearForm, close,
+    printTemplateDialogOpen, printPreviewVisible, selectedPrintTemplate, selectedPrintPrinter, printPreviewAutoPrint,
+    openPrint, closePrintTemplateDialog, closePrintPreview, printVariables,
+    printNumber: computed(() => form.value.orderNo),
+    previewSelectedPrintTemplate: (template, printer) => openPrintTemplate(template, printer, false),
+    printSelectedPrintTemplate: (template, printer) => openPrintTemplate(template, printer, true),
     onQuantityInput: index => calculateRow(form.value.items[index]),
     onActualQuantityInput: index => calculateRow(form.value.items[index]),
     onPriceInput: index => calculateRow(form.value.items[index]),
