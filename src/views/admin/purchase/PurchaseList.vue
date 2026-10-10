@@ -110,7 +110,20 @@
           <span>已审核单据<strong>{{ returnAuditedCount }}</strong></span>
         </div>
         <div class="table-scroll">
-          <table class="records-table return-records-table">
+          <table v-resizable-columns="{ storageKey: 'purchase-returns-list', resizeMode: 'fit' }" class="records-table return-records-table">
+            <colgroup>
+              <col style="width: 9%">
+              <col style="width: 10%">
+              <col style="width: 14%">
+              <col style="width: 8%">
+              <col style="width: 5%">
+              <col style="width: 9%">
+              <col style="width: 10%">
+              <col style="width: 10%">
+              <col style="width: 7%">
+              <col style="width: 9%">
+              <col style="width: 9%">
+            </colgroup>
             <thead>
               <tr>
                 <th>退货单号</th>
@@ -123,7 +136,7 @@
                 <th>确认退货金额</th>
                 <th>状态</th>
                 <th>制单 / 审核</th>
-                <th class="action-column">操作</th>
+                <th class="action-column" data-resizable="false">操作</th>
               </tr>
             </thead>
             <tbody v-if="loading">
@@ -394,7 +407,7 @@
       </header>
 
       <div class="table-scroll">
-        <table class="records-table">
+        <table v-resizable-columns="{ storageKey: `purchase-${mode}-list`, resizeMode: 'fit' }" class="records-table">
           <colgroup v-if="isInbound">
             <col style="width: 38px">
             <col style="width: 150px">
@@ -429,7 +442,7 @@
           </colgroup>
           <thead>
             <tr>
-              <th class="checkbox-column">
+              <th class="checkbox-column" data-column-key="selection" data-resizable="false">
                 <input
                   type="checkbox"
                   :checked="isAllPageSelected"
@@ -439,14 +452,14 @@
                   @change="togglePageSelection"
                 />
               </th>
-              <th>{{ isInbound ? '入库单号' : '采购单号' }}</th>
+              <th data-column-key="document-no">{{ isInbound ? '入库单号' : '采购单号' }}</th>
               <th class="document-type-column">单据类型</th>
-              <th>{{ isInbound ? '入库日期' : '申请日期' }}</th>
+              <th data-column-key="document-date">{{ isInbound ? '入库日期' : '申请日期' }}</th>
               <th v-if="isInbound">仓库</th>
               <th v-else>门店</th>
               <th>供应商</th>
-              <th>{{ isInbound ? '商品物品名称' : '物料摘要' }}</th>
-              <th>{{ isInbound ? '采购数量' : '计划采购数量' }}</th>
+              <th data-column-key="products">{{ isInbound ? '商品物品名称' : '物料摘要' }}</th>
+              <th data-column-key="purchase-quantity">{{ isInbound ? '采购数量' : '计划采购数量' }}</th>
               <th v-if="isInbound">入库数量</th>
               <th v-if="isInbound">进度</th>
               <th v-if="!isInbound">应付金额</th>
@@ -454,10 +467,10 @@
                 <th class="finance-column amount-cell">付款金额</th>
                 <th class="finance-column payment-status-cell">付款状态</th>
               </template>
-              <th>{{ isInbound ? '入库状态' : '履约状态' }}</th>
+              <th data-column-key="status">{{ isInbound ? '入库状态' : '履约状态' }}</th>
               <th v-if="!isInbound" class="finance-column">开票状态</th>
               <th>备注</th>
-              <th class="action-column">操作</th>
+              <th class="action-column" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody v-if="loading">
@@ -775,7 +788,7 @@
                   <span>{{ isInbound ? `共 ${selectedRecord.itemCount} 项物料` : receiptLabel(selectedRecord) }}</span>
                 </div>
                 <div class="detail-items-scroll">
-                  <table class="detail-items-table" :class="{ 'inbound-items-table': isInbound }">
+                  <table v-resizable-columns="{ storageKey: `purchase-${mode}-detail-items`, resizeMode: 'fit' }" class="detail-items-table" :class="{ 'inbound-items-table': isInbound }">
                     <colgroup v-if="isInbound">
                       <col style="width: 115px">
                       <col style="width: 130px">
@@ -787,6 +800,19 @@
                       <col style="width: 115px">
                       <col>
                     </colgroup>
+                    <colgroup v-else>
+                      <col style="width: 9%">
+                      <col style="width: 9%">
+                      <col style="width: 9%">
+                      <col style="width: 6%">
+                      <col style="width: 10%">
+                      <col style="width: 9%">
+                      <col style="width: 11%">
+                      <col style="width: 9%">
+                      <col style="width: 10%">
+                      <col style="width: 9%">
+                      <col style="width: 9%">
+                    </colgroup>
                     <thead>
                       <tr>
                         <th>物料编码</th>
@@ -795,10 +821,10 @@
                         <th>单位</th>
                         <th v-if="!isInbound">采购供应商</th>
                         <th v-if="isInbound">申请数量</th>
-                        <th>{{ isInbound ? '应收数量' : '申请数量' }}</th>
+                        <th data-column-key="expected-quantity">{{ isInbound ? '应收数量' : '申请数量' }}</th>
                         <th v-if="!isInbound">实际采购数量</th>
                         <th>累计实收</th>
-                        <th>履约进度</th>
+                        <th data-min-width="100">履约进度</th>
                         <th v-if="isInbound">备注</th>
                         <th v-if="!isInbound">采购单价</th>
                         <th v-if="!isInbound">金额</th>
@@ -863,8 +889,19 @@
                   <span>共 {{ selectedRecord.batches.length }} 批</span>
                 </div>
                 <div class="detail-items-scroll">
-                  <table class="detail-items-table batch-items-table">
-                    <thead><tr><th>入库日期</th><th>商品名称</th><th>规格型号</th><th>单位</th><th>类型</th><th>本批数量</th><th>仓库</th><th>状态</th><th>操作</th></tr></thead>
+                  <table v-resizable-columns="{ storageKey: 'purchase-order-inbound-batches', resizeMode: 'fit' }" class="detail-items-table batch-items-table">
+                    <colgroup>
+                      <col style="width: 10%">
+                      <col style="width: 18%">
+                      <col style="width: 17%">
+                      <col style="width: 7%">
+                      <col style="width: 8%">
+                      <col style="width: 11%">
+                      <col style="width: 12%">
+                      <col style="width: 8%">
+                      <col style="width: 9%">
+                    </colgroup>
+                    <thead><tr><th>入库日期</th><th>商品名称</th><th>规格型号</th><th>单位</th><th>类型</th><th>本批数量</th><th>仓库</th><th>状态</th><th data-resizable="false">操作</th></tr></thead>
                     <tbody v-for="batch in selectedRecord.batches" :key="batch.id">
                       <tr
                         v-for="(item, itemIndex) in (batch.items?.length ? batch.items : [null])"
@@ -3032,7 +3069,20 @@ onBeforeUnmount(() => {
   width: 100%;
   min-width: 820px;
   border-collapse: collapse;
+  table-layout: fixed;
   font-size: 12px;
+}
+
+.records-table.resizable-columns-table th,
+.records-table.resizable-columns-table td,
+.detail-items-table.resizable-columns-table th,
+.detail-items-table.resizable-columns-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.detail-items-table.resizable-columns-table th {
+  white-space: nowrap;
 }
 
 .detail-items-table th {
@@ -4218,7 +4268,7 @@ onBeforeUnmount(() => {
 
 .batch-items-table {
   width: 100%;
-  min-width: 0;
+  min-width: 820px;
   table-layout: fixed;
 }
 

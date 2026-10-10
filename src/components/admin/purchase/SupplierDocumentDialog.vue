@@ -31,7 +31,7 @@
             </div>
             <div class="sf-header sf-section-title"><h3>{{ invoiceMode ? '发票分配明细' : '应付核销明细' }}</h3><button v-if="!readonly" class="sf-button icon" type="button" title="刷新可分配余额" aria-label="刷新可分配余额" :disabled="sourcesLoading || !form.supplierId || !form.storeId" @click="loadSources()"><RefreshCw :size="16" /></button></div>
             <label v-if="embedded && invoiceMode && !readonly" class="sf-check"><input v-model="includeOtherOrders" type="checkbox" :disabled="busy" />合并同供应商其他单据</label>
-            <PayableAllocationTable v-model="form.allocations" :sources="visibleSources" :invoice="invoiceMode" :readonly="readonly" :loading="sourcesLoading" />
+            <PayableAllocationTable v-model="form.allocations" :sources="visibleSources" :invoice="invoiceMode" :resizable-columns="embedded && invoiceMode" :readonly="readonly" :loading="sourcesLoading" />
             <div class="sf-summary">
               <template v-if="invoiceMode"><span>未税合计<strong>{{ formatMoney(baseTotal) }}</strong></span><span>税额合计<strong>{{ formatMoney(taxTotal) }}</strong></span><span>价税合计<strong>{{ formatMoney(baseTotal + taxTotal) }}</strong></span><span v-if="embedded">本单分配<strong>{{ formatMoney(currentDocumentTotal) }}</strong></span></template>
               <template v-else><span>实际付款<strong>{{ formatMoney(form.paymentAmount) }}</strong></span><span>本次核销<strong>{{ formatMoney(allocatedTotal) }}</strong></span><span>新增预付款<strong :class="{ 'sf-error': advanceTotal < 0 }">{{ formatMoney(advanceTotal) }}</strong></span></template>

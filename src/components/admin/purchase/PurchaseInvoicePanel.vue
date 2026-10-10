@@ -29,8 +29,18 @@
         <span>本单可开票金额<strong>{{ formatMoney(contextData.availableAmount) }}</strong></span>
       </div>
       <div class="sf-table-scroll">
-        <table class="sf-table invoice-record-table">
-          <thead><tr><th>发票号码</th><th>供应商</th><th>发票日期</th><th>状态</th><th class="sf-number">发票价税合计</th><th class="sf-number">本单分配金额</th><th>附件</th><th>操作</th></tr></thead>
+        <table v-resizable-columns="{ storageKey: 'purchase-order-invoice-records', resizeMode: 'fit', minWidth: 64 }" class="sf-table invoice-record-table">
+          <colgroup>
+            <col style="width: 160px">
+            <col>
+            <col>
+            <col>
+            <col>
+            <col>
+            <col>
+            <col style="width: 64px">
+          </colgroup>
+          <thead><tr><th>发票号码</th><th>供应商</th><th>发票日期</th><th>状态</th><th class="sf-number">发票价税合计</th><th class="sf-number">本单分配金额</th><th>附件</th><th data-resizable="false">操作</th></tr></thead>
           <tbody>
             <tr v-if="loading"><td colspan="8" class="sf-empty">加载发票记录中...</td></tr>
             <tr v-else-if="!invoices.length"><td colspan="8" class="sf-empty">{{ contextData.suppliers.length ? '暂无发票记录' : record.sourceType === 'warehouse-inbound' ? '暂无可开票采购应付' : '暂无可开票的已审核采购明细' }}</td></tr>

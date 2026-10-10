@@ -1,6 +1,17 @@
 <template>
   <div class="sf-table-scroll">
-    <table class="sf-table sf-allocation-table">
+    <table v-resizable-columns="resizableColumns && invoice ? { storageKey: 'purchase-order-invoice-allocations', resizeMode: 'fit', minWidth: 80 } : false" class="sf-table sf-allocation-table">
+      <colgroup v-if="resizableColumns && invoice">
+        <col style="width: 210px">
+        <col>
+        <col>
+        <col>
+        <col>
+        <col>
+        <col>
+        <col>
+        <col>
+      </colgroup>
       <thead><tr><th>来源单号 / 商品</th><th>业务日期</th><th>{{ invoice ? '来源金额' : '应付金额' }}</th><th>可分配金额</th><th>开票状态</th><template v-if="invoice"><th>开票数量</th><th>未税金额</th><th>税额</th></template><th>{{ invoice ? '价税合计' : '本次核销' }}</th></tr></thead>
       <tbody>
         <tr v-if="loading"><td :colspan="invoice ? 9 : 6" class="sf-empty">加载来源中...</td></tr>
@@ -35,6 +46,7 @@ const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   sources: { type: Array, default: () => [] },
   invoice: Boolean,
+  resizableColumns: Boolean,
   readonly: Boolean,
   loading: Boolean
 })
