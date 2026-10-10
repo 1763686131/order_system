@@ -29,7 +29,7 @@
               </template>
               <label class="sf-field wide">备注<textarea v-model="form.remark" maxlength="500" :disabled="readonly" /></label>
             </div>
-            <div class="sf-header sf-section-title"><h3>{{ invoiceMode ? '发票分配明细' : '应付核销明细' }}</h3><button v-if="!readonly" class="sf-button icon" type="button" title="刷新可分配余额" aria-label="刷新可分配余额" :disabled="sourcesLoading || !form.supplierId || !form.storeId" @click="loadSources"><RefreshCw :size="16" /></button></div>
+            <div class="sf-header sf-section-title"><h3>{{ invoiceMode ? '发票分配明细' : '应付核销明细' }}</h3><button v-if="!readonly" class="sf-button icon" type="button" title="刷新可分配余额" aria-label="刷新可分配余额" :disabled="sourcesLoading || !form.supplierId || !form.storeId" @click="loadSources()"><RefreshCw :size="16" /></button></div>
             <label v-if="embedded && invoiceMode && !readonly" class="sf-check"><input v-model="includeOtherOrders" type="checkbox" :disabled="busy" />合并同供应商其他单据</label>
             <PayableAllocationTable v-model="form.allocations" :sources="visibleSources" :invoice="invoiceMode" :readonly="readonly" :loading="sourcesLoading" />
             <div class="sf-summary">
@@ -159,12 +159,26 @@ async function load() {
   loading.value = true
   try {
     if (props.documentId) form.value = await request.get(`${endpoint.value}/${props.documentId}`)
+    await loadSources(!props.documentId)
     savedSnapshot.value = JSON.stringify(form.value)
-    await loadSources()
   } catch (err) { loadFailed.value = true; error.value = err.response?.data?.message || err.message }
   finally { loading.value = false }
 }
-async function loadSources() {
+function fillInvoiceAllocations() {
+  if (!invoiceMode.value || !props.embedded || !props.context || form.value.id) return
+  form.value.allocations = sources.value.filter(row =>
+    matchesContext(row) && Number(row.availableAmount) > 0 && row.suggestedAllocation
+  ).map(row => ({
+    payableTransactionId: row.sourceType === 'purchase_order' ? null : row.id,
+    purchaseOrderItemId: row.purchaseOrderItemId, purchaseOrderId: row.purchaseOrderId,
+    sourceType: row.sourceType, sourceId: row.sourceId,
+    documentNo: row.documentNo, productName: row.productName,
+    quantity: row.suggestedAllocation.quantity,
+    amountExcludingTax: row.suggestedAllocation.amountExcludingTax,
+    taxAmount: row.suggestedAllocation.taxAmount
+  }))
+}
+async function loadSources(autoFill = false) {
   const sequence = ++sourceRequest
   sources.value = []
   if (!form.value.supplierId || !form.value.storeId) { sourcesLoading.value = false; return }
@@ -173,7 +187,10 @@ async function loadSources() {
     const result = invoiceMode.value && props.embedded
       ? await request.get('/purchase-invoices/sources', { params: { storeId: form.value.storeId, supplierId: form.value.supplierId, invoiceId: form.value.id || undefined } })
       : await request.get(`/suppliers/${form.value.supplierId}/${invoiceMode.value ? 'invoice-payables' : 'payables'}/allocatable`, { params: { storeId: form.value.storeId } })
-    if (sequence === sourceRequest) sources.value = result.items
+    if (sequence === sourceRequest) {
+      sources.value = result.items
+      if (autoFill) fillInvoiceAllocations()
+    }
   } catch (err) { if (sequence === sourceRequest) error.value = err.response?.data?.message || err.message }
   finally { if (sequence === sourceRequest) sourcesLoading.value = false }
 }
@@ -182,7 +199,7 @@ function changeParty() {
   form.value.bankAccountId = ''
   form.value.attachments = []
   if (!suppliers.value.some(row => Number(row.id) === Number(form.value.supplierId))) form.value.supplierId = ''
-  loadSources()
+  loadSources(true)
 }
 async function startEditing() {
   if (busy.value || confirmation.value) return
@@ -204,7 +221,10 @@ async function save() {
   error.value = ''
   try {
     const payload = { ...form.value, allocations: form.value.allocations.filter(row => invoiceMode.value
-      ? Number(row.amountExcludingTax || 0) + Number(row.taxAmount || 0) > 0 : Number(row.amount || 0) > 0) }
+      ? Number(row.amountExcludingTax || 0) + Number(row.taxAmount || 0) > 0 : Number(row.amount || 0) > 0
+    ).map(row => invoiceMode.value ? {
+      ...row, amountIncludingTax: (Math.round(Number(row.amountExcludingTax || 0) * 100) + Math.round(Number(row.taxAmount || 0) * 100)) / 100
+    } : row) }
     if (invoiceMode.value) {
       payload.amountExcludingTax = baseTotal.value
       payload.taxAmount = taxTotal.value

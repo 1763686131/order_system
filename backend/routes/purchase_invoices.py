@@ -12,7 +12,7 @@ from utils.supplier_ledger import (
 )
 from utils.supplier_settlement import (
     attachments_value, load_payable, positive_id, quantity, supplier_store, text,
-    refresh_invoice, required_version, proportional_tax,
+    refresh_invoice, required_version, proportional_tax, invoice_allocation_suggestion,
 )
 from routes.supplier_finance import finance_errors
 from utils.purchase_invoice_orders import (
@@ -179,7 +179,27 @@ def invoice_sources():
         ):
             available = row["amount_including_tax_cents"] - row["billed_cents"]
             if available > 0 and (not row["purchase_order_item_id"] or row["id"] in existing_ids):
-                sources.append({**serialize_transaction(row), "availableAmount": amount(available)})
+                entries = conn.execute(
+                    """SELECT a.tax_amount_cents, a.quantity FROM purchase_invoice_allocations a
+                       JOIN purchase_invoices i ON i.id = a.invoice_id
+                       WHERE a.payable_transaction_id = ? AND i.status = 'confirmed'
+                       UNION ALL SELECT m.tax_amount_cents, m.quantity FROM purchase_invoice_order_matches m
+                       JOIN purchase_invoice_order_allocations a ON a.id = m.order_allocation_id
+                       JOIN purchase_invoices i ON i.id = a.invoice_id
+                       WHERE m.payable_transaction_id = ? AND i.status = 'confirmed'""", (row["id"], row["id"]),
+                ).fetchall()
+                received = conn.execute(
+                    "SELECT received_qty FROM stock_inbound_items WHERE id = ?", (row["source_item_id"],),
+                ).fetchone()
+                tax_known = not row["manual_billed_cents"]
+                qty_known = tax_known and all(quantity(entry["quantity"]) > 0 for entry in entries)
+                suggestion = invoice_allocation_suggestion(
+                    row, available, received["received_qty"] if received else 0, used=row["billed_cents"],
+                    used_tax=sum(entry["tax_amount_cents"] for entry in entries) if tax_known else None,
+                    used_qty=sum((quantity(entry["quantity"]) for entry in entries), quantity(0)) if qty_known else None,
+                )
+                sources.append({**serialize_transaction(row), "availableAmount": amount(available),
+                                "suggestedAllocation": suggestion})
         return jsonify({"items": sources})
 
 

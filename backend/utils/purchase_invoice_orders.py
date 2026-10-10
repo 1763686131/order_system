@@ -100,6 +100,34 @@ def order_capacity(conn, source, actual):
     return max(source["amount_including_tax_cents"], actual) - locked
 
 
+def order_invoice_suggestion(conn, row, available, used, used_qty):
+    from utils.supplier_settlement import invoice_allocation_suggestion
+    # Order allocations already include their inbound matches; do not count matches again.
+    entries = conn.execute(
+        f"""SELECT a.tax_amount_cents, a.quantity FROM purchase_invoice_order_allocations a
+            JOIN purchase_invoices i ON i.id = a.invoice_id
+            WHERE a.purchase_order_item_id = ? AND i.status = 'confirmed'
+            UNION ALL
+            SELECT a.tax_amount_cents, a.quantity FROM purchase_invoice_allocations a
+            JOIN purchase_invoices i ON i.id = a.invoice_id
+            JOIN supplier_account_transactions t ON t.id = a.payable_transaction_id
+            WHERE t.purchase_order_item_id = ? AND t.source_type = 'stock_inbound'
+              AND i.status = 'confirmed' AND {effective_sql()}
+            UNION ALL
+            SELECT NULL, NULL FROM supplier_account_transactions t
+            WHERE t.purchase_order_item_id = ? AND t.source_type = 'stock_inbound'
+              AND t.manual_billed_cents > 0 AND {effective_sql()}""",
+        (row["id"], row["id"], row["id"]),
+    ).fetchall()
+    tax_known = all(entry["tax_amount_cents"] is not None for entry in entries)
+    qty_known = all(entry["quantity"] is not None and Decimal(entry["quantity"]) > 0 for entry in entries)
+    return invoice_allocation_suggestion(
+        row, available, row["actual_purchase_qty"] if row["actual_purchase_qty"] is not None else row["ordered_qty"],
+        used=used, used_tax=sum(entry["tax_amount_cents"] for entry in entries) if tax_known else None,
+        used_qty=used_qty if qty_known else None,
+    )
+
+
 def order_source_options(conn, store_id, supplier_id=None, order_id=None):
     sql = """SELECT p.id FROM purchase_order_items p JOIN purchase_orders o ON o.id = p.order_id
              WHERE o.store_id = ? AND o.status IN ('approved', 'partial', 'completed')
@@ -112,8 +140,9 @@ def order_source_options(conn, store_id, supplier_id=None, order_id=None):
     results = []
     for item in conn.execute(sql + " ORDER BY o.order_date, o.id, p.line_no", params):
         row = load_order_source(conn, item["id"])
-        used, _, actual = order_usage(conn, row["id"])
+        used, used_qty, actual = order_usage(conn, row["id"])
         total = max(row["amount_including_tax_cents"], actual)
+        available = max(0, order_capacity(conn, row, actual) - used)
         results.append({
             "id": f"order-item-{row['id']}", "purchaseOrderItemId": row["id"],
             "purchaseOrderId": row["order_id"], "supplierId": row["supplier_id"], "storeId": row["store_id"],
@@ -121,8 +150,9 @@ def order_source_options(conn, store_id, supplier_id=None, order_id=None):
             "documentNo": row["order_no"], "productName": row["product_name"],
             "businessDate": row["order_date"], "payableAmount": amount(total),
             "amountIncludingTax": amount(total),
-            "availableAmount": amount(max(0, order_capacity(conn, row, actual) - used)),
+            "availableAmount": amount(available),
             "invoiceStatus": "billed" if total and used >= total else "partial" if used else "unbilled",
+            "suggestedAllocation": order_invoice_suggestion(conn, row, available, used, used_qty) if available else None,
         })
     return results
 

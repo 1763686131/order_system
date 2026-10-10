@@ -6301,6 +6301,8 @@ SQLite 支持**多读一写**模式：
 
 `GET /api/purchase-invoices/sources?storeId=门店ID&supplierId=供应商ID` 返回 `{items}`，包含所选门店/供应商的已审核订单明细，以及独立入库/历史无订单明细的有效未锁定应付。订单来源为 `sourceType:"purchase_order"`，使用 `purchaseOrderItemId` 识别，含 `purchaseOrderId/documentNo/productName/businessDate/payableAmount/availableAmount/invoiceStatus`；`payableAmount` 在订单来源表示明细来源含税金额，不表示已经生成应付。编辑可传 `invoiceId`，保留该发票原有的入库应付来源，兼容既有草稿。录入默认展示本单来源，可切换合并同门店同供应商的其他来源；保存必须保留当前单据的正数分配，此约束由内嵌录入界面执行。
 
+来源项增加 `suggestedAllocation:{quantity,amountExcludingTax,taxAmount,amountIncludingTax}`，无剩余额度时为 `null`。金额以当前可开票额度和已保存的来源税额比例计算；完整覆盖且已确认税额可核对时，允许 1 分内尾差调整，使累计税额与来源一致。首次数量取审核采购数量或实际入库数量，部分开票扣除已确认数量；历史金额未记录数量或基础开票缺少数量时返回 `"0"`，不推测历史数量。锁定应付未开票部分不参与默认金额，数量最多保留四位小数。建议值只用于新建内嵌发票时自动填当前单据，切换供应商重新填充；手动刷新、编辑已有发票或展示其他单据时不覆盖已有输入，不自动写入数据库。
+
 ```json
 {
   "supplierId": 3,

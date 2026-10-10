@@ -1,7 +1,7 @@
 """Shared posting rules for supplier payments, balance use and purchase invoices."""
 
 import json
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_DOWN, ROUND_HALF_UP
 
 from utils.auth import admin_permission_granted, current_identity
 from utils.supplier_ledger import (
@@ -624,3 +624,22 @@ def proportional_tax(row, inclusive):
         return 0
     return int((Decimal(row["tax_amount_cents"]) * inclusive / row["amount_including_tax_cents"])
                .quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+
+
+def invoice_allocation_suggestion(row, available, source_qty, used=0, used_tax=None, used_qty=None):
+    tax = proportional_tax(row, available)
+    if used_tax is not None and used + available == row["amount_including_tax_cents"]:
+        remaining_tax = row["tax_amount_cents"] - used_tax
+        if 0 <= remaining_tax <= available and abs(remaining_tax - tax) <= 1:
+            tax = remaining_tax
+    qty = quantity(source_qty)
+    if used:
+        qty = max(Decimal(0), qty - used_qty) if used_qty is not None else Decimal(0)
+    remaining = max(0, row["amount_including_tax_cents"] - used)
+    if remaining and available < remaining:
+        qty *= Decimal(available) / remaining
+    qty = qty.quantize(Decimal("0.0001"), rounding=ROUND_DOWN)
+    return {
+        "amountExcludingTax": amount(available - tax), "taxAmount": amount(tax),
+        "amountIncludingTax": amount(available), "quantity": format(qty.normalize(), "f"),
+    }
