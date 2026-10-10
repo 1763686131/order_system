@@ -710,13 +710,15 @@
             </div>
             <div id="purchase-detail-content" class="detail-modal-body" :class="{ 'invoice-detail-body': detailTab === 'invoice' }" :role="hasInvoiceTab ? 'tabpanel' : undefined" :aria-labelledby="hasInvoiceTab ? `purchase-${detailTab}-tab` : undefined">
               <PurchaseInvoicePanel
-                v-if="hasInvoiceTab && detailTab === 'invoice'"
+                v-if="hasInvoiceTab"
+                v-show="detailTab === 'invoice'"
                 ref="invoicePanel"
                 :record="selectedRecord"
                 :initial-invoice-id="detailInvoiceId"
                 @updated="refreshData(false)"
+                @error="showNotice"
               />
-              <template v-else>
+              <div v-show="detailTab === 'document'">
               <div v-if="isInbound" class="detail-overview inbound-detail-overview">
                 <div>
                   <span class="detail-label">{{ selectedRecord.purchaseOrderId ? '申请日期' : '入库日期' }}</span>
@@ -928,7 +930,7 @@
                 <div class="section-heading"><h3>备注</h3></div>
                 <p>{{ selectedRecord.remark || '' }}</p>
               </section>
-              </template>
+              </div>
             </div>
 
             <footer v-if="detailTab === 'document'" class="detail-modal-footer">
@@ -954,6 +956,12 @@
                 <button v-if="canEdit(selectedRecord)" class="button button-primary" type="button" @click="editRecord(selectedRecord)">
                   修改单据
                 </button>
+                <button v-if="hasInvoiceTab && invoiceActionState?.fullyBilled && invoiceActionState.canReverse" class="button button-danger" type="button" :disabled="invoiceActionState.busy || !invoiceActionState.canRevoke" :title="invoiceActionState.reverseUnavailableReason" @click="invoicePanel.requestReverse()">
+                  <RotateCcw :size="16" aria-hidden="true" />撤销发票
+                </button>
+                <button v-else-if="hasInvoiceTab && invoiceActionState?.canCreate && !invoiceActionState.fullyBilled && invoiceActionState.hasSources" class="button button-primary" type="button" :disabled="invoiceActionState.busy || !invoiceActionState.canRegister" @click="registerInvoiceFromDetail">
+                  <FilePlus2 :size="16" aria-hidden="true" />登记发票
+                </button>
               </div>
             </footer>
           </article>
@@ -962,6 +970,7 @@
     </Teleport>
     <CustomModal
       :visible="deleteConfirmOpen"
+      :z-index="2147482100"
       title="确认批量删除"
       :message="deleteConfirmMessage"
       confirm-text="删除"
@@ -971,6 +980,7 @@
     />
     <CustomModal
       :visible="Boolean(orderReverseAuditTarget)"
+      :z-index="2147482100"
       title="反审核采购订单"
       message="确认反审核该采购订单？已有入库的订单不能反审核。"
       @confirm="reverseAuditOrder"
@@ -983,7 +993,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
-import { Check, ClipboardList, EllipsisVertical, PackageCheck, PackageX, Pencil, Plus, Printer, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
+import { Check, ClipboardList, EllipsisVertical, FilePlus2, PackageCheck, PackageX, Pencil, Plus, Printer, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import PurchaseInvoicePanel from '@/components/admin/purchase/PurchaseInvoicePanel.vue'
@@ -1294,6 +1304,7 @@ const detailModalOpen = ref(false)
 const detailTab = ref('document')
 const detailInvoiceId = ref(null)
 const invoicePanel = ref(null)
+const invoiceActionState = computed(() => invoicePanel.value?.actionState)
 const hasInvoiceTab = computed(() => props.mode === 'orders' && userStore.hasPerm('admin.route.purchase.invoices'))
 const actionMenuRecord = ref(null)
 const actionMenuElement = ref(null)
@@ -1836,12 +1847,20 @@ async function canLeaveInvoice() {
 
 async function switchDetailTab(tab, focus = false) {
   if (tab === detailTab.value || !await canLeaveInvoice()) return
+  invoicePanel.value?.resetEditor()
   detailTab.value = tab
   detailInvoiceId.value = null
   if (focus) {
     await nextTick()
     document.getElementById(`purchase-${tab}-tab`)?.focus()
   }
+}
+
+async function registerInvoiceFromDetail() {
+  await switchDetailTab('invoice')
+  if (detailTab.value !== 'invoice') return
+  await nextTick()
+  invoicePanel.value?.createInvoice()
 }
 
 async function closeDetail() {
@@ -4081,6 +4100,13 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(1px);
 }
 
+.detail-modal-layer,
+.detail-modal-layer *,
+.detail-modal-layer *::before,
+.detail-modal-layer *::after {
+  box-sizing: border-box;
+}
+
 .detail-modal {
   width: min(1200px, calc(100vw - 32px));
   max-height: min(880px, calc(100vh - 48px));
@@ -4345,12 +4371,17 @@ onBeforeUnmount(() => {
 
 .detail-modal-footer {
   min-height: 68px;
+  flex-shrink: 0;
   padding: 13px 18px;
   background: #fff;
   border-top: 1px solid var(--border);
 }
 
 .detail-modal-footer .footer-actions {
+  min-width: 0;
+  max-width: 100%;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   margin-left: auto;
 }
 

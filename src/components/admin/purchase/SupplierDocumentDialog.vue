@@ -15,7 +15,7 @@
               <label class="sf-field">供应商<select v-model="form.supplierId" required :disabled="readonly || invoiceMode && !!form.id || !!form.auditedAt" @change="changeParty"><option value="">请选择</option><option v-for="supplier in suppliers" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option><option v-if="form.supplierId && !suppliers.some(supplier => Number(supplier.id) === Number(form.supplierId))" :value="form.supplierId">{{ form.supplierName || form.supplierId }}</option></select></label>
               <label class="sf-field">业务日期<input v-model="form.businessDate" type="date" required :disabled="readonly" /></label>
               <template v-if="invoiceMode">
-                <label class="sf-field">发票号码<input v-model.trim="form.invoiceNo" maxlength="100" required :disabled="readonly" /></label>
+                <label class="sf-field">发票号码<input v-model.trim="form.invoiceNo" name="invoiceNo" maxlength="100" required :disabled="readonly" /></label>
                 <label class="sf-field">发票日期<input v-model="form.invoiceDate" type="date" required :disabled="readonly" /></label>
                 <label class="sf-field">发票类型<select v-model="form.invoiceType" required :disabled="readonly"><option value="vat-special">增值税专用发票</option><option value="vat-normal">增值税普通发票</option><option value="vat">增值税发票</option><option value="electronic">电子发票</option><option value="other">其他发票</option><option v-if="form.invoiceType && !['vat-special', 'vat-normal', 'vat', 'electronic', 'other'].includes(form.invoiceType)" :value="form.invoiceType">{{ form.invoiceType }}</option></select></label>
               </template>
@@ -62,11 +62,6 @@
             <button v-if="!editing && posted && can(invoiceMode ? 'reverse_confirm' : 'reverse_audit')" class="sf-button danger" :disabled="busy" @click="confirmAction('reverse')"><RotateCcw :size="16" />{{ invoiceMode ? '撤销确认' : '反审核付款' }}</button>
           </div>
         </footer>
-        <div v-if="embedded && confirmation" ref="confirmationPanel" class="sf-inline-confirmation" role="alertdialog" aria-label="确认操作" @keydown.esc.stop="cancelConfirmation">
-          <strong>{{ confirmation.title }}</strong>
-          <p>{{ confirmation.message }}</p>
-          <div class="sf-actions"><button class="sf-button" :disabled="saving" @click="cancelConfirmation">取消</button><button class="sf-button" :class="confirmation.action === 'post' ? 'primary' : 'danger'" :disabled="saving" @click="performAction">{{ saving ? '处理中...' : '确认' }}</button></div>
-        </div>
       </section>
     </div>
     <div v-if="!embedded && confirmation" class="sf-modal-layer sf-confirm-layer">
@@ -77,12 +72,24 @@
       </section>
     </div>
   </Teleport>
+  <CustomModal
+    v-if="embedded"
+    :visible="Boolean(confirmation)"
+    :z-index="2147482100"
+    :title="confirmation?.title || '确认操作'"
+    :message="confirmation?.message || ''"
+    :danger="confirmation?.action !== 'post'"
+    :confirm-disabled="busy"
+    @confirm="performAction"
+    @cancel="cancelConfirmation"
+  />
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ArrowLeft, Check, Pencil, RefreshCw, RotateCcw, Save, Trash2, X } from '@lucide/vue'
 import request from '@/api/request'
+import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { localDate } from '@/composables/documents/documentModels'
 import { documentStatusLabels, formatMoney, invoiceSourceKey, operationKey, sumMoney } from '@/utils/supplierFinance'
@@ -114,7 +121,6 @@ const uploading = ref(false)
 const editing = ref(!props.documentId)
 const error = ref('')
 const confirmation = ref(null)
-const confirmationPanel = ref(null)
 const documentElement = ref(null)
 const includeOtherOrders = ref(false)
 const savedSnapshot = ref(JSON.stringify(form.value))
@@ -249,6 +255,7 @@ function confirmAction(action) {
   confirmation.value = { ...labels[action], action }
 }
 async function performAction() {
+  if (!confirmation.value || busy.value) return
   const action = confirmation.value.action
   if (action === 'discard') {
     savedSnapshot.value = JSON.stringify(form.value)
@@ -260,6 +267,7 @@ async function performAction() {
   const suffix = action === 'post' ? invoiceMode.value ? 'confirm' : 'audit' : invoiceMode.value ? 'reverse-confirm' : 'reverse-audit'
   const key = `${action}:${form.value.id}:${form.value.version}`
   if (!actionKeys.has(key)) actionKeys.set(key, operationKey())
+  confirmation.value = null
   saving.value = true
   error.value = ''
   try {
@@ -275,11 +283,17 @@ async function performAction() {
   } catch (err) { confirmation.value = null; error.value = err.response?.data?.message || err.message }
   finally { saving.value = false }
 }
-onMounted(load)
+onMounted(async () => {
+  await load()
+  if (props.embedded && editing.value && !loadFailed.value) {
+    await nextTick()
+    documentElement.value?.querySelector('[name="invoiceNo"]')?.focus({ preventScroll: true })
+  }
+})
 watch(confirmation, async value => {
   if (!value || !props.embedded) return
   await nextTick()
-  confirmationPanel.value?.querySelector('button')?.focus()
+  document.querySelector('.custom-modal-overlay .btn-modal-cancel')?.focus()
 })
 defineExpose({ requestLeave })
 </script>

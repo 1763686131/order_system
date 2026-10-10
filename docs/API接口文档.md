@@ -6295,6 +6295,8 @@ SQLite 支持**多读一写**模式：
 
 页面入口为“采购 / 采购订单 / 详情 / 发票记录”，不再提供独立发票登记页面；表单直接内嵌在详情页签中。读权限继续使用 `admin.route.purchase.invoices`，中文名称为“查看采购订单发票”，进入页面还需 `admin.route.purchase.orders`。旧 `/admin/purchase/invoices?documentId=发票ID` 会跳转至关联单据。
 
+单据详情底部的“登记发票”直接打开上述新建表单。前端按分比较 `billedAmount` 与 `max(totalTaxIncludedAmount, confirmedPayable)`；达到或超过正数含税金额时，底部及发票记录工具栏改为“撤销发票”，不使用未税 `totalAmount` 判断开满。撤销通过公共 `CustomModal.vue` 确认，多张已确认且未锁定的关联发票须选择一张；跨单据发票提示其全部分配都会撤销。提交仍使用既有 `/api/purchase-invoices/{id}/reverse-confirm` 的版本及幂等键，成功后刷新本单开票汇总，无新增接口或数据库字段；基础开票记录不通过此按钮撤销。
+
 列表支持 `supplierId/storeId/status/invoiceNo/startDate/endDate/keyword/hasDifference=true或false`，另外可传 `purchaseOrderId`（普通采购订单）或 `inboundId`（直接入库单），两者互斥且必须为正整数。系统校验来源存在及门店范围，通过订单明细分配或实际应付分配筛选关联发票，不会重复返回跨批次或跨订单发票。跨订单发票仍返回完整金额与全部分配明细，客户端按来源计算本单分配金额；返回 `{items,total}`。详情直接返回发票对象，写入返回 `{success,invoice}`。分配项包含 `purchaseOrderId/purchaseOrderItemId/sourceType/sourceId` 来源标识；订单明细分配还返回 `matchedAmount/pendingInboundAmount`（已匹配实际应付/尚待入库金额），发票返回 `lockedAt` 和已确认的 `pendingInboundAmount` 合计。发票号码在同一供应商下唯一，供应商和门店保存后不可更改。
 
 `GET /api/purchase-invoices/context` 必须传上述一种来源筛选。返回 `{storeId,storeName,suppliers:[{id,supplierName,availableAmount}],availableAmount}`。普通订单状态为 `approved/partial/completed` 时按供应商汇总订单明细剩余开票额度，尚未入库也允许登记；直接入库单仍只汇总有效、已入账的实际采购入库应付。已锁定应付的未开票部分不提供额度。供应商选项支持一单多供应商，不暴露银行账户信息。

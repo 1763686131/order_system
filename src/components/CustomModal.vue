@@ -4,9 +4,11 @@
       <div
         v-if="visible"
         class="custom-modal-overlay"
+        :style="{ zIndex }"
         @click.self="handleCancel"
+        @keydown.esc.stop="handleCancel"
       >
-        <div class="custom-modal" role="dialog" aria-modal="true">
+        <div class="custom-modal" role="dialog" aria-modal="true" :aria-label="title">
           <!-- 头部 -->
           <header class="modal-header">
             <div
@@ -21,7 +23,7 @@
 
           <!-- 内容 -->
           <div class="modal-body">
-            <p>{{ message }}</p>
+            <slot name="content"><p>{{ message }}</p></slot>
           </div>
 
           <!-- 按钮 -->
@@ -38,6 +40,7 @@
               type="button"
               class="btn-modal-confirm"
               :class="{ danger: isDanger }"
+              :disabled="confirmDisabled"
               @click="handleConfirm"
             >
               {{ confirmText }}
@@ -57,6 +60,10 @@ const props = defineProps({
     type: Boolean,
     default: false
   },
+  zIndex: {
+    type: Number,
+    default: 99999
+  },
   type: {
     type: String,
     default: 'warning',
@@ -73,6 +80,10 @@ const props = defineProps({
   confirmText: {
     type: String,
     default: '确定'
+  },
+  confirmDisabled: {
+    type: Boolean,
+    default: false
   },
   cancelText: {
     type: String,
@@ -108,6 +119,7 @@ const isDanger = computed(() => {
 })
 
 const handleConfirm = () => {
+  if (props.confirmDisabled) return
   emit('confirm')
   emit('update:visible', false)
 }
@@ -248,6 +260,13 @@ const handleCancel = () => {
   border-color: #08745a;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(15, 159, 120, 0.25);
+}
+
+.btn-modal-confirm:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 /* 危险按钮 */
