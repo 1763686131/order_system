@@ -1184,6 +1184,9 @@ def delete_purchase_inbounds():
                     for row in applications:
                         check_scope(row['store_id'])
                     for order_id in application_ids:
+                        from utils.purchase_invoice_orders import order_has_invoices
+                        if order_has_invoices(conn, order_id):
+                            raise FinanceError('采购申请有发票记录，不能删除', 409)
                         if conn.execute(
                             'SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? LIMIT 1',
                             (order_id,),

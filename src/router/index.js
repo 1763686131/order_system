@@ -57,7 +57,10 @@ const routes = [
       {
         path: 'purchase/invoices',
         name: 'admin-purchase-invoices',
-        component: () => import('@/views/admin/purchase/PurchaseInvoices.vue'),
+        redirect: to => ({
+          name: 'admin-purchase-orders',
+          query: to.query.documentId ? { invoiceId: to.query.documentId } : {}
+        }),
         meta: { requiresAuth: true }
       },
       {

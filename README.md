@@ -191,6 +191,7 @@ order_system/
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
 │  │  ├─ supplier_ledger.py          # 采购入库应付、供应商流水和来源汇总
 │  │  ├─ supplier_settlement.py      # 付款、余额核销、银行及发票共同校验
+│  │  ├─ purchase_invoice_orders.py  # 订单提前开票与分批入库应付自动匹配
 │  │  ├─ supplier_periods.py         # 正式对账期间锁定与写入校验
 │  │  └─ db_helper.py                # 历史数据兼容读写
 │  ├─ tools/                         # 数据备份等维护脚本
@@ -273,7 +274,6 @@ order_system/
 │  │     │  └─ CustomerList.vue      # 客户管理入口，封装 PartyList 的 customer 模式
 │  │     ├─ purchase/                # 采购管理
 │  │     │  ├─ PurchaseList.vue      # 采购订单/采购入库/采购退货共用列表；按路由 mode 显示字段
-│  │     │  ├─ PurchaseInvoices.vue  # 采购发票登记入口
 │  │     │  └─ SupplierList.vue      # 供应商管理入口，封装 PartyList 的 supplier 模式
 │  │     ├─ inventory/               # 仓库管理
 │  │     │  └─ WarehouseManage.vue   # 仓库档案和启停维护
@@ -529,7 +529,7 @@ import {
 | `/admin/purchase/inbound/edit/:id` | 修改未审核进货单（公共表单） | `/api/stock-inbounds/:id` |
 | `/admin/purchase/inbound/:id` | 查看、打印进货单（公共表单） | `/api/stock-inbounds/:id`、`/api/print-templates` |
 | `/admin/purchase/inbound-settlement` | 采购审核：补齐供应商、单价和结算归属 | `/api/stock-inbounds/:id/settlement`、`/assign-supplier`、`/confirm-payable` |
-| `/admin/purchase/invoices` | 采购发票登记、分配、确认和撤销 | `/api/purchase-invoices` |
+| `/admin/purchase/orders`（详情 / 发票记录） | 采购发票登记、分配、确认和撤销 | `/api/purchase-invoices` |
 | `/admin/purchase/returns` | 采购退货、批次库存扣减、应付冲减和贷项 | `/api/purchase-returns` |
 | `/admin/purchase/returns/create` | 新增采购退货（公共表单） | `/api/purchase-returns/options`、`/api/suppliers/:id/purchase-return-sources`、`/api/purchase-returns` |
 | `/admin/purchase/returns/edit/:id` | 修改采购退货草稿（公共表单） | `/api/purchase-returns/:id`、可退入库批次接口 |
@@ -578,7 +578,9 @@ import {
 
 独立的采购费用归属功能已移除，采购申请中的“其它费用”仍保留。升级前请备份数据库；重启后端后的首次数据库访问会删除旧 `purchase_expense_lines` 表（含其记录和索引）及对应权限关联，不改写已过账的供应商账务和库存流水。
 
-“供应商应付”右侧余额操作查看/核销预付款和贷项；核销不再次扣款。付款审核默认允许未开票来源，但必须填写原因；“见票付款”开关开启后须先开票，或由具备豁免权限的审核人确认。“采购 / 采购发票登记”支持多来源、多发票部分覆盖；正式发票分配不生成新应付，撤销发票不撤销已发生付款。财务附件按登录和门店范围私有下载。
+“供应商应付”右侧余额操作查看/核销预付款和贷项；核销不再次扣款。付款审核默认允许未开票来源，但必须填写原因；“见票付款”开关开启后须先开票，或由具备豁免权限的审核人确认。“采购 / 采购订单 / 详情 / 发票记录”支持内嵌登记、编辑、删除、确认及撤销。普通采购订单审核通过后即可按订单明细提前登记和确认发票，不要求先入库；直接入库单仍以已确认的实际应付为来源，也可合并同门店同供应商其他单据。列表区分整张发票金额、本单分配金额和“已确认待入库”金额；确认后同步刷新采购列表和详情的开票汇总。实际入库形成应付时自动匹配已确认的订单发票，分批入库逐批匹配，不重复计算开票金额。提前开票不生成应付、不增加库存、不产生银行流水，撤销发票不撤销已发生付款。财务附件按登录和门店范围私有下载。
+
+独立采购发票页面和菜单已移除，旧 `/admin/purchase/invoices?documentId=发票ID` 地址自动跳转到关联采购单据的发票记录。普通角色需同时具备采购订单页面权限和“采购订单发票 / 查看采购订单发票”权限（沿用 `admin.route.purchase.invoices` 编码）；新增、编辑、删除、确认、撤销仍分别授权。提前开票增加 `purchase_invoice_order_allocations/purchase_invoice_order_matches` 两张表，由首次数据库访问自动创建，原有发票与入库应付分配原样保留。订单已有未作废发票时，须先撤销确认并删除相关发票才能反审核；有历史发票记录的订单不能物理删除。已锁定应付不提供开票额度，已锁定发票或匹配应付不能撤销。
 
 第二、三阶段早期专项测试已清理，正式运行不依赖额外预览服务。
 

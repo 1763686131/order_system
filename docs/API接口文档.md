@@ -6287,12 +6287,19 @@ SQLite 支持**多读一写**模式：
 | 方法 | 地址 | 权限 |
 | --- | --- | --- |
 | `GET` | `/api/purchase-invoices`、`/api/purchase-invoices/{id}` | `admin.route.purchase.invoices` |
+| `GET` | `/api/purchase-invoices/context`、`/api/purchase-invoices/sources` | `admin.route.purchase.invoices` |
 | `POST` | `/api/purchase-invoices` | `admin.purchase.invoice.create` |
 | `PUT` / `DELETE` | `/api/purchase-invoices/{id}` | `admin.purchase.invoice.edit` / `delete` |
 | `POST` | `/api/purchase-invoices/{id}/confirm` | `admin.purchase.invoice.confirm` |
 | `POST` | `/api/purchase-invoices/{id}/reverse-confirm` | `admin.purchase.invoice.reverse_confirm` |
 
-列表支持 `supplierId/storeId/status/invoiceNo/startDate/endDate/keyword/hasDifference=true或false`，返回 `{items,total}`；详情直接返回发票对象，写入返回 `{success,invoice}`。发票号码在同一供应商下唯一，供应商和门店保存后不可更改。
+页面入口为“采购 / 采购订单 / 详情 / 发票记录”，不再提供独立发票登记页面；表单直接内嵌在详情页签中。读权限继续使用 `admin.route.purchase.invoices`，中文名称为“查看采购订单发票”，进入页面还需 `admin.route.purchase.orders`。旧 `/admin/purchase/invoices?documentId=发票ID` 会跳转至关联单据。
+
+列表支持 `supplierId/storeId/status/invoiceNo/startDate/endDate/keyword/hasDifference=true或false`，另外可传 `purchaseOrderId`（普通采购订单）或 `inboundId`（直接入库单），两者互斥且必须为正整数。系统校验来源存在及门店范围，通过订单明细分配或实际应付分配筛选关联发票，不会重复返回跨批次或跨订单发票。跨订单发票仍返回完整金额与全部分配明细，客户端按来源计算本单分配金额；返回 `{items,total}`。详情直接返回发票对象，写入返回 `{success,invoice}`。分配项包含 `purchaseOrderId/purchaseOrderItemId/sourceType/sourceId` 来源标识；订单明细分配还返回 `matchedAmount/pendingInboundAmount`（已匹配实际应付/尚待入库金额），发票返回 `lockedAt` 和已确认的 `pendingInboundAmount` 合计。发票号码在同一供应商下唯一，供应商和门店保存后不可更改。
+
+`GET /api/purchase-invoices/context` 必须传上述一种来源筛选。返回 `{storeId,storeName,suppliers:[{id,supplierName,availableAmount}],availableAmount}`。普通订单状态为 `approved/partial/completed` 时按供应商汇总订单明细剩余开票额度，尚未入库也允许登记；直接入库单仍只汇总有效、已入账的实际采购入库应付。已锁定应付的未开票部分不提供额度。供应商选项支持一单多供应商，不暴露银行账户信息。
+
+`GET /api/purchase-invoices/sources?storeId=门店ID&supplierId=供应商ID` 返回 `{items}`，包含所选门店/供应商的已审核订单明细，以及独立入库/历史无订单明细的有效未锁定应付。订单来源为 `sourceType:"purchase_order"`，使用 `purchaseOrderItemId` 识别，含 `purchaseOrderId/documentNo/productName/businessDate/payableAmount/availableAmount/invoiceStatus`；`payableAmount` 在订单来源表示明细来源含税金额，不表示已经生成应付。编辑可传 `invoiceId`，保留该发票原有的入库应付来源，兼容既有草稿。录入默认展示本单来源，可切换合并同门店同供应商的其他来源；保存必须保留当前单据的正数分配，此约束由内嵌录入界面执行。
 
 ```json
 {
@@ -6314,9 +6321,13 @@ SQLite 支持**多读一写**模式：
 }
 ```
 
-来源只允许有效已审核采购入库应付；支持一票多来源、多票部分覆盖。总额/税额/未税额均须等于明细合计，累计分配含税额加第一阶段基础已开票金额不能超过原始应付，超额返回 `409`。含税额为未税额加税额；税额与来源比例快照偏差超过 1 分，或填写数量与累计实际入库数量不一致时，标记 `hasDifference` 并要求原因。数量为 0 表示不登记数量，仍按金额控制分配。可手工声明其它开票差异并填写原因。
+提前开票将示例中的分配项替换为 `{"sourceType":"purchase_order","purchaseOrderItemId":订单明细ID,"quantity":10,"amountExcludingTax":1000,"taxAmount":100}`，无需 `payableTransactionId`，两种来源不能在同一分配项同时指定。订单必须已经审核、明细供应商及单价已补齐，且供应商和门店与发票一致；未审核订单不能开票。原有 `payableTransactionId` 写入方式继续可用。
 
-确认/撤销请求为 `{version,idempotencyKey}`。确认仅更新来源 `billedAmount/invoiceStatus/invoiceRemark` 和正式分配/事件记录，不新增应付、不改变库存、履约或银行。撤销恢复其它仍有效发票加基础开票状态的汇总，已付款保持不变，锁定来源不可撤销。
+支持一票多来源、多票部分覆盖。总额/税额/未税额均须等于明细合计。订单明细额度取订单含税金额与有效实际入库金额的较大值，扣除已锁定应付的未开票部分；累计订单发票、实际应付直接分配及基础已开票金额共同占用该额度，不重复计算已自动匹配的部分。单个实际应付仍不能超过自身金额，超额返回 `409`。草稿不占用额度，确认时事务内重新校验。含税额为未税额加税额；税额与来源比例快照偏差超过 1 分，或填写数量超出来源数量/完整开票时累计数量不一致，标记 `hasDifference` 并要求原因。订单来源按审核采购数量校验，实际应付来源按实收数量校验。数量为 0 表示不登记数量，仍按金额控制分配。
+
+确认/撤销请求为 `{version,idempotencyKey}`。入库前确认仅记录订单发票；已有实际应付时自动匹配其未开票部分，后续关联入库过账后继续逐批匹配。匹配按发票日期和应付业务日期顺序进行，累计税额按分摊舍入，完整匹配后合计保持不变；不改变发票总额或重复新增分配金额。确认不新增应付、不改变库存、履约或银行。订单响应 `billedAmount/invoiceStatus` 包含已确认订单发票，`advanceBilledAmount` 为其中尚未匹配入库的金额，`confirmedPayable` 仍只统计实际入库应付。
+
+撤销移除该订单发票的实际应付匹配，恢复其它有效发票和基础开票状态；释放的实际应付可重新匹配其他已确认待入库发票。已发生付款保持不变，已锁定发票或匹配应付不可撤销。有未作废订单发票时须先撤销确认并删除发票才能反审核订单；有历史发票记录的订单禁止物理删除，作废发票保留原订单明细快照。
 
 第一阶段基础开票登记作为 `manual_billed_cents/manual_invoice_status` 保留；已有有效正式发票分配的来源返回 `invoiceManaged:true`，基础状态接口不能覆盖，必须通过正式发票处理。全部正式发票撤销后基础值恢复。
 
@@ -6330,7 +6341,9 @@ SQLite 支持**多读一写**模式：
 
 新增 `supplier_payments/supplier_payment_allocations/supplier_balance_allocations/supplier_settlement_allocations/bank_account_transactions/purchase_invoices/purchase_invoice_allocations/purchase_invoice_events/supplier_finance_attachments`，由现有数据库初始化自动创建。部署前备份数据库和 `uploads/`，重启后端后首次访问完成结构升级；不导入旧应付/历史付款，也不回填历史已审核入库。
 
-普通角色需显式授予新增中文权限分类“供应商付款”“采购发票登记”“采购退货”“供应商退款”和“供应商正式对账”；余额核销还需应付页面权限。专项测试使用临时数据库：`py -3 -m unittest discover -s backend/tests -v`。
+提前开票新增 `purchase_invoice_order_allocations`（发票关联订单明细及金额快照）和 `purchase_invoice_order_matches`（实际入库应付匹配记录），首次数据库访问自动创建。原 `purchase_invoice_allocations` 的实际应付分配保持不变，不迁移或改写已有发票。
+
+普通角色需显式授予新增中文权限分类“供应商付款”“采购订单发票”“采购退货”“供应商退款”和“供应商正式对账”；发票录入还需采购订单页面权限，余额核销还需应付页面权限。验证使用临时或内存数据库，不在业务库中创建测试单据。
 
 ## 采购模块第三阶段新增接口（v5.13）
 

@@ -905,10 +905,10 @@ PERMISSION_MODULES.extend([
     },
     {
         "code": "admin_purchase_invoices",
-        "name": "采购发票登记",
-        "description": "采购发票草稿、应付分配、确认和撤销确认",
+        "name": "采购订单发票",
+        "description": "采购订单详情内的发票草稿、应付分配、确认和撤销确认",
         "permissions": [
-            {"code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["invoices"], "name": "访问采购发票登记", "description": "访问采购发票登记页面"},
+            {"code": ADMIN_ROUTE_BRANCH_PERMISSIONS["purchase"]["invoices"], "name": "查看采购订单发票", "description": "查看采购订单详情中的发票记录；还需采购订单页面权限"},
             {"code": "admin.purchase.invoice.create", "name": "新增采购发票", "description": "新增采购发票登记草稿"},
             {"code": "admin.purchase.invoice.edit", "name": "编辑采购发票", "description": "修改未确认采购发票"},
             {"code": "admin.purchase.invoice.delete", "name": "删除采购发票", "description": "删除未确认采购发票"},

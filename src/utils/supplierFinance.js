@@ -21,6 +21,12 @@ export const businessLabels = {
   PREPAYMENT_ALLOCATION_REVERSAL: '预付款核销冲销', CREDIT_ALLOCATION_REVERSAL: '贷项核销冲销'
 }
 export const documentStatusLabels = { draft: '草稿', audited: '已审核', confirmed: '已确认', reversed: '已撤销', cancelled: '已作废' }
+
+export function invoiceSourceKey(row) {
+  return row.sourceType === 'purchase_order'
+    ? `order-item-${row.purchaseOrderItemId}`
+    : String(row.payableTransactionId ?? row.id)
+}
 export const formatMoney = value => Number(value || 0).toLocaleString('zh-CN', {
   minimumFractionDigits: 2, maximumFractionDigits: 2
 })

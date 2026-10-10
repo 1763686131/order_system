@@ -71,7 +71,6 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.ORDERS, path: '/admin/purchase/orders' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.SUPPLIERS, path: '/admin/purchase/suppliers' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND, path: '/admin/purchase/inbound' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INVOICES, path: '/admin/purchase/invoices' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS, path: '/admin/purchase/returns' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS, path: '/admin/finance/supplier-payments' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS, path: '/admin/finance/supplier-refunds' },
@@ -106,7 +105,6 @@ export function getDefaultAdminPath(userStore) {
 }
 
 export function getAdminRoutePermission(path = '') {
-  if (/^\/admin\/purchase\/invoices(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INVOICES
   if (/^\/admin\/purchase\/returns(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS
   if (/^\/admin\/finance\/supplier-payments(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS
   if (/^\/admin\/finance\/supplier-refunds(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS

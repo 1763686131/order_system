@@ -342,6 +342,9 @@ def post_inbound_payables(conn, document, items):
             (cursor.lastrowid, item["id"]),
         )
     if order:
+        from utils.purchase_invoice_orders import sync_order_invoices
+        for item_id in {item.get("purchase_order_item_id") for item in items} - {None}:
+            sync_order_invoices(conn, item_id)
         _allocate_order_payment(conn, order)
     elif finance:
         _allocate_order_payment(conn, {

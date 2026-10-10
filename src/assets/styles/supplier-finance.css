@@ -60,6 +60,11 @@
 .sf-attachment-list a { color: #08745a; overflow-wrap: anywhere; }
 .sf-file-input { display: none; }
 .sf-disabled { opacity: .45; }
+.sf-embedded-document { width: 100%; max-height: none; border: 0; border-radius: 0; box-shadow: none; }
+.sf-embedded-document .sf-header, .sf-embedded-document .sf-footer { padding-left: 0; padding-right: 0; }
+.sf-embedded-document .sf-dialog-body { overflow: visible; padding: 16px 0; }
+.sf-inline-confirmation { padding: 16px; border-top: 1px solid #e2e8f0; background: #fff5e8; }
+.sf-inline-confirmation p { margin: 8px 0 12px; line-height: 1.6; }
 @media (max-width: 780px) {
   .supplier-finance-page { padding: 12px; }
   .sf-form-grid { grid-template-columns: 1fr; }

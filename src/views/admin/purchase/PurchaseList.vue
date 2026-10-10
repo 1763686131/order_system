@@ -667,7 +667,7 @@
             aria-modal="true"
             :aria-label="`${documentTypeFor(selectedRecord).label}详情`"
             tabindex="-1"
-            @keydown.esc="closeDetail"
+            @keydown.esc.prevent="closeDetail"
           >
             <header class="detail-modal-header">
               <div class="detail-modal-title-wrap">
@@ -691,7 +691,19 @@
               </button>
             </header>
 
-            <div class="detail-modal-body">
+            <div v-if="hasInvoiceTab" class="detail-tabs" role="tablist" aria-label="采购订单详情">
+              <button id="purchase-document-tab" type="button" role="tab" :aria-selected="detailTab === 'document'" aria-controls="purchase-detail-content" :tabindex="detailTab === 'document' ? 0 : -1" @click="switchDetailTab('document')" @keydown.right.prevent="switchDetailTab('invoice', true)">单据详情</button>
+              <button id="purchase-invoice-tab" type="button" role="tab" :aria-selected="detailTab === 'invoice'" aria-controls="purchase-detail-content" :tabindex="detailTab === 'invoice' ? 0 : -1" @click="switchDetailTab('invoice')" @keydown.left.prevent="switchDetailTab('document', true)">发票记录</button>
+            </div>
+            <div id="purchase-detail-content" class="detail-modal-body" :class="{ 'invoice-detail-body': detailTab === 'invoice' }" :role="hasInvoiceTab ? 'tabpanel' : undefined" :aria-labelledby="hasInvoiceTab ? `purchase-${detailTab}-tab` : undefined">
+              <PurchaseInvoicePanel
+                v-if="hasInvoiceTab && detailTab === 'invoice'"
+                ref="invoicePanel"
+                :record="selectedRecord"
+                :initial-invoice-id="detailInvoiceId"
+                @updated="refreshData(false)"
+              />
+              <template v-else>
               <div v-if="isInbound" class="detail-overview inbound-detail-overview">
                 <div>
                   <span class="detail-label">{{ selectedRecord.purchaseOrderId ? '申请日期' : '入库日期' }}</span>
@@ -879,9 +891,10 @@
                 <div class="section-heading"><h3>备注</h3></div>
                 <p>{{ selectedRecord.remark || '' }}</p>
               </section>
+              </template>
             </div>
 
-            <footer class="detail-modal-footer">
+            <footer v-if="detailTab === 'document'" class="detail-modal-footer">
               <div class="footer-actions">
                 <button v-if="canAuditRecord(selectedRecord)" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
@@ -932,10 +945,11 @@
 
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
 import { Check, ClipboardList, EllipsisVertical, PackageCheck, PackageX, Pencil, Plus, Printer, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
+import PurchaseInvoicePanel from '@/components/admin/purchase/PurchaseInvoicePanel.vue'
 import { useUserStore } from '@/stores/user'
 import { ADMIN_PURCHASE_ORDER_PERMISSIONS } from '@/utils/accessControl'
 import { canEditReceivedPurchaseInbound, purchaseReturnStatusLabels } from '@/composables/documents/documentModels'
@@ -950,6 +964,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
 const isInbound = computed(() => props.mode === 'inbound')
 const isReturn = computed(() => props.mode === 'returns')
@@ -1239,6 +1254,10 @@ const detailTotals = computed(() => (selectedRecord.value?.items || []).reduce((
   amount: totals.amount + Number(item.amount ?? item.totalAmount ?? 0)
 }), { plannedQuantity: 0, receivedQuantity: 0, amount: 0 }))
 const detailModalOpen = ref(false)
+const detailTab = ref('document')
+const detailInvoiceId = ref(null)
+const invoicePanel = ref(null)
+const hasInvoiceTab = computed(() => props.mode === 'orders' && userStore.hasPerm('admin.route.purchase.invoices'))
 const actionMenuRecord = ref(null)
 const actionMenuElement = ref(null)
 const actionMenuStyle = ref({})
@@ -1768,15 +1787,61 @@ async function deleteSelected() {
 
 function openDetail(record) {
   closeActionMenu()
+  detailTab.value = 'document'
+  detailInvoiceId.value = null
   selectedRecord.value = record
   detailModalOpen.value = true
 }
 
-function closeDetail() {
+async function canLeaveInvoice() {
+  return !invoicePanel.value || await invoicePanel.value.requestLeave()
+}
+
+async function switchDetailTab(tab, focus = false) {
+  if (tab === detailTab.value || !await canLeaveInvoice()) return
+  detailTab.value = tab
+  detailInvoiceId.value = null
+  if (focus) {
+    await nextTick()
+    document.getElementById(`purchase-${tab}-tab`)?.focus()
+  }
+}
+
+async function closeDetail() {
+  if (!await canLeaveInvoice()) return
   closeActionMenu()
   detailModalOpen.value = false
   selectedRecord.value = null
+  detailInvoiceId.value = null
 }
+
+onBeforeRouteLeave(canLeaveInvoice)
+onBeforeRouteUpdate((to, from) => to.path === from.path || canLeaveInvoice())
+
+async function openLinkedInvoice() {
+  const id = Number(route.query.invoiceId)
+  if (!hasInvoiceTab.value || !Number.isInteger(id) || id <= 0 || loading.value) return
+  if (!await canLeaveInvoice()) return
+  try {
+    const invoice = await request.get(`/purchase-invoices/${id}`)
+    const record = orderRecords.value.find(record => invoice.allocations.some(allocation =>
+      record.sourceType === 'warehouse-inbound'
+        ? allocation.sourceType === 'stock_inbound' && Number(allocation.sourceId) === Number(record.inboundId)
+        : Number(allocation.purchaseOrderId) === Number(record.id)))
+    if (!record) throw new Error('该发票关联的采购单据不在当前列表中')
+    openDetail(record)
+    detailInvoiceId.value = id
+    detailTab.value = 'invoice'
+  } catch (error) {
+    showNotice(error?.response?.data?.message || error.message || '发票加载失败')
+  } finally {
+    const query = { ...route.query }
+    delete query.invoiceId
+    router.replace({ query })
+  }
+}
+
+watch(() => route.query.invoiceId, openLinkedInvoice)
 
 function showNotice(message) {
   notice.value = message
@@ -2043,6 +2108,11 @@ async function refreshData(showMessage = true) {
       .filter(record => !isInbound.value || canSelectForDeletion(record))
       .map(record => record.id))
     selectedIds.value = new Set([...selectedIds.value].filter(id => availableIds.has(id)))
+    if (selectedRecord.value) {
+      const refreshed = sourceRecords.value.find(record => record.id === selectedRecord.value.id
+        && record.sourceType === selectedRecord.value.sourceType)
+      if (refreshed) selectedRecord.value = refreshed
+    }
     if (showMessage) showNotice('列表已刷新')
   } catch (error) {
     const message = error?.response?.data?.message || error.message || '列表加载失败'
@@ -2055,7 +2125,7 @@ onMounted(() => {
   document.addEventListener('click', handleActionMenuClickOutside)
   window.addEventListener('resize', handleActionMenuViewportChange)
   window.addEventListener('scroll', handleActionMenuViewportChange, true)
-  refreshData(false)
+  refreshData(false).then(openLinkedInvoice)
 })
 
 onBeforeUnmount(() => {
@@ -4030,6 +4100,12 @@ onBeforeUnmount(() => {
   padding: 18px;
   background: #f4f7f9;
 }
+
+.detail-tabs { display: flex; flex: none; gap: 20px; padding: 0 20px; background: #fff; border-bottom: 1px solid #dfe5ec; }
+.detail-tabs button { padding: 13px 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: #64748b; font: inherit; font-size: 14px; cursor: pointer; }
+.detail-tabs button[aria-selected="true"] { border-bottom-color: #168368; color: #116951; font-weight: 600; }
+.detail-tabs button:focus-visible { outline: 2px solid #168368; outline-offset: -2px; }
+.detail-modal-body.invoice-detail-body { background: #fff; }
 
 .detail-overview,
 .detail-section {

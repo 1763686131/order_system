@@ -553,6 +553,10 @@ def _serialize_order(conn, row, include_items=True):
             "partial" if order["currentPayment"] > 0 else "unpaid"
         )
     order["supplierPayable"] = _supplier_payable(conn, selected_supplier_ids)
+    from utils.purchase_invoice_orders import order_invoice_summary
+    order.update(order_invoice_summary(
+        conn, row["id"], order["billedAmount"], order["confirmedPayable"], order["invoiceStatus"],
+    ))
     items = order.get("items", [])
     order["requestedTotalQuantity"] = sum(item["orderedQty"] for item in items)
     order["actualTotalQuantity"] = (
@@ -1195,6 +1199,9 @@ def delete_purchase_order(order_id):
                 return jsonify({"success": False, "message": str(exc)}), exc.status
             if conn.execute("SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ?", (order_id,)).fetchone():
                 return jsonify({"success": False, "message": "订单已被入库，不能删除"}), 409
+            from utils.purchase_invoice_orders import order_has_invoices
+            if order_has_invoices(conn, order_id):
+                return jsonify({"success": False, "message": "采购订单已有发票记录，不能删除"}), 409
             _reverse_order_bank_payment(conn, order_id)
             complete_audit_notifications(conn, "purchase_order", order_id)
             conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
@@ -1223,6 +1230,9 @@ def delete_purchase_inbound_application(order_id):
                     (order_id,),
                 ).fetchone():
                     return jsonify({"success": False, "message": "采购申请已被入库，不能删除"}), 409
+                from utils.purchase_invoice_orders import order_has_invoices
+                if order_has_invoices(conn, order_id):
+                    raise FinanceError("采购申请已有发票记录，不能删除", 409)
                 complete_audit_notifications(conn, "purchase_order", order_id)
                 conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
                 conn.execute("DELETE FROM purchase_orders WHERE id = ?", (order_id,))
@@ -1320,6 +1330,9 @@ def reverse_audit_purchase_order(order_id):
                 return jsonify({"success": False, "message": str(exc)}), exc.status
             if conn.execute("SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ?", (order_id,)).fetchone():
                 return jsonify({"success": False, "message": "订单已被入库，请先处理关联入库单"}), 409
+            from utils.purchase_invoice_orders import order_has_invoices
+            if order_has_invoices(conn, order_id, active_only=True):
+                return jsonify({"success": False, "message": "采购订单已有发票，请先撤销确认并删除相关发票再反审核"}), 409
             received = conn.execute(
                 "SELECT COALESCE(SUM(received_qty), 0) AS quantity FROM purchase_order_items WHERE order_id = ?",
                 (order_id,),

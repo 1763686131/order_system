@@ -7,7 +7,7 @@ from flask import Blueprint, jsonify, request
 from utils.auth import current_identity, require_admin_permission
 from utils.db import get_db
 from utils.supplier_ledger import (
-    FinanceError, amount, business_date, cents, check_scope,
+    FinanceError, amount, business_date, cents, check_scope, effective_sql,
     idempotent_result, now, save_operation, scope_sql,
 )
 from utils.supplier_settlement import (
@@ -15,6 +15,9 @@ from utils.supplier_settlement import (
     refresh_invoice, required_version, proportional_tax,
 )
 from routes.supplier_finance import finance_errors
+from utils.purchase_invoice_orders import (
+    load_order_source, order_capacity, order_source_options, order_usage, sync_order_invoices,
+)
 
 
 purchase_invoices_bp = Blueprint("purchase_invoices", __name__, url_prefix="/api")
@@ -34,7 +37,8 @@ def serialize_invoice(conn, row):
     allocations = []
     for item in conn.execute(
         """SELECT a.*, t.source_document_no, t.product_name, t.business_date, t.invoice_status,
-                  t.amount_including_tax_cents payable_cents
+                  t.amount_including_tax_cents payable_cents,
+                  t.purchase_order_id, t.purchase_order_item_id, t.source_type, t.source_id
            FROM purchase_invoice_allocations a
            JOIN supplier_account_transactions t ON t.id = a.payable_transaction_id
            WHERE a.invoice_id = ? ORDER BY a.id""", (row["id"],)
@@ -47,6 +51,29 @@ def serialize_invoice(conn, row):
             "taxAmount": amount(item["tax_amount_cents"]),
             "amountIncludingTax": amount(item["amount_including_tax_cents"]),
             "quantity": item["quantity"], "payableAmount": amount(item["payable_cents"]),
+            "purchaseOrderId": item["purchase_order_id"],
+            "purchaseOrderItemId": item["purchase_order_item_id"],
+            "sourceType": item["source_type"], "sourceId": item["source_id"],
+        })
+    pending = 0
+    for item in conn.execute(
+        """SELECT a.*, COALESCE((SELECT SUM(m.amount_including_tax_cents)
+           FROM purchase_invoice_order_matches m WHERE m.order_allocation_id = a.id), 0) matched
+           FROM purchase_invoice_order_allocations a WHERE a.invoice_id = ? ORDER BY a.id""", (row["id"],),
+    ):
+        remaining = item["amount_including_tax_cents"] - item["matched"]
+        pending += remaining
+        allocations.append({
+            "id": f"order-allocation-{item['id']}", "payableTransactionId": None,
+            "purchaseOrderId": item["purchase_order_id"], "purchaseOrderItemId": item["purchase_order_item_id"],
+            "sourceType": "purchase_order", "sourceId": item["purchase_order_id"],
+            "documentNo": item["document_no"], "productName": item["product_name"],
+            "businessDate": item["business_date"], "payableAmount": amount(item["source_amount_cents"]),
+            "amountExcludingTax": amount(item["amount_excluding_tax_cents"]), "taxAmount": amount(item["tax_amount_cents"]),
+            "amountIncludingTax": amount(item["amount_including_tax_cents"]), "quantity": item["quantity"],
+            "matchedAmount": amount(item["matched"]),
+            "pendingInboundAmount": amount(remaining) if row["status"] == "confirmed" else 0,
+            "invoiceStatus": "unbilled" if row["status"] != "confirmed" else "difference" if row["has_difference"] else "billed",
         })
     return {
         "id": row["id"], "supplierId": row["supplier_id"], "supplierName": supplier["supplier_name"],
@@ -61,8 +88,99 @@ def serialize_invoice(conn, row):
         "status": row["status"], "version": row["version"], "createdBy": row["created_by"],
         "createdAt": row["created_at"], "updatedAt": row["updated_at"],
         "confirmedBy": row["confirmed_by"], "confirmedAt": row["confirmed_at"],
-        "reversedAt": row["reversed_at"], "allocations": allocations,
+        "reversedAt": row["reversed_at"], "lockedAt": row["locked_at"], "allocations": allocations,
+        "pendingInboundAmount": amount(pending) if row["status"] == "confirmed" else 0,
     }
+
+
+def document_context(conn, required=False):
+    order_id, inbound_id = request.args.get("purchaseOrderId"), request.args.get("inboundId")
+    if order_id is not None and inbound_id is not None:
+        raise FinanceError("采购订单和直接入库单筛选不能同时使用")
+    if order_id is None and inbound_id is None:
+        if required:
+            raise FinanceError("请选择采购订单或直接入库单")
+        return None
+    document_id = positive_id(order_id if order_id is not None else inbound_id)
+    table = "purchase_orders" if order_id is not None else "stock_inbounds"
+    document = conn.execute(f"SELECT * FROM {table} WHERE id = ?", (document_id,)).fetchone()
+    if not document:
+        raise FinanceError("来源单据不存在", 404)
+    check_scope(document["store_id"])
+    if inbound_id is not None and document["purchase_order_id"]:
+        raise FinanceError("采购订单入库请使用采购订单筛选")
+    return document, "purchase_order_id" if order_id is not None else "source_id", document_id
+
+
+@purchase_invoices_bp.route("/purchase-invoices/context")
+@require_admin_permission("admin.route.purchase.invoices")
+@finance_errors
+def invoice_context():
+    with get_db() as conn:
+        document, column, document_id = document_context(conn, required=True)
+        store = conn.execute("SELECT name FROM stores WHERE id = ?", (document["store_id"],)).fetchone()
+        if column == "purchase_order_id":
+            sources = order_source_options(conn, document["store_id"], order_id=document_id)
+            suppliers = {}
+            for source in sources:
+                supplier_id = source["supplierId"]
+                if supplier_id not in suppliers:
+                    name = conn.execute("SELECT supplier_name FROM suppliers WHERE id = ?", (supplier_id,)).fetchone()
+                    suppliers[supplier_id] = {"id": supplier_id, "supplierName": name["supplier_name"], "availableAmount": 0}
+                suppliers[supplier_id]["availableAmount"] += source["availableAmount"]
+            return jsonify({
+                "storeId": document["store_id"], "storeName": store["name"] if store else "",
+                "suppliers": [{**row, "availableAmount": amount(cents(row["availableAmount"]))} for row in suppliers.values()],
+                "availableAmount": amount(sum(cents(row["availableAmount"]) for row in suppliers.values())),
+            })
+        suppliers = conn.execute(
+            f"""SELECT s.id, s.supplier_name,
+                       SUM(CASE WHEN t.locked_at IS NULL THEN
+                           MAX(0, t.amount_including_tax_cents - t.billed_cents) ELSE 0 END) available
+                FROM supplier_account_transactions t JOIN suppliers s ON s.id = t.supplier_id
+                WHERE t.{column} = ? AND t.store_id = ? AND t.source_type = 'stock_inbound'
+                  AND t.transaction_type IN ('PURCHASE_INBOUND', 'INDEPENDENT_PURCHASE_INBOUND')
+                  AND {effective_sql()}
+                GROUP BY s.id, s.supplier_name ORDER BY s.id""",
+            (document_id, document["store_id"]),
+        ).fetchall()
+        return jsonify({
+            "storeId": document["store_id"], "storeName": store["name"] if store else "",
+            "suppliers": [{"id": row["id"], "supplierName": row["supplier_name"],
+                           "availableAmount": amount(row["available"])} for row in suppliers],
+            "availableAmount": amount(sum(row["available"] for row in suppliers)),
+        })
+
+
+@purchase_invoices_bp.route("/purchase-invoices/sources")
+@require_admin_permission("admin.route.purchase.invoices")
+@finance_errors
+def invoice_sources():
+    supplier_id = positive_id(request.args.get("supplierId"))
+    store_id = positive_id(request.args.get("storeId"))
+    with get_db() as conn:
+        supplier_store(conn, supplier_id, store_id)
+        sources = order_source_options(conn, store_id, supplier_id=supplier_id)
+        invoice_id = request.args.get("invoiceId")
+        existing_ids = set()
+        if invoice_id:
+            invoice = invoice_row(conn, positive_id(invoice_id))
+            if invoice["supplier_id"] != supplier_id or invoice["store_id"] != store_id:
+                raise FinanceError("发票来源的供应商或门店不一致")
+            existing_ids = {row[0] for row in conn.execute(
+                "SELECT payable_transaction_id FROM purchase_invoice_allocations WHERE invoice_id = ?", (invoice["id"],),
+            )}
+        from routes.supplier_finance import serialize_transaction
+        for row in conn.execute(
+            f"""SELECT t.* FROM supplier_account_transactions t
+                WHERE t.store_id = ? AND t.supplier_id = ? AND t.source_type = 'stock_inbound'
+                  AND t.transaction_type IN ('PURCHASE_INBOUND', 'INDEPENDENT_PURCHASE_INBOUND')
+                  AND t.locked_at IS NULL AND {effective_sql()}""", (store_id, supplier_id),
+        ):
+            available = row["amount_including_tax_cents"] - row["billed_cents"]
+            if available > 0 and (not row["purchase_order_item_id"] or row["id"] in existing_ids):
+                sources.append({**serialize_transaction(row), "availableAmount": amount(available)})
+        return jsonify({"items": sources})
 
 
 def invoice_values(conn, data):
@@ -100,43 +218,73 @@ def invoice_values(conn, data):
 def invoice_allocations(conn, values):
     results, seen = [], set()
     total_base = total_tax = total_inclusive = 0
+    order_totals = {}
     for entry in values["allocations"]:
         if not isinstance(entry, dict):
             raise FinanceError("发票分配明细格式错误")
-        transaction_id = positive_id(entry.get("payableTransactionId"))
-        if transaction_id in seen:
-            raise FinanceError("同一应付不能重复分配")
-        seen.add(transaction_id)
-        row = load_payable(conn, transaction_id, values["supplier_id"], values["store_id"], invoice=True)
+        is_order = entry.get("sourceType") == "purchase_order"
+        if is_order and entry.get("payableTransactionId"):
+            raise FinanceError("发票分配不能同时指定订单明细和应付来源")
+        if is_order:
+            row = load_order_source(conn, entry.get("purchaseOrderItemId"), values["supplier_id"], values["store_id"])
+            key = ("order", row["id"])
+            used, old_qty, actual = order_usage(conn, row["id"])
+            existing = []
+            old = used
+            manual = 0
+            capacity = order_capacity(conn, row, actual)
+            row["source_amount_cents"] = max(row["amount_including_tax_cents"], actual)
+            actual_qty = quantity(row["actual_purchase_qty"] if row["actual_purchase_qty"] is not None else row["ordered_qty"])
+        else:
+            row = load_payable(conn, entry.get("payableTransactionId"), values["supplier_id"], values["store_id"], invoice=True)
+            key = ("payable", row["id"])
+            existing = conn.execute(
+                """SELECT a.amount_including_tax_cents, a.quantity
+                   FROM purchase_invoice_allocations a JOIN purchase_invoices i ON i.id = a.invoice_id
+                   WHERE a.payable_transaction_id = ? AND i.status = 'confirmed'
+                   UNION ALL SELECT m.amount_including_tax_cents, m.quantity FROM purchase_invoice_order_matches m
+                   JOIN purchase_invoice_order_allocations a ON a.id = m.order_allocation_id
+                   JOIN purchase_invoices i ON i.id = a.invoice_id
+                   WHERE m.payable_transaction_id = ? AND i.status = 'confirmed'""", (row["id"], row["id"]),
+            ).fetchall()
+            old = sum(item["amount_including_tax_cents"] for item in existing)
+            old_qty = sum((quantity(item["quantity"]) for item in existing), quantity(0))
+            manual, capacity = row["manual_billed_cents"], row["amount_including_tax_cents"]
+            received = conn.execute("SELECT received_qty FROM stock_inbound_items WHERE id=?", (row["source_item_id"],)).fetchone()
+            actual_qty = quantity(received["received_qty"]) if received else None
+        if key in seen:
+            raise FinanceError("同一开票来源不能重复分配")
+        seen.add(key)
         base, tax = cents(entry.get("amountExcludingTax")), cents(entry.get("taxAmount"))
         inclusive = cents(entry.get("amountIncludingTax", amount(base + tax)))
         if inclusive != base + tax or inclusive <= 0:
             raise FinanceError("发票分配价税合计不正确")
-        existing = conn.execute(
-            """SELECT a.amount_including_tax_cents, a.quantity
-               FROM purchase_invoice_allocations a JOIN purchase_invoices i ON i.id = a.invoice_id
-               WHERE a.payable_transaction_id = ? AND i.status = 'confirmed'""", (transaction_id,),
-        ).fetchall()
-        old = sum(item["amount_including_tax_cents"] for item in existing)
-        if old + row["manual_billed_cents"] + inclusive > row["amount_including_tax_cents"]:
-            raise FinanceError("发票分配超过应付可开票金额", 409)
+        if old + manual + inclusive > capacity:
+            raise FinanceError("发票分配超过来源可开票金额", 409)
         if abs(tax - proportional_tax(row, inclusive)) > 1:
             values["has_difference"] = 1
         qty = quantity(entry.get("quantity", 0))
-        received = conn.execute("SELECT received_qty FROM stock_inbound_items WHERE id=?", (row["source_item_id"],)).fetchone()
-        if received and qty > 0:
-            total_qty = qty + sum((quantity(item["quantity"]) for item in existing), quantity(0))
-            actual_qty = quantity(received["received_qty"])
+        if actual_qty is not None and qty > 0:
+            total_qty = qty + old_qty
+            quantity_capacity = row["source_amount_cents"] if is_order else capacity
             if total_qty > actual_qty or (
-                not row["manual_billed_cents"] and old + inclusive == row["amount_including_tax_cents"] and total_qty != actual_qty
+                not manual and old + inclusive == quantity_capacity and total_qty != actual_qty
             ):
                 values["has_difference"] = 1
-        results.append((row, base, tax, inclusive, qty))
+        item_id = row["id"] if is_order else row["purchase_order_item_id"]
+        if item_id:
+            order_totals[item_id] = order_totals.get(item_id, 0) + inclusive
+        results.append(({**dict(row), "invoice_source": "order" if is_order else "payable"}, base, tax, inclusive, qty))
         total_base += base
         total_tax += tax
         total_inclusive += inclusive
     if total_inclusive != values["inclusive"] or total_base != values["base"] or total_tax != values["tax"]:
         raise FinanceError("发票总额必须等于分配明细合计")
+    for item_id, added in order_totals.items():
+        source = load_order_source(conn, item_id, values["supplier_id"], values["store_id"])
+        used, _, actual = order_usage(conn, item_id)
+        if used + added > order_capacity(conn, source, actual):
+            raise FinanceError("订单明细累计开票超过可开票金额", 409)
     if values["has_difference"] and not values["difference_reason"]:
         raise FinanceError("发票存在差异时必须填写差异原因")
     return results
@@ -149,7 +297,16 @@ def insert_allocations(conn, invoice_id, allocations):
             tax_amount_cents, amount_including_tax_cents, quantity
         ) VALUES (?, ?, ?, ?, ?, ?)""",
         [(invoice_id, row["id"], base, tax, inclusive, str(qty))
-         for row, base, tax, inclusive, qty in allocations],
+         for row, base, tax, inclusive, qty in allocations if row["invoice_source"] == "payable"],
+    )
+    conn.executemany(
+        """INSERT INTO purchase_invoice_order_allocations (
+           invoice_id, purchase_order_id, purchase_order_item_id, document_no, product_name,
+           business_date, source_amount_cents, amount_excluding_tax_cents, tax_amount_cents,
+           amount_including_tax_cents, quantity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        [(invoice_id, row["order_id"], row["id"], row["order_no"], row["product_name"], row["order_date"],
+          row["source_amount_cents"], base, tax, inclusive, str(qty))
+         for row, base, tax, inclusive, qty in allocations if row["invoice_source"] == "order"],
     )
 
 
@@ -160,6 +317,20 @@ def list_invoices():
     with get_db() as conn:
         scoped, params = scope_sql(alias="i", store_id=request.args.get("storeId", type=int))
         sql = f"SELECT i.* FROM purchase_invoices i WHERE 1=1 {scoped}"
+        context = document_context(conn)
+        if context:
+            document, column, document_id = context
+            sql += f""" AND i.store_id = ? AND (EXISTS (
+                SELECT 1 FROM purchase_invoice_allocations a
+                JOIN supplier_account_transactions t ON t.id = a.payable_transaction_id
+                WHERE a.invoice_id = i.id AND t.source_type = 'stock_inbound'
+                  AND t.{column} = ?)"""
+            params.extend((document["store_id"], document_id))
+            if column == "purchase_order_id":
+                sql += """ OR EXISTS (SELECT 1 FROM purchase_invoice_order_allocations a
+                          WHERE a.invoice_id = i.id AND a.purchase_order_id = ?)"""
+                params.append(document_id)
+            sql += ")"
         for column, argument in (("supplier_id", "supplierId"), ("status", "status"), ("invoice_no", "invoiceNo")):
             if request.args.get(argument):
                 sql += f" AND i.{column} = ?"
@@ -251,6 +422,7 @@ def edit_invoice(invoice_id):
              values["has_difference"], values["attachments"], values["remark"], now(), invoice_id),
         )
         conn.execute("DELETE FROM purchase_invoice_allocations WHERE invoice_id=?", (invoice_id,))
+        conn.execute("DELETE FROM purchase_invoice_order_allocations WHERE invoice_id=?", (invoice_id,))
         insert_allocations(conn, invoice_id, allocations)
         return jsonify({"success": True, "invoice": serialize_invoice(conn, invoice_row(conn, invoice_id))})
 
@@ -303,14 +475,17 @@ def confirm_invoice(invoice_id):
             (values["has_difference"], current_identity(), now(), now(), invoice_id),
         )
         for source, *_ in allocations:
-            refresh_invoice(conn, source["id"])
+            if source["invoice_source"] == "order":
+                sync_order_invoices(conn, source["id"])
+            else:
+                refresh_invoice(conn, source["id"])
+        confirmed = serialize_invoice(conn, invoice_row(conn, invoice_id))
         conn.execute(
             """INSERT INTO purchase_invoice_events (invoice_id, document_version, action, created_by, created_at, allocations_json)
                VALUES (?, ?, 'confirm', ?, ?, ?)""",
-            (invoice_id, row["version"] + 1, current_identity(), now(), json.dumps(serialize_invoice(conn, row)["allocations"])),
+            (invoice_id, row["version"] + 1, current_identity(), now(), json.dumps(confirmed["allocations"])),
         )
-        return jsonify(save_operation(conn, token, {"success": True, "invoice": serialize_invoice(
-            conn, invoice_row(conn, invoice_id))}))
+        return jsonify(save_operation(conn, token, {"success": True, "invoice": confirmed}))
 
 
 @purchase_invoices_bp.route("/purchase-invoices/<int:invoice_id>/reverse-confirm", methods=["POST"])
@@ -330,17 +505,28 @@ def reverse_invoice(invoice_id):
         if row["status"] != "confirmed" or row["locked_at"]:
             raise FinanceError("只有未锁定已确认发票可以撤销", 409)
         allocations = list(conn.execute(
-            "SELECT payable_transaction_id FROM purchase_invoice_allocations WHERE invoice_id=?",
-            (invoice_id,),
+            """SELECT payable_transaction_id FROM purchase_invoice_allocations WHERE invoice_id=?
+               UNION SELECT m.payable_transaction_id FROM purchase_invoice_order_matches m
+               JOIN purchase_invoice_order_allocations a ON a.id = m.order_allocation_id WHERE a.invoice_id=?""",
+            (invoice_id, invoice_id),
         ))
+        order_item_ids = set()
         for source in allocations:
-            load_payable(conn, source["payable_transaction_id"], row["supplier_id"], row["store_id"], invoice=True)
+            payable = load_payable(conn, source["payable_transaction_id"], row["supplier_id"], row["store_id"], invoice=True)
+            if payable["purchase_order_item_id"]:
+                order_item_ids.add(payable["purchase_order_item_id"])
         conn.execute(
             "UPDATE purchase_invoices SET status='reversed', version=version+1, reversed_at=?, updated_at=? WHERE id=?",
             (now(), now(), invoice_id),
         )
+        conn.execute(
+            """DELETE FROM purchase_invoice_order_matches WHERE order_allocation_id IN
+               (SELECT id FROM purchase_invoice_order_allocations WHERE invoice_id=?)""", (invoice_id,),
+        )
         for source in allocations:
             refresh_invoice(conn, source["payable_transaction_id"])
+        for item_id in order_item_ids:
+            sync_order_invoices(conn, item_id)
         conn.execute(
             """INSERT INTO purchase_invoice_events (invoice_id, document_version, action, created_by, created_at, allocations_json)
                VALUES (?, ?, 'reverse', ?, ?, ?)""",

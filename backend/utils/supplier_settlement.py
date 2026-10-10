@@ -281,6 +281,8 @@ def ensure_schema(conn):
     refund_columns = {row["name"] for row in conn.execute("PRAGMA table_info(supplier_refunds)")}
     if "credits_json" not in refund_columns:
         conn.execute("ALTER TABLE supplier_refunds ADD COLUMN credits_json TEXT NOT NULL DEFAULT '[]'")
+    from utils.purchase_invoice_orders import ensure_schema as ensure_order_invoice_schema
+    ensure_order_invoice_schema(conn)
     balance_columns = {row["name"] for row in conn.execute("PRAGMA table_info(supplier_balance_allocations)")}
     for name, definition in {
         "unbilled_reason": "TEXT NOT NULL DEFAULT ''",
@@ -588,7 +590,15 @@ def refresh_invoice(conn, transaction_id):
     entries = conn.execute(
         """SELECT a.*, i.has_difference, i.invoice_no, i.difference_reason FROM purchase_invoice_allocations a
            JOIN purchase_invoices i ON i.id = a.invoice_id
-           WHERE a.payable_transaction_id = ? AND i.status = 'confirmed'""", (transaction_id,),
+           WHERE a.payable_transaction_id = ? AND i.status = 'confirmed'
+           UNION ALL
+           SELECT m.id, a.invoice_id, m.payable_transaction_id, m.amount_excluding_tax_cents,
+                  m.tax_amount_cents, m.amount_including_tax_cents, m.quantity,
+                  i.has_difference, i.invoice_no, i.difference_reason
+           FROM purchase_invoice_order_matches m
+           JOIN purchase_invoice_order_allocations a ON a.id = m.order_allocation_id
+           JOIN purchase_invoices i ON i.id = a.invoice_id
+           WHERE m.payable_transaction_id = ? AND i.status = 'confirmed'""", (transaction_id, transaction_id),
     ).fetchall()
     billed = row["manual_billed_cents"] + sum(entry["amount_including_tax_cents"] for entry in entries)
     status = (
