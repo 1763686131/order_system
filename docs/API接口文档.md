@@ -3297,7 +3297,7 @@ volumes:
 
 仓库端申请使用 `POST /api/purchase-inbound-applications` 和
 `PUT /api/purchase-inbound-applications/{id}`，权限为 `admin.route.purchase.inbound`。
-修改接口允许尚未被入库或采购费用引用的 `draft`、`pending` 申请调整物料和申请数量，
+修改接口允许尚未被入库的 `draft`、`pending` 申请调整物料和申请数量，
 并校验 `version`；供应商、单价、付款等采购字段不接受仓库端提交。
 采购端修改或审核已提交的仓库申请时，仍不得改写原申请物料和申请数量。
 
@@ -3460,7 +3460,7 @@ supplierPayable = 所选明细供应商在 supplier_account_transactions 中的�
 - `POST /api/purchase-orders/{id}/audit` 只接受 `pending` 订单。可以不带请求体，审核已保存的明细；
   如果需要在审核时修改表头或明细，应提交包含 `items` 的完整请求，以补齐供应商、单价、仓库或付款信息。
 - 审核会重新校验每行采购数量、启用供应商和采购单价，成功后状态变为 `approved`，并记录审核人和审核时间。
-- `DELETE /api/purchase-orders/{id}/audit` 只允许反审核 `approved` 订单；已有入库单（含草稿）、入库数量或采购费用引用时返回 HTTP `409`。
+- `DELETE /api/purchase-orders/{id}/audit` 只允许反审核 `approved` 订单；已有入库单（含草稿）或入库数量时返回 HTTP `409`。
 - `GET /api/purchase-orders/{id}/available-inbound` 只允许 `approved` 或 `partial` 订单。
   响应额外返回 `inboundDocumentNo`（首批入库单号，无批次时为空）。入库明细应把采购明细 ID 写入 `purchaseOrderItemId`，并把采购订单 ID 写入 `purchaseOrderId`。
 - 关联入库允许实收数量超过采购数量；审核成功后按实际数量累计，订单自动变为 `partial` 或 `completed`。`remainingQty` 最低为 `0`，反审核按实际累计数量恢复状态。
@@ -3846,7 +3846,7 @@ taxAmount = totalAmount - amount
 但 `procurementAuditedAt` 为空且未确认应付时，也可修改。
 此时必须提交 `postOnSave: true`，仍需入库审核权限；后端在同一事务中回退原入库流水、
 替换明细并重新入库，保留单据 ID，不重复增加库存。
-原库存不足以回退、已被费用/退货引用、采购已审核或已确认应付时返回 HTTP `409`。
+原库存不足以回退、已被退货引用、采购已审核或已确认应付时返回 HTTP `409`。
 修改失败整笔事务回滚；客户端应提交最新 `version` 和幂等键。
 
 **成功响应**:
@@ -6169,7 +6169,7 @@ SQLite 支持**多读一写**模式：
 
 履约字段包括 `progressBasis`（`quantity`/`lines`）、`fulfillmentProgress`（0-100）、`completedLineCount`、`totalLineCount`；明细返回实际 `receivedQty`、`overReceivedQty` 和封顶的 `fulfillmentProgress`。超收数量计入库存和应付，完成订单不能新增补充入库。
 
-写接口使用登录 Session，并按门店/仓库数据范围校验。请求携带 `version` 时启用乐观锁，旧版本返回 `409`；审核、反审核、供应商归属、应付确认、期初、费用新增和费用确认支持 `Idempotency-Key` 请求头或请求体 `idempotencyKey`。同一键与相同请求可重放，键被用于不同请求返回 `409`。
+写接口使用登录 Session，并按门店/仓库数据范围校验。请求携带 `version` 时启用乐观锁，旧版本返回 `409`；审核、反审核、供应商归属、应付确认和期初支持 `Idempotency-Key` 请求头或请求体 `idempotencyKey`。同一键与相同请求可重放，键被用于不同请求返回 `409`。
 
 ### 独立进货采购审核
 
@@ -6209,17 +6209,7 @@ SQLite 支持**多读一写**模式：
 
 基础开票状态为 `not_required/unbilled/partial/billed/difference`。无需开票/未开票金额必须为零，部分开票金额介于零与应付金额之间，已开票金额须等于应付，差异必须备注。不产生新应付，也不改变库存或银行余额；已有开票金额的入库不能直接反审核。
 
-### 采购费用归属
-
-| 方法 | 地址 | 用途 | 权限 |
-| --- | --- | --- | --- |
-| `GET` | `/api/purchase-orders/{id}/expenses` | 查询费用行 | `admin.route.purchase.orders` |
-| `POST` | `/api/purchase-orders/{id}/expenses` | 新增草稿费用 | `admin.purchase.expense.create` |
-| `PUT` | `/api/purchase-expenses/{id}` | 修改草稿费用 | `admin.purchase.expense.edit` |
-| `DELETE` | `/api/purchase-expenses/{id}` | 删除草稿费用 | `admin.purchase.expense.delete` |
-| `POST` / `DELETE` | `/api/purchase-expenses/{id}/confirm` | 确认/撤销费用归属 | `admin.purchase.expense.confirm` |
-
-费用请求包含 `supplierId`、`purchaseOrderItemId`、可选 `inboundItemId`、`expenseType`、`amountExcludingTax`、`taxAmount`、`includeInPayable`、`includeInInventoryCost`、`remark`。供应商必须与采购商品行一致；确认时必须明确未审核入库批次的明细。未确认或未明确归属的费用不能入账，不自动平均分摊。入库审核时应付计入已确认的含税费用，库存成本计入已确认的未税费用。
+独立的采购费用归属接口已移除，采购申请的 `otherFees` 字段仍保留。升级前须备份数据库；后端首次数据库访问会删除旧 `purchase_expense_lines` 表及其记录、索引和对应权限关联，已过账的账务与库存流水保持不变。
 
 第二阶段接口已实现，契约见下节。第三阶段接口见文末“采购模块第三阶段新增接口”。员工费用仍仅为前端页面临时状态，没有后端实体或真实审核/付款接口。
 

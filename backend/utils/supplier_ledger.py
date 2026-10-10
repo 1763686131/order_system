@@ -121,28 +121,7 @@ def ensure_schema(conn):
             result_json TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS purchase_expense_lines (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            purchase_order_id INTEGER NOT NULL REFERENCES purchase_orders(id),
-            purchase_order_item_id INTEGER NOT NULL,
-            inbound_item_id INTEGER,
-            supplier_id INTEGER NOT NULL REFERENCES suppliers(id),
-            expense_type TEXT NOT NULL,
-            amount_excluding_tax_cents INTEGER NOT NULL,
-            tax_amount_cents INTEGER NOT NULL,
-            amount_including_tax_cents INTEGER NOT NULL,
-            include_in_payable INTEGER NOT NULL DEFAULT 1,
-            include_in_inventory_cost INTEGER NOT NULL DEFAULT 0,
-            status TEXT NOT NULL DEFAULT 'draft',
-            confirmed_by TEXT,
-            confirmed_at TEXT,
-            created_by TEXT NOT NULL,
-            created_at TEXT NOT NULL,
-            remark TEXT NOT NULL DEFAULT '',
-            version INTEGER NOT NULL DEFAULT 1
-        );
-        CREATE INDEX IF NOT EXISTS idx_purchase_expenses_inbound
-            ON purchase_expense_lines(inbound_item_id, status);
+        DROP TABLE IF EXISTS purchase_expense_lines;
     """)
     from utils.supplier_settlement import ensure_schema as ensure_settlement_schema
     ensure_settlement_schema(conn)
@@ -332,18 +311,11 @@ def post_inbound_payables(conn, document, items):
             raise FinanceError("供应商不存在、已停用或不属于该门店")
         from utils.supplier_periods import ensure_period_open
         ensure_period_open(conn, supplier_id, document["store_id"], document["document_date"])
-        expenses = conn.execute(
-            "SELECT * FROM purchase_expense_lines WHERE inbound_item_id = ?", (item["id"],)
-        ).fetchall()
-        if any(line["status"] != "confirmed" for line in expenses):
-            raise FinanceError("该批次仍有未确认的采购费用，请先完成费用归属")
         tax = cents(item["tax_amount"])
         base = (
             cents(item["total_amount"]) - tax if item.get("tax_included_price") is not None
             else cents(Decimal(str(item["received_qty"])) * Decimal(str(item["unit_price"])))
         )
-        base += sum(line["amount_excluding_tax_cents"] for line in expenses if line["include_in_payable"])
-        tax += sum(line["tax_amount_cents"] for line in expenses if line["include_in_payable"])
         if payable_totals is not None:
             total = payable_totals[index]
             original_total = base + tax

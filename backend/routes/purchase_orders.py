@@ -1019,11 +1019,10 @@ def update_purchase_application(order_id):
                 check_scope(row["store_id"])
                 check_version(data, row)
                 if conn.execute(
-                    "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? "
-                    "UNION ALL SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ? LIMIT 1",
-                    (order_id, order_id),
+                    "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? LIMIT 1",
+                    (order_id,),
                 ).fetchone():
-                    raise FinanceError("采购申请已被入库或费用引用，不能修改", 409)
+                    raise FinanceError("采购申请已被入库，不能修改", 409)
                 values = _order_values(conn, application, existing, allow_request_edit=True)
                 now = _now()
                 conn.execute(
@@ -1132,8 +1131,6 @@ def update_purchase_order(order_id):
                     return jsonify({"success": False, "message": "已审核或已入库的采购订单不能编辑"}), 409
                 check_scope(row["store_id"])
                 check_version(data, row)
-                if conn.execute("SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ?", (order_id,)).fetchone():
-                    raise FinanceError("请先删除采购费用，再修改采购明细", 409)
                 if any(float(item.get("received_qty") or 0) > 0 for item in existing["_items"]):
                     return jsonify({"success": False, "message": "已有入库数量的采购订单不能编辑"}), 409
                 values = _order_values(conn, data, existing)
@@ -1196,10 +1193,8 @@ def delete_purchase_order(order_id):
                 check_version(request.get_json(silent=True) or {}, row)
             except FinanceError as exc:
                 return jsonify({"success": False, "message": str(exc)}), exc.status
-            if conn.execute("SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ?", (order_id,)).fetchone() or conn.execute(
-                "SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ?", (order_id,)
-            ).fetchone():
-                return jsonify({"success": False, "message": "订单已被入库或费用引用，不能删除"}), 409
+            if conn.execute("SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ?", (order_id,)).fetchone():
+                return jsonify({"success": False, "message": "订单已被入库，不能删除"}), 409
             _reverse_order_bank_payment(conn, order_id)
             complete_audit_notifications(conn, "purchase_order", order_id)
             conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
@@ -1224,11 +1219,10 @@ def delete_purchase_inbound_application(order_id):
                 check_scope(row["store_id"])
                 check_version(request.get_json(silent=True) or {}, row)
                 if conn.execute(
-                    "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? "
-                    "UNION ALL SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ? LIMIT 1",
-                    (order_id, order_id),
+                    "SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? LIMIT 1",
+                    (order_id,),
                 ).fetchone():
-                    return jsonify({"success": False, "message": "采购申请已被入库或费用引用，不能删除"}), 409
+                    return jsonify({"success": False, "message": "采购申请已被入库，不能删除"}), 409
                 complete_audit_notifications(conn, "purchase_order", order_id)
                 conn.execute("DELETE FROM purchase_order_items WHERE order_id = ?", (order_id,))
                 conn.execute("DELETE FROM purchase_orders WHERE id = ?", (order_id,))
@@ -1324,10 +1318,8 @@ def reverse_audit_purchase_order(order_id):
                 check_version(request.get_json(silent=True) or {}, row)
             except FinanceError as exc:
                 return jsonify({"success": False, "message": str(exc)}), exc.status
-            if conn.execute("SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ?", (order_id,)).fetchone() or conn.execute(
-                "SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ?", (order_id,)
-            ).fetchone():
-                return jsonify({"success": False, "message": "订单已被入库或费用引用，请先处理引用单据"}), 409
+            if conn.execute("SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ?", (order_id,)).fetchone():
+                return jsonify({"success": False, "message": "订单已被入库，请先处理关联入库单"}), 409
             received = conn.execute(
                 "SELECT COALESCE(SUM(received_qty), 0) AS quantity FROM purchase_order_items WHERE order_id = ?",
                 (order_id,),

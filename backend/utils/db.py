@@ -571,6 +571,15 @@ def _ensure_auth_schema(conn):
                     ),
                 )
 
+        cursor.execute(
+            """
+            DELETE FROM role_permissions WHERE permission_id IN (
+                SELECT id FROM permissions WHERE code LIKE 'admin.purchase.expense.%'
+            )
+            """
+        )
+        cursor.execute("DELETE FROM permissions WHERE code LIKE 'admin.purchase.expense.%'")
+
         valid_touch_permission_codes = [
             permission["code"]
             for module in PERMISSION_MODULES

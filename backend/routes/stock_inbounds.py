@@ -679,12 +679,7 @@ def _post_items(conn, document_row, item_rows):
         store_id = int(document_row['store_id'] or 0)
         bin_code = item['bin_code'] or ''
         batch_no = item['batch_no'] or ''
-        expense_cost = conn.execute(
-            """SELECT COALESCE(SUM(amount_excluding_tax_cents), 0) AS amount
-               FROM purchase_expense_lines WHERE inbound_item_id = ?
-               AND status = 'confirmed' AND include_in_inventory_cost = 1""", (item['id'],),
-        ).fetchone()['amount'] / 100
-        inventory_price = float(item['unit_price'] or 0) + expense_cost / qty
+        inventory_price = float(item['unit_price'] or 0)
         conn.execute(
             '''
             INSERT INTO stock_balances (
@@ -708,7 +703,7 @@ def _post_items(conn, document_row, item_rows):
             (
                 receipt_type, document_row['id'], document_row['document_no'], item['id'],
                 receipt_type, product_id, warehouse_id, store_id, bin_code, batch_no,
-                qty, inventory_price, item['tax_rate'], float(item['total_amount']) + expense_cost, now,
+                qty, inventory_price, item['tax_rate'], float(item['total_amount']), now,
             ),
         )
         if receipt_type == 'finished-product':
@@ -1054,9 +1049,6 @@ def update_stock_inbound(inbound_id):
                 check_version(data, old_row)
                 if editable_received and not post_on_save:
                     raise FinanceError('已入库未审核单据修改时必须保存并入库', 409)
-                if conn.execute('SELECT 1 FROM purchase_expense_lines WHERE inbound_item_id IN '
-                                '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?)', (inbound_id,)).fetchone():
-                    raise FinanceError('请先删除或取消该批次的费用归属，再修改入库明细', 409)
                 values = _document_values(conn, data, existing=old_values)
                 if post_on_save:
                     if (old_row['status'] != 'draft' and not editable_received) or values['purchase_order_id'] or values['document_source'] != 'other':
@@ -1131,12 +1123,6 @@ def cancel_stock_inbound(inbound_id):
                 check_version(data, row)
                 if _is_audited(row['status']):
                     return jsonify({'success': False, 'message': '已审核单据不能直接删除，请先反审核'}), 409
-                if conn.execute(
-                    'SELECT 1 FROM purchase_expense_lines WHERE inbound_item_id IN '
-                    '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?) LIMIT 1',
-                    (inbound_id,),
-                ).fetchone():
-                    raise FinanceError('请先删除或取消该批次的费用归属，再作废入库单', 409)
                 if row['status'] == 'cancelled':
                     complete_audit_notifications(conn, "stock_inbound", inbound_id)
                     conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (inbound_id,))
@@ -1199,11 +1185,10 @@ def delete_purchase_inbounds():
                         check_scope(row['store_id'])
                     for order_id in application_ids:
                         if conn.execute(
-                            'SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? '
-                            'UNION ALL SELECT 1 FROM purchase_expense_lines WHERE purchase_order_id = ? LIMIT 1',
-                            (order_id, order_id),
+                            'SELECT 1 FROM stock_inbounds WHERE purchase_order_id = ? LIMIT 1',
+                            (order_id,),
                         ).fetchone():
-                            raise FinanceError('采购申请已关联入库或费用，不能删除', 409)
+                            raise FinanceError('采购申请已关联入库，不能删除', 409)
                 orders = []
                 if order_ids:
                     placeholders = ','.join('?' for _ in order_ids)
@@ -1248,8 +1233,6 @@ def delete_purchase_inbounds():
                         _reverse_posted_items(conn, row)
                         _update_purchase_receipts(conn, row['purchase_order_id'], items, direction=-1)
                     complete_audit_notifications(conn, 'stock_inbound', row['id'])
-                    conn.execute('DELETE FROM purchase_expense_lines WHERE inbound_item_id IN '
-                                 '(SELECT id FROM stock_inbound_items WHERE inbound_id = ?)', (row['id'],))
                     conn.execute('DELETE FROM stock_inbound_items WHERE inbound_id = ?', (row['id'],))
                     conn.execute('DELETE FROM stock_inbounds WHERE id = ?', (row['id'],))
                 for order in applications:

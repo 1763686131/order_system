@@ -34,7 +34,6 @@ _RULES = (
     (
         r"/api/(?:stock-inbounds/\d+/(?:assign-supplier|confirm-payable)|"
         r"suppliers/\d+/initial-balances|supplier-payables/\d+/invoice|"
-        r"purchase-orders/\d+/expenses|purchase-expenses/\d+(?:/confirm)?|"
         r"supplier-payments(?:/\d+(?:/(?:audit|reverse-audit))?)?|"
         r"purchase-invoices(?:/\d+(?:/(?:confirm|reverse-confirm))?)?|"
         r"suppliers/\d+/(?:prepayments|credits)/\d+/allocate|"

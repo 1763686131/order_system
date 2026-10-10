@@ -883,9 +883,6 @@
 
             <footer class="detail-modal-footer">
               <div class="footer-actions">
-                <button v-if="!isInbound && canOpenExpenses(selectedRecord)" class="button button-secondary" type="button" @click="openExpenses(selectedRecord)">
-                  <ReceiptText :size="16" aria-hidden="true" />采购费用
-                </button>
                 <button v-if="canAuditRecord(selectedRecord)" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
                 </button>
@@ -913,7 +910,6 @@
         </div>
       </Transition>
     </Teleport>
-    <PurchaseExpenseDialog v-if="expenseOrderId" :order-id="expenseOrderId" @close="expenseOrderId = null" @updated="refreshData(false)" />
     <CustomModal
       :visible="deleteConfirmOpen"
       title="确认批量删除"
@@ -926,7 +922,7 @@
     <CustomModal
       :visible="Boolean(orderReverseAuditTarget)"
       title="反审核采购订单"
-      message="确认反审核该采购订单？已有入库或费用引用的订单不能反审核。"
+      message="确认反审核该采购订单？已有入库的订单不能反审核。"
       @confirm="reverseAuditOrder"
       @cancel="orderReverseAuditTarget = null"
     />
@@ -937,12 +933,11 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { Check, ClipboardList, EllipsisVertical, PackageCheck, PackageX, Pencil, Plus, Printer, ReceiptText, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
+import { Check, ClipboardList, EllipsisVertical, PackageCheck, PackageX, Pencil, Plus, Printer, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { ADMIN_PURCHASE_ORDER_PERMISSIONS } from '@/utils/accessControl'
-import PurchaseExpenseDialog from '@/components/admin/purchase/PurchaseExpenseDialog.vue'
 import { canEditReceivedPurchaseInbound, purchaseReturnStatusLabels } from '@/composables/documents/documentModels'
 import { invoiceLabels, operationKey, paymentLabels, fulfillmentLabel } from '@/utils/supplierFinance'
 
@@ -1232,7 +1227,6 @@ const returnActionMessage = computed(() => ({
   'reverse-audit': '确认反审核该采购退货？系统将冲销对应账务并恢复库存。',
   delete: '确定删除该采购退货草稿？'
 }[returnPendingAction.value?.action] || ''))
-const expenseOrderId = ref(null)
 const loading = ref(true)
 const recordTableColumnCount = computed(() => isReturn.value ? 11 : isInbound.value ? 13 : 15)
 const currentPage = ref(1)
@@ -1435,15 +1429,6 @@ function purchasePaymentLabel(record) {
   if (record.purchasePaymentStatus === 'prepaid') return `增加预付 ¥ ${formatMoney(record.prepaidAmount)}`
   if (record.purchasePaymentStatus !== 'paid') return `未付 ¥ ${formatMoney(record.estimatedUnpaidAmount)}`
   return '已结清'
-}
-function canOpenExpenses(record) {
-  return userStore.hasPerm('admin.route.purchase.orders') &&
-    Boolean(record.purchaseOrderId || (!isInbound.value && ['approved', 'partial', 'completed'].includes(record.status)))
-}
-function openExpenses(record) {
-  const id = Number(record.purchaseOrderId || record.id)
-  closeDetail()
-  expenseOrderId.value = id
 }
 function formatMoney(value) {
   return Number(value || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })

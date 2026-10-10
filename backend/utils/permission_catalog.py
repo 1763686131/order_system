@@ -954,16 +954,6 @@ PERMISSION_MODULES.extend([
         ],
     },
     {
-        "code": "admin_purchase_expenses",
-        "name": "采购费用归属",
-        "description": "实际入库批次费用归属，不自动分摊",
-        "permissions": [
-            {"code": "admin.purchase.expense." + action, "name": name, "description": name}
-            for action, name in [("create", "新增采购费用"), ("edit", "修改采购费用"),
-                                 ("delete", "删除采购费用"), ("confirm", "确认或撤销费用归属")]
-        ],
-    },
-    {
         "code": "admin_employee_expenses",
         "name": "员工费用原型",
         "description": "仅临时前端费用数据，不产生正式财务业务",

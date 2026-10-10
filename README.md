@@ -161,7 +161,7 @@ order_system/
 │  │  ├─ products.py                 # 成品、单位、属性和成品库存接口
 │  │  ├─ raw_material_products.py    # 原材料商品档案接口
 │  │  ├─ purchase_orders.py          # 采购申请、已付金额、对公扣款、审核和关联入库
-│  │  ├─ supplier_finance.py         # 供应商应付、内部对账、期初和费用归属
+│  │  ├─ supplier_finance.py         # 供应商应付、内部对账、期初和入库结算
 │  │  ├─ supplier_payments.py        # 付款审核、银行流水、余额核销和私有附件
 │  │  ├─ purchase_invoices.py        # 发票登记、来源分配、确认和撤销
 │  │  ├─ purchase_returns.py         # 采购退货、批次库存、应付冲减和贷项
@@ -240,8 +240,7 @@ order_system/
 │  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制模板、变量、绑定和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  ├─ PartyList.vue             # 客户/供应商共用列表、详情、编辑和财务展示
-│  │  │  ├─ purchase/                # 供应商归属、费用、付款/发票与核销复用组件
-│  │  │  │  ├─ PurchaseExpenseDialog.vue       # 采购费用归属、确认和删除费用草稿
+│  │  │  ├─ purchase/                # 供应商归属、付款/发票与核销复用组件
 │  │  │  │  ├─ SupplierAssignmentDialog.vue    # 独立入库逐行补录供应商并确认应付
 │  │  │  │  ├─ PayableAllocationTable.vue      # 付款核销和采购发票分配明细表
 │  │  │  │  ├─ SupplierAttachments.vue         # 供应商付款/发票附件上传和移除
@@ -575,11 +574,13 @@ import {
 
 采购申请提供折后金额（默认随明细合计填充）、其它费用、已付金额、付款方式和“需要发票”。付款方式为现金、微信、承兑、公对公、其它；公对公选择本门店预设账户，眼睛按钮切换最新余额显隐，其它需填写付款说明。保存采购申请时，对公账户按已付金额扣款，余额不足则整个保存事务回滚；编辑时冲销原扣款并重新入账，删除未审核采购单时退回原扣款。未入库的未付应付为折后金额加其它费用减已付金额。关联入库保存过账后确认应付并自动核销采购单已付金额，不再次扣款；后续剩余应付仍可通过供应商付款模块支付。采购列表将履约、开票和付款状态分开，已审核且没有入库的订单提供反审核入口。
 
-第一阶段应付/归属逻辑集中在 `supplier_ledger.py/supplier_finance.py`，第二阶段付款、余额核销和发票逻辑集中在 `supplier_settlement.py/supplier_payments.py/purchase_invoices.py`，第三阶段退货、退款和正式对账分别集中在 `purchase_returns.py/supplier_refunds.py/supplier_reconciliations.py`，期间控制由 `supplier_periods.py` 统一处理。前端复用 `src/components/admin/purchase/` 下的归属、费用、付款/发票、退货和核销组件及 `supplier-finance.css`。新表在重启后端后的首次数据库访问时自动创建，不迁移旧 `suppliers.payable`，不回填历史已审核入库应付。部署前备份数据库和上传目录，普通角色在权限组中授予新的中文付款、发票、退货、退款、正式对账及核销权限。采购退货与销售退货保持独立。
+第一阶段应付/归属逻辑集中在 `supplier_ledger.py/supplier_finance.py`，第二阶段付款、余额核销和发票逻辑集中在 `supplier_settlement.py/supplier_payments.py/purchase_invoices.py`，第三阶段退货、退款和正式对账分别集中在 `purchase_returns.py/supplier_refunds.py/supplier_reconciliations.py`，期间控制由 `supplier_periods.py` 统一处理。前端复用 `src/components/admin/purchase/` 下的归属、付款/发票、退货和核销组件及 `supplier-finance.css`。新表在重启后端后的首次数据库访问时自动创建，不迁移旧 `suppliers.payable`，不回填历史已审核入库应付。部署前备份数据库和上传目录，普通角色在权限组中授予新的中文付款、发票、退货、退款、正式对账及核销权限。采购退货与销售退货保持独立。
+
+独立的采购费用归属功能已移除，采购申请中的“其它费用”仍保留。升级前请备份数据库；重启后端后的首次数据库访问会删除旧 `purchase_expense_lines` 表（含其记录和索引）及对应权限关联，不改写已过账的供应商账务和库存流水。
 
 “供应商应付”右侧余额操作查看/核销预付款和贷项；核销不再次扣款。付款审核默认允许未开票来源，但必须填写原因；“见票付款”开关开启后须先开票，或由具备豁免权限的审核人确认。“采购 / 采购发票登记”支持多来源、多发票部分覆盖；正式发票分配不生成新应付，撤销发票不撤销已发生付款。财务附件按登录和门店范围私有下载。
 
-第二、三阶段回归命令曾使用临时数据库专项测试；当前测试文件已清理，正式运行不依赖额外预览服务。
+第二、三阶段早期专项测试已清理，正式运行不依赖额外预览服务。
 
 ### 公共单据录入组件
 
@@ -727,9 +728,6 @@ import {
 | `GET` | `/api/suppliers/:id/debt-details` | 查询内部对账明细 |
 | `POST` | `/api/suppliers/:id/initial-balances` | 录入新账务期初余额 |
 | `PUT` | `/api/supplier-payables/:id/invoice` | 维护基础开票状态 |
-| `GET` / `POST` | `/api/purchase-orders/:id/expenses` | 查询/新增采购费用行 |
-| `PUT` / `DELETE` | `/api/purchase-expenses/:id` | 修改/删除草稿费用 |
-| `POST` / `DELETE` | `/api/purchase-expenses/:id/confirm` | 确认/撤销费用归属 |
 
 银行账户图片目录由 `/api/settings/paths` 的 `bankCardBgPath` 和 `bankIconPath` 配置；数据库只保存 `/uploads/bank-cards/...` 访问路径。
 
