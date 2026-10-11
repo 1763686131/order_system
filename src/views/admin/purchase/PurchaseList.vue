@@ -675,7 +675,7 @@
         <div v-if="detailModalOpen && selectedRecord" class="detail-modal-layer" @click.self="closeDetail">
           <article
             class="detail-modal"
-            :class="{ 'is-inbound': isInbound }"
+            :class="{ 'is-inbound': isInbound, 'is-orders': !isInbound }"
             role="dialog"
             aria-modal="true"
             :aria-label="`${documentTypeFor(selectedRecord).label}详情`"
@@ -685,15 +685,21 @@
             <header class="detail-modal-header">
               <div class="detail-modal-title-wrap">
                 <span class="detail-modal-mark" aria-hidden="true">
-                  <svg viewBox="0 0 24 24">
+                  <FileText v-if="!isInbound" :size="20" />
+                  <svg v-else viewBox="0 0 24 24">
                     <path d="M5 3h11l3 3v15H5z"></path>
                     <path d="M16 3v4h4"></path>
                     <path d="M8 12h8M8 16h6"></path>
                   </svg>
                 </span>
                 <div>
-                  <span class="modal-kicker">{{ isInbound ? 'PURCHASE INBOUND' : 'PURCHASE ORDER' }}</span>
-                  <h2>{{ documentTypeFor(selectedRecord).label }}详情</h2>
+                  <span v-if="isInbound" class="modal-kicker">PURCHASE INBOUND</span>
+                  <div class="detail-title-line">
+                    <h2>{{ documentTypeFor(selectedRecord).label }}详情</h2>
+                    <span v-if="!isInbound" class="status-tag" :class="`status-${getStatusClass(selectedRecord.status)}`">
+                      <i></i>{{ getStatusLabel(selectedRecord.status) }}
+                    </span>
+                  </div>
                   <div class="modal-document-no">{{ getRecordNo(selectedRecord) }}</div>
                 </div>
               </div>
@@ -743,51 +749,59 @@
                   </span>
                 </div>
               </div>
-              <div v-else class="detail-overview">
-                <div>
-                  <span class="detail-label">当前状态</span>
-                  <span class="status-tag large" :class="`status-${getStatusClass(selectedRecord.status)}`">
-                    <i></i>{{ getStatusLabel(selectedRecord.status) }}
-                  </span>
-                </div>
-                <div>
-                  <span class="detail-label">申请日期</span>
-                  <strong>{{ formatDate(recordDate(selectedRecord)) }}</strong>
-                </div>
-                <div>
-                  <span class="detail-label">采购金额</span>
-                  <strong class="overview-amount">¥ {{ formatMoney(selectedRecord.totalAmount) }}</strong>
-                </div>
-              </div>
+              <template v-else>
+                <dl class="order-meta-grid" aria-label="基础信息">
+                  <div><dt>{{ selectedRecord.sourceType === 'warehouse-inbound' ? '入库日期' : '申请日期' }}</dt><dd>{{ formatDate(recordDate(selectedRecord)) }}</dd></div>
+                  <div><dt>供应商</dt><dd>{{ selectedRecord.supplierName || '—' }}</dd></div>
+                  <div><dt>收货仓库</dt><dd>{{ selectedRecord.warehouseName || '—' }}</dd></div>
+                  <div><dt>申请人员</dt><dd>{{ selectedRecord.contact || '—' }}</dd></div>
+                  <div><dt>门店</dt><dd>{{ selectedRecord.storeName || '—' }}</dd></div>
+                  <div><dt>预计到货</dt><dd>{{ selectedRecord.expectedDate || '—' }}</dd></div>
+                </dl>
 
-              <section v-if="!isInbound" class="detail-section">
-                <div class="section-heading"><h3>采购结算</h3><span>{{ receiptLabel(selectedRecord) }}</span></div>
-                <div class="meta-grid">
-                  <div><span>已确认应付</span><strong>¥ {{ formatMoney(selectedRecord.confirmedPayable) }}</strong></div>
-                  <div><span>已核销 / 未付</span><strong>¥ {{ formatMoney(selectedRecord.allocatedAmount) }} / ¥ {{ formatMoney(selectedRecord.unpaidAmount) }}</strong></div>
-                  <div><span>开票状态</span><strong>{{ invoiceLabels[selectedRecord.invoiceStatus] || '无需开票' }}</strong></div>
-                  <div><span>付款状态</span><strong>{{ paymentLabels[selectedRecord.paymentStatus] || '未确认应付' }}</strong></div>
-                  <div><span>已开票 / 未开票</span><strong>¥ {{ formatMoney(selectedRecord.billedAmount) }} / ¥ {{ formatMoney(selectedRecord.unbilledAmount) }}</strong></div>
-                </div>
-              </section>
-
-              <section v-if="!isInbound" class="detail-section">
-                <div class="section-heading">
-                  <h3>基础信息</h3>
-                  <span>共 {{ selectedRecord.itemCount }} 项物料</span>
-                </div>
-                <div class="meta-grid">
-                  <div><span>供应商</span><strong>{{ selectedRecord.supplierName || '—' }}</strong></div>
-                  <div><span>收货仓库</span><strong>{{ selectedRecord.warehouseName }}</strong></div>
-                  <div><span>{{ isInbound ? '验收人员' : '申请人员' }}</span><strong>{{ isInbound ? selectedRecord.inspector : selectedRecord.contact }}</strong></div>
-                  <div><span>{{ isInbound ? '质检单号' : '预计到货' }}</span><strong>{{ isInbound ? selectedRecord.qualityNo || '—' : selectedRecord.expectedDate || '—' }}</strong></div>
-                </div>
-              </section>
+                <section class="detail-section order-settlement" aria-label="金额与结算">
+                  <div class="order-settlement-grid">
+                    <div class="order-finance-item">
+                      <span class="order-finance-label">含税金额</span>
+                      <strong class="order-gross-amount">¥ {{ formatMoney(detailTaxIncludedAmount) }}</strong>
+                      <div class="order-finance-breakdown">
+                        <span>未税 ¥ {{ formatMoney(detailAmountExcludingTax) }}</span>
+                        <span>税额 ¥ {{ formatMoney(selectedRecord.totalTaxAmount) }}</span>
+                      </div>
+                    </div>
+                    <div class="order-finance-item">
+                      <span class="order-finance-label">已确认应付</span>
+                      <strong>¥ {{ formatMoney(selectedRecord.confirmedPayable) }}</strong>
+                    </div>
+                    <div class="order-finance-item">
+                      <span class="order-finance-label">付款</span>
+                      <strong>{{ paymentLabels[selectedRecord.paymentStatus] || '未确认应付' }}</strong>
+                      <div class="order-finance-breakdown">
+                        <span>已核销 ¥ {{ formatMoney(selectedRecord.allocatedAmount) }}</span>
+                        <span>未付 ¥ {{ formatMoney(selectedRecord.unpaidAmount) }}</span>
+                      </div>
+                    </div>
+                    <div class="order-finance-item">
+                      <span class="order-finance-label">发票</span>
+                      <strong>{{ invoiceLabels[selectedRecord.invoiceStatus] || '无需开票' }}</strong>
+                      <div class="order-finance-breakdown">
+                        <span>已开票 ¥ {{ formatMoney(selectedRecord.billedAmount) }}</span>
+                        <span>未开票 ¥ {{ formatMoney(selectedRecord.unbilledAmount) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <dl v-if="detailHasSettlementAdjustment" class="order-adjustments">
+                    <div><dt>订单应付</dt><dd>¥ {{ formatMoney(detailSettlementAmount) }}</dd></div>
+                    <div v-if="selectedRecord.paymentAmount != null"><dt>折后金额</dt><dd>¥ {{ formatMoney(selectedRecord.paymentAmount) }}</dd></div>
+                    <div v-if="Number(selectedRecord.otherFees || 0) !== 0"><dt>其它费用</dt><dd>¥ {{ formatMoney(selectedRecord.otherFees) }}</dd></div>
+                  </dl>
+                </section>
+              </template>
 
               <section class="detail-section">
                 <div class="section-heading">
                   <h3>采购物料明细</h3>
-                  <span>{{ isInbound ? `共 ${selectedRecord.itemCount} 项物料` : receiptLabel(selectedRecord) }}</span>
+                  <span>{{ isInbound ? `共 ${selectedRecord.itemCount} 项物料` : `共 ${selectedRecord.itemCount} 项 · ${selectedRecord.progressBasis === 'lines' ? '已完成 / 总行数' : '实收 / 采购'} ${receiptLabel(selectedRecord)}` }}</span>
                 </div>
                 <div class="detail-items-scroll">
                   <table v-resizable-columns="{ storageKey: `purchase-${mode}-detail-items`, resizeMode: 'fit' }" class="detail-items-table" :class="{ 'inbound-items-table': isInbound }">
@@ -828,8 +842,8 @@
                         <th>累计实收</th>
                         <th data-min-width="100">履约进度</th>
                         <th v-if="isInbound">备注</th>
-                        <th v-if="!isInbound">采购单价</th>
-                        <th v-if="!isInbound">金额</th>
+                        <th v-if="!isInbound" data-column-key="采购单价">未税单价</th>
+                        <th v-if="!isInbound" data-column-key="金额">未税金额</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -926,7 +940,7 @@
                 </div>
               </section>
 
-              <section class="detail-section remark-section">
+              <section v-if="isInbound || selectedRecord.remark?.trim()" class="detail-section remark-section">
                 <div class="section-heading"><h3>备注</h3></div>
                 <p>{{ selectedRecord.remark || '' }}</p>
               </section>
@@ -934,12 +948,12 @@
             </div>
 
             <footer v-if="detailTab === 'document'" class="detail-modal-footer">
+              <button v-if="canReverseAudit(selectedRecord)" class="button button-secondary footer-secondary-action" type="button" @click="confirmOrderReverseAudit(selectedRecord)">
+                <RotateCcw :size="16" aria-hidden="true" />反审核采购订单
+              </button>
               <div class="footer-actions">
                 <button v-if="canAuditRecord(selectedRecord)" class="button button-primary" type="button" @click="auditRecord(selectedRecord)">
                   补充采购信息并审核
-                </button>
-                <button v-if="canReverseAudit(selectedRecord)" class="button button-secondary" type="button" @click="confirmOrderReverseAudit(selectedRecord)">
-                  <RotateCcw :size="16" aria-hidden="true" />反审核采购订单
                 </button>
                 <button v-if="!isInbound && ['approved', 'partial'].includes(selectedRecord.status)" class="button button-secondary" type="button" @click="router.push({ name: 'admin-purchase-inbound-create', query: { purchaseOrderId: selectedRecord.id } })">
                   创建采购入库单
@@ -993,7 +1007,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter } from 'vue-router'
-import { Check, ClipboardList, EllipsisVertical, FilePlus2, PackageCheck, PackageX, Pencil, Plus, Printer, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
+import { Check, ClipboardList, EllipsisVertical, FilePlus2, FileText, PackageCheck, PackageX, Pencil, Plus, Printer, RotateCcw, ShoppingCart, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import PurchaseInvoicePanel from '@/components/admin/purchase/PurchaseInvoicePanel.vue'
@@ -1295,6 +1309,20 @@ const currentPage = ref(1)
 const pageSize = 30
 const selectedIds = ref(new Set())
 const selectedRecord = ref(null)
+const detailTaxIncludedAmount = computed(() => {
+  const record = selectedRecord.value
+  if (!record) return 0
+  return Number(record.totalTaxIncludedAmount ?? (record.sourceType === 'warehouse-inbound'
+    ? record.totalAmount
+    : Number(record.totalAmount || 0) + Number(record.totalTaxAmount || 0)))
+})
+const detailAmountExcludingTax = computed(() =>
+  Math.round((detailTaxIncludedAmount.value - Number(selectedRecord.value?.totalTaxAmount || 0)) * 100) / 100)
+const detailSettlementAmount = computed(() => Number(selectedRecord.value?.estimatedAmount ??
+  Math.max(0, Number(selectedRecord.value?.paymentAmount ?? detailTaxIncludedAmount.value) + Number(selectedRecord.value?.otherFees || 0))))
+const detailHasSettlementAdjustment = computed(() =>
+  Math.round(detailSettlementAmount.value * 100) !== Math.round(detailTaxIncludedAmount.value * 100) ||
+  Number(selectedRecord.value?.otherFees || 0) !== 0)
 const detailTotals = computed(() => (selectedRecord.value?.items || []).reduce((totals, item) => ({
   plannedQuantity: totals.plannedQuantity + Number(isInbound.value ? item.expectedQty : item.quantity),
   receivedQuantity: totals.receivedQuantity + Number(item.receivedQty ?? item.quantity ?? 0),
@@ -4385,6 +4413,232 @@ onBeforeUnmount(() => {
   margin-left: auto;
 }
 
+.is-orders {
+  background: #fff;
+}
+
+.is-orders .detail-modal-header {
+  min-height: 64px;
+  flex-shrink: 0;
+  padding: 10px 16px;
+}
+
+.is-orders .detail-modal-title-wrap {
+  gap: 10px;
+  padding-right: 38px;
+}
+
+.is-orders .detail-modal-title-wrap > div {
+  min-width: 0;
+}
+
+.is-orders .detail-modal-mark {
+  width: 34px;
+  height: 34px;
+  flex-basis: 34px;
+  border-radius: 5px;
+}
+
+.is-orders .detail-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+}
+
+.is-orders .detail-modal-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.is-orders .detail-title-line .status-tag {
+  flex: none;
+  width: auto;
+  font-size: 12px;
+}
+
+.is-orders .modal-document-no {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+}
+
+.is-orders .modal-close {
+  top: 10px;
+  right: 16px;
+}
+
+.is-orders .detail-tabs {
+  gap: 18px;
+  padding: 0 16px;
+}
+
+.is-orders .detail-tabs button {
+  padding: 9px 0;
+  font-size: 13px;
+}
+
+.is-orders .detail-modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 12px 16px;
+  background: #fff;
+}
+
+.order-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+}
+
+.order-meta-grid > div,
+.order-adjustments > div {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.order-meta-grid dt,
+.order-adjustments dt,
+.order-finance-label {
+  color: #718096;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.order-meta-grid dd,
+.order-adjustments dd {
+  margin: 0;
+  color: #283548;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.is-orders .detail-section {
+  margin-top: 12px;
+  border: 0;
+  border-radius: 0;
+}
+
+.is-orders .detail-section.order-settlement {
+  padding: 10px 0;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+.order-settlement-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px 18px;
+}
+
+.order-finance-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.order-finance-item > strong {
+  color: #283548;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.order-finance-item > .order-gross-amount {
+  color: var(--accent-dark);
+  font-size: 16px;
+}
+
+.order-finance-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+  color: #596579;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.order-finance-breakdown span {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.order-adjustments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 24px;
+  margin: 10px 0 0;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.is-orders .section-heading {
+  min-height: 36px;
+  margin: 0;
+  padding: 7px 0;
+  gap: 8px 16px;
+  flex-wrap: wrap;
+}
+
+.is-orders .section-heading h3 {
+  font-size: 13px;
+}
+
+.is-orders .section-heading > span {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.is-orders .detail-items-table th,
+.is-orders .detail-items-table td,
+.is-orders .detail-items-table tfoot td {
+  height: 36px;
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.is-orders .remark-section {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.is-orders .remark-section .section-heading {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+
+.is-orders .remark-section p {
+  padding: 0;
+  background: transparent;
+  font-size: 13px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.is-orders .detail-modal-footer {
+  min-height: 54px;
+  padding: 9px 16px;
+  gap: 8px 16px;
+}
+
+.is-orders .detail-modal-footer .button {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 12px;
+}
+
 .is-return .return-search-grid {
   grid-template-columns: minmax(210px, 1.2fr) minmax(120px, 0.6fr) minmax(110px, 0.55fr) minmax(220px, 1.1fr) minmax(120px, 0.6fr) auto !important;
   gap: 10px;
@@ -4735,6 +4989,16 @@ onBeforeUnmount(() => {
   }
 }
 
+@media (max-width: 1000px) {
+  .order-meta-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .order-settlement-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 780px) {
   .purchase-list-page {
     padding: 12px 12px 20px;
@@ -4811,6 +5075,49 @@ onBeforeUnmount(() => {
 
   .detail-modal-footer {
     flex-wrap: wrap;
+  }
+
+  .is-orders .detail-modal-header,
+  .is-orders .detail-modal-body,
+  .is-orders .detail-modal-footer {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .is-orders .modal-close {
+    right: 12px;
+  }
+
+  .is-orders .detail-tabs {
+    padding: 0 12px;
+  }
+
+  .order-meta-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+  }
+
+  .order-meta-grid > div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .order-settlement-grid {
+    gap: 12px;
+  }
+
+  .is-orders .detail-items-table td {
+    height: 40px;
+  }
+
+  .is-orders .detail-modal-footer > .footer-secondary-action {
+    margin-right: auto;
+  }
+
+  .is-orders .detail-modal-footer .button {
+    height: 38px;
+    min-height: 38px;
   }
 
   .detail-overview,
