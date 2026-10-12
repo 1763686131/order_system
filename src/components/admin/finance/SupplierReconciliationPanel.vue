@@ -57,9 +57,9 @@
             <td><button class="sf-link" @click="openRecord(row.id)">{{ row.documentNo }}</button></td>
             <td>{{ row.supplierName }}<div class="sf-muted">{{ row.storeName }}</div></td>
             <td>{{ row.periodStart }} 至 {{ row.periodEnd }}</td>
-            <td class="sf-number">{{ money(row.snapshot.closing.payable) }}</td>
-            <td class="sf-number">{{ money(row.snapshot.closing.prepayment) }}</td>
-            <td class="sf-number">{{ money(row.snapshot.closing.credit) }}</td>
+            <td class="sf-number">{{ formatTableMoney(row.snapshot.closing.payable) }}</td>
+            <td class="sf-number">{{ formatTableMoney(row.snapshot.closing.prepayment) }}</td>
+            <td class="sf-number">{{ formatTableMoney(row.snapshot.closing.credit) }}</td>
             <td><span class="sf-badge">{{ statusLabels[row.status] || row.status }}</span></td>
             <td>{{ row.createdBy }}<div class="sf-muted">{{ row.confirmedBy || '-' }}</div></td>
           </tr>
@@ -122,11 +122,11 @@
                     <td>{{ item.businessDate }}</td>
                     <td>{{ item.documentNo }}<div class="sf-muted">{{ businessLabels[item.businessType] || item.businessType }}</div></td>
                     <td>{{ item.productName || item.remark || '-' }}</td>
-                    <td class="sf-number">{{ money(item.payableChange) }}</td>
-                    <td class="sf-number">{{ money(item.prepaymentChange) }}</td>
-                    <td class="sf-number">{{ money(item.creditChange) }}</td>
+                    <td class="sf-number">{{ formatTableMoney(item.payableChange) }}</td>
+                    <td class="sf-number">{{ formatTableMoney(item.prepaymentChange) }}</td>
+                    <td class="sf-number">{{ formatTableMoney(item.creditChange) }}</td>
                     <td><span class="sf-badge">{{ transactionStatus[item.status] || item.status }}</span></td>
-                    <td>{{ money(item.balances.payable) }} / {{ money(item.balances.prepayment) }} / {{ money(item.balances.credit) }}</td>
+                    <td>{{ formatTableMoney(item.balances.payable) }} / {{ formatTableMoney(item.balances.prepayment) }} / {{ formatTableMoney(item.balances.credit) }}</td>
                   </tr>
                 </tbody>
               </table>
@@ -178,7 +178,7 @@ import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { localDate } from '@/composables/documents/documentModels'
-import { businessLabels, operationKey } from '@/utils/supplierFinance'
+import { businessLabels, formatTableMoney, operationKey } from '@/utils/supplierFinance'
 import '@/assets/styles/supplier-finance.css'
 
 const props = defineProps({ supplierId: { type: [String, Number], default: '' }, storeId: { type: [String, Number], default: '' } })
@@ -362,6 +362,7 @@ onMounted(async () => {
 .reconciliation-search-actions { justify-content: flex-end; }
 .reconciliation-search-actions .sf-button { height: 38px; padding: 0 15px; gap: 7px; border-radius: 5px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 .reconciliation-table th, .reconciliation-table td, .reconciliation-table .sf-number { text-align: left; }
+.reconciliation-table th, .reconciliation-table td { border: 1px solid #edf1f5; }
 .reconciliation-table.resizable-columns-table th, .reconciliation-table.resizable-columns-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reconciliation-table th:last-child, .reconciliation-table td:last-child { padding-right: 24px; }
 @media (max-width: 1280px) {

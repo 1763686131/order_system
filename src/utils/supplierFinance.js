@@ -33,6 +33,10 @@ export function invoiceSourceKey(row) {
 export const formatMoney = value => Number(value || 0).toLocaleString('zh-CN', {
   minimumFractionDigits: 2, maximumFractionDigits: 2
 })
+export function formatTableMoney(value, currency = '') {
+  const amount = Number(value) || 0
+  return Math.round(Math.abs(amount) * 100) === 0 ? '-' : `${currency}${formatMoney(amount)}`
+}
 export const operationKey = () => globalThis.crypto?.randomUUID?.()
   || `op-${Date.now()}-${Math.random().toString(16).slice(2)}`
 export const sumMoney = (rows, field) => rows.reduce((total, row) => total + Math.round(Number(row[field] || 0) * 100), 0) / 100

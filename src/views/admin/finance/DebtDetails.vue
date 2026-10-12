@@ -124,13 +124,13 @@
               <td>{{ date(row.businessDate) }}<small>{{ row.createdBy || '-' }}</small></td>
               <td><button v-if="canOpenSource(row)" class="statement-link" type="button" @click="openSource(row)">{{ row.documentNo || '-' }}</button><strong v-else>{{ row.documentNo || '-' }}</strong><small>{{ supplierBusinessLabels[row.businessType] || row.businessType }}</small></td>
               <td>{{ row.productName || row.remark || '-' }}</td>
-              <td class="number">{{ money(row.amountExcludingTax) }}</td>
-              <td class="number">{{ money(row.taxAmount) }}</td>
-              <td class="number" :class="Number(row.payableChange) > 0 ? 'increase' : 'decrease'">{{ money(row.payableChange) }}</td>
-              <td class="number">{{ money(row.prepaymentChange) }}</td>
-              <td class="number">{{ money(row.creditChange) }}</td>
-              <td class="number">{{ money(row.balances?.payable) }}</td>
-              <td>{{ invoiceLabels[row.invoiceStatus] || '-' }}<small>{{ money(row.billedAmount) }}</small></td>
+              <td class="number">{{ tableMoney(row.amountExcludingTax) }}</td>
+              <td class="number">{{ tableMoney(row.taxAmount) }}</td>
+              <td class="number" :class="Number(row.payableChange) > 0 ? 'increase' : 'decrease'">{{ tableMoney(row.payableChange) }}</td>
+              <td class="number">{{ tableMoney(row.prepaymentChange) }}</td>
+              <td class="number">{{ tableMoney(row.creditChange) }}</td>
+              <td class="number">{{ tableMoney(row.balances?.payable) }}</td>
+              <td>{{ invoiceLabels[row.invoiceStatus] || '-' }}<small>{{ tableMoney(row.billedAmount) }}</small></td>
               <td>{{ transactionLabels[row.status] || row.status }}</td>
               <td><button v-if="row.status === 'audited' && row.sourceType === 'stock_inbound' && !row.lockedAt && !row.invoiceManaged && user.hasPerm('admin.purchase.invoice_status.edit')" class="statement-link" @click="invoiceError = ''; invoice = { ...row }">开票状态</button></td>
             </tr>
@@ -143,16 +143,16 @@
                 <td><strong>{{ row.docNumber || '-' }}</strong></td>
                 <td><span class="business-badge" :class="`business-${row.businessType.toLowerCase()}`">{{ customerTypeLabels[row.businessType] || row.businessType }}</span></td>
                 <td :title="displayProducts(row).map(item => item.name).join('、')">{{ displayProducts(row)[0]?.name || '-' }}<span v-if="row.products?.length > 1" class="product-count">+{{ row.products.length - 1 }}</span></td>
-                <td class="number">{{ displayProducts(row)[0]?.quantity ?? '-' }}</td>
+                <td class="number">{{ tableQuantity(displayProducts(row)[0]?.quantity) }}</td>
                 <td>{{ displayProducts(row)[0]?.unit || '-' }}</td>
-                <td class="number">{{ row.products?.length ? money(displayProducts(row)[0]?.price) : '-' }}</td>
-                <td class="number">{{ ['ORDER', 'INITIAL'].includes(row.businessType) ? money(expandedRows[row.id] ? originalAmount(displayProducts(row)[0]) : row.orderAmount) : '-' }}</td>
-                <td class="number">{{ row.businessType === 'BALANCE' ? money(row.balanceAmount) : Number(row.paidAmount) > 0 ? money(row.paidAmount) : '-' }}</td>
-                <td class="number" :class="Number(row.debtAmount) > 0 ? 'increase' : 'decrease'">{{ row.businessType === 'BALANCE' ? '-' : money(expandedRows[row.id] ? productDebt(row, displayProducts(row)[0]) : row.debtAmount) }}</td>
-                <td class="number">{{ money(expandedRows[row.id] ? productCurrentDebt(row, displayProducts(row)[0]) : row.currentDebt) }}</td>
+                <td class="number">{{ row.products?.length ? tableMoney(displayProducts(row)[0]?.price) : '-' }}</td>
+                <td class="number">{{ ['ORDER', 'INITIAL'].includes(row.businessType) ? tableMoney(expandedRows[row.id] ? originalAmount(displayProducts(row)[0]) : row.orderAmount) : '-' }}</td>
+                <td class="number">{{ row.businessType === 'BALANCE' ? tableMoney(row.balanceAmount) : Number(row.paidAmount) > 0 ? tableMoney(row.paidAmount) : '-' }}</td>
+                <td class="number" :class="Number(row.debtAmount) > 0 ? 'increase' : 'decrease'">{{ row.businessType === 'BALANCE' ? '-' : tableMoney(expandedRows[row.id] ? productDebt(row, displayProducts(row)[0]) : row.debtAmount) }}</td>
+                <td class="number">{{ tableMoney(expandedRows[row.id] ? productCurrentDebt(row, displayProducts(row)[0]) : row.currentDebt) }}</td>
               </tr>
               <tr v-for="(product, productIndex) in expandedRows[row.id] ? displayProducts(row).slice(1) : []" :key="`${row.id}-${productIndex}`" class="product-row">
-                <td></td><td>{{ date(row.businessDate) }}</td><td>{{ row.docNumber }}</td><td></td><td>{{ product.name }}</td><td class="number">{{ product.quantity ?? '-' }}</td><td>{{ product.unit || '-' }}</td><td class="number">{{ money(product.price) }}</td><td class="number">{{ ['ORDER', 'INITIAL'].includes(row.businessType) ? money(originalAmount(product)) : '-' }}</td><td></td><td class="number">{{ money(productDebt(row, product)) }}</td><td class="number">{{ money(productCurrentDebt(row, product)) }}</td>
+                <td></td><td>{{ date(row.businessDate) }}</td><td>{{ row.docNumber }}</td><td></td><td>{{ product.name }}</td><td class="number">{{ tableQuantity(product.quantity) }}</td><td>{{ product.unit || '-' }}</td><td class="number">{{ tableMoney(product.price) }}</td><td class="number">{{ ['ORDER', 'INITIAL'].includes(row.businessType) ? tableMoney(originalAmount(product)) : '-' }}</td><td></td><td class="number">{{ tableMoney(productDebt(row, product)) }}</td><td class="number">{{ tableMoney(productCurrentDebt(row, product)) }}</td>
               </tr>
             </template>
           </template>
@@ -192,7 +192,7 @@ import * as XLSX from 'xlsx'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
-import { businessLabels as supplierBusinessLabels, invoiceLabels } from '@/utils/supplierFinance'
+import { businessLabels as supplierBusinessLabels, formatTableMoney, invoiceLabels } from '@/utils/supplierFinance'
 import SupplierReconciliationPanel from '@/components/admin/finance/SupplierReconciliationPanel.vue'
 
 const props = defineProps({
@@ -257,6 +257,8 @@ const supplierSummary = computed(() => {
   ]
 })
 const money = value => `¥${(Number(value) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+const tableMoney = value => formatTableMoney(value, '¥')
+const tableQuantity = value => value == null || Number(value) === 0 ? '-' : value
 const date = value => value ? String(value).slice(0, 10) : '-'
 const apiParams = extra => ({ ...filters, storeId: props.storeId || undefined, page: page.value, pageSize: pageSize.value, sortOrder: sortOrder.value, ...extra })
 function backToList() {
@@ -375,7 +377,7 @@ async function printStatement() {
     const rows = data?.items || filteredRecords.value
     const escape = value => String(value ?? '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
     const headers = props.type === 'payable' ? ['业务日期', '单号', '业务类型', '商品', '应付变动', '预付款变动', '贷项变动', '应付余额'] : ['业务日期', '单号', '业务类型', '商品', '数量', '单位', '单价', '本单变动', '当前欠款']
-    const body = rows.flatMap(row => props.type === 'payable' ? [[row.businessDate, row.documentNo, supplierBusinessLabels[row.businessType] || row.businessType, row.productName, money(row.payableChange), money(row.prepaymentChange), money(row.creditChange), money(row.balances.payable)]] : (displayProducts(row).length ? displayProducts(row) : [null]).map(product => [row.businessDate, row.docNumber, customerTypeLabels[row.businessType] || row.businessType, product?.name, product?.quantity, product?.unit, product ? money(product.price) : '', money(product ? productDebt(row, product) : row.debtAmount), money(product ? productCurrentDebt(row, product) : row.currentDebt)]))
+    const body = rows.flatMap(row => props.type === 'payable' ? [[row.businessDate, row.documentNo, supplierBusinessLabels[row.businessType] || row.businessType, row.productName, tableMoney(row.payableChange), tableMoney(row.prepaymentChange), tableMoney(row.creditChange), tableMoney(row.balances.payable)]] : (displayProducts(row).length ? displayProducts(row) : [null]).map(product => [row.businessDate, row.docNumber, customerTypeLabels[row.businessType] || row.businessType, product?.name, tableQuantity(product?.quantity), product?.unit, product ? tableMoney(product.price) : '', tableMoney(product ? productDebt(row, product) : row.debtAmount), tableMoney(product ? productCurrentDebt(row, product) : row.currentDebt)]))
     printWindow.document.write(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>${escape(displayName.value)}对账单</title><style>body{font:13px Arial,"Microsoft YaHei";padding:24px;color:#172033}h1{font-size:20px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border:1px solid #cbd5e1;text-align:left}</style></head><body><h1>${escape(displayName.value)} · 对账单</h1>${data ? `<p>期初应付 ${money(data.opening.payable)}　期末应付 ${money(data.closing.payable)}　期末预付款 ${money(data.closing.prepayment)}　期末贷项 ${money(data.closing.credit)}</p>` : ''}<table><thead><tr>${headers.map(label => `<th>${label}</th>`).join('')}</tr></thead><tbody>${body.map(row => `<tr>${row.map(value => `<td>${escape(value)}</td>`).join('')}</tr>`).join('')}</tbody></table><script>window.addEventListener('load',()=>window.print())<\/script></body></html>`)
     printWindow.document.close()
   } catch (err) { printWindow.close(); error.value = err.response?.data?.message || err.message }
@@ -461,7 +463,7 @@ onMounted(load)
 .statement-pagination select { height: 34px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
 .expandable { cursor: pointer; }.expandable:hover, .product-row { background: #f3fbf8; }.product-count { display: inline-block; margin-left: 6px; padding: 2px 5px; color: #08745a; background: #e9f8f3; border-radius: 4px; font-size: 11px; }
 .business-badge { display: inline-block; padding: 4px 6px; background: #eef3f5; border-radius: 4px; font-size: 12px; }.business-initial { color: #fff; background: #d97706; }.business-balance { color: #fff; background: #0891b2; }
-.statement-table th, .statement-table td { padding: 10px 12px; border-bottom: 1px solid #edf1f5; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.statement-table th, .statement-table td { padding: 10px 12px; border: 1px solid #edf1f5; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .statement-table th:last-child, .statement-table td:last-child { padding-right: 24px; }
 .statement-table th { height: 44px; color: #596579; background: #f8fafc; font-size: 12px; }
 .statement-table td { height: 52px; color: #344054; font-size: 13px; }
