@@ -66,9 +66,9 @@
 | `PaymentHistory.vue` / `receipt` | `GET /api/payment-receipts` | 原有收款单新增、修改、审核和反审核接口 |
 | `PaymentHistory.vue` / `payment` | `GET /api/supplier-payments`、`GET /api/supplier-finance/options` | 供应商付款新增、修改、审核和反审核接口 |
 
-欠款详情统一在 `components/admin/finance/DebtDetails.vue` 弹窗显示；从欠款行发起录单，通过 `create=1`、`customerId/supplierId` 和 `storeId` 带入往来单位。供应商期初和预付款/贷项核销仍在应付欠款内处理。付款历史的 `tab=refund` 内嵌供应商退款，应付欠款的 `tab=reconciliation` 及供应商对账弹窗内嵌正式对账；分别调用原 `/api/supplier-refunds` 和 `/api/supplier-reconciliations` 接口。
+欠款详情统一由 `views/admin/finance/DebtDetails.vue` 独立页面显示，路由为 `/admin/finance/debt-details/{type}/{id}`，`type` 为 `receivable/payable`；可通过 `name/storeId` 传入名称和门店范围，直接刷新或返回对应欠款列表。页面继续调用原客户/供应商对账接口，筛选、分页、排序、打印和导出契约不变。从欠款行发起录单，通过 `create=1`、`customerId/supplierId` 和 `storeId` 带入往来单位。供应商期初和预付款/贷项核销仍在应付欠款内处理。付款历史的 `tab=refund` 内嵌供应商退款，应付欠款的 `tab=reconciliation` 及供应商对账页面内嵌正式对账；分别调用原 `/api/supplier-refunds` 和 `/api/supplier-reconciliations` 接口。
 
-旧前端地址 `/admin/finance/supplier-refunds`、`/admin/finance/supplier-reconciliations` 跳转到上述页签；`/admin/finance/supplier-statement/{id}` 和 `/admin/finance/debt-details/{type}/{id}` 跳转到对应欠款页面并以 `statementId` 打开弹窗。它们不再加载独立业务页面。退款和正式对账沿用独立的查看/操作权限，仅有对应权限的账号可访问对应页签，但不能读取应付或付款数据。没有新增数据库表、迁移历史余额或删除账务流水，所有财务写入仍执行版本、幂等和门店校验。
+旧前端地址 `/admin/finance/supplier-refunds`、`/admin/finance/supplier-reconciliations` 跳转到上述页签；`/admin/finance/supplier-statement/{id}` 及欠款列表的 `statementId` 链接转到共用欠款详情页面，不再打开弹窗。供应商详情继续要求应付页面权限及 `admin.finance.supplier_statement.read`，导出另需 `admin.finance.supplier_statement.export`；退款和正式对账沿用独立的查看/操作权限，仅有对应权限的账号可访问对应页签，但不能读取应付或付款数据。此次页面调整未新增或修改后端接口、数据库表，也不迁移历史余额或删除账务流水，所有财务写入仍执行版本、幂等和门店校验。
 
 ## 版本历史
 
@@ -6225,7 +6225,7 @@ SQLite 支持**多读一写**模式：
 
 对账响应包含 `supplier`、`opening`、`changes`、`closing`、`items`、`total`、`page` 和 `pageSize`。三类余额分别满足期初加期间变动等于期末；类型/开票筛选仅影响显示行，不改变会计等式。流水的 `lockedAt` 为正式对账锁定时间，未锁定为 `null`；锁定流水不能维护基础开票状态。反审核保留原流水并追加反向冲销流水，不覆盖历史金额。
 
-`sortOrder` 缺省为 `asc`，保持旧调用顺序；共用对账弹窗传 `desc` 显示最近流水在前。服务端先按业务日期及流水 ID 正序计算逐行余额，再按请求方向排序并分页，因此倒序不会改变 `balances` 或期初/期末金额。非法排序值返回 `400`；`export=1` 返回整个筛选期间的流水，仍需 `admin.finance.supplier_statement.export` 权限。
+`sortOrder` 缺省为 `asc`，保持旧调用顺序；共用对账页面传 `desc` 显示最近流水在前。服务端先按业务日期及流水 ID 正序计算逐行余额，再按请求方向排序并分页，因此倒序不会改变 `balances` 或期初/期末金额。非法排序值返回 `400`；`export=1` 返回整个筛选期间的流水，仍需 `admin.finance.supplier_statement.export` 权限。
 
 基础开票状态为 `not_required/unbilled/partial/billed/difference`。无需开票/未开票金额必须为零，部分开票金额介于零与应付金额之间，已开票金额须等于应付，差异必须备注。不产生新应付，也不改变库存或银行余额；已有开票金额的入库不能直接反审核。
 

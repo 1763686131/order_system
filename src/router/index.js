@@ -103,8 +103,9 @@ const routes = [
         path: 'finance/supplier-statement/:supplierId',
         name: 'admin-supplier-statement',
         redirect: to => ({
-          name: 'admin-finance-payables',
-          query: { ...to.query, statementId: to.params.supplierId }
+          name: 'admin-finance-debt-details',
+          params: { type: 'payable', targetId: to.params.supplierId },
+          query: to.query
         }),
         meta: { requiresAuth: true, permission: 'admin.finance.supplier_statement.read' }
       },
@@ -249,11 +250,14 @@ const routes = [
       {
         path: 'finance/debt-details/:type/:targetId',
         name: 'admin-finance-debt-details',
-        redirect: to => ({
-          name: to.params.type === 'payable' ? 'admin-finance-payables' : 'admin-finance-receivables',
-          query: { ...to.query, statementId: to.params.targetId }
+        component: () => import('@/views/admin/finance/DebtDetails.vue'),
+        props: to => ({
+          type: to.params.type,
+          targetId: to.params.targetId,
+          targetName: typeof to.query.name === 'string' ? to.query.name : '',
+          storeId: typeof to.query.storeId === 'string' ? to.query.storeId : ''
         }),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, financeStatement: true }
       },
       {
         path: 'inventory/warehouse',
@@ -488,6 +492,24 @@ router.beforeEach(async (to) => {
 
   if (to.meta.requiresAdmin && !userStore.canAccessAdmin) return '/main'
 
+  if (['admin-finance-payables', 'admin-finance-receivables'].includes(to.name) && to.query.statementId) {
+    const { statementId, tab, balanceSupplierId, ...query } = to.query
+    if (typeof statementId !== 'string' || !/^[1-9]\d*$/.test(statementId)) return { path: to.path, query, replace: true }
+    return {
+      name: 'admin-finance-debt-details',
+      params: { type: to.name === 'admin-finance-payables' ? 'payable' : 'receivable', targetId: statementId },
+      query,
+      replace: true
+    }
+  }
+  if (to.name === 'admin-finance-debt-details') {
+    const payable = to.params.type === 'payable'
+    const listName = payable ? 'admin-finance-payables' : 'admin-finance-receivables'
+    if (!['payable', 'receivable'].includes(to.params.type) || !/^[1-9]\d*$/.test(to.params.targetId)) {
+      return { name: listName, replace: true }
+    }
+    if (payable && !userStore.hasPerm('admin.finance.supplier_statement.read')) return { name: listName, replace: true }
+  }
   const adminPermission = getAdminRoutePermission(to.path)
   const canAccessNestedFinance = (
     to.path === '/admin/finance/supplier-payments' && to.query.tab === 'refund'

@@ -279,11 +279,6 @@
     <p v-else class="finance-error" role="alert">没有查看应付欠款的权限</p>
     <SupplierBalanceDialog v-if="balanceSupplier" :supplier="balanceSupplier" :stores="stores" :default-store="selectedStoreId || route.query.storeId || ''" @close="closeBalance" @updated="loadReceivables" />
     <Teleport to="body">
-      <div v-if="statementTarget" class="statement-overlay" @click.self="closeStatement">
-        <section class="statement-dialog" role="dialog" aria-modal="true" :aria-label="`${statementTarget.partyName}对账单`">
-          <DebtDetails :key="`${props.mode}-${statementTarget.partyId}`" :type="props.mode" :target-id="statementTarget.partyId" :target-name="statementTarget.partyName" :store-id="selectedStoreId || route.query.storeId || ''" @close="closeStatement" />
-        </section>
-      </div>
       <div v-if="initialOpen" class="sf-modal-layer" @click.self="!saving && (initialOpen = false)">
         <form class="supplier-finance-dialog initial-dialog" role="dialog" aria-modal="true" aria-label="供应商期初余额" @submit.prevent="saveInitial">
           <header class="sf-header"><h2>录入供应商期初余额</h2><button type="button" class="sf-button icon" title="关闭" :disabled="saving" @click="initialOpen = false"><X :size="18" /></button></header>
@@ -312,7 +307,6 @@ import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { localDate } from '@/composables/documents/documentModels'
 import { operationKey } from '@/utils/supplierFinance'
-import DebtDetails from '@/components/admin/finance/DebtDetails.vue'
 import SupplierBalanceDialog from '@/components/admin/purchase/SupplierBalanceDialog.vue'
 import SupplierReconciliationPanel from '@/components/admin/finance/SupplierReconciliationPanel.vue'
 import '@/assets/styles/supplier-finance.css'
@@ -329,7 +323,6 @@ const canReconcile = computed(() => payableMode.value && user.hasPerm('admin.rou
 const canStatement = computed(() => !payableMode.value || user.hasPerm('admin.finance.supplier_statement.read'))
 const canPayment = computed(() => user.hasPerm(payableMode.value ? 'admin.route.finance.supplier_payments' : 'admin.route.finance.payment_history'))
 const reconciliationTab = computed(() => payableMode.value && route.query.tab === 'reconciliation')
-const statementTarget = ref(null)
 const balanceSupplier = ref(null)
 const suppliers = ref([])
 const error = ref('')
@@ -505,9 +498,11 @@ const setDebtStatus = status => {
   currentPage.value = 1
 }
 
-const viewDebtDetails = (item) => {
-  statementTarget.value = item
-}
+const viewDebtDetails = item => router.push({
+  name: 'admin-finance-debt-details',
+  params: { type: props.mode, targetId: item.partyId },
+  query: { name: item.partyName, storeId: selectedStoreId.value ?? undefined }
+})
 const showError = (err, fallback) => { error.value = err?.response?.data?.error || err?.response?.data?.message || err?.message || fallback }
 const createPayment = item => router.push({
   name: payableMode.value ? 'admin-supplier-payments' : 'admin-finance-payment-history',
@@ -518,7 +513,6 @@ function clearQuery(keys) {
   keys.forEach(key => delete query[key])
   router.replace({ query })
 }
-function closeStatement() { statementTarget.value = null; if (route.query.statementId) clearQuery(['statementId', 'name']) }
 function closeBalance() { balanceSupplier.value = null; if (route.query.balanceSupplierId) clearQuery(['balanceSupplierId']) }
 function setTab(tab) { router.replace({ query: { ...route.query, tab: tab || undefined } }) }
 function openInitial() {
@@ -534,10 +528,6 @@ async function saveInitial() {
   finally { saving.value = false }
 }
 function openQueryDialog() {
-  if (route.query.statementId && canStatement.value) {
-    const item = receivables.value.find(row => row.partyId === Number(route.query.statementId))
-    statementTarget.value = item || { partyId: Number(route.query.statementId), partyName: route.query.name || '' }
-  }
   if (route.query.balanceSupplierId && payableMode.value && canReadBalances.value) {
     balanceSupplier.value = receivables.value.find(row => row.supplierId === Number(route.query.balanceSupplierId)) || null
   }
@@ -549,7 +539,7 @@ watch(totalPages, pages => {
 
 watch(() => props.mode, async () => {
   ++loadRequestToken
-  statementTarget.value = null; balanceSupplier.value = null; initialOpen.value = false
+  balanceSupplier.value = null; initialOpen.value = false
   storesLoaded.value = false; receivables.value = []; allReceivables.value = []
   selectedStoreId.value = route.query.storeId ? Number(route.query.storeId) : null
   Object.assign(filters, { keyword: '', debtStatus: '', asOf: '', aging: '' })
@@ -557,16 +547,13 @@ watch(() => props.mode, async () => {
   await loadReceivables()
   openQueryDialog()
 })
-watch(() => [route.query.statementId, route.query.balanceSupplierId], openQueryDialog)
-watch(() => Boolean(statementTarget.value), (open, previous) => {
-  if (open !== previous) document.body.style.overflow = open ? 'hidden' : ''
-})
+watch(() => route.query.balanceSupplierId, openQueryDialog)
 onMounted(async () => {
   selectedStoreId.value = route.query.storeId ? Number(route.query.storeId) : null
   await loadReceivables()
   openQueryDialog()
 })
-onBeforeUnmount(() => { ++loadRequestToken; document.body.style.overflow = '' })
+onBeforeUnmount(() => { ++loadRequestToken })
 </script>
 
 <style scoped>
@@ -579,10 +566,8 @@ onBeforeUnmount(() => { ++loadRequestToken; document.body.style.overflow = '' })
 .payable-filters input, .payable-filters select { height: 34px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
 .finance-error { padding: 12px 16px; color: #b4232f; }
 .balance-button { width: 30px; padding: 0; flex-shrink: 0; }
-.statement-overlay { position: fixed; inset: 0; z-index: 2400; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(15,23,42,.42); }
-.statement-dialog { width: min(1500px,100%); max-height: calc(100dvh - 48px); overflow: auto; background: #f4f7f8; border: 1px solid #e2e8f0; border-radius: 7px; }
 .initial-dialog { max-width: 620px; }
-@media (max-width: 780px) { .statement-overlay { padding: 0; } .statement-dialog { width: 100%; height: 100dvh; max-height: 100dvh; border-radius: 0; } .payable-summary { flex-wrap: wrap; } .payable-summary .summary-item { flex-basis: 40%; } }
+@media (max-width: 780px) { .payable-summary { flex-wrap: wrap; } .payable-summary .summary-item { flex-basis: 40%; } }
 .receivables-page {
   --accent: #0f9f78;
   --accent-rgb: 15, 159, 120;

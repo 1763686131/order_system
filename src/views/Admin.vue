@@ -305,7 +305,7 @@
         <router-view v-slot="{ Component }">
           <component
             :is="Component"
-            :key="route.meta.documentForm ? route.fullPath : undefined"
+            :key="route.meta.documentForm || route.meta.financeStatement ? route.fullPath : undefined"
             ref="activeContentRef"
             @close="handleDocumentClose"
             @create="handleStockRecordCreate"
@@ -895,7 +895,9 @@ const isChildActive = (children) => {
   return children.some(child => child.path === currentPath.value)
 }
 
-const currentPath = computed(() => route.path)
+const currentPath = computed(() => route.name === 'admin-finance-debt-details'
+  ? `/admin/finance/${route.params.type === 'payable' ? 'payables' : 'receivables'}`
+  : route.path)
 const dockedDocuments = computed(() => {
   const documents = []
   const currentFullPath = route.fullPath
@@ -940,6 +942,7 @@ const dockedDocuments = computed(() => {
 })
 
 const currentMenuLabel = computed(() => {
+  if (route.name === 'admin-finance-debt-details') return isMobileViewport.value ? '欠款详情' : `财务/${route.params.type === 'payable' ? '应付' : '应收'}欠款/欠款详情`
   if (currentPath.value.startsWith('/admin/purchase/orders/')) {
     const action = {
       'admin-purchase-order-create': '新增', 'admin-purchase-order-edit': '修改',

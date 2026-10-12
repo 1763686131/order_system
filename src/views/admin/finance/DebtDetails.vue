@@ -1,7 +1,8 @@
 <template>
   <section class="statement-page">
     <header class="statement-header">
-      <div>
+      <div class="statement-heading">
+        <button class="statement-icon" type="button" title="返回欠款列表" aria-label="返回欠款列表" @click="backToList"><ArrowLeft :size="18" /></button>
         <h2>{{ displayName }} · 对账单</h2>
       </div>
       <div class="statement-actions">
@@ -14,9 +15,6 @@
         </button>
         <button v-if="canExport" class="statement-icon" type="button" title="打印" aria-label="打印" :disabled="loading" @click="printStatement">
           <Printer :size="17" />
-        </button>
-        <button class="statement-icon" type="button" title="关闭" aria-label="关闭" @click="emit('close')">
-          <X :size="18" />
         </button>
       </div>
     </header>
@@ -132,13 +130,13 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowDownUp, ChevronLeft, ChevronRight, Download, Printer, RefreshCw, Search, X } from '@lucide/vue'
+import { ArrowDownUp, ArrowLeft, ChevronLeft, ChevronRight, Download, Printer, RefreshCw, Search } from '@lucide/vue'
 import * as XLSX from 'xlsx'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { businessLabels as supplierBusinessLabels, invoiceLabels } from '@/utils/supplierFinance'
-import SupplierReconciliationPanel from './SupplierReconciliationPanel.vue'
+import SupplierReconciliationPanel from '@/components/admin/finance/SupplierReconciliationPanel.vue'
 
 const props = defineProps({
   type: { type: String, required: true, validator: value => ['receivable', 'payable'].includes(value) },
@@ -146,7 +144,6 @@ const props = defineProps({
   targetName: { type: String, default: '' },
   storeId: { type: [String, Number], default: '' }
 })
-const emit = defineEmits(['close'])
 const router = useRouter()
 const user = useUserStore()
 const records = ref([])
@@ -200,6 +197,18 @@ const supplierSummary = computed(() => [
 const money = value => `¥${(Number(value) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const date = value => value ? String(value).slice(0, 10) : '-'
 const apiParams = extra => ({ ...filters, storeId: props.storeId || undefined, page: page.value, pageSize: pageSize.value, sortOrder: sortOrder.value, ...extra })
+function backToList() {
+  const listPath = `/admin/finance/${props.type === 'payable' ? 'payables' : 'receivables'}`
+  const previous = router.options.history.state.back
+  if (typeof previous === 'string') {
+    const url = new URL(previous, window.location.origin)
+    if (url.pathname === listPath && !url.searchParams.has('statementId') && (url.searchParams.get('storeId') || '') === String(props.storeId || '')) {
+      router.back()
+      return
+    }
+  }
+  router.replace({ path: listPath, query: props.storeId ? { storeId: props.storeId } : {} })
+}
 function toggleRow(row) { if (row.products?.length > 1) expandedRows[row.id] = !expandedRows[row.id] }
 function displayProducts(row) { return sortOrder.value === 'desc' ? (row.products || []).slice().reverse() : row.products || [] }
 function originalAmount(product) { return Number(product?.price || 0) * Number(product?.quantity ?? 1) }
@@ -257,7 +266,6 @@ function canOpenSource(row) { return Boolean(sourcePermissions[row.sourceType] &
 function openSource(row) {
   if (!canOpenSource(row)) return
   const paths = { stock_inbound: `/admin/purchase/inbound/${row.sourceId}`, purchase_return: `/admin/purchase/returns/${row.sourceId}` }
-  emit('close')
   if (row.sourceType === 'supplier_payment' || row.sourceType === 'supplier_refund') {
     router.push({ name: 'admin-supplier-payments', query: { tab: row.sourceType === 'supplier_refund' ? 'refund' : undefined, documentId: row.sourceId } })
   } else if (row.sourceType === 'supplier_balance') router.push({ name: 'admin-finance-payables', query: { balanceSupplierId: row.supplierId, storeId: row.storeId } })
@@ -332,20 +340,22 @@ onMounted(load)
 </script>
 
 <style scoped>
-.statement-page { min-height: 100%; padding: 18px; color: #172033; background: #f4f7f8; }
+.statement-page { width: 100%; min-width: 0; min-height: 100%; color: #172033; background: #f4f7f8; }
+.statement-page, .statement-page * { box-sizing: border-box; }
 .statement-header, .statement-filters, .statement-footer, .statement-actions, .statement-pagination { display: flex; align-items: center; }
-.statement-header { justify-content: space-between; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
-.statement-header h2 { margin: 0; font-size: 18px; }
+.statement-header { justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
+.statement-heading { display: flex; flex: 1 1 280px; min-width: 0; align-items: center; gap: 12px; }
+.statement-header h2 { margin: 0; min-width: 0; font-size: 18px; overflow-wrap: anywhere; }
 .statement-header span, .statement-summary span, .statement-summary small { color: #596579; font-size: 12px; }
 .statement-actions, .statement-pagination { gap: 8px; }
-.statement-icon { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; color: #596579; background: #fff; border: 1px solid #cbd5e1; border-radius: 5px; cursor: pointer; }
+.statement-icon { display: inline-flex; flex: 0 0 34px; width: 34px; height: 34px; align-items: center; justify-content: center; color: #596579; background: #fff; border: 1px solid #cbd5e1; border-radius: 5px; cursor: pointer; }
 .statement-icon:disabled { cursor: not-allowed; opacity: .45; }
 .statement-summary { display: flex; align-items: center; gap: 14px; padding: 16px 0; overflow-x: auto; }
 .statement-summary > div { min-width: 120px; display: grid; gap: 5px; text-align: center; }
 .statement-summary strong { font-size: 18px; font-variant-numeric: tabular-nums; }
 .supplier-summary { flex-wrap: wrap; }
 .supplier-summary > div { flex: 1 1 140px; }
-.statement-filters { flex-wrap: wrap; gap: 10px; padding: 12px; background: #fff; border: 1px solid #e2e8f0; border-radius: 6px; }
+.statement-filters { flex-wrap: wrap; gap: 10px; padding: 12px 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
 .statement-filters label { display: grid; gap: 5px; color: #596579; font-size: 12px; }
 .statement-filters select, .statement-filters input { height: 34px; min-width: 130px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
 .statement-button { display: inline-flex; height: 34px; align-items: center; gap: 6px; padding: 0 12px; color: #596579; background: #fff; border: 1px solid #cbd5e1; border-radius: 5px; cursor: pointer; }
@@ -366,8 +376,8 @@ onMounted(load)
 .increase { color: #dc3545 !important; }.decrease { color: #07805f !important; }
 .statement-link { padding: 0; color: #08745a; background: transparent; border: 0; cursor: pointer; font-weight: 650; }
 .statement-empty { height: 220px !important; color: #8a96a8 !important; text-align: center !important; }
-.statement-footer { justify-content: space-between; min-height: 56px; color: #596579; font-size: 12px; }
+.statement-footer { justify-content: space-between; flex-wrap: wrap; gap: 10px; min-height: 56px; padding: 10px 0; color: #596579; font-size: 12px; }
 .invoice-form { display: grid; gap: 12px; text-align: left; }.invoice-form label { display: grid; gap: 6px; }.invoice-form input, .invoice-form select, .invoice-form textarea { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font: inherit; }
 .spinning { animation: spin .8s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
-@media (max-width: 780px) { .statement-page { padding: 12px; }.statement-summary { flex-wrap: wrap; }.statement-summary > div { flex: 1 1 40%; }.summary-operator { display: none; } }
+@media (max-width: 780px) { .statement-actions { margin-left: auto; }.statement-summary { flex-wrap: wrap; }.statement-summary > div { flex: 1 1 40%; }.summary-operator { display: none; }.statement-filters label { flex: 1 1 140px; min-width: 0; }.statement-filters input, .statement-filters select { width: 100%; min-width: 0; } }
 </style>
