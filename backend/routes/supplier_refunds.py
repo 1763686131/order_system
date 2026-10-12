@@ -193,7 +193,11 @@ def refund_options():
             if row["store_id"] is None or row["store_id"] in store_ids
         ]
         scoped, params = scope_sql(alias="b")
-        banks = [dict(row) for row in conn.execute(
+        banks = [{
+            "id": row["id"], "storeId": row["store_id"],
+            "accountName": row["account_name"], "bankName": row["bank_name"],
+            "balance": row["balance"],
+        } for row in conn.execute(
             f"SELECT b.id,b.store_id,b.account_name,b.bank_name,b.balance FROM bank_accounts b WHERE 1=1 {scoped}",
             params,
         )]

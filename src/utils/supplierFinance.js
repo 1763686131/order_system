@@ -18,7 +18,10 @@ export const businessLabels = {
   PAYMENT: '供应商付款核销', ADVANCE_PAYMENT: '新增供应商预付款',
   PREPAYMENT_ALLOCATION: '预付款核销', CREDIT_ALLOCATION: '贷项核销',
   PAYMENT_REVERSAL: '付款核销冲销', ADVANCE_PAYMENT_REVERSAL: '预付款冲销',
-  PREPAYMENT_ALLOCATION_REVERSAL: '预付款核销冲销', CREDIT_ALLOCATION_REVERSAL: '贷项核销冲销'
+  PREPAYMENT_ALLOCATION_REVERSAL: '预付款核销冲销', CREDIT_ALLOCATION_REVERSAL: '贷项核销冲销',
+  PURCHASE_RETURN: '采购退货', PURCHASE_RETURN_ADJUSTMENT: '退货价格调整',
+  SUPPLIER_REFUND: '供应商退款', SUPPLIER_REFUND_REVERSAL: '供应商退款冲销',
+  PURCHASE_RETURN_REVERSAL: '采购退货冲销', PURCHASE_RETURN_ADJUSTMENT_REVERSAL: '退货价格调整冲销'
 }
 export const documentStatusLabels = { draft: '草稿', audited: '已审核', confirmed: '已确认', reversed: '已撤销', cancelled: '已作废' }
 

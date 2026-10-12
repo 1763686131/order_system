@@ -100,14 +100,15 @@ import '@/assets/styles/supplier-finance.css'
 const props = defineProps({
   mode: { type: String, required: true }, documentId: { type: Number, default: null },
   options: { type: Object, required: true }, embedded: Boolean,
-  context: { type: Object, default: null }, initialSupplierId: { type: Number, default: null }
+  context: { type: Object, default: null }, initialSupplierId: { type: Number, default: null },
+  initialStoreId: { type: Number, default: null }
 })
 const emit = defineEmits(['close', 'updated'])
 const user = useUserStore()
 const invoiceMode = computed(() => props.mode === 'invoice')
 const endpoint = computed(() => invoiceMode.value ? '/purchase-invoices' : '/supplier-payments')
 const form = ref({
-  storeId: props.context?.storeId || '', supplierId: props.initialSupplierId || '', businessDate: localDate(), paymentDate: localDate(), invoiceDate: localDate(),
+  storeId: props.context?.storeId || props.initialStoreId || '', supplierId: props.initialSupplierId || '', businessDate: localDate(), paymentDate: localDate(), invoiceDate: localDate(),
   invoiceNo: '', invoiceType: 'vat-special', paymentMethod: 'bank-transfer', bankAccountId: '',
   paymentAmount: '', unbilledReason: '', invoiceOverride: false, hasDifference: false,
   differenceReason: '', attachments: [], allocations: [], remark: '', status: 'draft', idempotencyKey: operationKey()

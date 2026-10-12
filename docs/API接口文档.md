@@ -55,8 +55,24 @@
 
 采购订单审核只形成采购承诺，不直接产生供应商应付。采购申请的 `paymentAmount` 为折后金额，`currentPayment` 为已付金额；选择 `bank_transfer` 时，保存申请即校验并扣减所选对公账户，余额不足整笔事务回滚。关联采购入库保存过账后，按实际数量、明细供应商、单价和税额确认应付，并自动核销订单已付金额，不再次扣款；独立 `none` 入库只写库存，独立 `pending_supplier` 入库先写库存，再由采购审核补齐供应商、单价及结算信息并确认应付。入库草稿不产生应付。完整契约见采购订单接口及文末各阶段接口。
 
+### 财务共用页面调用约定
+
+供应商财务只保留 `/admin/finance/payables`（应付欠款）和 `/admin/finance/supplier-payments`（付款历史）两个主入口。页面复用不合并账务实体或权限：
+
+| 页面组件/模式 | 主要读取接口 | 详情/录单 |
+| --- | --- | --- |
+| `Receivables.vue` / `receivable` | `GET /api/customers/receivables` | 客户欠款详情调用 `GET /api/customers/{id}/debt-details` |
+| `Receivables.vue` / `payable` | `GET /api/suppliers/payables`、`GET /api/supplier-finance/options` | 供应商欠款详情调用 `GET /api/suppliers/{id}/debt-details` |
+| `PaymentHistory.vue` / `receipt` | `GET /api/payment-receipts` | 原有收款单新增、修改、审核和反审核接口 |
+| `PaymentHistory.vue` / `payment` | `GET /api/supplier-payments`、`GET /api/supplier-finance/options` | 供应商付款新增、修改、审核和反审核接口 |
+
+欠款详情统一在 `components/admin/finance/DebtDetails.vue` 弹窗显示；从欠款行发起录单，通过 `create=1`、`customerId/supplierId` 和 `storeId` 带入往来单位。供应商期初和预付款/贷项核销仍在应付欠款内处理。付款历史的 `tab=refund` 内嵌供应商退款，应付欠款的 `tab=reconciliation` 及供应商对账弹窗内嵌正式对账；分别调用原 `/api/supplier-refunds` 和 `/api/supplier-reconciliations` 接口。
+
+旧前端地址 `/admin/finance/supplier-refunds`、`/admin/finance/supplier-reconciliations` 跳转到上述页签；`/admin/finance/supplier-statement/{id}` 和 `/admin/finance/debt-details/{type}/{id}` 跳转到对应欠款页面并以 `statementId` 打开弹窗。它们不再加载独立业务页面。退款和正式对账沿用独立的查看/操作权限，仅有对应权限的账号可访问对应页签，但不能读取应付或付款数据。没有新增数据库表、迁移历史余额或删除账务流水，所有财务写入仍执行版本、幂等和门店校验。
+
 ## 版本历史
 
+- **v5.14** (2026-10-11，供应商财务入口合并) - 应收/应付与收款/付款共用页面；应付汇总增加联系人字段，对账支持时间排序，付款响应补充锁期标记，统一退款账户选项字段；现有财务写入接口与权限编码保持不变
 - **v5.13** (2026-10-07，采购第三阶段闭环) - 新增采购退货、供应商退款、正式对账快照与期间锁定；退货与销售退货保持独立
 - **v5.12** (2026-10-06，采购第二阶段闭环) - 新增供应商付款草稿/审核/反审核、银行流水、独立预付款/贷项核销、采购发票登记与多来源分配、见票付款规则和私有附件接口
 - **v5.11** (2026-10-06，采购第一阶段闭环) - 新增实际入库应付、独立入库供应商归属、采购费用归属、应付汇总/内部对账/期初/基础开票状态接口；增加版本、幂等和数据范围校验；不迁移旧 `suppliers.payable`
@@ -6199,13 +6215,17 @@ SQLite 支持**多读一写**模式：
 | --- | --- | --- | --- |
 | `GET` | `/api/suppliers/payables` | `storeId`、`keyword`、`asOf`、`aging`（`0-30/31-60/61-90/90+`） | `admin.route.finance.payables` |
 | `GET` | `/api/suppliers/{id}/balance` | `storeId`、`asOf` | `admin.route.finance.payables` |
-| `GET` | `/api/suppliers/{id}/debt-details` | `storeId`、`startDate`、`endDate`、`businessType`、`invoiceStatus`、`page`、`pageSize`、`export=1` | `admin.finance.supplier_statement.read`；导出另需 `export` 权限 |
+| `GET` | `/api/suppliers/{id}/debt-details` | `storeId`、`startDate`、`endDate`、`businessType`、`invoiceStatus`、`sortOrder`（`asc/desc`）、`page`、`pageSize`、`export=1` | `admin.finance.supplier_statement.read`；导出另需 `export` 权限 |
 | `POST` | `/api/suppliers/{id}/initial-balances` | `storeId`、`businessDate`、`payableAmount`、`prepaymentAmount`、`creditAmount`、`remark` | `admin.finance.payable.initial` |
 | `PUT` | `/api/supplier-payables/{id}/invoice` | `version`、`invoiceStatus`、`billedAmount`、`invoiceRemark` | `admin.purchase.invoice_status.edit` |
 
 金额单位为元，数据库以整数分保存。余额分别返回 `payableBalance`、`prepaymentBalance`、`creditBalance`、`netSettlement`。期初按供应商/门店录入一次，有新账务流水后不得补录；首次成功返回 `201`，幂等重放返回 `200`。不自动继承旧主档余额。
 
-对账响应包含 `supplier`、`opening`、`changes`、`closing`、`items`、`total`、`page` 和 `pageSize`。三类余额分别满足期初加期间变动等于期末；类型/开票筛选仅影响显示行，不改变会计等式。反审核保留原流水并追加反向冲销流水，不覆盖历史金额。
+应付汇总直接返回数组，不包裹 `items`；每项包含 `supplierId/supplierCode/supplierName/storeId`、联系人 `contactPerson/phone`、`confirmedPayable/allocatedAmount/returnedAmount` 和上述三类余额及净结算额。
+
+对账响应包含 `supplier`、`opening`、`changes`、`closing`、`items`、`total`、`page` 和 `pageSize`。三类余额分别满足期初加期间变动等于期末；类型/开票筛选仅影响显示行，不改变会计等式。流水的 `lockedAt` 为正式对账锁定时间，未锁定为 `null`；锁定流水不能维护基础开票状态。反审核保留原流水并追加反向冲销流水，不覆盖历史金额。
+
+`sortOrder` 缺省为 `asc`，保持旧调用顺序；共用对账弹窗传 `desc` 显示最近流水在前。服务端先按业务日期及流水 ID 正序计算逐行余额，再按请求方向排序并分页，因此倒序不会改变 `balances` 或期初/期末金额。非法排序值返回 `400`；`export=1` 返回整个筛选期间的流水，仍需 `admin.finance.supplier_statement.export` 权限。
 
 基础开票状态为 `not_required/unbilled/partial/billed/difference`。无需开票/未开票金额必须为零，部分开票金额介于零与应付金额之间，已开票金额须等于应付，差异必须备注。不产生新应付，也不改变库存或银行余额；已有开票金额的入库不能直接反审核。
 
@@ -6253,7 +6273,7 @@ SQLite 支持**多读一写**模式：
 
 审核请求为 `{version,idempotencyKey}`，使用已保存草稿的核销明细重新校验，不接受临时覆盖分配。付款必须大于零、银行账户须归属所选门店、各来源须属同一供应商/门店且未冲销/未锁定；业务日期不得早于来源应付。核销合计不能超过付款额或来源最新未付余额。差额自动成为 `advanceAmount`，本例新增预付款 200 元；不会自动抵扣其它应付。
 
-审核一次性扣减银行余额、写 `bank_account_transactions`、写供应商 `PAYMENT/ADVANCE_PAYMENT` 流水并更新来源 `allocatedAmount`。余额不足返回 `409`，整个事务回滚。详情包含 `paymentAmount/allocatedAmount/advanceAmount/allocations/bankTransactions` 和制单、审核、撤销时间/操作人；银行流水包含 `change/balanceAfter/reversalOfId`。
+审核一次性扣减银行余额、写 `bank_account_transactions`、写供应商 `PAYMENT/ADVANCE_PAYMENT` 流水并更新来源 `allocatedAmount`。余额不足返回 `409`，整个事务回滚。列表和详情包含 `paymentAmount/allocatedAmount/advanceAmount/allocations/bankTransactions/lockedAt` 和制单、审核、撤销时间/操作人；`lockedAt` 为正式对账锁定时间，未锁定为 `null`。银行流水包含 `change/balanceAfter/reversalOfId`。
 
 反审核追加冲销流水并恢复核销及银行余额；新增预付款已被使用时必须先撤销后续余额核销。付款或来源被锁定时不能反审核。有审核历史的付款单供应商、门店不能改写，银行账户不可删除、不可换门店/账号或直接改余额。
 
@@ -6408,6 +6428,8 @@ SQLite 支持**多读一写**模式：
 | `POST` | `/api/supplier-refunds/{id}/reverse-audit` | `admin.finance.supplier_refund.reverse_audit` |
 
 退款单只能分配采购退货产生的有效贷项，不能关联普通应付、预付款或销售退货。请求包含 `supplierId/storeId/bankAccountId/businessDate/refundDate/refundAmount/allocations/remark`，其中 `allocations` 为 `{creditTransactionId,amount}` 数组，分配合计必须等于 `refundAmount`。业务日期和退款日期不能早于贷项日期；银行账户必须属于所选门店；单号按 `TKYYYYMMDDNNN` 生成。
+
+`GET /api/supplier-refunds/options` 返回 `{stores,suppliers,bankAccounts}`。`bankAccounts` 每项统一为 `{id,storeId,accountName,bankName,balance}`，与付款选项使用相同命名，前端按 `storeId` 过滤门店账户，不再读取数据库的 `store_id/account_name` 字段。
 
 退款审核增加银行账户余额、写入 `bank_account_transactions` 的供应商退款入账流水，并以贷项核销流水减少可用贷项。反审核追加银行冲销流水和贷项恢复流水，恢复银行余额与贷项可用额。已使用或已锁定贷项、银行余额不足以执行反审核、以及已确认对账期间内的退款操作均返回 `409`。
 

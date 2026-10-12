@@ -1,7 +1,7 @@
 .supplier-finance-page, .supplier-finance-dialog { color: #172033; font-size: 13px; letter-spacing: 0; }
 .supplier-finance-page { padding: 20px; background: #f4f7f8; min-height: 100%; }
 .supplier-finance-page *, .supplier-finance-dialog * { box-sizing: border-box; letter-spacing: 0; }
-.supplier-finance-page h1, .supplier-finance-dialog h2 { margin: 0; font-size: 18px; }
+.supplier-finance-page h2, .supplier-finance-dialog h2 { margin: 0; font-size: 18px; }
 .supplier-finance-dialog h2 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .sf-header, .sf-toolbar, .sf-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 14px 0; }
 .sf-header { justify-content: space-between; }
@@ -71,14 +71,6 @@
   .sf-modal-layer { padding: 8px; }
   .supplier-finance-dialog { max-height: calc(100dvh - 16px); }
   .sf-toolbar .sf-field { flex: 1 1 140px; }
-}
-@media print {
-  body:has(.sf-print-surface) * { visibility: hidden; }
-  body:has(.sf-print-surface) .sf-print-surface, body:has(.sf-print-surface) .sf-print-surface * { visibility: visible; }
-  .sf-print-surface { position: absolute; left: 0; top: 0; width: 100%; padding: 0; background: #fff; }
-  .sf-print-surface .sf-toolbar, .sf-print-surface .sf-actions, .sf-print-surface .sf-footer, .sf-print-surface .sf-no-print { display: none; }
-  .sf-print-surface .sf-table-scroll { overflow: visible; }
-  .sf-print-surface .sf-table { min-width: 0; width: 100%; font-size: 10px; }
 }
 .sf-plain-fieldset { margin: 0; padding: 0; border: 0; min-width: 0; }
 .sf-inline-fields { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin: 0; padding: 0; border: 0; min-width: 0; }

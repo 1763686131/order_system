@@ -39,19 +39,20 @@ const routes = [
       {
         path: 'finance/supplier-payments',
         name: 'admin-supplier-payments',
-        component: () => import('@/views/admin/finance/SupplierPayments.vue'),
+        component: () => import('@/views/admin/finance/PaymentHistory.vue'),
+        props: { mode: 'payment' },
         meta: { requiresAuth: true }
       },
       {
         path: 'finance/supplier-refunds',
         name: 'admin-supplier-refunds',
-        component: () => import('@/views/admin/finance/SupplierRefunds.vue'),
+        redirect: to => ({ name: 'admin-supplier-payments', query: { ...to.query, tab: 'refund' } }),
         meta: { requiresAuth: true }
       },
       {
         path: 'finance/supplier-reconciliations',
         name: 'admin-supplier-reconciliations',
-        component: () => import('@/views/admin/finance/SupplierReconciliations.vue'),
+        redirect: to => ({ name: 'admin-finance-payables', query: { ...to.query, tab: 'reconciliation' } }),
         meta: { requiresAuth: true }
       },
       {
@@ -94,14 +95,17 @@ const routes = [
       {
         path: 'finance/payables',
         name: 'admin-finance-payables',
-        component: () => import('@/views/admin/finance/Payables.vue'),
+        component: () => import('@/views/admin/finance/Receivables.vue'),
+        props: { mode: 'payable' },
         meta: { requiresAuth: true }
       },
       {
         path: 'finance/supplier-statement/:supplierId',
         name: 'admin-supplier-statement',
-        component: () => import('@/views/admin/finance/SupplierStatement.vue'),
-        props: route => ({ supplierId: Number(route.params.supplierId) }),
+        redirect: to => ({
+          name: 'admin-finance-payables',
+          query: { ...to.query, statementId: to.params.supplierId }
+        }),
         meta: { requiresAuth: true, permission: 'admin.finance.supplier_statement.read' }
       },
       {
@@ -214,12 +218,14 @@ const routes = [
         path: 'finance/receivables',
         name: 'admin-finance-receivables',
         component: () => import('@/views/admin/finance/Receivables.vue'),
+        props: { mode: 'receivable' },
         meta: { requiresAuth: true }
       },
       {
         path: 'finance/payment-history',
         name: 'admin-finance-payment-history',
         component: () => import('@/views/admin/finance/PaymentHistory.vue'),
+        props: { mode: 'receipt' },
         meta: { requiresAuth: true }
       },
       {
@@ -243,13 +249,11 @@ const routes = [
       {
         path: 'finance/debt-details/:type/:targetId',
         name: 'admin-finance-debt-details',
-        component: () => import('@/views/admin/finance/DebtDetails.vue'),
-        meta: { requiresAuth: true },
-        props: (route) => ({
-          type: route.params.type,
-          targetId: route.params.targetId,
-          targetName: route.query.name || ''
-        })
+        redirect: to => ({
+          name: to.params.type === 'payable' ? 'admin-finance-payables' : 'admin-finance-receivables',
+          query: { ...to.query, statementId: to.params.targetId }
+        }),
+        meta: { requiresAuth: true }
       },
       {
         path: 'inventory/warehouse',
@@ -485,10 +489,17 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresAdmin && !userStore.canAccessAdmin) return '/main'
 
   const adminPermission = getAdminRoutePermission(to.path)
+  const canAccessNestedFinance = (
+    to.path === '/admin/finance/supplier-payments' && to.query.tab === 'refund'
+    && userStore.hasPerm('admin.route.finance.supplier_refunds')
+  ) || (
+    to.path === '/admin/finance/payables' && to.query.tab === 'reconciliation'
+    && userStore.hasPerm('admin.route.finance.supplier_reconciliations')
+  )
   if (
     adminPermission &&
     userStore.canAccessAdmin &&
-    !userStore.hasPerm(adminPermission)
+    !userStore.hasPerm(adminPermission) && !canAccessNestedFinance
   ) {
     return getDefaultAdminPath(userStore)
   }

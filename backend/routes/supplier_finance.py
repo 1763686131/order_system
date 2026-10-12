@@ -272,7 +272,7 @@ def list_payables():
                 bucket = "0-30" if days <= 30 else "31-60" if days <= 60 else "61-90" if days <= 90 else "90+"
                 result["aging"][bucket] += max(0, row["payable_delta_cents"] - allocated - returned)
         results = []
-        for supplier in conn.execute("SELECT id, supplier_name, supplier_code, store_id FROM suppliers ORDER BY supplier_name"):
+        for supplier in conn.execute("SELECT id, supplier_name, supplier_code, store_id, contact_person, phone FROM suppliers ORDER BY supplier_name"):
             if supplier["store_id"] is not None:
                 scoped_supplier, supplier_params = scope_sql(alias="s", store_id=store_id)
                 if not conn.execute(f"SELECT 1 FROM suppliers s WHERE id = ? {scoped_supplier}", (supplier["id"], *supplier_params)).fetchone():
@@ -290,6 +290,7 @@ def list_payables():
             results.append({
                 "supplierId": supplier["id"], "supplierName": supplier["supplier_name"],
                 "supplierCode": supplier["supplier_code"] or "", "storeId": supplier["store_id"],
+                "contactPerson": supplier["contact_person"] or "", "phone": supplier["phone"] or "",
                 "payableBalance": amount(payable), "prepaymentBalance": amount(prepayment),
                 "creditBalance": amount(credit), "netSettlement": amount(payable - prepayment - credit),
                 "confirmedPayable": amount(max(0, confirmed - returned)), "allocatedAmount": amount(allocated),
@@ -321,6 +322,7 @@ def serialize_transaction(row):
         "invoiceStatus": row["invoice_status"], "invoiceRemark": row["invoice_remark"],
         "invoiceManaged": bool(row["invoice_managed"]),
         "version": row["version"], "reversalOfId": row["reversal_of_id"], "remark": row["remark"],
+        "lockedAt": row["locked_at"],
     }
 
 
@@ -367,6 +369,11 @@ def supplier_statement(supplier_id):
         filtered = [row for row in period
                     if (not request.args.get("businessType") or row["businessType"] == request.args["businessType"])
                     and (not request.args.get("invoiceStatus") or row["invoiceStatus"] == request.args["invoiceStatus"])]
+        sort_order = request.args.get("sortOrder", "asc")
+        if sort_order not in ("asc", "desc"):
+            raise FinanceError("排序方向无效")
+        if sort_order == "desc":
+            filtered.reverse()
         page = max(1, request.args.get("page", default=1, type=int))
         page_size = min(200, max(1, request.args.get("pageSize", default=50, type=int)))
         selected = filtered if export else filtered[(page - 1) * page_size:page * page_size]

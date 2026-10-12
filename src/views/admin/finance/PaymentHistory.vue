@@ -1,9 +1,15 @@
 <template>
   <div class="payment-history-page">
+    <nav v-if="paymentMode && canRefund" class="history-tabs" role="tablist" aria-label="付款历史视图">
+      <button v-if="user.hasPerm('admin.route.finance.supplier_payments')" :class="{ active: !refundTab }" role="tab" :aria-selected="!refundTab" @click="setHistoryTab('')">付款历史</button>
+      <button :class="{ active: refundTab }" role="tab" :aria-selected="refundTab" @click="setHistoryTab('refund')">退款入账</button>
+    </nav>
+    <SupplierRefundPanel v-if="refundTab && canRefund" />
+    <template v-else>
     <section class="records-panel">
       <header class="records-toolbar">
         <div class="store-filter-area">
-          <span class="toolbar-label">收款门店</span>
+          <span class="toolbar-label">{{ paymentMode ? '付款门店' : '收款门店' }}</span>
           <div class="store-slider" role="tablist" aria-label="按门店筛选">
             <button
               :class="['slider-tab', { active: selectedStoreId === null }]"
@@ -33,7 +39,7 @@
           <button
             class="icon-button"
             type="button"
-            title="刷新收款历史"
+            :title="`刷新${historyLabel}`"
             :disabled="loading"
             @click="loadData"
           >
@@ -49,12 +55,20 @@
             </svg>
             导出Excel
           </button>
-          <button class="button button-primary" type="button" @click="openCreateModal">
+          <button v-if="canAction('create')" class="button button-primary" type="button" @click="openCreateModal">
             <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg>
-            新增收款单
+            新增{{ documentLabel }}
           </button>
         </div>
       </header>
+      <form v-if="paymentMode" class="history-filters" @submit.prevent="loadData">
+        <label>单号 / 供应商<input v-model.trim="paymentFilters.keyword" type="search" /></label>
+        <label>状态<select v-model="paymentFilters.status"><option value="">全部</option><option v-for="status in ['draft', 'audited', 'reversed', 'cancelled']" :key="status" :value="status">{{ statusLabel(status) }}</option></select></label>
+        <label>开始日期<input v-model="paymentFilters.startDate" type="date" /></label>
+        <label>结束日期<input v-model="paymentFilters.endDate" type="date" /></label>
+        <button class="button button-primary" :disabled="loading"><Search :size="16" />查询</button>
+        <label class="invoice-rule"><input v-model="supplierOptions.paymentRequireInvoice" type="checkbox" :disabled="ruleSaving || !user.hasPerm('admin.finance.supplier_payment.rules')" @change="saveInvoiceRule" />见票付款</label>
+      </form>
 
       <div class="table-scroll">
         <table class="records-table">
@@ -71,17 +85,17 @@
                   type="checkbox"
                   :checked="allPageSelected"
                   :indeterminate.prop="somePageSelected"
-                  aria-label="选择当前页全部收款单"
+                  :aria-label="`选择当前页全部${documentLabel}`"
                   @change="togglePageSelection"
                 >
               </th>
               <th>单据日期</th>
               <th>单据编号</th>
-              <th>客户</th>
-              <th class="money-cell">收款金额</th>
-              <th class="money-cell">优惠金额</th>
+              <th>{{ paymentMode ? '供应商' : '客户' }}</th>
+              <th class="money-cell">{{ paymentMode ? '付款金额' : '收款金额' }}</th>
+              <th :class="{ 'money-cell': !paymentMode }">{{ paymentMode ? '付款账户' : '优惠金额' }}</th>
               <th class="money-cell">核销金额</th>
-              <th class="money-cell">本次预收</th>
+              <th class="money-cell">{{ paymentMode ? '新增预付款' : '本次预收' }}</th>
               <th>制单人</th>
               <th class="center-cell">审核状态</th>
               <th>备注</th>
@@ -101,8 +115,7 @@
                     <path d="M4 5h16v15H4zM8 3h8v4H8zM8 11h8M8 15h5"></path>
                   </svg>
                 </div>
-                <strong>当前门店还没有收款记录</strong>
-                <span>点击“新增收款单”录入第一笔客户收款</span>
+                <strong>没有符合条件的{{ paymentMode ? '付款' : '收款' }}记录</strong>
               </td>
             </tr>
             <tr
@@ -116,30 +129,30 @@
               </td>
               <td>{{ item.documentDate }}</td>
               <td>
-                <button class="document-number" type="button" @click="printReceipt(item)">
+                <button class="document-number" type="button" @click="paymentMode ? openPayment(item.id) : printReceipt(item)">
                   {{ item.documentNo }}
                   <svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"></path></svg>
                 </button>
               </td>
               <td class="customer-cell" :title="customerTitle(item)">
-                <strong>{{ item.customerName || '-' }}</strong>
+                <strong>{{ item.partyName || item.customerName || '-' }}</strong>
                 <span>{{ item.storeName || '-' }} · #{{ item.customerCode || item.customerId }}</span>
               </td>
               <td class="money-cell amount-main">{{ formatMoney(item.paymentAmount) }}</td>
-              <td class="money-cell amount-discount">{{ formatMoney(item.discountAmount) }}</td>
+              <td :class="paymentMode ? 'account-cell' : 'money-cell amount-discount'" :title="item.accountName">{{ paymentMode ? item.accountName || '-' : formatMoney(item.discountAmount) }}</td>
               <td class="money-cell amount-main">{{ formatMoney(item.writeoffAmount) }}</td>
               <td class="money-cell amount-advance">{{ formatMoney(item.advanceAmount) }}</td>
               <td>{{ item.creator || '-' }}</td>
               <td class="center-cell">
                 <span :class="['status-badge', `status-${item.status}`]">
-                  <i></i>{{ item.status === 'audited' ? '已审核' : '待审核' }}
+                  <i></i>{{ statusLabel(item.status) }}
                 </span>
               </td>
               <td :title="item.remark || '-'">{{ item.remark || '-' }}</td>
               <td class="operation-cell">
                 <div class="row-actions">
                   <button
-                    v-if="item.status === 'draft'"
+                    v-if="isDraft(item) && canAction('audit')"
                     class="action-button action-audit"
                     type="button"
                     :disabled="busyId === item.id"
@@ -148,7 +161,7 @@
                     审核
                   </button>
                   <button
-                    v-else
+                    v-else-if="item.status === 'audited' && !item.lockedAt && canAction('reverse_audit')"
                     class="action-button action-reverse"
                     type="button"
                     :disabled="busyId === item.id"
@@ -160,7 +173,7 @@
                     打印
                   </button>
                   <button
-                    v-if="item.status === 'draft'"
+                    v-if="isDraft(item) && canAction('edit')"
                     class="action-button action-edit"
                     type="button"
                     @click="openEditModal(item)"
@@ -168,7 +181,7 @@
                     修改
                   </button>
                   <button
-                    v-if="item.status === 'draft'"
+                    v-if="isDraft(item) && canAction('delete')"
                     class="action-button action-delete"
                     type="button"
                     @click="deleteReceipt(item)"
@@ -184,7 +197,7 @@
               <td></td>
               <td colspan="3" class="total-label">当前筛选合计</td>
               <td class="money-cell">{{ formatMoney(totals.paymentAmount) }}</td>
-              <td class="money-cell">{{ formatMoney(totals.discountAmount) }}</td>
+              <td :class="{ 'money-cell': !paymentMode }">{{ paymentMode ? '' : formatMoney(totals.discountAmount) }}</td>
               <td class="money-cell">{{ formatMoney(totals.writeoffAmount) }}</td>
               <td class="money-cell">{{ formatMoney(totals.advanceAmount) }}</td>
               <td colspan="4"></td>
@@ -194,7 +207,7 @@
       </div>
 
       <footer class="table-footer">
-        <span>共 <strong>{{ filteredReceipts.length }}</strong> 条收款记录</span>
+        <span>共 <strong>{{ filteredReceipts.length }}</strong> 条{{ paymentMode ? '付款' : '收款' }}记录</span>
         <div class="pagination">
           <select v-model.number="pageSize" @change="currentPage = 1">
             <option :value="10">10 条/页</option>
@@ -211,6 +224,9 @@
         </div>
       </footer>
     </section>
+    </template>
+    <SupplierDocumentDialog v-if="paymentDialogOpen && paymentMode" :key="paymentDocumentId || 'new-payment'" mode="payment" :document-id="paymentDocumentId" :options="supplierOptions" :initial-supplier-id="paymentSupplierId" :initial-store-id="paymentStoreId" @close="closePayment" @updated="loadData" />
+    <CustomModal :visible="Boolean(confirmation)" :title="confirmation?.title || (confirmation?.action === 'audit' ? '审核付款单' : confirmation?.action === 'delete' ? '删除付款单' : '反审核付款单')" :message="confirmation?.message || ''" :danger="confirmation?.action !== 'audit'" :confirm-disabled="Boolean(busyId)" @confirm="performPaymentAction" @cancel="cancelConfirmation" />
 
     <Teleport to="body">
       <Transition name="modal-fade">
@@ -458,9 +474,72 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { Search } from '@lucide/vue'
 import * as XLSX from 'xlsx'
 import request from '@/api/request'
+import { useUserStore } from '@/stores/user'
+import { documentStatusLabels, operationKey } from '@/utils/supplierFinance'
+import SupplierDocumentDialog from '@/components/admin/purchase/SupplierDocumentDialog.vue'
+import SupplierRefundPanel from '@/components/admin/finance/SupplierRefundPanel.vue'
+import CustomModal from '@/components/CustomModal.vue'
 
+const props = defineProps({ mode: { type: String, default: 'receipt', validator: value => ['receipt', 'payment'].includes(value) } })
+const route = useRoute()
+const router = useRouter()
+const user = useUserStore()
+const paymentMode = computed(() => props.mode === 'payment')
+const documentLabel = computed(() => paymentMode.value ? '付款单' : '收款单')
+const historyLabel = computed(() => paymentMode.value ? '付款历史' : '收款历史')
+const canRefund = computed(() => paymentMode.value && user.hasPerm('admin.route.finance.supplier_refunds'))
+const refundTab = computed(() => paymentMode.value && route.query.tab === 'refund')
+const supplierOptions = ref({ stores: [], suppliers: [], bankAccounts: [], paymentRequireInvoice: false })
+const paymentFilters = reactive({ keyword: '', status: '', startDate: '', endDate: '' })
+const paymentDialogOpen = ref(false)
+const paymentDocumentId = ref(null)
+const paymentSupplierId = ref(null)
+const paymentStoreId = ref(null)
+const ruleSaving = ref(false)
+const confirmation = ref(null)
+const actionKeys = new Map()
+let receiptConfirmationResolver = null
+function confirmReceipt(message, title, action) {
+  cancelConfirmation()
+  confirmation.value = { message, title, action }
+  return new Promise(resolve => { receiptConfirmationResolver = resolve })
+}
+function cancelConfirmation() {
+  confirmation.value = null
+  receiptConfirmationResolver?.(false)
+  receiptConfirmationResolver = null
+}
+const canAction = action => !paymentMode.value || user.hasPerm(`admin.finance.supplier_payment.${action}`)
+const statusLabel = status => paymentMode.value ? documentStatusLabels[status] || status : status === 'audited' ? '已审核' : '待审核'
+const isDraft = item => !item.lockedAt && (item.status === 'draft' || paymentMode.value && item.status === 'reversed')
+function setHistoryTab(tab) {
+  paymentDialogOpen.value = false
+  const query = { ...route.query, tab: tab || undefined }
+  delete query.documentId; delete query.create; delete query.supplierId
+  router.replace({ query })
+}
+function openPayment(id = null) {
+  paymentDocumentId.value = id
+  paymentSupplierId.value = route.query.supplierId ? Number(route.query.supplierId) : null
+  paymentStoreId.value = selectedStoreId.value || (route.query.storeId ? Number(route.query.storeId) : null)
+  paymentDialogOpen.value = true
+}
+function closePayment() {
+  paymentDialogOpen.value = false
+  const query = { ...route.query }
+  delete query.documentId; delete query.create; delete query.supplierId
+  router.replace({ query })
+}
+async function saveInvoiceRule() {
+  ruleSaving.value = true
+  try { await request.put('/supplier-finance/rules', { paymentRequireInvoice: supplierOptions.value.paymentRequireInvoice }) }
+  catch (err) { supplierOptions.value.paymentRequireInvoice = !supplierOptions.value.paymentRequireInvoice; showNotice(errorMessage(err, '规则保存失败'), 'error') }
+  finally { ruleSaving.value = false }
+}
 const receipts = ref([])
 const stores = ref([])
 const customers = ref([])
@@ -479,6 +558,7 @@ const attachmentFile = ref(null)
 const attachmentPreview = ref('')
 const localPreviewUrl = ref('')
 let noticeTimer = null
+let loadRequestToken = 0
 
 const notice = reactive({ visible: false, type: 'success', message: '' })
 
@@ -581,14 +661,34 @@ const showNotice = (message, type = 'success') => {
 }
 
 const loadData = async () => {
+  const requestToken = ++loadRequestToken
   loading.value = true
   try {
+    if (paymentMode.value) {
+      if (!user.hasPerm('admin.route.finance.supplier_payments')) return
+      const [options, payments] = await Promise.all([
+        request.get('/supplier-finance/options'),
+        request.get('/supplier-payments', { params: paymentFilters })
+      ])
+      if (requestToken !== loadRequestToken) return
+      supplierOptions.value = options
+      stores.value = options.stores || []
+      receipts.value = (payments.items || []).map(row => ({
+        ...row, partyName: row.supplierName, customerCode: row.supplierId,
+        documentDate: row.businessDate, creator: row.createdBy,
+        writeoffAmount: row.allocatedAmount, customerName: row.supplierName,
+        settlementAccount: row.accountName, discountAmount: 0
+      }))
+      selectedIds.value = selectedIds.value.filter(id => receipts.value.some(item => item.id === id))
+      return
+    }
     const [storeResponse, customerResponse, receiptResponse, bankAccountResponse] = await Promise.all([
       request({ url: '/stores', method: 'GET' }),
       request({ url: '/customers', method: 'GET', params: { status: 'active' } }),
       request({ url: '/payment-receipts', method: 'GET' }),
       request({ url: '/bank-accounts/options', method: 'GET' })
     ])
+    if (requestToken !== loadRequestToken) return
     stores.value = Array.isArray(storeResponse) ? storeResponse : []
     customers.value = Array.isArray(customerResponse) ? customerResponse : []
     receipts.value = Array.isArray(receiptResponse?.items) ? receiptResponse.items : []
@@ -599,10 +699,11 @@ const loadData = async () => {
       receipts.value.some(item => item.id === id)
     )
   } catch (error) {
-    console.error('加载收款历史失败:', error)
-    showNotice(errorMessage(error, '加载收款历史失败'), 'error')
+    if (requestToken !== loadRequestToken) return
+    console.error(`加载${historyLabel.value}失败:`, error)
+    showNotice(errorMessage(error, `加载${historyLabel.value}失败`), 'error')
   } finally {
-    loading.value = false
+    if (requestToken === loadRequestToken) loading.value = false
   }
 }
 
@@ -647,11 +748,26 @@ const loadNextNumber = async () => {
   }
 }
 const openCreateModal = async () => {
+  if (paymentMode.value) { openPayment(); return }
   resetForm()
   modalVisible.value = true
   await loadNextNumber()
 }
+const openQueryCreate = async () => {
+  if (paymentMode.value) {
+    if (route.query.documentId && !refundTab.value) openPayment(Number(route.query.documentId))
+    else if (route.query.create === '1' && !refundTab.value) openPayment()
+    return
+  }
+  if (route.query.create !== '1') return
+  resetForm()
+  if (route.query.customerId) form.customerId = Number(route.query.customerId)
+  handleCustomerChange()
+  modalVisible.value = true
+  await loadNextNumber()
+}
 const openEditModal = item => {
+  if (paymentMode.value) { openPayment(item.id); return }
   resetForm()
   editingId.value = item.id
   Object.assign(form, {
@@ -673,6 +789,12 @@ const closeModal = () => {
   if (saving.value) return
   modalVisible.value = false
   window.setTimeout(resetForm, 180)
+  if (route.query.create || route.query.customerId) {
+    const query = { ...route.query }
+    delete query.create
+    delete query.customerId
+    router.replace({ query })
+  }
 }
 const handleCustomerChange = () => {
   const store = stores.value.find(
@@ -760,6 +882,11 @@ const saveReceipt = async () => {
     showNotice(response?.message || '收款单保存成功')
     modalVisible.value = false
     resetForm()
+    if (route.query.create || route.query.customerId) {
+      const query = { ...route.query }
+      delete query.create; delete query.customerId
+      router.replace({ query })
+    }
     await loadData()
   } catch (error) {
     console.error('保存收款单失败:', error)
@@ -770,12 +897,13 @@ const saveReceipt = async () => {
 }
 
 const auditReceipt = async item => {
+  if (paymentMode.value) { confirmation.value = { action: 'audit', item, message: `审核付款单 ${item.documentNo}？将扣减账户 ${formatMoney(item.paymentAmount)}，核销应付 ${formatMoney(item.writeoffAmount)}。` }; return }
   const prompt = [
     `确定审核收款单 ${item.documentNo} 吗？`,
     `实收 ${formatMoney(item.paymentAmount)}，优惠 ${formatMoney(item.discountAmount)}。`,
     '审核后会立即核销客户欠款，多收金额转为客户储值。'
   ].join('\n')
-  if (!window.confirm(prompt)) return
+  if (!await confirmReceipt(prompt, '审核收款单', 'audit')) return
   busyId.value = item.id
   try {
     const response = await request({
@@ -791,9 +919,8 @@ const auditReceipt = async item => {
   }
 }
 const reverseAudit = async item => {
-  if (!window.confirm(
-    `确定反审核收款单 ${item.documentNo} 吗？\n系统会恢复本单核销的欠款并撤回本单预收。`
-  )) return
+  if (paymentMode.value) { confirmation.value = { action: 'reverse-audit', item, message: `反审核付款单 ${item.documentNo}？将恢复银行余额和应付核销，已使用的预付款需先撤销后续核销。` }; return }
+  if (!await confirmReceipt(`确定反审核收款单 ${item.documentNo} 吗？\n系统会恢复本单核销的欠款并撤回本单预收。`, '反审核收款单', 'reverse-audit')) return
   busyId.value = item.id
   try {
     const response = await request({
@@ -809,7 +936,8 @@ const reverseAudit = async item => {
   }
 }
 const deleteReceipt = async item => {
-  if (!window.confirm(`确定删除待审核收款单 ${item.documentNo} 吗？`)) return
+  if (paymentMode.value) { confirmation.value = { action: 'delete', item, message: `删除付款单 ${item.documentNo}？有审核历史的单据将保留为已作废记录。` }; return }
+  if (!await confirmReceipt(`确定删除待审核收款单 ${item.documentNo} 吗？`, '删除收款单', 'delete')) return
   busyId.value = item.id
   try {
     const response = await request({
@@ -841,7 +969,7 @@ const printReceipt = item => {
     : ''
   printWindow.document.write(`
     <!doctype html><html lang="zh-CN"><head><meta charset="utf-8">
-    <title>收款单 ${escapeHtml(item.documentNo)}</title>
+    <title>${documentLabel.value} ${escapeHtml(item.documentNo)}</title>
     <style>
       *{box-sizing:border-box}body{padding:36px;color:#172033;font:14px/1.6 Arial,"Microsoft YaHei"}
       h1{text-align:center;letter-spacing:5px}.sub{text-align:center;color:#667085}
@@ -853,19 +981,19 @@ const printReceipt = item => {
       .remark{min-height:72px;margin-top:22px;padding:12px;border:1px solid #cbd5e1}
       .attachment img{max-width:420px;max-height:300px;object-fit:contain}.sign{display:flex;justify-content:space-between;margin-top:45px}
     </style></head><body>
-    <h1>收款单</h1><p class="sub">${escapeHtml(item.storeName)} · ${escapeHtml(item.documentNo)}</p>
+    <h1>${documentLabel.value}</h1><p class="sub">${escapeHtml(item.storeName)} · ${escapeHtml(item.documentNo)}</p>
     <section class="meta">
       <div><span>单据日期</span><strong>${escapeHtml(item.documentDate)}</strong></div>
-      <div><span>客户</span><strong>${escapeHtml(item.customerName)}</strong></div>
-      <div><span>审核状态</span><strong>${item.status === 'audited' ? '已审核' : '待审核'}</strong></div>
+      <div><span>${paymentMode.value ? '供应商' : '客户'}</span><strong>${escapeHtml(item.customerName)}</strong></div>
+      <div><span>审核状态</span><strong>${statusLabel(item.status)}</strong></div>
       <div><span>结算账户</span><strong>${escapeHtml(item.settlementAccount || '-')}</strong></div>
-      <div><span>收款方式</span><strong>${escapeHtml(item.paymentMethod || '-')}</strong></div>
+      <div><span>${paymentMode.value ? '付款方式' : '收款方式'}</span><strong>${escapeHtml(item.paymentMethod || '-')}</strong></div>
       <div><span>制单人</span><strong>${escapeHtml(item.creator || '-')}</strong></div>
     </section>
-    <table><thead><tr><th>金额项目</th><th>收款金额</th><th>优惠金额</th><th>核销金额</th><th>本次预收</th></tr></thead>
-    <tbody><tr><td>本次收款</td><td>${formatMoney(item.paymentAmount)}</td><td>${formatMoney(item.discountAmount)}</td><td>${formatMoney(item.writeoffAmount)}</td><td>${formatMoney(item.advanceAmount)}</td></tr></tbody></table>
+    <table><thead><tr><th>金额项目</th><th>${paymentMode.value ? '付款金额' : '收款金额'}</th>${paymentMode.value ? '' : '<th>优惠金额</th>'}<th>核销金额</th><th>${paymentMode.value ? '新增预付款' : '本次预收'}</th></tr></thead>
+    <tbody><tr><td>本次${paymentMode.value ? '付款' : '收款'}</td><td>${formatMoney(item.paymentAmount)}</td>${paymentMode.value ? '' : `<td>${formatMoney(item.discountAmount)}</td>`}<td>${formatMoney(item.writeoffAmount)}</td><td>${formatMoney(item.advanceAmount)}</td></tr></tbody></table>
     <div class="remark">备注：${escapeHtml(item.remark || '无')}</div>${attachment}
-    <div class="sign"><span>客户签字：________________</span><span>经办人：${escapeHtml(item.creator || '王醒')}</span></div>
+    <div class="sign"><span>${paymentMode.value ? '供应商' : '客户'}签字：________________</span><span>经办人：${escapeHtml(item.creator || '王醒')}</span></div>
     <script>window.addEventListener('load',()=>window.print())<\/script></body></html>
   `)
   printWindow.document.close()
@@ -873,22 +1001,22 @@ const printReceipt = item => {
 
 const exportExcel = () => {
   if (!filteredReceipts.value.length) {
-    showNotice('当前没有可导出的收款记录', 'error')
+    showNotice(`当前没有可导出的${paymentMode.value ? '付款' : '收款'}记录`, 'error')
     return
   }
   const rows = filteredReceipts.value.map(item => ({
     '单据日期': item.documentDate,
     '单据编号': item.documentNo,
     '门店': item.storeName,
-    '客户': item.customerName,
-    '客户编号': item.customerCode || item.customerId,
-    '收款金额': Number(item.paymentAmount) || 0,
-    '优惠金额': Number(item.discountAmount) || 0,
+    [paymentMode.value ? '供应商' : '客户']: item.customerName,
+    [paymentMode.value ? '供应商编号' : '客户编号']: item.customerCode || item.customerId,
+    [paymentMode.value ? '付款金额' : '收款金额']: Number(item.paymentAmount) || 0,
+    ...(paymentMode.value ? {} : { '优惠金额': Number(item.discountAmount) || 0 }),
     '核销金额': Number(item.writeoffAmount) || 0,
-    '本次预收': Number(item.advanceAmount) || 0,
+    [paymentMode.value ? '新增预付款' : '本次预收']: Number(item.advanceAmount) || 0,
     '制单人': item.creator,
-    '审核状态': item.status === 'audited' ? '已审核' : '待审核',
-    '收款方式': item.paymentMethod,
+    '审核状态': statusLabel(item.status),
+    [paymentMode.value ? '付款方式' : '收款方式']: item.paymentMethod,
     '结算账户': item.settlementAccount,
     '备注': item.remark
   }))
@@ -899,12 +1027,34 @@ const exportExcel = () => {
     { wch: 10 }, { wch: 14 }, { wch: 20 }, { wch: 28 }
   ]
   const workbook = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(workbook, sheet, '收款历史')
+  XLSX.utils.book_append_sheet(workbook, sheet, historyLabel.value)
   const storeName = selectedStoreId.value === null
     ? '全部门店'
     : activeStores.value.find(store => store.id === selectedStoreId.value)?.name || '门店'
-  XLSX.writeFile(workbook, `收款历史-${storeName}-${todayText()}.xlsx`)
-  showNotice(`已导出 ${rows.length} 条收款记录`)
+  XLSX.writeFile(workbook, `${historyLabel.value}-${storeName}-${todayText()}.xlsx`)
+  showNotice(`已导出 ${rows.length} 条${paymentMode.value ? '付款' : '收款'}记录`)
+}
+async function performPaymentAction() {
+  if (receiptConfirmationResolver) {
+    confirmation.value = null
+    receiptConfirmationResolver(true)
+    receiptConfirmationResolver = null
+    return
+  }
+  if (!confirmation.value || busyId.value) return
+  const { action, item } = confirmation.value
+  const permission = action === 'reverse-audit' ? 'reverse_audit' : action
+  if (!canAction(permission)) return
+  const key = `${action}:${item.id}:${item.version}`
+  if (!actionKeys.has(key)) actionKeys.set(key, operationKey())
+  busyId.value = item.id
+  confirmation.value = null
+  try {
+    await request({ url: `/supplier-payments/${item.id}${action === 'delete' ? '' : `/${action}`}`, method: action === 'delete' ? 'DELETE' : 'POST', data: { version: item.version, idempotencyKey: actionKeys.get(key) } })
+    await loadData()
+    showNotice(action === 'audit' ? '付款审核成功' : action === 'delete' ? '付款单已删除' : '反审核成功')
+  } catch (err) { showNotice(errorMessage(err, '操作失败'), 'error') }
+  finally { busyId.value = null }
 }
 
 watch(totalPages, pages => {
@@ -913,8 +1063,27 @@ watch(totalPages, pages => {
 watch(modalVisible, visible => {
   document.body.style.overflow = visible ? 'hidden' : ''
 })
-onMounted(loadData)
+onMounted(async () => {
+  selectedStoreId.value = route.query.storeId ? Number(route.query.storeId) : null
+  await loadData()
+  await openQueryCreate()
+})
+watch(() => route.query.create, value => {
+  if (value === '1') openQueryCreate()
+})
+watch(() => route.query.documentId, id => { if (paymentMode.value && id && !refundTab.value) openPayment(Number(id)) })
+watch(() => props.mode, async () => {
+  cancelConfirmation()
+  Object.assign(paymentFilters, { keyword: '', status: '', startDate: '', endDate: '' })
+  modalVisible.value = false; paymentDialogOpen.value = false; receipts.value = []; selectedIds.value = []
+  selectedStoreId.value = route.query.storeId ? Number(route.query.storeId) : null
+  currentPage.value = 1
+  await loadData()
+  await openQueryCreate()
+})
 onBeforeUnmount(() => {
+  ++loadRequestToken
+  cancelConfirmation()
   document.body.style.overflow = ''
   clearLocalPreview()
   if (noticeTimer) window.clearTimeout(noticeTimer)
@@ -922,6 +1091,14 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.history-tabs { display: flex; gap: 8px; padding-bottom: 12px; }
+.history-tabs button { height: 36px; padding: 0 16px; color: #596579; background: transparent; border: 0; border-bottom: 2px solid transparent; font: inherit; cursor: pointer; }
+.history-tabs button.active { color: #08745a; border-color: #0f9f78; font-weight: 600; }
+.history-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 12px 16px; border-bottom: 1px solid #e2e8f0; }
+.history-filters label { display: grid; gap: 5px; font-size: 12px; color: #596579; }
+.history-filters input:not([type="checkbox"]), .history-filters select { height: 34px; max-width: 100%; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
+.history-filters .invoice-rule { display: flex; align-items: center; gap: 8px; height: 34px; }
+.status-reversed { color: #a4510b; background: #fff3df; }.status-cancelled { color: #b4232f; background: #f1f2f4; }
 .payment-history-page {
   --accent:#0f9f78;--accent-rgb:15,159,120;--accent-dark:#08745a;
   --accent-soft:#e9f8f3;--accent-border:#a9e5d2;--page-bg:#f4f7f8;

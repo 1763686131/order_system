@@ -750,24 +750,18 @@ const allMenuItems = [
     icon: icons.dollar,
     children: [
       {
-        label: '供应商应付',
+        label: '应付欠款',
         path: '/admin/finance/payables',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES,
+        alternativePermission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS,
+        alternativePath: '/admin/finance/payables?tab=reconciliation'
       },
       {
-        label: '供应商付款',
+        label: '付款历史',
         path: '/admin/finance/supplier-payments',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS
-      },
-      {
-        label: '供应商退款',
-        path: '/admin/finance/supplier-refunds',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS
-      },
-      {
-        label: '供应商正式对账',
-        path: '/admin/finance/supplier-reconciliations',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS,
+        alternativePermission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS,
+        alternativePath: '/admin/finance/supplier-payments?tab=refund'
       },
       {
         label: '员工费用原型',
@@ -865,7 +859,10 @@ const menuItems = computed(() =>
     .map(item => {
       const children = item.children?.filter(child =>
         !child.permission || userStore.hasPerm(child.permission)
-      )
+          || child.alternativePermission && userStore.hasPerm(child.alternativePermission)
+      ).map(child => child.alternativePermission && !userStore.hasPerm(child.permission)
+        ? { ...child, path: child.alternativePath }
+        : child)
       return {
         ...item,
         ...(item.children ? { children } : {})

@@ -12,8 +12,8 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `5.12` |
-| 文档更新 | `2026-10-06` |
+| 权限/API 文档版本 | `5.14` |
+| 文档更新 | `2026-10-11` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -30,6 +30,7 @@
 - 客户期初欠款、储值余额和应收欠款汇总
 - 供应商应付、预付款和贷项读取独立账务流水，按实际入库确认应付
 - 供应商付款草稿、审核、反审核、银行流水及独立余额核销
+- 供应商财务仅保留“应付欠款”和“付款历史”两个菜单入口，分别复用应收汇总和收款历史页面
 - 采购发票登记、部分分配、确认/撤销和见票付款规则
 - 收款历史、收款单草稿、附件、打印和 Excel 导出
 - 收款单审核入账、反审核回滚及客户账户流水追溯
@@ -241,13 +242,16 @@ order_system/
 │  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制模板、变量、绑定和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  ├─ PartyList.vue             # 客户/供应商共用列表、详情、编辑和财务展示
+│  │  │  ├─ finance/                 # 应收/应付共用对账弹窗及供应商内嵌业务面板
+│  │  │  │  ├─ DebtDetails.vue       # 客户/供应商账务明细、筛选、打印和导出
+│  │  │  │  ├─ SupplierRefundPanel.vue # 付款历史内的退款入账页签
+│  │  │  │  └─ SupplierReconciliationPanel.vue # 应付欠款/对账弹窗内的正式对账和锁期
 │  │  │  ├─ purchase/                # 供应商归属、付款/发票与核销复用组件
 │  │  │  │  ├─ SupplierAssignmentDialog.vue    # 独立入库逐行补录供应商并确认应付
 │  │  │  │  ├─ PayableAllocationTable.vue      # 付款核销和采购发票分配明细表
 │  │  │  │  ├─ SupplierAttachments.vue         # 供应商付款/发票附件上传和移除
 │  │  │  │  ├─ SupplierBalanceDialog.vue       # 供应商预付款/贷项核销及历史记录
-│  │  │  │  ├─ SupplierDocumentDialog.vue      # 供应商付款和采购发票新增、审核弹窗
-│  │  │  │  └─ SupplierDocumentList.vue        # 供应商付款/采购发票共用列表
+│  │  │  │  └─ SupplierDocumentDialog.vue      # 供应商付款和采购发票新增、审核弹窗
 │  │  │  └─ StoreFormModal.vue       # 门店维护弹窗
 │  │  ├─ print/
 │  │  │  ├─ PrintDesignerEditor.vue  # 可视化模板设计器封装
@@ -278,15 +282,9 @@ order_system/
 │  │     ├─ inventory/               # 仓库管理
 │  │     │  └─ WarehouseManage.vue   # 仓库档案和启停维护
 │  │     ├─ finance/                 # 财务
-│  │     │  ├─ Receivables.vue       # 客户应收欠款汇总
-│  │     │  ├─ PaymentHistory.vue    # 收款历史、收款单录入与审核
+│  │     │  ├─ Receivables.vue       # receivable/payable 双模式应收/应付汇总
+│  │     │  ├─ PaymentHistory.vue    # receipt/payment 双模式收款/付款历史、录单与审核
 │  │     │  ├─ BankAccounts.vue      # 银行账户管理和余额展示
-│  │     │  ├─ DebtDetails.vue       # 应收/应付欠款详情
-│  │     │  ├─ Payables.vue          # 供应商应付、预付款、贷项汇总
-│  │     │  ├─ SupplierPayments.vue # 供应商付款入口
-│  │     │  ├─ SupplierRefunds.vue  # 供应商贷项退款入口
-│  │     │  ├─ SupplierReconciliations.vue # 供应商正式对账与锁期
-│  │     │  ├─ SupplierStatement.vue # 供应商内部对账、打印和导出
 │  │     │  ├─ EmployeeExpenses.vue  # 员工费用前端临时原型
 │  │     │  ├─ ExpressCourierReconciliation.vue # 快递运费对账
 │  │     │  └─ LogisticsTruckReconciliation.vue # 物流运费对账
@@ -357,7 +355,7 @@ order_system/
 | `customer` | `/api/customers` | `balance`、`initialReceivable`、`receivable` | 储值余额、期初欠款、应收欠款 |
 | `supplier` | `/api/suppliers` | `payable` | 欠款金额、应付欠款 |
 
-客户页面允许维护储值余额和期初欠款。供应商余额读取新的供应商账务流水，档案中只读展示，期初通过“供应商应付”页面录入。旧 `suppliers.payable` 不作为当前账务依据。供应商的联系人、银行信息、税号和备注仍可正常编辑。
+客户页面允许维护储值余额和期初欠款。供应商余额读取新的供应商账务流水，档案中只读展示，期初通过“应付欠款”页面录入。旧 `suppliers.payable` 不作为当前账务依据。供应商的联系人、银行信息、税号和备注仍可正常编辑。
 
 `CustomerList.vue` 和 `SupplierList.vue` 保留原有页面入口与对外方法名，路由无需调整。新增第三类往来单位时，应优先扩展共享组件的实体配置、字段标准化和请求映射。
 
@@ -549,18 +547,23 @@ import {
 | `/admin/customers` | 客户管理 | `/api/customers` |
 | `/admin/finance/receivables` | 应收欠款 | `/api/customers/receivables` |
 | `/admin/finance/payment-history` | 收款历史 | `/api/payment-receipts` |
-| `/admin/finance/payables` | 供应商应付、预付款和贷项 | `/api/suppliers/payables`、`/api/suppliers/:id/initial-balances` |
-| `/admin/finance/supplier-payments` | 供应商付款、审核、反审核和银行流水 | `/api/supplier-payments` |
-| `/admin/finance/supplier-refunds` | 供应商贷项退款、审核、反审核和银行入账 | `/api/supplier-refunds` |
-| `/admin/finance/supplier-reconciliations` | 供应商正式对账、快照确认和期间锁定 | `/api/supplier-reconciliations` |
-| `/admin/finance/supplier-statement/:supplierId` | 供应商内部对账、打印和导出 | `/api/suppliers/:id/debt-details`、`/api/supplier-payables/:id/invoice` |
+| `/admin/finance/payables` | 应付欠款，共用应收汇总；欠款详情打开对账弹窗 | `/api/suppliers/payables`、`/api/suppliers/:id/debt-details`、`/api/suppliers/:id/initial-balances` |
+| `/admin/finance/payables?tab=reconciliation` | 应付欠款内的正式对账页签，快照确认和期间锁定 | `/api/supplier-reconciliations` |
+| `/admin/finance/supplier-payments` | 付款历史，共用收款历史；付款单录入、审核、反审核和银行流水 | `/api/supplier-payments` |
+| `/admin/finance/supplier-payments?tab=refund` | 付款历史内的退款入账页签 | `/api/supplier-refunds` |
 | `/admin/finance/employee-expenses` | 员工采购/费用报销前端原型 | 仅页面临时状态，不调用正式财务接口 |
 | `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
-| `/admin/finance/debt-details/:type/:targetId` | 欠款详情 | 前端模拟数据（待接入后端 API） |
+| `/admin/finance/debt-details/:type/:targetId` | 兼容旧地址，转到应收/应付页面并打开共用对账弹窗 | `/api/customers/:id/debt-details` 或 `/api/suppliers/:id/debt-details` |
 | `/admin/system/print-template` | 打印模板管理和设计器 | `/api/print-templates` |
 | `/admin/system/operation-logs` | 操作日志查询、筛选和清空 | `/api/admin/operation-logs` |
 | `/admin/hr/employees` | 员工档案、登录账号和头像维护 | `/api/admin/employees`、`/api/admin/employees/:id/avatar` |
 | `/admin/hr/departments` | 部门配置和部门员工管理 | `/api/admin/departments`、`/api/admin/employees` |
+
+供应商财务菜单只保留“应付欠款”和“付款历史”。`Receivables.vue` 由路由传入 `receivable/payable` 模式，按客户/供应商切换接口、字段和金额摘要；“欠款详情”统一打开 `components/admin/finance/DebtDetails.vue`，保留客户商品展开和供应商账务来源、基础开票状态、打印导出。供应商的应付、预付款和贷项分开展示，不能仅替换客户文案或使用旧档案余额。
+
+`PaymentHistory.vue` 由路由传入 `receipt/payment` 模式，客户收款维持原有流程，供应商付款读取 `/api/supplier-payments`；从欠款行发起收款/付款会带入往来单位和门店。付款草稿不扣账户，审核后扣减门店银行账户、核销指定应付，超额部分计入预付款；反审核追加冲销流水并恢复余额。付款录单复用原有付款/采购发票弹窗，发票登记功能不受影响。
+
+供应商退款和正式对账不再提供独立菜单/页面，而是在付款历史的“退款入账”和应付欠款（或供应商对账弹窗）的“正式对账”页签内处理；退款审核增加银行余额，正式对账确认仍锁定期间。各业务继续使用原有独立权限、版本号、幂等键和门店范围，不因页面合并扩大授权；仅有退款或正式对账权限的账号也可进入对应页签。旧 `/admin/finance/supplier-refunds`、`/admin/finance/supplier-reconciliations` 分别跳转到上述页签，旧 `/admin/finance/supplier-statement/:supplierId` 转到应付欠款并通过 `statementId` 打开对账弹窗，链接可继续使用。
 
 采购订单、采购入库和采购退货保留独立路由及菜单权限，共用 `src/views/admin/purchase/PurchaseList.vue`。
 路由通过 `mode: 'orders'`、`mode: 'inbound'` 或 `mode: 'returns'` 切换标题、筛选条件、表格列和操作；页面样式写在组件内的 `<style scoped>`，切换路由会重置筛选。
@@ -574,11 +577,11 @@ import {
 
 采购申请提供折后金额（默认随明细合计填充）、其它费用、已付金额、付款方式和“需要发票”。付款方式为现金、微信、承兑、公对公、其它；公对公选择本门店预设账户，眼睛按钮切换最新余额显隐，其它需填写付款说明。保存采购申请时，对公账户按已付金额扣款，余额不足则整个保存事务回滚；编辑时冲销原扣款并重新入账，删除未审核采购单时退回原扣款。未入库的未付应付为折后金额加其它费用减已付金额。关联入库保存过账后确认应付并自动核销采购单已付金额，不再次扣款；后续剩余应付仍可通过供应商付款模块支付。采购列表将履约、开票和付款状态分开，已审核且没有入库的订单提供反审核入口。
 
-第一阶段应付/归属逻辑集中在 `supplier_ledger.py/supplier_finance.py`，第二阶段付款、余额核销和发票逻辑集中在 `supplier_settlement.py/supplier_payments.py/purchase_invoices.py`，第三阶段退货、退款和正式对账分别集中在 `purchase_returns.py/supplier_refunds.py/supplier_reconciliations.py`，期间控制由 `supplier_periods.py` 统一处理。前端复用 `src/components/admin/purchase/` 下的归属、付款/发票、退货和核销组件及 `supplier-finance.css`。新表在重启后端后的首次数据库访问时自动创建，不迁移旧 `suppliers.payable`，不回填历史已审核入库应付。部署前备份数据库和上传目录，普通角色在权限组中授予新的中文付款、发票、退货、退款、正式对账及核销权限。采购退货与销售退货保持独立。
+第一阶段应付/归属逻辑集中在 `supplier_ledger.py/supplier_finance.py`，第二阶段付款、余额核销和发票逻辑集中在 `supplier_settlement.py/supplier_payments.py/purchase_invoices.py`，第三阶段退货、退款和正式对账分别集中在 `purchase_returns.py/supplier_refunds.py/supplier_reconciliations.py`，期间控制由 `supplier_periods.py` 统一处理。前端复用 `src/components/admin/purchase/` 下的归属、付款/发票、退货和核销组件，以及 `src/components/admin/finance/` 下的对账与内嵌面板，样式共用 `supplier-finance.css`。新表在重启后端后的首次数据库访问时自动创建，不迁移旧 `suppliers.payable`，不回填历史已审核入库应付。部署前备份数据库和上传目录，普通角色在权限组中授予新的中文付款、发票、退货、退款、正式对账及核销权限。采购退货与销售退货保持独立。
 
 独立的采购费用归属功能已移除，采购申请中的“其它费用”仍保留。升级前请备份数据库；重启后端后的首次数据库访问会删除旧 `purchase_expense_lines` 表（含其记录和索引）及对应权限关联，不改写已过账的供应商账务和库存流水。
 
-“供应商应付”右侧余额操作查看/核销预付款和贷项；核销不再次扣款。付款审核默认允许未开票来源，但必须填写原因；“见票付款”开关开启后须先开票，或由具备豁免权限的审核人确认。“采购 / 采购订单 / 详情 / 发票记录”支持内嵌登记、编辑、删除、确认及撤销。普通采购订单审核通过后即可按订单明细提前登记和确认发票，不要求先入库；直接入库单仍以已确认的实际应付为来源，也可合并同门店同供应商其他单据。列表区分整张发票金额、本单分配金额和“已确认待入库”金额；确认后同步刷新采购列表和详情的开票汇总。实际入库形成应付时自动匹配已确认的订单发票，分批入库逐批匹配，不重复计算开票金额。提前开票不生成应付、不增加库存、不产生银行流水，撤销发票不撤销已发生付款。财务附件按登录和门店范围私有下载。
+“应付欠款”右侧余额操作查看/核销预付款和贷项；核销不再次扣款。付款审核默认允许未开票来源，但必须填写原因；“见票付款”开关开启后须先开票，或由具备豁免权限的审核人确认。“采购 / 采购订单 / 详情 / 发票记录”支持内嵌登记、编辑、删除、确认及撤销。普通采购订单审核通过后即可按订单明细提前登记和确认发票，不要求先入库；直接入库单仍以已确认的实际应付为来源，也可合并同门店同供应商其他单据。列表区分整张发票金额、本单分配金额和“已确认待入库”金额；确认后同步刷新采购列表和详情汇总。实际入库形成应付时自动匹配已确认的订单发票，分批入库逐批匹配，不重复计算开票金额。提前开票不生成应付、不增加库存、不产生银行流水，撤销发票不撤销已发生付款。财务附件按登录和门店范围私有下载。
 
 独立采购发票页面和菜单已移除，旧 `/admin/purchase/invoices?documentId=发票ID` 地址自动跳转到关联采购单据的发票记录。普通角色需同时具备采购订单页面权限和“采购订单发票 / 查看采购订单发票”权限（沿用 `admin.route.purchase.invoices` 编码）；新增、编辑、删除、确认、撤销仍分别授权。提前开票增加 `purchase_invoice_order_allocations/purchase_invoice_order_matches` 两张表，由首次数据库访问自动创建，原有发票与入库应付分配原样保留。订单已有未作废发票时，须先撤销确认并删除相关发票才能反审核；有历史发票记录的订单不能物理删除。已锁定应付不提供开票额度，已锁定发票或匹配应付不能撤销。
 

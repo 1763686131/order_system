@@ -73,8 +73,8 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.INBOUND, path: '/admin/purchase/inbound' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS, path: '/admin/purchase/returns' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS, path: '/admin/finance/supplier-payments' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS, path: '/admin/finance/supplier-refunds' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS, path: '/admin/finance/supplier-reconciliations' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS, path: '/admin/finance/supplier-payments?tab=refund' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS, path: '/admin/finance/payables?tab=reconciliation' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES, path: '/admin/finance/payables' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES, path: '/admin/finance/employee-expenses' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS, path: '/admin/inventory' },
@@ -107,8 +107,8 @@ export function getDefaultAdminPath(userStore) {
 export function getAdminRoutePermission(path = '') {
   if (/^\/admin\/purchase\/returns(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.PURCHASE.RETURNS
   if (/^\/admin\/finance\/supplier-payments(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS
-  if (/^\/admin\/finance\/supplier-refunds(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS
-  if (/^\/admin\/finance\/supplier-reconciliations(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS
+  if (/^\/admin\/finance\/supplier-refunds(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS
+  if (/^\/admin\/finance\/supplier-reconciliations(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
   if (/^\/admin\/finance\/(payables|supplier-statement)(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
   if (/^\/admin\/finance\/employee-expenses(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES
   if (path === '/admin/dashboard') return ADMIN_ROUTE_PERMISSIONS.DASHBOARD
@@ -154,7 +154,9 @@ export function getAdminRoutePermission(path = '') {
     return ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS
   }
   if (/^\/admin\/finance\/debt-details(\/|$)/.test(path)) {
-    return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.RECEIVABLES
+    return path.includes('/debt-details/payable/')
+      ? ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
+      : ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.RECEIVABLES
   }
   if (/^\/admin\/finance\/payment-history(\/|$)/.test(path)) {
     return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYMENT_HISTORY

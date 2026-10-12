@@ -1,7 +1,7 @@
 <template>
   <section class="supplier-finance-page">
     <header class="sf-header">
-      <h1>供应商退款</h1>
+      <h2>供应商退款</h2>
       <div class="sf-actions">
         <button v-if="can('create')" class="sf-button primary" @click="openNew"><Plus :size="16" />新增退款</button>
         <button class="sf-button icon" title="刷新" aria-label="刷新" :disabled="loading" @click="load"><RefreshCw :size="18" /></button>
@@ -38,17 +38,17 @@
             <td><span class="sf-badge">{{ statusLabels[row.status] || row.status }}</span></td>
             <td>{{ row.createdBy }}<div class="sf-muted">{{ row.auditedBy || '-' }}</div></td>
             <td><div class="sf-actions">
-              <button v-if="['draft', 'reversed'].includes(row.status) && can('edit')" class="sf-button icon" title="编辑退款草稿" aria-label="编辑退款草稿" @click="openRecord(row.id)"><Pencil :size="16" /></button>
-              <button v-if="['draft', 'reversed'].includes(row.status) && can('audit')" class="sf-button icon" title="审核并登记银行入账" aria-label="审核并登记银行入账" @click="act(row, 'audit')"><Check :size="16" /></button>
-              <button v-if="row.status === 'audited' && can('reverse_audit')" class="sf-button icon danger" title="反审核" aria-label="反审核" @click="act(row, 'reverse-audit')"><RotateCcw :size="16" /></button>
-              <button v-if="['draft', 'reversed'].includes(row.status) && can('delete')" class="sf-button icon danger" title="删除退款草稿" aria-label="删除退款草稿" @click="act(row, 'delete')"><Trash2 :size="16" /></button>
+              <button v-if="!row.lockedAt && ['draft', 'reversed'].includes(row.status) && can('edit')" class="sf-button icon" title="编辑退款草稿" aria-label="编辑退款草稿" :disabled="saving" @click="openRecord(row.id)"><Pencil :size="16" /></button>
+              <button v-if="!row.lockedAt && ['draft', 'reversed'].includes(row.status) && can('audit')" class="sf-button icon" title="审核并登记银行入账" aria-label="审核并登记银行入账" :disabled="saving" @click="act(row, 'audit')"><Check :size="16" /></button>
+              <button v-if="!row.lockedAt && row.status === 'audited' && can('reverse_audit')" class="sf-button icon danger" title="反审核" aria-label="反审核" :disabled="saving" @click="act(row, 'reverse-audit')"><RotateCcw :size="16" /></button>
+              <button v-if="!row.lockedAt && ['draft', 'reversed'].includes(row.status) && can('delete')" class="sf-button icon danger" title="删除退款草稿" aria-label="删除退款草稿" :disabled="saving" @click="act(row, 'delete')"><Trash2 :size="16" /></button>
             </div></td>
           </tr>
         </tbody>
       </table>
     </div>
 
-    <div v-if="dialogOpen" class="sf-modal-layer" @click.self="close">
+    <Teleport to="body"><div v-if="dialogOpen" class="sf-modal-layer" @click.self="close">
       <section class="supplier-finance-dialog" role="dialog" aria-modal="true" aria-label="供应商退款单">
         <header class="sf-header">
           <h2>{{ form.documentNo || (form.id ? '供应商退款详情' : '新增供应商退款') }} <span v-if="form.id" class="sf-badge">{{ statusLabels[form.status] }}</span></h2>
@@ -56,7 +56,9 @@
         </header>
         <div class="sf-dialog-body">
           <p v-if="dialogError" class="sf-error" role="alert">{{ dialogError }}</p>
-          <form id="supplier-refund-form" @submit.prevent="save">
+          <p v-if="detailLoading" class="sf-empty">加载退款单中...</p>
+          <form v-else-if="!detailFailed" id="supplier-refund-form" @submit.prevent="save">
+            <fieldset class="sf-plain-fieldset" :disabled="saving || creditLoading">
             <div class="sf-form-grid">
               <label class="sf-field">门店<select v-model="form.storeId" required :disabled="!editing" @change="changeParty"><option value="">请选择</option><option v-for="store in options.stores" :key="store.id" :value="store.id">{{ store.name }}</option></select></label>
               <label class="sf-field">供应商<select v-model="form.supplierId" required :disabled="!editing" @change="changeParty"><option value="">请选择</option><option v-for="supplier in suppliersForForm" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option></select></label>
@@ -94,6 +96,7 @@
               <div class="sf-header sf-section-title"><h3>银行流水</h3></div>
               <div class="sf-table-scroll"><table class="sf-table"><thead><tr><th>日期</th><th>变动</th><th>余额</th><th>冲销流水</th></tr></thead><tbody><tr v-for="entry in form.bankTransactions" :key="entry.id"><td>{{ entry.businessDate }}</td><td class="sf-number">{{ money(entry.change) }}</td><td class="sf-number">{{ money(entry.balanceAfter) }}</td><td>{{ entry.reversalOfId || '-' }}</td></tr></tbody></table></div>
             </template>
+            </fieldset>
           </form>
         </div>
         <footer class="sf-footer">
@@ -101,26 +104,36 @@
           <div class="sf-actions">
             <button class="sf-button" :disabled="saving" @click="close">关闭</button>
             <button v-if="editing" form="supplier-refund-form" class="sf-button primary" :disabled="saving || creditLoading"><Save :size="16" />{{ saving ? '保存中...' : '保存草稿' }}</button>
-            <button v-if="!editing && ['draft', 'reversed'].includes(form.status) && can('edit')" class="sf-button" :disabled="saving" @click="editing = true; loadCredits()"><Pencil :size="16" />编辑</button>
-            <button v-if="!editing && ['draft', 'reversed'].includes(form.status) && can('audit')" class="sf-button primary" :disabled="saving" @click="act(form, 'audit')"><Check :size="16" />审核并入账</button>
-            <button v-if="!editing && form.status === 'audited' && can('reverse_audit')" class="sf-button danger" :disabled="saving" @click="act(form, 'reverse-audit')"><RotateCcw :size="16" />反审核</button>
+            <button v-if="!detailLoading && !detailFailed && !form.lockedAt && !editing && ['draft', 'reversed'].includes(form.status) && can('edit')" class="sf-button" :disabled="saving" @click="editing = true; loadCredits()"><Pencil :size="16" />编辑</button>
+            <button v-if="!detailLoading && !detailFailed && !form.lockedAt && !editing && ['draft', 'reversed'].includes(form.status) && can('audit')" class="sf-button primary" :disabled="saving" @click="act(form, 'audit')"><Check :size="16" />审核并入账</button>
+            <button v-if="!detailLoading && !detailFailed && !form.lockedAt && !editing && form.status === 'audited' && can('reverse_audit')" class="sf-button danger" :disabled="saving" @click="act(form, 'reverse-audit')"><RotateCcw :size="16" />反审核</button>
           </div>
         </footer>
       </section>
-    </div>
+    </div></Teleport>
+    <CustomModal :visible="Boolean(pendingAction)" title="供应商退款" :message="pendingAction?.message || ''" :danger="pendingAction?.action !== 'audit'" :confirm-disabled="saving" @confirm="performAction" @cancel="pendingAction = null" />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { Check, Pencil, Plus, RefreshCw, RotateCcw, Save, Search, Trash2, X } from '@lucide/vue'
 import request from '@/api/request'
+import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { localDate } from '@/composables/documents/documentModels'
 import { formatMoney, operationKey } from '@/utils/supplierFinance'
 import '@/assets/styles/supplier-finance.css'
 
 const user = useUserStore()
+const route = useRoute()
+const router = useRouter()
+const pendingAction = ref(null)
+const detailLoading = ref(false)
+const detailFailed = ref(false)
+const actionKeys = new Map()
+let creditSequence = 0
 const statusLabels = { draft: '草稿', audited: '已审核', reversed: '已反审核', cancelled: '已取消' }
 const options = ref({ stores: [], suppliers: [], bankAccounts: [] })
 const records = ref([])
@@ -146,7 +159,7 @@ const auditedCount = computed(() => audited.value.length)
 const auditedTotal = computed(() => audited.value.reduce((sum, row) => sum + Number(row.refundAmount || 0), 0))
 
 function emptyForm() {
-  return { supplierId: '', storeId: '', businessDate: localDate(), refundDate: localDate(), bankAccountId: '', allocations: [], remark: '', status: 'draft', version: 1 }
+  return { supplierId: '', storeId: route.query.storeId ? Number(route.query.storeId) : '', businessDate: localDate(), refundDate: localDate(), bankAccountId: '', allocations: [], remark: '', status: 'draft', version: 1, idempotencyKey: operationKey() }
 }
 function money(value) { return formatMoney(value) }
 function creditFor(line) { return credits.value.find(row => Number(row.creditTransactionId) === Number(line.creditTransactionId)) }
@@ -160,14 +173,15 @@ async function load() {
   finally { loading.value = false }
 }
 async function loadCredits() {
+  const sequence = ++creditSequence
   credits.value = []
-  if (!form.value.supplierId || !form.value.storeId) return
+  if (!form.value.supplierId || !form.value.storeId) { creditLoading.value = false; return }
   creditLoading.value = true
   try {
     const result = await request.get(`/suppliers/${form.value.supplierId}/supplier-refund-credits`, { params: { storeId: form.value.storeId } })
-    credits.value = result.items || []
-  } catch (err) { dialogError.value = err.response?.data?.message || err.message }
-  finally { creditLoading.value = false }
+    if (sequence === creditSequence) credits.value = result.items || []
+  } catch (err) { if (sequence === creditSequence) dialogError.value = err.response?.data?.message || err.message }
+  finally { if (sequence === creditSequence) creditLoading.value = false }
 }
 function changeParty() {
   form.value.allocations = []
@@ -182,9 +196,13 @@ function addCredit() {
   creditToAdd.value = ''
 }
 function openNew() {
+  ++creditSequence
+  creditLoading.value = false
+  detailLoading.value = false
   form.value = emptyForm()
   credits.value = []
   dialogError.value = ''
+  detailFailed.value = false
   editing.value = true
   dialogOpen.value = true
 }
@@ -192,19 +210,27 @@ async function openRecord(id) {
   dialogError.value = ''
   credits.value = []
   editing.value = false
+  form.value = emptyForm()
+  detailLoading.value = true
+  detailFailed.value = false
   dialogOpen.value = true
   try {
     const row = await request.get(`/supplier-refunds/${id}`)
     form.value = { ...row, allocations: row.allocations.map(item => ({ ...item })) }
-    editing.value = ['draft', 'reversed'].includes(row.status) && can('edit')
+    editing.value = !row.lockedAt && ['draft', 'reversed'].includes(row.status) && can('edit')
     if (editing.value) await loadCredits()
-  } catch (err) { dialogError.value = err.response?.data?.message || err.message }
+  } catch (err) { detailFailed.value = true; dialogError.value = err.response?.data?.message || err.message }
+  finally { detailLoading.value = false }
 }
 function close() {
   if (saving.value) return
   dialogOpen.value = false
+  if (route.query.documentId) {
+    const query = { ...route.query }; delete query.documentId; router.replace({ query })
+  }
 }
 async function save() {
+  if (saving.value || creditLoading.value || !can(form.value.id ? 'edit' : 'create')) return
   if (!form.value.allocations.length || form.value.allocations.some(line => Number(line.amount) <= 0 || Number(line.amount) > Number(creditFor(line)?.availableAmount ?? line.availableAmount ?? 0))) {
     dialogError.value = '请为退款选择可用贷项，并确保每笔金额不超过可退款余额。'
     return
@@ -221,7 +247,7 @@ async function save() {
       businessDate: form.value.businessDate, refundDate: form.value.refundDate,
       bankAccountId: form.value.bankAccountId, refundAmount: allocationTotal.value,
       allocations: form.value.allocations.map(row => ({ creditTransactionId: row.creditTransactionId, amount: row.amount })),
-      remark: form.value.remark, version: form.value.version, idempotencyKey: operationKey()
+      remark: form.value.remark, version: form.value.version, idempotencyKey: form.value.idempotencyKey || operationKey()
     }
     const response = await request({
       url: form.value.id ? `/supplier-refunds/${form.value.id}` : '/supplier-refunds',
@@ -235,8 +261,17 @@ async function save() {
   finally { saving.value = false }
 }
 async function act(row, action) {
+  if (saving.value || row.lockedAt) return
   const labels = { audit: '审核该退款，并将款项记入所选银行账户？', 'reverse-audit': '反审核该退款，并冲销银行入账、恢复贷项？', delete: '删除该退款草稿？' }
-  if (!window.confirm(labels[action])) return
+  pendingAction.value = { row, action, message: labels[action] }
+}
+async function performAction() {
+  if (!pendingAction.value || saving.value) return
+  const { row, action } = pendingAction.value
+  if (!can(action === 'reverse-audit' ? 'reverse_audit' : action)) return
+  pendingAction.value = null
+  const key = `${action}:${row.id}:${row.version}`
+  if (!actionKeys.has(key)) actionKeys.set(key, operationKey())
   saving.value = true
   dialogError.value = ''
   error.value = ''
@@ -244,7 +279,7 @@ async function act(row, action) {
     const suffix = action === 'audit' ? '/audit' : action === 'reverse-audit' ? '/reverse-audit' : ''
     const response = await request({
       url: `/supplier-refunds/${row.id}${suffix}`, method: action === 'delete' ? 'DELETE' : 'POST',
-      data: { version: row.version, idempotencyKey: operationKey() }
+      data: { version: row.version, idempotencyKey: actionKeys.get(key) }
     })
     if (dialogOpen.value && Number(form.value.id) === Number(row.id) && action !== 'delete') {
       form.value = response.refund
@@ -264,5 +299,7 @@ onMounted(async () => {
   try { options.value = await request.get('/supplier-refunds/options') }
   catch (err) { error.value = err.response?.data?.message || err.message }
   await load()
+  if (route.query.documentId) await openRecord(Number(route.query.documentId))
 })
+watch(() => route.query.documentId, id => { if (id) openRecord(Number(id)) })
 </script>

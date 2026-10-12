@@ -1,7 +1,7 @@
 <template>
   <section class="supplier-finance-page">
     <header class="sf-header">
-      <h1>供应商正式对账</h1>
+      <h2>正式对账</h2>
       <div class="sf-actions">
         <button v-if="can('create')" class="sf-button primary" @click="openCreate"><Plus :size="16" />新建对账</button>
         <button class="sf-button icon" title="刷新" aria-label="刷新" :disabled="loading" @click="load"><RefreshCw :size="18" /></button>
@@ -10,7 +10,7 @@
     <form class="sf-toolbar" @submit.prevent="load">
       <label class="sf-field">单号 / 供应商<input v-model.trim="filters.keyword" type="search" /></label>
       <label class="sf-field">门店<select v-model="filters.storeId"><option value="">全部授权门店</option><option v-for="store in options.stores" :key="store.id" :value="store.id">{{ store.name }}</option></select></label>
-      <label class="sf-field">供应商<select v-model="filters.supplierId"><option value="">全部供应商</option><option v-for="supplier in suppliersForFilter" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option></select></label>
+      <label v-if="!props.supplierId" class="sf-field">供应商<select v-model="filters.supplierId"><option value="">全部供应商</option><option v-for="supplier in suppliersForFilter" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option></select></label>
       <label class="sf-field">状态<select v-model="filters.status"><option value="">全部</option><option v-for="(label, key) in statusLabels" :key="key" :value="key">{{ label }}</option></select></label>
       <label class="sf-field">期间开始<input v-model="filters.periodStart" type="date" /></label>
       <label class="sf-field">期间结束<input v-model="filters.periodEnd" type="date" /></label>
@@ -42,7 +42,7 @@
       </table>
     </div>
 
-    <div v-if="dialogOpen" class="sf-modal-layer" @click.self="close">
+    <Teleport to="body"><div v-if="dialogOpen" class="sf-modal-layer" @click.self="close">
       <section class="supplier-finance-dialog" role="dialog" aria-modal="true" aria-label="供应商正式对账">
         <header class="sf-header">
           <h2>{{ selected?.documentNo || '新建供应商对账' }} <span v-if="selected" class="sf-badge">{{ statusLabels[selected.status] }}</span></h2>
@@ -50,15 +50,16 @@
         </header>
         <div class="sf-dialog-body">
           <p v-if="dialogError" class="sf-error" role="alert">{{ dialogError }}</p>
-          <form v-if="!selected" id="supplier-reconciliation-create" @submit.prevent="create">
+          <p v-if="detailLoading" class="sf-empty">加载对账单中...</p>
+          <form v-else-if="!selected && !detailFailed" id="supplier-reconciliation-create" @submit.prevent="create">
             <div class="sf-form-grid">
               <label class="sf-field">门店<select v-model="createForm.storeId" required @change="changeCreateStore"><option value="">请选择</option><option v-for="store in options.stores" :key="store.id" :value="store.id">{{ store.name }}</option></select></label>
-              <label class="sf-field">供应商<select v-model="createForm.supplierId" required><option value="">请选择</option><option v-for="supplier in suppliersForCreate" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option></select></label>
+              <label class="sf-field">供应商<select v-model="createForm.supplierId" required :disabled="Boolean(props.supplierId)"><option value="">请选择</option><option v-for="supplier in suppliersForCreate" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option></select></label>
               <label class="sf-field">期间开始<input v-model="createForm.periodStart" type="date" required /></label>
               <label class="sf-field">期间结束<input v-model="createForm.periodEnd" type="date" required /></label>
             </div>
           </form>
-          <template v-else>
+          <template v-else-if="selected">
             <div class="sf-summary">
               <span>供应商<strong>{{ selected.supplierName }}</strong></span>
               <span>门店<strong>{{ selected.storeName }}</strong></span>
@@ -118,15 +119,16 @@
           <span v-if="selected" class="sf-muted">版本 {{ selected.version }} · {{ selected.createdBy }} · {{ selected.createdAt }}</span>
           <div class="sf-actions">
             <button class="sf-button" :disabled="saving" @click="close">关闭</button>
-            <button v-if="!selected && can('create')" form="supplier-reconciliation-create" class="sf-button primary" :disabled="saving"><Save :size="16" />生成快照</button>
+            <button v-if="!selected && !detailLoading && !detailFailed && can('create')" form="supplier-reconciliation-create" class="sf-button primary" :disabled="saving"><Save :size="16" />生成快照</button>
             <template v-if="selected?.status === 'draft'">
               <button v-if="can('cancel')" class="sf-button danger" :disabled="saving" @click="cancel"><X :size="16" />取消草稿</button>
-              <button v-if="can('confirm')" class="sf-button primary" :disabled="saving" @click="confirm"><Check :size="16" />确认并锁定期间</button>
+              <button v-if="can('confirm')" class="sf-button primary" :disabled="saving" @click="requestConfirmation('confirm')"><Check :size="16" />确认并锁定期间</button>
             </template>
           </div>
         </footer>
       </section>
-    </div>
+    </div></Teleport>
+    <CustomModal :visible="Boolean(pendingAction)" :title="pendingAction === 'confirm' ? '确认并锁定期间' : '取消对账草稿'" :message="pendingAction === 'confirm' ? '确认后将锁定该供应商、门店截至期末的账务，锁定期间不能修改、审核或反审核。确定继续？' : '确定取消这张尚未确认的对账草稿？'" :danger="pendingAction === 'cancel'" :confirm-disabled="saving" @confirm="performAction" @cancel="pendingAction = ''" />
   </section>
 </template>
 
@@ -134,25 +136,19 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Check, Plus, RefreshCw, Save, Search, X } from '@lucide/vue'
 import request from '@/api/request'
+import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { localDate } from '@/composables/documents/documentModels'
-import { operationKey } from '@/utils/supplierFinance'
+import { businessLabels, operationKey } from '@/utils/supplierFinance'
 import '@/assets/styles/supplier-finance.css'
 
+const props = defineProps({ supplierId: { type: [String, Number], default: '' }, storeId: { type: [String, Number], default: '' } })
+const emit = defineEmits(['updated'])
 const user = useUserStore()
+const pendingAction = ref('')
+const actionKeys = new Map()
 const statusLabels = { draft: '草稿', confirmed: '已确认并锁期', cancelled: '已取消' }
 const transactionStatus = { audited: '已审核', reversed: '已冲销', reversal: '冲销流水' }
-const businessLabels = {
-  INITIAL: '期初余额',
-  PURCHASE_INBOUND: '采购入库应付',
-  INDEPENDENT_PURCHASE_INBOUND: '独立入库应付',
-  PAYMENT: '供应商付款核销',
-  ADVANCE_PAYMENT: '新增预付款',
-  PURCHASE_RETURN: '采购退货',
-  PURCHASE_RETURN_ADJUSTMENT: '退货价格调整',
-  SUPPLIER_REFUND: '供应商退款',
-  CREDIT_ALLOCATION: '贷项核销'
-}
 const options = ref({ stores: [], suppliers: [] })
 const records = ref([])
 const loading = ref(false)
@@ -160,8 +156,10 @@ const saving = ref(false)
 const error = ref('')
 const dialogError = ref('')
 const dialogOpen = ref(false)
+const detailLoading = ref(false)
+const detailFailed = ref(false)
 const selected = ref(null)
-const filters = reactive({ keyword: '', storeId: '', supplierId: '', status: '', periodStart: '', periodEnd: '' })
+const filters = reactive({ keyword: '', storeId: props.storeId, supplierId: props.supplierId, status: '', periodStart: '', periodEnd: '' })
 const createForm = ref(emptyCreate())
 const confirmation = ref(emptyConfirmation())
 const can = action => user.hasPerm(`admin.finance.supplier_reconciliation.${action}`)
@@ -174,7 +172,7 @@ const confirmationDisplay = computed(() => {
 
 function emptyCreate() {
   const today = localDate()
-  return { supplierId: '', storeId: '', periodStart: `${today.slice(0, 7)}-01`, periodEnd: today }
+  return { supplierId: props.supplierId, storeId: props.storeId, periodStart: `${today.slice(0, 7)}-01`, periodEnd: today, idempotencyKey: operationKey() }
 }
 function emptyConfirmation() {
   return { payableBalance: '', prepaymentBalance: '', creditBalance: '', supplierContact: '', confirmationNote: '', differenceReason: '' }
@@ -199,6 +197,8 @@ async function load() {
 }
 function openCreate() {
   selected.value = null
+  detailLoading.value = false
+  detailFailed.value = false
   createForm.value = emptyCreate()
   confirmation.value = emptyConfirmation()
   dialogError.value = ''
@@ -211,21 +211,25 @@ async function openRecord(id) {
   dialogError.value = ''
   dialogOpen.value = true
   selected.value = null
+  detailLoading.value = true
+  detailFailed.value = false
   try {
     selected.value = await request.get(`/supplier-reconciliations/${id}`)
     setConfirmation(selected.value)
-  } catch (err) { dialogError.value = err.response?.data?.message || err.message }
+  } catch (err) { detailFailed.value = true; dialogError.value = err.response?.data?.message || err.message }
+  finally { detailLoading.value = false }
 }
 function close() {
   if (saving.value) return
   dialogOpen.value = false
 }
 async function create() {
+  if (saving.value || detailLoading.value || detailFailed.value || !can('create')) return
   saving.value = true
   dialogError.value = ''
   try {
     const response = await request.post('/supplier-reconciliations', {
-      ...createForm.value, idempotencyKey: operationKey()
+      ...createForm.value
     })
     selected.value = response.reconciliation
     setConfirmation(selected.value)
@@ -234,12 +238,12 @@ async function create() {
   finally { saving.value = false }
 }
 async function refreshSnapshot() {
-  if (!selected.value) return
+  if (!selected.value || saving.value || !can('create')) return
   saving.value = true
   dialogError.value = ''
   try {
     const response = await request.post(`/supplier-reconciliations/${selected.value.id}/refresh`, {
-      version: selected.value.version, idempotencyKey: operationKey()
+      version: selected.value.version, idempotencyKey: actionKey('refresh')
     })
     selected.value = response.reconciliation
     setConfirmation(selected.value)
@@ -248,12 +252,12 @@ async function refreshSnapshot() {
   finally { saving.value = false }
 }
 async function confirm() {
-  if (!selected.value) return
+  if (!selected.value || saving.value || !can('confirm')) return
   saving.value = true
   dialogError.value = ''
   try {
     const response = await request.post(`/supplier-reconciliations/${selected.value.id}/confirm`, {
-      version: selected.value.version, idempotencyKey: operationKey(),
+      version: selected.value.version, idempotencyKey: actionKey('confirm'),
       supplierBalances: {
         payableBalance: confirmation.value.payableBalance,
         prepaymentBalance: confirmation.value.prepaymentBalance,
@@ -264,17 +268,30 @@ async function confirm() {
       differenceReason: confirmation.value.differenceReason
     })
     selected.value = response.reconciliation
+    emit('updated')
     await load()
   } catch (err) { dialogError.value = err.response?.data?.message || err.message }
   finally { saving.value = false }
 }
 async function cancel() {
-  if (!selected.value || !window.confirm('取消这张尚未确认的对账草稿？')) return
+  requestConfirmation('cancel')
+}
+function actionKey(action) {
+  const key = `${action}:${selected.value?.id}:${selected.value?.version}`
+  if (!actionKeys.has(key)) actionKeys.set(key, operationKey())
+  return actionKeys.get(key)
+}
+function requestConfirmation(action) { if (!saving.value && selected.value) pendingAction.value = action }
+async function performAction() {
+  const action = pendingAction.value
+  pendingAction.value = ''
+  if (action === 'confirm') { await confirm(); return }
+  if (action !== 'cancel' || !selected.value || saving.value || !can('cancel')) return
   saving.value = true
   dialogError.value = ''
   try {
     const response = await request.post(`/supplier-reconciliations/${selected.value.id}/cancel`, {
-      version: selected.value.version, idempotencyKey: operationKey()
+      version: selected.value.version, idempotencyKey: actionKey('cancel')
     })
     selected.value = response.reconciliation
     await load()

@@ -44,6 +44,7 @@ def serialize_payment(conn, row):
         "account_name": "accountName", "payment_method": "paymentMethod", "unbilled_reason": "unbilledReason",
         "created_by": "createdBy", "created_at": "createdAt", "updated_at": "updatedAt",
         "audited_by": "auditedBy", "audited_at": "auditedAt", "reversed_at": "reversedAt", "remark": "remark",
+        "locked_at": "lockedAt",
     }.items():
         result[target] = row[source]
     result.update({"paymentAmount": amount(row["payment_cents"]), "advanceAmount": amount(row["advance_cents"]),
