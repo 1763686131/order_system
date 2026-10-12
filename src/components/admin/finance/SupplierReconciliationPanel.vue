@@ -34,8 +34,22 @@
       <span>已锁定期间<strong>{{ records.filter(row => row.status === 'confirmed').length }}</strong></span>
     </div>
     <div class="sf-table-scroll">
-      <table class="sf-table reconciliation-table" style="min-width: 1030px">
-        <thead><tr><th>对账单号</th><th>供应商 / 门店</th><th>对账期间</th><th>系统应付期末</th><th>预付款期末</th><th>贷项期末</th><th>状态</th><th>创建 / 确认</th></tr></thead>
+      <table
+        v-resizable-columns="{ storageKey: 'finance-reconciliation-list', resizeMode: 'fit', minWidth: 64 }"
+        class="sf-table reconciliation-table"
+        style="min-width: 1030px"
+      >
+        <colgroup>
+          <col data-column-key="document" data-min-width="110" style="width: 150px">
+          <col data-column-key="supplier-store" data-min-width="120" style="width: 180px">
+          <col data-column-key="period" data-min-width="120" style="width: 180px">
+          <col data-column-key="payable" data-min-width="100" style="width: 120px">
+          <col data-column-key="prepayment" data-min-width="100" style="width: 120px">
+          <col data-column-key="credit" data-min-width="90" style="width: 120px">
+          <col data-column-key="status" data-min-width="90" style="width: 130px">
+          <col data-column-key="created-confirmed" data-min-width="120" style="width: 180px">
+        </colgroup>
+        <thead><tr><th data-column-key="document" data-min-width="110">对账单号</th><th data-column-key="supplier-store" data-min-width="120">供应商 / 门店</th><th data-column-key="period" data-min-width="120">对账期间</th><th data-column-key="payable" data-min-width="100">系统应付期末</th><th data-column-key="prepayment" data-min-width="100">预付款期末</th><th data-column-key="credit" data-min-width="90">贷项期末</th><th data-column-key="status" data-min-width="90">状态</th><th data-column-key="created-confirmed" data-min-width="120">创建 / 确认</th></tr></thead>
         <tbody>
           <tr v-if="loading"><td colspan="8" class="sf-empty">加载中...</td></tr>
           <tr v-else-if="!records.length"><td colspan="8" class="sf-empty">暂无正式对账记录</td></tr>
@@ -86,8 +100,22 @@
               <span>期末贷项<strong>{{ money(selected.snapshot.closing.credit) }}</strong></span>
             </div>
             <div class="sf-table-scroll">
-              <table class="sf-table reconciliation-table" style="min-width: 1120px">
-                <thead><tr><th>业务日期</th><th>单号 / 业务类型</th><th>商品 / 摘要</th><th>应付变动</th><th>预付款变动</th><th>贷项变动</th><th>状态</th><th>余额（应付 / 预付 / 贷项）</th></tr></thead>
+              <table
+                v-resizable-columns="{ storageKey: 'finance-reconciliation-snapshot', resizeMode: 'fit', minWidth: 64 }"
+                class="sf-table reconciliation-table"
+                style="min-width: 1120px"
+              >
+                <colgroup>
+                  <col data-column-key="business-date" data-min-width="90" style="width: 120px">
+                  <col data-column-key="document-type" data-min-width="110" style="width: 180px">
+                  <col data-column-key="summary" data-min-width="110" style="width: 180px">
+                  <col data-column-key="payable-change" data-min-width="100" style="width: 120px">
+                  <col data-column-key="prepayment-change" data-min-width="100" style="width: 120px">
+                  <col data-column-key="credit-change" data-min-width="90" style="width: 120px">
+                  <col data-column-key="status" data-min-width="90" style="width: 120px">
+                  <col data-column-key="balances" data-min-width="140" style="width: 220px">
+                </colgroup>
+                <thead><tr><th data-column-key="business-date" data-min-width="90">业务日期</th><th data-column-key="document-type" data-min-width="110">单号 / 业务类型</th><th data-column-key="summary" data-min-width="110">商品 / 摘要</th><th data-column-key="payable-change" data-min-width="100">应付变动</th><th data-column-key="prepayment-change" data-min-width="100">预付款变动</th><th data-column-key="credit-change" data-min-width="90">贷项变动</th><th data-column-key="status" data-min-width="90">状态</th><th data-column-key="balances" data-min-width="140">余额（应付 / 预付 / 贷项）</th></tr></thead>
                 <tbody>
                   <tr v-if="!selected.snapshot.items.length"><td colspan="8" class="sf-empty">该期间没有账务变动</td></tr>
                   <tr v-for="item in selected.snapshot.items" :key="item.id">
@@ -334,6 +362,7 @@ onMounted(async () => {
 .reconciliation-search-actions { justify-content: flex-end; }
 .reconciliation-search-actions .sf-button { height: 38px; padding: 0 15px; gap: 7px; border-radius: 5px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 .reconciliation-table th, .reconciliation-table td, .reconciliation-table .sf-number { text-align: left; }
+.reconciliation-table.resizable-columns-table th, .reconciliation-table.resizable-columns-table td { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .reconciliation-table th:last-child, .reconciliation-table td:last-child { padding-right: 24px; }
 @media (max-width: 1280px) {
   .reconciliation-search-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }

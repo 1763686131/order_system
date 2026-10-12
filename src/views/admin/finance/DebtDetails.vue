@@ -74,12 +74,47 @@
 
     <p v-if="error" class="statement-error" role="alert">{{ error }}</p>
     <div class="statement-table-scroll">
-      <table class="statement-table">
+      <table
+        v-resizable-columns="{
+          storageKey: type === 'payable' ? 'finance-debt-details-payable' : 'finance-debt-details-receivable',
+          resizeMode: 'fit',
+          minWidth: 64
+        }"
+        class="statement-table"
+      >
+        <colgroup v-if="type === 'payable'">
+          <col data-column-key="business-date" data-min-width="90" style="width: 120px">
+          <col data-column-key="document" data-min-width="110" style="width: 180px">
+          <col data-column-key="summary" data-min-width="110" style="width: 180px">
+          <col data-column-key="amount-excluding-tax" data-min-width="110" style="width: 120px">
+          <col data-column-key="tax" data-min-width="90" style="width: 100px">
+          <col data-column-key="payable-change" data-min-width="110" style="width: 120px">
+          <col data-column-key="prepayment-change" data-min-width="110" style="width: 120px">
+          <col data-column-key="credit-change" data-min-width="100" style="width: 120px">
+          <col data-column-key="payable-balance" data-min-width="110" style="width: 120px">
+          <col data-column-key="invoice-status" data-min-width="100" style="width: 120px">
+          <col data-column-key="transaction-status" data-min-width="90" style="width: 100px">
+          <col data-column-key="actions" data-resizable="false" style="width: 120px">
+        </colgroup>
+        <colgroup v-else>
+          <col data-column-key="sequence" data-min-width="64" style="width: 70px">
+          <col data-column-key="business-date" data-min-width="90" style="width: 120px">
+          <col data-column-key="document" data-min-width="110" style="width: 160px">
+          <col data-column-key="business-type" data-min-width="100" style="width: 110px">
+          <col data-column-key="products" data-min-width="110" style="width: 180px">
+          <col data-column-key="quantity" data-min-width="64" style="width: 80px">
+          <col data-column-key="unit" data-min-width="64" style="width: 80px">
+          <col data-column-key="unit-price" data-min-width="90" style="width: 100px">
+          <col data-column-key="original-debt" data-min-width="110" style="width: 120px">
+          <col data-column-key="paid-amount" data-min-width="100" style="width: 110px">
+          <col data-column-key="debt-amount" data-min-width="110" style="width: 120px">
+          <col data-column-key="current-debt" data-min-width="110" style="width: 120px">
+        </colgroup>
         <thead v-if="type === 'payable'">
-          <tr><th>业务日期</th><th class="document-column">单号 / 类型</th><th>商品 / 摘要</th><th>未税金额</th><th>税额</th><th>应付变动</th><th>预付款变动</th><th>贷项变动</th><th>应付余额</th><th>开票状态</th><th>账务状态</th><th>操作</th></tr>
+          <tr><th data-column-key="business-date" data-min-width="90">业务日期</th><th class="document-column" data-column-key="document" data-min-width="110">单号 / 类型</th><th data-column-key="summary" data-min-width="110">商品 / 摘要</th><th data-column-key="amount-excluding-tax" data-min-width="110">未税金额</th><th data-column-key="tax" data-min-width="90">税额</th><th data-column-key="payable-change" data-min-width="110">应付变动</th><th data-column-key="prepayment-change" data-min-width="110">预付款变动</th><th data-column-key="credit-change" data-min-width="100">贷项变动</th><th data-column-key="payable-balance" data-min-width="110">应付余额</th><th data-column-key="invoice-status" data-min-width="100">开票状态</th><th data-column-key="transaction-status" data-min-width="90">账务状态</th><th data-column-key="actions" data-resizable="false">操作</th></tr>
         </thead>
         <thead v-else>
-          <tr><th>序号</th><th>业务日期</th><th class="document-column">单据编号</th><th>业务类型</th><th class="product-column">商品详情</th><th>数量</th><th>单位</th><th>单价</th><th>原单欠款</th><th>部分付款</th><th>应收欠款</th><th>当前欠款</th></tr>
+          <tr><th data-column-key="sequence" data-min-width="64">序号</th><th data-column-key="business-date" data-min-width="90">业务日期</th><th class="document-column" data-column-key="document" data-min-width="110">单据编号</th><th data-column-key="business-type" data-min-width="100">业务类型</th><th class="product-column" data-column-key="products" data-min-width="110">商品详情</th><th data-column-key="quantity" data-min-width="64">数量</th><th data-column-key="unit" data-min-width="64">单位</th><th data-column-key="unit-price" data-min-width="90">单价</th><th data-column-key="original-debt" data-min-width="110">原单欠款</th><th data-column-key="paid-amount" data-min-width="100">部分付款</th><th data-column-key="debt-amount" data-min-width="110">应收欠款</th><th data-column-key="current-debt" data-min-width="110">当前欠款</th></tr>
         </thead>
         <tbody>
           <tr v-if="loading"><td colspan="12" class="statement-empty">加载中...</td></tr>

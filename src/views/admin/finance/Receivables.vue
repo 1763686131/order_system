@@ -155,15 +155,42 @@
       <p v-if="error" class="finance-error" role="alert">{{ error }}</p>
 
       <div class="table-scroll">
-        <table class="records-table">
+        <table
+          v-resizable-columns="{
+            storageKey: payableMode ? 'finance-payables-list' : 'finance-receivables-list',
+            resizeMode: 'fit',
+            minWidth: 64
+          }"
+          class="records-table"
+        >
+          <colgroup>
+            <col data-column-key="party-id" data-min-width="80" style="width: 90px">
+            <col data-column-key="party-name" data-min-width="120" style="width: 180px">
+            <col data-column-key="contact" data-min-width="90" style="width: 105px">
+            <col data-column-key="phone" data-min-width="100" style="width: 120px">
+            <col
+              v-for="column in amountColumns"
+              :key="`col-${column.key}`"
+              :data-column-key="column.key"
+              data-min-width="110"
+              style="width: 150px"
+            >
+            <col data-column-key="actions" data-resizable="false" style="width: 185px">
+          </colgroup>
           <thead>
             <tr>
-              <th class="customer-id-column">{{ partyLabel }}ID</th>
-              <th class="customer-name-column">{{ partyLabel }}</th>
-              <th class="contact-column">联系人</th>
-              <th class="phone-column">电话</th>
-              <th v-for="column in amountColumns" :key="column.key" class="money-column">{{ column.label }}</th>
-              <th class="operation-column">操作</th>
+              <th class="customer-id-column" data-column-key="party-id" data-min-width="80">{{ partyLabel }}ID</th>
+              <th class="customer-name-column" data-column-key="party-name" data-min-width="120">{{ partyLabel }}</th>
+              <th class="contact-column" data-column-key="contact" data-min-width="90">联系人</th>
+              <th class="phone-column" data-column-key="phone" data-min-width="100">电话</th>
+              <th
+                v-for="column in amountColumns"
+                :key="column.key"
+                class="money-column"
+                :data-column-key="column.key"
+                data-min-width="110"
+              >{{ column.label }}</th>
+              <th class="operation-column" data-column-key="actions" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -941,6 +968,11 @@ svg {
   font-weight: 650;
   text-align: left;
   white-space: nowrap;
+}
+
+.records-table.resizable-columns-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .records-table td {
