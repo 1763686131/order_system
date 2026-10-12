@@ -32,7 +32,19 @@
       <div><span>当前储值</span><strong>{{ money(statement.summary?.storedBalance ?? statement.storedBalance) }}</strong></div>
     </div>
     <div v-else class="statement-summary supplier-summary">
-      <div v-for="item in supplierSummary" :key="item.label"><span>{{ item.label }}</span><strong>{{ money(item.value) }}</strong></div>
+      <div class="balance-formula" role="group" aria-label="净结算额等于期末应付减期末预付款减期末退货贷项">
+        <template v-for="item in supplierSummary" :key="item.label">
+          <span v-if="item.operator" class="balance-operator" aria-hidden="true">{{ item.operator }}</span>
+          <div class="balance-item" :class="{ 'balance-result': !item.operator }"><span>{{ item.label }}</span><strong>{{ money(item.value) }}</strong></div>
+        </template>
+      </div>
+      <div class="balance-formula payable-movement" role="group" aria-label="期末应付等于期初应付加期间应付变动">
+        <div class="balance-item balance-result"><span>期末应付</span><strong>{{ money(statement.closing?.payable) }}</strong></div>
+        <span class="balance-operator" aria-hidden="true">=</span>
+        <div class="balance-item"><span>期初应付</span><strong>{{ money(statement.opening?.payable) }}</strong></div>
+        <span class="balance-operator" aria-hidden="true">+</span>
+        <div class="balance-item"><span>期间应付变动</span><strong>{{ money(statement.changes?.payable) }}</strong></div>
+      </div>
     </div>
 
     <nav v-if="type === 'payable' && canReconcile" class="statement-tabs" role="tablist" aria-label="供应商对账视图">
@@ -41,14 +53,24 @@
     </nav>
     <SupplierReconciliationPanel v-if="activeTab === 'reconciliation' && canReconcile" :supplier-id="targetId" :store-id="storeId" @updated="load" />
     <template v-else>
-    <form class="statement-filters" @submit.prevent="search">
-      <label>业务类型<select v-model="filters.businessType"><option value="">全部</option><option v-for="(label, key) in typeOptions" :key="key" :value="key">{{ label }}</option></select></label>
-      <label>开始日期<input v-model="filters.startDate" type="date" /></label>
-      <label>结束日期<input v-model="filters.endDate" type="date" /></label>
-      <label v-if="type === 'payable'">开票状态<select v-model="filters.invoiceStatus"><option value="">全部</option><option v-for="(label, key) in invoiceLabels" :key="key" :value="key">{{ label }}</option></select></label>
-      <button class="statement-button primary" :disabled="loading"><Search :size="16" />查询</button>
-      <button class="statement-button" type="button" @click="resetFilters">重置</button>
-    </form>
+    <section class="statement-search-panel" aria-label="账务明细筛选">
+      <form class="statement-search-grid" :class="{ 'customer-search-grid': type === 'receivable' }" @submit.prevent="search">
+        <label class="statement-field"><span>业务类型</span><select v-model="filters.businessType"><option value="">全部</option><option v-for="(label, key) in typeOptions" :key="key" :value="key">{{ label }}</option></select></label>
+        <div class="statement-field">
+          <span>业务日期</span>
+          <div class="statement-date-range">
+            <input v-model="filters.startDate" type="date" aria-label="开始日期" :max="filters.endDate || undefined" />
+            <span aria-hidden="true">至</span>
+            <input v-model="filters.endDate" type="date" aria-label="结束日期" :min="filters.startDate || undefined" />
+          </div>
+        </div>
+        <label v-if="type === 'payable'" class="statement-field"><span>开票状态</span><select v-model="filters.invoiceStatus"><option value="">全部</option><option v-for="(label, key) in invoiceLabels" :key="key" :value="key">{{ label }}</option></select></label>
+        <div class="statement-search-actions">
+          <button class="statement-button" type="button" @click="resetFilters"><RotateCcw :size="16" />重置</button>
+          <button class="statement-button primary" :disabled="loading"><Search :size="16" />查询</button>
+        </div>
+      </form>
+    </section>
 
     <p v-if="error" class="statement-error" role="alert">{{ error }}</p>
     <div class="statement-table-scroll">
@@ -130,7 +152,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowDownUp, ArrowLeft, ChevronLeft, ChevronRight, Download, Printer, RefreshCw, Search } from '@lucide/vue'
+import { ArrowDownUp, ArrowLeft, ChevronLeft, ChevronRight, Download, Printer, RefreshCw, RotateCcw, Search } from '@lucide/vue'
 import * as XLSX from 'xlsx'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
@@ -187,13 +209,18 @@ const customerSummary = computed(() => ({
   discountAmount: statement.value.summary?.discountAmount || 0,
   receivable: statement.value.summary?.receivable ?? statement.value.totalReceivable ?? 0
 }))
-const supplierSummary = computed(() => [
-  { label: '期初应付', value: statement.value.opening?.payable },
-  { label: '期间应付变动', value: statement.value.changes?.payable },
-  { label: '期末应付', value: statement.value.closing?.payable },
-  { label: '期末预付款', value: statement.value.closing?.prepayment },
-  { label: '期末贷项', value: statement.value.closing?.credit }
-])
+const supplierSummary = computed(() => {
+  const closing = statement.value.closing || {}
+  const netSettlement = (Math.round(Number(closing.payable || 0) * 100)
+    - Math.round(Number(closing.prepayment || 0) * 100)
+    - Math.round(Number(closing.credit || 0) * 100)) / 100
+  return [
+    { label: '净结算额', value: netSettlement },
+    { label: '期末应付', value: closing.payable, operator: '=' },
+    { label: '期末预付款', value: closing.prepayment, operator: '-' },
+    { label: '期末退货贷项', value: closing.credit, operator: '-' }
+  ]
+})
 const money = value => `¥${(Number(value) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const date = value => value ? String(value).slice(0, 10) : '-'
 const apiParams = extra => ({ ...filters, storeId: props.storeId || undefined, page: page.value, pageSize: pageSize.value, sortOrder: sortOrder.value, ...extra })
@@ -340,9 +367,25 @@ onMounted(load)
 </script>
 
 <style scoped>
-.statement-page { width: 100%; min-width: 0; min-height: 100%; color: #172033; background: #f4f7f8; }
+.statement-page {
+  --accent: #0f9f78;
+  --accent-rgb: 15, 159, 120;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --page-bg: #f4f7f8;
+  --panel-bg: #fff;
+  --border: #e2e8f0;
+  --border-strong: #cbd5e1;
+  --text: #172033;
+  --text-secondary: #596579;
+  --text-muted: #8a96a8;
+  width: 100%; min-width: 0; min-height: 100%; color: var(--text); background: var(--page-bg); font-size: 14px;
+}
 .statement-page, .statement-page * { box-sizing: border-box; }
-.statement-header, .statement-filters, .statement-footer, .statement-actions, .statement-pagination { display: flex; align-items: center; }
+.statement-page button, .statement-page input, .statement-page select { font: inherit; }
+.statement-page button:focus-visible, .statement-page input:focus-visible, .statement-page select:focus-visible, .expandable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.statement-header, .statement-footer, .statement-actions, .statement-pagination { display: flex; align-items: center; }
 .statement-header { justify-content: space-between; flex-wrap: wrap; gap: 14px; padding-bottom: 14px; border-bottom: 1px solid #e2e8f0; }
 .statement-heading { display: flex; flex: 1 1 280px; min-width: 0; align-items: center; gap: 12px; }
 .statement-header h2 { margin: 0; min-width: 0; font-size: 18px; overflow-wrap: anywhere; }
@@ -353,13 +396,28 @@ onMounted(load)
 .statement-summary { display: flex; align-items: center; gap: 14px; padding: 16px 0; overflow-x: auto; }
 .statement-summary > div { min-width: 120px; display: grid; gap: 5px; text-align: center; }
 .statement-summary strong { font-size: 18px; font-variant-numeric: tabular-nums; }
-.supplier-summary { flex-wrap: wrap; }
-.supplier-summary > div { flex: 1 1 140px; }
-.statement-filters { flex-wrap: wrap; gap: 10px; padding: 12px 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
-.statement-filters label { display: grid; gap: 5px; color: #596579; font-size: 12px; }
-.statement-filters select, .statement-filters input { height: 34px; min-width: 130px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
-.statement-button { display: inline-flex; height: 34px; align-items: center; gap: 6px; padding: 0 12px; color: #596579; background: #fff; border: 1px solid #cbd5e1; border-radius: 5px; cursor: pointer; }
-.statement-button.primary { color: #fff; background: #0f9f78; border-color: #0f9f78; }
+.statement-summary.supplier-summary { display: block; overflow: visible; }
+.supplier-summary > .balance-formula { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr); align-items: center; gap: 6px; }
+.balance-item { display: grid; min-width: 0; gap: 5px; text-align: center; }
+.balance-item strong { overflow-wrap: anywhere; }
+.supplier-summary .balance-operator { color: var(--text-muted); font-size: 16px; text-align: center; }
+.supplier-summary > .payable-movement { grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr) 24px minmax(0, 1fr); margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+.payable-movement strong { font-size: 16px; }
+.statement-search-panel { padding: 18px 20px; background: var(--panel-bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.statement-search-grid { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(280px, 1.45fr) minmax(160px, 1fr) auto; gap: 14px; align-items: end; }
+.statement-search-grid.customer-search-grid { grid-template-columns: minmax(160px, 1fr) minmax(280px, 1.45fr) auto; }
+.statement-field { display: flex; min-width: 0; flex-direction: column; gap: 7px; }
+.statement-field > span { color: var(--text-secondary); font-size: 12px; font-weight: 600; }
+.statement-field input, .statement-field select { width: 100%; min-width: 0; height: 38px; padding: 0 11px; color: var(--text); background: var(--panel-bg); border: 1px solid var(--border-strong); border-radius: 5px; }
+.statement-field input:focus, .statement-field select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .12); }
+.statement-date-range { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.statement-date-range > span { color: var(--text-muted); font-size: 12px; }
+.statement-search-actions { display: flex; align-items: center; gap: 8px; }
+.statement-page .statement-button { display: inline-flex; height: 38px; align-items: center; justify-content: center; gap: 7px; padding: 0 15px; color: var(--text-secondary); background: var(--panel-bg); border: 1px solid var(--border-strong); border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.statement-page .statement-button.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+.statement-button:hover:not(:disabled) { color: var(--accent-dark); background: var(--accent-soft); border-color: var(--accent-border); }
+.statement-button.primary:hover:not(:disabled) { color: #fff; background: var(--accent-dark); }
+.statement-button:disabled { cursor: not-allowed; opacity: .45; }
 .statement-error { padding: 10px 0; color: #b4232f; }
 .statement-table-scroll { margin-top: 14px; overflow: auto; background: #fff; border: 1px solid #e2e8f0; }
 .statement-table { width: 100%; min-width: 1550px; border-collapse: collapse; table-layout: fixed; }
@@ -369,15 +427,30 @@ onMounted(load)
 .expandable { cursor: pointer; }.expandable:hover, .product-row { background: #f3fbf8; }.product-count { display: inline-block; margin-left: 6px; padding: 2px 5px; color: #08745a; background: #e9f8f3; border-radius: 4px; font-size: 11px; }
 .business-badge { display: inline-block; padding: 4px 6px; background: #eef3f5; border-radius: 4px; font-size: 12px; }.business-initial { color: #fff; background: #d97706; }.business-balance { color: #fff; background: #0891b2; }
 .statement-table th, .statement-table td { padding: 10px 12px; border-bottom: 1px solid #edf1f5; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.statement-table th:last-child, .statement-table td:last-child { padding-right: 24px; }
 .statement-table th { height: 44px; color: #596579; background: #f8fafc; font-size: 12px; }
 .statement-table td { height: 52px; color: #344054; font-size: 13px; }
 .statement-table small { display: block; margin-top: 3px; color: #8a96a8; font-size: 11px; }
-.statement-table .number { text-align: right; font-variant-numeric: tabular-nums; }
+.statement-table .number { font-variant-numeric: tabular-nums; }
 .increase { color: #dc3545 !important; }.decrease { color: #07805f !important; }
 .statement-link { padding: 0; color: #08745a; background: transparent; border: 0; cursor: pointer; font-weight: 650; }
 .statement-empty { height: 220px !important; color: #8a96a8 !important; text-align: center !important; }
-.statement-footer { justify-content: space-between; flex-wrap: wrap; gap: 10px; min-height: 56px; padding: 10px 0; color: #596579; font-size: 12px; }
+.statement-footer { justify-content: space-between; flex-wrap: wrap; gap: 10px; min-height: 58px; padding: 10px 16px; color: #596579; background: var(--panel-bg); border-top: 1px solid var(--border); font-size: 12px; }
 .invoice-form { display: grid; gap: 12px; text-align: left; }.invoice-form label { display: grid; gap: 6px; }.invoice-form input, .invoice-form select, .invoice-form textarea { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font: inherit; }
 .spinning { animation: spin .8s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }
-@media (max-width: 780px) { .statement-actions { margin-left: auto; }.statement-summary { flex-wrap: wrap; }.statement-summary > div { flex: 1 1 40%; }.summary-operator { display: none; }.statement-filters label { flex: 1 1 140px; min-width: 0; }.statement-filters input, .statement-filters select { width: 100%; min-width: 0; } }
+@media (max-width: 1280px) {
+  .statement-search-grid, .statement-search-grid.customer-search-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .statement-search-actions { justify-content: flex-end; }
+}
+@media (max-width: 780px) {
+  .statement-actions { margin-left: auto; }
+  .statement-summary { flex-wrap: wrap; }
+  .statement-summary > div { flex: 1 1 40%; }
+  .summary-operator { display: none; }
+  .supplier-summary > .balance-formula { grid-template-columns: 24px minmax(0, 1fr); row-gap: 10px; }
+  .balance-item { text-align: left; }
+  .balance-result { grid-column: 1 / -1; text-align: center; }
+  .statement-search-panel { padding: 14px 16px; }
+  .statement-search-grid, .statement-search-grid.customer-search-grid { grid-template-columns: minmax(0, 1fr); }
+}
 </style>

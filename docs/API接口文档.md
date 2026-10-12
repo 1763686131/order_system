@@ -6219,7 +6219,7 @@ SQLite 支持**多读一写**模式：
 | `POST` | `/api/suppliers/{id}/initial-balances` | `storeId`、`businessDate`、`payableAmount`、`prepaymentAmount`、`creditAmount`、`remark` | `admin.finance.payable.initial` |
 | `PUT` | `/api/supplier-payables/{id}/invoice` | `version`、`invoiceStatus`、`billedAmount`、`invoiceRemark` | `admin.purchase.invoice_status.edit` |
 
-金额单位为元，数据库以整数分保存。余额分别返回 `payableBalance`、`prepaymentBalance`、`creditBalance`、`netSettlement`。期初按供应商/门店录入一次，有新账务流水后不得补录；首次成功返回 `201`，幂等重放返回 `200`。不自动继承旧主档余额。
+金额单位为元，数据库以整数分保存。余额分别返回 `payableBalance`、`prepaymentBalance`、`creditBalance`、`netSettlement`，其中 `netSettlement = payableBalance - prepaymentBalance - creditBalance`。欠款详情按 `closing.payable - closing.prepayment - closing.credit` 以分计算期末净结算额，仅用于金额公式展示，不新增接口字段或改变账务余额。期初按供应商/门店录入一次，有新账务流水后不得补录；首次成功返回 `201`，幂等重放返回 `200`。不自动继承旧主档余额。
 
 应付汇总直接返回数组，不包裹 `items`；每项包含 `supplierId/supplierCode/supplierName/storeId`、联系人 `contactPerson/phone`、`confirmedPayable/allocatedAmount/returnedAmount` 和上述三类余额及净结算额。
 

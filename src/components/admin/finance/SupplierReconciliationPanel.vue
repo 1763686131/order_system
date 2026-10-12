@@ -7,15 +7,26 @@
         <button class="sf-button icon" title="刷新" aria-label="刷新" :disabled="loading" @click="load"><RefreshCw :size="18" /></button>
       </div>
     </header>
-    <form class="sf-toolbar" @submit.prevent="load">
-      <label class="sf-field">单号 / 供应商<input v-model.trim="filters.keyword" type="search" /></label>
-      <label class="sf-field">门店<select v-model="filters.storeId"><option value="">全部授权门店</option><option v-for="store in options.stores" :key="store.id" :value="store.id">{{ store.name }}</option></select></label>
-      <label v-if="!props.supplierId" class="sf-field">供应商<select v-model="filters.supplierId"><option value="">全部供应商</option><option v-for="supplier in suppliersForFilter" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option></select></label>
-      <label class="sf-field">状态<select v-model="filters.status"><option value="">全部</option><option v-for="(label, key) in statusLabels" :key="key" :value="key">{{ label }}</option></select></label>
-      <label class="sf-field">期间开始<input v-model="filters.periodStart" type="date" /></label>
-      <label class="sf-field">期间结束<input v-model="filters.periodEnd" type="date" /></label>
-      <button class="sf-button primary" :disabled="loading"><Search :size="16" />查询</button>
-    </form>
+    <section class="reconciliation-search-panel" aria-label="正式对账筛选">
+      <form class="reconciliation-search-grid" @submit.prevent="load">
+        <label class="sf-field"><span>单号 / 供应商</span><input v-model.trim="filters.keyword" type="search" /></label>
+        <label class="sf-field"><span>门店</span><select v-model="filters.storeId"><option value="">全部授权门店</option><option v-for="store in options.stores" :key="store.id" :value="store.id">{{ store.name }}</option></select></label>
+        <label v-if="!props.supplierId" class="sf-field"><span>供应商</span><select v-model="filters.supplierId"><option value="">全部供应商</option><option v-for="supplier in suppliersForFilter" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option></select></label>
+        <label class="sf-field"><span>状态</span><select v-model="filters.status"><option value="">全部</option><option v-for="(label, key) in statusLabels" :key="key" :value="key">{{ label }}</option></select></label>
+        <div class="sf-field reconciliation-period">
+          <span>对账期间</span>
+          <div class="reconciliation-date-range">
+            <input v-model="filters.periodStart" type="date" aria-label="期间开始" :max="filters.periodEnd || undefined" />
+            <span aria-hidden="true">至</span>
+            <input v-model="filters.periodEnd" type="date" aria-label="期间结束" :min="filters.periodStart || undefined" />
+          </div>
+        </div>
+        <div class="sf-actions reconciliation-search-actions">
+          <button class="sf-button" type="button" @click="resetFilters"><RotateCcw :size="16" />重置</button>
+          <button class="sf-button primary" :disabled="loading"><Search :size="16" />查询</button>
+        </div>
+      </form>
+    </section>
     <p v-if="error" class="sf-error" role="alert">{{ error }}</p>
     <div class="sf-summary">
       <span>对账单数<strong>{{ records.length }}</strong></span>
@@ -23,7 +34,7 @@
       <span>已锁定期间<strong>{{ records.filter(row => row.status === 'confirmed').length }}</strong></span>
     </div>
     <div class="sf-table-scroll">
-      <table class="sf-table" style="min-width: 1030px">
+      <table class="sf-table reconciliation-table" style="min-width: 1030px">
         <thead><tr><th>对账单号</th><th>供应商 / 门店</th><th>对账期间</th><th>系统应付期末</th><th>预付款期末</th><th>贷项期末</th><th>状态</th><th>创建 / 确认</th></tr></thead>
         <tbody>
           <tr v-if="loading"><td colspan="8" class="sf-empty">加载中...</td></tr>
@@ -75,7 +86,7 @@
               <span>期末贷项<strong>{{ money(selected.snapshot.closing.credit) }}</strong></span>
             </div>
             <div class="sf-table-scroll">
-              <table class="sf-table" style="min-width: 1120px">
+              <table class="sf-table reconciliation-table" style="min-width: 1120px">
                 <thead><tr><th>业务日期</th><th>单号 / 业务类型</th><th>商品 / 摘要</th><th>应付变动</th><th>预付款变动</th><th>贷项变动</th><th>状态</th><th>余额（应付 / 预付 / 贷项）</th></tr></thead>
                 <tbody>
                   <tr v-if="!selected.snapshot.items.length"><td colspan="8" class="sf-empty">该期间没有账务变动</td></tr>
@@ -134,7 +145,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Check, Plus, RefreshCw, Save, Search, X } from '@lucide/vue'
+import { Check, Plus, RefreshCw, RotateCcw, Save, Search, X } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
@@ -194,6 +205,10 @@ async function load() {
     records.value = result.items || []
   } catch (err) { error.value = err.response?.data?.message || err.message }
   finally { loading.value = false }
+}
+function resetFilters() {
+  Object.assign(filters, { keyword: '', storeId: props.storeId, supplierId: props.supplierId, status: '', periodStart: '', periodEnd: '' })
+  load()
 }
 function openCreate() {
   selected.value = null
@@ -305,3 +320,27 @@ onMounted(async () => {
   await load()
 })
 </script>
+
+<style scoped>
+.reconciliation-search-panel { padding: 18px 20px; background: #fff; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+.reconciliation-search-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; align-items: end; }
+.reconciliation-search-grid .sf-field { gap: 7px; }
+.reconciliation-search-grid .sf-field > span { font-size: 12px; font-weight: 600; }
+.reconciliation-search-grid input, .reconciliation-search-grid select { height: 38px; min-height: 0; padding: 0 11px; border-radius: 5px; }
+.reconciliation-search-grid input:focus, .reconciliation-search-grid select:focus { border-color: #0f9f78; box-shadow: 0 0 0 3px rgba(15, 159, 120, .12); }
+.reconciliation-period { grid-column: span 2; }
+.reconciliation-date-range { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.reconciliation-date-range > span { font-size: 12px; color: #8a96a8; }
+.reconciliation-search-actions { justify-content: flex-end; }
+.reconciliation-search-actions .sf-button { height: 38px; padding: 0 15px; gap: 7px; border-radius: 5px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.reconciliation-table th, .reconciliation-table td, .reconciliation-table .sf-number { text-align: left; }
+.reconciliation-table th:last-child, .reconciliation-table td:last-child { padding-right: 24px; }
+@media (max-width: 1280px) {
+  .reconciliation-search-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 780px) {
+  .reconciliation-search-panel { padding: 14px 16px; }
+  .reconciliation-search-grid { grid-template-columns: minmax(0, 1fr); }
+  .reconciliation-period { grid-column: auto; }
+}
+</style>

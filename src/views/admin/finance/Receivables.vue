@@ -36,11 +36,40 @@
         </div>
       </div>
     </section>
-    <section v-else class="summary-panel payable-summary" aria-label="应付欠款合计">
-      <div v-for="column in payableSummaryColumns" :key="column.key" class="summary-item">
-        <span>{{ column.label }}</span>
-        <strong :class="{ 'negative-amount': totals[column.key] < 0 }">{{ formatMoney(totals[column.key]) }}</strong>
+    <section v-else class="summary-panel" aria-label="应付欠款合计">
+      <div class="summary-formula payable-summary-formula" role="group" aria-label="净结算额等于应付欠款减预付款减退货贷项">
+        <template v-for="column in payableSummaryColumns" :key="column.key">
+          <span v-if="column.operator" class="summary-operator" aria-hidden="true">{{ column.operator }}</span>
+          <div class="summary-item" :class="{ 'summary-item-result': column.key === 'netSettlement' }">
+            <span>{{ column.label }}</span>
+            <strong :class="{ 'negative-amount': totals[column.key] < 0 }">{{ formatMoney(totals[column.key]) }}</strong>
+          </div>
+        </template>
       </div>
+    </section>
+
+    <section class="search-panel" :aria-label="`${debtLabel}筛选`">
+      <form class="search-grid" :class="{ 'customer-search-grid': !payableMode }" @submit.prevent="handleFilter">
+        <label class="field-group">
+          <span>{{ partyLabel }}搜索 / 联系电话</span>
+          <span class="input-with-icon">
+            <Search :size="16" aria-hidden="true" />
+            <input v-model.trim="filters.keyword" type="search" :placeholder="`${partyLabel}ID、名称、联系人或联系电话`" />
+          </span>
+        </label>
+        <label v-if="payableMode" class="field-group">
+          <span>截止日期</span>
+          <input v-model="filters.asOf" type="date" @change="loadReceivables" />
+        </label>
+        <label v-if="payableMode" class="field-group">
+          <span>账龄</span>
+          <select v-model="filters.aging" @change="loadReceivables"><option value="">全部</option><option value="0-30">0-30 天</option><option value="31-60">31-60 天</option><option value="61-90">61-90 天</option><option value="90+">90 天以上</option></select>
+        </label>
+        <div class="search-actions">
+          <button class="button button-secondary" type="button" @click="handleReset"><RotateCcw :size="16" />重置</button>
+          <button class="button button-primary" type="submit" :disabled="loading"><Search :size="16" />查询</button>
+        </div>
+      </form>
     </section>
 
     <section class="records-panel">
@@ -105,40 +134,6 @@
           </div>
         </div>
 
-        <form class="toolbar-search" :aria-label="`${debtLabel}筛选`" @submit.prevent="handleFilter">
-          <label class="field-group">
-            <span>{{ partyLabel }}搜索 / 联系电话</span>
-            <span class="input-with-icon">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="7"></circle>
-                <path d="m20 20-3.7-3.7"></path>
-              </svg>
-              <input
-                v-model.trim="filters.keyword"
-                type="search"
-                :placeholder="`${partyLabel}ID、名称、联系人或联系电话`"
-              />
-            </span>
-          </label>
-
-          <div class="search-actions">
-            <button class="button button-secondary" type="button" @click="handleReset">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path d="M3 12a9 9 0 1 0 3-6.7"></path>
-                <path d="M3 4v6h6"></path>
-              </svg>
-              重置
-            </button>
-            <button class="button button-primary" type="submit">
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <circle cx="11" cy="11" r="7"></circle>
-                <path d="m20 20-3.7-3.7"></path>
-              </svg>
-              查询
-            </button>
-          </div>
-        </form>
-
         <div class="toolbar-actions">
           <button v-if="payableMode && user.hasPerm('admin.finance.payable.initial')" class="button button-secondary" @click="openInitial"><Plus :size="16" />录入期初</button>
           <button
@@ -157,10 +152,6 @@
           </button>
         </div>
       </header>
-      <form v-if="payableMode" class="payable-filters" @submit.prevent="loadReceivables">
-        <label>截止日期<input v-model="filters.asOf" type="date" @change="loadReceivables" /></label>
-        <label>账龄<select v-model="filters.aging" @change="loadReceivables"><option value="">全部</option><option value="0-30">0-30 天</option><option value="31-60">31-60 天</option><option value="61-90">61-90 天</option><option value="90+">90 天以上</option></select></label>
-      </form>
       <p v-if="error" class="finance-error" role="alert">{{ error }}</p>
 
       <div class="table-scroll">
@@ -302,7 +293,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Check, Plus, WalletCards, X } from '@lucide/vue'
+import { Check, Plus, RotateCcw, Search, WalletCards, X } from '@lucide/vue'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import { localDate } from '@/composables/documents/documentModels'
@@ -346,7 +337,12 @@ const amountColumns = computed(() => payableMode.value ? [
   { key: 'discountAmount', label: '优惠', className: 'discount-amount' },
   { key: 'receivable', label: '应收欠款', className: 'receivable-amount' }
 ])
-const payableSummaryColumns = computed(() => amountColumns.value.slice(2))
+const payableSummaryColumns = computed(() => [
+  { ...amountColumns.value[5] },
+  { ...amountColumns.value[2], operator: '=' },
+  { ...amountColumns.value[3], operator: '-' },
+  { ...amountColumns.value[4], operator: '-' }
+])
 
 const receivables = ref([])
 const allReceivables = ref([])
@@ -473,6 +469,7 @@ const loadReceivables = async () => {
 
 const handleFilter = () => {
   currentPage.value = 1
+  if (payableMode.value) loadReceivables()
 }
 
 const handleReset = () => {
@@ -560,14 +557,9 @@ onBeforeUnmount(() => { ++loadRequestToken })
 .finance-tabs { display: flex; gap: 8px; padding: 0 0 12px; }
 .finance-tabs button { min-height: 36px; padding: 0 16px; border: 0; border-bottom: 2px solid transparent; color: #596579; background: transparent; cursor: pointer; }
 .finance-tabs button.active { color: #08745a; border-color: #0f9f78; font-weight: 600; }
-.payable-summary { display: flex; gap: 20px; justify-content: space-between; }
-.payable-filters { display: flex; flex-wrap: wrap; gap: 16px; padding: 10px 16px; border-bottom: 1px solid #e2e8f0; }
-.payable-filters label { display: flex; gap: 8px; align-items: center; color: #596579; font-size: 12px; }
-.payable-filters input, .payable-filters select { height: 34px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
 .finance-error { padding: 12px 16px; color: #b4232f; }
 .balance-button { width: 30px; padding: 0; flex-shrink: 0; }
 .initial-dialog { max-width: 620px; }
-@media (max-width: 780px) { .payable-summary { flex-wrap: wrap; } .payable-summary .summary-item { flex-basis: 40%; } }
 .receivables-page {
   --accent: #0f9f78;
   --accent-rgb: 15, 159, 120;
@@ -667,41 +659,9 @@ svg {
   text-align: center;
 }
 
-.toolbar-search {
-  display: flex;
-  min-width: 220px;
-  flex: 0 1 520px;
-  align-items: center;
-  gap: 8px;
-}
-
-.toolbar-search .field-group {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.toolbar-search .field-group > span:first-child {
-  flex: 0 0 auto;
-  white-space: nowrap;
-}
-
-.toolbar-search .input-with-icon {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.toolbar-search .search-actions {
-  align-self: center;
-  justify-content: flex-start;
-}
-
-.toolbar-search .button {
-  padding: 0 12px;
-}
+.search-panel { margin-top: 14px; padding: 18px 20px; background: var(--panel-bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.search-grid { display: grid; grid-template-columns: minmax(240px, 1.5fr) minmax(160px, 1fr) minmax(160px, 1fr) auto; gap: 14px; align-items: end; }
+.customer-search-grid { grid-template-columns: minmax(240px, 1fr) auto; }
 
 .field-group {
   display: flex;
@@ -716,8 +676,10 @@ svg {
   font-weight: 600;
 }
 
-.field-group input {
+.field-group input,
+.field-group select {
   width: 100%;
+  min-width: 0;
   height: 38px;
   padding: 0 11px;
   color: var(--text);
@@ -732,7 +694,8 @@ svg {
   color: #a2adba;
 }
 
-.field-group input:focus {
+.field-group input:focus,
+.field-group select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.12);
 }
@@ -810,6 +773,8 @@ svg {
   border-color: var(--accent-border);
 }
 
+.button:disabled { cursor: not-allowed; opacity: .45; }
+
 .records-panel {
   margin-top: 14px;
   overflow: hidden;
@@ -822,11 +787,11 @@ svg {
 .records-toolbar {
   display: flex;
   flex-wrap: wrap;
-  min-height: 88px;
+  min-height: 62px;
   align-items: center;
   justify-content: flex-start;
-  gap: 14px;
-  padding: 13px 16px;
+  gap: 20px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -840,7 +805,8 @@ svg {
 }
 
 .records-toolbar > .filter-sliders {
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  max-width: 100%;
 }
 
 .records-toolbar > .toolbar-actions {
@@ -1251,10 +1217,7 @@ svg {
     overflow-x: auto;
   }
 
-  .toolbar-search {
-    min-width: 300px;
-    flex: 1 1 420px;
-  }
+  .search-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
   .search-actions {
     justify-content: flex-end;
@@ -1324,23 +1287,8 @@ svg {
     grid-row: 5;
   }
 
-  .toolbar-search {
-    flex-direction: column;
-    width: 100%;
-    min-width: 0;
-    align-items: stretch;
-  }
-
-  .toolbar-search .field-group {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 7px;
-  }
-
-  .toolbar-search .field-group,
-  .toolbar-search .search-actions {
-    width: 100%;
-  }
+  .search-panel { padding: 14px 16px; }
+  .search-grid { grid-template-columns: minmax(0, 1fr); }
 
   .records-toolbar,
   .table-footer {
