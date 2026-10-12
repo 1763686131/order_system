@@ -94,7 +94,7 @@
               <th>{{ paymentMode ? '供应商' : '客户' }}</th>
               <th class="money-cell">{{ paymentMode ? '付款金额' : '收款金额' }}</th>
               <th :class="{ 'money-cell': !paymentMode }">{{ paymentMode ? '付款账户' : '优惠金额' }}</th>
-              <th class="money-cell">核销金额</th>
+              <th class="money-cell">{{ paymentMode ? '抵扣应付' : '核销金额' }}</th>
               <th class="money-cell">{{ paymentMode ? '新增预付款' : '本次预收' }}</th>
               <th>制单人</th>
               <th class="center-cell">审核状态</th>
@@ -897,7 +897,13 @@ const saveReceipt = async () => {
 }
 
 const auditReceipt = async item => {
-  if (paymentMode.value) { confirmation.value = { action: 'audit', item, message: `审核付款单 ${item.documentNo}？将扣减账户 ${formatMoney(item.paymentAmount)}，核销应付 ${formatMoney(item.writeoffAmount)}。` }; return }
+  if (paymentMode.value) {
+    confirmation.value = {
+      action: 'audit', item,
+      message: `审核付款单 ${item.documentNo}？将扣减账户 ${formatMoney(item.paymentAmount)}，并自动抵扣最新应付欠款，超出欠款的部分转为预付款。`
+    }
+    return
+  }
   const prompt = [
     `确定审核收款单 ${item.documentNo} 吗？`,
     `实收 ${formatMoney(item.paymentAmount)}，优惠 ${formatMoney(item.discountAmount)}。`,
@@ -990,7 +996,7 @@ const printReceipt = item => {
       <div><span>${paymentMode.value ? '付款方式' : '收款方式'}</span><strong>${escapeHtml(item.paymentMethod || '-')}</strong></div>
       <div><span>制单人</span><strong>${escapeHtml(item.creator || '-')}</strong></div>
     </section>
-    <table><thead><tr><th>金额项目</th><th>${paymentMode.value ? '付款金额' : '收款金额'}</th>${paymentMode.value ? '' : '<th>优惠金额</th>'}<th>核销金额</th><th>${paymentMode.value ? '新增预付款' : '本次预收'}</th></tr></thead>
+    <table><thead><tr><th>金额项目</th><th>${paymentMode.value ? '付款金额' : '收款金额'}</th>${paymentMode.value ? '' : '<th>优惠金额</th>'}<th>${paymentMode.value ? '抵扣应付' : '核销金额'}</th><th>${paymentMode.value ? '新增预付款' : '本次预收'}</th></tr></thead>
     <tbody><tr><td>本次${paymentMode.value ? '付款' : '收款'}</td><td>${formatMoney(item.paymentAmount)}</td>${paymentMode.value ? '' : `<td>${formatMoney(item.discountAmount)}</td>`}<td>${formatMoney(item.writeoffAmount)}</td><td>${formatMoney(item.advanceAmount)}</td></tr></tbody></table>
     <div class="remark">备注：${escapeHtml(item.remark || '无')}</div>${attachment}
     <div class="sign"><span>${paymentMode.value ? '供应商' : '客户'}签字：________________</span><span>经办人：${escapeHtml(item.creator || '王醒')}</span></div>
@@ -1012,7 +1018,7 @@ const exportExcel = () => {
     [paymentMode.value ? '供应商编号' : '客户编号']: item.customerCode || item.customerId,
     [paymentMode.value ? '付款金额' : '收款金额']: Number(item.paymentAmount) || 0,
     ...(paymentMode.value ? {} : { '优惠金额': Number(item.discountAmount) || 0 }),
-    '核销金额': Number(item.writeoffAmount) || 0,
+    [paymentMode.value ? '抵扣应付' : '核销金额']: Number(item.writeoffAmount) || 0,
     [paymentMode.value ? '新增预付款' : '本次预收']: Number(item.advanceAmount) || 0,
     '制单人': item.creator,
     '审核状态': statusLabel(item.status),

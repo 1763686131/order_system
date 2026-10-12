@@ -6266,29 +6266,30 @@ SQLite 支持**多读一写**模式：
   "invoiceOverride": false,
   "attachments": [],
   "remark": "",
-  "idempotencyKey": "unique-payment-create",
-  "allocations": [{"payableTransactionId": 15, "amount": 1000}]
+  "idempotencyKey": "unique-payment-create"
 }
 ```
 
-审核请求为 `{version,idempotencyKey}`，使用已保存草稿的核销明细重新校验，不接受临时覆盖分配。付款必须大于零、银行账户须归属所选门店、各来源须属同一供应商/门店且未冲销/未锁定；业务日期不得早于来源应付。核销合计不能超过付款额或来源最新未付余额。差额自动成为 `advanceAmount`，本例新增预付款 200 元；不会自动抵扣其它应付。
+付款单和客户收款单一致，审核入账时自动抵扣欠款，无需单独核销。新建/编辑无需传 `autoAllocate` 或 `allocations`；旧客户端即使传入这些字段，也不会控制入账分配。服务端始终按 `businessDate/id` 从早到晚匹配同供应商、同门店、业务日期不晚于付款日期且有效未锁定的应付，来源可用额扣除已核销和退货金额；`allocations` 作为服务端计算的抵扣明细返回，不能用空分配把普通付款变成预付款。
 
-审核一次性扣减银行余额、写 `bank_account_transactions`、写供应商 `PAYMENT/ADVANCE_PAYMENT` 流水并更新来源 `allocatedAmount`。余额不足返回 `409`，整个事务回滚。列表和详情包含 `paymentAmount/allocatedAmount/advanceAmount/allocations/bankTransactions/lockedAt` 和制单、审核、撤销时间/操作人；`lockedAt` 为正式对账锁定时间，未锁定为 `null`。银行流水包含 `change/balanceAfter/reversalOfId`。
+审核请求为 `{version,idempotencyKey}`。所有付款（包括旧草稿和反审核后的旧单）都在审核事务内按最新可用余额重新生成分配和 `advanceAmount`，保存草稿的分配仅为预览、不占额度、不改变账单或银行。付款必须大于零、银行账户须归属所选门店、各来源须属同一供应商/门店且未冲销/未锁定；业务日期不得早于来源应付。核销合计不能超过付款额或来源最新未付余额；没有可抵扣应付或付款超出欠款时，差额才成为 `advanceAmount`。应付 19000 元、付款 5000 元，审核后应付余额为 14000 元、预付款新增 0 元；付款 25000 元则抵扣 19000 元并新增预付款 6000 元。
 
-反审核追加冲销流水并恢复核销及银行余额；新增预付款已被使用时必须先撤销后续余额核销。付款或来源被锁定时不能反审核。有审核历史的付款单供应商、门店不能改写，银行账户不可删除、不可换门店/账号或直接改余额。
+审核一次性扣减银行余额、写 `bank_account_transactions`、写供应商 `PAYMENT/ADVANCE_PAYMENT` 流水并更新来源 `allocatedAmount`。余额不足返回 `409`，整个事务回滚。列表和详情包含 `paymentAmount/allocatedAmount/advanceAmount/allocations/bankTransactions/lockedAt` 和制单、审核、撤销时间/操作人；`lockedAt` 为正式对账锁定时间，未锁定为 `null`。银行流水包含 `change/balanceAfter/reversalOfId`。付款单实体始终保留，欠款详情中的 `PAYMENT` 显示为“供应商付款单”，应付变动为实际抵扣的负金额，累计余额同步减少；`ADVANCE_PAYMENT` 仅表示超出可抵扣欠款的预付款部分。
+
+反审核追加冲销流水并恢复核销及银行余额；新增预付款已被使用时必须先撤销后续余额核销。付款或来源被锁定时不能反审核。有审核历史的付款单供应商、门店不能改写，银行账户不可删除、不可换门店/账号或直接改余额。不新增 `auto_allocate` 列，已存在的旧列不再使用；不追溯重记已审核账务。历史空分配付款如需抵扣欠款，应在符合反审核条件时反审核原单并重新审核，无需编辑核销方式；未开票来源的原因与豁免校验继续有效，不能通过再次新增付款重复扣款。
 
 ### 来源选择与独立余额核销
 
 | 方法 | 地址 | 用途 |
 | --- | --- | --- |
 | `GET` | `/api/supplier-finance/options` | 授权门店、启用供应商、银行账户、见票付款规则 |
-| `GET` | `/api/suppliers/{id}/{kind}/allocatable` | `kind` 为 `payables/prepayments/credits/invoice-payables`，可传 `storeId` |
+| `GET` | `/api/suppliers/{id}/{kind}/allocatable` | `kind` 为 `payables/prepayments/credits/invoice-payables`，可传 `storeId/asOf` |
 | `POST` | `/api/suppliers/{id}/prepayments/{transactionId}/allocate` | 预付款核销 |
 | `POST` | `/api/suppliers/{id}/credits/{transactionId}/allocate` | 贷项核销 |
 | `GET` | `/api/supplier-balance-allocations` | 按 `supplierId/storeId` 查核销记录及来源分配 |
 | `POST` | `/api/supplier-balance-allocations/{id}/reverse` | 撤销核销，恢复应付和对应余额 |
 
-来源选择/选项需付款、发票或应付菜单权限之一。来源响应为 `{items,balance}`，每项包含账务流水摘要、`version` 和 `availableAmount`，已锁定/已冲销来源不提供分配。期初应付可付款核销，不可登记采购发票。
+来源选择/选项需付款、发票或应付菜单权限之一。来源响应为 `{items,balance}`，每项包含账务流水摘要、`version` 和 `availableAmount`，按业务日期和流水 ID 升序返回，已锁定/已冲销来源不提供分配。`asOf` 为可选 `YYYY-MM-DD`，过滤晚于该日的来源，按该日退货金额计算应付可分配额，`balance` 返回该日余额；来源已核销额度仍以当前有效分配为准，避免回填付款重复核销。付款录入传付款业务日期，使预览与审核一致。期初应付可付款核销，不可登记采购发票。
 
 余额写入和历史查看需 `admin.route.finance.payables`；使用或撤销预付款另需 `admin.finance.supplier_prepayment.allocate`，贷项另需 `admin.finance.supplier_credit.allocate`。请求为 `{version,businessDate,allocations:[{payableTransactionId,amount}],unbilledReason,invoiceOverride,remark,idempotencyKey}`；`version` 对应余额来源。业务日期不得早于余额/应付来源。核销总额不得超过来源可用余额，预付款与贷项分别计算。余额核销不改变银行余额。
 

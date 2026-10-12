@@ -24,17 +24,17 @@
                 <label class="sf-field">付款日期<input v-model="form.paymentDate" type="date" required :disabled="readonly" /></label>
                 <label class="sf-field">付款方式<select v-model="form.paymentMethod" required :disabled="readonly"><option value="bank-transfer">银行转账</option><option value="cash">现金账户</option><option value="online">线上支付</option><option value="other">其他</option><option v-if="form.paymentMethod === 'transfer'" value="transfer">银行转账</option><option v-else-if="form.paymentMethod && !['bank-transfer', 'cash', 'online', 'other'].includes(form.paymentMethod)" :value="form.paymentMethod">{{ form.paymentMethod }}</option></select></label>
                 <label class="sf-field">本次实际付款<input v-model.number="form.paymentAmount" type="number" min="0.01" step="0.01" required :disabled="readonly" /></label>
-                <label class="sf-field wide">未开票付款原因<textarea v-model.trim="form.unbilledReason" maxlength="500" :disabled="readonly" /></label>
+                <label class="sf-field wide">未开票付款原因<textarea v-model.trim="form.unbilledReason" maxlength="500" :required="requiresUnbilledReason" :disabled="readonly" /></label>
                 <label v-if="user.hasPerm('admin.finance.supplier_payment.invoice_override') || form.invoiceOverride" class="sf-check wide"><input v-model="form.invoiceOverride" type="checkbox" :disabled="readonly" />财务豁免见票付款</label>
               </template>
               <label class="sf-field wide">备注<textarea v-model="form.remark" maxlength="500" :disabled="readonly" /></label>
             </div>
-            <div class="sf-header sf-section-title"><h3>{{ invoiceMode ? '发票分配明细' : '应付核销明细' }}</h3><button v-if="!readonly" class="sf-button icon" type="button" title="刷新可分配余额" aria-label="刷新可分配余额" :disabled="sourcesLoading || !form.supplierId || !form.storeId" @click="loadSources()"><RefreshCw :size="16" /></button></div>
+            <div class="sf-header sf-section-title"><h3>{{ invoiceMode ? '发票分配明细' : '付款抵扣明细' }}</h3><button v-if="!readonly" class="sf-button icon" type="button" title="刷新可分配余额" aria-label="刷新可分配余额" :disabled="sourcesLoading || !form.supplierId || !form.storeId" @click="loadSources()"><RefreshCw :size="16" /></button></div>
             <label v-if="embedded && invoiceMode && !readonly" class="sf-check"><input v-model="includeOtherOrders" type="checkbox" :disabled="busy" />合并同供应商其他单据</label>
-            <PayableAllocationTable v-model="form.allocations" :sources="visibleSources" :invoice="invoiceMode" :resizable-columns="embedded && invoiceMode" :readonly="readonly" :loading="sourcesLoading" />
+            <PayableAllocationTable v-model="allocationRows" :sources="visibleSources" :invoice="invoiceMode" :resizable-columns="embedded && invoiceMode" :readonly="readonly || !invoiceMode" :loading="sourcesLoading" />
             <div class="sf-summary">
               <template v-if="invoiceMode"><span>未税合计<strong>{{ formatMoney(baseTotal) }}</strong></span><span>税额合计<strong>{{ formatMoney(taxTotal) }}</strong></span><span>价税合计<strong>{{ formatMoney(baseTotal + taxTotal) }}</strong></span><span v-if="embedded">本单分配<strong>{{ formatMoney(currentDocumentTotal) }}</strong></span></template>
-              <template v-else><span>实际付款<strong>{{ formatMoney(form.paymentAmount) }}</strong></span><span>本次核销<strong>{{ formatMoney(allocatedTotal) }}</strong></span><span>新增预付款<strong :class="{ 'sf-error': advanceTotal < 0 }">{{ formatMoney(advanceTotal) }}</strong></span></template>
+              <template v-else><span>实际付款<strong>{{ formatMoney(form.paymentAmount) }}</strong></span><span>{{ editing || draft ? '预计抵扣应付' : '已抵扣应付' }}<strong>{{ formatMoney(allocatedTotal) }}</strong></span><span>新增预付款<strong :class="{ 'sf-error': advanceTotal < 0 }">{{ formatMoney(advanceTotal) }}</strong></span></template>
             </div>
             <div v-if="invoiceMode" class="sf-form-grid sf-section-title">
               <label class="sf-check wide"><input v-model="form.hasDifference" type="checkbox" :disabled="readonly" />发票金额或税额存在差异</label>
@@ -92,7 +92,7 @@ import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { localDate } from '@/composables/documents/documentModels'
-import { documentStatusLabels, formatMoney, invoiceSourceKey, operationKey, sumMoney } from '@/utils/supplierFinance'
+import { documentStatusLabels, formatMoney, invoiceSourceKey, operationKey, paymentAllocationPreview, sumMoney } from '@/utils/supplierFinance'
 import PayableAllocationTable from './PayableAllocationTable.vue'
 import SupplierAttachments from './SupplierAttachments.vue'
 import '@/assets/styles/supplier-finance.css'
@@ -133,7 +133,15 @@ const posted = computed(() => !form.value.lockedAt && form.value.status === (inv
 const readonly = computed(() => !editing.value || busy.value || !!confirmation.value)
 const suppliers = computed(() => props.options.suppliers.filter(row => !row.storeId || Number(row.storeId) === Number(form.value.storeId)))
 const banks = computed(() => props.options.bankAccounts.filter(row => Number(row.storeId) === Number(form.value.storeId)))
-const allocatedTotal = computed(() => sumMoney(form.value.allocations, 'amount'))
+const allocationRows = computed({
+  get: () => !invoiceMode.value && (editing.value || draft.value)
+    ? paymentAllocationPreview(sources.value, form.value.paymentAmount, form.value.businessDate)
+    : form.value.allocations,
+  set: value => { form.value.allocations = value }
+})
+const allocatedTotal = computed(() => sumMoney(allocationRows.value, 'amount'))
+const requiresUnbilledReason = computed(() => !invoiceMode.value && allocationRows.value.some(row =>
+  !['billed', 'not_required'].includes(row.invoiceStatus)))
 const baseTotal = computed(() => sumMoney(form.value.allocations, 'amountExcludingTax'))
 const taxTotal = computed(() => sumMoney(form.value.allocations, 'taxAmount'))
 const advanceTotal = computed(() => Math.round((Number(form.value.paymentAmount || 0) - allocatedTotal.value) * 100) / 100)
@@ -193,7 +201,7 @@ async function loadSources(autoFill = false) {
   try {
     const result = invoiceMode.value && props.embedded
       ? await request.get('/purchase-invoices/sources', { params: { storeId: form.value.storeId, supplierId: form.value.supplierId, invoiceId: form.value.id || undefined } })
-      : await request.get(`/suppliers/${form.value.supplierId}/${invoiceMode.value ? 'invoice-payables' : 'payables'}/allocatable`, { params: { storeId: form.value.storeId } })
+      : await request.get(`/suppliers/${form.value.supplierId}/${invoiceMode.value ? 'invoice-payables' : 'payables'}/allocatable`, { params: { storeId: form.value.storeId, asOf: invoiceMode.value ? undefined : form.value.businessDate } })
     if (sequence === sourceRequest) {
       sources.value = result.items
       if (autoFill) fillInvoiceAllocations()
@@ -227,15 +235,18 @@ async function save() {
   saving.value = true
   error.value = ''
   try {
-    const payload = { ...form.value, allocations: form.value.allocations.filter(row => invoiceMode.value
-      ? Number(row.amountExcludingTax || 0) + Number(row.taxAmount || 0) > 0 : Number(row.amount || 0) > 0
-    ).map(row => invoiceMode.value ? {
-      ...row, amountIncludingTax: (Math.round(Number(row.amountExcludingTax || 0) * 100) + Math.round(Number(row.taxAmount || 0) * 100)) / 100
-    } : row) }
+    const payload = { ...form.value }
     if (invoiceMode.value) {
+      payload.allocations = form.value.allocations.filter(row =>
+        Number(row.amountExcludingTax || 0) + Number(row.taxAmount || 0) > 0
+      ).map(row => ({
+        ...row, amountIncludingTax: (Math.round(Number(row.amountExcludingTax || 0) * 100) + Math.round(Number(row.taxAmount || 0) * 100)) / 100
+      }))
       payload.amountExcludingTax = baseTotal.value
       payload.taxAmount = taxTotal.value
       payload.amountIncludingTax = Math.round((baseTotal.value + taxTotal.value) * 100) / 100
+    } else {
+      delete payload.allocations
     }
     const response = await request({ url: form.value.id ? `${endpoint.value}/${form.value.id}` : endpoint.value, method: form.value.id ? 'PUT' : 'POST', data: payload })
     form.value = response[invoiceMode.value ? 'invoice' : 'payment']
@@ -250,7 +261,12 @@ function confirmAction(action) {
   if (busy.value || confirmation.value) return
   const labels = {
     delete: { title: '删除单据', message: '确定删除当前单据？有历史审核的单据将保留为已作废记录。' },
-    post: { title: invoiceMode.value ? '确认采购发票' : '审核供应商付款', message: invoiceMode.value ? '确认当前发票？订单开票记录将保留，已有入库应付的部分同步更新开票分配。' : `将从银行账户扣减 ${formatMoney(form.value.paymentAmount)} 元，核销 ${formatMoney(allocatedTotal.value)} 元应付，并新增 ${formatMoney(advanceTotal.value)} 元预付款。` },
+    post: {
+      title: invoiceMode.value ? '确认采购发票' : '审核供应商付款',
+      message: invoiceMode.value
+        ? '确认当前发票？订单开票记录将保留，已有入库应付的部分同步更新开票分配。'
+        : `将从银行账户扣减 ${formatMoney(form.value.paymentAmount)} 元，并自动抵扣最新应付欠款，超出欠款的部分转为预付款。`
+    },
     reverse: { title: invoiceMode.value ? '撤销发票确认' : '反审核付款', message: invoiceMode.value ? '将撤销当前发票的开票分配，已发生的付款保持不变。' : '将冲销当前付款并恢复银行余额与应付核销。已使用的预付款须先撤销后续核销。' }
   }
   confirmation.value = { ...labels[action], action }
@@ -290,6 +306,9 @@ onMounted(async () => {
     await nextTick()
     documentElement.value?.querySelector('[name="invoiceNo"]')?.focus({ preventScroll: true })
   }
+})
+watch(() => form.value.businessDate, () => {
+  if (!invoiceMode.value && editing.value && !loading.value) loadSources()
 })
 watch(confirmation, async value => {
   if (!value || !props.embedded) return

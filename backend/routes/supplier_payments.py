@@ -90,10 +90,22 @@ def payment_values(conn, data):
     paid = cents(data.get("paymentAmount"))
     if paid <= 0:
         raise FinanceError("本次实际付款必须大于零；使用历史余额请走余额核销")
-    entries = allocation_values(conn, data, supplier_id, store_id)
     date = business_date(data.get("businessDate"))
-    if any(row["business_date"] > date for row, _ in entries):
-        raise FinanceError("付款业务日期不能早于来源应付日期")
+    rows = conn.execute(
+        f"""SELECT * FROM supplier_account_transactions t
+            WHERE supplier_id=? AND store_id=? AND business_date<=? AND locked_at IS NULL
+            AND transaction_type IN ({','.join('?' for _ in PAYABLE_TYPES)}) AND {effective_sql()}
+            ORDER BY business_date, id""",
+        (supplier_id, store_id, date, *PAYABLE_TYPES),
+    )
+    entries, remaining = [], paid
+    for row in rows:
+        value = min(remaining, payable_available_cents(conn, row, date))
+        if value > 0:
+            entries.append((row, value))
+            remaining -= value
+        if remaining == 0:
+            break
     allocated = sum(value for _, value in entries)
     if allocated > paid:
         raise FinanceError("应付核销合计不能超过本次实际付款")
@@ -195,10 +207,13 @@ def allocatable(supplier_id, kind):
         raise FinanceError("来源类型不存在", 404)
     with get_db() as conn:
         supplier_row(conn, supplier_id)
+        as_of = business_date(request.args["asOf"]) if request.args.get("asOf") else None
         scoped, params = scope_sql(store_id=request.args.get("storeId", type=int))
+        date_clause = " AND t.business_date <= ?" if as_of else ""
         rows = conn.execute(
-            f"SELECT * FROM supplier_account_transactions t WHERE supplier_id = ? AND {effective_sql()} {scoped}",
-            (supplier_id, *params),
+            f"SELECT * FROM supplier_account_transactions t WHERE supplier_id = ? AND {effective_sql()} {scoped}"
+            f"{date_clause} ORDER BY t.business_date, t.id",
+            (supplier_id, *params, *([as_of] if as_of else [])),
         ).fetchall()
         result = []
         for row in rows:
@@ -210,14 +225,14 @@ def allocatable(supplier_id, kind):
                 if kind == "invoice-payables" and row["source_type"] != "stock_inbound":
                     continue
                 available = (row["amount_including_tax_cents"] - row["billed_cents"]
-                             if kind == "invoice-payables" else payable_available_cents(conn, row))
+                             if kind == "invoice-payables" else payable_available_cents(conn, row, as_of))
             else:
                 available = balance_available(conn, row, "prepayment" if kind == "prepayments" else "credit")
             if available > 0:
                 entry = serialize_transaction(row)
                 entry["availableAmount"] = amount(available)
                 result.append(entry)
-        return jsonify({"items": result, "balance": balance(conn, supplier_id, request.args.get("storeId", type=int))})
+        return jsonify({"items": result, "balance": balance(conn, supplier_id, request.args.get("storeId", type=int), as_of)})
 
 
 @supplier_payments_bp.route("/supplier-payments/next-number")
@@ -343,19 +358,18 @@ def audit_payment(payment_id):
         from utils.supplier_periods import ensure_period_open
         ensure_period_open(conn, row["supplier_id"], row["store_id"], row["business_date"])
         payload = serialize_payment(conn, row)
-        payload["allocations"] = [
-            {"payableTransactionId": item["payableTransactionId"], "amount": item["amount"]}
-            for item in payload["allocations"]
-        ]
-        _, entries = payment_values(conn, payload)
+        values, entries = payment_values(conn, payload)
         invoice_payment_check(conn, entries, payload)
+        # As with customer receipts, audit always recalculates the latest debt before posting.
+        conn.execute("UPDATE supplier_payments SET advance_cents=? WHERE id=?", (values[8], payment_id))
+        replace_payment_allocations(conn, payment_id, entries)
         document = dict(row)
         document["version"] += 1
         post_bank(conn, document)
         apply_allocations(conn, document, "supplier_payment", payment_id, entries)
-        if row["advance_cents"]:
+        if values[8]:
             add_ledger(conn, document, "supplier_payment", payment_id, 0, "ADVANCE_PAYMENT",
-                       prepayment=row["advance_cents"])
+                       prepayment=values[8])
         conn.execute(
             """UPDATE supplier_payments SET status='audited', version=version+1, audited_by=?,
                audited_at=?, reversed_at=NULL, updated_at=? WHERE id=?""",

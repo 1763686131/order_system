@@ -15,7 +15,7 @@ export const businessLabels = {
   INDEPENDENT_PURCHASE_INBOUND: '独立入库应付',
   PURCHASE_INBOUND_REVERSAL: '采购入账冲销',
   INDEPENDENT_PURCHASE_INBOUND_REVERSAL: '独立入库冲销',
-  PAYMENT: '供应商付款核销', ADVANCE_PAYMENT: '新增供应商预付款',
+  PAYMENT: '供应商付款单', ADVANCE_PAYMENT: '新增供应商预付款',
   PREPAYMENT_ALLOCATION: '预付款核销', CREDIT_ALLOCATION: '贷项核销',
   PAYMENT_REVERSAL: '付款核销冲销', ADVANCE_PAYMENT_REVERSAL: '预付款冲销',
   PREPAYMENT_ALLOCATION_REVERSAL: '预付款核销冲销', CREDIT_ALLOCATION_REVERSAL: '贷项核销冲销',
@@ -36,6 +36,25 @@ export const formatMoney = value => Number(value || 0).toLocaleString('zh-CN', {
 export const operationKey = () => globalThis.crypto?.randomUUID?.()
   || `op-${Date.now()}-${Math.random().toString(16).slice(2)}`
 export const sumMoney = (rows, field) => rows.reduce((total, row) => total + Math.round(Number(row[field] || 0) * 100), 0) / 100
+export function paymentAllocationPreview(sources, paymentAmount, businessDate) {
+  let remaining = Math.max(0, Math.round(Number(paymentAmount || 0) * 100))
+  const result = []
+  const ordered = sources.filter(row => !row.lockedAt && row.businessDate <= businessDate)
+    .slice().sort((left, right) => left.businessDate.localeCompare(right.businessDate) || Number(left.id) - Number(right.id))
+  for (const row of ordered) {
+    const allocated = Math.min(remaining, Math.max(0, Math.round(Number(row.availableAmount || 0) * 100)))
+    if (allocated > 0) {
+      result.push({
+        payableTransactionId: row.id, documentNo: row.documentNo, productName: row.productName,
+        businessDate: row.businessDate, invoiceStatus: row.invoiceStatus,
+        payableAmount: row.payableAmount ?? row.amountIncludingTax, amount: allocated / 100
+      })
+      remaining -= allocated
+    }
+    if (remaining === 0) break
+  }
+  return result
+}
 export function fulfillmentLabel(record) {
   if (record.progressBasis === 'lines') return `${record.completedLineCount || 0} / ${record.totalLineCount || 0} 行`
   return `${record.receivedQuantity || 0} / ${record.totalQuantity || 0}${record.items?.[0]?.unit || ''}`
