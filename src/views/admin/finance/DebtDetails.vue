@@ -84,7 +84,8 @@
       >
         <colgroup v-if="type === 'payable'">
           <col data-column-key="business-date" data-min-width="90" style="width: 120px">
-          <col data-column-key="document" data-min-width="110" style="width: 180px">
+          <col data-column-key="document" data-min-width="110" style="width: 150px">
+          <col data-column-key="business-type" data-min-width="90" style="width: 110px">
           <col data-column-key="summary" data-min-width="110" style="width: 180px">
           <col data-column-key="amount-excluding-tax" data-min-width="110" style="width: 120px">
           <col data-column-key="tax" data-min-width="90" style="width: 100px">
@@ -111,18 +112,19 @@
           <col data-column-key="current-debt" data-min-width="110" style="width: 120px">
         </colgroup>
         <thead v-if="type === 'payable'">
-          <tr><th data-column-key="business-date" data-min-width="90">业务日期</th><th class="document-column" data-column-key="document" data-min-width="110">单号 / 类型</th><th data-column-key="summary" data-min-width="110">商品 / 摘要</th><th data-column-key="amount-excluding-tax" data-min-width="110">未税金额</th><th data-column-key="tax" data-min-width="90">税额</th><th data-column-key="payable-change" data-min-width="110">应付变动</th><th data-column-key="prepayment-change" data-min-width="110">预付款变动</th><th data-column-key="credit-change" data-min-width="100">贷项变动</th><th data-column-key="payable-balance" data-min-width="110">应付余额</th><th data-column-key="invoice-status" data-min-width="100">开票状态</th><th data-column-key="transaction-status" data-min-width="90">账务状态</th><th data-column-key="actions" data-resizable="false">操作</th></tr>
+          <tr><th data-column-key="business-date" data-min-width="90">业务日期</th><th class="document-column" data-column-key="document" data-min-width="110">单号</th><th data-column-key="business-type" data-min-width="90">业务类型</th><th data-column-key="summary" data-min-width="110">商品 / 摘要</th><th data-column-key="amount-excluding-tax" data-min-width="110">未税金额</th><th data-column-key="tax" data-min-width="90">税额</th><th data-column-key="payable-change" data-min-width="110">应付变动</th><th data-column-key="prepayment-change" data-min-width="110">预付款变动</th><th data-column-key="credit-change" data-min-width="100">贷项变动</th><th data-column-key="payable-balance" data-min-width="110">应付余额</th><th data-column-key="invoice-status" data-min-width="100">开票状态</th><th data-column-key="transaction-status" data-min-width="90">账务状态</th><th data-column-key="actions" data-resizable="false">操作</th></tr>
         </thead>
         <thead v-else>
           <tr><th data-column-key="sequence" data-min-width="64">序号</th><th data-column-key="business-date" data-min-width="90">业务日期</th><th class="document-column" data-column-key="document" data-min-width="110">单据编号</th><th data-column-key="business-type" data-min-width="100">业务类型</th><th class="product-column" data-column-key="products" data-min-width="110">商品详情</th><th data-column-key="quantity" data-min-width="64">数量</th><th data-column-key="unit" data-min-width="64">单位</th><th data-column-key="unit-price" data-min-width="90">单价</th><th data-column-key="original-debt" data-min-width="110">原单欠款</th><th data-column-key="paid-amount" data-min-width="100">部分付款</th><th data-column-key="debt-amount" data-min-width="110">应收欠款</th><th data-column-key="current-debt" data-min-width="110">当前欠款</th></tr>
         </thead>
         <tbody>
-          <tr v-if="loading"><td colspan="12" class="statement-empty">加载中...</td></tr>
-          <tr v-else-if="!visibleRecords.length"><td colspan="12" class="statement-empty">本期暂无账务流水</td></tr>
+          <tr v-if="loading"><td :colspan="type === 'payable' ? 13 : 12" class="statement-empty">加载中...</td></tr>
+          <tr v-else-if="!visibleRecords.length"><td :colspan="type === 'payable' ? 13 : 12" class="statement-empty">本期暂无账务流水</td></tr>
           <template v-else-if="type === 'payable'">
-            <tr v-for="row in visibleRecords" :key="row.id">
+            <tr v-for="row in visibleRecords" :key="row.id" :class="rowTone(row)">
               <td>{{ date(row.businessDate) }}<small>{{ row.createdBy || '-' }}</small></td>
-              <td><button v-if="canOpenSource(row)" class="statement-link" type="button" @click="openSource(row)">{{ row.documentNo || '-' }}</button><strong v-else>{{ row.documentNo || '-' }}</strong><small>{{ supplierBusinessLabels[row.businessType] || row.businessType }}</small></td>
+              <td><button v-if="canOpenSource(row)" class="statement-link" type="button" @click="openSource(row)">{{ row.documentNo || '-' }}</button><strong v-else>{{ row.documentNo || '-' }}</strong></td>
+              <td>{{ supplierBusinessLabels[row.businessType] || row.businessType }}</td>
               <td>{{ row.productName || row.remark || '-' }}</td>
               <td class="number">{{ tableMoney(row.amountExcludingTax) }}</td>
               <td class="number">{{ tableMoney(row.taxAmount) }}</td>
@@ -137,11 +139,11 @@
           </template>
           <template v-else>
             <template v-for="(row, index) in visibleRecords" :key="row.id">
-              <tr :class="{ expandable: row.products?.length > 1 }" @click="toggleRow(row)" @keydown.enter="toggleRow(row)" :tabindex="row.products?.length > 1 ? 0 : undefined" :aria-expanded="row.products?.length > 1 ? Boolean(expandedRows[row.id]) : undefined">
+              <tr :class="[{ expandable: row.products?.length > 1 }, rowTone(row)]" @click="toggleRow(row)" @keydown.enter="toggleRow(row)" :tabindex="row.products?.length > 1 ? 0 : undefined" :aria-expanded="row.products?.length > 1 ? Boolean(expandedRows[row.id]) : undefined">
                 <td>{{ (page - 1) * pageSize + index + 1 }}</td>
                 <td>{{ date(row.businessDate) }}</td>
                 <td><strong>{{ row.docNumber || '-' }}</strong></td>
-                <td><span class="business-badge" :class="`business-${row.businessType.toLowerCase()}`">{{ customerTypeLabels[row.businessType] || row.businessType }}</span></td>
+                <td>{{ customerTypeLabels[row.businessType] || row.businessType }}</td>
                 <td :title="displayProducts(row).map(item => item.name).join('、')">{{ displayProducts(row)[0]?.name || '-' }}<span v-if="row.products?.length > 1" class="product-count">+{{ row.products.length - 1 }}</span></td>
                 <td class="number">{{ tableQuantity(displayProducts(row)[0]?.quantity) }}</td>
                 <td>{{ displayProducts(row)[0]?.unit || '-' }}</td>
@@ -151,7 +153,7 @@
                 <td class="number" :class="Number(row.debtAmount) > 0 ? 'increase' : 'decrease'">{{ row.businessType === 'BALANCE' ? '-' : tableMoney(expandedRows[row.id] ? productDebt(row, displayProducts(row)[0]) : row.debtAmount) }}</td>
                 <td class="number">{{ tableMoney(expandedRows[row.id] ? productCurrentDebt(row, displayProducts(row)[0]) : row.currentDebt) }}</td>
               </tr>
-              <tr v-for="(product, productIndex) in expandedRows[row.id] ? displayProducts(row).slice(1) : []" :key="`${row.id}-${productIndex}`" class="product-row">
+              <tr v-for="(product, productIndex) in expandedRows[row.id] ? displayProducts(row).slice(1) : []" :key="`${row.id}-${productIndex}`" :class="['product-row', rowTone(row)]">
                 <td></td><td>{{ date(row.businessDate) }}</td><td>{{ row.docNumber }}</td><td></td><td>{{ product.name }}</td><td class="number">{{ tableQuantity(product.quantity) }}</td><td>{{ product.unit || '-' }}</td><td class="number">{{ tableMoney(product.price) }}</td><td class="number">{{ ['ORDER', 'INITIAL'].includes(row.businessType) ? tableMoney(originalAmount(product)) : '-' }}</td><td></td><td class="number">{{ tableMoney(productDebt(row, product)) }}</td><td class="number">{{ tableMoney(productCurrentDebt(row, product)) }}</td>
               </tr>
             </template>
@@ -259,7 +261,14 @@ const supplierSummary = computed(() => {
 const money = value => `¥${(Number(value) || 0).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const tableMoney = value => formatTableMoney(value, '¥')
 const tableQuantity = value => value == null || Number(value) === 0 ? '-' : value
+const greenRowTypes = new Set(['PAYMENT'])
+const redRowTypes = new Set(['PURCHASE_INBOUND_REVERSAL', 'PURCHASE_RETURN', 'RETURN'])
 const date = value => value ? String(value).slice(0, 10) : '-'
+function rowTone(row) {
+  if (greenRowTypes.has(row?.businessType)) return 'statement-row-green'
+  if (redRowTypes.has(row?.businessType)) return 'statement-row-red'
+  return ''
+}
 const apiParams = extra => ({ ...filters, storeId: props.storeId || undefined, page: page.value, pageSize: pageSize.value, sortOrder: sortOrder.value, ...extra })
 function backToList() {
   const listPath = `/admin/finance/${props.type === 'payable' ? 'payables' : 'receivables'}`
@@ -458,11 +467,10 @@ onMounted(load)
 .statement-error { padding: 10px 0; color: #b4232f; }
 .statement-table-scroll { margin-top: 14px; overflow: auto; background: #fff; border: 1px solid #e2e8f0; }
 .statement-table { width: 100%; min-width: 1550px; border-collapse: collapse; table-layout: fixed; }
-.document-column { width: 180px; }.product-column { width: 180px; }
+.document-column { width: 150px; }.product-column { width: 180px; }
 .statement-tabs { display: flex; gap: 8px; margin-bottom: 12px; }.statement-tabs button { height: 36px; padding: 0 16px; color: #596579; background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }.statement-tabs button.active { color: #08745a; border-color: #0f9f78; }
 .statement-pagination select { height: 34px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
 .expandable { cursor: pointer; }.expandable:hover, .product-row { background: #f3fbf8; }.product-count { display: inline-block; margin-left: 6px; padding: 2px 5px; color: #08745a; background: #e9f8f3; border-radius: 4px; font-size: 11px; }
-.business-badge { display: inline-block; padding: 4px 6px; background: #eef3f5; border-radius: 4px; font-size: 12px; }.business-initial { color: #fff; background: #d97706; }.business-balance { color: #fff; background: #0891b2; }
 .statement-table th, .statement-table td { padding: 10px 12px; border: 1px solid #edf1f5; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .statement-table th:last-child, .statement-table td:last-child { padding-right: 24px; }
 .statement-table th { height: 44px; color: #596579; background: #f8fafc; font-size: 12px; }
@@ -471,6 +479,18 @@ onMounted(load)
 .statement-table .number { font-variant-numeric: tabular-nums; }
 .increase { color: #dc3545 !important; }.decrease { color: #07805f !important; }
 .statement-link { padding: 0; color: #08745a; background: transparent; border: 0; cursor: pointer; font-weight: 650; }
+.statement-table tr.statement-row-green td,
+.statement-table tr.statement-row-green td small,
+.statement-table tr.statement-row-green td strong,
+.statement-table tr.statement-row-green td .statement-link,
+.statement-table tr.statement-row-green td .product-count,
+.statement-table tr.statement-row-green td.number { color: #07805f !important; }
+.statement-table tr.statement-row-red td,
+.statement-table tr.statement-row-red td small,
+.statement-table tr.statement-row-red td strong,
+.statement-table tr.statement-row-red td .statement-link,
+.statement-table tr.statement-row-red td .product-count,
+.statement-table tr.statement-row-red td.number { color: #dc3545 !important; }
 .statement-empty { height: 220px !important; color: #8a96a8 !important; text-align: center !important; }
 .statement-footer { justify-content: space-between; flex-wrap: wrap; gap: 10px; min-height: 58px; padding: 10px 16px; color: #596579; background: var(--panel-bg); border-top: 1px solid var(--border); font-size: 12px; }
 .invoice-form { display: grid; gap: 12px; text-align: left; }.invoice-form label { display: grid; gap: 6px; }.invoice-form input, .invoice-form select, .invoice-form textarea { width: 100%; padding: 8px; border: 1px solid #cbd5e1; border-radius: 5px; font: inherit; }
