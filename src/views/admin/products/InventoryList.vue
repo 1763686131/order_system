@@ -86,40 +86,60 @@
         <span v-if="lastRefreshed">最后刷新：{{ lastRefreshed }}</span>
       </div>
       <div class="table-container">
-        <table class="inventory-table">
+        <table
+          v-resizable-columns="{ storageKey: `inventory-${mode}-list-v2`, resizeMode: 'fit', minWidth: 40 }"
+          class="inventory-table"
+        >
+          <colgroup>
+            <col data-column-key="selection" data-resizable="false" style="width: 40px" />
+            <col data-column-key="id" data-min-width="32" style="width: calc(var(--inventory-column-unit) * 52)" />
+            <col data-column-key="code" data-min-width="64" style="width: calc(var(--inventory-column-unit) * 110)" />
+            <col data-column-key="name" data-min-width="80" style="width: calc(var(--inventory-column-unit) * 140)" />
+            <col data-column-key="specification" data-min-width="56" style="width: calc(var(--inventory-column-unit) * 100)" />
+            <col data-column-key="warehouse" data-min-width="48" style="width: calc(var(--inventory-column-unit) * 90)" />
+            <col data-column-key="category" data-min-width="48" style="width: calc(var(--inventory-column-unit) * 90)" />
+            <col data-column-key="stock" data-min-width="52" style="width: calc(var(--inventory-column-unit) * 90)" />
+            <col v-if="isRawMaterial" data-column-key="inventory-amount" data-min-width="64" style="width: calc(var(--inventory-column-unit) * 110)" />
+            <col data-column-key="unit" data-min-width="32" style="width: calc(var(--inventory-column-unit) * 52)" />
+            <col v-if="!isRawMaterial" data-column-key="attributes" data-min-width="64" style="width: calc(var(--inventory-column-unit) * 110)" />
+            <col v-if="!isRawMaterial" data-column-key="price" data-min-width="56" style="width: calc(var(--inventory-column-unit) * 100)" />
+            <col data-column-key="min-stock" data-min-width="44" style="width: calc(var(--inventory-column-unit) * 76)" />
+            <col data-column-key="max-stock" data-min-width="44" style="width: calc(var(--inventory-column-unit) * 76)" />
+            <col data-column-key="stock-status" data-min-width="52" style="width: calc(var(--inventory-column-unit) * 90)" />
+            <col data-column-key="product-status" data-min-width="52" style="width: calc(var(--inventory-column-unit) * 90)" />
+            <col data-column-key="notes" data-min-width="64" style="width: calc(var(--inventory-column-unit) * 120)" />
+            <col data-column-key="actions" data-resizable="false" style="width: var(--inventory-actions-width)" />
+          </colgroup>
           <thead>
             <tr>
-              <th class="col-checkbox">
+              <th class="col-checkbox" data-column-key="selection" data-resizable="false">
                 <input type="checkbox" :checked="allPageSelected" :indeterminate="somePageSelected" :disabled="!canManageProducts || loading || deleting || paginatedInventory.length === 0" :aria-label="`选择本页全部${entityLabel}`" @change="handleSelectAll($event.target.checked)" />
               </th>
-              <th class="col-id">ID</th>
-              <th class="col-code sortable" @click="handleSort('code')">
+              <th class="col-id" data-column-key="id">ID</th>
+              <th class="col-code sortable" data-column-key="code" @click="handleSort('code')">
                 {{ entityLabel }}编号<span class="sort-icon">{{ getSortIcon('code') }}</span>
               </th>
-              <th class="col-name sortable" @click="handleSort('name')">
+              <th class="col-name sortable" data-column-key="name" @click="handleSort('name')">
                 {{ entityLabel }}名称<span class="sort-icon">{{ getSortIcon('name') }}</span>
               </th>
-              <th class="col-spec">规格型号</th>
-              <th class="col-warehouse">仓库</th>
-              <th class="col-category">分类</th>
-              <th class="col-stock sortable" @click="handleSort('stock')">
+              <th class="col-spec" data-column-key="specification">规格型号</th>
+              <th class="col-warehouse" data-column-key="warehouse">仓库</th>
+              <th class="col-category" data-column-key="category">分类</th>
+              <th class="col-stock sortable" data-column-key="stock" @click="handleSort('stock')">
                 当前库存<span class="sort-icon">{{ getSortIcon('stock') }}</span>
               </th>
-              <th v-if="isRawMaterial" class="col-amount sortable" @click="handleSort('inventoryAmount')">
+              <th v-if="isRawMaterial" class="col-amount sortable" data-column-key="inventory-amount" @click="handleSort('inventoryAmount')">
                 库存金额<span class="sort-icon">{{ getSortIcon('inventoryAmount') }}</span>
               </th>
-              <th class="col-unit">单位</th>
-              <th v-if="!isRawMaterial" class="col-attributes">商品属性</th>
-              <th v-if="!isRawMaterial" class="col-price">零售价格</th>
-              <th class="col-min-stock">最低库存</th>
-              <th class="col-max-stock">最高库存</th>
-              <th class="col-status">库存状态</th>
-              <th class="col-product-status">{{ entityLabel }}状态</th>
-              <th class="col-notes">备注信息</th>
-              <th class="col-update-time sortable" @click="handleSort('updateTime')">
-                更新时间<span class="sort-icon">{{ getSortIcon('updateTime') }}</span>
-              </th>
-              <th class="col-actions">操作</th>
+              <th class="col-unit" data-column-key="unit">单位</th>
+              <th v-if="!isRawMaterial" class="col-attributes" data-column-key="attributes">商品属性</th>
+              <th v-if="!isRawMaterial" class="col-price" data-column-key="price">零售价格</th>
+              <th class="col-min-stock" data-column-key="min-stock">最低库存</th>
+              <th class="col-max-stock" data-column-key="max-stock">最高库存</th>
+              <th class="col-status" data-column-key="stock-status">库存状态</th>
+              <th class="col-product-status" data-column-key="product-status">{{ entityLabel }}状态</th>
+              <th class="col-notes" data-column-key="notes">备注信息</th>
+              <th class="col-actions" data-column-key="actions" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -171,7 +191,6 @@
                 <span :class="['status-badge', item.enabled === false ? 'status-disabled' : 'status-success']">{{ item.enabled === false ? '停用' : '启用' }}</span>
               </td>
               <td class="col-notes" :title="item.notes">{{ item.notes || '-' }}</td>
-              <td class="col-update-time">{{ formatDateTime(item.updateTime) }}</td>
               <td class="col-actions" @click.stop @keydown.stop>
                 <div class="row-actions">
                   <button v-if="isRawMaterial" class="btn-action btn-edit" type="button" title="库存流水" :aria-label="`查看${item.productName}库存流水`" @click="openMovementDetail(item)">
@@ -335,7 +354,7 @@ const statusOptions = [
   { value: 'out', label: '缺货' }
 ]
 const pageSizes = computed(() => isRawMaterial.value ? [8, 15, 30] : [30, 50, 100])
-const columnCount = computed(() => isRawMaterial.value ? 17 : 18)
+const columnCount = computed(() => isRawMaterial.value ? 16 : 17)
 const sameId = (left, right) => left !== null && left !== undefined
   && right !== null && right !== undefined && String(left) === String(right)
 const findById = (items, id) => items.find(item => sameId(item.id, id))
@@ -420,8 +439,7 @@ const inventory = computed(() => products.value.map(product => {
     unit: findById(allUnits.value, product.unitId)?.name || (isRawMaterial.value ? '未设置' : '件'),
     minStock: toFiniteNumber(product.minStock ?? stockLimits?.[0]),
     maxStock: toFiniteNumber(product.maxStock ?? stockLimits?.[1]),
-    stock: toFiniteNumber(product.stock),
-    updateTime: product.inventoryUpdatedAt || product.updatedAt || product.createdAt || ''
+    stock: toFiniteNumber(product.stock)
   }
   if (!isRawMaterial.value) return item
 
@@ -435,9 +453,6 @@ const inventory = computed(() => products.value.map(product => {
       ? toFiniteNumber(balance.quantity) * toFiniteNumber(balance.averageUnitCost)
       : toFiniteNumber(balance.inventoryAmount)
   ), 0)
-  const balanceUpdatedAt = balances.reduce((latest, balance) => (
-    String(balance.updatedAt || '') > latest ? String(balance.updatedAt) : latest
-  ), '')
   const warehouseNames = [...new Set(balances.map(balance => (
     findById(allWarehouses.value, balance.warehouseId)?.name
   )).filter(Boolean))]
@@ -450,8 +465,7 @@ const inventory = computed(() => products.value.map(product => {
     visibleBalanceCount: balances.length,
     warehouseName: findById(allWarehouses.value, filters.value.warehouseId)?.name
       || warehouseNames.join('、') || item.warehouseName,
-    storeName: findById(allStores.value, selectedStoreId.value)?.name || item.storeName,
-    updateTime: balanceUpdatedAt || item.updateTime
+    storeName: findById(allStores.value, selectedStoreId.value)?.name || item.storeName
   }
 }))
 
@@ -497,8 +511,8 @@ const filteredInventory = computed(() => {
   if (!sortKey.value) return result
   return result.sort((left, right) => {
     const field = { name: 'productName', code: 'productCode' }[sortKey.value] || sortKey.value
-    const a = field === 'updateTime' ? new Date(left[field]).getTime() || 0 : left[field]
-    const b = field === 'updateTime' ? new Date(right[field]).getTime() || 0 : right[field]
+    const a = left[field]
+    const b = right[field]
     const comparison = typeof a === 'number' && typeof b === 'number'
       ? a - b : String(a || '').localeCompare(String(b || ''), 'zh-CN')
     return sortDirection.value === 'asc' ? comparison : -comparison
@@ -550,13 +564,6 @@ const getStockStatusText = item => isRawMaterial.value
   'out-of-stock': '缺货', 'low-stock': '库存不足',
   'over-stock': '库存过高', 'normal-stock': '正常'
 }[getStockClass(item)])
-const formatDateTime = value => {
-  if (!value) return '-'
-  const date = new Date(String(value).replace(' ', 'T'))
-  if (Number.isNaN(date.getTime())) return String(value)
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
-}
-
 const resetFilters = () => {
   filters.value = createFilters()
   selectedStoreId.value = null
@@ -640,7 +647,7 @@ const handleExport = () => {
   if (loading.value || loadError.value) return
   const header = ['编号', `${entityLabel.value}名称`, '分类', '规格', '门店', '仓库', '当前库存', '单位',
     ...(isRawMaterial.value ? ['库存金额'] : ['商品属性', '零售价格']),
-    '最低库存', '最高库存', '库存状态', `${entityLabel.value}状态`, '备注', '更新时间']
+    '最低库存', '最高库存', '库存状态', `${entityLabel.value}状态`, '备注']
   const rows = filteredInventory.value.map(item => [
     item.productCode, item.productName, item.categoryName, item.specification, item.storeName, item.warehouseName, item.stock, item.unit,
     ...(isRawMaterial.value ? [item.inventoryAmount] : [
@@ -649,7 +656,7 @@ const handleExport = () => {
         ? item.attributeCombinations.map(combo => toFiniteNumber(combo.retailPrice)).join('、')
         : toFiniteNumber(item.attributeCombinations?.[0]?.retailPrice || item.price)
     ]),
-    item.minStock, item.maxStock, getStockStatusText(item), item.enabled === false ? '停用' : '启用', item.notes, formatDateTime(item.updateTime)
+    item.minStock, item.maxStock, getStockStatusText(item), item.enabled === false ? '停用' : '启用', item.notes
   ])
   const csv = [header, ...rows].map(row => row.map(value => `"${String(value ?? '').replaceAll('"', '""')}"`).join(',')).join('\n')
   const url = URL.createObjectURL(new Blob([`\ufeff${csv}`], { type: 'text/csv;charset=utf-8;' }))
@@ -724,6 +731,8 @@ defineExpose({ reload: loadInventory })
 <style scoped>
 .inventory-list-page {
   padding: 0;
+  min-width: 0;
+  width: 100%;
   background: #f5f5f5;
   min-height: 100vh;
   color: #1f2937;
@@ -850,36 +859,41 @@ button:focus-visible, input:focus-visible, select:focus-visible, .inventory-row:
 .stat-content { min-width: 0; }
 .stat-label { font-size: 13px; color: #6b7280; margin-bottom: 4px; }
 .stat-value { font-size: 24px; font-weight: 600; overflow-wrap: anywhere; color: #111827; font-variant-numeric: tabular-nums; }
-.table-panel { background: white; }
+.table-panel { min-width: 0; max-width: 100%; background: white; }
 .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid #e5e7eb; }
 .table-toolbar h2 { font-size: 16px; font-weight: 600; margin: 0; }
 .table-toolbar span { color: #9ca3af; font-size: 13px; }
-.table-container { overflow-x: auto; }
-.inventory-table { width: 100%; min-width: 1900px; border-collapse: collapse; font-size: 13px; }
-.raw-material-mode .inventory-table { min-width: 1700px; }
+.table-container { width: 100%; overflow-x: auto; container-type: inline-size; }
+.inventory-table {
+  --inventory-actions-width: 120px;
+  /* Flexible columns share the space left by selection and action columns. */
+  --inventory-column-unit: calc((max(1040px, 100cqw) - 40px - var(--inventory-actions-width)) / 1386);
+  width: 100%;
+  min-width: 1040px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 13px;
+}
+.raw-material-mode .inventory-table {
+  --inventory-actions-width: 156px;
+  --inventory-column-unit: calc((max(1000px, 100cqw) - 40px - var(--inventory-actions-width)) / 1286);
+  min-width: 1000px;
+}
+.inventory-table th, .inventory-table td { overflow: hidden; text-overflow: ellipsis; }
 .inventory-table thead { background: #f9fafb; border-bottom: 2px solid #e5e7eb; }
-.inventory-table th { padding: 12px 16px; text-align: left; font-weight: 600; color: #374151; white-space: nowrap; }
+.inventory-table th { padding: 12px 8px; text-align: left; font-weight: 600; color: #374151; white-space: nowrap; }
 .inventory-table th.sortable { cursor: pointer; user-select: none; }
 .inventory-table th.sortable:hover { background: #f3f4f6; }
 .sort-icon { margin-left: 4px; color: #9ca3af; font-size: 12px; }
-.inventory-table td { padding: 12px 16px; border-bottom: 1px solid #e5e7eb; color: #1f2937; }
+.inventory-table td { padding: 12px 8px; border-bottom: 1px solid #e5e7eb; color: #1f2937; }
 .inventory-table tbody tr:hover { background: #f9fafb; }
 .inventory-table tbody tr.row-disabled { background: #f3f4f6; }
 .inventory-row { cursor: pointer; }
-.col-checkbox { width: 40px; text-align: center; }
-.col-id { width: 60px; }
-.col-code, .col-spec { width: 120px; }
-.col-name { min-width: 120px; max-width: 180px; overflow-wrap: anywhere; }
-.col-warehouse, .col-category { min-width: 100px; }
-.col-stock { min-width: 100px; }
-.col-unit { width: 60px; }
-.col-min-stock, .col-max-stock { width: 90px; }
-.col-status, .col-product-status { min-width: 90px; white-space: nowrap; }
-.col-update-time { min-width: 140px; white-space: nowrap; }
-.col-attributes, .col-price, .col-amount, .col-notes { min-width: 120px; }
+.col-checkbox { text-align: center; }
+.col-name, .col-notes { overflow-wrap: anywhere; }
+.col-status, .col-product-status { white-space: nowrap; }
 .col-stock, .col-min-stock, .col-max-stock, .col-price, .col-amount { text-align: right !important; font-variant-numeric: tabular-nums; }
 .attribute-row { padding: 4px 0; }
-.col-notes { max-width: 200px; overflow-wrap: anywhere; }
 .product-link { color: #3b82f6; text-decoration: none; }
 .product-link:hover { text-decoration: underline; }
 .store-name { display: block; margin-top: 4px; font-size: 12px; color: #9ca3af; }
@@ -888,7 +902,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, .inventory-row:
 .stock-value.low-stock, .status-badge.status-warning { color: #d97706; background: #fef3c7; }
 .stock-value.out-of-stock, .status-badge.status-danger { color: #dc2626; background: #fee2e2; }
 .stock-value.over-stock, .status-badge.status-info { color: #3b82f6; background: #dbeafe; }
-.status-badge { display: inline-block; padding: 4px 10px; border-radius: 5px; font-size: 12px; font-weight: 500; }
+.status-badge { display: inline-block; box-sizing: border-box; max-width: 100%; padding: 4px 6px; border-radius: 5px; font-size: 12px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
 .status-badge.status-disabled { color: #6b7280; background: #e5e7eb; }
 .empty-state { padding: 60px 20px !important; text-align: center; color: #6b7280; }
 .empty-state p { margin: 0; }
@@ -900,10 +914,18 @@ button:focus-visible, input:focus-visible, select:focus-visible, .inventory-row:
 .page-jump { display: flex; align-items: center; gap: 6px; font-size: 13px; color: #6b7280; }
 .jump-input { width: 50px; padding: 6px 8px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 13px; text-align: center; }
 .page-info { font-size: 13px; color: #6b7280; }
-.col-actions { min-width: 128px; }
-.raw-material-mode .col-actions { min-width: 158px; }
-.row-actions { display: flex; gap: 6px; white-space: nowrap; }
-.btn-action { display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; padding: 0; border: 1px solid #d1d5db; border-radius: 3px; cursor: pointer; background: white; }
+.inventory-table .col-actions {
+  position: sticky;
+  right: 0;
+  z-index: 3;
+  background: #fff;
+  box-shadow: -6px 0 8px -6px #9ca3af;
+}
+.inventory-table th.col-actions { z-index: 4; background: #f9fafb; }
+.inventory-table tbody tr:hover .col-actions { background: #f9fafb; }
+.inventory-table tbody tr.row-disabled .col-actions { background: #f3f4f6; }
+.row-actions { display: flex; justify-content: flex-end; gap: 6px; white-space: nowrap; }
+.btn-action { display: inline-flex; flex: 0 0 30px; width: 30px; height: 30px; align-items: center; justify-content: center; padding: 0; border: 1px solid #d1d5db; border-radius: 3px; cursor: pointer; background: white; }
 .btn-action.btn-edit { color: #3b82f6; border-color: #3b82f6; }
 .btn-action.btn-edit:hover { background: #3b82f6; color: white; }
 .btn-action.btn-delete { color: #dc2626; border-color: #fecaca; }
