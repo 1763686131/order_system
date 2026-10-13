@@ -3,6 +3,10 @@ version: '3'
 services:
   order-board:
     image: order-backend:latest
+    build:
+      context: ./backend
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
     container_name: nas_order_board
     ports:
       - "7899:7899"

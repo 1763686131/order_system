@@ -2,8 +2,8 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Use the Tsinghua PyPI mirror for Python dependencies.
-RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+ARG PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+RUN pip config set global.index-url "$PIP_INDEX_URL"
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
