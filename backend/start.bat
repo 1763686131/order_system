@@ -9,6 +9,7 @@ pushd "%~dp0.." || (
 )
 set "PROJECT_ROOT=%CD%"
 popd
+set "OFFLINE_IMAGE=%PROJECT_ROOT%\Settings\order-backend.tar"
 
 echo ====================================
 echo Project Root: %PROJECT_ROOT%
@@ -35,12 +36,41 @@ docker build -t order-backend "%PROJECT_ROOT%\backend"
 if %errorlevel% neq 0 (
     echo ====================================
     echo Build failed. See the Docker error above.
-    echo If the error mentions python:3.10-slim or auth.docker.io,
-    echo pull the base image first after fixing Docker Hub access:
-    echo docker pull python:3.10-slim
     echo ====================================
-    pause
-    exit /b 1
+    if exist "%OFFLINE_IMAGE%" (
+        echo Loading fallback image from:
+        echo %OFFLINE_IMAGE%
+        docker load -i "%OFFLINE_IMAGE%"
+        if errorlevel 1 (
+            echo ====================================
+            echo Failed to load fallback image.
+            echo ====================================
+            pause
+            exit /b 1
+        )
+
+        docker image inspect order-backend >nul 2>&1
+        if errorlevel 1 (
+            echo ====================================
+            echo The fallback archive was loaded, but it does not contain
+            echo an image tagged as order-backend.
+            echo Recreate it with:
+            echo docker save order-backend -o Settings\order-backend.tar
+            echo ====================================
+            pause
+            exit /b 1
+        )
+    ) else (
+        echo No fallback image found at:
+        echo %OFFLINE_IMAGE%
+        echo If the error mentions python:3.10-slim or auth.docker.io,
+        echo pull the base image first after fixing Docker Hub access:
+        echo docker pull python:3.10-slim
+        echo Or place a saved image at Settings\order-backend.tar.
+        echo ====================================
+        pause
+        exit /b 1
+    )
 )
 
 echo ====================================
