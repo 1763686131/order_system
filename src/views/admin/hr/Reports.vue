@@ -489,7 +489,7 @@ const hideContextMenu = () => {
 // 处理下载
 const handleDownload = () => {
   if (contextMenu.value.type === 'file') {
-    window.open(`${API_BASE}/download/${contextMenu.value.target.id}`, '_blank')
+    openFile(contextMenu.value.target)
   }
   hideContextMenu()
 }

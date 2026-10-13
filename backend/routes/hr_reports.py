@@ -3,10 +3,11 @@
 支持文件上传、同步扫描、分享功能
 """
 from flask import Blueprint, request, jsonify, send_file
-from werkzeug.utils import secure_filename
 import os
+import ntpath
 import hashlib
 import uuid
+import unicodedata
 from datetime import datetime, timedelta
 from utils.auth import current_identity
 from utils.db import get_db
@@ -60,6 +61,27 @@ def path_under_root(root, relative_path, allow_empty=False):
     if candidate != root_real and not candidate.startswith(root_real + os.sep):
         raise ValueError('文件路径超出报告目录')
     return candidate
+
+
+def safe_upload_filename(filename):
+    """Keep Unicode filenames while removing path and control characters."""
+    value = unicodedata.normalize('NFC', str(filename or ''))
+    value = ntpath.basename(value)
+    value = ''.join(
+        char for char in value
+        if char not in '<>:"/\\|?*' and unicodedata.category(char) != 'Cc'
+    ).strip(' .')
+
+    if not value:
+        raise ValueError('文件名不合法')
+
+    stem = value.split('.', 1)[0].upper()
+    if stem in {'CON', 'PRN', 'AUX', 'NUL'} or (
+        len(stem) == 4 and stem[:3] in {'COM', 'LPT'} and stem[3] in '123456789'
+    ):
+        value = f'_{value}'
+
+    return value
 
 # 允许的文件类型
 ALLOWED_EXTENSIONS = {
@@ -309,10 +331,8 @@ def upload_file():
         if ext not in ALLOWED_EXTENSIONS:
             return jsonify({'success': False, 'message': '不支持的文件类型'}), 400
 
-        # 安全的文件名
-        filename = secure_filename(file.filename)
-        if not filename:
-            return jsonify({'success': False, 'message': '文件名不合法'}), 400
+        # 保留中文文件名，同时去除路径和控制字符
+        filename = safe_upload_filename(file.filename)
 
         # 构建保存路径
         if folder_path:
@@ -399,19 +419,15 @@ def download_file(file_id):
 
         # PDF 和图片在浏览器中预览，其他文件下载
         if row['file_type'] in ['pdf', 'image']:
-            # 对于 PDF，确保使用正确的 MIME 类型
-            if row['file_type'] == 'pdf' and not mimetype:
+            if row['file_type'] == 'pdf':
                 mimetype = 'application/pdf'
-
-            response = send_file(
+            # send_file encodes Unicode download names in Content-Disposition.
+            return send_file(
                 file_path,
                 mimetype=mimetype,
                 as_attachment=False,
                 download_name=row['filename']
             )
-            # 添加响应头，确保浏览器以内联方式显示
-            response.headers['Content-Disposition'] = f'inline; filename="{row["filename"]}"'
-            return response
         else:
             return send_file(
                 file_path,
@@ -518,9 +534,12 @@ def download_shared_file(share_token):
 
         # PDF 和图片在浏览器中预览，其他文件下载
         if row['file_type'] in ['pdf', 'image']:
+            mimetype = mimetypes.guess_type(row['filename'])[0]
+            if row['file_type'] == 'pdf':
+                mimetype = 'application/pdf'
             return send_file(
                 file_path,
-                mimetype=mimetypes.guess_type(row['filename'])[0],
+                mimetype=mimetype,
                 as_attachment=False,
                 download_name=row['filename']
             )
