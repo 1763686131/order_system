@@ -63,7 +63,7 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
 export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_PERMISSIONS.DASHBOARD, path: '/admin/dashboard' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST, path: '/admin/inventory' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS, path: '/admin/materials' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS, path: '/admin/inventory/materials' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS, path: '/admin/sales' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.LOGISTICS, path: '/admin/sales/logistics' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.RETURNS, path: '/admin/sales/returns' },

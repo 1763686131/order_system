@@ -311,7 +311,7 @@
                   </span>
                 </label>
                 <div v-if="settings.products.length === 0" class="products-empty">
-                  请先在原材料列表中建立原材料档案
+                  请先在原材料库存中建立原材料档案
                 </div>
               </div>
               <label class="default-product-field">

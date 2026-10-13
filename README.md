@@ -274,9 +274,8 @@ order_system/
 │  │  └─ admin/
 │  │     ├─ Dashboard.vue           # 后台首页
 │  │     ├─ products/               # 商品档案、库存和出入库页面
-│  │     │  ├─ MaterialProductList.vue # 商品 → 原材料列表，原材料档案维护
 │  │     │  ├─ InventoryList.vue     # 库存 → 成品库存，含商品档案新增、修改、复制和删除
-│  │     │  ├─ MaterialInventory.vue # 库存 → 原材料库存，含库存金额
+│  │     │  ├─ MaterialInventory.vue # 库存 → 原材料库存，含档案维护、库存金额和流水详情
 │  │     │  ├─ MaterialOutboundList.vue # 库存 → 原材料出库，录入、审核与触屏端配置
 │  │     │  └─ StockRecordList.vue   # 库存 → 入库记录/出库记录，按 mode 切换
 │  │     ├─ sales/                   # 销售管理
@@ -358,7 +357,6 @@ order_system/
 
 | 后台菜单 | 路由 | 页面组件 | 路由传入的模式 |
 | --- | --- | --- | --- |
-| 商品 → 原材料列表 | `/admin/materials` | `admin/products/MaterialProductList.vue` | — |
 | 库存 → 成品库存 | `/admin/inventory` | `admin/products/InventoryList.vue` | — |
 | 库存 → 原材料库存 | `/admin/inventory/materials` | `admin/products/MaterialInventory.vue` | — |
 | 库存 → 原材料出库 | `/admin/inventory/material-outbounds` | `admin/products/MaterialOutboundList.vue` | — |
@@ -366,14 +364,18 @@ order_system/
 | 库存 → 出库记录 | `/admin/stock/out` | `admin/products/StockRecordList.vue` | `mode="OUTBOUND"` |
 | 库存 → 仓库管理 | `/admin/inventory/warehouse` | `admin/inventory/WarehouseManage.vue` | — |
 
-成品档案与库存统一由 `InventoryList.vue` 维护，原材料档案仍由 `MaterialProductList.vue` 维护。两者共用
+成品档案与库存统一由 `InventoryList.vue` 维护，原材料档案与库存统一由 `MaterialInventory.vue` 维护。两者共用
 `src/components/admin/ProductFormModal.vue` 档案弹窗，分别传入 `mode="finished-product"`
-和 `mode="raw-material"`，对应成品与原材料接口。“成品库存”的“新增商品”只创建商品档案，不产生入库单或库存变动，
-该页不再提供独立成品入库入口；采购入库和原材料出库审核生成成品入库的流程保持不变。
+和 `mode="raw-material"`，对应成品与原材料接口。两页支持档案新增、修改、复制、删除及启停状态筛选；
+“新增商品”和“新增原材料”只创建档案，不产生入库单或库存变动。两页不再提供独立入库按钮；
+原材料采购入库和原材料出库审核生成成品入库的流程保持不变。
 
 旧 `/admin/products` 地址会跳转到 `/admin/inventory`，`ProductList.vue` 已移除。
 拥有 `admin.route.inventory.products` 或旧 `admin.route.products.list` 任一权限均可访问合并页面，
 商品新增、修改、复制和删除仍需 `admin.route.products.list`，仅有库存权限的账号保持只读。
+旧 `/admin/materials` 地址会跳转到 `/admin/inventory/materials`，`MaterialProductList.vue` 已移除。
+原材料库存页兼容 `admin.route.inventory.materials` 和旧 `admin.route.products.materials` 任一访问权限，
+原材料档案写操作仍需 `admin.route.products.materials`。商品和原材料档案统一从侧栏“库存”分组进入。
 `MaterialOutboundList.vue` 负责原材料出库单，
 新增和修改明细使用 `src/components/admin/MaterialOutboundAuditModal.vue`。
 
@@ -532,8 +534,7 @@ import {
 
 原材料库存相关页面以 `/api/stock-balances?type=raw-material` 为库存数据源：
 
-- `MaterialProductList.vue` 映射并展示当前库存。
-- `MaterialInventory.vue` 按物料、门店和仓库汇总库存数量。
+- `MaterialInventory.vue` 统一维护原材料档案，按物料、门店和仓库汇总库存数量，并展示已审核出入库流水。
 - 库存金额由当前库存数量和已审核入库流水的平均单位成本计算。
 - `averageUnitCost` 为平均单位成本。
 - `inventoryAmount` 为库存金额。
@@ -553,7 +554,7 @@ import {
 | 路由 | 页面 | 主要数据来源 |
 | --- | --- | --- |
 | `/admin/products` | 兼容旧商品入口，跳转 `/admin/inventory` | — |
-| `/admin/materials` | 原材料档案 | `/api/raw-material-products`、`/api/stock-balances` |
+| `/admin/materials` | 兼容旧原材料入口，跳转 `/admin/inventory/materials` | — |
 | `/admin/purchase/orders` | 采购订单（`PurchaseList.vue`，`mode: orders`） | `/api/purchase-orders` |
 | `/admin/purchase/orders/create` | 新增采购申请（公共表单） | `/api/purchase-orders`、门店/供应商/原材料/单位接口 |
 | `/admin/purchase/orders/edit/:id` | 编辑采购申请（公共表单） | `/api/purchase-orders/:id` |
@@ -571,7 +572,7 @@ import {
 | `/admin/purchase/returns/edit/:id` | 修改采购退货草稿（公共表单） | `/api/purchase-returns/:id`、可退入库批次接口 |
 | `/admin/purchase/returns/:id` | 查看采购退货、审核/反审核（公共表单） | `/api/purchase-returns/:id`、`/audit`、`/reverse-audit` |
 | `/admin/inventory` | 成品库存与商品档案管理 | `/api/products/inventory`、`/api/products` |
-| `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances`、`/api/stock-movements` |
+| `/admin/inventory/materials` | 原材料库存与档案管理 | `/api/raw-material-products`、`/api/stock-balances`、`/api/stock-movements` |
 | `/admin/inventory/material-outbounds` | 原材料出库录入、修改、审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbounds/admin`、`/api/material-outbound-settings` |
 | `/admin/stock/in` | 入库记录 | `/api/stock-inbounds` |
 | `/admin/stock/out` | 出库记录 | `/api/orders` |

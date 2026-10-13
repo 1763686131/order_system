@@ -130,8 +130,8 @@ const routes = [
       {
         path: 'materials',
         name: 'admin-materials',
-        component: () => import('@/views/admin/products/MaterialProductList.vue'),
-        meta: { requiresAuth: true, productType: 'raw-material' }
+        redirect: to => ({ name: 'admin-inventory-materials', query: to.query, hash: to.hash }),
+        meta: { requiresAuth: true }
       },
       {
         path: 'suppliers',
@@ -149,7 +149,7 @@ const routes = [
         path: 'inventory/materials',
         name: 'admin-inventory-materials',
         component: () => import('@/views/admin/products/MaterialInventory.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, productType: 'raw-material' }
       },
       {
         path: 'inventory/material-outbounds',
@@ -518,8 +518,11 @@ router.beforeEach(async (to) => {
     to.path === '/admin/finance/payables' && to.query.tab === 'reconciliation'
     && userStore.hasPerm('admin.route.finance.supplier_reconciliations')
   )
-  const canAccessMergedInventory = to.name === 'admin-inventory'
-    && userStore.hasPerm('admin.route.products.list')
+  const canAccessMergedInventory = (
+    to.name === 'admin-inventory' && userStore.hasPerm('admin.route.products.list')
+  ) || (
+    to.name === 'admin-inventory-materials' && userStore.hasPerm('admin.route.products.materials')
+  )
   if (
     adminPermission &&
     userStore.canAccessAdmin &&

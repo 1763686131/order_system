@@ -4,7 +4,7 @@
       <div class="filter-row">
         <label class="search-field">
           <span class="sr-only">搜索原材料</span>
-          <span class="search-icon" aria-hidden="true"></span>
+          <Search class="search-icon" :size="16" aria-hidden="true" />
           <input
             v-model.trim="filters.keyword"
             type="search"
@@ -67,17 +67,27 @@
           </div>
         </div>
 
+        <label class="filter-field">
+          <span>原材料状态</span>
+          <select v-model="filters.productStatus">
+            <option value="all">全部状态</option>
+            <option value="enabled">启用</option>
+            <option value="disabled">停用</option>
+          </select>
+        </label>
+
         <div class="header-actions">
           <button class="btn btn-secondary" type="button" @click="resetFilters">
+            <RotateCcw :size="16" aria-hidden="true" />
             重置筛选
           </button>
           <button class="btn btn-secondary" type="button" @click="exportInventory">
-            <span class="button-icon" aria-hidden="true">↓</span>
+            <Download :size="16" aria-hidden="true" />
             导出
           </button>
-          <button class="btn btn-primary" type="button" @click="openStockInModal()">
-            <span class="button-icon" aria-hidden="true">+</span>
-            入库
+          <button v-if="canManageMaterials" class="btn btn-primary" type="button" @click="handleNew">
+            <Plus :size="16" aria-hidden="true" />
+            新增原材料
           </button>
         </div>
       </div>
@@ -125,7 +135,7 @@
           <span>最后刷新：{{ lastRefreshed }}</span>
         </div>
         <button class="refresh-button" type="button" title="刷新" @click="refreshData">
-          <span aria-hidden="true">↻</span>
+          <RefreshCw :size="16" aria-hidden="true" />
           刷新
         </button>
       </div>
@@ -159,6 +169,8 @@
               <th>单位</th>
               <th class="number-column">安全库存</th>
               <th>库存状态</th>
+              <th>原材料状态</th>
+              <th>备注</th>
               <th class="sortable" @click="sortBy('updatedAt')">
                 更新时间
                 <span :class="['sort-indicator', { active: sortKey === 'updatedAt' }]">
@@ -209,20 +221,30 @@
                   {{ getStatusText(material) }}
                 </span>
               </td>
+              <td>
+                <span :class="['status-badge', material.enabled === false ? 'status-disabled' : 'status-normal']">
+                  {{ material.enabled === false ? '停用' : '启用' }}
+                </span>
+              </td>
+              <td class="notes-cell" :title="material.notes">{{ material.notes || '-' }}</td>
               <td class="muted-cell">{{ material.updatedAt }}</td>
               <td class="actions-column">
-                <button
-                  class="table-action"
-                  type="button"
-                  @click.stop="openStockInModal(material)"
-                  @keydown.stop
-                >
-                  入库
-                </button>
+                <div v-if="canManageMaterials" class="row-actions" @click.stop @keydown.stop>
+                  <button class="table-action" type="button" title="修改原材料" :aria-label="`修改原材料${material.name}`" @click="handleEdit(material)">
+                    <Pencil :size="15" aria-hidden="true" />
+                  </button>
+                  <button class="table-action" type="button" title="复制原材料" :aria-label="`复制原材料${material.name}`" @click="handleCopy(material)">
+                    <Copy :size="15" aria-hidden="true" />
+                  </button>
+                  <button class="table-action action-delete" type="button" title="删除原材料" :aria-label="`删除原材料${material.name}`" :disabled="deleting" @click="handleDelete(material)">
+                    <Trash2 :size="15" aria-hidden="true" />
+                  </button>
+                </div>
+                <span v-else>-</span>
               </td>
             </tr>
             <tr v-if="paginatedMaterials.length === 0">
-              <td colspan="12" class="empty-state">
+              <td colspan="14" class="empty-state">
                 <div class="empty-title">没有匹配的原材料</div>
                 <p>可以尝试清空筛选条件后重新查看。</p>
               </td>
@@ -248,7 +270,12 @@
       </footer>
     </section>
 
-    <StockInOrderModal ref="stockInModalRef" @saved="handleStockInSaved" />
+    <ProductFormModal
+      ref="productFormModal"
+      mode="raw-material"
+      @save="refreshData"
+      @refresh="refreshData"
+    />
 
     <teleport to="body">
       <div
@@ -349,9 +376,17 @@
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
+import { Copy, Download, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import { getMeasurementUnits } from '@/utils/unitHelper'
-import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
+import ProductFormModal from '@/components/admin/ProductFormModal.vue'
+import { useUserStore } from '@/stores/user'
+import { ADMIN_ROUTE_BRANCH_PERMISSIONS } from '@/utils/adminAccess'
+
+const userStore = useUserStore()
+const canManageMaterials = computed(() => userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS))
+const productFormModal = ref(null)
+const deleting = ref(false)
 
 const stores = ref([
   { id: 1, name: '绝缘门店' },
@@ -507,6 +542,7 @@ const fallbackInventoryByCode = new Map(
   materialFallbacks.map(material => [material.code, { ...material }])
 )
 const materials = ref([])
+const rawMaterialProducts = ref([])
 const stockBalances = ref([])
 const movementDetailMaterial = ref(null)
 const movementRecords = ref([])
@@ -534,6 +570,7 @@ const loadMaterialProducts = async () => {
     ])
 
     const rawProducts = Array.isArray(productResponse) ? productResponse : []
+    rawMaterialProducts.value = rawProducts
     stockBalances.value = Array.isArray(balanceResponse) ? balanceResponse : []
     if (Array.isArray(storeResponse) && storeResponse.length > 0) {
       stores.value = storeResponse
@@ -578,6 +615,7 @@ const loadMaterialProducts = async () => {
   } catch (error) {
     console.error('加载原材料库存失败:', error)
     materials.value = []
+    rawMaterialProducts.value = []
     stockBalances.value = []
   }
 }
@@ -587,6 +625,7 @@ const filters = ref({
   category: '',
   warehouse: '',
   status: 'all',
+  productStatus: 'all',
   storeId: null
 })
 
@@ -726,8 +765,12 @@ const filteredMaterials = computed(() => {
           ? material.visibleBalanceCount > 0 || configuredWarehouseMatches
           : true
     const matchesStatus = filters.value.status === 'all' || getStatusKey(material) === filters.value.status
+    const matchesProductStatus = filters.value.productStatus === 'all'
+      || (filters.value.productStatus === 'disabled'
+        ? material.enabled === false
+        : material.enabled !== false)
 
-    return matchesKeyword && matchesCategory && matchesLocation && matchesStatus
+    return matchesKeyword && matchesCategory && matchesLocation && matchesStatus && matchesProductStatus
   })
 
   return result.sort((left, right) => {
@@ -764,6 +807,7 @@ watch(
     filters.value.category,
     filters.value.warehouse,
     filters.value.status,
+    filters.value.productStatus,
     filters.value.storeId,
     pageSize.value
   ],
@@ -805,12 +849,13 @@ const resetFilters = () => {
     category: '',
     warehouse: '',
     status: 'all',
+    productStatus: 'all',
     storeId: null
   }
 }
 
-const refreshData = () => {
-  loadMaterialProducts()
+const refreshData = async () => {
+  await loadMaterialProducts()
   lastRefreshed.value = new Date().toLocaleTimeString('zh-CN', {
     hour: '2-digit',
     minute: '2-digit'
@@ -818,7 +863,7 @@ const refreshData = () => {
 }
 
 const exportInventory = () => {
-  const header = ['编号', '原材料', '分类', '规格', '仓库', '当前库存', '库存金额', '单位', '状态']
+  const header = ['编号', '原材料', '分类', '规格', '仓库', '当前库存', '库存金额', '单位', '库存状态', '原材料状态', '备注']
   const rows = filteredMaterials.value.map(item => [
     item.code,
     item.name,
@@ -828,7 +873,9 @@ const exportInventory = () => {
     item.stock,
     item.inventoryAmount,
     item.unit,
-    getStatusText(item)
+    getStatusText(item),
+    item.enabled === false ? '停用' : '启用',
+    item.notes || ''
   ])
   const csv = [header, ...rows]
     .map(row => row.map(value => `"${String(value).replaceAll('"', '""')}"`).join(','))
@@ -842,7 +889,51 @@ const exportInventory = () => {
   URL.revokeObjectURL(url)
 }
 
-const stockInModalRef = ref(null)
+const handleNew = () => {
+  if (!canManageMaterials.value) return
+  const initialData = filters.value.storeId === null
+    ? null
+    : { storeIds: [filters.value.storeId] }
+  productFormModal.value?.open(initialData)
+}
+
+const getMaterialFormData = material => {
+  // 库存行的分类和仓库是展示名称，编辑必须保留档案中的 ID 和完整配置。
+  const product = findById(rawMaterialProducts.value, material.id)
+  return product ? JSON.parse(JSON.stringify(product)) : null
+}
+
+const handleEdit = material => {
+  if (!canManageMaterials.value) return
+  const product = getMaterialFormData(material)
+  if (product) productFormModal.value?.open(product)
+}
+
+const handleCopy = material => {
+  if (!canManageMaterials.value) return
+  const product = getMaterialFormData(material)
+  if (!product) return
+  delete product.id
+  productFormModal.value?.open(product)
+}
+
+const handleDelete = async material => {
+  if (!canManageMaterials.value || deleting.value) return
+  if (!window.confirm(`确定要删除原材料“${material.name}”吗？`)) return
+
+  deleting.value = true
+  try {
+    await request({ url: `/raw-material-products/${material.id}`, method: 'DELETE' })
+    if (String(movementDetailMaterial.value?.id) === String(material.id)) {
+      closeMovementDetail()
+    }
+    await refreshData()
+  } catch (error) {
+    window.alert(error?.response?.data?.message || '删除原材料失败。')
+  } finally {
+    deleting.value = false
+  }
+}
 
 const movementKey = movement => [
   movement.movementType,
@@ -922,30 +1013,6 @@ const openMovementDetail = async (material) => {
   }
 }
 
-// 原材料库存页固定使用采购入库模式；行操作会预填所选原材料。
-const openStockInModal = (material = null) => {
-  const initialItem = material
-    ? { ...material, productId: material.productId ?? material.id }
-    : null
-  const initialData = filters.value.storeId === null
-    ? undefined
-    : { storeId: filters.value.storeId }
-
-  stockInModalRef.value?.open({
-    type: 'raw-material',
-    item: initialItem,
-    data: initialData
-  })
-}
-
-const handleStockInSaved = async () => {
-  await loadMaterialProducts()
-  lastRefreshed.value = new Date().toLocaleTimeString('zh-CN', {
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
 onMounted(loadMaterialProducts)
 </script>
 
@@ -997,22 +1064,8 @@ onMounted(loadMaterialProducts)
 
 .search-icon {
   position: absolute;
-  left: 13px;
-  width: 13px;
-  height: 13px;
-  border: 1.8px solid #94a3b8;
-  border-radius: 50%;
-}
-
-.search-icon::after {
-  content: '';
-  position: absolute;
-  right: -5px;
-  bottom: -3px;
-  width: 6px;
-  height: 1.8px;
-  background: #94a3b8;
-  transform: rotate(45deg);
+  left: 12px;
+  color: #94a3b8;
 }
 
 .filter-label {
@@ -1111,6 +1164,7 @@ onMounted(loadMaterialProducts)
   display: flex;
   align-items: center;
   gap: 4px;
+  white-space: nowrap;
 }
 
 .btn-secondary {
@@ -1136,9 +1190,9 @@ onMounted(loadMaterialProducts)
   border-color: #059669;
 }
 
-.button-icon {
-  font-size: 16px;
-  line-height: 0;
+.btn svg,
+.refresh-button svg {
+  flex-shrink: 0;
 }
 
 .stats-grid {
@@ -1265,7 +1319,7 @@ onMounted(loadMaterialProducts)
 
 .inventory-table {
   width: 100%;
-  min-width: 1180px;
+  min-width: 1420px;
   border-collapse: collapse;
   font-size: 14px;
 }
@@ -1348,6 +1402,12 @@ onMounted(loadMaterialProducts)
   font-size: 13px;
 }
 
+.notes-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .category-tag {
   display: inline-block;
   padding: 5px 9px;
@@ -1403,6 +1463,11 @@ onMounted(loadMaterialProducts)
   background: #fef2f2;
 }
 
+.status-disabled {
+  color: #6b7280;
+  background: #f3f4f6;
+}
+
 .status-dot {
   width: 6px;
   height: 6px;
@@ -1414,14 +1479,40 @@ onMounted(loadMaterialProducts)
   text-align: right !important;
 }
 
+.row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
 .table-action {
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
   color: #3b82f6;
   background: white;
   border: 1px solid #3b82f6;
   border-radius: 3px;
   cursor: pointer;
   font-size: 13px;
+}
+
+.table-action.action-delete {
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.table-action.action-delete:hover:not(:disabled) {
+  color: #fff;
+  background: #dc2626;
+}
+
+.table-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .table-action:hover {
@@ -1821,6 +1912,20 @@ onMounted(loadMaterialProducts)
 @media (max-width: 640px) {
   .material-inventory-page {
     padding: 18px 12px 24px;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+  }
+
+  .store-tabs,
+  .status-tabs {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .table-toolbar {
+    flex-wrap: wrap;
   }
 
   .header-actions,

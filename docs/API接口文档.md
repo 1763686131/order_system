@@ -1540,13 +1540,14 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 | 页面或组件 | 路由/模式 | 接口 |
 |------------|-----------|------|
 | `InventoryList.vue` | `/admin/inventory`、`finished-product`；旧 `/admin/products` 跳转至此 | `/api/products/inventory` 查询库存与档案；`/api/products` 新增、修改和删除档案 |
-| `MaterialProductList.vue` | `/admin/materials`、`raw-material` | `/api/raw-material-products` |
 | `ProductFormModal.vue` | 根据路由或 `mode` 自动切换 | 上述对应接口 |
-| `MaterialInventory.vue` | `/admin/inventory/materials` | 读取 `/api/raw-material-products` |
+| `MaterialInventory.vue` | `/admin/inventory/materials`、`raw-material`；旧 `/admin/materials` 跳转至此 | `/api/raw-material-products` 维护档案；`/api/stock-balances`、`/api/stock-movements` 查询库存与流水 |
 
-成品库存页复用 `ProductFormModal.vue` 维护商品档案，不再提供独立成品入库入口。
-新增商品只保存档案，不增加库存；采购入库及原材料出库审核生成成品入库的接口保持不变。
-合并页面兼容原商品列表和成品库存任一访问权限，档案写操作仍要求 `admin.route.products.list`。
+成品和原材料库存页复用 `ProductFormModal.vue` 维护各自档案，不再提供独立入库按钮。
+新增商品或原材料只保存档案，不增加库存；采购入库及原材料出库审核生成成品入库的接口保持不变。
+成品库存页兼容原商品列表和成品库存任一访问权限，档案写操作仍要求 `admin.route.products.list`。
+原材料库存页兼容 `admin.route.products.materials` 和 `admin.route.inventory.materials` 任一访问权限，
+原材料档案写操作仍要求 `admin.route.products.materials`；仅有库存权限的账号保持只读。
 
 ---
 
@@ -5893,8 +5894,8 @@ ON print_templates(is_default);
 | 权限编码 | 权限栏目 | 控制范围 |
 |---|---|---|
 | `admin.route.dashboard` | 后台首页 | 后台首页 |
-| `admin.route.products.list` | 商品管理 | 商品列表 |
-| `admin.route.products.materials` | 商品管理 | 原材料列表 |
+| `admin.route.products.list` | 商品管理 | 成品库存页访问及商品档案写操作 |
+| `admin.route.products.materials` | 商品管理 | 原材料库存页访问及原材料档案写操作 |
 | `admin.route.sales.orders` | 销售订单操作 | 销售订单页面及订单表单 |
 | `admin.route.sales.logistics` | 物流管理 | 物流操作列表 |
 | `admin.route.sales.returns` | 退货管理 | 退货订单及表单 |

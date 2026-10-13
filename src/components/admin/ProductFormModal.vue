@@ -1005,6 +1005,7 @@ const open = (product = null) => {
     formData.unitConversions = product.unitConversions || []
     formData.enableAttributes = product.enableAttributes || false
     formData.unitId = product.unitId || null
+    formData.enableMultiUnit = Boolean(product.enableMultiUnit)
 
     // 延迟设置仓库和分类，等待数据加载完成
     setTimeout(() => {
