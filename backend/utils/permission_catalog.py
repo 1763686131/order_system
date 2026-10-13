@@ -64,7 +64,6 @@ ADMIN_LOGISTICS_COPY_PERMISSIONS = {
 
 ADMIN_ROUTE_PERMISSIONS = {
     "dashboard": "admin.route.dashboard",
-    "products": "admin.route.products",
     "sales": "admin.route.sales",
     "purchase": "admin.route.purchase",
     "inventory": "admin.route.inventory",
@@ -74,10 +73,6 @@ ADMIN_ROUTE_PERMISSIONS = {
 }
 
 ADMIN_ROUTE_BRANCH_PERMISSIONS = {
-    "products": {
-        "list": "admin.route.products.list",
-        "materials": "admin.route.products.materials",
-    },
     "sales": {
         "orders": "admin.route.sales.orders",
         "logistics": "admin.route.sales.logistics",
@@ -214,11 +209,6 @@ PERMISSION_MODULES = [
                 "description": "显示并访问后台数据看板",
             },
             {
-                "code": ADMIN_ROUTE_PERMISSIONS["products"],
-                "name": "访问商品",
-                "description": "显示并访问商品和原材料管理",
-            },
-            {
                 "code": ADMIN_ROUTE_PERMISSIONS["sales"],
                 "name": "访问销售",
                 "description": "显示并访问销售、物流、退货和客户管理",
@@ -247,16 +237,6 @@ PERMISSION_MODULES = [
                 "code": ADMIN_ROUTE_PERMISSIONS["system"],
                 "name": "访问设置",
                 "description": "显示并访问门店、系统、角色组和打印模板",
-            },
-            {
-                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["products"]["list"],
-                "name": "访问商品列表",
-                "description": "显示并访问成品商品管理",
-            },
-            {
-                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["products"]["materials"],
-                "name": "访问原材料列表",
-                "description": "显示并访问原材料管理",
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["orders"],
@@ -301,12 +281,12 @@ PERMISSION_MODULES = [
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["products"],
                 "name": "访问成品库存",
-                "description": "显示并访问成品库存",
+                "description": "访问成品库存及新增、修改、复制和删除商品档案",
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["materials"],
                 "name": "访问原材料库存",
-                "description": "显示并访问原材料库存",
+                "description": "访问原材料库存及新增、修改、复制和删除原材料档案",
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["material_outbounds"],
@@ -678,15 +658,6 @@ _ROUTE_PERMISSION_MODULES = [
         [ADMIN_ROUTE_PERMISSIONS["dashboard"]],
     ),
     (
-        "admin_products",
-        "商品管理",
-        "控制商品和原材料档案页面访问",
-        [
-            ADMIN_ROUTE_BRANCH_PERMISSIONS["products"]["list"],
-            ADMIN_ROUTE_BRANCH_PERMISSIONS["products"]["materials"],
-        ],
-    ),
-    (
         "admin_logistics",
         "物流管理",
         "控制物流操作列表页面访问",
@@ -731,13 +702,13 @@ _ROUTE_PERMISSION_MODULES = [
     (
         "admin_product_inventory",
         "成品库存",
-        "控制成品库存页面访问",
+        "控制成品库存页面访问和商品档案管理",
         [ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["products"]],
     ),
     (
         "admin_material_inventory",
         "原材料库存",
-        "控制原材料库存页面访问",
+        "控制原材料库存页面访问和原材料档案管理",
         [ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["materials"]],
     ),
     (

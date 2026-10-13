@@ -674,16 +674,12 @@ const allMenuItems = [
       {
         label: '成品库存',
         path: '/admin/inventory',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS,
-        alternativePermission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST,
-        alternativePath: '/admin/inventory'
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS
       },
       {
         label: '原材料库存',
         path: '/admin/inventory/materials',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIALS,
-        alternativePermission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS,
-        alternativePath: '/admin/inventory/materials'
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIALS
       },
       {
         label: '原材料出库',

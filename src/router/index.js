@@ -520,15 +520,10 @@ router.beforeEach(async (to) => {
     to.path === '/admin/finance/payables' && to.query.tab === 'reconciliation'
     && userStore.hasPerm('admin.route.finance.supplier_reconciliations')
   )
-  const canAccessMergedInventory = (
-    to.name === 'admin-inventory' && userStore.hasPerm('admin.route.products.list')
-  ) || (
-    to.name === 'admin-inventory-materials' && userStore.hasPerm('admin.route.products.materials')
-  )
   if (
     adminPermission &&
     userStore.canAccessAdmin &&
-    !userStore.hasPerm(adminPermission) && !canAccessNestedFinance && !canAccessMergedInventory
+    !userStore.hasPerm(adminPermission) && !canAccessNestedFinance
   ) {
     return getDefaultAdminPath(userStore)
   }

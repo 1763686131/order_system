@@ -226,6 +226,26 @@
     </section>
 
     <ProductFormModal :key="mode" ref="productFormModal" :mode="mode" @save="handleProductSaved" @refresh="handleProductSaved" />
+    <CustomModal
+      :visible="!!deleteConfirmation"
+      type="warning"
+      :title="`删除${entityLabel}`"
+      :message="deleteConfirmationMessage"
+      confirm-text="确定删除"
+      :danger="true"
+      :confirm-disabled="deleting || loading || !canManageProducts"
+      @confirm="confirmDeleteProducts"
+      @cancel="deleteConfirmation = null"
+    />
+    <CustomModal
+      :visible="!!deleteError"
+      type="error"
+      title="删除失败"
+      :message="deleteError"
+      :show-cancel="false"
+      @confirm="deleteError = ''"
+      @cancel="deleteError = ''"
+    />
     <InventoryMovementModal
       v-if="isRawMaterial"
       :item="movementDetailItem"
@@ -242,6 +262,7 @@ import { ref, computed, watch, onBeforeUnmount } from 'vue'
 import { CircleAlert, CircleCheck, Coins, Copy, Download, Layers, List, Package, Pencil, Plus, RefreshCw, RotateCcw, Search, Trash2, TriangleAlert } from '@lucide/vue'
 import request from '@/api/request'
 import { getMeasurementUnits } from '@/utils/unitHelper'
+import CustomModal from '@/components/CustomModal.vue'
 import ProductFormModal from '@/components/admin/ProductFormModal.vue'
 import InventoryMovementModal from '@/components/admin/InventoryMovementModal.vue'
 import { useUserStore } from '@/stores/user'
@@ -262,8 +283,8 @@ const apiPrefix = computed(() => isRawMaterial.value ? '/raw-material-products' 
 const userStore = useUserStore()
 const canManageProducts = computed(() => userStore.hasPerm(
   isRawMaterial.value
-    ? ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS
-    : ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST
+    ? ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIALS
+    : ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS
 ))
 
 const createFilters = () => ({
@@ -293,6 +314,11 @@ const loadError = ref('')
 const lastRefreshed = ref('')
 const productFormModal = ref(null)
 const deleting = ref(false)
+const deleteConfirmation = ref(null)
+const deleteError = ref('')
+const deleteConfirmationMessage = computed(() =>
+  `确定要删除选中的 ${deleteConfirmation.value?.items.length || 0} 个${entityLabel.value}吗？`
+)
 const movementDetailItem = ref(null)
 const movementRecords = ref([])
 const movementDetailLoading = ref(false)
@@ -565,11 +591,20 @@ const handleCopy = item => {
   productFormModal.value?.open(product)
 }
 const handleProductSaved = () => loadInventory()
-const deleteProducts = async items => {
-  if (!canManageProducts.value || !items.length || deleting.value || loading.value) return
-  if (!window.confirm(`确定要删除选中的 ${items.length} 个${entityLabel.value}吗？`)) return
-  const mode = props.mode
-  const generation = modeVersion
+const deleteProducts = items => {
+  if (disposed || !canManageProducts.value || !items.length || deleting.value || loading.value) return
+  deleteConfirmation.value = {
+    items: items.map(item => ({ id: item.id })),
+    mode: props.mode,
+    generation: modeVersion
+  }
+}
+const confirmDeleteProducts = async () => {
+  const confirmation = deleteConfirmation.value
+  if (!confirmation || !canManageProducts.value || deleting.value || loading.value) return
+  deleteConfirmation.value = null
+  const { items, mode, generation } = confirmation
+  if (disposed || generation !== modeVersion || mode !== props.mode) return
   const prefix = apiPrefix.value
   const label = entityLabel.value
   deleting.value = true
@@ -582,7 +617,7 @@ const deleteProducts = async items => {
     const failed = results.filter(result => result.status === 'rejected')
     if (failed.length) {
       const error = failed[0].reason
-      window.alert(`${failed.length} 个${label}删除失败：${error?.response?.data?.message || error?.message || '请重试。'}`)
+      deleteError.value = `${failed.length} 个${label}删除失败：${error?.response?.data?.message || error?.message || '请重试。'}`
     }
   } finally {
     if (!disposed && generation === modeVersion && mode === props.mode) deleting.value = false
@@ -673,6 +708,8 @@ watch(() => props.mode, () => {
   pageSize.value = isRawMaterial.value ? 8 : 30
   lastRefreshed.value = ''
   deleting.value = false
+  deleteConfirmation.value = null
+  deleteError.value = ''
   closeMovementDetail()
   loadInventory()
 }, { immediate: true })

@@ -8,10 +8,6 @@ export const ADMIN_ROUTE_PERMISSIONS = {
 }
 
 export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
-  PRODUCTS: {
-    LIST: 'admin.route.products.list',
-    MATERIALS: 'admin.route.products.materials'
-  },
   SALES: {
     ORDERS: 'admin.route.sales.orders',
     LOGISTICS: 'admin.route.sales.logistics',
@@ -62,8 +58,6 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
 
 export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_PERMISSIONS.DASHBOARD, path: '/admin/dashboard' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST, path: '/admin/inventory' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS, path: '/admin/inventory/materials' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.ORDERS, path: '/admin/sales' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.LOGISTICS, path: '/admin/sales/logistics' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.RETURNS, path: '/admin/sales/returns' },
@@ -112,8 +106,8 @@ export function getAdminRoutePermission(path = '') {
   if (/^\/admin\/finance\/(payables|supplier-statement)(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
   if (/^\/admin\/finance\/employee-expenses(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES
   if (path === '/admin/dashboard') return ADMIN_ROUTE_PERMISSIONS.DASHBOARD
-  if (path === '/admin/products') return ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST
-  if (path === '/admin/materials') return ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS
+  if (path === '/admin/products') return ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS
+  if (path === '/admin/materials') return ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIALS
   if (/^\/admin\/sales\/returns(\/|$)/.test(path)) {
     return ADMIN_ROUTE_BRANCH_PERMISSIONS.SALES.RETURNS
   }

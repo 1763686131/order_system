@@ -374,11 +374,11 @@ order_system/
 原材料采购入库和原材料出库审核生成成品入库的流程保持不变。
 
 旧 `/admin/products` 地址会跳转到 `/admin/inventory`，`ProductList.vue` 已移除。
-拥有 `admin.route.inventory.products` 或旧 `admin.route.products.list` 任一权限均可访问合并页面，
-商品新增、修改、复制和删除仍需 `admin.route.products.list`，仅有库存权限的账号保持只读。
+成品库存页面访问以及商品新增、修改、复制和删除均使用 `admin.route.inventory.products`。
 旧 `/admin/materials` 地址会跳转到 `/admin/inventory/materials`，`MaterialProductList.vue` 已移除。
-原材料库存页兼容 `admin.route.inventory.materials` 和旧 `admin.route.products.materials` 任一访问权限，
-原材料档案写操作仍需 `admin.route.products.materials`。商品和原材料档案统一从侧栏“库存”分组进入。
+原材料库存页面访问以及原材料档案写操作均使用 `admin.route.inventory.materials`。
+旧商品列表和原材料列表权限已从权限管理中移除，商品和原材料档案统一从侧栏“库存”分组进入。
+后端初始化时会将已有角色的旧商品权限迁移到对应库存权限，再清理旧权限及其角色关联。
 `MaterialOutboundList.vue` 负责原材料出库单，
 新增和修改明细使用 `src/components/admin/MaterialOutboundAuditModal.vue`。
 

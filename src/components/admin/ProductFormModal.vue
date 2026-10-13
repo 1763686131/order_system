@@ -500,12 +500,22 @@
       </div>
     </div>
   </div>
+  <CustomModal
+    :visible="!!feedback"
+    :type="feedback?.type || 'warning'"
+    :title="feedback?.title || '提示'"
+    :message="feedback?.message || ''"
+    :show-cancel="false"
+    @confirm="feedback = null"
+    @cancel="feedback = null"
+  />
 </template>
 
 <script setup>
 import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import request from '@/api/request'
+import CustomModal from '@/components/CustomModal.vue'
 import ToggleSwitch from '@/components/common/ToggleSwitch.vue'
 import { getMeasurementUnits } from '@/utils/unitHelper'
 
@@ -518,6 +528,14 @@ const props = defineProps({
 
 const route = useRoute()
 const visible = ref(false)
+const feedback = ref(null)
+const showAlert = (message, type = 'warning') => {
+  feedback.value = {
+    message,
+    type,
+    title: type === 'success' ? '操作成功' : type === 'error' ? '操作失败' : '提示'
+  }
+}
 const isEdit = ref(false)
 const currentTab = ref(0)
 const stores = ref([])
@@ -765,11 +783,11 @@ const handleAddUnit = async () => {
       data: { name: unitName.trim(), type: 'measurement' }
     })
     if (response.success) {
-      alert('单位添加成功')
+      showAlert('单位添加成功', 'success')
       await loadUnits()
     }
   } catch (error) {
-    alert('添加单位失败：' + (error.response?.data?.message || error.message))
+    showAlert('添加单位失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 
@@ -782,7 +800,7 @@ const getUnitName = (unitId) => {
 // 添加单位换算
 const addUnitConversion = () => {
   if (!formData.unitId) {
-    alert('请先选择基础单位')
+    showAlert('请先选择基础单位')
     return
   }
   formData.unitConversions.push({
@@ -858,7 +876,7 @@ const editAttributeOption = async (attr, option) => {
       option.name = newName.trim()
     }
   } catch (error) {
-    alert('修改失败：' + (error.response?.data?.message || error.message))
+    showAlert('修改失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 
@@ -875,7 +893,7 @@ const deleteAttributeOption = async (attrId, optionId) => {
       await loadAttributes()
     }
   } catch (error) {
-    alert('删除失败：' + (error.response?.data?.message || error.message))
+    showAlert('删除失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 
@@ -894,7 +912,7 @@ const editAttributeName = async (attr) => {
       attr.name = newName.trim()
     }
   } catch (error) {
-    alert('修改失败：' + (error.response?.data?.message || error.message))
+    showAlert('修改失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 
@@ -914,7 +932,7 @@ const deleteAttributeById = async (attrId) => {
       await loadAttributes()
     }
   } catch (error) {
-    alert('删除失败：' + (error.response?.data?.message || error.message))
+    showAlert('删除失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 
@@ -929,11 +947,11 @@ const deleteAttribute = async () => {
 const addAttributeOption = async () => {
   const selected = selectedAttributes.value
   if (selected.length === 0) {
-    alert('请先选择一个属性')
+    showAlert('请先选择一个属性')
     return
   }
   if (selected.length > 1) {
-    alert('请只选择一个属性来添加选项')
+    showAlert('请只选择一个属性来添加选项')
     return
   }
 
@@ -948,11 +966,11 @@ const addAttributeOption = async () => {
       data: { name: optionName.trim() }
     })
     if (response.success) {
-      alert('选项添加成功')
+      showAlert('选项添加成功', 'success')
       await loadAttributes()
     }
   } catch (error) {
-    alert('添加选项失败：' + (error.response?.data?.message || error.message))
+    showAlert('添加选项失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 
@@ -968,11 +986,11 @@ const addNewAttribute = async () => {
       data: { name: attrName.trim() }
     })
     if (response.success) {
-      alert('属性添加成功')
+      showAlert('属性添加成功', 'success')
       await loadAttributes()
     }
   } catch (error) {
-    alert('添加属性失败：' + (error.response?.data?.message || error.message))
+    showAlert('添加属性失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 
@@ -985,6 +1003,7 @@ onMounted(() => {
 
 // 打开弹窗
 const open = (product = null) => {
+  feedback.value = null
   visible.value = true
   currentTab.value = 0
   resetForm()
@@ -1212,27 +1231,27 @@ const handleDeleteCategory = (warehouseId, categoryId) => {
 const handleSave = async () => {
   // 验证必填项
   if (!formData.storeIds || formData.storeIds.length === 0) {
-    alert('请至少选择一个门店')
+    showAlert('请至少选择一个门店')
     return
   }
 
   if (!formData.warehouse) {
-    alert('请选择仓库')
+    showAlert('请选择仓库')
     return
   }
 
   if (!formData.category) {
-    alert('请选择分类')
+    showAlert('请选择分类')
     return
   }
 
   if (!formData.name) {
-    alert(`请输入${entityLabel.value}名称`)
+    showAlert(`请输入${entityLabel.value}名称`)
     return
   }
 
   if (!formData.unitId) {
-    alert('请选择单位')
+    showAlert('请选择单位')
     return
   }
 
@@ -1272,12 +1291,12 @@ const handleSave = async () => {
     })
 
     if (response.success) {
-      alert(isEdit.value ? '更新成功' : '添加成功')
+      showAlert(isEdit.value ? '更新成功' : '添加成功', 'success')
       emit('save', response.product || response.rawMaterialProduct)
       handleClose()
     }
   } catch (error) {
-    alert('保存失败：' + (error.response?.data?.message || error.message))
+    showAlert('保存失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 
@@ -1285,27 +1304,27 @@ const handleSave = async () => {
 const handleSaveAndContinue = async () => {
   // 验证必填项
   if (!formData.storeIds || formData.storeIds.length === 0) {
-    alert('请至少选择一个门店')
+    showAlert('请至少选择一个门店')
     return
   }
 
   if (!formData.warehouse) {
-    alert('请选择仓库')
+    showAlert('请选择仓库')
     return
   }
 
   if (!formData.category) {
-    alert('请选择分类')
+    showAlert('请选择分类')
     return
   }
 
   if (!formData.name) {
-    alert(`请输入${entityLabel.value}名称`)
+    showAlert(`请输入${entityLabel.value}名称`)
     return
   }
 
   if (!formData.unitId) {
-    alert('请选择单位')
+    showAlert('请选择单位')
     return
   }
 
@@ -1340,12 +1359,12 @@ const handleSaveAndContinue = async () => {
     })
 
     if (response.success) {
-      alert('添加成功')
+      showAlert('添加成功', 'success')
       emit('save', response.product || response.rawMaterialProduct)
       resetForm()
     }
   } catch (error) {
-    alert('保存失败：' + (error.response?.data?.message || error.message))
+    showAlert('保存失败：' + (error.response?.data?.message || error.message), 'error')
   }
 }
 

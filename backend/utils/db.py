@@ -571,6 +571,58 @@ def _ensure_auth_schema(conn):
                     ),
                 )
 
+        product_inventory_permission_mappings = (
+            (
+                "admin.route.products.list",
+                ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["products"],
+            ),
+            (
+                "admin.route.products.materials",
+                ADMIN_ROUTE_BRANCH_PERMISSIONS["inventory"]["materials"],
+            ),
+        )
+        for old_code, inventory_code in product_inventory_permission_mappings:
+            cursor.execute(
+                """
+                INSERT OR IGNORE INTO role_permissions (role_id, permission_id)
+                SELECT old_links.role_id, inventory_permissions.id
+                FROM role_permissions AS old_links
+                INNER JOIN permissions AS old_permissions
+                    ON old_permissions.id = old_links.permission_id
+                CROSS JOIN permissions AS inventory_permissions
+                WHERE old_permissions.code IN (?, 'admin.route.products')
+                  AND inventory_permissions.code = ?
+                """,
+                (old_code, inventory_code),
+            )
+
+        retired_product_permission_codes = (
+            "admin.route.products",
+            "admin.route.products.list",
+            "admin.route.products.materials",
+        )
+        retired_product_placeholders = ",".join(
+            "?" for _ in retired_product_permission_codes
+        )
+        cursor.execute(
+            f"""
+            DELETE FROM role_permissions
+            WHERE permission_id IN (
+                SELECT id
+                FROM permissions
+                WHERE code IN ({retired_product_placeholders})
+            )
+            """,
+            retired_product_permission_codes,
+        )
+        cursor.execute(
+            f"""
+            DELETE FROM permissions
+            WHERE code IN ({retired_product_placeholders})
+            """,
+            retired_product_permission_codes,
+        )
+
         cursor.execute(
             """
             DELETE FROM role_permissions WHERE permission_id IN (
