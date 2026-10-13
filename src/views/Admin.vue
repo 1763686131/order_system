@@ -305,7 +305,7 @@
         <router-view v-slot="{ Component }">
           <component
             :is="Component"
-            :key="route.meta.documentForm || route.meta.financeStatement ? route.fullPath : undefined"
+            :key="route.meta.documentForm || route.meta.financeStatement ? route.fullPath : ['admin-inventory', 'admin-inventory-materials'].includes(route.name) ? route.name : undefined"
             ref="activeContentRef"
             @close="handleDocumentClose"
             @create="handleStockRecordCreate"

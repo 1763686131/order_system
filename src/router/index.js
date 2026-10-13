@@ -143,12 +143,14 @@ const routes = [
         path: 'inventory',
         name: 'admin-inventory',
         component: () => import('@/views/admin/products/InventoryList.vue'),
+        props: { mode: 'finished-product' },
         meta: { requiresAuth: true, productType: 'finished-product' }
       },
       {
         path: 'inventory/materials',
         name: 'admin-inventory-materials',
-        component: () => import('@/views/admin/products/MaterialInventory.vue'),
+        component: () => import('@/views/admin/products/InventoryList.vue'),
+        props: { mode: 'raw-material' },
         meta: { requiresAuth: true, productType: 'raw-material' }
       },
       {

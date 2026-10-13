@@ -245,6 +245,7 @@ order_system/
 │  │  │  ├─ ChatWindow.vue           # 可拖动的一对一留言和附件窗口
 │  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制模板、变量、绑定和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
+│  │  │  ├─ InventoryMovementModal.vue # 原材料库存流水详情弹窗
 │  │  │  ├─ PartyList.vue             # 客户/供应商共用列表、详情、编辑和财务展示
 │  │  │  ├─ finance/                 # 供应商财务内嵌业务面板
 │  │  │  │  ├─ SupplierRefundPanel.vue # 付款历史内的退款入账页签
@@ -274,8 +275,7 @@ order_system/
 │  │  └─ admin/
 │  │     ├─ Dashboard.vue           # 后台首页
 │  │     ├─ products/               # 商品档案、库存和出入库页面
-│  │     │  ├─ InventoryList.vue     # 库存 → 成品库存，含商品档案新增、修改、复制和删除
-│  │     │  ├─ MaterialInventory.vue # 库存 → 原材料库存，含档案维护、库存金额和流水详情
+│  │     │  ├─ InventoryList.vue     # 成品/原材料库存共用列表，按 mode 切换档案、字段和库存数据
 │  │     │  ├─ MaterialOutboundList.vue # 库存 → 原材料出库，录入、审核与触屏端配置
 │  │     │  └─ StockRecordList.vue   # 库存 → 入库记录/出库记录，按 mode 切换
 │  │     ├─ sales/                   # 销售管理
@@ -357,16 +357,19 @@ order_system/
 
 | 后台菜单 | 路由 | 页面组件 | 路由传入的模式 |
 | --- | --- | --- | --- |
-| 库存 → 成品库存 | `/admin/inventory` | `admin/products/InventoryList.vue` | — |
-| 库存 → 原材料库存 | `/admin/inventory/materials` | `admin/products/MaterialInventory.vue` | — |
+| 库存 → 成品库存 | `/admin/inventory` | `admin/products/InventoryList.vue` | `mode="finished-product"` |
+| 库存 → 原材料库存 | `/admin/inventory/materials` | `admin/products/InventoryList.vue` | `mode="raw-material"` |
 | 库存 → 原材料出库 | `/admin/inventory/material-outbounds` | `admin/products/MaterialOutboundList.vue` | — |
 | 库存 → 入库记录 | `/admin/stock/in` | `admin/products/StockRecordList.vue` | `mode="INBOUND"` |
 | 库存 → 出库记录 | `/admin/stock/out` | `admin/products/StockRecordList.vue` | `mode="OUTBOUND"` |
 | 库存 → 仓库管理 | `/admin/inventory/warehouse` | `admin/inventory/WarehouseManage.vue` | — |
 
-成品档案与库存统一由 `InventoryList.vue` 维护，原材料档案与库存统一由 `MaterialInventory.vue` 维护。两者共用
-`src/components/admin/ProductFormModal.vue` 档案弹窗，分别传入 `mode="finished-product"`
-和 `mode="raw-material"`，对应成品与原材料接口。两页支持档案新增、修改、复制、删除及启停状态筛选；
+成品和原材料档案与库存统一由 `InventoryList.vue` 维护，两个菜单和路由分别传入
+`mode="finished-product"` 和 `mode="raw-material"`，档案弹窗 `ProductFormModal.vue` 使用相同模式。
+成品模式展示商品属性、零售价格和库存状态统计；原材料模式展示库存金额、库存总量，
+使用 `InventoryMovementModal.vue` 展示流水详情。两种模式共用搜索、筛选、排序、分页、导出、
+单条和批量删除、档案新增、修改、复制及启停状态筛选。切换菜单会重置筛选、选择和弹窗，
+较早返回的接口响应不会覆盖当前模式；`MaterialInventory.vue` 已移除。
 “新增商品”和“新增原材料”只创建档案，不产生入库单或库存变动。两页不再提供独立入库按钮；
 原材料采购入库和原材料出库审核生成成品入库的流程保持不变。
 
@@ -534,7 +537,7 @@ import {
 
 原材料库存相关页面以 `/api/stock-balances?type=raw-material` 为库存数据源：
 
-- `MaterialInventory.vue` 统一维护原材料档案，按物料、门店和仓库汇总库存数量，并展示已审核出入库流水。
+- `InventoryList.vue` 的 `raw-material` 模式统一维护原材料档案，按物料、门店和仓库汇总库存数量，并展示已审核出入库流水。
 - 库存金额由当前库存数量和已审核入库流水的平均单位成本计算。
 - `averageUnitCost` 为平均单位成本。
 - `inventoryAmount` 为库存金额。

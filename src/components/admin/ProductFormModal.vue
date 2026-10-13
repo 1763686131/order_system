@@ -527,9 +527,9 @@ const attributesExpanded = ref(false) // 属性区域是否展开
 const attributesList = ref([]) // 属性列表（从数据库加载）
 
 const isRawMaterial = computed(() => (
-  props.mode === 'raw-material'
-  || route.name === 'admin-materials'
-  || route.meta?.productType === 'raw-material'
+  props.mode
+    ? props.mode === 'raw-material'
+    : route.name === 'admin-materials' || route.meta?.productType === 'raw-material'
 ))
 
 const entityLabel = computed(() => isRawMaterial.value ? '原材料' : '商品')

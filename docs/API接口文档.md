@@ -1541,9 +1541,13 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 |------------|-----------|------|
 | `InventoryList.vue` | `/admin/inventory`、`finished-product`；旧 `/admin/products` 跳转至此 | `/api/products/inventory` 查询库存与档案；`/api/products` 新增、修改和删除档案 |
 | `ProductFormModal.vue` | 根据路由或 `mode` 自动切换 | 上述对应接口 |
-| `MaterialInventory.vue` | `/admin/inventory/materials`、`raw-material`；旧 `/admin/materials` 跳转至此 | `/api/raw-material-products` 维护档案；`/api/stock-balances`、`/api/stock-movements` 查询库存与流水 |
+| `InventoryList.vue` | `/admin/inventory/materials`、`raw-material`；旧 `/admin/materials` 跳转至此 | `/api/raw-material-products` 维护档案；`/api/stock-balances`、`/api/stock-movements` 查询库存与流水 |
+| `InventoryMovementModal.vue` | 原材料模式的流水详情 | 由库存列表通过 `/api/stock-movements` 读取并传入数据 |
 
-成品和原材料库存页复用 `ProductFormModal.vue` 维护各自档案，不再提供独立入库按钮。
+成品和原材料库存路由共用 `InventoryList.vue`，分别传入 `mode="finished-product"` 和 `mode="raw-material"`；
+共用 `ProductFormModal.vue` 维护各自档案，不再提供独立入库按钮。成品模式保留商品属性及零售价格，
+原材料模式按门店、仓库汇总真实余额和库存金额，并展示已审核出入库流水。
+两个模式共用筛选、排序、分页、导出及单条/批量档案操作，切换模式时重置界面状态并隔离异步请求。
 新增商品或原材料只保存档案，不增加库存；采购入库及原材料出库审核生成成品入库的接口保持不变。
 成品库存页兼容原商品列表和成品库存任一访问权限，档案写操作仍要求 `admin.route.products.list`。
 原材料库存页兼容 `admin.route.products.materials` 和 `admin.route.inventory.materials` 任一访问权限，
