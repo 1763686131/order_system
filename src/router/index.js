@@ -124,8 +124,8 @@ const routes = [
       {
         path: 'products',
         name: 'admin-products',
-        component: () => import('@/views/admin/products/ProductList.vue'),
-        meta: { requiresAuth: true, productType: 'finished-product' }
+        redirect: to => ({ name: 'admin-inventory', query: to.query, hash: to.hash }),
+        meta: { requiresAuth: true }
       },
       {
         path: 'materials',
@@ -143,7 +143,7 @@ const routes = [
         path: 'inventory',
         name: 'admin-inventory',
         component: () => import('@/views/admin/products/InventoryList.vue'),
-        meta: { requiresAuth: true }
+        meta: { requiresAuth: true, productType: 'finished-product' }
       },
       {
         path: 'inventory/materials',
@@ -518,10 +518,12 @@ router.beforeEach(async (to) => {
     to.path === '/admin/finance/payables' && to.query.tab === 'reconciliation'
     && userStore.hasPerm('admin.route.finance.supplier_reconciliations')
   )
+  const canAccessMergedInventory = to.name === 'admin-inventory'
+    && userStore.hasPerm('admin.route.products.list')
   if (
     adminPermission &&
     userStore.canAccessAdmin &&
-    !userStore.hasPerm(adminPermission) && !canAccessNestedFinance
+    !userStore.hasPerm(adminPermission) && !canAccessNestedFinance && !canAccessMergedInventory
   ) {
     return getDefaultAdminPath(userStore)
   }

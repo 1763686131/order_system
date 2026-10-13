@@ -13,7 +13,7 @@
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
 | 权限/API 文档版本 | `5.14` |
-| 文档更新 | `2026-10-12` |
+| 文档更新 | `2026-10-13` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、XLSX、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -139,6 +139,9 @@ Windows 本地环境可运行：
 
 ## 项目结构
 
+以下列出主要源码和部署目录，按实际文件位置组织。后台菜单在 `src/views/Admin.vue` 中定义，
+页面组件由 `src/router/index.js` 配置并通过 `<router-view>` 加载；菜单分组与源码目录名称不必相同。
+
 ```text
 order_system/
 ├─ backend/
@@ -192,6 +195,7 @@ order_system/
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
 │  │  ├─ supplier_ledger.py          # 采购入库应付、供应商流水和来源汇总
 │  │  ├─ supplier_settlement.py      # 付款、余额核销、银行及发票共同校验
+│  │  ├─ purchase_pricing.py         # 采购含税单价、税额和金额计算
 │  │  ├─ purchase_invoice_orders.py  # 订单提前开票与分批入库应付自动匹配
 │  │  ├─ supplier_periods.py         # 正式对账期间锁定与写入校验
 │  │  └─ db_helper.py                # 历史数据兼容读写
@@ -245,8 +249,8 @@ order_system/
 │  │  │  ├─ finance/                 # 供应商财务内嵌业务面板
 │  │  │  │  ├─ SupplierRefundPanel.vue # 付款历史内的退款入账页签
 │  │  │  │  └─ SupplierReconciliationPanel.vue # 应付欠款/对账页面内的正式对账和锁期
-│  │  │  ├─ purchase/                # 供应商归属、付款/发票与核销复用组件
-│  │  │  │  ├─ SupplierAssignmentDialog.vue    # 独立入库逐行补录供应商并确认应付
+│  │  │  ├─ purchase/                # 采购发票、付款与核销复用组件
+│  │  │  │  ├─ PurchaseInvoicePanel.vue       # 采购详情内的发票记录、登记和撤销
 │  │  │  │  ├─ PayableAllocationTable.vue      # 付款核销和采购发票分配明细表
 │  │  │  │  ├─ SupplierAttachments.vue         # 供应商付款/发票附件上传和移除
 │  │  │  │  ├─ SupplierBalanceDialog.vue       # 供应商预付款/贷项核销及历史记录
@@ -260,17 +264,21 @@ order_system/
 │  │  └─ front/
 │  │     └─ UploadMaterialModal.vue  # 前台原材料录入弹窗
 │  ├─ views/
-│  │  ├─ Admin.vue                   # 后台布局、菜单、入库弹窗和带权限的复制模板入口
+│  │  ├─ Admin.vue                   # 后台布局、菜单、router-view 页面容器和公共弹窗
+│  │  ├─ LoginView.vue               # 登录与首次部署超级管理员初始化
 │  │  ├─ MainView.vue                # 前台业务容器
-│  │  ├─ front/                      # 订单、已出库和原材料流水页面
+│  │  ├─ front/                      # 前台触屏页面
+│  │  │  ├─ OrderList.vue            # 前台订单列表
+│  │  │  ├─ ShippedOrderList.vue     # 前台已出库订单列表
+│  │  │  └─ MaterialDisplay.vue      # 前台原材料流水与辅助出库
 │  │  └─ admin/
-│  │     ├─ products/
-│  │     │  ├─ ProductList.vue       # 成品档案
-│  │     │  ├─ MaterialProductList.vue 
-│  │     │  ├─ InventoryList.vue     # 成品库存
-│  │     │  ├─ MaterialInventory.vue # 原材料库存及库存金额
-│  │     │  ├─ MaterialOutboundList.vue # 原材料出库录入、历史审核与触屏端配置
-│  │     │  └─ StockRecordList.vue   # 入库/出库记录通用组件
+│  │     ├─ Dashboard.vue           # 后台首页
+│  │     ├─ products/               # 商品档案、库存和出入库页面
+│  │     │  ├─ MaterialProductList.vue # 商品 → 原材料列表，原材料档案维护
+│  │     │  ├─ InventoryList.vue     # 库存 → 成品库存，含商品档案新增、修改、复制和删除
+│  │     │  ├─ MaterialInventory.vue # 库存 → 原材料库存，含库存金额
+│  │     │  ├─ MaterialOutboundList.vue # 库存 → 原材料出库，录入、审核与触屏端配置
+│  │     │  └─ StockRecordList.vue   # 库存 → 入库记录/出库记录，按 mode 切换
 │  │     ├─ sales/                   # 销售管理
 │  │     │  ├─ UnifiedOrderList.vue  # 销售订单和物流订单列表
 │  │     │  ├─ ReturnOrderList.vue   # 退货订单列表
@@ -290,15 +298,16 @@ order_system/
 │  │     │  └─ LogisticsTruckReconciliation.vue # 物流运费对账
 │  │     ├─ system/                  # 角色组、门店、打印模板、操作日志和系统配置
 │  │     │  ├─ RoleGroupManage.vue   # 权限、成员、会话策略和数据范围
+│  │     │  ├─ StoreManage.vue       # 门店档案管理
 │  │     │  ├─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
 │  │     │  ├─ PrintTemplate.vue     # 打印模板管理
 │  │     │  └─ OperationLogs.vue     # 操作日志筛选、分页、详情和清空
-│  │     └─ hr/                       #人事行政
+│  │     └─ hr/                      # 人事行政
 │  │        ├─ AccountManage.vue     # 员工档案、可选登录账号和头像上传
 │  │        ├─ DepartmentManage.vue  # 部门配置、员工归属和职位维护
 │  │        └─ Reports.vue           # 人事检测报告
 │  ├─ router/index.js                # 前端路由和登录守卫
-│  ├─ utils/                          
+│  ├─ utils/
 │  │  ├─ accessControl.js            # 权限、角色并集和数据范围过滤
 │  │  ├─ adminAccess.js              # 后台菜单分支和路由权限映射
 │  │  ├─ adminRealtime.js            # 后台组件共享的 EventSource 客户端
@@ -309,6 +318,7 @@ order_system/
 │  │  ├─ chineseMoney.js             # 金额中文大写
 │  │  ├─ supplierFinance.js          # 供应商账务标签、金额和幂等键工具
 │  │  └─ ...                         # Excel、日期、单位和通用工具
+│  ├─ App.vue                        # 应用根组件
 │  ├─ main.js                        # 前端入口，全局注册 v-resizable-columns 并引入样式
 │  └─ assets/styles/                 # 本地全局样式
 │     ├─ resizable-columns.css       # 表格列宽调整手柄、拖动状态和打印隐藏样式
@@ -322,22 +332,50 @@ order_system/
 │  ├─ 打印机项目实现.md              # 打印模板、预览、浏览器打印和 C-Lodop 实现
 │  ├─ 组件样式规范.md                 # 后台页面视觉和组件复用规范
 │  ├─ 录入表单结构规范.md             # 公共单据组件、业务适配器、字段和提交规范
+│  ├─ 采购流程.md                    # 采购申请、审核、入库和结算流程
 │  ├─ 表格列宽拖动调整.md             # 列宽指令复用、配置参数、本地保存和交互限制
 │  └─ 权限角色分组优化方案.md        # 账号、员工、角色组和数据范围设计
 ├─ uploads/                          # 回单、头像、收款附件、报告和银行卡图片等上传文件
 │  ├─ employee-avatars/              # 员工头像，内部继续按 YYYY-MM 分目录
-│  ├─ chat-attachments/              # 私有聊天附件，必须通过鉴权接口下载
+│  ├─ chat-attachments/              # 私有聊天附件，上传时创建，通过鉴权接口下载
 │  └─ bank-cards/                    # 银行卡相关文件（由系统配置指定路径）
 │     ├─ backgrounds/                # 银行卡背景图
 │     └─ icons/                      # 银行 LOGO 图标
 ├─ frontend/                         # Flask/Docker 当前使用的生产静态文件
 ├─ dist/                             # Vite 默认构建输出
 ├─ frontend old/                     # 旧版前端，仅保留参考
+├─ docker-compose.yml                # Docker Compose 部署与宿主机挂载配置
+├─ index.html                        # Vite 页面入口
 ├─ vite.config.js
 ├─ package.json
 ├─ 版本更新日志.md
 └─ README.md
 ```
+
+### 商品与库存菜单对应关系
+
+以下页面均由 `Admin.vue` 的 `<router-view>` 显示，组件路径相对 `src/views/`：
+
+| 后台菜单 | 路由 | 页面组件 | 路由传入的模式 |
+| --- | --- | --- | --- |
+| 商品 → 原材料列表 | `/admin/materials` | `admin/products/MaterialProductList.vue` | — |
+| 库存 → 成品库存 | `/admin/inventory` | `admin/products/InventoryList.vue` | — |
+| 库存 → 原材料库存 | `/admin/inventory/materials` | `admin/products/MaterialInventory.vue` | — |
+| 库存 → 原材料出库 | `/admin/inventory/material-outbounds` | `admin/products/MaterialOutboundList.vue` | — |
+| 库存 → 入库记录 | `/admin/stock/in` | `admin/products/StockRecordList.vue` | `mode="INBOUND"` |
+| 库存 → 出库记录 | `/admin/stock/out` | `admin/products/StockRecordList.vue` | `mode="OUTBOUND"` |
+| 库存 → 仓库管理 | `/admin/inventory/warehouse` | `admin/inventory/WarehouseManage.vue` | — |
+
+成品档案与库存统一由 `InventoryList.vue` 维护，原材料档案仍由 `MaterialProductList.vue` 维护。两者共用
+`src/components/admin/ProductFormModal.vue` 档案弹窗，分别传入 `mode="finished-product"`
+和 `mode="raw-material"`，对应成品与原材料接口。“成品库存”的“新增商品”只创建商品档案，不产生入库单或库存变动，
+该页不再提供独立成品入库入口；采购入库和原材料出库审核生成成品入库的流程保持不变。
+
+旧 `/admin/products` 地址会跳转到 `/admin/inventory`，`ProductList.vue` 已移除。
+拥有 `admin.route.inventory.products` 或旧 `admin.route.products.list` 任一权限均可访问合并页面，
+商品新增、修改、复制和删除仍需 `admin.route.products.list`，仅有库存权限的账号保持只读。
+`MaterialOutboundList.vue` 负责原材料出库单，
+新增和修改明细使用 `src/components/admin/MaterialOutboundAuditModal.vue`。
 
 ## 客户与供应商管理组件
 
@@ -514,7 +552,7 @@ import {
 
 | 路由 | 页面 | 主要数据来源 |
 | --- | --- | --- |
-| `/admin/products` | 成品档案 | `/api/products` |
+| `/admin/products` | 兼容旧商品入口，跳转 `/admin/inventory` | — |
 | `/admin/materials` | 原材料档案 | `/api/raw-material-products`、`/api/stock-balances` |
 | `/admin/purchase/orders` | 采购订单（`PurchaseList.vue`，`mode: orders`） | `/api/purchase-orders` |
 | `/admin/purchase/orders/create` | 新增采购申请（公共表单） | `/api/purchase-orders`、门店/供应商/原材料/单位接口 |
@@ -532,7 +570,7 @@ import {
 | `/admin/purchase/returns/create` | 新增采购退货（公共表单） | `/api/purchase-returns/options`、`/api/suppliers/:id/purchase-return-sources`、`/api/purchase-returns` |
 | `/admin/purchase/returns/edit/:id` | 修改采购退货草稿（公共表单） | `/api/purchase-returns/:id`、可退入库批次接口 |
 | `/admin/purchase/returns/:id` | 查看采购退货、审核/反审核（公共表单） | `/api/purchase-returns/:id`、`/audit`、`/reverse-audit` |
-| `/admin/inventory` | 成品库存 | `/api/products/inventory` |
+| `/admin/inventory` | 成品库存与商品档案管理 | `/api/products/inventory`、`/api/products` |
 | `/admin/inventory/materials` | 原材料库存 | `/api/raw-material-products`、`/api/stock-balances`、`/api/stock-movements` |
 | `/admin/inventory/material-outbounds` | 原材料出库录入、修改、审核与触屏配置 | `/api/material-outbounds`、`/api/material-outbounds/admin`、`/api/material-outbound-settings` |
 | `/admin/stock/in` | 入库记录 | `/api/stock-inbounds` |

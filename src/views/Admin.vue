@@ -672,11 +672,6 @@ const allMenuItems = [
     icon: icons.package,
     children: [
       {
-        label: '商品列表',
-        path: '/admin/products',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST
-      },
-      {
         label: '原材料列表',
         path: '/admin/materials',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.MATERIALS
@@ -690,7 +685,9 @@ const allMenuItems = [
       {
         label: '成品库存',
         path: '/admin/inventory',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS,
+        alternativePermission: ADMIN_ROUTE_BRANCH_PERMISSIONS.PRODUCTS.LIST,
+        alternativePath: '/admin/inventory'
       },
       {
         label: '原材料库存',

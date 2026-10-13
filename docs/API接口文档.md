@@ -1539,10 +1539,14 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 
 | 页面或组件 | 路由/模式 | 接口 |
 |------------|-----------|------|
-| `ProductList.vue` | `/admin/products`、`finished-product` | `/api/products` |
+| `InventoryList.vue` | `/admin/inventory`、`finished-product`；旧 `/admin/products` 跳转至此 | `/api/products/inventory` 查询库存与档案；`/api/products` 新增、修改和删除档案 |
 | `MaterialProductList.vue` | `/admin/materials`、`raw-material` | `/api/raw-material-products` |
 | `ProductFormModal.vue` | 根据路由或 `mode` 自动切换 | 上述对应接口 |
 | `MaterialInventory.vue` | `/admin/inventory/materials` | 读取 `/api/raw-material-products` |
+
+成品库存页复用 `ProductFormModal.vue` 维护商品档案，不再提供独立成品入库入口。
+新增商品只保存档案，不增加库存；采购入库及原材料出库审核生成成品入库的接口保持不变。
+合并页面兼容原商品列表和成品库存任一访问权限，档案写操作仍要求 `admin.route.products.list`。
 
 ---
 
