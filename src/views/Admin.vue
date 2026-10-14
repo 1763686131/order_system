@@ -75,9 +75,13 @@
     ></button>
 
     <!-- 右侧主体区域 -->
-    <div class="main-wrapper">
+    <div class="main-wrapper" @wheel.capture.passive="handleStickyPanelWheel">
       <!-- 顶部栏 -->
-      <header class="top-header" :class="{ 'is-document-docking': Boolean(dockingDocument) }">
+      <header
+        ref="topHeaderRef"
+        class="top-header"
+        :class="{ 'is-document-docking': Boolean(dockingDocument) }"
+      >
         <div class="header-left">
           <button
             class="sidebar-toggle-btn"
@@ -298,10 +302,27 @@
             </div>
           </div>
         </div>
+        <button
+          v-if="stickyPanelVisible"
+          class="sticky-panel-toggle"
+          type="button"
+          aria-expanded="false"
+          :aria-controls="stickyPanelId"
+          :aria-label="stickyPanelButtonLabel"
+          :title="stickyPanelButtonLabel"
+          @click="expandStickyPanel"
+        >
+          <ChevronDown :size="16" aria-hidden="true" />
+        </button>
       </header>
 
       <!-- 主内容区 -->
-      <main class="main-content" :class="{ 'purchase-list-content': route.meta.documentForm || ['/admin/purchase/suppliers', '/admin/purchase/orders', '/admin/purchase/inbound'].includes(route.path) }">
+      <main
+        ref="mainContentRef"
+        class="main-content"
+        :class="{ 'purchase-list-content': route.meta.documentForm || ['/admin/purchase/suppliers', '/admin/purchase/orders', '/admin/purchase/inbound'].includes(route.path) }"
+        @scroll.passive="handleStickyPanelScroll"
+      >
         <router-view v-slot="{ Component }">
           <component
             :is="Component"
@@ -340,12 +361,13 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import { FilePenLine, FilePlus2, PackageCheck, RotateCcw } from '@lucide/vue'
+import { ChevronDown, FilePenLine, FilePlus2, PackageCheck, RotateCcw } from '@lucide/vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { useDocumentDraftStore } from '@/stores/documentDraft'
 import { animateDocumentDock, cancelDocumentDockAnimations, waitForDocumentReady } from '@/utils/documentDockAnimation'
+import { provideAdminStickyPanel } from '@/composables/useAdminStickyPanel'
 import request from '@/api/request'
 import {
   ADMIN_ROUTE_BRANCH_PERMISSIONS,
@@ -380,6 +402,16 @@ const receivedDockType = ref('')
 const shippedActionModal = ref(null)
 const stockRecordModal = ref(null)
 const activeContentRef = ref(null)
+const mainContentRef = ref(null)
+const topHeaderRef = ref(null)
+const {
+  visible: stickyPanelVisible,
+  panelId: stickyPanelId,
+  buttonLabel: stickyPanelButtonLabel,
+  handleScroll: handleStickyPanelScroll,
+  handleWheel: handleStickyPanelWheel,
+  expand: expandStickyPanel
+} = provideAdminStickyPanel(mainContentRef, topHeaderRef)
 const avatarLoadFailed = ref(false)
 const accountMenuRef = ref(null)
 const accountMenuOpen = ref(false)
@@ -1302,6 +1334,37 @@ const logout = async () => {
 
 .top-header.is-document-docking {
   z-index: 3100;
+}
+
+.sticky-panel-toggle {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  display: inline-flex;
+  width: 42px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--text-secondary);
+  background: var(--panel-bg);
+  border: 1px solid var(--border-strong);
+  border-top: 0;
+  border-radius: 0 0 7px 7px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
+  cursor: pointer;
+  transform: translateX(-50%);
+}
+
+.sticky-panel-toggle:hover {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.sticky-panel-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .header-left {

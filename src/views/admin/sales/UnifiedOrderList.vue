@@ -63,15 +63,24 @@
     </Teleport>
 
     <!-- 筛选工具栏 - 参考 StockRecordList 风格 -->
-    <div class="search-panel-shell">
+    <div
+      ref="searchPanelShell"
+      class="search-panel-shell"
+      :style="searchPanelPlaceholderStyle"
+    >
+      <div ref="searchPanelContent" class="search-panel-content" :style="searchPanelContentStyle">
       <section
         id="order-search-panel"
         class="search-panel"
         aria-label="订单筛选"
         :class="{ 'is-mobile-collapsed': !mobileSearchExpanded }"
       >
-      <form class="search-grid" @submit.prevent="handleFilter">
-        <label class="field-group">
+      <form
+        class="search-grid"
+        :class="{ 'is-logistics': mode === 'logistics' }"
+        @submit.prevent="handleFilter"
+      >
+        <label class="field-group keyword-field">
           <span>关键词搜索</span>
           <span class="input-with-icon">
             <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -148,10 +157,71 @@
             查询
           </button>
         </div>
+        <div class="toolbar-actions">
+          <button
+            class="icon-button refresh-button"
+            type="button"
+            title="刷新列表"
+            aria-label="刷新列表"
+            :disabled="loading"
+            @click="fetchOrdersData"
+          >
+            <svg :class="{ spinning: loading }" aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M20 11a8.1 8.1 0 0 0-14.9-4L3 10"></path>
+              <path d="M3 4v6h6"></path>
+              <path d="M4 13a8.1 8.1 0 0 0 14.9 4L21 14"></path>
+              <path d="M15 14h6v6"></path>
+            </svg>
+          </button>
+          <button
+            v-if="mode !== 'finance' || canExportSalesOrders"
+            class="button button-export"
+            type="button"
+            title="导出Excel"
+            @click="handleExport"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            导出 Excel
+          </button>
+          <button
+            v-if="mode === 'finance' && canCreateSalesOrders"
+            class="button button-primary create-button"
+            type="button"
+            @click="handleAdd"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M12 5v14"></path>
+              <path d="M5 12h14"></path>
+            </svg>
+            {{ addButtonText }}
+          </button>
+          <button
+            v-if="mode === 'finance' && canDeleteSalesOrders"
+            class="button button-delete"
+            :class="{ 'has-selection': selectedOrders.length > 0 }"
+            type="button"
+            :disabled="selectedOrders.length === 0"
+            @click="handleBatchDelete"
+          >
+            <svg aria-hidden="true" viewBox="0 0 24 24">
+              <path d="M3 6h18"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M10 11v6"></path>
+              <path d="M14 11v6"></path>
+            </svg>
+            批量删除
+          </button>
+        </div>
         </form>
       </section>
 
       <button
+        v-if="!searchPanelPinned"
         class="mobile-search-toggle"
         :class="{ expanded: mobileSearchExpanded }"
         type="button"
@@ -166,6 +236,7 @@
           <path v-else d="m6 15 6-6 6 6"></path>
         </svg>
       </button>
+      </div>
     </div>
 
     <!-- 订单记录面板 -->
@@ -241,66 +312,6 @@
           </div>
         </div>
 
-        <div class="toolbar-actions">
-          <button
-            class="icon-button refresh-button"
-            type="button"
-            title="刷新列表"
-            :disabled="loading"
-            @click="fetchOrdersData"
-          >
-            <svg :class="{ spinning: loading }" aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M20 11a8.1 8.1 0 0 0-14.9-4L3 10"></path>
-              <path d="M3 4v6h6"></path>
-              <path d="M4 13a8.1 8.1 0 0 0 14.9 4L21 14"></path>
-              <path d="M15 14h6v6"></path>
-            </svg>
-          </button>
-          <button
-            v-if="mode !== 'finance' || canExportSalesOrders"
-            class="button button-export"
-            type="button"
-            title="导出Excel"
-            @click="handleExport"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-              <polyline points="7 10 12 15 17 10"></polyline>
-              <line x1="12" y1="15" x2="12" y2="3"></line>
-            </svg>
-            导出 Excel
-          </button>
-          <button
-            v-if="mode === 'finance' && canCreateSalesOrders"
-            class="button button-primary create-button"
-            type="button"
-            @click="handleAdd"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 5v14"></path>
-              <path d="M5 12h14"></path>
-            </svg>
-            {{ addButtonText }}
-          </button>
-          <!-- 批量删除按钮 -->
-          <button
-            v-if="mode === 'finance' && canDeleteSalesOrders"
-            class="button button-delete"
-            :class="{ 'has-selection': selectedOrders.length > 0 }"
-            type="button"
-            :disabled="selectedOrders.length === 0"
-            @click="handleBatchDelete"
-          >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M3 6h18"></path>
-              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-              <path d="M10 11v6"></path>
-              <path d="M14 11v6"></path>
-            </svg>
-            批量删除
-          </button>
-        </div>
       </header>
 
       <div class="table-scroll">
@@ -1482,6 +1493,7 @@ import {
 } from '@/utils/logisticsCopy'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
+import { useAdminStickyPanel } from '@/composables/useAdminStickyPanel'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 
@@ -1760,9 +1772,32 @@ const toggleShippingMethod = (method) => {
   }
 }
 
-// 计算选中的发货方式显示文本
 const mobileSearchExpanded = ref(false)
+const searchPanelShell = ref(null)
+const searchPanelContent = ref(null)
+let mobileSearchExpandedBeforePin = false
+const {
+  pinned: searchPanelPinned,
+  placeholderStyle: searchPanelPlaceholderStyle,
+  contentStyle: searchPanelContentStyle
+} = useAdminStickyPanel(searchPanelShell, searchPanelContent, {
+  id: 'order-search-panel',
+  label: '订单筛选',
+  onPin: () => {
+    mobileSearchExpandedBeforePin = mobileSearchExpanded.value
+  },
+  onExpand: () => {
+    mobileSearchExpanded.value = true
+  },
+  onCollapse: () => {
+    shippingDropdownOpen.value = false
+  },
+  onRestore: () => {
+    mobileSearchExpanded.value = mobileSearchExpandedBeforePin
+  }
+})
 
+// 计算选中的发货方式显示文本
 const selectedShippingMethodText = computed(() => {
   if (filters.value.shippingMethods.length === 0) {
     return '全部发货方式'
@@ -3508,6 +3543,12 @@ svg {
   position: relative;
 }
 
+.search-panel-content {
+  position: relative;
+  background: var(--page-bg);
+  container-type: inline-size;
+}
+
 .search-panel {
   padding: 18px 20px;
   background: var(--panel-bg);
@@ -3521,10 +3562,28 @@ svg {
 }
 
 .search-grid {
-  display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(280px, 1.45fr) minmax(160px, 1fr) auto;
-  gap: 14px;
-  align-items: end;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.keyword-field {
+  flex: 0 1 260px;
+  min-width: 160px;
+}
+
+.search-grid.is-logistics .keyword-field {
+  flex-basis: 240px;
+}
+
+.date-field {
+  flex: 1 1 260px;
+  min-width: 260px;
+}
+
+.shipping-method-filter {
+  flex: 0 1 180px;
+  min-width: 140px;
 }
 
 .field-group {
@@ -3679,6 +3738,9 @@ svg {
 
 .search-actions {
   display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px;
 }
@@ -3886,6 +3948,8 @@ svg {
 
 .toolbar-actions {
   display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
   align-items: center;
   gap: 8px;
 }
@@ -3902,6 +3966,12 @@ svg {
   border: 1px solid var(--border-strong);
   border-radius: 5px;
   cursor: pointer;
+}
+
+.search-grid .icon-button {
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
 }
 
 .icon-button:hover:not(:disabled) {
@@ -5709,33 +5779,43 @@ svg {
   color: #1890ff;
 }
 
-@media (max-width: 1280px) {
-  .search-grid {
+@container (max-width: 1100px) {
+  .search-grid,
+  .search-grid.is-logistics {
+    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .toolbar-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .search-grid:not(.is-logistics) .search-actions {
+    grid-column: 1;
+  }
+
+  .search-grid.is-logistics .toolbar-actions {
+    grid-column: 1 / -1;
   }
 }
 
 @media (max-width: 780px) {
   .search-panel-shell {
     margin-bottom: 14px;
+  }
+
+  .search-panel-content {
     padding-bottom: 10px;
   }
 
   .search-panel {
-    max-height: 520px;
-    overflow: hidden;
-    transition: max-height 0.2s ease, padding 0.2s ease, border-color 0.2s ease,
-      box-shadow 0.2s ease, opacity 0.2s ease;
+    padding: 12px;
   }
 
-  .search-panel.is-mobile-collapsed {
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-    border-color: transparent;
-    box-shadow: none;
-    opacity: 0;
-    pointer-events: none;
+  .search-panel.is-mobile-collapsed .field-group,
+  .search-panel.is-mobile-collapsed .search-actions {
+    display: none;
   }
 
   .mobile-search-toggle {
@@ -5851,8 +5931,26 @@ svg {
     width: 100%;
   }
 
-  .search-grid {
+  .search-grid,
+  .search-grid.is-logistics {
     grid-template-columns: 1fr;
+  }
+
+  .date-field {
+    min-width: 0;
+  }
+
+  .date-range {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  }
+
+  .date-range input {
+    min-width: 0;
+    padding: 0 6px;
+  }
+
+  .search-actions .button {
+    flex: 1 1 auto;
   }
 
   .detail-modal-layer {
