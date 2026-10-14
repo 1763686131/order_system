@@ -1494,7 +1494,7 @@ import {
 } from '@/utils/logisticsCopy'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
-import { exportToExcel } from '@/utils/excelExport'
+import { DATA_STYLE, TITLE_STYLE, exportToExcel } from '@/utils/excelExport'
 import { useAdminStickyPanel } from '@/composables/useAdminStickyPanel'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
@@ -3269,6 +3269,7 @@ const handleExport = () => {
     const getReceived = order =>
       Number((toNumber(order.current_payment) + toNumber(order.balance_applied)).toFixed(2))
     const columns = [
+      { title: '序号', width: 8, value: (order, item, orderIndex) => orderIndex + 1 },
       { title: '订单编号', width: 22, value: order => String(order.order_number || order.id) },
       { title: '日期', width: 12, value: formatDate },
       { title: '客户', width: 20, value: order => order.order_client || '' },
@@ -3329,15 +3330,20 @@ const handleExport = () => {
     }
     columns.push({ title: '备注', width: 40, value: order => order.remark || '' })
 
-    const data = [columns.map(column => column.title)]
-    const merges = []
-    records.forEach(order => {
+    const dates = records.map(formatDate).filter(date => date !== '-').sort()
+    const startDate = filters.value.startDate || dates[0] || ''
+    const endDate = filters.value.endDate || dates[dates.length - 1] || ''
+    const periodText = startDate && endDate ? `${startDate}至${endDate}` : startDate || endDate
+    const title = `${props.mode === 'logistics' ? '物流单' : '销售单'}${periodText}`
+    const data = [[title], columns.map(column => column.title)]
+    const merges = [{ s: { r: 0, c: 0 }, e: { r: 0, c: columns.length - 1 } }]
+    records.forEach((order, orderIndex) => {
       const goods = Array.isArray(order.order_goods) ? order.order_goods.filter(Boolean) : []
       const items = goods.length > 0 ? goods : [null]
       const startRow = data.length
       items.forEach((item, index) => {
         data.push(columns.map(column =>
-          column.itemColumn || index === 0 ? column.value(order, item) : ''
+          column.itemColumn || index === 0 ? column.value(order, item, orderIndex) : ''
         ))
       })
 
@@ -3365,7 +3371,21 @@ const handleExport = () => {
       sheetName: label,
       data,
       merges,
-      colWidths: columns.map(column => ({ wch: column.width }))
+      colWidths: columns.map(column => ({ wch: column.width })),
+      rowHeights: data.map((row, index) => ({ hpt: index === 0 ? 36 : index === 1 ? 28 : 32 })),
+      styles: {
+        defaultStyle: {
+          ...DATA_STYLE,
+          alignment: { ...DATA_STYLE.alignment, wrapText: true }
+        },
+        titleRow: 0,
+        titleStyle: TITLE_STYLE,
+        headerRow: 1,
+        headerStyle: {
+          font: { bold: true, sz: 11 },
+          fill: { patternType: 'solid', fgColor: { rgb: 'E2E8F0' } }
+        }
+      }
     })
     showNotice(`已导出当前筛选结果，共 ${records.length} 条订单`)
   } catch (error) {

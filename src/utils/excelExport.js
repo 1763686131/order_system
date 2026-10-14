@@ -1,9 +1,9 @@
 /**
  * Excel 导出工具
- * 基于 xlsx 库封装的通用导出功能
+ * 基于 xlsx-js-style 封装数据和单元格样式导出
  */
 
-import * as XLSX from 'xlsx'
+import XLSX from 'xlsx-js-style'
 
 /**
  * 导出数据到 Excel
@@ -48,7 +48,7 @@ export function exportToExcel(options) {
 
   // 应用样式
   if (Object.keys(styles).length > 0) {
-    applyStylesToWorksheet(ws, data, styles)
+    applyStylesToWorksheet(ws, styles)
   }
 
   // 添加工作表到工作簿
@@ -65,22 +65,31 @@ export function exportToExcel(options) {
 /**
  * 应用样式到工作表
  * @param {Object} ws - 工作表对象
- * @param {Array<Array>} data - 数据数组
  * @param {Object} styles - 样式配置
  */
-function applyStylesToWorksheet(ws, data, styles) {
+function applyStylesToWorksheet(ws, styles) {
+  if (!ws['!ref']) return
+
   const range = XLSX.utils.decode_range(ws['!ref'])
+  const defaultStyle = styles.defaultStyle || {}
+  const hasDefaultStyle = Object.keys(defaultStyle).length > 0
 
   for (let R = range.s.r; R <= range.e.r; ++R) {
+    const rowStyle = getStyleForRow(R, styles)
+    if (!rowStyle && !hasDefaultStyle) continue
+
+    const style = {
+      ...defaultStyle,
+      ...rowStyle,
+      font: { ...defaultStyle.font, ...rowStyle?.font },
+      alignment: { ...defaultStyle.alignment, ...rowStyle?.alignment },
+      border: { ...defaultStyle.border, ...rowStyle?.border }
+    }
     for (let C = range.s.c; C <= range.e.c; ++C) {
       const cellAddress = XLSX.utils.encode_cell({ r: R, c: C })
-      if (!ws[cellAddress]) continue
-
-      // 根据行类型应用样式
-      const style = getStyleForRow(R, styles, data.length)
-      if (style) {
-        ws[cellAddress].s = style
-      }
+      // 合并区域和空白格也需要实体单元格，才能保存完整的外边框。
+      if (!ws[cellAddress]) ws[cellAddress] = { t: 's', v: '' }
+      ws[cellAddress].s = style
     }
   }
 }
@@ -89,10 +98,9 @@ function applyStylesToWorksheet(ws, data, styles) {
  * 获取指定行的样式
  * @param {number} rowIndex - 行索引
  * @param {Object} styles - 样式配置对象
- * @param {number} totalRows - 总行数
  * @returns {Object|null}
  */
-function getStyleForRow(rowIndex, styles, totalRows) {
+function getStyleForRow(rowIndex, styles) {
   const {
     titleRow = null,
     headerRow = null,
@@ -110,7 +118,7 @@ function getStyleForRow(rowIndex, styles, totalRows) {
     return headerStyle
   } else if (summaryRow !== null && rowIndex === summaryRow) {
     return summaryStyle
-  } else if (dataRowStart !== null && rowIndex >= dataRowStart && rowIndex < totalRows - 1) {
+  } else if (dataRowStart !== null && rowIndex >= dataRowStart) {
     return dataStyle
   }
 
