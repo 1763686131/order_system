@@ -195,6 +195,7 @@ import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
 import { useUserStore } from '@/stores/user'
 import { businessLabels as supplierBusinessLabels, formatTableMoney, invoiceLabels } from '@/utils/supplierFinance'
+import { DATA_STYLE, TITLE_STYLE, exportToExcel } from '@/utils/excelExport'
 import SupplierReconciliationPanel from '@/components/admin/finance/SupplierReconciliationPanel.vue'
 
 const props = defineProps({
@@ -345,7 +346,11 @@ function openSource(row) {
   else router.push(paths[row.sourceType])
 }
 async function exportStatement() {
-  if (!canExport.value) return
+  if (!canExport.value || loading.value) return
+  if (filters.startDate && filters.endDate && filters.startDate > filters.endDate) {
+    error.value = '开始日期不能晚于结束日期'
+    return
+  }
   try {
     const data = props.type === 'payable'
       ? await request.get(`/suppliers/${props.targetId}/debt-details`, { params: { ...apiParams(), export: '1' } })
@@ -362,17 +367,74 @@ async function exportStatement() {
       XLSX.writeFile(workbook, `${displayName.value}-对账单.xlsx`)
       return
     }
-    const rows = filteredRecords.value.flatMap(row => (displayProducts(row).length ? displayProducts(row) : [null]).map(product => ({
-      业务日期: row.businessDate, 单号: row.docNumber, 业务类型: customerTypeLabels[row.businessType] || row.businessType, 商品: product?.name || '', 数量: product?.quantity ?? '', 单位: product?.unit || '', 单价: product?.price ?? '', 本单变动: product ? productDebt(row, product) : row.debtAmount, 当前欠款: product ? productCurrentDebt(row, product) : row.currentDebt
-    })))
-    const csv = [Object.keys(rows[0] || { 记录: '' }), ...rows.map(row => Object.values(row))]
-      .map(row => row.map(cell => `"${String(cell ?? '').replaceAll('"', '""')}"`).join(',')).join('\n')
-    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${displayName.value}-对账单.csv`
-    link.click()
-    URL.revokeObjectURL(url)
+    const exportRecords = filteredRecords.value
+    if (!exportRecords.length) {
+      error.value = '暂无可导出的对账记录'
+      return
+    }
+
+    const dates = exportRecords.map(row => date(row.businessDate)).filter(value => value !== '-').sort()
+    const startDate = filters.startDate || dates[0] || ''
+    const endDate = filters.endDate || dates[dates.length - 1] || ''
+    const periodText = startDate && endDate ? `${startDate}至${endDate}` : startDate || endDate || '未设置'
+    const headers = ['序号', '业务日期', '单号', '业务类型', '商品', '数量', '单位', '单价', '本单变动', '当前欠款']
+    const rows = [
+      ['对账单'],
+      [`客户名字：${displayName.value}`, '', '', '', `时间日期：${periodText}`],
+      headers
+    ]
+    const merges = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: headers.length - 1 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+      { s: { r: 1, c: 4 }, e: { r: 1, c: headers.length - 1 } }
+    ]
+    exportRecords.forEach((row, index) => {
+      const products = displayProducts(row)
+      const items = products.length ? products : [null]
+      const startRow = rows.length
+      items.forEach((product, productIndex) => {
+        rows.push([
+          productIndex === 0 ? index + 1 : '',
+          productIndex === 0 ? date(row.businessDate) : '',
+          productIndex === 0 ? String(row.docNumber || '') : '',
+          productIndex === 0 ? customerTypeLabels[row.businessType] || row.businessType : '',
+          product?.name || '',
+          product?.quantity ?? '',
+          product?.unit || '',
+          product?.price ?? '',
+          product ? productDebt(row, product) : row.debtAmount,
+          product ? productCurrentDebt(row, product) : row.currentDebt
+        ])
+      })
+      // 商品金额沿用对账明细计算，仅合并共用的单据信息。
+      if (items.length > 1) {
+        for (let column = 0; column < 4; column += 1) {
+          merges.push({ s: { r: startRow, c: column }, e: { r: rows.length - 1, c: column } })
+        }
+      }
+    })
+    exportToExcel({
+      filename: `${displayName.value.replace(/[\\/:*?"<>|]/g, '_')}-对账单`,
+      sheetName: '客户对账单',
+      data: rows,
+      merges,
+      colWidths: [8, 14, 24, 16, 36, 12, 10, 14, 16, 16].map(wch => ({ wch })),
+      rowHeights: rows.map((row, index) => ({ hpt: index === 0 ? 36 : index <= 2 ? 28 : 32 })),
+      styles: {
+        defaultStyle: {
+          ...DATA_STYLE,
+          alignment: { ...DATA_STYLE.alignment, wrapText: true }
+        },
+        titleRow: 0,
+        titleStyle: TITLE_STYLE,
+        headerRow: 2,
+        headerStyle: {
+          font: { bold: true, sz: 11 },
+          fill: { patternType: 'solid', fgColor: { rgb: 'E2E8F0' } }
+        }
+      }
+    })
+    error.value = ''
   } catch (err) { error.value = err.response?.data?.message || err.message }
 }
 async function printStatement() {

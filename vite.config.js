@@ -21,6 +21,9 @@ export default defineConfig({
   },
   server: {
     port: 3000,
+    watch: {
+      usePolling: process.platform === 'win32'
+    },
     proxy: {
       '/api': {
         // target: 'http://192.168.31.236:7899',

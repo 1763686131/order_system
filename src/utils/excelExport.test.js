@@ -94,6 +94,40 @@ test('data row styles include the final row without requiring a summary', () => 
   assert.equal(workbook.Sheets.Sheet1.A3.s.border.top.style, 'thin')
 })
 
+test('statement exports keep the title, customer and date metadata in separate merged ranges', () => {
+  const { workbook, saved } = captureExport({
+    data: [
+      ['Statement'],
+      ['Customer: Example', '', 'Date: 2026-10-14 to 2026-10-20'],
+      ['Number', 'Document', 'Quantity', 'Price'],
+      [1, '0000123', 0, 0]
+    ],
+    merges: [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } },
+      { s: { r: 1, c: 2 }, e: { r: 1, c: 3 } }
+    ],
+    styles: {
+      defaultStyle: DATA_STYLE,
+      titleRow: 0,
+      titleStyle: TITLE_STYLE,
+      headerRow: 2,
+      headerStyle: { font: { bold: true } }
+    }
+  })
+  const sheet = saved.Sheets.Sheet1
+  assert.equal(sheet.A1.v, 'Statement')
+  assert.equal(sheet.A2.v, 'Customer: Example')
+  assert.equal(sheet.C2.v, 'Date: 2026-10-14 to 2026-10-20')
+  assert.equal(sheet['!merges'].length, 3)
+  assert.equal(sheet.B4.t, 's')
+  assert.equal(sheet.C4.v, 0)
+  assert.equal(sheet.D4.v, 0)
+  assert.equal(workbook.Sheets.Sheet1.A3.s.font.bold, true)
+  assert.equal(workbook.Sheets.Sheet1.D2.s.border.right.style, 'thin')
+  assert.equal(workbook.Sheets.Sheet1.D4.s.alignment.horizontal, 'center')
+})
+
 test('summary row styles take precedence over data styles and inherit alignment', () => {
   const { workbook } = captureExport({
     data: [['Amount'], [1], [1]],
