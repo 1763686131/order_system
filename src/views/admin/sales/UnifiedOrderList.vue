@@ -3278,13 +3278,30 @@ const handleExport = () => {
       {
         title: '货物',
         width: 40,
-        value: order => isNewOrder(order)
-          ? order.order_goods.map(item => [
+        itemColumn: true,
+        value: (order, item) => item
+          ? [
             getGoodsItemName(item),
-            item.spec || item.model || '',
-            item.quantity != null ? `${item.quantity}${item.unit || ''}` : ''
-          ].filter(Boolean).join(' ')).join('\n')
+            item.spec || item.model || ''
+          ].filter(Boolean).join(' ')
           : order.goods_name || ''
+      },
+      {
+        title: '数量',
+        width: 14,
+        itemColumn: true,
+        value: (order, item) => item?.quantity != null && item.quantity !== ''
+          ? toNumber(item.quantity)
+          : ''
+      },
+      { title: '单位', width: 10, itemColumn: true, value: (order, item) => item?.unit || '' },
+      {
+        title: '单价',
+        width: 14,
+        itemColumn: true,
+        value: (order, item) => item?.price != null && item.price !== ''
+          ? toNumber(item.price)
+          : ''
       }
     ]
 
@@ -3312,6 +3329,30 @@ const handleExport = () => {
     }
     columns.push({ title: '备注', width: 40, value: order => order.remark || '' })
 
+    const data = [columns.map(column => column.title)]
+    const merges = []
+    records.forEach(order => {
+      const goods = Array.isArray(order.order_goods) ? order.order_goods.filter(Boolean) : []
+      const items = goods.length > 0 ? goods : [null]
+      const startRow = data.length
+      items.forEach((item, index) => {
+        data.push(columns.map(column =>
+          column.itemColumn || index === 0 ? column.value(order, item) : ''
+        ))
+      })
+
+      // 共用订单列只写入一次并纵向合并，避免商品展开后重复统计订单金额。
+      if (items.length > 1) {
+        columns.forEach((column, columnIndex) => {
+          if (column.itemColumn) return
+          merges.push({
+            s: { r: startRow, c: columnIndex },
+            e: { r: data.length - 1, c: columnIndex }
+          })
+        })
+      }
+    })
+
     const now = new Date()
     const date = [
       now.getFullYear(),
@@ -3322,10 +3363,8 @@ const handleExport = () => {
     exportToExcel({
       filename: `${label}-${date}`,
       sheetName: label,
-      data: [
-        columns.map(column => column.title),
-        ...records.map(order => columns.map(column => column.value(order)))
-      ],
+      data,
+      merges,
       colWidths: columns.map(column => ({ wch: column.width }))
     })
     showNotice(`已导出当前筛选结果，共 ${records.length} 条订单`)
