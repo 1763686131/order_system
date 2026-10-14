@@ -1,70 +1,76 @@
 <template>
   <div class="inventory-list-page" :class="{ 'raw-material-mode': isRawMaterial }">
     <div class="search-bar">
-      <label class="search-field">
-        <span class="sr-only">搜索{{ entityLabel }}</span>
-        <Search class="search-icon" :size="16" aria-hidden="true" />
-        <input v-model.trim="filters.productName" type="search" placeholder="搜索名称、编号或规格" />
-      </label>
+      <div class="filter-row primary-filter-row">
+        <div class="store-filter">
+          <span class="filter-label">门店</span>
+          <div class="store-tabs" aria-label="门店">
+            <button type="button" class="store-tab" :class="{ active: selectedStoreId === null }" :aria-pressed="selectedStoreId === null" @click="selectedStoreId = null">
+              全部门店
+            </button>
+            <button v-for="store in allStores" :key="store.id" type="button" class="store-tab" :class="{ active: sameId(selectedStoreId, store.id) }" :aria-pressed="sameId(selectedStoreId, store.id)" @click="selectedStoreId = store.id">
+              {{ store.name }}
+            </button>
+          </div>
+        </div>
 
-      <span class="filter-label">门店</span>
-      <div class="store-tabs" aria-label="门店">
-        <button type="button" class="store-tab" :class="{ active: selectedStoreId === null }" :aria-pressed="selectedStoreId === null" @click="selectedStoreId = null">
-          全部门店
-        </button>
-        <button v-for="store in allStores" :key="store.id" type="button" class="store-tab" :class="{ active: sameId(selectedStoreId, store.id) }" :aria-pressed="sameId(selectedStoreId, store.id)" @click="selectedStoreId = store.id">
-          {{ store.name }}
-        </button>
-      </div>
+        <div class="status-filter" aria-label="库存状态">
+          <span class="filter-label">库存状态</span>
+          <div class="status-tabs">
+            <button v-for="status in statusOptions" :key="status.value" type="button" :class="{ active: filters.status === status.value }" :aria-pressed="filters.status === status.value" @click="filters.status = status.value">
+              {{ status.label }}
+            </button>
+          </div>
+        </div>
 
-      <label class="filter-field">
-        <span>分类</span>
-        <select v-model="filters.categoryId">
-          <option :value="null">全部分类</option>
-          <option v-for="category in allCategories" :key="category.id" :value="category.id">{{ category.name }}</option>
-        </select>
-      </label>
-      <label class="filter-field">
-        <span>仓库</span>
-        <select v-model="filters.warehouseId">
-          <option :value="null">全部仓库</option>
-          <option v-for="warehouse in allWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option>
-        </select>
-      </label>
+        <label class="search-field">
+          <span class="sr-only">搜索{{ entityLabel }}</span>
+          <Search class="search-icon" :size="16" aria-hidden="true" />
+          <input v-model.trim="filters.productName" type="search" placeholder="搜索名称、编号或规格" />
+        </label>
 
-      <div class="status-filter" aria-label="库存状态">
-        <span class="filter-label">库存状态</span>
-        <div class="status-tabs">
-          <button v-for="status in statusOptions" :key="status.value" type="button" :class="{ active: filters.status === status.value }" :aria-pressed="filters.status === status.value" @click="filters.status = status.value">
-            {{ status.label }}
+        <div class="action-buttons">
+          <button class="btn btn-secondary" type="button" @click="resetFilters">
+            <RotateCcw :size="16" aria-hidden="true" />重置筛选
+          </button>
+          <button class="btn btn-secondary icon-button" type="button" title="刷新" aria-label="刷新" :disabled="loading" @click="loadInventory">
+            <RefreshCw :size="16" aria-hidden="true" />
+          </button>
+          <button class="btn btn-secondary" type="button" :disabled="loading || !!loadError" @click="handleExport">
+            <Download :size="16" aria-hidden="true" />导出
+          </button>
+          <button v-if="canManageProducts" class="btn btn-danger" type="button" :disabled="selectedCount === 0 || deleting || loading" @click="handleBatchDelete">
+            <Trash2 :size="16" aria-hidden="true" />批量删除
+          </button>
+          <button v-if="canManageProducts" class="btn btn-primary" type="button" :disabled="deleting || loading" @click="handleNew">
+            <Plus :size="16" aria-hidden="true" />新增{{ entityLabel }}
           </button>
         </div>
       </div>
-      <label class="filter-field">
-        <span>{{ entityLabel }}状态</span>
-        <select v-model="filters.productStatus">
-          <option value="all">全部状态</option>
-          <option value="enabled">启用</option>
-          <option value="disabled">停用</option>
-        </select>
-      </label>
 
-      <div class="action-buttons">
-        <button class="btn btn-secondary" type="button" @click="resetFilters">
-          <RotateCcw :size="16" aria-hidden="true" />重置筛选
-        </button>
-        <button class="btn btn-secondary icon-button" type="button" title="刷新" aria-label="刷新" :disabled="loading" @click="loadInventory">
-          <RefreshCw :size="16" aria-hidden="true" />
-        </button>
-        <button class="btn btn-secondary" type="button" :disabled="loading || !!loadError" @click="handleExport">
-          <Download :size="16" aria-hidden="true" />导出
-        </button>
-        <button v-if="canManageProducts" class="btn btn-danger" type="button" :disabled="selectedCount === 0 || deleting || loading" @click="handleBatchDelete">
-          <Trash2 :size="16" aria-hidden="true" />批量删除
-        </button>
-        <button v-if="canManageProducts" class="btn btn-primary" type="button" :disabled="deleting || loading" @click="handleNew">
-          <Plus :size="16" aria-hidden="true" />新增{{ entityLabel }}
-        </button>
+      <div class="filter-row secondary-filter-row">
+        <label class="filter-field">
+          <span>分类</span>
+          <select v-model="filters.categoryId">
+            <option :value="null">全部分类</option>
+            <option v-for="category in allCategories" :key="category.id" :value="category.id">{{ category.name }}</option>
+          </select>
+        </label>
+        <label class="filter-field">
+          <span>仓库</span>
+          <select v-model="filters.warehouseId">
+            <option :value="null">全部仓库</option>
+            <option v-for="warehouse in allWarehouses" :key="warehouse.id" :value="warehouse.id">{{ warehouse.name }}</option>
+          </select>
+        </label>
+        <div class="status-filter" :aria-label="`${entityLabel}状态`">
+          <span class="filter-label">{{ entityLabel }}状态</span>
+          <div class="status-tabs">
+            <button v-for="status in productStatusOptions" :key="status.value" type="button" :class="{ active: filters.productStatus === status.value }" :aria-pressed="filters.productStatus === status.value" @click="filters.productStatus = status.value">
+              {{ status.label }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -83,7 +89,6 @@
     <section class="table-panel">
       <div class="table-toolbar">
         <h2>{{ pageTitle }}</h2>
-        <span v-if="lastRefreshed">最后刷新：{{ lastRefreshed }}</span>
       </div>
       <div class="table-container">
         <table
@@ -330,7 +335,6 @@ const sortKey = ref('')
 const sortDirection = ref('asc')
 const loading = ref(false)
 const loadError = ref('')
-const lastRefreshed = ref('')
 const productFormModal = ref(null)
 const deleting = ref(false)
 const deleteConfirmation = ref(null)
@@ -352,6 +356,11 @@ const statusOptions = [
   { value: 'normal', label: '正常' },
   { value: 'low', label: '预警' },
   { value: 'out', label: '缺货' }
+]
+const productStatusOptions = [
+  { value: 'all', label: '全部' },
+  { value: 'enabled', label: '启用' },
+  { value: 'disabled', label: '停用' }
 ]
 const pageSizes = computed(() => isRawMaterial.value ? [8, 15, 30] : [30, 50, 100])
 const columnCount = computed(() => isRawMaterial.value ? 16 : 17)
@@ -397,7 +406,6 @@ const loadInventory = async () => {
     allUnits.value = getMeasurementUnits(units)
     const existingIds = new Set(products.value.map(item => String(item.id)))
     selectedIds.value = selectedIds.value.filter(id => existingIds.has(id))
-    lastRefreshed.value = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
   } catch (error) {
     if (disposed || version !== loadVersion || mode !== props.mode) return
     products.value = []
@@ -713,7 +721,6 @@ watch(() => props.mode, () => {
   currentPage.value = 1
   jumpPage.value = 1
   pageSize.value = isRawMaterial.value ? 8 : 30
-  lastRefreshed.value = ''
   deleting.value = false
   deleteConfirmation.value = null
   deleteError.value = ''
@@ -739,19 +746,38 @@ defineExpose({ reload: loadInventory })
 }
 .search-bar {
   display: flex;
+  flex-direction: column;
   align-items: center;
   gap: 12px;
   padding: 16px 20px;
   background: white;
   border-bottom: 1px solid #e5e7eb;
+}
+.filter-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
   flex-wrap: wrap;
+}
+.secondary-filter-row {
+  padding-top: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+.store-filter {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  gap: 10px;
 }
 .search-field {
   display: flex;
   align-items: center;
-  min-height: 38px;
+  min-width: 0;
+  min-height: 34px;
   max-width: 200px;
-  flex: 0 0 200px;
+  flex: 1 1 140px;
   border: 1px solid #d1d5db;
   border-radius: 4px;
   background: #fff;
@@ -772,14 +798,15 @@ defineExpose({ reload: loadInventory })
 .store-tabs, .status-tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   background: #f3f4f6;
-  padding: 4px;
-  border-radius: 8px;
+  padding: 3px;
+  border-radius: 6px;
 }
+.store-tabs { min-width: 0; flex-wrap: wrap; }
 .store-tab, .status-tabs button {
-  padding: 8px 16px;
-  font-size: 14px;
+  padding: 6px 8px;
+  font-size: 13px;
   font-weight: 500;
   color: #6b7280;
   cursor: pointer;
@@ -793,8 +820,8 @@ defineExpose({ reload: loadInventory })
 .filter-field {
   display: flex;
   align-items: center;
-  min-height: 38px;
-  padding: 0 12px;
+  min-height: 34px;
+  padding: 0 10px;
   gap: 8px;
   border: 1px solid #d1d5db;
   border-radius: 4px;
@@ -806,12 +833,14 @@ defineExpose({ reload: loadInventory })
   outline: 0;
   color: #1f2937;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   min-width: 100px;
-  height: 36px;
+  height: 32px;
 }
-.status-filter { display: flex; align-items: center; gap: 10px; }
-.action-buttons { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+.status-filter { display: flex; align-items: center; gap: 8px; }
+.action-buttons { display: flex; align-items: center; gap: 6px; margin-left: auto; flex-wrap: wrap; }
+.search-bar .btn { min-height: 34px; padding: 0 10px; font-size: 13px; }
+.search-bar .icon-button { width: 34px; height: 34px; padding: 0; }
 .btn {
   min-height: 38px;
   padding: 0 16px;
@@ -862,7 +891,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, .inventory-row:
 .table-panel { min-width: 0; max-width: 100%; background: white; }
 .table-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 14px 20px; border-bottom: 1px solid #e5e7eb; }
 .table-toolbar h2 { font-size: 16px; font-weight: 600; margin: 0; }
-.table-toolbar span { color: #9ca3af; font-size: 13px; }
 .table-container { width: 100%; overflow-x: auto; container-type: inline-size; }
 .inventory-table {
   --inventory-actions-width: 120px;
@@ -936,8 +964,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, .inventory-row:
 @media (max-width: 700px) {
   .search-bar, .table-toolbar, .pagination { padding: 12px; }
   .search-field { flex: 1 1 200px; max-width: 100%; }
+  .filter-row { align-items: stretch; }
+  .store-filter, .status-filter { width: 100%; flex-wrap: wrap; }
   .store-tabs, .status-tabs { max-width: 100%; flex-wrap: wrap; }
-  .status-filter { max-width: 100%; flex-wrap: wrap; }
   .action-buttons { width: 100%; margin-left: 0; }
   .stat-card { padding: 12px; gap: 8px; }
   .stat-icon { width: 32px; height: 32px; }
