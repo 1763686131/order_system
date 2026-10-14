@@ -178,6 +178,7 @@
             class="button button-export"
             type="button"
             title="导出Excel"
+            :disabled="loading"
             @click="handleExport"
           >
             <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -1493,6 +1494,7 @@ import {
 } from '@/utils/logisticsCopy'
 import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
+import { exportToExcel } from '@/utils/excelExport'
 import { useAdminStickyPanel } from '@/composables/useAdminStickyPanel'
 import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
@@ -1648,6 +1650,7 @@ onMounted(() => {
         h('button', {
           class: 'btn-export',
           onClick: handleExport,
+          disabled: loading.value,
           style: 'padding: 10px 20px; background: #fff; color: #6b7280; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;'
         }, [
           h('span', '📥'),
@@ -1660,6 +1663,7 @@ onMounted(() => {
         h('button', {
           class: 'btn-export',
           onClick: handleExport,
+          disabled: loading.value,
           style: 'padding: 10px 20px; background: #fff; color: #6b7280; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; display: flex; align-items: center; gap: 6px;'
         }, [
           h('span', '📥'),
@@ -1823,6 +1827,10 @@ const expandModal = ref({
 const currentPage = ref(1)
 const pageSize = ref(30)
 const showAll = ref(false) // 是否显示全部
+
+watch(filters, () => {
+  currentPage.value = 1
+}, { deep: true })
 
 // 计算属性
 const pageTitle = computed(() => {
@@ -2599,7 +2607,7 @@ const getShippingColor = (method) => {
 }
 
 const handleFilter = () => {
-  console.log('筛选订单', filters.value)
+  currentPage.value = 1
 }
 
 const handleReset = () => {
@@ -3243,7 +3251,88 @@ const handleBatchDelete = async () => {
 
 const handleExport = () => {
   if (props.mode === 'finance' && !canExportSalesOrders.value) return
-  console.log('导出数据')
+  if (loading.value) return
+
+  // 与页面共用筛选和排序结果，导出范围不经过分页切片。
+  const records = filteredOrders.value
+  if (records.length === 0) {
+    showNotice('暂无可导出的订单', 'info')
+    return
+  }
+
+  try {
+    const toNumber = value => {
+      const number = Number(value)
+      return Number.isFinite(number) ? number : 0
+    }
+    const getReceivable = order => toNumber(order.should_receive ?? order.total_amount)
+    const getReceived = order =>
+      Number((toNumber(order.current_payment) + toNumber(order.balance_applied)).toFixed(2))
+    const columns = [
+      { title: '订单编号', width: 22, value: order => String(order.order_number || order.id) },
+      { title: '日期', width: 12, value: formatDate },
+      { title: '客户', width: 20, value: order => order.order_client || '' },
+      { title: '收货人', width: 14, value: getContactPerson },
+      { title: '电话', width: 18, value: order => String(getContactPhone(order)) },
+      { title: '地址', width: 40, value: getContactAddress },
+      {
+        title: '货物',
+        width: 40,
+        value: order => isNewOrder(order)
+          ? order.order_goods.map(item => [
+            getGoodsItemName(item),
+            item.spec || item.model || '',
+            item.quantity != null ? `${item.quantity}${item.unit || ''}` : ''
+          ].filter(Boolean).join(' ')).join('\n')
+          : order.goods_name || ''
+      }
+    ]
+
+    if (props.mode === 'finance') {
+      columns.push(
+        { title: '应收金额', width: 16, value: getReceivable },
+        { title: '已收金额', width: 16, value: getReceived },
+        {
+          title: '未收金额',
+          width: 16,
+          value: order => order.current_debt != null
+            ? toNumber(order.current_debt)
+            : Number((getReceivable(order) - getReceived(order)).toFixed(2))
+        },
+        { title: '状态', width: 12, value: getStatusText }
+      )
+    } else {
+      columns.push(
+        { title: '重量', width: 14, value: getTotalWeight },
+        { title: '发货方式', width: 16, value: getShippingMethodText },
+        { title: '单号', width: 24, value: order => String(order.logistics_no || '') },
+        { title: '回单', width: 12, value: order => hasReceipt(order) ? '有回单' : '' },
+        { title: '运费', width: 16, value: order => Number(getFreightTotal(order).toFixed(2)) }
+      )
+    }
+    columns.push({ title: '备注', width: 40, value: order => order.remark || '' })
+
+    const now = new Date()
+    const date = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0')
+    ].join('-')
+    const label = props.mode === 'logistics' ? '物流订单' : '销售订单'
+    exportToExcel({
+      filename: `${label}-${date}`,
+      sheetName: label,
+      data: [
+        columns.map(column => column.title),
+        ...records.map(order => columns.map(column => column.value(order)))
+      ],
+      colWidths: columns.map(column => ({ wch: column.width }))
+    })
+    showNotice(`已导出当前筛选结果，共 ${records.length} 条订单`)
+  } catch (error) {
+    console.error('导出订单失败:', error)
+    showNotice('导出失败，请重试', 'error')
+  }
 }
 
 const showExpandModal = (content, title) => {
