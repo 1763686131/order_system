@@ -76,7 +76,7 @@
     <div class="statement-table-scroll">
       <table
         v-resizable-columns="{
-          storageKey: type === 'payable' ? 'finance-debt-details-payable' : 'finance-debt-details-receivable',
+          storageKey: type === 'payable' ? 'finance-debt-details-payable' : 'finance-debt-details-receivable-compact',
           resizeMode: 'fit',
           minWidth: 64
         }"
@@ -99,26 +99,26 @@
           <col data-column-key="actions" data-resizable="false" style="width: 120px">
         </colgroup>
         <colgroup v-else>
-          <col data-column-key="sequence" data-min-width="64" style="width: 70px">
-          <col data-column-key="business-date" data-min-width="90" style="width: 120px">
-          <col data-column-key="document" data-min-width="110" style="width: 160px">
-          <col data-column-key="business-type" data-min-width="100" style="width: 110px">
-          <col data-column-key="receiver-name" data-min-width="90" style="width: 120px">
-          <col data-column-key="receiver-address" data-min-width="120" style="width: 240px">
-          <col data-column-key="products" data-min-width="110" style="width: 180px">
+          <col data-column-key="sequence" data-min-width="64" style="width: 64px">
+          <col data-column-key="business-date" data-min-width="90" style="width: 105px">
+          <col data-column-key="document" data-min-width="110" style="width: 145px">
+          <col data-column-key="business-type" data-min-width="86" style="width: 92px">
+          <col data-column-key="receiver-name" data-min-width="76" style="width: 96px">
+          <col data-column-key="receiver-address" data-min-width="104" style="width: 150px">
+          <col data-column-key="products" data-min-width="100" style="width: 140px">
           <col data-column-key="quantity" data-min-width="64" style="width: 80px">
-          <col data-column-key="unit" data-min-width="64" style="width: 80px">
-          <col data-column-key="unit-price" data-min-width="90" style="width: 100px">
-          <col data-column-key="original-debt" data-min-width="110" style="width: 120px">
-          <col data-column-key="paid-amount" data-min-width="100" style="width: 110px">
-          <col data-column-key="debt-amount" data-min-width="110" style="width: 120px">
-          <col data-column-key="current-debt" data-min-width="110" style="width: 120px">
+          <col data-column-key="unit" data-min-width="64" style="width: 70px">
+          <col data-column-key="unit-price" data-min-width="76" style="width: 82px">
+          <col data-column-key="original-debt" data-min-width="86" style="width: 96px">
+          <col data-column-key="paid-amount" data-min-width="82" style="width: 88px">
+          <col data-column-key="debt-amount" data-min-width="86" style="width: 96px">
+          <col data-column-key="current-debt" data-min-width="86" style="width: 96px">
         </colgroup>
         <thead v-if="type === 'payable'">
           <tr><th data-column-key="business-date" data-min-width="90">业务日期</th><th class="document-column" data-column-key="document" data-min-width="110">单号</th><th data-column-key="business-type" data-min-width="90">业务类型</th><th data-column-key="summary" data-min-width="110">商品 / 摘要</th><th data-column-key="amount-excluding-tax" data-min-width="110">未税金额</th><th data-column-key="tax" data-min-width="90">税额</th><th data-column-key="payable-change" data-min-width="110">应付变动</th><th data-column-key="prepayment-change" data-min-width="110">预付款变动</th><th data-column-key="credit-change" data-min-width="100">贷项变动</th><th data-column-key="payable-balance" data-min-width="110">应付余额</th><th data-column-key="invoice-status" data-min-width="100">开票状态</th><th data-column-key="transaction-status" data-min-width="90">账务状态</th><th data-column-key="actions" data-resizable="false">操作</th></tr>
         </thead>
         <thead v-else>
-          <tr><th data-column-key="sequence" data-min-width="64">序号</th><th data-column-key="business-date" data-min-width="90">业务日期</th><th class="document-column" data-column-key="document" data-min-width="110">单据编号</th><th data-column-key="business-type" data-min-width="100">业务类型</th><th data-column-key="receiver-name" data-min-width="90">收货人</th><th data-column-key="receiver-address" data-min-width="120">收货地址</th><th class="product-column" data-column-key="products" data-min-width="110">商品详情</th><th data-column-key="quantity" data-min-width="64">数量</th><th data-column-key="unit" data-min-width="64">单位</th><th data-column-key="unit-price" data-min-width="90">单价</th><th data-column-key="original-debt" data-min-width="110">原单欠款</th><th data-column-key="paid-amount" data-min-width="100">部分付款</th><th data-column-key="debt-amount" data-min-width="110">应收欠款</th><th data-column-key="current-debt" data-min-width="110">当前欠款</th></tr>
+          <tr><th data-column-key="sequence" data-min-width="64">序号</th><th data-column-key="business-date" data-min-width="90">业务日期</th><th class="document-column" data-column-key="document" data-min-width="110">单据编号</th><th data-column-key="business-type" data-min-width="86">业务类型</th><th data-column-key="receiver-name" data-min-width="76">收货人</th><th data-column-key="receiver-address" data-min-width="104">收货地址</th><th class="product-column" data-column-key="products" data-min-width="100">商品详情</th><th data-column-key="quantity" data-min-width="64">数量</th><th data-column-key="unit" data-min-width="64">单位</th><th data-column-key="unit-price" data-min-width="76">单价</th><th data-column-key="original-debt" data-min-width="86">原单欠款</th><th data-column-key="paid-amount" data-min-width="82">部分付款</th><th data-column-key="debt-amount" data-min-width="86">应收欠款</th><th data-column-key="current-debt" data-min-width="86">当前欠款</th></tr>
         </thead>
         <tbody>
           <tr v-if="loading"><td :colspan="type === 'payable' ? 13 : 14" class="statement-empty">加载中...</td></tr>
@@ -542,7 +542,7 @@ onMounted(load)
 .statement-error { padding: 10px 0; color: #b4232f; }
 .statement-table-scroll { margin-top: 14px; overflow: auto; background: #fff; border: 1px solid #e2e8f0; }
 .statement-table { width: 100%; min-width: 1550px; border-collapse: collapse; table-layout: fixed; }
-.customer-statement-table { min-width: 1850px; }
+.customer-statement-table { min-width: 100%; }
 .document-column { width: 150px; }.product-column { width: 180px; }
 .statement-tabs { display: flex; gap: 8px; margin-bottom: 12px; }.statement-tabs button { height: 36px; padding: 0 16px; color: #596579; background: transparent; border: 0; border-bottom: 2px solid transparent; cursor: pointer; }.statement-tabs button.active { color: #08745a; border-color: #0f9f78; }
 .statement-pagination select { height: 34px; padding: 0 8px; border: 1px solid #cbd5e1; border-radius: 5px; }
@@ -585,5 +585,6 @@ onMounted(load)
   .balance-result { grid-column: 1 / -1; text-align: center; }
   .statement-search-panel { padding: 14px 16px; }
   .statement-search-grid, .statement-search-grid.customer-search-grid { grid-template-columns: minmax(0, 1fr); }
+  .customer-statement-table { min-width: 1320px; }
 }
 </style>
