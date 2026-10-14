@@ -250,9 +250,20 @@ def _debt_record_from_transaction(cursor, transaction):
             + stored_balance_applied
         )
         if order:
+            order_data = dict(order)
             record.update({
                 'businessDate': order['date'] or record['businessDate'],
                 'docNumber': order['order_number'] or record['docNumber'],
+                'receiverName': (
+                    order_data.get('contact_person')
+                    or order_data.get('receiver_name')
+                    or ''
+                ),
+                'receiverAddress': (
+                    order_data.get('contact_address')
+                    or order_data.get('receiver_address')
+                    or ''
+                ),
                 'orderAmount': _debt_float(order['should_receive']),
                 'paidAmount': _debt_float(
                     _debt_money(order['current_payment'])
