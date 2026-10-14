@@ -304,10 +304,47 @@
       </header>
 
       <div class="table-scroll">
-        <table class="records-table">
+        <table
+          v-resizable-columns="{ storageKey: `sales-${mode}-list`, minWidth: 64, resizeMode: 'fit' }"
+          class="records-table"
+        >
+          <colgroup>
+            <col
+              v-if="mode !== 'finance' || canDeleteSalesOrders"
+              data-column-key="selection"
+              style="width: 50px"
+            />
+            <col data-column-key="order-number" style="width: 140px" />
+            <col data-column-key="date" style="width: 110px" />
+            <col data-column-key="customer" style="width: 140px" />
+            <col data-column-key="contact-person" style="width: 100px" />
+            <col data-column-key="phone" style="width: 120px" />
+            <col data-column-key="address" style="width: 140px" />
+            <col data-column-key="goods" style="width: 150px" />
+            <template v-if="mode === 'finance'">
+              <col data-column-key="receivable" style="width: 100px" />
+              <col data-column-key="received" style="width: 100px" />
+              <col data-column-key="outstanding" style="width: 100px" />
+            </template>
+            <template v-if="mode === 'logistics'">
+              <col data-column-key="weight" style="width: 80px" />
+              <col data-column-key="shipping-method" style="width: 100px" />
+              <col data-column-key="tracking-number" style="width: 120px" />
+              <col data-column-key="receipt" style="width: 64px" />
+            </template>
+            <col v-if="mode === 'finance'" data-column-key="status" style="width: 90px" />
+            <col v-if="mode === 'logistics'" data-column-key="freight" style="width: 100px" />
+            <col data-column-key="remark" style="width: 120px" />
+            <col data-column-key="actions" style="width: 136px" />
+          </colgroup>
           <thead>
             <tr>
-              <th v-if="mode !== 'finance' || canDeleteSalesOrders" class="col-checkbox">
+              <th
+                v-if="mode !== 'finance' || canDeleteSalesOrders"
+                class="col-checkbox"
+                data-column-key="selection"
+                data-resizable="false"
+              >
                 <input
                   type="checkbox"
                   :checked="isAllSelected"
@@ -315,33 +352,33 @@
                   @change="toggleSelectAll"
                 />
               </th>
-              <th class="document-column">订单编号</th>
-              <th>日期</th>
-              <th>客户</th>
-              <th>收货人</th>
-              <th>电话</th>
-              <th class="address-column">地址</th>
-              <th class="material-column">货物</th>
+              <th class="document-column" data-column-key="order-number" data-min-width="100">订单编号</th>
+              <th data-column-key="date" data-min-width="100">日期</th>
+              <th data-column-key="customer" data-min-width="80">客户</th>
+              <th data-column-key="contact-person">收货人</th>
+              <th data-column-key="phone" data-min-width="100">电话</th>
+              <th class="address-column" data-column-key="address" data-min-width="80">地址</th>
+              <th class="material-column" data-column-key="goods" data-min-width="80">货物</th>
 
               <!-- 财务模式列 -->
               <template v-if="mode === 'finance'">
-                <th class="number-column">应收金额</th>
-                <th class="number-column">已收金额</th>
-                <th class="number-column">未收金额</th>
+                <th class="number-column" data-column-key="receivable" data-min-width="90">应收金额</th>
+                <th class="number-column" data-column-key="received" data-min-width="90">已收金额</th>
+                <th class="number-column" data-column-key="outstanding" data-min-width="90">未收金额</th>
               </template>
 
               <!-- 物流模式列 -->
               <template v-if="mode === 'logistics'">
-                <th>重量</th>
-                <th>发货方式</th>
-                <th>单号</th>
-                <th>回单</th>
+                <th data-column-key="weight">重量</th>
+                <th data-column-key="shipping-method" data-min-width="80">发货方式</th>
+                <th data-column-key="tracking-number" data-min-width="80">单号</th>
+                <th data-column-key="receipt">回单</th>
               </template>
 
-              <th v-if="mode === 'finance'">状态</th>
-              <th v-if="mode === 'logistics'" class="number-column">运费</th>
-              <th>备注</th>
-              <th class="operation-column">操作</th>
+              <th v-if="mode === 'finance'" data-column-key="status" data-min-width="80">状态</th>
+              <th v-if="mode === 'logistics'" class="number-column" data-column-key="freight" data-min-width="80">运费</th>
+              <th data-column-key="remark">备注</th>
+              <th class="operation-column" data-column-key="actions" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -976,20 +1013,36 @@
                   </div>
                 </div>
                 <div class="detail-table-scroll">
-                  <table class="detail-table order-goods-table">
+                  <table
+                    v-resizable-columns="{ storageKey: 'sales-order-detail-items', resizeMode: 'fit' }"
+                    class="detail-table order-goods-table"
+                  >
+                    <colgroup>
+                      <col data-column-key="index" style="width: 45px" />
+                      <col data-column-key="name" />
+                      <col data-column-key="spec" style="width: 90px" />
+                      <col data-column-key="unit" style="width: 50px" />
+                      <col data-column-key="packages" style="width: 55px" />
+                      <col data-column-key="quantity" style="width: 65px" />
+                      <col data-column-key="price" style="width: 75px" />
+                      <col data-column-key="amount" style="width: 88px" />
+                      <col data-column-key="tax-rate" style="width: 62px" />
+                      <col data-column-key="tax-amount" style="width: 85px" />
+                      <col data-column-key="total-amount" style="width: 95px" />
+                    </colgroup>
                     <thead>
                       <tr>
-                        <th>序号</th>
-                        <th class="material-detail-column">商品名称</th>
-                        <th>规格型号</th>
-                        <th>单位</th>
-                        <th class="number-column">件数</th>
-                        <th class="number-column">数量</th>
-                        <th class="number-column">单价</th>
-                        <th class="money-column">金额</th>
-                        <th class="number-column">税率</th>
-                        <th class="money-column">税额</th>
-                        <th class="money-column">含税金额</th>
+                        <th data-column-key="index">序号</th>
+                        <th class="material-detail-column" data-column-key="name" data-min-width="100">商品名称</th>
+                        <th data-column-key="spec" data-min-width="64">规格型号</th>
+                        <th data-column-key="unit">单位</th>
+                        <th class="number-column" data-column-key="packages">件数</th>
+                        <th class="number-column" data-column-key="quantity">数量</th>
+                        <th class="number-column" data-column-key="price" data-min-width="64">单价</th>
+                        <th class="money-column" data-column-key="amount" data-min-width="64">金额</th>
+                        <th class="number-column" data-column-key="tax-rate">税率</th>
+                        <th class="money-column" data-column-key="tax-amount" data-min-width="64">税额</th>
+                        <th class="money-column" data-column-key="total-amount" data-min-width="80">含税金额</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1756,7 +1809,7 @@ const emptyMessage = computed(() => {
 })
 
 const columnCount = computed(() => {
-  if (props.mode === 'logistics') return 14
+  if (props.mode === 'logistics') return 15
   return canDeleteSalesOrders.value ? 14 : 13
 })
 
@@ -3897,6 +3950,12 @@ svg {
   text-align: left;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+.records-table.resizable-columns-table th,
+.order-goods-table.resizable-columns-table th {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .records-table td {
