@@ -1186,19 +1186,8 @@
       business-type="sale"
       title="打印订单"
       :document-number="printTargetOrder?.order_number || printTargetOrder?.id || ''"
-      description="选择一个销售模板预览当前订单数据。"
-      @close="closePrintTemplateDialog"
-      @preview="previewSelectedPrintTemplate"
-      @print="printSelectedPrintTemplate"
-    />
-
-    <OrderPrintPreview
-      :visible="printPreviewVisible"
-      :template="selectedPrintTemplate"
       :variables="printOrderVariables"
-      :printer="selectedPrintPrinter"
-      :auto-print="printPreviewAutoPrint"
-      @close="closePrintPreview"
+      @close="closePrintTemplateDialog"
     />
 
     <!-- 展开信息弹窗 -->
@@ -1386,7 +1375,6 @@ import { getStores } from '@/utils/storeHelper'
 import { toChineseMoney } from '@/utils/chineseMoney'
 import { DATA_STYLE, TITLE_STYLE, exportToExcel } from '@/utils/excelExport'
 import { useAdminStickyPanel } from '@/composables/useAdminStickyPanel'
-import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 
 const router = useRouter()
@@ -1444,11 +1432,7 @@ const showStoreSelector = computed(() => hasMultipleScopeOptions(stores.value))
 
 // 打印模板预览
 const printTemplateDialogOpen = ref(false)
-const selectedPrintTemplate = ref(null)
-const selectedPrintPrinter = ref(null)
-const printPreviewAutoPrint = ref(false)
 const printTargetOrder = ref(null)
-const printPreviewVisible = ref(false)
 
 // 详情弹窗状态
 const detailModalOpen = ref(false)
@@ -2382,35 +2366,6 @@ const printOrderVariables = computed(() => getOrderPrintVariables(printTargetOrd
 
 const closePrintTemplateDialog = () => {
   printTemplateDialogOpen.value = false
-  if (!printPreviewVisible.value) {
-    selectedPrintTemplate.value = null
-    selectedPrintPrinter.value = null
-    printPreviewAutoPrint.value = false
-    printTargetOrder.value = null
-  }
-}
-
-const openSelectedPrintTemplate = (template, printer, autoPrint) => {
-  selectedPrintTemplate.value = template
-  selectedPrintPrinter.value = printer
-  printPreviewAutoPrint.value = autoPrint
-  printTemplateDialogOpen.value = false
-  printPreviewVisible.value = true
-}
-
-const previewSelectedPrintTemplate = (template, printer) => {
-  openSelectedPrintTemplate(template, printer, false)
-}
-
-const printSelectedPrintTemplate = (template, printer) => {
-  openSelectedPrintTemplate(template, printer, true)
-}
-
-const closePrintPreview = () => {
-  printPreviewVisible.value = false
-  selectedPrintTemplate.value = null
-  selectedPrintPrinter.value = null
-  printPreviewAutoPrint.value = false
   printTargetOrder.value = null
 }
 
@@ -2583,9 +2538,6 @@ const handlePrintOrder = (order) => {
   if (!canPrintSalesOrders.value) return
   if (isNewOrder(order)) {
     printTargetOrder.value = order
-    selectedPrintTemplate.value = null
-    selectedPrintPrinter.value = null
-    printPreviewAutoPrint.value = false
     printTemplateDialogOpen.value = true
   } else {
     // 旧订单：显示提示信息

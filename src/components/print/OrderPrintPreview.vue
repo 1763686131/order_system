@@ -1,29 +1,86 @@
 <template>
   <div v-if="visible" class="order-print-preview-overlay">
-    <div class="order-print-preview-dialog">
+    <div
+      ref="dialogRef"
+      class="order-print-preview-dialog"
+      :class="{ 'with-template-picker': templateSelection }"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="title"
+      tabindex="-1"
+      @keydown.esc.prevent="handleClose"
+    >
       <div class="order-print-preview-header">
         <div>
-          <h3>{{ template?.name || '打印预览' }}</h3>
+          <h3>{{ templateSelection ? title : template?.name || title }}</h3>
           <span>
-            {{ previewLabel }} · {{ template?.pageWidth || 210 }}mm × {{ template?.pageHeight || 140 }}mm
+            <template v-if="documentNumber">{{ documentNumber }} · </template>
+            {{ previewLabel }}
+            <template v-if="template"> · {{ template.pageWidth || 210 }}mm × {{ template.pageHeight || 140 }}mm</template>
             · {{ resolvedPrinterName }}
           </span>
         </div>
         <button type="button" class="preview-close" title="关闭" @click="handleClose">×</button>
       </div>
 
-      <div class="order-print-preview-body">
-        <div v-if="loading" class="preview-state">正在生成预览...</div>
-        <div v-else-if="errorMessage" class="preview-state preview-error">
-          {{ errorMessage }}
+      <div class="preview-workspace">
+        <aside v-if="templateSelection" class="preview-template-sidebar">
+          <div class="preview-template-heading">
+            <label for="preview-template-select"><FileText :size="16" aria-hidden="true" />打印模板</label>
+            <button
+              type="button"
+              class="preview-footer-button preview-icon-button preview-template-reload"
+              title="刷新打印模板"
+              aria-label="刷新打印模板"
+              :disabled="templatesLoading || printing"
+              @click="emit('reload-templates')"
+            >
+              <RefreshCw :size="15" aria-hidden="true" />
+            </button>
+          </div>
+          <select
+            id="preview-template-select"
+            class="preview-template-select"
+            aria-label="打印模板"
+            :value="template?.id ?? ''"
+            :title="template?.name || '打印模板'"
+            :disabled="templatesLoading || printing || !templateOptions.length"
+            @change="emit('select-template', $event.target.value)"
+          >
+            <option v-if="!templateOptions.length" value="">
+              {{ templatesLoading ? '正在加载模板...' : '暂无可用模板' }}
+            </option>
+            <option v-for="option in templateOptions" :key="option.id" :value="option.id">
+              {{ option.name }}
+            </option>
+          </select>
+          <dl v-if="template" class="preview-template-details">
+            <div><dt>纸张</dt><dd>{{ template.paperType || '自定义' }}</dd></div>
+            <div><dt>尺寸</dt><dd>{{ template.pageWidth || 210 }} × {{ template.pageHeight || 140 }} mm</dd></div>
+          </dl>
+        </aside>
+        <div class="order-print-preview-body" :aria-busy="loading || templatesLoading">
+          <div v-if="templatesLoading" class="preview-state">正在加载打印模板...</div>
+          <div v-else-if="templatesError" class="preview-state preview-error">
+            <span>{{ templatesError }}</span>
+            <button type="button" class="preview-footer-button" @click="emit('reload-templates')">
+              <RefreshCw :size="15" aria-hidden="true" />重新加载
+            </button>
+          </div>
+          <div v-else-if="loading" class="preview-state">正在生成预览...</div>
+          <div v-else-if="errorMessage" class="preview-state preview-error">
+            {{ errorMessage }}
+          </div>
+          <iframe
+            v-else-if="previewHtml"
+            class="preview-frame"
+            title="订单打印预览"
+            :srcdoc="previewHtml"
+          ></iframe>
+          <div v-else class="preview-state">
+            {{ templateSelection ? '暂无可用的打印模板' : '暂无可预览内容' }}
+          </div>
         </div>
-        <iframe
-          v-else-if="previewHtml"
-          class="preview-frame"
-          title="订单打印预览"
-          :srcdoc="previewHtml"
-        ></iframe>
-        <div v-else class="preview-state">暂无可预览内容</div>
       </div>
 
       <div class="order-print-preview-footer">
@@ -33,16 +90,33 @@
         <div class="preview-footer-actions">
           <button
             type="button"
+            class="preview-footer-button preview-icon-button"
+            title="打印设置"
+            aria-label="打印设置"
+            :disabled="printing"
+            @click="settingsVisible = true"
+          >
+            <Settings :size="16" aria-hidden="true" />
+          </button>
+          <button
+            v-if="activePrintConfig.mode === 'clodop'"
+            type="button"
+            class="preview-footer-button preview-icon-button"
+            title="重新检测打印服务"
+            aria-label="重新检测打印服务"
+            :disabled="checkingPrintService || printing"
+            @click="recheckPrintService"
+          >
+            <RefreshCw :size="16" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
             class="preview-footer-button preview-print-button"
             :title="printButtonTitle"
-            :disabled="loading || printing || !renderedHtml"
+            :disabled="!printReady"
             @click="handlePrint"
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M6 9V2h12v7"></path>
-              <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-              <path d="M6 14h12v8H6z"></path>
-            </svg>
+            <Printer :size="16" aria-hidden="true" />
             {{ printing ? '正在连接...' : '打印' }}
           </button>
           <button type="button" class="preview-footer-button" @click="handleClose">关闭</button>
@@ -57,18 +131,34 @@
       @ready="handleDesignerReady"
     ></print-designer>
   </div>
+
+  <PrintClientSettingsDialog
+    :visible="settingsVisible"
+    @close="settingsVisible = false"
+    @saved="handlePrintConfigSaved"
+  />
 </template>
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
+import { FileText, Printer, RefreshCw, Settings } from '@lucide/vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 import { openConfiguredPrintPreview } from '@/utils/lodopPrint'
 import { getPrintClientConfig } from '@/utils/printClientConfig'
+import { usePrintAvailability } from '@/composables/usePrintAvailability'
+import PrintClientSettingsDialog from '@/components/print/PrintClientSettingsDialog.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
   template: { type: Object, default: null },
+  templateSelection: { type: Boolean, default: false },
+  templateOptions: { type: Array, default: () => [] },
+  templatesLoading: { type: Boolean, default: false },
+  templatesError: { type: String, default: '' },
+  title: { type: String, default: '打印预览' },
+  documentNumber: { type: [String, Number], default: '' },
+  printEnabled: { type: Boolean, default: true },
   variables: { type: Object, default: () => ({}) },
   printer: { type: Object, default: null },
   previewLabel: { type: String, default: '当前订单数据预览' },
@@ -81,17 +171,25 @@ const props = defineProps({
   hideZeroValues: { type: Boolean, default: true }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'select-template', 'reload-templates'])
+const dialogRef = ref(null)
 const designerRef = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
 const previewHtml = ref('')
 const renderedHtml = ref('')
-const designerReady = ref(false)
 const printing = ref(false)
 const printErrorMessage = ref('')
 const autoPrintConsumed = ref(false)
-const activePrintConfig = ref(getPrintClientConfig())
+const settingsVisible = ref(false)
+const {
+  printConfig: activePrintConfig,
+  checkingPrintService,
+  printAvailable,
+  printUnavailableReason,
+  refreshPrintAvailability,
+  cancelPrintCheck
+} = usePrintAvailability(() => props.printer)
 const renderedTemplateId = ref(null)
 const designerInstanceKey = ref(0)
 let renderRequestId = 0
@@ -106,18 +204,39 @@ const getTemplateIdentity = (template) => {
 const resolvedPrinterName = computed(() => (
   activePrintConfig.value.mode === 'browser'
     ? '浏览器打印'
-    : activePrintConfig.value.printerName || props.printer?.name || 'C-Lodop 默认打印机'
+    : activePrintConfig.value.printerName || props.printer?.name || '未选择打印机'
 ))
 
-const printDestinationHint = computed(() => (
-  activePrintConfig.value.mode === 'browser'
+const printDestinationHint = computed(() => {
+  if (checkingPrintService.value) return '正在检测打印服务，预览不受影响。'
+  if (!printAvailable.value) return printUnavailableReason.value
+  return activePrintConfig.value.mode === 'browser'
     ? '点击打印后将打开浏览器打印窗口。'
     : `点击打印后将在 C-Lodop 中使用 ${resolvedPrinterName.value}。`
+})
+
+const printReady = computed(() => (
+  props.visible &&
+  props.printEnabled &&
+  !props.templatesLoading &&
+  !props.templatesError &&
+  !loading.value &&
+  !printing.value &&
+  !checkingPrintService.value &&
+  printAvailable.value &&
+  Boolean(renderedHtml.value) &&
+  Boolean(getTemplateIdentity(props.template)) &&
+  renderedTemplateId.value === getTemplateIdentity(props.template)
 ))
 
 const printButtonTitle = computed(() => {
+  if (!props.printEnabled) return '打印功能已关闭'
+  if (props.templatesLoading) return '正在加载打印模板'
   if (loading.value) return '正在生成打印内容'
   if (!renderedHtml.value) return '暂无可打印内容'
+  if (!getTemplateIdentity(props.template)) return '请先保存模板后再打印'
+  if (checkingPrintService.value) return '正在检测打印服务'
+  if (!printAvailable.value) return printUnavailableReason.value
   return activePrintConfig.value.mode === 'browser'
     ? '使用浏览器打印'
     : `使用 ${resolvedPrinterName.value} 打印`
@@ -191,7 +310,8 @@ const wrapPreviewHtml = (html) => `<!doctype html>
     <meta charset="UTF-8" />
     <style>
       html, body { margin: 0; padding: 0; background: #eef1f5; }
-      body { min-height: 100vh; display: flex; justify-content: center; padding: 24px; box-sizing: border-box; }
+      body { min-height: 100vh; display: flex; justify-content: safe center; padding: 24px; box-sizing: border-box; }
+      body > div { min-width: max-content; }
       * { box-sizing: border-box; }
     </style>
   </head>
@@ -524,7 +644,10 @@ const loadPreview = async () => {
   const designer = designerRef.value
   const template = props.template
   const requestId = ++renderRequestId
-  if (!designer || !template) return
+  if (!designer || !template) {
+    loading.value = false
+    return
+  }
 
   const isCurrentRequest = () => (
     requestId === renderRequestId &&
@@ -574,15 +697,12 @@ const loadPreview = async () => {
 }
 
 const handleDesignerReady = async () => {
-  designerReady.value = true
   await loadPreview()
 }
 
-const openPreview = async () => {
-  activePrintConfig.value = getPrintClientConfig()
+const resetPreview = () => {
   autoPrintConsumed.value = false
-  designerReady.value = false
-  loading.value = true
+  loading.value = Boolean(props.template)
   errorMessage.value = ''
   previewHtml.value = ''
   renderedHtml.value = ''
@@ -594,77 +714,61 @@ const openPreview = async () => {
 
 watch(
   () => props.visible,
-  (visible) => {
+  async (visible) => {
     if (!visible) {
+      cancelPrintCheck()
+      settingsVisible.value = false
       autoPrintConsumed.value = false
       renderRequestId += 1
-      designerReady.value = false
       loading.value = false
       renderedTemplateId.value = null
       renderedHtml.value = ''
       previewHtml.value = ''
       return
     }
-    openPreview()
-  }
+    refreshPrintAvailability()
+    resetPreview()
+    await nextTick()
+    if (props.visible) dialogRef.value?.focus()
+  },
+  { immediate: true }
 )
 
 watch(
-  () => props.variables,
+  [() => props.variables, () => props.template, () => props.trailingBlankRows, () => props.hideZeroValues],
   () => {
-    if (props.visible && designerReady.value) {
-      openPreview()
-    }
+    if (props.visible) resetPreview()
   },
   { deep: true }
-)
-
-watch(
-  () => props.template,
-  () => {
-    if (props.visible && designerReady.value) {
-      openPreview()
-    }
-  },
-  { deep: true }
-)
-
-watch(
-  () => props.trailingBlankRows,
-  () => {
-    if (props.visible && designerReady.value) openPreview()
-  }
-)
-
-watch(
-  () => props.hideZeroValues,
-  () => {
-    if (props.visible && designerReady.value) openPreview()
-  }
 )
 
 const handlePrint = async () => {
   const currentTemplateId = getTemplateIdentity(props.template)
-  if (
-    !renderedHtml.value ||
-    !currentTemplateId ||
-    renderedTemplateId.value !== currentTemplateId ||
-    loading.value ||
-    printing.value
-  ) {
-    return
-  }
+  if (!printReady.value) return
+  const currentRenderRequestId = renderRequestId
 
   printing.value = true
   printErrorMessage.value = ''
 
   try {
+    const available = await refreshPrintAvailability()
+    if (
+      !available ||
+      !props.visible ||
+      !props.printEnabled ||
+      props.templatesLoading ||
+      props.templatesError ||
+      getTemplateIdentity(props.template) !== currentTemplateId ||
+      currentRenderRequestId !== renderRequestId ||
+      loading.value ||
+      !renderedHtml.value
+    ) return
+
     const orderNumber = props.variables?.orderNumber || props.variables?.orderNo || ''
     const taskName = [props.template?.name || '单据打印', orderNumber]
       .filter(Boolean)
       .join(' - ')
 
-    activePrintConfig.value = getPrintClientConfig()
     await openConfiguredPrintPreview({
       html: renderedHtml.value,
       taskName,
@@ -675,13 +779,14 @@ const handlePrint = async () => {
     emit('close')
   } catch (error) {
     printErrorMessage.value = error?.message || '调用打印服务失败'
+    refreshPrintAvailability()
   } finally {
     printing.value = false
   }
 }
 
 watch(
-  [() => props.visible, () => props.autoPrint, renderedHtml, renderedTemplateId, loading],
+  [() => props.visible, () => props.autoPrint, renderedHtml, renderedTemplateId, loading, checkingPrintService, printAvailable],
   async ([visible, autoPrint, html]) => {
     if (!visible) {
       autoPrintConsumed.value = false
@@ -694,6 +799,7 @@ watch(
       !currentTemplateId ||
       renderedTemplateId.value !== currentTemplateId ||
       loading.value ||
+      checkingPrintService.value ||
       autoPrintConsumed.value ||
       printing.value
     ) {
@@ -701,10 +807,21 @@ watch(
     }
 
     autoPrintConsumed.value = true
+    if (!printAvailable.value) return
     await nextTick()
     await handlePrint()
   }
 )
+
+const handlePrintConfigSaved = (config) => {
+  printErrorMessage.value = ''
+  refreshPrintAvailability(config || getPrintClientConfig())
+}
+
+const recheckPrintService = () => {
+  printErrorMessage.value = ''
+  refreshPrintAvailability()
+}
 
 const handleClose = () => emit('close')
 </script>
@@ -733,6 +850,10 @@ const handleClose = () => emit('close')
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.25);
 }
 
+.order-print-preview-dialog.with-template-picker {
+  width: min(1280px, 96vw);
+}
+
 .order-print-preview-header {
   display: flex;
   align-items: center;
@@ -741,6 +862,12 @@ const handleClose = () => emit('close')
   padding: 14px 18px;
   background: #fff;
   border-bottom: 1px solid #d9e0e8;
+}
+
+.order-print-preview-header > div {
+  min-width: 0;
+  padding-right: 12px;
+  overflow-wrap: anywhere;
 }
 
 .order-print-preview-header h3 {
@@ -758,6 +885,7 @@ const handleClose = () => emit('close')
 .preview-close {
   width: 32px;
   height: 32px;
+  flex: 0 0 auto;
   border: 1px solid #cbd5e1;
   border-radius: 4px;
   background: #fff;
@@ -767,12 +895,91 @@ const handleClose = () => emit('close')
   cursor: pointer;
 }
 
+.preview-workspace {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.preview-template-sidebar {
+  width: 228px;
+  flex: 0 0 auto;
+  padding: 16px;
+  background: #fff;
+  border-right: 1px solid #d9e0e8;
+}
+
+.preview-template-heading,
+.preview-template-heading label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.preview-template-heading {
+  justify-content: space-between;
+  margin-bottom: 10px;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.preview-template-heading label {
+  white-space: nowrap;
+}
+
+.preview-template-heading .preview-template-reload {
+  width: 28px;
+  height: 28px;
+}
+
+.preview-template-select {
+  width: 100%;
+  height: 38px;
+  padding: 0 9px;
+  color: #172033;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+  text-overflow: ellipsis;
+}
+
+.preview-template-select:focus-visible {
+  outline: 2px solid #0f9f78;
+  outline-offset: 2px;
+}
+
+.preview-template-details {
+  display: grid;
+  gap: 12px;
+  margin: 20px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.preview-template-details div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.preview-template-details dd {
+  margin: 0;
+  color: #475569;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
 .order-print-preview-body {
+  min-width: 0;
   min-height: 0;
   flex: 1;
 }
 
 .preview-frame {
+  display: block;
   width: 100%;
   height: 100%;
   border: 0;
@@ -784,6 +991,8 @@ const handleClose = () => emit('close')
   display: flex;
   align-items: center;
   justify-content: center;
+  flex-direction: column;
+  gap: 12px;
   padding: 24px;
   color: #64748b;
   font-size: 14px;
@@ -846,6 +1055,17 @@ const handleClose = () => emit('close')
   border-color: #0f9f78;
 }
 
+.preview-icon-button {
+  width: 34px;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.preview-footer-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .preview-print-button:disabled {
   color: #94a3b8;
   background: #f1f5f9;
@@ -869,10 +1089,36 @@ const handleClose = () => emit('close')
     padding: 0;
   }
 
-  .order-print-preview-dialog {
+  .order-print-preview-dialog,
+  .order-print-preview-dialog.with-template-picker {
     width: 100vw;
     height: 100vh;
+    height: 100dvh;
     border-radius: 0;
+  }
+
+  .preview-workspace {
+    flex-direction: column;
+  }
+
+  .preview-template-sidebar {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 14px;
+    border-right: 0;
+    border-bottom: 1px solid #d9e0e8;
+  }
+
+  .preview-template-heading {
+    margin: 0;
+  }
+
+  .preview-template-heading label svg,
+  .preview-template-details {
+    display: none;
   }
 
   .order-print-preview-footer {

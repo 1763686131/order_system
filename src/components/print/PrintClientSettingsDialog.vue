@@ -287,7 +287,7 @@ watch(
 .print-client-settings-overlay {
   position: fixed;
   inset: 0;
-  z-index: 2147482800;
+  z-index: 2147483200;
   display: flex;
   align-items: center;
   justify-content: center;

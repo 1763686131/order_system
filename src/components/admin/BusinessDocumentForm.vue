@@ -344,8 +344,7 @@
     </Teleport>
     <CustomModal :visible="Boolean(confirmation)" :title="confirmationContent.title" :message="confirmationContent.message" @confirm="confirmAction" @cancel="confirmation = ''" />
     <CustomModal :visible="Boolean(ui.showModal)" :title="ui.modalTitle || '操作失败'" :message="ui.modalMessage || ''" :show-cancel="false" type="error" @confirm="ui.closeModal?.()" @cancel="ui.closeModal?.()" />
-    <PrintTemplateSelector v-if="ui.config.printType" :visible="ui.printTemplateDialogOpen" :business-type="ui.config.printType" :title="`${ui.config.title}打印`" :document-number="ui.printNumber" @close="ui.closePrintTemplateDialog" @preview="ui.previewSelectedPrintTemplate" @print="ui.printSelectedPrintTemplate" />
-    <OrderPrintPreview v-if="ui.config.printType" :visible="ui.printPreviewVisible" :template="ui.selectedPrintTemplate" :variables="ui.printVariables" :printer="ui.selectedPrintPrinter" :auto-print="ui.printPreviewAutoPrint" @close="ui.closePrintPreview" />
+    <PrintTemplateSelector v-if="ui.config.printType" :visible="ui.printTemplateDialogOpen" :business-type="ui.config.printType" :title="`${ui.config.title}打印`" :document-number="ui.printNumber" :variables="ui.printVariables" @close="ui.closePrintTemplateDialog" />
   </section>
 </template>
 
@@ -354,7 +353,6 @@ import { computed, ref, watch } from 'vue'
 import { Check, CircleAlert, CircleCheck, Eye, EyeOff, Pencil, Plus, RefreshCw, RotateCcw, Save, Send, Trash2, TriangleAlert, X } from '@lucide/vue'
 import CustomModal from '@/components/CustomModal.vue'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
-import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 import { DOCUMENT_ACTIONS, DOCUMENT_TYPES, money } from '@/composables/documents/documentModels'
 import { useBusinessDocument } from '@/composables/documents/useBusinessDocument'
 
