@@ -73,9 +73,11 @@
           </div>
           <iframe
             v-else-if="previewHtml"
+            ref="previewFrameRef"
             class="preview-frame"
             title="订单打印预览"
             :srcdoc="previewHtml"
+            @load="fitPreviewToWidth"
           ></iframe>
           <div v-else class="preview-state">
             {{ templateSelection ? '暂无可用的打印模板' : '暂无可预览内容' }}
@@ -177,6 +179,7 @@ const designerRef = ref(null)
 const loading = ref(false)
 const errorMessage = ref('')
 const previewHtml = ref('')
+const previewFrameRef = ref(null)
 const renderedHtml = ref('')
 const printing = ref(false)
 const printErrorMessage = ref('')
@@ -308,15 +311,41 @@ const wrapPreviewHtml = (html) => `<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
       html, body { margin: 0; padding: 0; background: #eef1f5; }
       body { min-height: 100vh; display: flex; justify-content: safe center; padding: 24px; box-sizing: border-box; }
-      body > div { min-width: max-content; }
+      #preview-paper-content { width: max-content; flex: 0 0 auto; }
       * { box-sizing: border-box; }
+      @media (max-width: 780px) {
+        body { padding: 12px; }
+      }
     </style>
   </head>
-  <body>${html}</body>
+  <body><div id="preview-paper-content">${html}</div></body>
 </html>`
+
+const fitPreviewToWidth = () => {
+  const previewDocument = previewFrameRef.value?.contentDocument
+  const content = previewDocument?.getElementById('preview-paper-content')
+  if (!content) return
+
+  const pages = Array.from(content.querySelectorAll('.print-page'))
+  const paperWidth = Math.max(0, ...pages.map(page => page.offsetWidth)) || content.scrollWidth
+  if (!paperWidth) return
+
+  const bodyStyle = previewDocument.defaultView.getComputedStyle(previewDocument.body)
+  const availableWidth = previewDocument.documentElement.clientWidth -
+    parseFloat(bodyStyle.paddingLeft) - parseFloat(bodyStyle.paddingRight)
+  content.style.zoom = String(Math.min(1, Math.max(1, availableWidth) / paperWidth))
+}
+
+watch(previewFrameRef, (frame, previousFrame, onCleanup) => {
+  if (!frame) return
+  const observer = new ResizeObserver(fitPreviewToWidth)
+  observer.observe(frame)
+  onCleanup(() => observer.disconnect())
+})
 
 const normalizeVariableKey = (value) => {
   const token = String(value ?? '').trim()
