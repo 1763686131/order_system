@@ -667,8 +667,8 @@
               <span role="columnheader">商品</span>
               <span role="columnheader">规格</span>
               <span role="columnheader">数量</span>
-              <span role="columnheader">单价</span>
-              <span role="columnheader">总金额</span>
+              <span role="columnheader">{{ hasMobileTax(order) ? '含税单价' : '单价' }}</span>
+              <span role="columnheader">{{ hasMobileTax(order) ? '含税金额' : '金额' }}</span>
             </div>
             <div
               v-for="(item, index) in getMobileGoodsItems(order)"
@@ -679,8 +679,8 @@
               <span role="cell" :title="getGoodsItemName(item)">{{ getGoodsItemName(item) }}</span>
               <span role="cell" :title="getGoodsItemSpec(item)">{{ getGoodsItemSpec(item) }}</span>
               <span role="cell">{{ item.quantity ?? '-' }}</span>
-              <span role="cell">{{ formatMobileMoney(item.price) }}</span>
-              <span role="cell">{{ getMobileGoodsAmount(item) }}</span>
+              <span role="cell">{{ formatMobileMoney(getMobileGoodsPrice(order, item)) }}</span>
+              <span role="cell">{{ getMobileGoodsAmount(order, item) }}</span>
             </div>
           </section>
 
@@ -2199,14 +2199,28 @@ const formatMobileMoney = (value) => {
   return Number.isFinite(amount) ? amount.toFixed(2) : '-'
 }
 
-const getMobileGoodsAmount = (item) => {
-  if (item.amount !== undefined && item.amount !== null && item.amount !== '') {
-    return formatMobileMoney(item.amount)
+const hasMobileTax = (order) => {
+  return getMobileGoodsItems(order).some(item =>
+    Number(item.tax_rate ?? item.taxRate) > 0 ||
+    Number(item.tax_included_price ?? item.taxIncludedPrice) > 0 ||
+    Number(item.total_amount ?? item.totalAmount) > 0
+  ) || Number(order.tax_amount) > 0
+}
+
+const getMobileGoodsPrice = (order, item) => {
+  return hasMobileTax(order) ? (item.tax_included_price ?? item.taxIncludedPrice) : item.price
+}
+
+const getMobileGoodsAmount = (order, item) => {
+  const amount = hasMobileTax(order) ? (item.total_amount ?? item.totalAmount) : item.amount
+  if (amount !== undefined && amount !== null && amount !== '') {
+    return formatMobileMoney(amount)
   }
-  if ([item.quantity, item.price].some(value => value === undefined || value === null || value === '')) {
+  const price = getMobileGoodsPrice(order, item)
+  if ([item.quantity, price].some(value => value === undefined || value === null || value === '')) {
     return '-'
   }
-  return formatMobileMoney(Number(item.quantity) * Number(item.price))
+  return formatMobileMoney(Number(item.quantity) * Number(price))
 }
 
 // 计算合计件数
