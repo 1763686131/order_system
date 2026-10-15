@@ -26,7 +26,7 @@
       <div class="preview-workspace">
         <aside v-if="templateSelection" class="preview-template-sidebar">
           <div class="preview-template-heading">
-            <label for="preview-template-select"><FileText :size="16" aria-hidden="true" />打印模板</label>
+            <label :for="templatePickerId"><FileText :size="16" aria-hidden="true" />打印模板</label>
             <button
               type="button"
               class="preview-footer-button preview-icon-button preview-template-reload"
@@ -38,22 +38,88 @@
               <RefreshCw :size="15" aria-hidden="true" />
             </button>
           </div>
-          <select
-            id="preview-template-select"
-            class="preview-template-select"
-            aria-label="打印模板"
-            :value="template?.id ?? ''"
-            :title="template?.name || '打印模板'"
-            :disabled="templatesLoading || printing || !templateOptions.length"
-            @change="emit('select-template', $event.target.value)"
+          <div
+            ref="templatePickerRef"
+            class="preview-template-picker"
+            @keydown="handleTemplatePickerKeydown"
+            @focusout="handleTemplatePickerFocusout"
           >
-            <option v-if="!templateOptions.length" value="">
-              {{ templatesLoading ? '正在加载模板...' : '暂无可用模板' }}
-            </option>
-            <option v-for="option in templateOptions" :key="option.id" :value="option.id">
-              {{ option.name }}
-            </option>
-          </select>
+            <button
+              :id="templatePickerId"
+              ref="templateTriggerRef"
+              type="button"
+              class="preview-template-select"
+              aria-label="打印模板"
+              aria-haspopup="listbox"
+              :aria-expanded="templateDropdownOpen"
+              :aria-controls="`${templatePickerId}-list`"
+              :title="template?.name || '打印模板'"
+              :disabled="templatesLoading || printing || !templateOptions.length"
+              @click="toggleTemplateDropdown"
+            >
+              <span>{{ template?.name || (templatesLoading ? '正在加载模板...' : '暂无可用模板') }}</span>
+              <ChevronDown :size="16" aria-hidden="true" />
+            </button>
+            <div v-if="templateDropdownOpen" class="preview-template-dropdown">
+              <div class="preview-template-search">
+                <Search :size="15" aria-hidden="true" />
+                <input
+                  ref="templateSearchRef"
+                  v-model="templateSearch"
+                  type="text"
+                  inputmode="search"
+                  autocomplete="off"
+                  placeholder="搜索模板..."
+                  aria-label="搜索打印模板"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded="true"
+                  :aria-controls="`${templatePickerId}-list`"
+                  :aria-activedescendant="filteredTemplates.length ? `${templatePickerId}-option-${activeTemplateIndex}` : undefined"
+                />
+                <button
+                  type="button"
+                  title="清空搜索"
+                  aria-label="清空搜索"
+                  :disabled="!templateSearch"
+                  @click="clearTemplateSearch"
+                >
+                  <X :size="14" aria-hidden="true" />
+                </button>
+              </div>
+              <div
+                :id="`${templatePickerId}-list`"
+                ref="templateListRef"
+                class="preview-template-options"
+                role="listbox"
+                aria-label="打印模板"
+              >
+                <button
+                  v-for="(option, index) in filteredTemplates"
+                  :id="`${templatePickerId}-option-${index}`"
+                  :key="option.id"
+                  type="button"
+                  role="option"
+                  tabindex="-1"
+                  class="preview-template-option"
+                  :class="{ active: index === activeTemplateIndex }"
+                  :aria-selected="String(option.id) === String(template?.id)"
+                  @mousedown.prevent
+                  @mouseenter="activeTemplateIndex = index"
+                  @click="selectTemplateOption(option)"
+                >
+                  <span>
+                    <strong>{{ option.name }}</strong>
+                    <small>{{ option.paperType || '自定义' }} · {{ option.pageWidth }} × {{ option.pageHeight }} mm</small>
+                  </span>
+                  <Check v-if="String(option.id) === String(template?.id)" :size="16" aria-hidden="true" />
+                </button>
+                <div v-if="!filteredTemplates.length" class="preview-template-empty" role="status">
+                  没有匹配的模板
+                </div>
+              </div>
+            </div>
+          </div>
           <dl v-if="template" class="preview-template-details">
             <div><dt>纸张</dt><dd>{{ template.paperType || '自定义' }}</dd></div>
             <div><dt>尺寸</dt><dd>{{ template.pageWidth || 210 }} × {{ template.pageHeight || 140 }} mm</dd></div>
@@ -142,8 +208,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, ref, watch } from 'vue'
-import { FileText, Printer, RefreshCw, Settings } from '@lucide/vue'
+import { computed, getCurrentInstance, nextTick, ref, watch } from 'vue'
+import { Check, ChevronDown, FileText, Printer, RefreshCw, Search, Settings, X } from '@lucide/vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 import { openConfiguredPrintPreview } from '@/utils/lodopPrint'
@@ -185,6 +251,14 @@ const printing = ref(false)
 const printErrorMessage = ref('')
 const autoPrintConsumed = ref(false)
 const settingsVisible = ref(false)
+const templatePickerId = `preview-template-select-${getCurrentInstance().uid}`
+const templatePickerRef = ref(null)
+const templateTriggerRef = ref(null)
+const templateSearchRef = ref(null)
+const templateListRef = ref(null)
+const templateDropdownOpen = ref(false)
+const templateSearch = ref('')
+const activeTemplateIndex = ref(0)
 const {
   printConfig: activePrintConfig,
   checkingPrintService,
@@ -196,6 +270,110 @@ const {
 const renderedTemplateId = ref(null)
 const designerInstanceKey = ref(0)
 let renderRequestId = 0
+
+const filteredTemplates = computed(() => {
+  const keyword = templateSearch.value.trim().toLocaleLowerCase()
+  return props.templateOptions.filter(option => (
+    [option.name, option.paperType, `${option.pageWidth}×${option.pageHeight}`]
+      .join(' ')
+      .toLocaleLowerCase()
+      .includes(keyword)
+  ))
+})
+
+const closeTemplateDropdown = (restoreFocus = false) => {
+  templateDropdownOpen.value = false
+  templateSearch.value = ''
+  if (restoreFocus) templateTriggerRef.value?.focus()
+}
+
+const scrollActiveTemplateIntoView = () => {
+  const list = templateListRef.value
+  const option = list?.querySelector('.active')
+  if (!option) return
+  const top = option.offsetTop - list.offsetTop
+  if (top < list.scrollTop) list.scrollTop = top
+  else if (top + option.offsetHeight > list.scrollTop + list.clientHeight) {
+    list.scrollTop = top + option.offsetHeight - list.clientHeight
+  }
+}
+
+const openTemplateDropdown = async () => {
+  if (props.templatesLoading || printing.value || !props.templateOptions.length) return
+  templateSearch.value = ''
+  activeTemplateIndex.value = Math.max(0, props.templateOptions.findIndex(option => (
+    String(option.id) === String(props.template?.id)
+  )))
+  templateDropdownOpen.value = true
+  await nextTick()
+  templateSearchRef.value?.focus()
+  scrollActiveTemplateIntoView()
+}
+
+const toggleTemplateDropdown = () => {
+  if (templateDropdownOpen.value) closeTemplateDropdown()
+  else openTemplateDropdown()
+}
+
+const selectTemplateOption = (option) => {
+  if (!option || props.templatesLoading || printing.value) return
+  emit('select-template', option.id)
+  closeTemplateDropdown(true)
+}
+
+const clearTemplateSearch = () => {
+  templateSearch.value = ''
+  templateSearchRef.value?.focus()
+}
+
+const handleTemplatePickerKeydown = (event) => {
+  if (event.isComposing) return
+  if (event.key === 'Escape' && templateDropdownOpen.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    closeTemplateDropdown(true)
+  } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    if (!templateDropdownOpen.value) {
+      openTemplateDropdown()
+      return
+    }
+    const count = filteredTemplates.value.length
+    if (count) {
+      activeTemplateIndex.value = (activeTemplateIndex.value + (event.key === 'ArrowDown' ? 1 : -1) + count) % count
+    }
+  } else if (event.key === 'Enter' && event.target === templateSearchRef.value) {
+    event.preventDefault()
+    selectTemplateOption(filteredTemplates.value[activeTemplateIndex.value])
+  }
+}
+
+const handleTemplatePickerFocusout = (event) => {
+  if (!templatePickerRef.value?.contains(event.relatedTarget)) closeTemplateDropdown()
+}
+
+watch(filteredTemplates, () => {
+  activeTemplateIndex.value = 0
+})
+
+watch(activeTemplateIndex, async () => {
+  await nextTick()
+  scrollActiveTemplateIntoView()
+})
+
+watch(templateDropdownOpen, (open, previousOpen, onCleanup) => {
+  if (!open) return
+  const handlePointerDown = (event) => {
+    if (!templatePickerRef.value?.contains(event.target)) closeTemplateDropdown()
+  }
+  document.addEventListener('pointerdown', handlePointerDown)
+  onCleanup(() => document.removeEventListener('pointerdown', handlePointerDown))
+})
+
+watch(
+  [() => props.visible, () => props.templatesLoading, () => props.templateSelection, printing],
+  () => closeTemplateDropdown()
+)
 
 const getTemplateIdentity = (template) => {
   const templateId = template?.id
@@ -931,6 +1109,7 @@ const handleClose = () => emit('close')
 }
 
 .preview-template-sidebar {
+  box-sizing: border-box;
   width: 228px;
   flex: 0 0 auto;
   padding: 16px;
@@ -963,6 +1142,10 @@ const handleClose = () => emit('close')
 }
 
 .preview-template-select {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   width: 100%;
   height: 38px;
   padding: 0 9px;
@@ -972,12 +1155,164 @@ const handleClose = () => emit('close')
   background: #fff;
   font: inherit;
   font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.preview-template-select span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.preview-template-select svg {
+  flex: 0 0 auto;
+}
+
+.preview-template-select:disabled {
+  color: #94a3b8;
+  cursor: not-allowed;
 }
 
 .preview-template-select:focus-visible {
   outline: 2px solid #0f9f78;
   outline-offset: 2px;
+}
+
+.preview-template-picker {
+  position: relative;
+  min-width: 0;
+}
+
+.preview-template-picker,
+.preview-template-picker * {
+  box-sizing: border-box;
+}
+
+.preview-template-dropdown {
+  position: absolute;
+  top: calc(100% + 5px);
+  left: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: min(340px, calc(100dvh - 260px));
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.14);
+}
+
+.preview-template-search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.preview-template-search > svg {
+  flex: 0 0 auto;
+}
+
+.preview-template-search input {
+  width: 100%;
+  min-width: 0;
+  height: 28px;
+  padding: 0;
+  color: #172033;
+  font: inherit;
+  font-size: 13px;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.preview-template-search button {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #64748b;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.preview-template-search button:disabled {
+  visibility: hidden;
+}
+
+.preview-template-options {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.preview-template-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 54px;
+  padding: 9px 10px;
+  color: #334155;
+  font: inherit;
+  text-align: left;
+  background: #fff;
+  border: 0;
+  cursor: pointer;
+}
+
+.preview-template-option.active {
+  background: #f1f5f9;
+}
+
+.preview-template-option[aria-selected="true"] {
+  color: #087f63;
+  background: #ecfdf5;
+}
+
+.preview-template-option span {
+  min-width: 0;
+}
+
+.preview-template-option strong,
+.preview-template-option small {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.preview-template-option strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.preview-template-option small {
+  margin-top: 3px;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.preview-template-option svg {
+  flex: 0 0 auto;
+}
+
+.preview-template-empty {
+  padding: 18px 10px;
+  color: #64748b;
+  font-size: 12px;
+  text-align: center;
 }
 
 .preview-template-details {
@@ -1148,6 +1483,10 @@ const handleClose = () => emit('close')
   .preview-template-heading label svg,
   .preview-template-details {
     display: none;
+  }
+
+  .preview-template-search input {
+    font-size: 16px;
   }
 
   .order-print-preview-footer {
