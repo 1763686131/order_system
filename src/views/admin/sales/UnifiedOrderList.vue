@@ -4507,6 +4507,7 @@ svg {
 }
 
 .mobile-order-card {
+  min-width: 0;
   background: #fff;
   border: 1px solid var(--border);
   border-left: 3px solid var(--store-bg-color, var(--accent));
@@ -6008,6 +6009,7 @@ svg {
 
   .mobile-order-list {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: 8px;
     padding: 8px;
     background: #f8fafc;
