@@ -613,222 +613,102 @@
           :key="order.id"
           class="mobile-order-card"
           :class="{ selected: isSelected(order.id) }"
-          :style="{ '--store-bg-color': getStoreColor(order) }"
         >
-          <header
-            class="mobile-order-card-header"
-            tabindex="0"
-            @click="toggleMobileOrder(order)"
-            @keydown.enter.self.prevent="toggleMobileOrder(order)"
-          >
-            <label
-              v-if="mode !== 'finance' || canDeleteSalesOrders"
-              class="mobile-order-select"
-              @click.stop
-            >
-              <input
-                type="checkbox"
-                :checked="isSelected(order.id)"
-                :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
-                :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
-                @change="toggleSelect(order.id)"
-              />
-            </label>
-            <div class="mobile-order-field mobile-order-customer-field">
-              <span>客户</span>
-              <strong>{{ order.order_client || '-' }}</strong>
+          <header class="mobile-order-card-header">
+            <div class="mobile-order-date-cell">
+              <label
+                v-if="mode !== 'finance' || canDeleteSalesOrders"
+                class="mobile-order-select"
+              >
+                <input
+                  type="checkbox"
+                  :checked="isSelected(order.id)"
+                  :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
+                  :aria-label="`选择订单 ${order.order_number || order.id}`"
+                  :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
+                  @change="toggleSelect(order.id)"
+                />
+              </label>
+              <time class="mobile-order-date" :datetime="formatDate(order) === '-' ? undefined : formatDate(order)">
+                {{ formatDate(order) }}
+              </time>
+            </div>
+            <div class="mobile-order-customer">
+              <strong :title="order.order_client || '-'">{{ order.order_client || '-' }}</strong>
             </div>
             <button
-              v-if="mode === 'finance'"
-              class="mobile-order-copy"
+              class="mobile-order-number"
               type="button"
-              title="复制订单信息"
-              aria-label="复制订单信息"
-              @click.stop="handleCopyOrderInfo(order, 'order-info')"
+              :title="`查看订单 ${order.order_number || order.id}`"
+              :aria-label="`查看订单 ${order.order_number || order.id}`"
+              @click="openOrderDetail(order)"
             >
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <rect x="8" y="8" width="12" height="12" rx="2"></rect>
-                <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
-              </svg>
+              {{ order.order_number || order.id }}
             </button>
-            <div class="mobile-order-field mobile-order-header-status">
-              <span>状态</span>
-              <span :class="['status-tag', getStatusClass(order)]">
+          </header>
+
+          <div class="mobile-order-contact-row">
+            <div class="mobile-order-field">
+              <span>收货人</span>
+              <strong :title="getContactPerson(order)">{{ getContactPerson(order) }}</strong>
+            </div>
+            <div class="mobile-order-field">
+              <span>收货电话</span>
+              <strong :title="String(getContactPhone(order))">{{ getContactPhone(order) }}</strong>
+            </div>
+            <div class="mobile-order-field mobile-order-address-field">
+              <span>客户地址</span>
+              <strong :title="getContactAddress(order)">{{ getMobileContactAddress(order) }}</strong>
+            </div>
+          </div>
+
+          <section class="mobile-order-products" role="table" aria-label="商品明细">
+            <div class="mobile-order-product-grid mobile-order-product-head" role="row">
+              <span role="columnheader">商品</span>
+              <span role="columnheader">规格</span>
+              <span role="columnheader">数量</span>
+              <span role="columnheader">单价</span>
+              <span role="columnheader">总金额</span>
+            </div>
+            <div
+              v-for="(item, index) in getMobileGoodsItems(order)"
+              :key="`${order.id}-mobile-item-${index}`"
+              class="mobile-order-product-grid mobile-order-product"
+              role="row"
+            >
+              <span role="cell" :title="getGoodsItemName(item)">{{ getGoodsItemName(item) }}</span>
+              <span role="cell" :title="getGoodsItemSpec(item)">{{ getGoodsItemSpec(item) }}</span>
+              <span role="cell">{{ item.quantity ?? '-' }}</span>
+              <span role="cell">{{ formatMobileMoney(item.price) }}</span>
+              <span role="cell">{{ getMobileGoodsAmount(item) }}</span>
+            </div>
+          </section>
+
+          <footer class="mobile-order-footer">
+            <div class="mobile-order-field mobile-order-money">
+              <span>应收金额</span>
+              <strong>{{ getShouldReceive(order) }}</strong>
+            </div>
+            <div class="mobile-order-field mobile-order-money">
+              <span>未收金额</span>
+              <strong>{{ getCurrentDebt(order) }}</strong>
+            </div>
+            <div class="mobile-order-footer-actions">
+              <button
+                class="mobile-order-copy"
+                type="button"
+                :title="mode === 'finance' ? '复制订单信息' : '复制物流信息'"
+                :aria-label="mode === 'finance' ? '复制订单信息' : '复制物流信息'"
+                @click="handleCopyOrderInfo(order, mode === 'finance' ? 'order-info' : 'logistics-info')"
+              >
+                <Copy aria-hidden="true" />
+              </button>
+              <span :class="['status-tag', 'mobile-order-status', getStatusClass(order)]">
                 <i aria-hidden="true"></i>
                 {{ getStatusText(order) }}
               </span>
             </div>
-            <button
-              class="mobile-order-expand"
-              type="button"
-              :aria-expanded="mobileExpandedOrderId === order.id"
-              :aria-label="mobileExpandedOrderId === order.id ? '收起订单详情' : '展开订单详情'"
-              :title="mobileExpandedOrderId === order.id ? '收起详情' : '展开详情'"
-              @click.stop="toggleMobileOrder(order)"
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24">
-                <path
-                  :d="mobileExpandedOrderId === order.id ? 'm6 15 6-6 6 6' : 'm6 9 6 6 6-6'"
-                ></path>
-              </svg>
-            </button>
-          </header>
-
-          <div class="mobile-order-primary" @click="toggleMobileOrder(order)">
-            <div class="mobile-order-field mobile-order-document-field">
-              <span>编号 / 日期</span>
-              <div class="mobile-order-document-meta">
-                <button
-                  class="mobile-order-number"
-                  type="button"
-                  @click.stop="toggleMobileOrder(order)"
-                >
-                  {{ order.order_number || order.id }}
-                </button>
-                <span class="mobile-order-date">{{ formatDate(order) }}</span>
-              </div>
-            </div>
-            <div class="mobile-order-field">
-              <span>收货人</span>
-              <strong>{{ getContactPerson(order) }}</strong>
-            </div>
-          </div>
-
-          <div class="mobile-order-contact-row" @click="toggleMobileOrder(order)">
-            <div class="mobile-order-field">
-              <span>联系电话</span>
-              <strong>{{ getContactPhone(order) }}</strong>
-            </div>
-            <div class="mobile-order-field mobile-order-address-field">
-              <span>客户地址</span>
-              <strong>{{ getContactAddress(order) }}</strong>
-            </div>
-          </div>
-
-          <div class="mobile-order-amount-row" @click="toggleMobileOrder(order)">
-            <template v-if="mode === 'finance'">
-              <div class="mobile-order-field">
-                <span>应收金额</span>
-                <strong>{{ getShouldReceive(order) }}</strong>
-              </div>
-              <div class="mobile-order-field">
-                <span>未收金额</span>
-                <strong>{{ getCurrentDebt(order) }}</strong>
-              </div>
-              <div class="mobile-order-field">
-                <span>已收金额</span>
-                <strong>{{ getCurrentPayment(order) }}</strong>
-              </div>
-            </template>
-            <template v-else>
-              <div class="mobile-order-field">
-                <span>发货方式</span>
-                <strong>{{ getShippingMethodText(order) }}</strong>
-              </div>
-              <div class="mobile-order-field">
-                <span>总重量</span>
-                <strong>{{ getTotalWeight(order) }}</strong>
-              </div>
-              <div class="mobile-order-field">
-                <span>运费</span>
-                <strong>{{ getFreightTotal(order) > 0 ? `¥${getFreightTotal(order).toFixed(2)}` : '-' }}</strong>
-              </div>
-            </template>
-          </div>
-
-          <div
-            v-if="mobileExpandedOrderId === order.id"
-            class="mobile-order-details"
-            @click.stop
-          >
-            <div class="mobile-product-scroll">
-              <div class="mobile-product-table">
-                <div class="mobile-product-row mobile-product-head">
-                  <span>商品信息</span>
-                  <span>型号</span>
-                  <span>数量</span>
-                  <span>单价</span>
-                  <span>金额</span>
-                  <span>备注</span>
-                </div>
-                <template v-if="isNewOrder(order)">
-                  <div
-                    v-for="(item, index) in order.order_goods"
-                    :key="`${order.id}-mobile-item-${index}`"
-                    class="mobile-product-row"
-                  >
-                    <strong :title="getGoodsItemName(item)">{{ getGoodsItemName(item) }}</strong>
-                    <span>{{ getGoodsItemSpec(item) }}</span>
-                    <span>{{ item.quantity ?? '-' }}</span>
-                    <span>{{ formatMobileMoney(item.price) }}</span>
-                    <span>{{ formatMobileMoney(item.amount) }}</span>
-                    <span>{{ item.remark || '-' }}</span>
-                  </div>
-                </template>
-                <div v-else class="mobile-product-row">
-                  <strong>{{ getGoodsDisplay(order) }}</strong>
-                  <span>-</span>
-                  <span>{{ order.goods_quantity ?? '-' }}</span>
-                  <span>-</span>
-                  <span>{{ getShouldReceive(order) }}</span>
-                  <span>{{ order.remark || '-' }}</span>
-                </div>
-                <div class="mobile-product-total">
-                  <strong>合计</strong>
-                  <span></span>
-                  <strong>{{ calculateTotalQuantity(order) }}</strong>
-                  <span></span>
-                  <strong>{{ formatMobileMoney(calculateSubtotal(order)) }}</strong>
-                  <span></span>
-                </div>
-              </div>
-            </div>
-
-            <div class="mobile-order-actions" @click.stop>
-              <button
-                v-if="mode === 'logistics'"
-                type="button"
-                title="物流信息"
-                @click="handleCopyOrderInfo(order)"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <rect x="8" y="8" width="12" height="12" rx="2"></rect>
-                  <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
-                </svg>
-                复制物流
-              </button>
-              <button
-                v-if="canPrintSalesOrders"
-                type="button"
-                title="打印订单"
-                @click="handlePrintOrder(order)"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <path d="M6 9V2h12v7"></path>
-                  <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                  <path d="M6 14h12v8H6z"></path>
-                </svg>
-                打印
-              </button>
-              <button
-                v-if="hasRowMenuActions(order)"
-                class="mobile-order-more"
-                type="button"
-                title="更多操作"
-                :aria-label="`订单 ${order.order_number || order.id} 更多操作`"
-                aria-haspopup="menu"
-                :aria-expanded="openActionMenuOrderId === order.id"
-                @click="toggleActionMenu(order, $event)"
-              >
-                <svg aria-hidden="true" viewBox="0 0 24 24">
-                  <circle cx="5" cy="12" r="1.4"></circle>
-                  <circle cx="12" cy="12" r="1.4"></circle>
-                  <circle cx="19" cy="12" r="1.4"></circle>
-                </svg>
-                更多
-              </button>
-            </div>
-          </div>
+          </footer>
         </article>
       </div>
 
@@ -1177,6 +1057,15 @@
                 </button>
               </div>
               <div class="detail-modal-actions">
+                <button
+                  v-if="canPrintSalesOrders"
+                  class="button button-secondary mobile-order-print-action"
+                  type="button"
+                  @click="handlePrintOrder(selectedOrder)"
+                >
+                  <Printer aria-hidden="true" />
+                  打印
+                </button>
                 <template v-if="mode === 'finance' && canAuditOrder(selectedOrder)">
                   <button
                     v-if="!auditSlideVisible"
@@ -1476,6 +1365,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { Copy, Printer } from '@lucide/vue'
 import request from '@/api/request'
 import { resolveLogisticsCopySettings } from '@/api/logisticsCopy'
 import { useOrderStore } from '@/stores/order'
@@ -1814,7 +1704,6 @@ const selectedShippingMethodText = computed(() => {
 
 // 选中的订单
 const selectedOrders = ref([])
-const mobileExpandedOrderId = ref(null)
 
 // 展开弹窗状态
 const expandModal = ref({
@@ -2099,7 +1988,6 @@ const actionMenuOrder = computed(() =>
 
 watch(paginatedOrders, () => {
   closeActionMenu()
-  mobileExpandedOrderId.value = null
 })
 
 const pageStart = computed(() => filteredOrders.value.length ? (currentPage.value - 1) * pageSize.value + 1 : 0)
@@ -2136,11 +2024,6 @@ const isSelected = (orderId) => {
   return selectedOrders.value.includes(orderId)
 }
 
-const toggleMobileOrder = (order) => {
-  mobileExpandedOrderId.value =
-    mobileExpandedOrderId.value === order.id ? null : order.id
-}
-
 // ========== 新旧字段兼容辅助函数 ==========
 
 // 获取联系人
@@ -2156,6 +2039,23 @@ const getContactPhone = (order) => {
 // 获取联系地址
 const getContactAddress = (order) => {
   return order.contact_address || order.receiver_address || '-'
+}
+
+const getMobileContactAddress = (order) => {
+  const characters = Array.from(String(getContactAddress(order)))
+  return characters.length > 5 ? `${characters.slice(0, 5).join('')}...` : characters.join('')
+}
+
+const getMobileGoodsItems = (order) => {
+  if (Array.isArray(order.order_goods) && order.order_goods.length > 0) {
+    return order.order_goods
+  }
+  return [{
+    goods_name: order.goods_name || '-',
+    spec: order.goods_spec || order.model || '',
+    quantity: order.goods_quantity,
+    price: order.goods_price ?? order.price
+  }]
 }
 
 // 获取商品信息显示
@@ -2294,8 +2194,19 @@ const getGoodsItemSpec = (item) => {
 }
 
 const formatMobileMoney = (value) => {
+  if (value === undefined || value === null || value === '') return '-'
   const amount = Number(value)
-  return Number.isFinite(amount) ? `¥${amount.toFixed(2)}` : '-'
+  return Number.isFinite(amount) ? amount.toFixed(2) : '-'
+}
+
+const getMobileGoodsAmount = (item) => {
+  if (item.amount !== undefined && item.amount !== null && item.amount !== '') {
+    return formatMobileMoney(item.amount)
+  }
+  if ([item.quantity, item.price].some(value => value === undefined || value === null || value === '')) {
+    return '-'
+  }
+  return formatMobileMoney(Number(item.quantity) * Number(item.price))
 }
 
 // 计算合计件数
@@ -4510,59 +4421,206 @@ svg {
   min-width: 0;
   background: #fff;
   border: 1px solid var(--border);
-  border-left: 3px solid var(--store-bg-color, var(--accent));
   border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
 }
 
 .mobile-order-card.selected {
-  background: rgba(var(--accent-rgb), 0.08);
+  border-color: var(--accent-border);
+  background: #f7fcfa;
 }
 
 .mobile-order-card-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0.7fr) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
-  padding: 11px 12px 7px;
-  cursor: pointer;
+  min-height: 46px;
+  padding: 8px 12px 4px;
 }
 
-.mobile-order-customer-field {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.mobile-order-heading {
+.mobile-order-date-cell {
   display: flex;
-  flex: 1 1 auto;
   min-width: 0;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+}
+
+.mobile-order-customer {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.mobile-order-customer strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobile-order-select {
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
+  padding: 6px 0;
 }
 
 .mobile-order-select input {
-  width: 17px;
-  height: 17px;
+  width: 15px;
+  height: 15px;
   margin: 0;
   accent-color: var(--accent);
 }
 
+.mobile-order-number {
+  min-width: 0;
+  min-height: 32px;
+  overflow: hidden;
+  padding: 0;
+  color: #526071;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-order-number:hover {
+  color: var(--accent-dark);
+  text-decoration: underline;
+}
+
+.mobile-order-date {
+  color: #89929e;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.mobile-order-contact-row {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 3px 12px 11px;
+}
+
+.mobile-order-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mobile-order-field > span:first-child {
+  color: #8a939f;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.mobile-order-field strong {
+  overflow: hidden;
+  color: #495361;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-order-products {
+  margin: 0 12px;
+  padding: 4px 0 6px;
+  border-top: 1px solid #f0f2f4;
+}
+
+.mobile-order-product-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.85fr) minmax(0, 0.55fr) minmax(0, 0.9fr) minmax(0, 1fr);
+  align-items: start;
+  gap: 5px;
+  min-width: 0;
+  padding: 6px 0;
+  line-height: 1.6;
+}
+
+.mobile-order-product-grid > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.mobile-order-product-grid > span:nth-child(n + 3) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.mobile-order-product-head {
+  color: #8a939f;
+  border-bottom: 1px solid #f0f2f4;
+  font-size: 10px;
+}
+
+.mobile-order-product {
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.mobile-order-product + .mobile-order-product {
+  border-top: 1px solid #f5f6f8;
+}
+
+.mobile-order-product > span:nth-child(2) {
+  color: #7e8793;
+}
+
+.mobile-order-product > span:nth-child(n + 3) {
+  font-size: 11px;
+}
+
+.mobile-order-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 0 12px;
+  padding: 10px 0 12px;
+  border-top: 1px solid #f0f2f4;
+}
+
+.mobile-order-money strong {
+  overflow: visible;
+  color: #303943;
+  font-size: 14px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.mobile-order-footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .mobile-order-copy {
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
   padding: 0;
-  color: var(--text-secondary);
+  color: #6b7582;
   background: #fff;
-  border: 1px solid var(--border-strong);
+  border: 1px solid var(--border);
   border-radius: 5px;
   cursor: pointer;
 }
@@ -4578,327 +4636,30 @@ svg {
   height: 15px;
 }
 
-.mobile-order-header-status {
-  display: flex;
-  flex: 0 1 72px;
-  min-width: 0;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 3px;
-}
-
-.mobile-order-header-status .status-tag {
-  max-width: 100%;
-  min-height: 22px;
+.mobile-order-status {
+  min-height: 24px;
   gap: 4px;
-  overflow: hidden;
-  padding: 3px 7px;
-  font-size: 11px;
-  text-overflow: ellipsis;
-}
-
-.mobile-order-header-status .status-tag i {
-  flex: 0 0 auto;
-}
-
-.mobile-order-number {
-  max-width: 220px;
-  overflow: hidden;
-  padding: 0;
-  color: var(--accent-dark);
-  background: transparent;
+  padding: 3px 6px;
   border: 0;
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 750;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-order-number:hover {
-  text-decoration: underline;
-}
-
-.mobile-order-date {
-  color: var(--text-secondary);
-  font-size: 11px;
-  line-height: 1.2;
-}
-
-.mobile-order-expand {
-  display: inline-flex;
-  width: 30px;
-  height: 30px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  color: var(--text-secondary);
-  background: #fff;
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.mobile-order-expand:hover {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-}
-
-.mobile-order-expand svg {
-  width: 16px;
-  height: 16px;
-}
-
-.mobile-order-primary {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 10px;
-  padding: 3px 12px 10px;
-  cursor: pointer;
-}
-
-.mobile-order-document-meta {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.mobile-order-field {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.mobile-order-field > span:first-child,
-.mobile-order-detail-grid dt {
-  color: var(--text-muted);
-  font-size: 11px;
-  line-height: 1.3;
-}
-
-.mobile-order-field strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-order-header-store {
-  flex: 0 1 104px;
-  max-width: 104px;
-  margin-left: auto;
-  padding: 4px 7px;
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border: 1px solid var(--accent-border);
   border-radius: 4px;
-  font-size: 11px;
-  line-height: 1.25;
+  font-size: 10px;
+  font-weight: 500;
 }
 
-.mobile-order-contact-row,
-.mobile-order-amount-row {
-  display: grid;
-  gap: 8px;
-  border-top: 1px solid #edf1f5;
-  cursor: pointer;
-}
-
-.mobile-order-contact-row {
-  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.5fr);
-  padding: 9px 12px 8px;
-}
-
-.mobile-order-amount-row {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  padding: 9px 12px 10px;
-}
-
-.mobile-order-contact-row .mobile-order-field,
-.mobile-order-amount-row .mobile-order-field {
-  cursor: pointer;
-}
-
-.mobile-order-address-field strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-order-status-field {
-  align-items: flex-end;
-}
-
-.mobile-order-status-field .status-tag {
-  max-width: 100%;
-  min-height: 22px;
-  gap: 4px;
-  overflow: hidden;
-  padding: 3px 7px;
-  font-size: 11px;
-  text-overflow: ellipsis;
-}
-
-.mobile-order-status-field .status-tag i {
+.mobile-order-status i {
+  width: 4px;
+  height: 4px;
   flex: 0 0 auto;
 }
 
-.mobile-order-details {
-  padding: 10px 12px 12px;
-  border-top: 1px solid var(--border);
-  background: #fbfcfd;
+.mobile-order-number:focus-visible,
+.mobile-order-copy:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
-.mobile-product-scroll {
-  overflow-x: auto;
-  margin: 0 -2px;
-  padding-bottom: 2px;
-  scrollbar-width: thin;
-}
-
-.mobile-product-table {
-  min-width: 620px;
-  overflow: hidden;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 5px;
-}
-
-.mobile-product-row,
-.mobile-product-total {
-  display: grid;
-  grid-template-columns: 1.5fr 1.05fr 0.65fr 1fr 1fr 1.25fr;
-  gap: 8px;
-  align-items: center;
-  padding: 7px 9px;
-}
-
-.mobile-product-row {
-  min-height: 38px;
-  color: #344054;
-  border-bottom: 1px solid #edf1f5;
-  font-size: 11px;
-}
-
-.mobile-product-head {
-  min-height: 34px;
-  color: var(--text-muted);
-  background: #f4f7f9;
-  font-weight: 650;
-}
-
-.mobile-product-row > *,
-.mobile-product-total > * {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-product-row strong {
-  color: var(--text);
-  font-weight: 650;
-}
-
-.mobile-product-total {
-  min-height: 38px;
-  color: var(--text);
-  background: #fff;
-  font-size: 12px;
-}
-
-.mobile-product-total > :nth-child(3),
-.mobile-product-total > :nth-child(5) {
-  text-align: right;
-}
-
-.mobile-order-detail-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
-  margin: 0;
-}
-
-.mobile-order-detail-grid > div {
-  min-width: 0;
-}
-
-.mobile-order-detail-grid dd {
-  margin: 3px 0 0;
-  color: var(--text);
-  font-size: 12px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.mobile-order-detail-wide,
-.mobile-order-remark {
-  grid-column: 1 / -1;
-}
-
-.mobile-order-inline-action {
-  max-width: 100%;
-  overflow: hidden;
-  padding: 0;
-  color: var(--accent-dark);
-  background: transparent;
-  border: 0;
-  cursor: pointer;
-  font-size: 12px;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.mobile-order-inline-action:hover {
-  text-decoration: underline;
-}
-
-.mobile-order-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 11px;
-  padding-top: 10px;
-  border-top: 1px solid var(--border);
-}
-
-.mobile-order-actions button {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  padding: 0 9px;
-  color: #445066;
-  background: #fff;
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.mobile-order-actions button:hover {
-  color: var(--accent-dark);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-}
-
-.mobile-order-actions svg {
-  width: 15px;
-  height: 15px;
-}
-
-.mobile-order-more {
-  margin-left: auto;
+.mobile-order-print-action {
+  display: none;
 }
 
 .mobile-order-loading,
@@ -6013,6 +5774,17 @@ svg {
     gap: 8px;
     padding: 8px;
     background: #f8fafc;
+  }
+
+  .mobile-order-print-action {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .mobile-order-print-action svg {
+    width: 15px;
+    height: 15px;
   }
 
   .records-toolbar {
