@@ -196,6 +196,7 @@ const canConfigure = computed(() =>
 
 const close = () => {
   stopDrag()
+  stopResize()
   emit('update:modelValue', false)
 }
 
@@ -237,6 +238,47 @@ let statusController
 let previousFocus
 let dragState
 let resizeState
+
+const DIALOG_BOUNDS_STORAGE_KEY = 'admin_gugu_chat_window_bounds'
+
+const loadStoredDialogBounds = () => {
+  try {
+    const bounds = JSON.parse(window.localStorage.getItem(DIALOG_BOUNDS_STORAGE_KEY) || 'null')
+    if (
+      ![bounds?.left, bounds?.top, bounds?.width, bounds?.height].every(Number.isFinite)
+      || bounds.width <= 0
+      || bounds.height <= 0
+    ) return null
+    return { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }
+  } catch {
+    return null
+  }
+}
+
+let savedDialogBounds = loadStoredDialogBounds()
+
+const restoreDialogBounds = () => {
+  if (!savedDialogBounds || document.documentElement.clientWidth <= 780) return
+  const { left, top, width, height } = savedDialogBounds
+  dialogPosition.value = { left, top }
+  dialogSize.value = { width, height }
+}
+
+const saveDialogBounds = () => {
+  if (!dialogRef.value || document.documentElement.clientWidth <= 780) return
+  const { left, top, width, height } = dialogRef.value.getBoundingClientRect()
+  savedDialogBounds = {
+    left: dialogPosition.value?.left ?? left,
+    top: dialogPosition.value?.top ?? top,
+    width: dialogSize.value?.width ?? width,
+    height: dialogSize.value?.height ?? height
+  }
+  try {
+    window.localStorage.setItem(DIALOG_BOUNDS_STORAGE_KEY, JSON.stringify(savedDialogBounds))
+  } catch {
+    // 浏览器禁用本地存储时，仍在当前页面内保留窗口设置。
+  }
+}
 
 const getResizeLimits = () => {
   const viewportWidth = document.documentElement.clientWidth
@@ -380,6 +422,7 @@ const stopDrag = event => {
   dragState = null
   dragging.value = false
   if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId)
+  saveDialogBounds()
 }
 
 const startResize = (event, direction) => {
@@ -461,11 +504,13 @@ const stopResize = event => {
   resizeState = null
   resizing.value = false
   if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId)
+  saveDialogBounds()
 }
 
 const handleViewportResize = async () => {
   stopDrag()
   stopResize()
+  restoreDialogBounds()
   await nextTick()
   clampDialogBounds()
 }
@@ -610,6 +655,7 @@ watch(() => props.modelValue, async isOpen => {
     return
   }
   previousFocus = document.activeElement
+  restoreDialogBounds()
   await nextTick()
   clampDialogBounds()
   dialogRef.value?.focus()
