@@ -23,6 +23,9 @@ Werkzeug==3.0.0
 python-dateutil==2.8.2
 # 日期时间处理工具（可选，用于高级日期操作）
 
+# Encrypt stored provider credentials
+cryptography>=42,<47
+
 # -------------------- 开发工具（可选）--------------------
 # 以下是开发和测试时推荐的工具，生产环境可选
 

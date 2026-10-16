@@ -5,8 +5,11 @@ from flask import Blueprint, jsonify, request
 from utils.auth import (
     current_session_id,
     get_current_user,
+    require_admin_permission,
     require_super_admin,
 )
+from utils import deepseek
+from utils.ai_secrets import set_deepseek_api_key
 from utils.db import get_db
 from utils.system_settings import (
     DEFAULT_BANK_CARD_BG_PATH,
@@ -26,6 +29,59 @@ from utils.system_settings import (
 
 
 settings_bp = Blueprint("settings", __name__, url_prefix="/api/settings")
+
+
+@settings_bp.route("/ai", methods=["GET"])
+@require_admin_permission(deepseek.SETTINGS_PERMISSION)
+def get_ai_settings():
+    response = jsonify({
+        "success": True,
+        "data": deepseek.config_status(include_mask=True),
+    })
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@settings_bp.route("/ai", methods=["PUT"])
+@require_admin_permission(deepseek.SETTINGS_PERMISSION)
+def save_ai_settings():
+    if request.content_length and request.content_length > 4096:
+        return jsonify({"success": False, "message": "API 配置请求过大"}), 413
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"success": False, "message": "API 配置格式不正确"}), 400
+    if data.get("clear") is True and "apiKey" not in data:
+        set_deepseek_api_key("")
+        message = "Nomi API 密钥已清除"
+    else:
+        api_key = data.get("apiKey")
+        if not isinstance(api_key, str) or data.get("clear"):
+            return jsonify({"success": False, "message": "请提供有效的 API 密钥"}), 400
+        api_key = api_key.strip()
+        if not 16 <= len(api_key) <= 512 or any(
+            ord(char) < 33 or ord(char) > 126 for char in api_key
+        ):
+            return jsonify({
+                "success": False,
+                "message": "API 密钥格式不正确，请检查是否有多余空格或换行",
+            }), 400
+        try:
+            deepseek.chat(
+                api_key,
+                [{"role": "user", "content": "请只回复：连接成功"}],
+                max_tokens=16,
+            )
+        except deepseek.DeepSeekError as error:
+            return jsonify({
+                "success": False, "code": error.code, "message": str(error)
+            }), error.status
+        set_deepseek_api_key(api_key)
+        message = "连接验证成功，Nomi API 密钥已保存"
+    return jsonify({
+        "success": True,
+        "message": message,
+        "data": deepseek.config_status(include_mask=True),
+    })
 
 
 def _save_directory_setting(key, value, default_path, label):

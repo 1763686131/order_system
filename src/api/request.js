@@ -39,7 +39,11 @@ request.interceptors.response.use(
     return response.data
   },
   (error) => {
-    console.error('API Error:', error)
+    if (error.config?.url === '/settings/ai') {
+      console.error('Nomi configuration request failed:', error.response?.status || error.code)
+    } else {
+      console.error('API Error:', error)
+    }
     return Promise.reject(error)
   }
 )

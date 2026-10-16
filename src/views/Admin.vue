@@ -114,6 +114,17 @@
           </TransitionGroup>
 
           <div class="header-icons">
+            <button
+              class="icon-btn nomi-header-button"
+              type="button"
+              title="打开 Nomi 智能助手"
+              aria-label="打开 Nomi 智能助手"
+              aria-haspopup="dialog"
+              :aria-expanded="nomiChatOpen"
+              @click="openNomiChat"
+            >
+              <NomiAvatar />
+            </button>
             <button v-if="!isMobileViewport" class="icon-btn" title="系统公告">
               <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 2L2 7l10 5 10-5-10-5z"/>
@@ -356,6 +367,10 @@
       @message-sent="messageInboxRef?.refresh()"
       @open-contact="openChat"
     />
+    <NomiAdminChat
+      v-model="nomiChatOpen"
+      @open-settings="openNomiSettings"
+    />
   </div>
 </template>
 
@@ -381,6 +396,8 @@ import {
 import ChatWindow from '@/components/admin/ChatWindow.vue'
 import DirectoryPanel from '@/components/admin/DirectoryPanel.vue'
 import MessageInbox from '@/components/admin/MessageInbox.vue'
+import NomiAdminChat from '@/components/admin/NomiAdminChat.vue'
+import NomiAvatar from '@/components/common/NomiAvatar.vue'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
 import LogisticsCopySettingsDialog from '@/components/admin/LogisticsCopySettingsDialog.vue'
@@ -420,6 +437,7 @@ const messageInboxRef = ref(null)
 const notificationInboxRef = ref(null)
 const chatWindowOpen = ref(false)
 const activeChatContact = ref(null)
+const nomiChatOpen = ref(false)
 const logisticsCopySettingsVisible = ref(false)
 const canOpenLogisticsCopySettings = computed(() =>
   userStore.canAccessAdmin &&
@@ -466,6 +484,25 @@ const openLogisticsCopySettings = () => {
 
 const closeLogisticsCopySettings = () => {
   logisticsCopySettingsVisible.value = false
+}
+
+const openNomiChat = () => {
+  closeAccountMenu()
+  directoryPanelRef.value?.close()
+  messageInboxRef.value?.close()
+  notificationInboxRef.value?.close()
+  chatWindowOpen.value = false
+  nomiChatOpen.value = true
+}
+
+const closeNomiChat = () => {
+  nomiChatOpen.value = false
+}
+
+const openNomiSettings = () => {
+  if (!userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.SETTINGS)) return
+  closeNomiChat()
+  router.push({ name: 'admin-settings', query: { section: 'nomi' } })
 }
 
 const openChat = contact => {
@@ -1626,6 +1663,18 @@ const logout = async () => {
   color: var(--accent-dark);
 }
 
+.icon-btn.nomi-header-button {
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.icon-btn.nomi-header-button:hover,
+.icon-btn.nomi-header-button[aria-expanded="true"] {
+  box-shadow: 0 0 0 3px #a9e5d2;
+}
+
 .icon-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
@@ -2023,11 +2072,29 @@ const logout = async () => {
   }
 
   .header-left {
-    gap: 12px;
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .header-right {
+    flex: 0 0 auto;
+    gap: 8px;
+  }
+
+  .header-icons {
+    gap: 6px;
+  }
+
+  .header-actions:empty {
+    display: none;
   }
 
   .header-page-title {
+    min-width: 0;
+    overflow: hidden;
     font-size: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .user-name {

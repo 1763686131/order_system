@@ -125,6 +125,7 @@ from routes.notifications import notifications_bp
 from routes.admin_realtime import admin_realtime_bp
 from routes.peer_transfers import peer_transfers_bp
 from routes.operation_logs import operation_logs_bp
+from routes.ai import ai_bp
 
 app.register_blueprint(users_bp)
 app.register_blueprint(auth_bp)
@@ -161,6 +162,7 @@ app.register_blueprint(notifications_bp)
 app.register_blueprint(admin_realtime_bp)
 app.register_blueprint(peer_transfers_bp)
 app.register_blueprint(operation_logs_bp)
+app.register_blueprint(ai_bp)
 
 from utils.operation_logs import register_operation_logging
 

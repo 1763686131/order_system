@@ -10,6 +10,91 @@
 
     <!-- 配置面板 -->
     <div class="records-panel">
+      <!-- Nomi AI 配置 -->
+      <div class="settings-section nomi-settings-section">
+        <button class="section-header nomi-section-trigger" type="button" :aria-expanded="expandedSections.nomi" aria-controls="nomi-config-form" @click="toggleSection('nomi')">
+          <span class="header-left">
+            <Bot class="section-icon" aria-hidden="true" />
+            <span class="section-title">Nomi AI 助手</span>
+            <span :class="['section-badge', { 'is-disabled': !aiConfig.configured }]">
+              {{ aiLoading ? '读取中' : !aiConfigLoaded ? '待读取' : aiConfig.configured ? '已配置' : '未配置' }}
+            </span>
+          </span>
+          <ChevronDown
+            class="toggle-icon"
+            :class="{ expanded: expandedSections.nomi }"
+            aria-hidden="true"
+          />
+        </button>
+
+        <form v-show="expandedSections.nomi" id="nomi-config-form" class="section-content" @submit.prevent="saveAiConfig">
+          <div class="config-grid">
+            <div class="config-item">
+              <label class="config-label" for="nomi-api-key">
+                <span class="label-text">DeepSeek API 密钥</span>
+              </label>
+              <div class="nomi-key-input-group">
+                <input
+                  id="nomi-api-key"
+                  v-model="aiConfig.apiKey"
+                  :type="showAiKey ? 'text' : 'password'"
+                  class="config-input"
+                  autocomplete="new-password"
+                  autocapitalize="off"
+                  :spellcheck="false"
+                  maxlength="512"
+                  :disabled="aiLoading || aiSaving || !canManageAi"
+                  placeholder="输入 DeepSeek API 密钥"
+                />
+                <button class="nomi-key-visibility" type="button" :title="showAiKey ? '隐藏密钥' : '显示密钥'" :aria-label="showAiKey ? '隐藏密钥' : '显示密钥'" :aria-pressed="showAiKey" @click="showAiKey = !showAiKey">
+                  <EyeOff v-if="showAiKey" :size="17" aria-hidden="true" />
+                  <Eye v-else :size="17" aria-hidden="true" />
+                </button>
+              </div>
+              <span v-if="aiConfig.maskedApiKey" class="config-current-value">
+                当前密钥：{{ aiConfig.maskedApiKey }} · 模型：{{ aiConfig.model }}
+              </span>
+              <span v-else-if="aiConfigLoaded" class="config-current-value">
+                当前尚未配置 API 密钥。
+              </span>
+            </div>
+          </div>
+
+          <div v-if="aiNotice.text" :class="['ai-config-notice', aiNotice.type]" role="status" aria-live="polite">
+            {{ aiNotice.text }}
+            <button
+              v-if="!aiConfigLoaded && !aiLoading"
+              type="button"
+              class="nomi-retry-button"
+              @click="loadAiConfig"
+            >
+              重试读取
+            </button>
+          </div>
+
+          <div class="section-actions">
+            <button
+              class="btn-primary"
+              type="submit"
+              :disabled="aiSaving || aiLoading || !aiConfigLoaded || !canManageAi"
+            >
+              <Check class="btn-icon" aria-hidden="true" />
+              {{ aiSaving ? '处理中...' : '验证并保存' }}
+            </button>
+            <button
+              v-if="aiConfig.configured"
+              class="btn-secondary ai-clear-button"
+              type="button"
+              :disabled="aiSaving || aiLoading || !aiConfigLoaded || !canManageAi"
+              @click="clearAiConfig"
+            >
+              <Trash2 class="btn-icon" aria-hidden="true" />
+              清除 API 密钥
+            </button>
+          </div>
+        </form>
+      </div>
+
       <!-- 第一排：路径参数设置 -->
       <div class="settings-section">
         <div class="section-header" @click="toggleSection('path')">
@@ -851,21 +936,43 @@
 </template>
 
 <script setup>
-import { computed, ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, nextTick, ref, reactive, onMounted, watch } from 'vue'
+import { Bot, Check, ChevronDown, Eye, EyeOff, Trash2 } from '@lucide/vue'
+import { useRoute, useRouter } from 'vue-router'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
+import { ADMIN_ROUTE_BRANCH_PERMISSIONS } from '@/utils/adminAccess'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
+const canManageAi = computed(() =>
+  userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.SETTINGS)
+)
 
 // 控制各区块展开/收起
 const expandedSections = reactive({
+  nomi: route.query.section === 'nomi',
   path: true,
   message: false,
   business: false,
   security: false,
   devices: false
+})
+
+const aiConfig = reactive({
+  apiKey: '',
+  maskedApiKey: '',
+  configured: false,
+  model: ''
+})
+const showAiKey = ref(false)
+const aiLoading = ref(false)
+const aiSaving = ref(false)
+const aiConfigLoaded = ref(false)
+const aiNotice = reactive({
+  type: 'success',
+  text: ''
 })
 
 const deviceSessions = ref([])
@@ -953,6 +1060,91 @@ const toggleSection = (section) => {
 const setDeviceNotice = (text, type = 'success') => {
   deviceNotice.text = text
   deviceNotice.type = type
+}
+
+const setAiNotice = (text, type = 'success') => {
+  aiNotice.text = text
+  aiNotice.type = type
+}
+
+const loadAiConfig = async () => {
+  aiLoading.value = true
+  aiConfigLoaded.value = false
+  setAiNotice('')
+  try {
+    const response = await request.get('/settings/ai')
+    if (!response.success) {
+      throw new Error(response.message || 'Nomi 配置读取失败')
+    }
+    Object.assign(aiConfig, {
+      maskedApiKey: response.data?.maskedApiKey || '',
+      configured: Boolean(response.data?.configured),
+      model: response.data?.model || '',
+      apiKey: ''
+    })
+    aiConfigLoaded.value = true
+    if (response.data?.configurationError) {
+      setAiNotice(response.data.configurationError, 'error')
+    }
+  } catch (error) {
+    setAiNotice(error.response?.data?.message || error.message || 'Nomi 配置读取失败', 'error')
+  } finally {
+    aiLoading.value = false
+  }
+}
+
+const saveAiConfig = async () => {
+  if (aiSaving.value || !aiConfigLoaded.value || !canManageAi.value) return
+  aiSaving.value = true
+  setAiNotice('')
+  try {
+    if (!aiConfig.apiKey.trim()) {
+      setAiNotice('请输入新的 DeepSeek API 密钥；如需移除当前密钥，请使用清除操作。', 'error')
+      return
+    }
+    const response = await request.put('/settings/ai', { apiKey: aiConfig.apiKey }, { timeout: 75000 })
+    if (!response.success) {
+      throw new Error(response.message || 'Nomi 配置保存失败')
+    }
+    Object.assign(aiConfig, {
+      apiKey: '',
+      maskedApiKey: response.data?.maskedApiKey || '',
+      configured: Boolean(response.data?.configured),
+      model: response.data?.model || aiConfig.model
+    })
+    showAiKey.value = false
+    setAiNotice(response.message || 'Nomi API 配置已保存')
+  } catch (error) {
+    setAiNotice(error.response?.data?.message || error.message || 'Nomi 配置保存失败', 'error')
+  } finally {
+    aiSaving.value = false
+  }
+}
+
+const clearAiConfig = async () => {
+  if (aiSaving.value || !aiConfigLoaded.value || !canManageAi.value) return
+  if (!window.confirm('清除后，Nomi 将无法继续使用 DeepSeek。确定清除 API 密钥吗？')) {
+    return
+  }
+  aiSaving.value = true
+  setAiNotice('')
+  try {
+    const response = await request.put('/settings/ai', { clear: true })
+    if (!response.success) {
+      throw new Error(response.message || 'Nomi API 密钥清除失败')
+    }
+    Object.assign(aiConfig, {
+      apiKey: '',
+      maskedApiKey: '',
+      configured: false
+    })
+    showAiKey.value = false
+    setAiNotice(response.message || 'Nomi API 密钥已清除')
+  } catch (error) {
+    setAiNotice(error.response?.data?.message || error.message || 'Nomi API 密钥清除失败', 'error')
+  } finally {
+    aiSaving.value = false
+  }
 }
 
 const loadLoginDevices = async () => {
@@ -1147,9 +1339,20 @@ const saveSecurityConfig = () => {
   alert('安全配置已保存')
 }
 
+const revealNomiSection = async () => {
+  if (route.query.section !== 'nomi') return
+  expandedSections.nomi = true
+  await nextTick()
+  document.querySelector('.nomi-settings-section')?.scrollIntoView({ block: 'start' })
+}
+
+watch(() => route.query.section, revealNomiSection)
+
 onMounted(() => {
   loadPathConfig()
+  loadAiConfig()
   loadLoginDevices()
+  revealNomiSection()
   // 这里可以加载配置数据
   console.log('设置页面已加载')
 })
@@ -1278,6 +1481,101 @@ onMounted(() => {
   min-height: 20px;
   display: inline-flex;
   align-items: center;
+}
+
+.section-badge.is-disabled {
+  color: var(--text-muted);
+  background: #f1f5f9;
+}
+
+.nomi-section-trigger {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+}
+
+.nomi-section-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.nomi-key-input-group {
+  display: flex;
+  min-width: 0;
+  max-width: 640px;
+  gap: 8px;
+}
+
+.nomi-key-input-group .config-input {
+  min-width: 0;
+}
+
+.nomi-key-visibility {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  color: var(--text-secondary);
+  background: var(--panel-bg);
+  cursor: pointer;
+}
+
+.config-current-value {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ai-config-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 9px 11px;
+  border: 1px solid var(--accent-border);
+  border-radius: 5px;
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ai-config-notice.error {
+  border-color: #fecaca;
+  color: #b42318;
+  background: #fff1f2;
+}
+
+.nomi-retry-button {
+  flex: 0 0 auto;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ai-clear-button {
+  color: #b42318;
+  border-color: #fecaca;
+}
+
+.ai-clear-button:hover {
+  color: #991b1b;
+  border-color: #fda4af;
+  background: #fff1f2;
 }
 
 .toggle-icon {
