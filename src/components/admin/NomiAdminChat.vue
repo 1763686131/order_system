@@ -3,7 +3,7 @@
   <div v-if="modelValue" class="nomi-admin-layer" @click.self="close" @keydown="handleKeydown">
     <section
       ref="dialogRef"
-      class="nomi-admin-dialog"
+      :class="['nomi-admin-dialog', { 'is-resizing': resizing }]"
       :style="dialogStyle"
       role="dialog"
       aria-modal="true"
@@ -154,6 +154,18 @@
           <Send :size="17" :stroke-width="1.9" />
         </button>
       </form>
+
+      <div
+        v-for="handle in resizeHandles"
+        :key="handle"
+        :class="['nomi-resize-handle', `is-${handle}`]"
+        aria-hidden="true"
+        @pointerdown="startResize($event, handle)"
+        @pointermove="resizeDialog"
+        @pointerup="stopResize"
+        @pointercancel="stopResize"
+        @lostpointercapture="stopResize"
+      ></div>
     </section>
   </div>
   </Teleport>
@@ -189,15 +201,25 @@ const close = () => {
 
 const dialogRef = ref(null)
 const dialogPosition = ref(null)
+const dialogSize = ref(null)
 const dragging = ref(false)
-const dialogStyle = computed(() => dialogPosition.value
-  ? {
-      position: 'fixed',
-      left: `${dialogPosition.value.left}px`,
-      top: `${dialogPosition.value.top}px`
-    }
-  : {}
-)
+const resizing = ref(false)
+const resizeHandles = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']
+const dialogStyle = computed(() => ({
+  ...(dialogPosition.value
+    ? {
+        position: 'fixed',
+        left: `${dialogPosition.value.left}px`,
+        top: `${dialogPosition.value.top}px`
+      }
+    : {}),
+  ...(dialogSize.value
+    ? {
+        width: `${dialogSize.value.width}px`,
+        height: `${dialogSize.value.height}px`
+      }
+    : {})
+}))
 const composerRef = ref(null)
 const messageListRef = ref(null)
 const messages = ref([])
@@ -214,6 +236,26 @@ let replyController
 let statusController
 let previousFocus
 let dragState
+let resizeState
+
+const getResizeLimits = () => {
+  const viewportWidth = document.documentElement.clientWidth
+  const viewportHeight = document.documentElement.clientHeight
+  const availableWidth = Math.max(0, viewportWidth - 28)
+  const availableHeight = Math.max(0, viewportHeight - 96)
+  const minWidth = Math.min(340, availableWidth)
+  const minHeight = Math.min(320, availableHeight)
+  return {
+    viewportWidth,
+    viewportHeight,
+    minWidth,
+    minHeight,
+    maxWidth: Math.max(minWidth, Math.min(820, availableWidth)),
+    maxHeight: Math.max(minHeight, Math.min(860, availableHeight))
+  }
+}
+
+const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(value, maximum))
 
 const splitMarkdownTableRow = line => {
   const trimmed = line.trim()
@@ -270,14 +312,45 @@ const renderMarkdown = content => {
 const clampDialogPosition = (left = dialogPosition.value?.left, top = dialogPosition.value?.top) => {
   if (!dialogRef.value || left == null || top == null) return
   const rect = dialogRef.value.getBoundingClientRect()
+  const { viewportWidth, viewportHeight } = getResizeLimits()
   dialogPosition.value = {
-    left: Math.max(0, Math.min(left, document.documentElement.clientWidth - rect.width)),
-    top: Math.max(0, Math.min(top, document.documentElement.clientHeight - rect.height))
+    left: clamp(left, 0, Math.max(0, viewportWidth - rect.width)),
+    top: clamp(top, 0, Math.max(0, viewportHeight - rect.height))
   }
 }
 
+const clampDialogBounds = () => {
+  if (!dialogRef.value) return
+  const limits = getResizeLimits()
+  if (limits.viewportWidth <= 780) {
+    dialogSize.value = null
+    dialogPosition.value = null
+    return
+  }
+  const rect = dialogRef.value.getBoundingClientRect()
+  const width = dialogSize.value
+    ? clamp(dialogSize.value.width, limits.minWidth, limits.maxWidth)
+    : rect.width
+  const height = dialogSize.value
+    ? clamp(dialogSize.value.height, limits.minHeight, limits.maxHeight)
+    : rect.height
+  const left = clamp(dialogPosition.value?.left ?? rect.left, 0, Math.max(0, limits.viewportWidth - width))
+  const top = clamp(dialogPosition.value?.top ?? rect.top, 0, Math.max(0, limits.viewportHeight - height))
+  if (dialogSize.value) {
+    dialogSize.value = { width, height }
+  }
+  dialogPosition.value = { left, top }
+}
+
 const startDrag = event => {
-  if (!event.isPrimary || event.button !== 0 || event.target.closest('button') || !dialogRef.value || dragState) return
+  if (
+    !event.isPrimary
+    || event.button !== 0
+    || event.target.closest('button')
+    || !dialogRef.value
+    || dragState
+    || resizeState
+  ) return
   const rect = dialogRef.value.getBoundingClientRect()
   dialogPosition.value = { left: rect.left, top: rect.top }
   dragState = {
@@ -309,10 +382,92 @@ const stopDrag = event => {
   if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId)
 }
 
+const startResize = (event, direction) => {
+  if (
+    !event.isPrimary
+    || event.button !== 0
+    || !dialogRef.value
+    || dragState
+    || resizeState
+  ) return
+  const rect = dialogRef.value.getBoundingClientRect()
+  dialogPosition.value = { left: rect.left, top: rect.top }
+  dialogSize.value = { width: rect.width, height: rect.height }
+  resizeState = {
+    pointerId: event.pointerId,
+    handle: event.currentTarget,
+    direction,
+    startX: event.clientX,
+    startY: event.clientY,
+    left: rect.left,
+    top: rect.top,
+    width: rect.width,
+    height: rect.height
+  }
+  resizing.value = true
+  event.currentTarget.setPointerCapture(event.pointerId)
+  event.preventDefault()
+  event.stopPropagation()
+}
+
+const resizeDialog = event => {
+  if (!resizeState || event.pointerId !== resizeState.pointerId) return
+  const { direction, startX, startY, left, top, width, height } = resizeState
+  const limits = getResizeLimits()
+  const deltaX = event.clientX - startX
+  const deltaY = event.clientY - startY
+  let nextLeft = left
+  let nextTop = top
+  let nextWidth = width
+  let nextHeight = height
+
+  if (direction.includes('e')) {
+    nextWidth = clamp(
+      width + deltaX,
+      limits.minWidth,
+      Math.min(limits.maxWidth, limits.viewportWidth - left)
+    )
+  } else if (direction.includes('w')) {
+    nextWidth = clamp(
+      width - deltaX,
+      limits.minWidth,
+      Math.min(limits.maxWidth, left + width)
+    )
+    nextLeft = left + width - nextWidth
+  }
+
+  if (direction.includes('s')) {
+    nextHeight = clamp(
+      height + deltaY,
+      limits.minHeight,
+      Math.min(limits.maxHeight, limits.viewportHeight - top)
+    )
+  } else if (direction.includes('n')) {
+    nextHeight = clamp(
+      height - deltaY,
+      limits.minHeight,
+      Math.min(limits.maxHeight, top + height)
+    )
+    nextTop = top + height - nextHeight
+  }
+
+  dialogPosition.value = { left: nextLeft, top: nextTop }
+  dialogSize.value = { width: nextWidth, height: nextHeight }
+}
+
+const stopResize = event => {
+  if (!resizeState || (event?.pointerId != null && event.pointerId !== resizeState.pointerId)) return
+  const { handle, pointerId } = resizeState
+  resizeState = null
+  resizing.value = false
+  if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId)
+}
+
 const handleViewportResize = async () => {
   stopDrag()
+  stopResize()
   await nextTick()
-  clampDialogPosition()
+  clampDialogBounds()
 }
 
 const scrollToBottom = async () => {
@@ -449,27 +604,34 @@ const handleKeydown = event => {
 watch(() => props.modelValue, async isOpen => {
   if (!isOpen) {
     stopDrag()
+    stopResize()
     await nextTick()
     if (previousFocus?.isConnected) previousFocus.focus()
     return
   }
   previousFocus = document.activeElement
   await nextTick()
-  clampDialogPosition()
+  clampDialogBounds()
   dialogRef.value?.focus()
   await loadStatus()
   if (props.modelValue && !sending.value) composerRef.value?.focus()
 })
 
+const handleWindowBlur = () => {
+  stopDrag()
+  stopResize()
+}
+
 onMounted(() => {
   window.addEventListener('resize', handleViewportResize)
-  window.addEventListener('blur', stopDrag)
+  window.addEventListener('blur', handleWindowBlur)
 })
 
 onUnmounted(() => {
   stopDrag()
+  stopResize()
   window.removeEventListener('resize', handleViewportResize)
-  window.removeEventListener('blur', stopDrag)
+  window.removeEventListener('blur', handleWindowBlur)
   replyController?.abort()
   statusController?.abort()
 })
@@ -495,12 +657,99 @@ onUnmounted(() => {
   width: min(430px, calc(100vw - 28px));
   height: min(640px, calc(100vh - 96px));
   height: min(640px, calc(100dvh - 96px));
+  box-sizing: border-box;
   flex-direction: column;
   overflow: hidden;
   border: 1px solid #dbe3eb;
   border-radius: 8px;
   background: #ffffff;
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.2);
+}
+
+.nomi-admin-dialog.is-resizing {
+  user-select: none;
+}
+
+.nomi-resize-handle {
+  position: absolute;
+  z-index: 5;
+  touch-action: none;
+}
+
+.nomi-resize-handle.is-n,
+.nomi-resize-handle.is-s {
+  right: 12px;
+  left: 12px;
+  height: 8px;
+  cursor: ns-resize;
+}
+
+.nomi-resize-handle.is-n {
+  top: 0;
+}
+
+.nomi-resize-handle.is-s {
+  bottom: 0;
+}
+
+.nomi-resize-handle.is-e,
+.nomi-resize-handle.is-w {
+  top: 12px;
+  bottom: 12px;
+  width: 8px;
+  cursor: ew-resize;
+}
+
+.nomi-resize-handle.is-e {
+  right: 0;
+}
+
+.nomi-resize-handle.is-w {
+  left: 0;
+}
+
+.nomi-resize-handle.is-ne,
+.nomi-resize-handle.is-se,
+.nomi-resize-handle.is-sw,
+.nomi-resize-handle.is-nw {
+  width: 16px;
+  height: 16px;
+}
+
+.nomi-resize-handle.is-ne {
+  top: 0;
+  right: 0;
+  cursor: nesw-resize;
+}
+
+.nomi-resize-handle.is-se {
+  right: 0;
+  bottom: 0;
+  cursor: nwse-resize;
+}
+
+.nomi-resize-handle.is-sw {
+  bottom: 0;
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.nomi-resize-handle.is-nw {
+  top: 0;
+  left: 0;
+  cursor: nwse-resize;
+}
+
+.nomi-resize-handle.is-se::after {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid #94a3b8;
+  border-bottom: 2px solid #94a3b8;
+  content: '';
+  opacity: 0.85;
 }
 
 .nomi-admin-header {
@@ -969,6 +1218,10 @@ onUnmounted(() => {
     border-bottom: 0;
     border-left: 0;
     border-radius: 8px 8px 0 0;
+  }
+
+  .nomi-resize-handle {
+    display: none;
   }
 }
 
