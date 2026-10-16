@@ -1,8 +1,8 @@
-"""Authenticated Nomi chat endpoints for the admin workspace."""
+"""Authenticated GuGu chat endpoints for the admin workspace."""
 
 from flask import Blueprint, jsonify, request
 
-from utils import ai_client, ai_config
+from utils import ai_client, ai_config, ai_order_tools
 from utils.ai_secrets import decrypt_api_key
 from utils.auth import require_admin_access
 
@@ -48,10 +48,24 @@ def chat_with_nomi():
             "code": "missing_api_key",
             "message": "尚未配置 AI 接口，请先在系统设置中配置服务商和 API 密钥。",
         }), 409
+    order_query_used = False
+
+    def execute_order_tool(name, arguments):
+        nonlocal order_query_used
+        result = ai_order_tools.execute_tool(name, arguments)
+        if result.get("success"):
+            order_query_used = True
+        return result
+
     try:
-        result = ai_client.chat(config, api_key, messages)
+        result = ai_client.chat(
+            config, api_key, messages,
+            tools=ai_order_tools.available_tools(),
+            execute_tool=execute_order_tool,
+        )
     except ai_client.AIProviderError as error:
         return jsonify({
             "success": False, "code": error.code, "message": str(error)
         }), error.status
+    result["orderQueryUsed"] = order_query_used
     return jsonify({"success": True, "data": result})

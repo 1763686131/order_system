@@ -12,8 +12,8 @@
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `5.14` |
-| 文档更新 | `2026-10-14` |
+| 权限/API 文档版本 | `5.16` |
+| 文档更新 | `2026-10-16` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -46,6 +46,7 @@
 - 员工头像裁剪、缩放、上传、替换和物理文件清理
 - 部门配置、员工多部门归属、部门员工维护和职位内联编辑
 - 后台顶栏通讯录，支持部门折叠、员工搜索、头像、职位、电话和在线状态
+- 固固助手（GuGu）后台顶栏聊天助手，支持多服务商、自定义 OpenAI 兼容接口、连接验证和数据库加密保存密钥；触屏端保留原有筛选等辅助功能
 - 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
 - 操作日志：记录账号安全、角色权限、员工部门及指定业务写操作，支持筛选和清空
 - 物流复制模板：支持服务器保存、历史模板、复制入口和绑定用户、变量拖拽/点击插入、逐件换行、变量拼接及实时预览
@@ -61,7 +62,7 @@
 - npm
 - Docker Desktop，可选
 
-纯内网环境需要提前准备 npm、pip 依赖缓存或内部镜像源。应用运行时不需要访问互联网。
+纯内网环境需要提前准备 npm、pip 依赖缓存或内部镜像源。常规业务和触屏端固固助手辅助功能可在内网运行；启用云端 AI 聊天时，后端服务器需要能够访问所配置的服务商接口。自定义接口也可指向内网兼容服务。
 
 ### 安装依赖
 
@@ -75,7 +76,7 @@ py -m venv .venv
 pip install -r backend\requirements.txt
 ```
 
-如果本机没有 `py` 命令，可以使用对应版本的 `python`。
+如果本机没有 `py` 命令，可以使用对应版本的 `python`。后端依赖包含 `cryptography>=42,<47`，用于加密保存 AI 服务商密钥；直接运行 Python 后端时需在实际使用的虚拟环境中安装完整依赖。
 
 ### 本地开发
 
@@ -123,9 +124,9 @@ Windows 本地环境可运行：
 .\backend\start.bat
 ```
 
-脚本会构建 `order-backend` 镜像并启动名为 `my_order_app` 的容器，将本地 `backend/`、`data/`、`frontend/` 和 `uploads/` 挂载到容器中。
+脚本直接调用 `docker build` 和 `docker run`，构建 `order-backend` 镜像并启动名为 `my_order_app` 的容器，将本地 `backend/`、`data/`、`frontend/` 和 `uploads/` 挂载到容器中，不读取 Compose 文件。构建失败时会尝试加载 `Settings/order-backend.tar` 中的离线镜像，归档需包含 `order-backend:latest` 标签及当前后端所需依赖。
 
-`docker-compose.yml` 当前包含 NAS 环境的固定挂载路径。换机器部署前，必须先修改其中的宿主机路径。
+`docker-compose.yml` 用于 NAS 的 Compose 部署，当前包含 NAS 环境的固定挂载路径。Windows 本地启动脚本与 NAS Compose 分别使用各自的挂载配置；换机器使用 Compose 部署前，必须先修改其中的宿主机路径。
 
 ### 首次部署
 
@@ -177,7 +178,8 @@ order_system/
 │  │  ├─ warehouses.py               # 仓库接口
 │  │  ├─ customers.py                # 客户、应收欠款与账户汇总接口
 │  │  ├─ payment_receipts.py         # 收款单、附件、审核和反审核接口
-│  │  ├─ settings.py                 # 系统路径和登录设备会话管理
+│  │  ├─ settings.py                 # 系统路径、固固助手服务商配置和登录设备会话管理
+│  │  ├─ ai.py                       # 固固助手配置状态与后台聊天接口
 │  │  ├─ print_templates.py          # 打印模板 CRUD、默认模板和历史模板迁移
 │  │  ├─ freight.py                  # 运费与对账接口
 │  │  └─ hr_reports.py               # 人事报告接口
@@ -191,6 +193,10 @@ order_system/
 │  │  ├─ bank_account_helpers.py     # 银行账户默认值、余额和流水辅助逻辑
 │  │  ├─ employee_links.py           # 员工、登录账号和角色关系辅助逻辑
 │  │  ├─ system_settings.py          # 系统配置读取和更新
+│  │  ├─ ai_config.py                # AI 服务商预设、独立配置和当前启用服务商
+│  │  ├─ ai_client.py                # OpenAI 兼容聊天请求、消息限制和异常转换
+│  │  ├─ ai_order_tools.py           # 复用鉴权订单接口的列表、汇总和详情查询工具
+│  │  ├─ ai_secrets.py               # AI 密钥 Fernet 加密、解密和旧配置兼容
 │  │  ├─ user_helpers.py             # 当前用户和账号关系辅助逻辑
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
 │  │  ├─ supplier_ledger.py          # 采购入库应付、供应商流水和来源汇总
@@ -235,7 +241,8 @@ order_system/
 │  │  │  ├─ ConfirmModal.vue         # 通用确认弹窗
 │  │  │  ├─ ShippedOrderActionModal.vue # 物流发货-回单上传窗口
 │  │  │  ├─ ToggleSwitch.vue         # 通用滑块开关
-│  │  │  └─ NomiFloatingAI.vue       # Nomi 辅助工具
+│  │  │  ├─ NomiAvatar.vue           # 固固助手方形机器人头像、触角、耳朵和眨眼动画
+│  │  │  └─ NomiFloatingAI.vue       # 触屏端固固助手筛选等辅助工具
 │  │  ├─ admin/
 │  │  │  ├─ BusinessDocumentForm.vue # 销售、销售退货、采购申请、采购入库和采购退货共用录入界面
 │  │  │  ├─ MaterialOutboundAuditModal.vue # 原材料出库后台新增、修改与批量明细
@@ -243,6 +250,7 @@ order_system/
 │  │  │  ├─ DirectoryPanel.vue       # 后台通讯录搜索、部门折叠和员工状态
 │  │  │  ├─ MessageInbox.vue         # 留言会话与审核通知双模式面板
 │  │  │  ├─ ChatWindow.vue           # 可拖动的一对一留言和附件窗口
+│  │  │  ├─ NomiAdminChat.vue        # 后台固固助手聊天、配置引导、重试和清空
 │  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制模板、变量、绑定和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  ├─ InventoryMovementModal.vue # 原材料库存流水详情弹窗
@@ -298,7 +306,7 @@ order_system/
 │  │     ├─ system/                  # 角色组、门店、打印模板、操作日志和系统配置
 │  │     │  ├─ RoleGroupManage.vue   # 权限、成员、会话策略和数据范围
 │  │     │  ├─ StoreManage.vue       # 门店档案管理
-│  │     │  ├─ Settings.vue          # 系统参数配置（含银行卡图片路径配置）
+│  │     │  ├─ Settings.vue          # 系统参数、固固助手服务商和银行卡图片路径配置
 │  │     │  ├─ PrintTemplate.vue     # 打印模板管理
 │  │     │  └─ OperationLogs.vue     # 操作日志筛选、分页、详情和清空
 │  │     └─ hr/                      # 人事行政
@@ -324,7 +332,10 @@ order_system/
 │     └─ ...                         # 其它全局与业务样式
 ├─ data/
 │  ├─ order_system.db                # 当前 SQLite 业务数据库
+│  ├─ .app_secret_key                # 未设置 APP_SECRET_KEY 时自动生成的服务端密钥
 │  └─ backup_before_cleanup/         # 历史 JSON 备份
+├─ Settings/
+│  └─ order-backend.tar              # 后端 Docker 离线镜像，包含 Python 运行环境和依赖
 ├─ docs/
 │  ├─ API接口文档.md                 # 完整 API 参数、响应、权限和业务规则
 │  ├─ BUG及优化文档.md               # 问题与优化记录
@@ -1008,6 +1019,60 @@ order-system-print-client-config
 `create`、`edit`、`delete`。普通用户使用物流列表或订单详情复制时，不需要模板管理权限，
 但必须拥有后台访问权限和对应的销售路由分支权限；复制接口只返回当前账号适用的字段配置。
 
+## 固固助手（GuGu）
+
+### 入口与聊天
+
+后台 `Admin.vue` 顶栏显示固固助手（GuGu）机器人按钮，点击打开 `NomiAdminChat.vue` 对话框。头像为绿色方形机器人头，带触角、耳朵、白色眼睛和眨眼动画。触屏端继续使用 `NomiFloatingAI.vue` 的原有筛选等辅助功能。
+
+未配置 API 时，对话区域中央显示配置提示；具有系统设置权限的账号可以点击“去设置 API”，进入 `/admin/settings?section=nomi`。没有该权限时提示联系管理员。配置成功后显示正常聊天界面，不再显示配置引导；标题和输入区不显示固定服务商品牌副标题、“密钥已配置”或“管理 API”栏。
+
+支持多轮文字聊天、Enter 发送、Shift+Enter 换行、失败重试、清空对话和停止等待。按住标题栏可使用鼠标或触摸拖动窗口，位置限制在屏幕内，本页关闭后重开保留位置。对话仅保存在当前页面内存中，刷新页面后清空，不写入数据库。“停止等待”只取消前端等待，不保证终止服务商已收到的请求。
+
+除问答、文字整理和起草内容外，固固助手已接入只读订单查询。可以直接询问“今天有哪些未完成订单”“查询某客户本月的订单”“查看订单编号 XXX 的明细”，支持按单号、客户、门店、关键词、日期、状态和过账状态筛选，并查看明细。查询成功的回复下方显示“已查询订单数据”。
+
+订单查询复用 `GET /api/orders` 和 `GET /api/orders/{id}` 的鉴权与门店范围，要求后台访问及 `touch.order.read` 权限，超级管理员直接通过。列表每次默认返回 10 条、最多 20 条；汇总数量和本单应收合计由后端对全部匹配订单计算，不将当前页当成全部结果。详情最多提供 20 项商品，并标记是否截断；订单金额为单据快照，不代替客户实时账务。
+
+所选模型需要支持 Chat Completions 工具调用；不接受工具参数的兼容服务会尝试退回普通聊天，并明确本次无法查询订单。助手尚未接入订单创建、修改、审核、删除，以及库存或客户账务工具。
+
+### 服务商配置
+
+在“系统设置 → 固固助手 AI 配置”中选择服务商，填写接口地址、模型 ID 和 API 密钥，再点击“验证并启用”。
+
+| 选项 | 配置标识 |
+| --- | --- |
+| DeepSeek | `deepseek` |
+| 通义千问 · 阿里云百炼 | `qwen` |
+| Kimi · 月之暗面 | `kimi` |
+| 智谱 GLM | `zhipu` |
+| 豆包 · 火山方舟 | `doubao` |
+| 硅基流动 | `siliconflow` |
+| OpenAI | `openai` |
+| 自定义（OpenAI 兼容，位于选项末尾） | `custom` |
+
+预设自动填入接口地址和模型，允许按账号实际开通情况修改；豆包需填写模型 ID 或 `ep-...` 接入点 ID，自定义需填写完整的接口地址和模型 ID。自定义服务需支持 Bearer 密钥认证及 OpenAI Chat Completions 协议，后端向接口地址追加 `/chat/completions`；也接受直接填写以该路径结尾的完整地址。不支持该协议的原生 API 需要通过兼容网关接入。
+
+每个服务商分别保存地址、模型和密钥，系统只启用其中一个供后台聊天使用。选择下拉选项只加载配置；保存时会实际调用服务商进行连接验证，验证成功后保存并切换，失败则保留原有配置。验证请求也可能产生服务商调用费用。
+
+已保存密钥仅显示掩码，输入框留空可复用所选服务商的已有密钥；更换接口地址时必须重新输入密钥，不会跨服务商复用。清除操作只删除所选服务商的密钥，保留其地址、模型和其他服务商配置；清除当前启用服务商的密钥后，聊天界面重新显示配置引导。
+
+### 密钥保存与备份
+
+服务商配置保存在 SQLite `system_settings` 表的 `ai.providers_config` 中，包含 `activeProvider` 和各服务商的 `profiles`。API 密钥通过 `cryptography` 的 Fernet 加密后保存，配置读取仅返回密钥掩码，浏览器不使用 `localStorage` 保存密钥。旧版 `ai.deepseek_api_key` 在 DeepSeek 没有独立配置时继续兼容读取。
+
+加密依赖稳定的 Flask `SECRET_KEY`：优先读取环境变量 `APP_SECRET_KEY`，未设置时自动生成并持久化到 `data/.app_secret_key`（容器内为 `/app/data/.app_secret_key`）。迁移或备份数据库时应同时保留对应的服务端密钥；密钥变化或文件丢失会导致已有 API 密钥无法解密，需要重新输入并保存。
+
+### 关键接口
+
+| 接口 | 用途 | 权限 |
+| --- | --- | --- |
+| `GET /api/ai/status` | 当前启用服务商的配置状态 | 登录且可访问后台 |
+| `POST /api/ai/chat` | 文字聊天及按权限调用只读订单查询 | 登录且可访问后台；查订单另需 `touch.order.read` |
+| `GET /api/settings/ai?provider=qwen` | 读取指定服务商配置、密钥掩码及全部预设 | 后台访问 + `admin.route.system.settings` |
+| `PUT /api/settings/ai` | 验证并启用配置，或清除指定服务商密钥 | 后台访问 + `admin.route.system.settings` |
+
+请求字段、消息长度限制及错误码见 [API 文档第 20 章](docs/API接口文档.md#20-gugu-ai)。
+
 ## 数据存储
 
 系统当前以 SQLite 为业务数据源，本地和 Docker 默认都使用 `data/order_system.db`。
@@ -1058,6 +1123,8 @@ order-system-print-client-config
 
 打印模板本身保存在 SQLite；C-Lodop 地址、端口和打印机名称保存在每台客户端浏览器的 `localStorage`，不会随数据库备份迁移到其他电脑。
 
+系统参数和固固助手服务商配置使用 `system_settings` 表；AI 密钥保存为密文，对话记录不在数据库中持久化。
+
 修改或替换数据库前，应先停止后端服务并备份 `data/order_system.db`，避免正在运行的进程继续写入。
 
 ## 前端开发约定
@@ -1106,8 +1173,18 @@ docker restart my_order_app
 - 已构建的 Docker 镜像
 - 已生成的前端静态文件
 - SQLite 数据库备份
+- 与数据库匹配的 `data/.app_secret_key`，或部署时使用的同一个 `APP_SECRET_KEY`
 
 `backend/Dockerfile` 当前配置了在线 pip 镜像。严格断网环境下应使用预构建镜像，或把镜像源改为内网地址。
+
+在可联网构建的环境中，于项目根目录重新打包后端依赖镜像：
+
+```powershell
+docker build -t order-backend:latest ./backend
+docker save -o ./Settings/order-backend.tar order-backend:latest
+```
+
+目标环境可使用 `docker load -i ./Settings/order-backend.tar` 导入。该文件是完整 Docker 镜像归档，包含 `cryptography>=42,<47` 等后端依赖；新增依赖后需要重新构建并导出。云端 AI 聊天仍需后端能访问所配置的服务商，离线环境可使用内网兼容接口。
 
 ## 常见问题
 

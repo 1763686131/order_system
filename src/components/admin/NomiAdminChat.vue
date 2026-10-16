@@ -4,18 +4,26 @@
     <section
       ref="dialogRef"
       class="nomi-admin-dialog"
+      :style="dialogStyle"
       role="dialog"
       aria-modal="true"
       aria-labelledby="nomi-admin-title"
       tabindex="-1"
     >
-      <header class="nomi-admin-header">
+      <header
+        :class="['nomi-admin-header', { 'is-dragging': dragging }]"
+        @pointerdown="startDrag"
+        @pointermove="dragDialog"
+        @pointerup="stopDrag"
+        @pointercancel="stopDrag"
+        @lostpointercapture="stopDrag"
+      >
         <div class="nomi-admin-title-wrap">
           <div class="nomi-admin-avatar" aria-hidden="true">
             <NomiAvatar :thinking="sending" />
           </div>
           <div>
-            <h2 id="nomi-admin-title">Nomi 智能助手</h2>
+            <h2 id="nomi-admin-title">固固助手（GuGu）</h2>
           </div>
         </div>
 
@@ -33,8 +41,8 @@
           <button
             class="nomi-icon-button"
             type="button"
-            title="关闭 Nomi"
-            aria-label="关闭 Nomi"
+            title="关闭固固助手"
+            aria-label="关闭固固助手"
             @click="close"
           >
             <X :size="18" :stroke-width="1.8" />
@@ -42,9 +50,9 @@
         </div>
       </header>
 
-      <div ref="messageListRef" class="nomi-admin-messages" role="log" aria-label="Nomi 对话记录" aria-live="polite" :aria-busy="sending">
+      <div ref="messageListRef" class="nomi-admin-messages" role="log" aria-label="固固助手对话记录" aria-live="polite" :aria-busy="sending">
         <div v-if="statusLoading" class="nomi-admin-state">
-          正在检查 Nomi 配置...
+          正在检查固固助手配置...
         </div>
 
         <div v-else-if="statusError" class="nomi-admin-state nomi-admin-state-error">
@@ -71,7 +79,7 @@
         <template v-else>
           <div v-if="!messages.length && !failedQuestion" class="nomi-admin-empty">
             <div class="nomi-welcome-avatar"><NomiAvatar /></div>
-            <strong>你好，我是 Nomi</strong>
+            <strong>你好，我是固固助手（GuGu）</strong>
             <p>今天有什么想聊的？</p>
           </div>
           <div
@@ -80,7 +88,13 @@
             :class="['nomi-message-row', `is-${message.role}`]"
           >
             <div class="nomi-message-bubble">
-              <span class="nomi-message-content">{{ message.content }}</span>
+              <div
+                v-if="message.role === 'assistant'"
+                class="nomi-message-content nomi-markdown"
+                v-html="renderMarkdown(message.content)"
+              ></div>
+              <span v-else class="nomi-message-content">{{ message.content }}</span>
+              <small v-if="message.orderQueryUsed" class="nomi-order-source">已查询订单数据</small>
               <small v-if="message.truncated" class="nomi-truncated">回复未完，可继续提问。</small>
             </div>
           </div>
@@ -89,7 +103,7 @@
             <div class="nomi-message-bubble">{{ failedQuestion }}</div>
           </div>
           <div v-if="sending" class="nomi-message-row is-assistant">
-            <div class="nomi-message-bubble nomi-loading-bubble" aria-label="Nomi 正在思考">
+            <div class="nomi-message-bubble nomi-loading-bubble" aria-label="固固助手正在思考">
               <span></span><span></span><span></span>
             </div>
           </div>
@@ -146,8 +160,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { KeyRound, Send, Settings2, Square, Trash2, X } from '@lucide/vue'
+import DOMPurify from 'dompurify'
+import { marked } from 'marked'
 import request from '@/api/request'
 import NomiAvatar from '@/components/common/NomiAvatar.vue'
 import { useUserStore } from '@/stores/user'
@@ -167,10 +183,21 @@ const canConfigure = computed(() =>
 )
 
 const close = () => {
+  stopDrag()
   emit('update:modelValue', false)
 }
 
 const dialogRef = ref(null)
+const dialogPosition = ref(null)
+const dragging = ref(false)
+const dialogStyle = computed(() => dialogPosition.value
+  ? {
+      position: 'fixed',
+      left: `${dialogPosition.value.left}px`,
+      top: `${dialogPosition.value.top}px`
+    }
+  : {}
+)
 const composerRef = ref(null)
 const messageListRef = ref(null)
 const messages = ref([])
@@ -186,6 +213,107 @@ const configurationError = ref('')
 let replyController
 let statusController
 let previousFocus
+let dragState
+
+const splitMarkdownTableRow = line => {
+  const trimmed = line.trim()
+  if (!trimmed.includes('|')) return []
+  return trimmed
+    .replace(/^\|/, '')
+    .replace(/\|$/, '')
+    .split('|')
+    .map(cell => cell.trim())
+}
+
+const normalizeMarkdownTables = source => {
+  const lines = source.split('\n')
+  for (let index = 0; index < lines.length - 1; index += 1) {
+    const headerCells = splitMarkdownTableRow(lines[index])
+    const separatorCells = splitMarkdownTableRow(lines[index + 1])
+    if (
+      headerCells.length < 2
+      || separatorCells.length < 2
+      || !separatorCells.every(cell => /^:?-{3,}:?$/.test(cell))
+    ) {
+      continue
+    }
+    const normalizedSeparators = headerCells.map((_, cellIndex) => separatorCells[cellIndex] || '---')
+    lines[index + 1] = `| ${normalizedSeparators.join(' | ')} |`
+  }
+  return lines.join('\n')
+}
+
+const renderMarkdown = content => {
+  const source = normalizeMarkdownTables(String(content || ''))
+  try {
+    const html = marked.parse(source, {
+      gfm: true,
+      breaks: true
+    })
+    return DOMPurify.sanitize(html, {
+      USE_PROFILES: { html: true },
+      ALLOW_DATA_ATTR: false,
+      FORBID_ATTR: ['style'],
+      FORBID_TAGS: ['embed', 'form', 'iframe', 'object', 'script', 'style']
+    })
+  } catch {
+    return `<p>${source
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/\n/g, '<br>')}</p>`
+  }
+}
+
+const clampDialogPosition = (left = dialogPosition.value?.left, top = dialogPosition.value?.top) => {
+  if (!dialogRef.value || left == null || top == null) return
+  const rect = dialogRef.value.getBoundingClientRect()
+  dialogPosition.value = {
+    left: Math.max(0, Math.min(left, document.documentElement.clientWidth - rect.width)),
+    top: Math.max(0, Math.min(top, document.documentElement.clientHeight - rect.height))
+  }
+}
+
+const startDrag = event => {
+  if (!event.isPrimary || event.button !== 0 || event.target.closest('button') || !dialogRef.value || dragState) return
+  const rect = dialogRef.value.getBoundingClientRect()
+  dialogPosition.value = { left: rect.left, top: rect.top }
+  dragState = {
+    pointerId: event.pointerId,
+    handle: event.currentTarget,
+    startX: event.clientX,
+    startY: event.clientY,
+    left: rect.left,
+    top: rect.top
+  }
+  dragging.value = true
+  event.currentTarget.setPointerCapture(event.pointerId)
+  event.preventDefault()
+}
+
+const dragDialog = event => {
+  if (!dragState || event.pointerId !== dragState.pointerId) return
+  clampDialogPosition(
+    dragState.left + event.clientX - dragState.startX,
+    dragState.top + event.clientY - dragState.startY
+  )
+}
+
+const stopDrag = event => {
+  if (!dragState || (event?.pointerId != null && event.pointerId !== dragState.pointerId)) return
+  const { handle, pointerId } = dragState
+  dragState = null
+  dragging.value = false
+  if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId)
+}
+
+const handleViewportResize = async () => {
+  stopDrag()
+  await nextTick()
+  clampDialogPosition()
+}
 
 const scrollToBottom = async () => {
   await nextTick()
@@ -203,13 +331,13 @@ const loadStatus = async () => {
   try {
     const response = await request.get('/ai/status', { signal: controller.signal })
     if (!response.success) {
-      throw new Error(response.message || 'Nomi 配置读取失败')
+      throw new Error(response.message || '固固助手配置读取失败')
     }
     apiConfigured.value = Boolean(response.data?.configured)
     configurationError.value = response.data?.configurationError || ''
   } catch (error) {
     if (controller.signal.aborted) return
-    statusError.value = error.response?.data?.message || error.message || 'Nomi 配置读取失败，请稍后重试'
+    statusError.value = error.response?.data?.message || error.message || '固固助手配置读取失败，请稍后重试'
   } finally {
     if (statusController === controller) {
       statusLoading.value = false
@@ -255,14 +383,15 @@ const sendMessage = async (question = draft.value) => {
       { timeout: 75000, signal: controller.signal }
     )
     if (!response.success) {
-      const error = new Error(response.message || 'Nomi 暂时无法回答')
+      const error = new Error(response.message || '固固助手暂时无法回答')
       error.apiCode = response.code
       throw error
     }
-    if (!response.data?.content) throw new Error('Nomi 没有返回有效回复，请重试')
+    if (!response.data?.content) throw new Error('固固助手没有返回有效回复，请重试')
     messages.value.push({
       role: 'assistant',
       content: response.data.content,
+      orderQueryUsed: Boolean(response.data.orderQueryUsed),
       truncated: Boolean(response.data.truncated)
     })
   } catch (error) {
@@ -271,7 +400,7 @@ const sendMessage = async (question = draft.value) => {
     const code = error.response?.data?.code || error.apiCode
     sendError.value = controller.signal.aborted
       ? '已停止等待回复。'
-      : error.response?.data?.message || 'Nomi 请求失败，请稍后重试。'
+      : error.response?.data?.message || '固固助手请求失败，请稍后重试。'
     if (['missing_api_key', 'invalid_api_key'].includes(code)) {
       apiConfigured.value = false
       configurationError.value = code === 'invalid_api_key' ? sendError.value : ''
@@ -319,18 +448,28 @@ const handleKeydown = event => {
 
 watch(() => props.modelValue, async isOpen => {
   if (!isOpen) {
+    stopDrag()
     await nextTick()
     if (previousFocus?.isConnected) previousFocus.focus()
     return
   }
   previousFocus = document.activeElement
   await nextTick()
+  clampDialogPosition()
   dialogRef.value?.focus()
   await loadStatus()
   if (props.modelValue && !sending.value) composerRef.value?.focus()
 })
 
+onMounted(() => {
+  window.addEventListener('resize', handleViewportResize)
+  window.addEventListener('blur', stopDrag)
+})
+
 onUnmounted(() => {
+  stopDrag()
+  window.removeEventListener('resize', handleViewportResize)
+  window.removeEventListener('blur', stopDrag)
   replyController?.abort()
   statusController?.abort()
 })
@@ -373,6 +512,13 @@ onUnmounted(() => {
   padding: 0 16px;
   border-bottom: 1px solid #e8edf2;
   flex: 0 0 66px;
+  cursor: move;
+  touch-action: none;
+  user-select: none;
+}
+
+.nomi-admin-header.is-dragging {
+  cursor: grabbing;
 }
 
 .nomi-admin-title-wrap,
@@ -481,6 +627,13 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
+.nomi-order-source {
+  display: block;
+  margin-top: 8px;
+  color: #08745a;
+  font-size: 11px;
+}
+
 .nomi-send-error {
   display: flex;
   flex: 0 0 auto;
@@ -550,6 +703,131 @@ onUnmounted(() => {
   line-height: 1.65;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+.nomi-markdown {
+  white-space: normal;
+}
+
+.nomi-markdown :deep(:first-child) {
+  margin-top: 0;
+}
+
+.nomi-markdown :deep(:last-child) {
+  margin-bottom: 0;
+}
+
+.nomi-markdown :deep(p) {
+  margin: 0 0 9px;
+}
+
+.nomi-markdown :deep(h1),
+.nomi-markdown :deep(h2),
+.nomi-markdown :deep(h3),
+.nomi-markdown :deep(h4) {
+  margin: 0 0 9px;
+  color: #172033;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.nomi-markdown :deep(h1) {
+  font-size: 16px;
+}
+
+.nomi-markdown :deep(h2) {
+  font-size: 15px;
+}
+
+.nomi-markdown :deep(ul),
+.nomi-markdown :deep(ol) {
+  margin: 0 0 9px;
+  padding-left: 20px;
+}
+
+.nomi-markdown :deep(li + li) {
+  margin-top: 4px;
+}
+
+.nomi-markdown :deep(blockquote) {
+  margin: 0 0 9px;
+  padding: 6px 10px;
+  border-left: 3px solid #9bdac8;
+  color: #596579;
+  background: #f4faf8;
+}
+
+.nomi-markdown :deep(code) {
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #08745a;
+  background: #e9f8f3;
+  font-size: 0.92em;
+}
+
+.nomi-markdown :deep(pre) {
+  max-width: 100%;
+  margin: 0 0 9px;
+  padding: 9px 10px;
+  overflow-x: auto;
+  border-radius: 5px;
+  color: #e8edf2;
+  background: #172033;
+}
+
+.nomi-markdown :deep(pre code) {
+  padding: 0;
+  color: inherit;
+  background: transparent;
+}
+
+.nomi-markdown :deep(table) {
+  display: block;
+  width: max-content;
+  min-width: 100%;
+  max-width: 100%;
+  margin: 0 0 9px;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.nomi-markdown :deep(th),
+.nomi-markdown :deep(td) {
+  min-width: 72px;
+  padding: 6px 8px;
+  border: 1px solid #dbe3eb;
+  text-align: left;
+  vertical-align: top;
+}
+
+.nomi-markdown :deep(th) {
+  color: #172033;
+  background: #eef5f3;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.nomi-markdown :deep(td) {
+  background: #ffffff;
+}
+
+.nomi-markdown :deep(a) {
+  color: #08745a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.nomi-markdown :deep(hr) {
+  margin: 10px 0;
+  border: 0;
+  border-top: 1px solid #dbe3eb;
+}
+
+.nomi-markdown :deep(img) {
+  max-width: 100%;
+  height: auto;
 }
 
 .nomi-message-row.is-user .nomi-message-bubble {

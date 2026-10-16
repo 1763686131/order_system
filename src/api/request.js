@@ -40,7 +40,7 @@ request.interceptors.response.use(
   },
   (error) => {
     if (error.config?.url === '/settings/ai') {
-      console.error('Nomi configuration request failed:', error.response?.status || error.code)
+      console.error('GuGu configuration request failed:', error.response?.status || error.code)
     } else {
       console.error('API Error:', error)
     }

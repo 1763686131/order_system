@@ -33,7 +33,7 @@ def decrypt_api_key(stored_value):
         return _cipher().decrypt(encrypted_value).decode("utf-8")
     except (InvalidToken, UnicodeDecodeError, ValueError) as error:
         raise RuntimeError(
-            "Nomi API 密钥无法解密，请在系统设置中重新保存密钥"
+            "固固助手 API 密钥无法解密，请在系统设置中重新保存密钥"
         ) from error
 
 

@@ -65,7 +65,7 @@ def save_ai_settings():
             if "apiKey" in data:
                 raise ValueError("清除密钥时不能同时提交新密钥")
             ai_config.clear_api_key(provider)
-            message = "Nomi API 密钥已清除"
+            message = "固固助手 API 密钥已清除"
         else:
             config = ai_config.validate_config(
                 provider,
@@ -90,7 +90,7 @@ def save_ai_settings():
                 max_tokens=128,
             )
             ai_config.save_config(config, api_key)
-            message = "连接验证成功，Nomi 已启用该服务商配置"
+            message = "连接验证成功，固固助手（GuGu）已启用该服务商配置"
         status = ai_config.config_status(provider, include_settings=True)
     except ValueError as error:
         return jsonify({"success": False, "message": str(error)}), 400

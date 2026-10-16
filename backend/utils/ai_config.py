@@ -1,4 +1,4 @@
-"""Provider presets and encrypted configuration for Nomi."""
+"""Provider presets and encrypted configuration for GuGu."""
 
 import json
 from urllib.parse import urlsplit, urlunsplit
@@ -135,7 +135,7 @@ def _load_profiles():
             raise ValueError
         return document
     except (TypeError, ValueError):
-        raise RuntimeError("Nomi 服务商配置无法读取，请检查数据库中的 AI 配置") from None
+        raise RuntimeError("固固助手服务商配置无法读取，请检查数据库中的 AI 配置") from None
 
 
 def get_config(provider=None):

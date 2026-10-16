@@ -117,8 +117,8 @@
             <button
               class="icon-btn nomi-header-button"
               type="button"
-              title="打开 Nomi 智能助手"
-              aria-label="打开 Nomi 智能助手"
+              title="打开固固助手（GuGu）"
+              aria-label="打开固固助手（GuGu）"
               aria-haspopup="dialog"
               :aria-expanded="nomiChatOpen"
               @click="openNomiChat"

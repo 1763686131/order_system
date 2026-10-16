@@ -10,12 +10,12 @@
 
     <!-- 配置面板 -->
     <div class="records-panel">
-      <!-- Nomi AI 配置 -->
+      <!-- 固固助手（GuGu）AI 配置 -->
       <div class="settings-section nomi-settings-section">
         <button class="section-header nomi-section-trigger" type="button" :aria-expanded="expandedSections.nomi" aria-controls="nomi-config-form" @click="toggleSection('nomi')">
           <span class="header-left">
             <Bot class="section-icon" aria-hidden="true" />
-            <span class="section-title">Nomi AI 助手</span>
+            <span class="section-title">固固助手 AI 配置 <small>GuGu</small></span>
             <span :class="['section-badge', { 'is-disabled': !aiConfig.configured }]">
               {{ aiLoading ? '读取中' : !aiConfigLoaded ? '待读取' : aiConfig.configured ? '已配置' : '未配置' }}
             </span>
@@ -1157,7 +1157,7 @@ const loadAiConfig = async (provider) => {
       params: selectedProvider ? { provider: selectedProvider } : undefined
     })
     if (!response.success) {
-      throw new Error(response.message || 'Nomi 配置读取失败')
+      throw new Error(response.message || '固固助手配置读取失败')
     }
     applyAiConfig(response.data)
     aiConfigLoaded.value = true
@@ -1165,7 +1165,7 @@ const loadAiConfig = async (provider) => {
       setAiNotice(response.data.configurationError, 'error')
     }
   } catch (error) {
-    setAiNotice(error.response?.data?.message || error.message || 'Nomi 配置读取失败', 'error')
+    setAiNotice(error.response?.data?.message || error.message || '固固助手配置读取失败', 'error')
   } finally {
     aiLoading.value = false
   }
@@ -1197,12 +1197,12 @@ const saveAiConfig = async () => {
       apiKey: aiConfig.apiKey
     }, { timeout: 75000 })
     if (!response.success) {
-      throw new Error(response.message || 'Nomi 配置保存失败')
+      throw new Error(response.message || '固固助手配置保存失败')
     }
     applyAiConfig(response.data)
-    setAiNotice(response.message || 'Nomi API 配置已保存')
+    setAiNotice(response.message || '固固助手 API 配置已保存')
   } catch (error) {
-    setAiNotice(error.response?.data?.message || error.message || 'Nomi 配置保存失败', 'error')
+    setAiNotice(error.response?.data?.message || error.message || '固固助手配置保存失败', 'error')
   } finally {
     aiSaving.value = false
   }
@@ -1218,12 +1218,12 @@ const clearAiConfig = async () => {
   try {
     const response = await request.put('/settings/ai', { provider: aiConfig.provider, clear: true })
     if (!response.success) {
-      throw new Error(response.message || 'Nomi API 密钥清除失败')
+      throw new Error(response.message || '固固助手 API 密钥清除失败')
     }
     applyAiConfig(response.data)
-    setAiNotice(response.message || 'Nomi API 密钥已清除')
+    setAiNotice(response.message || '固固助手 API 密钥已清除')
   } catch (error) {
-    setAiNotice(error.response?.data?.message || error.message || 'Nomi API 密钥清除失败', 'error')
+    setAiNotice(error.response?.data?.message || error.message || '固固助手 API 密钥清除失败', 'error')
   } finally {
     aiSaving.value = false
   }
@@ -1582,6 +1582,13 @@ onMounted(() => {
 .nomi-section-trigger:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -3px;
+}
+
+.nomi-section-trigger .section-title small {
+  margin-left: 4px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 #nomi-config-form .config-grid {

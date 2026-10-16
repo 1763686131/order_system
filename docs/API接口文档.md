@@ -72,6 +72,8 @@
 
 ## 版本历史
 
+- **v5.16** (2026-10-16，固固助手（GuGu）只读订单工具) - 聊天支持按权限调用订单列表和详情查询，复用原订单接口的门店范围；增加组合筛选、分页、后端汇总、工具调用次数限制及 `orderQueryUsed` 返回字段
+- **v5.15** (2026-10-16，固固助手（GuGu）后台聊天与多服务商配置) - 新增 AI 状态、文字聊天、服务商配置读取、连接验证与启用、密钥清除接口；支持七类服务商预设和自定义 OpenAI 兼容接口，各服务商独立加密保存密钥，兼容旧 DeepSeek 配置
 - **v5.14** (2026-10-11，供应商财务入口合并) - 应收/应付与收款/付款共用页面；应付汇总增加联系人字段，对账支持时间排序，付款响应补充锁期标记，统一退款账户选项字段；现有财务写入接口与权限编码保持不变
 - **v5.13** (2026-10-07，采购第三阶段闭环) - 新增采购退货、供应商退款、正式对账快照与期间锁定；退货与销售退货保持独立
 - **v5.12** (2026-10-06，采购第二阶段闭环) - 新增供应商付款草稿/审核/反审核、银行流水、独立预付款/贷项核销、采购发票登记与多来源分配、见票付款规则和私有附件接口
@@ -136,6 +138,7 @@
 17. [留言、附件与审核通知](#17-留言附件与审核通知)
 18. [操作日志](#18-操作日志)
 19. [物流复制字段配置](#19-物流复制字段配置)
+20. [固固助手（GuGu）与 AI 配置](#20-gugu-ai)
 
 ---
 
@@ -4486,6 +4489,8 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 系统路径配置保存在 SQLite 的 `system_settings` 表中。检测报告模块使用键 `reports.path` 保存报告根目录；银行卡背景图和银行图标分别使用 `bank_cards.bg_path`、`bank_cards.icon_path`。相关上传和静态访问接口都会在请求时读取这些配置。
 
+同属 `/api/settings` 的固固助手服务商配置接口见 [第 20 章](#20-gugu-ai)，其读取和写入均要求 `admin.route.system.settings` 权限。
+
 ### 15.1 获取路径配置
 
 - **URL**: `/api/settings/paths`
@@ -5714,6 +5719,314 @@ CREATE TABLE logistics_copy_settings (
 
 ---
 
+<a id="20-gugu-ai"></a>
+
+## 20. 固固助手（GuGu）与 AI 配置
+
+模块前缀：`/api/ai`、`/api/settings/ai`。
+
+后台 `Admin.vue` 顶栏的机器人按钮打开 `NomiAdminChat.vue`；系统设置中的“固固助手 AI 配置”管理服务商配置，英文名为 `GuGu`，直达地址为 `/admin/settings?section=nomi`。触屏端 `NomiFloatingAI.vue` 继续使用原有筛选等辅助功能。
+
+### 20.1 权限与使用流程
+
+| Method | URL | 权限 | 用途 |
+| --- | --- | --- | --- |
+| `GET` | `/api/ai/status` | 已登录且 `canAccessAdmin=true` | 获取当前启用配置的状态 |
+| `POST` | `/api/ai/chat` | 已登录且 `canAccessAdmin=true` | 使用当前启用配置聊天 |
+| `GET` | `/api/settings/ai` | 后台访问及 `admin.route.system.settings` | 读取配置、密钥掩码和服务商预设 |
+| `PUT` | `/api/settings/ai` | 后台访问及 `admin.route.system.settings` | 验证并启用配置，或清除密钥 |
+
+上述接口沿用 Session Cookie 鉴权；未登录返回 `401`，没有后台访问或所需设置权限返回 `403`。有后台访问权限的员工可使用管理员已经配置好的聊天服务，无需额外授予系统设置权限。
+
+未配置密钥时，对话区域中央显示配置引导；具有设置权限的账号可点击“去设置 API”，其他账号提示联系管理员。配置完成后显示普通聊天界面，不显示固定服务商品牌副标题或底部密钥管理栏。对话仅存在于当前页面内存，刷新后丢失，没有服务端聊天记录保存接口。
+
+### 20.2 获取当前聊天配置状态
+
+- **URL**: `/api/ai/status`
+- **Method**: `GET`
+- **成功响应 Header**: `Cache-Control: no-store`
+
+```json
+{
+  "success": true,
+  "data": {
+    "provider": "qwen",
+    "providerName": "通义千问 · 阿里云百炼",
+    "model": "qwen-plus",
+    "configured": true,
+    "configurationError": ""
+  }
+}
+```
+
+`configured` 仅表示当前服务商有可解密的已存密钥，不代表余额、模型权限或网络实时可用。未配置时为 `false`；密钥无法解密时也为 `false`，并通过 `configurationError` 返回重新配置提示，此时状态接口仍返回 `200`。整个服务商配置 JSON 无法读取时返回 `409`。
+
+状态接口不返回接口地址、密钥掩码或其他服务商配置。每次打开聊天框时前端会重新检查状态。
+
+### 20.3 获取服务商配置及预设
+
+- **URL**: `/api/settings/ai`
+- **Method**: `GET`
+- **成功响应 Header**: `Cache-Control: no-store`
+
+| 查询参数 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `provider` | string | 否 | 指定服务商标识；省略时读取当前启用服务商 |
+
+请求示例：`GET /api/settings/ai?provider=qwen`。
+
+```json
+{
+  "success": true,
+  "data": {
+    "provider": "qwen",
+    "providerName": "通义千问 · 阿里云百炼",
+    "model": "qwen-plus",
+    "configured": true,
+    "configurationError": "",
+    "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    "maskedApiKey": "****1234",
+    "activeProvider": "deepseek",
+    "activeConfigured": true,
+    "providers": [
+      {
+        "id": "deepseek",
+        "name": "DeepSeek",
+        "baseUrl": "https://api.deepseek.com",
+        "model": "deepseek-flash"
+      },
+      {
+        "id": "qwen",
+        "name": "通义千问 · 阿里云百炼",
+        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "model": "qwen-plus"
+      },
+      {
+        "id": "kimi",
+        "name": "Kimi · 月之暗面",
+        "baseUrl": "https://api.moonshot.cn/v1",
+        "model": "kimi-k2.6"
+      },
+      {
+        "id": "zhipu",
+        "name": "智谱 GLM",
+        "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+        "model": "glm-5.3"
+      },
+      {
+        "id": "doubao",
+        "name": "豆包 · 火山方舟",
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+        "model": "",
+        "modelPlaceholder": "模型 ID 或接入点 ID（ep-...）"
+      },
+      {
+        "id": "siliconflow",
+        "name": "硅基流动",
+        "baseUrl": "https://api.siliconflow.cn/v1",
+        "model": "deepseek-ai/DeepSeek-V4-Flash"
+      },
+      {
+        "id": "openai",
+        "name": "OpenAI",
+        "baseUrl": "https://api.openai.com/v1",
+        "model": "gpt-4.1-mini"
+      },
+      {
+        "id": "custom",
+        "name": "自定义（OpenAI 兼容）",
+        "baseUrl": "",
+        "model": "",
+        "modelPlaceholder": "输入服务商提供的模型 ID"
+      }
+    ]
+  }
+}
+```
+
+`provider`、`baseUrl`、`model`、`configured`、`configurationError` 和 `maskedApiKey` 描述本次查询的服务商；`activeProvider`、`activeConfigured` 描述实际供聊天使用的配置。上例查看通义千问，聊天仍使用 DeepSeek。切换查询参数不会改变启用服务商。
+
+`providers` 是当前代码内置的预设目录，不包含各服务商已保存的密钥或自定义配置；其中模型只是初始配置值，可在设置中修改，并不保证当前账号已开通该模型。豆包需填写模型 ID 或接入点 ID；自定义选项位于末尾，需要填写地址和模型。
+
+密钥已保存时返回 `****` 加末尾四位；未配置或无法解密时为空字符串，不返回完整密钥。非法 `provider` 返回 `400`，配置 JSON 无法读取返回 `409`。
+
+### 20.4 验证、保存并启用配置
+
+- **URL**: `/api/settings/ai`
+- **Method**: `PUT`
+- **请求体上限**: 8192 字节
+
+```json
+{
+  "provider": "qwen",
+  "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "model": "qwen-plus",
+  "apiKey": "example-provider-key"
+}
+```
+
+上例密钥仅为占位文本，实际请求应使用对应服务商签发的密钥。
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `provider` | string | 否 | 上述预设标识之一；省略时使用当前启用服务商 |
+| `baseUrl` | string | 否 | 省略时使用所选服务商的已存地址或预设；自定义首次配置必须提供 |
+| `model` | string | 否 | 省略时使用已存模型或预设；没有默认值时必须提供 |
+| `apiKey` | string | 条件必填 | 首次配置或更换接口地址时必填；否则省略或空字符串可复用所选服务商已有密钥 |
+| `clear` | boolean | 否 | 保存时省略；`true` 表示执行下一节的清除操作 |
+
+校验与启用规则：
+
+- 地址去除首尾空白和末尾斜线，最长 2048 字符，仅允许无空白的可打印 ASCII 内容。要求有效的 HTTP/HTTPS 地址，不能包含账号、密码、查询参数或片段。支持填写基础地址或以 `/chat/completions` 结尾的完整地址，统一保存为基础地址。
+- 模型 ID 去除首尾空白后为 1 至 200 个无空白的可打印 ASCII 字符；密钥去除首尾空白后为 1 至 512 个无空白的可打印 ASCII 字符。
+- 密钥只能复用所选服务商的已有值。规范化后的接口地址发生变化时，即使该服务商已有密钥，也必须重新输入；不能直接把 `maskedApiKey` 当作密钥提交。
+- 后端向所选接口实际发送“请只回复：连接成功”的验证请求，输出 token 上限为 128。调用成功且返回有效文字后，才将配置与启用服务商一起保存；验证失败不会覆盖原有配置。该请求可能产生服务商费用。
+- 各服务商配置独立保存。保存成功即切换后台聊天使用的服务商，没有单独的“仅保存草稿”接口。
+
+成功返回 `success: true`，`message` 为“连接验证成功，固固助手（GuGu）已启用该服务商配置”，`data` 字段结构与上一节相同；其中 `provider` 和 `activeProvider` 均为本次启用的服务商。
+
+自定义配置使用 `provider: "custom"`，需支持 Bearer 认证及 OpenAI Chat Completions 请求/响应格式，后端请求路径为 `baseUrl + "/chat/completions"`。其他原生协议需要兼容网关，不会仅凭填写地址自动转换。服务端禁止跟随上游重定向，应配置最终接口地址。
+
+### 20.5 清除指定服务商密钥
+
+- **URL**: `/api/settings/ai`
+- **Method**: `PUT`
+
+```json
+{
+  "provider": "qwen",
+  "clear": true
+}
+```
+
+清除时不能同时提交 `apiKey`，即使为空字符串也会返回 `400`。省略 `provider` 时清除当前启用服务商的密钥。
+
+成功返回 `success: true`，`message` 为“固固助手 API 密钥已清除”，`data` 与配置读取接口相同。仅清空该服务商密钥，保留其地址、模型、启用选择及其他服务商配置，不调用服务商验证。清除当前启用服务商后 `activeConfigured=false`，后续聊天返回缺少密钥；清除其他服务商不影响当前聊天。清除 DeepSeek 时还会清空旧 `ai.deepseek_api_key`，避免再次回退到旧密钥。
+
+### 20.6 发送文字对话
+
+- **URL**: `/api/ai/chat`
+- **Method**: `POST`
+- **请求体上限**: 512 KiB
+
+```json
+{
+  "messages": [
+    { "role": "user", "content": "帮我把这段客户沟通记录整理成摘要。" },
+    { "role": "assistant", "content": "请提供需要整理的文字。" },
+    { "role": "user", "content": "客户希望下周一送货，送货前电话联系。" }
+  ]
+}
+```
+
+| 字段或限制 | 规则 |
+| --- | --- |
+| `messages` | 必须为 1 至 20 条消息组成的数组，按对话顺序提交 |
+| `role` | 仅允许 `user`、`assistant`，最后一条必须为 `user` |
+| `content` | 非空字符串，校验前去除首尾空白 |
+| 单条用户消息 | 最多 4000 字符 |
+| 单条助手消息 | 最多 16000 字符 |
+| 本次全部消息 | 内容合计最多 60000 字符 |
+
+后端自行加入系统提示词，使用数据库当前启用的服务商、地址、模型和密钥；客户端不传密钥，也不能通过此接口切换服务商或提交 `system`、工具调用消息。前端发送时自动保留最近上下文，并按长度裁剪较早的对话。
+
+具备 `touch.order.read` 权限的后台账号会获得只读订单工具，超级管理员直接通过。模型提出工具调用后由后端校验并复用已鉴权的订单列表或详情接口，再将结果交给模型整理；浏览器请求格式不变。工具协议和权限见第 20.9 节。
+
+```json
+{
+  "success": true,
+  "data": {
+    "content": "客户要求下周一送货，并在送货前电话联系确认。",
+    "model": "qwen-plus",
+    "truncated": false,
+    "orderQueryUsed": false
+  }
+}
+```
+
+返回的 `model` 为本次配置使用的模型 ID；上游 `finish_reason` 为 `length` 时 `truncated=true`，前端提示回复被截断。`orderQueryUsed=true` 表示本次实际执行了成功的订单查询，前端显示“已查询订单数据”；未调用或查询失败时为 `false`。当前为非流式文字回复，每次上游请求的输出 token 上限为 2048。后端单次上游请求超时最多 45 秒，启用工具时多个上游请求共享 65 秒等待预算；前端聊天与配置验证的请求超时均为 75 秒。
+
+前端“停止等待”取消客户端请求等待，不保证终止后端或服务商已经开始处理的请求。助手支持文字问答和只读订单查询，尚无订单创建、修改、审核、删除或库存、客户实时账务工具。
+
+### 20.7 错误状态与业务码
+
+带业务码的失败响应示例：
+
+```json
+{
+  "success": false,
+  "code": "missing_api_key",
+  "message": "尚未配置 AI 接口，请先在系统设置中配置服务商和 API 密钥。"
+}
+```
+
+| HTTP 状态 | `code` | 场景 |
+| --- | --- | --- |
+| `400` | 无 | 请求格式、服务商、地址、模型、密钥或消息不合法 |
+| `401` / `403` | 无 | 未登录或没有相应权限 |
+| `409` | 无 | 配置 JSON 无法读取；设置操作中已有密钥无法解密 |
+| `409` | `missing_api_key` | 聊天时当前启用服务商未配置密钥 |
+| `409` | `invalid_api_key` | 聊天时配置无法读取或密钥无法解密 |
+| `413` | 无 | 配置请求超过 8192 字节，或聊天请求超过 512 KiB |
+| `400` | `invalid_provider_config` | 上游返回 `400`、`404` 或 `422`，通常需检查地址、模型及调用权限 |
+| `400` | `provider_redirect` | 上游要求跳转，需填写最终接口地址 |
+| `429` | `rate_limited` | 上游限流 |
+| `502` | `invalid_api_key` | 上游返回 `401` 或 `403`，密钥无效或无调用权限 |
+| `502` | `insufficient_balance` | 上游返回 `402`，账户余额不足 |
+| `502` | `provider_unavailable` | 无法连接上游服务 |
+| `502` | `provider_error` | 其他上游异常、响应格式异常或没有有效文字回复 |
+| `502` | `tool_limit` | 模型请求超过两轮或累计四次工具调用，需缩小条件后重试 |
+| `504` | `provider_timeout` | 上游请求超时 |
+
+参数校验和配置错误不一定包含 `code`，客户端应同时处理 HTTP 状态及 `message`。服务端只返回整理后的异常提示，不直接透传上游响应体或密钥。
+
+### 20.8 数据存储、加密与部署
+
+配置使用现有 `system_settings` 表，键为 `ai.providers_config`，无需新建 AI 专用表。设置值为 JSON，包含当前 `activeProvider` 和以服务商标识为键的 `profiles`；每份配置保存 `baseUrl`、`model`、`apiKey`，其中 `apiKey` 是带 `fernet:v1:` 前缀的 Fernet 密文，不是明文。聊天记录不写入数据库。
+
+在没有 DeepSeek 独立配置时，兼容读取旧键 `ai.deepseek_api_key`；读取不会自动写入新配置，后续保存 DeepSeek 配置时写入新结构。
+
+后端依赖 `cryptography>=42,<47`。加密密钥由 Flask `SECRET_KEY` 派生，启动时优先读取 `APP_SECRET_KEY`，否则使用自动持久化的 `data/.app_secret_key`（容器内 `/app/data/.app_secret_key`）。数据库备份和迁移需保留对应的密钥文件或相同环境变量；更换密钥后，已有 API 密钥无法解密，需在系统设置中重新输入并保存。
+
+聊天时浏览器只调用本系统接口，由后端附加密钥并请求服务商。离线部署可使用 `Settings/order-backend.tar` 导入包含依赖的后端镜像，但云端聊天仍需后端联网；内网兼容服务可通过自定义配置接入。Windows `backend/start.bat` 直接运行 Docker，NAS 的 `docker-compose.yml` 使用其独立的宿主机挂载路径，具体命令见 [README 部署说明](../README.md#离线部署)。
+
+---
+
+### 20.9 订单查询工具
+
+工具在服务端内部执行，不是新增的公开 HTTP 接口。客户端仍只提交 `user`、`assistant` 文字消息，不能自行提交工具结果、指定执行函数、SQL 或请求地址。
+
+| 工具 | 复用接口 | 权限与数据范围 |
+| --- | --- | --- |
+| `query_orders` | `GET /api/orders` | 后台访问及 `touch.order.read`；结果限当前账号授权门店 |
+| `get_order_detail` | `GET /api/orders/{id}` | 同上；不可见与不存在的订单均返回不可读取提示 |
+
+`query_orders` 参数均可省略，多个条件同时提供时取交集：
+
+| 参数 | 类型 | 说明 |
+| --- | --- | --- |
+| `keyword` | string | 单号、客户、商品、联系人、电话、地址、项目、物流单号等包含匹配 |
+| `orderNumber` | string | 完整订单编号，精确匹配 |
+| `customerName` / `storeName` | string | 客户名称或门店名称，包含匹配 |
+| `storeId` | integer | 正整数门店 ID，仍受当前账号门店范围约束 |
+| `startDate` / `endDate` | string | 订单日期区间，`YYYY-MM-DD`，包含首尾日期 |
+| `status` | string | `pending` 未完成、`completed` 已完成、`shipped` 已发货 |
+| `auditState` | integer | `0` 未过账、`1` 已过账、`2` 已作废，与流转状态分别筛选 |
+| `limit` | integer | 默认 10，范围 1 至 20 |
+| `offset` | integer | 默认 0，范围 0 至 10000 |
+
+文字条件去除首尾空白，最长 160 字符；不接受未知参数、非法日期或不合法的数字。相对日期由模型依据后端提供的当前服务器日期换算。
+
+查询结果按订单日期和 ID 倒序，返回 `queriedAt`、`filters`、`total`、`offset`、`returned`、`hasMore`、`summary` 和 `orders`。每项仅返回订单 ID、单号、日期、客户、门店、状态、过账状态、商品摘要和本单应收。`summary.statusCounts` 和 `receivableTotal` 对全部匹配订单计算；`receivableOrderCount` 表示具有有效本单应收金额的订单数，缺失金额不会作为零计入。存在匹配订单但均缺少金额时，`receivableTotal=null`；无匹配订单时为 `"0.00"`。金额为两位小数字符串，指本单应收快照，不是已收款或客户实时欠款。
+
+`get_order_detail` 必须提供正整数 `orderId`。结果包含订单摘要、联系/收货信息、物流信息、订单金额快照和最多 20 项商品；`itemCount` 为全部有效商品项数，`itemsTruncated` 标记是否只返回部分明细。备注等长文本会截断，查询结果不是完整订单导出。
+
+后端仅注册这两个只读工具，每次执行都重新检查订单读取权限，并使用原接口的门店过滤，不接受模型提供的身份或权限。单次工具参数最多 4096 字符，工具结果超过 24000 字符时返回缩小查询范围提示；每次聊天最多两轮、累计四次工具调用，最后一轮只请求最终文字回复。
+
+工具内部失败以结构化结果交给模型解释，包括 `permission_denied`、`order_not_found`、`invalid_tool_arguments`、`unknown_tool`、`query_failed`、`result_too_large`，这些不是新增的 HTTP 状态码。当前模型或兼容网关拒绝工具参数时，后端尝试退回普通聊天，并明确本次无法查询实时订单；其他鉴权、网络和限流异常仍按第 20.7 节处理。普通聊天和系统设置的连接验证不执行订单查询。
+
+---
+
 ## 错误响应格式
 
 多数 JSON 接口在发生错误时返回以下格式。文件下载和预览接口在失败时也返回 JSON，成功时返回文件流。
@@ -5773,7 +6086,7 @@ CREATE TABLE logistics_copy_settings (
 - `stock_movements` - 入库与出库过账库存流水表
 - `payment_receipts` - 收款单草稿、审核状态、核销和预收快照表
 - `customer_account_transactions` - 订单审核、收款、反审核的客户账户流水表
-- `system_settings` - 系统键值配置表，包括检测报告根目录 `reports.path`
+- `system_settings` - 系统键值配置表，包括检测报告根目录 `reports.path`、固固助手服务商配置 `ai.providers_config`（含加密后的 API 密钥）
 - `print_templates` - 打印模板元数据、纸张尺寸和设计器 JSON
 
 **辅助表**:
