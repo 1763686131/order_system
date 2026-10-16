@@ -1,8 +1,15 @@
 <template>
   <span class="nomi-avatar" :class="{ 'is-thinking': thinking }" aria-hidden="true">
-    <span class="nomi-avatar-eye is-left"></span>
-    <span class="nomi-avatar-eye is-right"></span>
-    <span class="nomi-avatar-mouth"></span>
+    <span class="nomi-avatar-antenna">
+      <span class="nomi-avatar-antenna-dot"></span>
+    </span>
+    <span class="nomi-avatar-ear is-left"></span>
+    <span class="nomi-avatar-ear is-right"></span>
+    <span class="nomi-avatar-face">
+      <span class="nomi-avatar-eye is-left"></span>
+      <span class="nomi-avatar-eye is-right"></span>
+      <span class="nomi-avatar-mouth"></span>
+    </span>
   </span>
 </template>
 
@@ -14,37 +21,96 @@ defineProps({ thinking: Boolean })
 .nomi-avatar {
   position: relative;
   display: inline-block;
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
-  overflow: hidden;
-  border-radius: 50%;
-  background: radial-gradient(circle at 30% 30%, #2a3b5c, #0f172a);
-  box-shadow: inset -2px -2px 5px #0009, inset 1px 1px 4px #fff3;
+  overflow: visible;
   vertical-align: middle;
+}
+
+.nomi-avatar-face {
+  position: absolute;
+  z-index: 1;
+  top: 17%;
+  left: 12%;
+  box-sizing: border-box;
+  width: 76%;
+  height: 76%;
+  border: 2px solid #0f9f78;
+  border-radius: 6px;
+  background: #0f9f78;
+  box-shadow: 0 2px 7px rgba(15, 159, 120, 0.18);
+  overflow: hidden;
+}
+
+.nomi-avatar-antenna {
+  position: absolute;
+  z-index: 0;
+  top: 3%;
+  left: 50%;
+  width: 2px;
+  height: 15%;
+  background: #0f9f78;
+  transform: translateX(-50%);
+}
+
+.nomi-avatar-antenna-dot {
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #0f9f78;
+  border-radius: 50%;
+  background: #f7fffb;
+  transform: translateX(-50%);
+}
+
+.nomi-avatar-ear {
+  position: absolute;
+  z-index: 0;
+  top: 46%;
+  box-sizing: border-box;
+  width: 14%;
+  height: 21%;
+  border: 2px solid #0f9f78;
+  border-radius: 4px;
+  background: #f7fffb;
+}
+
+.nomi-avatar-ear.is-left {
+  left: 1%;
+  transform: rotate(-12deg);
+}
+
+.nomi-avatar-ear.is-right {
+  right: 1%;
+  transform: rotate(12deg);
 }
 
 .nomi-avatar-eye {
   position: absolute;
-  top: 31%;
-  width: 14%;
-  height: 20%;
-  border-radius: 6px;
-  background: #00e5ff;
+  top: 25%;
+  width: 19%;
+  height: 28%;
+  border: 2px solid #ffffff;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: inset 0 2px 0 #d9fff0;
   animation: nomi-avatar-blink 4s infinite;
 }
 
-.nomi-avatar-eye.is-left { left: 26%; }
-.nomi-avatar-eye.is-right { right: 26%; }
+.nomi-avatar-eye.is-left { left: 22%; }
+.nomi-avatar-eye.is-right { right: 22%; }
 
 .nomi-avatar-mouth {
   position: absolute;
-  top: 60%;
-  left: 34%;
-  width: 32%;
+  top: 63%;
+  left: 31%;
+  width: 38%;
   height: 15%;
-  border: 2px solid #00e5ff;
-  border-top: 0;
-  border-radius: 0 0 20px 20px;
+  border-bottom: 2px solid #ffffff;
+  border-radius: 0 0 3px 3px;
 }
 
 .nomi-avatar.is-thinking .nomi-avatar-eye {

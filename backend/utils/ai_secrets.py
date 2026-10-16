@@ -23,12 +23,11 @@ def _cipher():
     return Fernet(base64.urlsafe_b64encode(derived_key))
 
 
-def get_deepseek_api_key():
-    stored_value = get_setting(DEEPSEEK_API_KEY_SETTING, "")
+def decrypt_api_key(stored_value):
     if not stored_value:
         return ""
     try:
-        if not stored_value.startswith(ENCRYPTED_PREFIX):
+        if not isinstance(stored_value, str) or not stored_value.startswith(ENCRYPTED_PREFIX):
             raise ValueError("Unsupported credential format")
         encrypted_value = stored_value[len(ENCRYPTED_PREFIX):].encode("ascii")
         return _cipher().decrypt(encrypted_value).decode("utf-8")
@@ -38,12 +37,21 @@ def get_deepseek_api_key():
         ) from error
 
 
-def set_deepseek_api_key(api_key):
+def encrypt_api_key(api_key):
     value = str(api_key or "").strip()
-    stored_value = (
+    return (
         f"{ENCRYPTED_PREFIX}{_cipher().encrypt(value.encode('utf-8')).decode('ascii')}"
         if value
         else ""
     )
+
+
+def get_deepseek_api_key():
+    return decrypt_api_key(get_setting(DEEPSEEK_API_KEY_SETTING, ""))
+
+
+def set_deepseek_api_key(api_key):
+    value = str(api_key or "").strip()
+    stored_value = encrypt_api_key(value)
     set_setting(DEEPSEEK_API_KEY_SETTING, stored_value)
     return value

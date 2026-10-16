@@ -8,8 +8,8 @@ from utils.auth import (
     require_admin_permission,
     require_super_admin,
 )
-from utils import deepseek
-from utils.ai_secrets import set_deepseek_api_key
+from utils import ai_client, ai_config
+from utils.ai_secrets import decrypt_api_key
 from utils.db import get_db
 from utils.system_settings import (
     DEFAULT_BANK_CARD_BG_PATH,
@@ -32,55 +32,78 @@ settings_bp = Blueprint("settings", __name__, url_prefix="/api/settings")
 
 
 @settings_bp.route("/ai", methods=["GET"])
-@require_admin_permission(deepseek.SETTINGS_PERMISSION)
+@require_admin_permission(ai_config.SETTINGS_PERMISSION)
 def get_ai_settings():
+    try:
+        data = ai_config.config_status(
+            provider=request.args.get("provider"), include_settings=True
+        )
+    except ValueError as error:
+        return jsonify({"success": False, "message": str(error)}), 400
+    except RuntimeError as error:
+        return jsonify({"success": False, "message": str(error)}), 409
     response = jsonify({
         "success": True,
-        "data": deepseek.config_status(include_mask=True),
+        "data": data,
     })
     response.headers["Cache-Control"] = "no-store"
     return response
 
 
 @settings_bp.route("/ai", methods=["PUT"])
-@require_admin_permission(deepseek.SETTINGS_PERMISSION)
+@require_admin_permission(ai_config.SETTINGS_PERMISSION)
 def save_ai_settings():
-    if request.content_length and request.content_length > 4096:
+    if request.content_length and request.content_length > 8192:
         return jsonify({"success": False, "message": "API 配置请求过大"}), 413
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
         return jsonify({"success": False, "message": "API 配置格式不正确"}), 400
-    if data.get("clear") is True and "apiKey" not in data:
-        set_deepseek_api_key("")
-        message = "Nomi API 密钥已清除"
-    else:
-        api_key = data.get("apiKey")
-        if not isinstance(api_key, str) or data.get("clear"):
-            return jsonify({"success": False, "message": "请提供有效的 API 密钥"}), 400
-        api_key = api_key.strip()
-        if not 16 <= len(api_key) <= 512 or any(
-            ord(char) < 33 or ord(char) > 126 for char in api_key
-        ):
-            return jsonify({
-                "success": False,
-                "message": "API 密钥格式不正确，请检查是否有多余空格或换行",
-            }), 400
-        try:
-            deepseek.chat(
-                api_key,
-                [{"role": "user", "content": "请只回复：连接成功"}],
-                max_tokens=16,
+    try:
+        current_config = ai_config.get_config(data.get("provider"))
+        provider = current_config["provider"]
+        if data.get("clear") is True:
+            if "apiKey" in data:
+                raise ValueError("清除密钥时不能同时提交新密钥")
+            ai_config.clear_api_key(provider)
+            message = "Nomi API 密钥已清除"
+        else:
+            config = ai_config.validate_config(
+                provider,
+                data.get("baseUrl", current_config["baseUrl"]),
+                data.get("model", current_config["model"]),
             )
-        except deepseek.DeepSeekError as error:
-            return jsonify({
-                "success": False, "code": error.code, "message": str(error)
-            }), error.status
-        set_deepseek_api_key(api_key)
-        message = "连接验证成功，Nomi API 密钥已保存"
+            api_key = data.get("apiKey", "")
+            if not isinstance(api_key, str):
+                raise ValueError("请提供有效的 API 密钥")
+            api_key = api_key.strip()
+            if not api_key:
+                if config["baseUrl"] != current_config["baseUrl"]:
+                    raise ValueError("接口地址已更改，请重新输入 API 密钥")
+                api_key = decrypt_api_key(current_config["encryptedApiKey"])
+            if not 1 <= len(api_key) <= 512 or any(
+                ord(char) < 33 or ord(char) > 126 for char in api_key
+            ):
+                raise ValueError("请输入 API 密钥，并检查是否有多余空格或换行")
+            ai_client.chat(
+                config, api_key,
+                [{"role": "user", "content": "请只回复：连接成功"}],
+                max_tokens=128,
+            )
+            ai_config.save_config(config, api_key)
+            message = "连接验证成功，Nomi 已启用该服务商配置"
+        status = ai_config.config_status(provider, include_settings=True)
+    except ValueError as error:
+        return jsonify({"success": False, "message": str(error)}), 400
+    except RuntimeError as error:
+        return jsonify({"success": False, "message": str(error)}), 409
+    except ai_client.AIProviderError as error:
+        return jsonify({
+            "success": False, "code": error.code, "message": str(error)
+        }), error.status
     return jsonify({
         "success": True,
         "message": message,
-        "data": deepseek.config_status(include_mask=True),
+        "data": status,
     })
 
 

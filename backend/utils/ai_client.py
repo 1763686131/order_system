@@ -1,15 +1,14 @@
-"""DeepSeek transport shared by Nomi chat and credential verification."""
+"""OpenAI-compatible transport shared by Nomi chat and verification."""
 
 import json
 from http.client import HTTPException
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+from utils.ai_config import PROVIDERS
 
 
-API_URL = "https://api.deepseek.com/chat/completions"
-MODEL = "deepseek-flash"
 TIMEOUT_SECONDS = 45
-SETTINGS_PERMISSION = "admin.route.system.settings"
 MAX_MESSAGE_COUNT = 20
 MAX_USER_MESSAGE_LENGTH = 4000
 MAX_ASSISTANT_MESSAGE_LENGTH = 16000
@@ -17,11 +16,17 @@ MAX_CONTEXT_LENGTH = 60000
 MAX_REQUEST_BYTES = 512 * 1024
 
 
-class DeepSeekError(Exception):
+class AIProviderError(Exception):
     def __init__(self, message, code="provider_error", status=502):
         super().__init__(message)
         self.code = code
         self.status = status
+
+
+class _NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        # Never forward an administrator's credential to a redirect target.
+        return None
 
 
 def normalize_messages(raw_messages):
@@ -56,14 +61,16 @@ def normalize_messages(raw_messages):
     return messages
 
 
-def chat(api_key, messages, max_tokens=2048):
+def chat(config, api_key, messages, max_tokens=2048):
+    provider = config["provider"]
+    provider_name = PROVIDERS[provider]["name"]
     payload = {
-        "model": MODEL,
+        "model": config["model"],
         "messages": [
             {
                 "role": "system",
                 "content": (
-                    "你是订单管理系统后台的 Nomi 智能助手。默认用简洁清晰的中文回答，"
+                    "你是订单管理系统后台的 固固 智能助手。默认用简洁清晰的中文回答，"
                     "可以帮助用户整理文字、分析问题、起草内容。"
                     "目前没有接入订单、库存、客户或任何业务查询与写入工具；"
                     "你看不到系统实时数据，不得编造查询结果或声称已经执行了业务操作。"
@@ -71,12 +78,16 @@ def chat(api_key, messages, max_tokens=2048):
             },
             *messages,
         ],
-        "thinking": {"type": "disabled"},
         "stream": False,
-        "max_tokens": max_tokens,
     }
+    token_field = "max_completion_tokens" if provider == "openai" else "max_tokens"
+    payload[token_field] = max_tokens
+    if provider in ("deepseek", "kimi", "zhipu", "doubao"):
+        payload["thinking"] = {"type": "disabled"}
+    elif provider in ("qwen", "siliconflow"):
+        payload["enable_thinking"] = False
     provider_request = Request(
-        API_URL,
+        f"{config['baseUrl']}/chat/completions",
         data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
         headers={
             "Authorization": f"Bearer {api_key}",
@@ -86,63 +97,59 @@ def chat(api_key, messages, max_tokens=2048):
         method="POST",
     )
     try:
-        with urlopen(provider_request, timeout=TIMEOUT_SECONDS) as response:
+        with build_opener(_NoRedirect()).open(
+            provider_request, timeout=TIMEOUT_SECONDS
+        ) as response:
             result = json.loads(response.read().decode("utf-8"))
     except HTTPError as error:
         # Provider errors may echo request details; only return known messages.
         error.close()
         if error.code in (401, 403):
-            raise DeepSeekError(
-                "DeepSeek API 密钥无效或无权调用，请在系统设置中更新",
+            raise AIProviderError(
+                f"{provider_name} API 密钥无效或无权调用，请在系统设置中更新",
                 "invalid_api_key",
             ) from None
         if error.code == 402:
-            raise DeepSeekError(
-                "DeepSeek 账户余额不足，请充值后重试", "insufficient_balance"
+            raise AIProviderError(
+                f"{provider_name} 账户余额不足，请充值后重试", "insufficient_balance"
             ) from None
         if error.code == 429:
-            raise DeepSeekError(
-                "DeepSeek 请求过于频繁，请稍后重试", "rate_limited", 429
+            raise AIProviderError(
+                f"{provider_name} 请求过于频繁，请稍后重试", "rate_limited", 429
             ) from None
-        raise DeepSeekError("DeepSeek 服务暂时不可用，请稍后重试") from None
+        if error.code in (400, 404, 422):
+            raise AIProviderError(
+                f"{provider_name} 拒绝请求，请检查接口地址、模型 ID 及模型调用权限",
+                "invalid_provider_config",
+                400,
+            ) from None
+        if 300 <= error.code < 400:
+            raise AIProviderError(
+                "API 地址发生跳转，请在系统设置中填写最终接口地址",
+                "provider_redirect",
+                400,
+            ) from None
+        raise AIProviderError(f"{provider_name} 服务暂时不可用，请稍后重试") from None
     except TimeoutError:
-        raise DeepSeekError(
-            "等待 DeepSeek 回复超时，请重试", "provider_timeout", 504
+        raise AIProviderError(
+            f"等待 {provider_name} 回复超时，请重试", "provider_timeout", 504
         ) from None
     except URLError:
-        raise DeepSeekError(
-            "无法连接 DeepSeek，请检查后端服务器网络", "provider_unavailable"
+        raise AIProviderError(
+            f"无法连接 {provider_name}，请检查接口地址和后端服务器网络",
+            "provider_unavailable",
         ) from None
     except (HTTPException, OSError, UnicodeDecodeError, ValueError):
-        raise DeepSeekError("DeepSeek 响应异常，请稍后重试") from None
+        raise AIProviderError(f"{provider_name} 响应异常，请稍后重试") from None
 
     choices = result.get("choices") if isinstance(result, dict) else None
     choice = choices[0] if isinstance(choices, list) and choices else None
     message = choice.get("message") if isinstance(choice, dict) else None
     content = message.get("content") if isinstance(message, dict) else None
     if not isinstance(content, str) or not content.strip():
-        raise DeepSeekError("DeepSeek 没有返回有效回复，请重试")
+        raise AIProviderError(f"{provider_name} 没有返回有效回复，请重试")
     return {
         "content": content.strip(),
-        "model": MODEL,
+        "model": config["model"],
         "truncated": choice.get("finish_reason") == "length",
     }
-
-
-def config_status(include_mask=False):
-    from utils.ai_secrets import get_deepseek_api_key
-
-    try:
-        api_key = get_deepseek_api_key()
-        configuration_error = ""
-    except RuntimeError as error:
-        api_key = ""
-        configuration_error = str(error)
-    data = {
-        "configured": bool(api_key),
-        "model": MODEL,
-        "configurationError": configuration_error,
-    }
-    if include_mask:
-        data["maskedApiKey"] = f"****{api_key[-4:]}" if api_key else ""
-    return data

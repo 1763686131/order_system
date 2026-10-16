@@ -13,10 +13,17 @@
       @touchstart="handleDragStart"
       @click="handleClick"
     >
-      <div class="face-inner">
-        <div class="eye left"></div>
-        <div class="eye right"></div>
-        <div class="mouth"></div>
+      <div class="robot-antenna">
+        <span class="robot-antenna-dot"></span>
+      </div>
+      <div class="robot-ear left"></div>
+      <div class="robot-ear right"></div>
+      <div class="robot-head">
+        <div class="face-inner">
+          <div class="eye left"></div>
+          <div class="eye right"></div>
+          <div class="mouth"></div>
+        </div>
       </div>
     </div>
 
@@ -493,17 +500,15 @@ onUnmounted(() => {
 }
 
 .ai-face {
+  box-sizing: border-box;
   width: 100%;
   height: 100%;
-  background: radial-gradient(circle at 30% 30%, #2a3b5c, #0f172a);
-  border-radius: 50%;
-  box-shadow: inset -4px -4px 10px rgba(0,0,0,0.6), inset 2px 2px 8px rgba(255,255,255,0.2), 0 6px 20px rgba(24, 144, 255, 0.4);
   position: relative;
   cursor: grab;
   user-select: none;
-  overflow: hidden;
-  opacity: 0.5;
-  transition: opacity 0.3s ease, transform 0.2s, background 0.4s, box-shadow 0.4s;
+  overflow: visible;
+  opacity: 0.8;
+  transition: opacity 0.3s ease, transform 0.2s;
 }
 
 .fab-container.active .ai-face,
@@ -511,9 +516,83 @@ onUnmounted(() => {
   opacity: 1;
 }
 
-.fab-container.active .ai-face {
-  background: radial-gradient(circle at 30% 30%, #5c2a33, #1f0f15);
-  box-shadow: inset -4px -4px 10px rgba(0,0,0,0.6), inset 2px 2px 8px rgba(255,255,255,0.2), 0 6px 25px rgba(255, 77, 79, 0.5);
+.robot-head {
+  position: absolute;
+  z-index: 1;
+  top: 16%;
+  left: 13%;
+  box-sizing: border-box;
+  width: 74%;
+  height: 74%;
+  border: 2px solid #0f9f78;
+  border-radius: 9px;
+  background: #f7fffb;
+  box-shadow: 0 5px 16px rgba(15, 159, 120, 0.2);
+  overflow: hidden;
+  transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
+}
+
+.robot-antenna {
+  position: absolute;
+  z-index: 0;
+  top: 3%;
+  left: 50%;
+  width: 3px;
+  height: 15%;
+  background: #0f9f78;
+  transform: translateX(-50%);
+}
+
+.robot-antenna-dot {
+  position: absolute;
+  top: -7px;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border: 2px solid #0f9f78;
+  border-radius: 50%;
+  background: #f7fffb;
+  transform: translateX(-50%);
+}
+
+.robot-ear {
+  position: absolute;
+  z-index: 0;
+  top: 49%;
+  box-sizing: border-box;
+  width: 13%;
+  height: 20%;
+  border: 2px solid #0f9f78;
+  border-radius: 5px;
+  background: #f7fffb;
+  transition: background 0.4s, border-color 0.4s;
+}
+
+.robot-ear.left {
+  left: 2%;
+  transform: rotate(-12deg);
+}
+
+.robot-ear.right {
+  right: 2%;
+  transform: rotate(12deg);
+}
+
+.fab-container.active .robot-head {
+  background: #fff8f8;
+  border-color: #d43838;
+  box-shadow: 0 5px 18px rgba(212, 56, 56, 0.22);
+}
+
+.fab-container.active .robot-ear,
+.fab-container.active .robot-antenna {
+  border-color: #d43838;
+  background: #fff8f8;
+}
+
+.fab-container.active .robot-antenna-dot {
+  border-color: #d43838;
+  background: #fff8f8;
 }
 
 .ai-face:active {
@@ -537,17 +616,19 @@ onUnmounted(() => {
 
 .eye {
   position: absolute;
-  top: 22px;
-  width: 10px;
-  height: 14px;
-  background: #00e5ff;
-  border-radius: 6px;
+  top: 21%;
+  width: 25%;
+  height: 31%;
+  border: 2px solid #ffffff;
+  background: #ffffff;
+  border-radius: 4px;
+  box-shadow: inset 0 2px 0 #d9fff0;
   animation: blink 4s infinite;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.eye.left { left: 18px; }
-.eye.right { right: 18px; }
+.eye.left { left: 19%; }
+.eye.right { right: 19%; }
 
 @keyframes blink {
   0%, 94%, 98%, 100% { transform: scaleY(1); }
@@ -556,13 +637,12 @@ onUnmounted(() => {
 
 .mouth {
   position: absolute;
-  top: 42px;
-  left: 24px;
-  width: 22px;
-  height: 10px;
-  border: 3px solid #00e5ff;
-  border-top: none;
-  border-radius: 0 0 20px 20px;
+  top: 61%;
+  left: 30%;
+  width: 40%;
+  height: 15%;
+  border-bottom: 3px solid #ffffff;
+  border-radius: 0 0 4px 4px;
   transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -571,25 +651,26 @@ onUnmounted(() => {
 }
 
 .fab-container.active .eye {
-  width: 14px;
-  height: 14px;
-  top: 20px;
-  background: transparent;
-  border: 3px solid #ff4d4f;
-  border-radius: 50%;
+  width: 30%;
+  height: 5px;
+  top: 35%;
+  background: #d43838;
+  border: 0;
+  border-radius: 3px;
+  box-shadow: none;
   animation: none;
 }
 
-.fab-container.active .eye.left { left: 16px; }
-.fab-container.active .eye.right { right: 16px; }
+.fab-container.active .eye.left { left: 15%; }
+.fab-container.active .eye.right { right: 15%; }
 
 .fab-container.active .mouth {
-  width: 16px;
-  height: 18px;
-  top: 42px;
-  left: 27px;
-  border: 3px solid #ff4d4f;
-  border-radius: 50%;
+  width: 32%;
+  height: 15%;
+  top: 61%;
+  left: 34%;
+  border-bottom-color: #d43838;
+  border-radius: 0 0 4px 4px;
 }
 
 @keyframes jitter {

@@ -1666,13 +1666,13 @@ const logout = async () => {
 .icon-btn.nomi-header-button {
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 6px;
   background: transparent;
 }
 
 .icon-btn.nomi-header-button:hover,
 .icon-btn.nomi-header-button[aria-expanded="true"] {
-  box-shadow: 0 0 0 3px #a9e5d2;
+  box-shadow: 0 0 0 2px #a9e5d2;
 }
 
 .icon-btn:focus-visible {

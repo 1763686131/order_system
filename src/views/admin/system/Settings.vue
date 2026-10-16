@@ -30,8 +30,62 @@
         <form v-show="expandedSections.nomi" id="nomi-config-form" class="section-content" @submit.prevent="saveAiConfig">
           <div class="config-grid">
             <div class="config-item">
+              <label class="config-label" for="nomi-provider">
+                <span class="label-text">AI 服务商</span>
+              </label>
+              <select
+                id="nomi-provider"
+                v-model="aiConfig.provider"
+                class="config-select"
+                :disabled="aiLoading || aiSaving || !canManageAi"
+                @change="changeAiProvider"
+              >
+                <option v-for="provider in aiProviders" :key="provider.id" :value="provider.id">
+                  {{ provider.name }}
+                </option>
+              </select>
+              <span v-if="aiActiveConfigured" class="config-current-value">
+                当前启用：{{ aiActiveProviderName }}
+              </span>
+            </div>
+
+            <div class="config-item">
+              <label class="config-label" for="nomi-base-url">
+                <span class="label-text">API 接口地址</span>
+              </label>
+              <input
+                id="nomi-base-url"
+                v-model="aiConfig.baseUrl"
+                type="url"
+                class="config-input"
+                placeholder="https://api.example.com/v1"
+                maxlength="2048"
+                required
+                :spellcheck="false"
+                :disabled="aiLoading || aiSaving || !canManageAi"
+              />
+            </div>
+
+            <div class="config-item">
+              <label class="config-label" for="nomi-model">
+                <span class="label-text">模型 ID</span>
+              </label>
+              <input
+                id="nomi-model"
+                v-model="aiConfig.model"
+                type="text"
+                class="config-input"
+                :placeholder="aiSelectedProvider?.modelPlaceholder || '输入模型 ID'"
+                maxlength="200"
+                required
+                :spellcheck="false"
+                :disabled="aiLoading || aiSaving || !canManageAi"
+              />
+            </div>
+
+            <div class="config-item">
               <label class="config-label" for="nomi-api-key">
-                <span class="label-text">DeepSeek API 密钥</span>
+                <span class="label-text">API 密钥</span>
               </label>
               <div class="nomi-key-input-group">
                 <input
@@ -44,7 +98,7 @@
                   :spellcheck="false"
                   maxlength="512"
                   :disabled="aiLoading || aiSaving || !canManageAi"
-                  placeholder="输入 DeepSeek API 密钥"
+                  :placeholder="aiConfig.maskedApiKey ? '留空使用该服务商已保存的密钥' : '输入 API 密钥'"
                 />
                 <button class="nomi-key-visibility" type="button" :title="showAiKey ? '隐藏密钥' : '显示密钥'" :aria-label="showAiKey ? '隐藏密钥' : '显示密钥'" :aria-pressed="showAiKey" @click="showAiKey = !showAiKey">
                   <EyeOff v-if="showAiKey" :size="17" aria-hidden="true" />
@@ -52,7 +106,7 @@
                 </button>
               </div>
               <span v-if="aiConfig.maskedApiKey" class="config-current-value">
-                当前密钥：{{ aiConfig.maskedApiKey }} · 模型：{{ aiConfig.model }}
+                已保存密钥：{{ aiConfig.maskedApiKey }}
               </span>
               <span v-else-if="aiConfigLoaded" class="config-current-value">
                 当前尚未配置 API 密钥。
@@ -66,7 +120,7 @@
               v-if="!aiConfigLoaded && !aiLoading"
               type="button"
               class="nomi-retry-button"
-              @click="loadAiConfig"
+              @click="loadAiConfig()"
             >
               重试读取
             </button>
@@ -79,7 +133,7 @@
               :disabled="aiSaving || aiLoading || !aiConfigLoaded || !canManageAi"
             >
               <Check class="btn-icon" aria-hidden="true" />
-              {{ aiSaving ? '处理中...' : '验证并保存' }}
+              {{ aiSaving ? '处理中...' : '验证并启用' }}
             </button>
             <button
               v-if="aiConfig.configured"
@@ -961,11 +1015,22 @@ const expandedSections = reactive({
 })
 
 const aiConfig = reactive({
+  provider: 'deepseek',
+  baseUrl: '',
   apiKey: '',
   maskedApiKey: '',
   configured: false,
   model: ''
 })
+const aiProviders = ref([])
+const aiActiveProvider = ref('')
+const aiActiveConfigured = ref(false)
+const aiSelectedProvider = computed(() =>
+  aiProviders.value.find(provider => provider.id === aiConfig.provider)
+)
+const aiActiveProviderName = computed(() =>
+  aiProviders.value.find(provider => provider.id === aiActiveProvider.value)?.name || ''
+)
 const showAiKey = ref(false)
 const aiLoading = ref(false)
 const aiSaving = ref(false)
@@ -1067,21 +1132,34 @@ const setAiNotice = (text, type = 'success') => {
   aiNotice.type = type
 }
 
-const loadAiConfig = async () => {
+const applyAiConfig = data => {
+  Object.assign(aiConfig, {
+    provider: data.provider,
+    baseUrl: data.baseUrl || '',
+    model: data.model || '',
+    maskedApiKey: data.maskedApiKey || '',
+    configured: Boolean(data.configured),
+    apiKey: ''
+  })
+  aiProviders.value = data.providers || []
+  aiActiveProvider.value = data.activeProvider || ''
+  aiActiveConfigured.value = Boolean(data.activeConfigured)
+  showAiKey.value = false
+}
+
+const loadAiConfig = async (provider) => {
   aiLoading.value = true
   aiConfigLoaded.value = false
   setAiNotice('')
   try {
-    const response = await request.get('/settings/ai')
+    const selectedProvider = provider || (aiProviders.value.length ? aiConfig.provider : undefined)
+    const response = await request.get('/settings/ai', {
+      params: selectedProvider ? { provider: selectedProvider } : undefined
+    })
     if (!response.success) {
       throw new Error(response.message || 'Nomi 配置读取失败')
     }
-    Object.assign(aiConfig, {
-      maskedApiKey: response.data?.maskedApiKey || '',
-      configured: Boolean(response.data?.configured),
-      model: response.data?.model || '',
-      apiKey: ''
-    })
+    applyAiConfig(response.data)
     aiConfigLoaded.value = true
     if (response.data?.configurationError) {
       setAiNotice(response.data.configurationError, 'error')
@@ -1093,26 +1171,35 @@ const loadAiConfig = async () => {
   }
 }
 
+const changeAiProvider = () => {
+  aiConfig.apiKey = ''
+  aiConfig.maskedApiKey = ''
+  aiConfig.configured = false
+  aiConfig.baseUrl = ''
+  aiConfig.model = ''
+  showAiKey.value = false
+  loadAiConfig(aiConfig.provider)
+}
+
 const saveAiConfig = async () => {
   if (aiSaving.value || !aiConfigLoaded.value || !canManageAi.value) return
   aiSaving.value = true
   setAiNotice('')
   try {
-    if (!aiConfig.apiKey.trim()) {
-      setAiNotice('请输入新的 DeepSeek API 密钥；如需移除当前密钥，请使用清除操作。', 'error')
+    if (!aiConfig.apiKey.trim() && !aiConfig.maskedApiKey) {
+      setAiNotice('请输入当前服务商的 API 密钥。', 'error')
       return
     }
-    const response = await request.put('/settings/ai', { apiKey: aiConfig.apiKey }, { timeout: 75000 })
+    const response = await request.put('/settings/ai', {
+      provider: aiConfig.provider,
+      baseUrl: aiConfig.baseUrl,
+      model: aiConfig.model,
+      apiKey: aiConfig.apiKey
+    }, { timeout: 75000 })
     if (!response.success) {
       throw new Error(response.message || 'Nomi 配置保存失败')
     }
-    Object.assign(aiConfig, {
-      apiKey: '',
-      maskedApiKey: response.data?.maskedApiKey || '',
-      configured: Boolean(response.data?.configured),
-      model: response.data?.model || aiConfig.model
-    })
-    showAiKey.value = false
+    applyAiConfig(response.data)
     setAiNotice(response.message || 'Nomi API 配置已保存')
   } catch (error) {
     setAiNotice(error.response?.data?.message || error.message || 'Nomi 配置保存失败', 'error')
@@ -1123,22 +1210,17 @@ const saveAiConfig = async () => {
 
 const clearAiConfig = async () => {
   if (aiSaving.value || !aiConfigLoaded.value || !canManageAi.value) return
-  if (!window.confirm('清除后，Nomi 将无法继续使用 DeepSeek。确定清除 API 密钥吗？')) {
+  if (!window.confirm(`确定清除 ${aiSelectedProvider.value?.name || '当前服务商'} 的 API 密钥吗？`)) {
     return
   }
   aiSaving.value = true
   setAiNotice('')
   try {
-    const response = await request.put('/settings/ai', { clear: true })
+    const response = await request.put('/settings/ai', { provider: aiConfig.provider, clear: true })
     if (!response.success) {
       throw new Error(response.message || 'Nomi API 密钥清除失败')
     }
-    Object.assign(aiConfig, {
-      apiKey: '',
-      maskedApiKey: '',
-      configured: false
-    })
-    showAiKey.value = false
+    applyAiConfig(response.data)
     setAiNotice(response.message || 'Nomi API 密钥已清除')
   } catch (error) {
     setAiNotice(error.response?.data?.message || error.message || 'Nomi API 密钥清除失败', 'error')
@@ -1502,6 +1584,24 @@ onMounted(() => {
   outline-offset: -3px;
 }
 
+#nomi-config-form .config-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+#nomi-config-form .config-item {
+  min-width: 0;
+}
+
+#nomi-config-form .config-input,
+#nomi-config-form .config-select {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  flex: 0 0 38px;
+}
+
 .nomi-key-input-group {
   display: flex;
   min-width: 0;
@@ -1509,8 +1609,8 @@ onMounted(() => {
   gap: 8px;
 }
 
-.nomi-key-input-group .config-input {
-  min-width: 0;
+#nomi-config-form .nomi-key-input-group .config-input {
+  flex: 1 1 0;
 }
 
 .nomi-key-visibility {
@@ -2294,6 +2394,10 @@ onMounted(() => {
 }
 
 @media (max-width: 780px) {
+  #nomi-config-form .config-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .directory-browser-path {
     align-items: stretch;
     flex-direction: column;

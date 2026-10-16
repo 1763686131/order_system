@@ -16,7 +16,6 @@
           </div>
           <div>
             <h2 id="nomi-admin-title">Nomi 智能助手</h2>
-            <p>{{ sending ? '正在回复...' : 'DeepSeek' }}</p>
           </div>
         </div>
 
@@ -61,7 +60,7 @@
               <KeyRound :size="22" :stroke-width="1.8" />
             </div>
             <strong>{{ configurationError ? 'API 配置需要更新' : '尚未配置 API 接口' }}</strong>
-            <p>{{ configurationError || (canConfigure ? '先配置 DeepSeek API 密钥，即可开始聊天。' : '请联系有系统设置权限的管理员配置 DeepSeek API 密钥。') }}</p>
+            <p>{{ configurationError || (canConfigure ? '先配置 AI 服务商和 API 密钥，即可开始聊天。' : '请联系有系统设置权限的管理员配置 AI 接口。') }}</p>
             <button v-if="canConfigure" type="button" class="nomi-primary-button" @click="emit('open-settings')">
               <Settings2 :size="16" :stroke-width="1.8" />
               去设置 API
@@ -141,13 +140,6 @@
           <Send :size="17" :stroke-width="1.9" />
         </button>
       </form>
-
-      <footer v-if="apiConfigured && !statusLoading" class="nomi-admin-footer">
-        <span>密钥已配置</span>
-        <button v-if="canConfigure" type="button" class="nomi-link-button" @click="emit('open-settings')">
-          管理 API
-        </button>
-      </footer>
     </section>
   </div>
   </Teleport>
@@ -401,27 +393,17 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   flex: 0 0 36px;
-  border-radius: 50%;
+  border-radius: 6px;
   color: #08745a;
-  background: #e9f8f3;
-}
-
-.nomi-admin-header h2,
-.nomi-admin-header p {
-  margin: 0;
+  background: transparent;
 }
 
 .nomi-admin-header h2 {
+  margin: 0;
   color: #172033;
   font-size: 15px;
   font-weight: 700;
   line-height: 1.35;
-}
-
-.nomi-admin-header p {
-  margin-top: 3px;
-  color: #8a96a8;
-  font-size: 12px;
 }
 
 .nomi-admin-header-actions {
@@ -603,7 +585,7 @@ onUnmounted(() => {
   display: flex;
   gap: 10px;
   align-items: flex-end;
-  padding: 12px 14px 8px;
+  padding: 12px 14px;
   border-top: 1px solid #e8edf2;
   background: #ffffff;
   flex: 0 0 auto;
@@ -682,17 +664,6 @@ onUnmounted(() => {
 .nomi-link-button:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-.nomi-admin-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 14px 11px;
-  color: #8a96a8;
-  background: #ffffff;
-  font-size: 11px;
-  flex: 0 0 auto;
 }
 
 @keyframes nomi-pulse {
