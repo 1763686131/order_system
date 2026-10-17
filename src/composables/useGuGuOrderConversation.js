@@ -420,7 +420,7 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
 
   const normalizeContactValue = (value, field) => {
     const normalized = String(value || '').trim()
-      .replace(/^(?:请)?(?:改成|改为|修改为|更改为|换成|改一下|修改一下|更改一下)\s*/, '')
+      .replace(/^(?:请)?(?:修改成|更改成|改成|改为|修改为|更改为|换成|改一下|修改一下|更改一下)\s*/, '')
     return field === 'contactAddress' && /^(自提|自取)$/.test(normalized) ? '客户自提' : normalized
   }
   const applyCorrection = text => {
@@ -458,7 +458,7 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       ask(`好的，请告诉我新的${labels[field]}。`, { type: 'contact', field })
       return true
     }
-    const header = text.match(/^(收货人|联系人|联系电话|电话|收货地址|地址|项目名称|项目|订单备注|备注|门店|仓库|客户)\s*(?:要|需要)?\s*(?:改成|改为|修改为|更改为|换成|[:：])\s*(.+)$/)
+    const header = text.match(/^(收货人|联系人|联系电话|电话|收货地址|地址|项目名称|项目|订单备注|备注|门店|仓库|客户)\s*(?:要|需要)?\s*(?:修改成|更改成|改成|改为|修改为|更改为|换成|[:：])\s*(.+)$/)
     if (!header) return false
     const field = {
       收货人: 'contactPerson', 联系人: 'contactPerson', 联系电话: 'contactPhone', 电话: 'contactPhone',
