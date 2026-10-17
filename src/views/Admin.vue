@@ -369,6 +369,7 @@
     />
     <NomiAdminChat
       v-model="nomiChatOpen"
+      :open-order="openGuGuOrderDraft"
       @open-settings="openNomiSettings"
     />
   </div>
@@ -391,6 +392,7 @@ import {
 import {
   ADMIN_DEPARTMENT_PERMISSIONS,
   ADMIN_EMPLOYEE_PERMISSIONS,
+  ADMIN_SALES_ORDER_PERMISSIONS,
   ADMIN_LOGISTICS_COPY_PERMISSIONS
 } from '@/utils/accessControl'
 import ChatWindow from '@/components/admin/ChatWindow.vue'
@@ -503,6 +505,29 @@ const openNomiSettings = () => {
   if (!userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.SETTINGS)) return
   closeNomiChat()
   router.push({ name: 'admin-settings', query: { section: 'nomi' } })
+}
+
+const openGuGuOrderDraft = async draft => {
+  if (!userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.CREATE)) {
+    throw new Error('当前账号没有新增销售订单权限')
+  }
+  const token = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+  const storageKey = 'admin_gugu_order_draft'
+  try {
+    sessionStorage.setItem(storageKey, JSON.stringify({ token, draft }))
+  } catch {
+    throw new Error('无法暂存订单信息，请检查浏览器存储设置后重试')
+  }
+  try {
+    const failure = await router.push({ name: 'admin-sales-create', query: { guguDraft: token } })
+    if (failure || route.name !== 'admin-sales-create' || route.query.guguDraft !== token) {
+      throw new Error('未能打开新增订单，请检查访问权限后重试')
+    }
+    closeNomiChat()
+  } catch (error) {
+    sessionStorage.removeItem(storageKey)
+    throw error
+  }
 }
 
 const openChat = contact => {

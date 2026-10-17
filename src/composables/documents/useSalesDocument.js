@@ -1892,6 +1892,71 @@ export function useSalesDocument(props) {
     showClearConfirmModal.value = false
     resetOrderFields()
   }
+
+  const readGuGuOrderDraft = () => {
+    const token = String(route.query.guguDraft || '')
+    if (!token || isEditMode.value || readOnly.value || copySourceId.value) return null
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('admin_gugu_order_draft') || 'null')
+      if (stored?.token !== token || !stored.draft?.items?.length) return null
+      return stored.draft
+    } catch {
+      return null
+    }
+  }
+
+  const applyGuGuOrderDraft = async draft => {
+    const store = stores.value.find(store => String(store.id) === String(draft.storeId))
+    const warehouse = warehouses.value.find(warehouse =>
+      String(warehouse.id) === String(draft.warehouseId) &&
+      String(warehouse.storeId ?? warehouse.store_id) === String(draft.storeId)
+    )
+    const customer = customers.value.find(customer =>
+      String(customer.id) === String(draft.customerId) &&
+      String(customer.storeId) === String(draft.storeId)
+    )
+    if (!store || !warehouse || !customer) {
+      throw new Error('订单对应的门店、仓库或客户已不可用，请返回固固助手重新确认')
+    }
+    const selectedProducts = draft.items.map(item => products.value.find(product =>
+      String(product.id) === String(item.productId) &&
+      product.storeIds?.some(id => String(id) === String(store.id)) &&
+      (!product.warehouseId || String(product.warehouseId) === String(warehouse.id))
+    ))
+    if (selectedProducts.some((product, index) =>
+      !product || !draft.items[index].unit || !Number.isFinite(Number(draft.items[index].packages)) ||
+      Number(draft.items[index].packages) <= 0 ||
+      !Number.isFinite(Number(draft.items[index].quantity)) || Number(draft.items[index].quantity) <= 0 ||
+      units.value.find(unit => String(unit.id) === String(product.unitId))?.name !== draft.items[index].unit
+    )) {
+      throw new Error('商品资料或数量已变化，请返回固固助手重新确认型号、单位和件数')
+    }
+
+    initEmptyRows()
+    formData.value.storeId = store.id
+    formData.value.warehouseId = warehouse.id
+    formData.value.customerId = customer.id
+    formData.value.contactPerson = draft.contactPerson || ''
+    formData.value.contactPhone = draft.contactPhone || ''
+    formData.value.contactAddress = draft.contactAddress || ''
+    formData.value.projectName = draft.projectName || ''
+    formData.value.orderRemark = draft.orderRemark || ''
+    applyNewOrderDefaults()
+    formData.value.items = padBlankSalesRows(draft.items.map(() => createBlankSalesItem()))
+    selectedProducts.forEach((product, index) => {
+      selectProduct(index, product)
+      const item = formData.value.items[index]
+      item.unit = draft.items[index].unit
+      item.packages = Number(draft.items[index].packages)
+      item.quantity = Number(draft.items[index].quantity)
+      item.remark = draft.items[index].remark || ''
+      calculateRowAmount(index)
+      updateStockInfo(item)
+    })
+    totalPackages.value = totalPackagesCalculated.value
+    totalPackagesManuallyEdited.value = false
+    await generateNewOrderNumber()
+  }
   
   watch(
     [formData, showTaxColumns, totalPackages],
@@ -1927,13 +1992,17 @@ export function useSalesDocument(props) {
       loadOrderDirectory()
     ])
   
+    const guGuDraft = readGuGuOrderDraft()
     let savedDraft = readOnly.value ? null : orderDraftStore.draft
     if (savedDraft && savedDraft.key !== orderFormRoute.key) {
       orderDraftStore.clearDraft()
       savedDraft = null
     }
   
-    if (savedDraft && savedDraft.key === orderFormRoute.key) {
+    if (guGuDraft) {
+      await applyGuGuOrderDraft(guGuDraft)
+      sessionStorage.removeItem('admin_gugu_order_draft')
+    } else if (savedDraft && savedDraft.key === orderFormRoute.key) {
       await restoreDraft(savedDraft)
   
       for (const item of formData.value.items) {
@@ -1973,7 +2042,7 @@ export function useSalesDocument(props) {
     persistDraft()
     } catch (error) {
       loadFailed.value = true
-      showErrorModal(error?.response?.data?.message || '加载销售订单失败')
+      showErrorModal(error?.response?.data?.message || error?.message || '加载销售订单失败')
     } finally {
       loading.value = false
     }

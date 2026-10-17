@@ -134,7 +134,7 @@ def _request_completion(config, api_key, payload, timeout):
     return choice
 
 
-def chat(config, api_key, messages, max_tokens=2048, tools=None, execute_tool=None):
+def chat(config, api_key, messages, max_tokens=2048, tools=None, execute_tool=None, system_prompt=None):
     provider = config["provider"]
     tools_enabled = bool(tools and execute_tool)
     prompt = (
@@ -164,6 +164,8 @@ def chat(config, api_key, messages, max_tokens=2048, tools=None, execute_tool=No
         )
     else:
         prompt = unavailable_prompt
+    if system_prompt:
+        prompt = system_prompt
     payload = {
         "model": config["model"],
         "messages": [{"role": "system", "content": prompt}, *messages],

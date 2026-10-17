@@ -20,7 +20,7 @@
       >
         <div class="nomi-admin-title-wrap">
           <div class="nomi-admin-avatar" aria-hidden="true">
-            <NomiAvatar :thinking="sending" />
+            <NomiAvatar :thinking="sending || orderDraftBusy" />
           </div>
           <div>
             <h2 id="nomi-admin-title">固固助手（GuGu）</h2>
@@ -29,11 +29,23 @@
 
         <div class="nomi-admin-header-actions">
           <button
+            v-if="canCreateOrder"
+            class="nomi-icon-button"
+            type="button"
+            title="整理新增订单"
+            aria-label="整理新增订单"
+            :aria-pressed="orderDraftOpen"
+            :disabled="sending || orderDraftBusy || !apiConfigured || statusLoading || Boolean(statusError)"
+            @click="toggleOrderDraft"
+          >
+            <FilePlus2 :size="18" :stroke-width="1.8" />
+          </button>
+          <button
             class="nomi-icon-button"
             type="button"
             title="清空对话"
             aria-label="清空对话"
-            :disabled="sending || (!messages.length && !failedQuestion)"
+            :disabled="sending || orderDraftBusy || (!messages.length && !failedQuestion && !orderDraftOpen)"
             @click="clearConversation"
           >
             <Trash2 :size="17" :stroke-width="1.8" />
@@ -50,7 +62,7 @@
         </div>
       </header>
 
-      <div ref="messageListRef" class="nomi-admin-messages" role="log" aria-label="固固助手对话记录" aria-live="polite" :aria-busy="sending">
+      <div ref="messageListRef" class="nomi-admin-messages" role="log" aria-label="固固助手对话记录" aria-live="polite" :aria-busy="sending || orderDraftBusy">
         <div v-if="statusLoading" class="nomi-admin-state">
           正在检查固固助手配置...
         </div>
@@ -77,7 +89,7 @@
         </template>
 
         <template v-else>
-          <div v-if="!messages.length && !failedQuestion" class="nomi-admin-empty">
+          <div v-if="!messages.length && !orderDraftOpen && !failedQuestion" class="nomi-admin-empty">
             <div class="nomi-welcome-avatar"><NomiAvatar /></div>
             <strong>你好，我是固固助手（GuGu）</strong>
             <p>今天有什么想聊的？</p>
@@ -87,7 +99,15 @@
             :key="`${message.role}-${index}`"
             :class="['nomi-message-row', `is-${message.role}`]"
           >
-            <div class="nomi-message-bubble">
+            <GuGuOrderDraft
+              v-if="message.orderFlow && message.role === 'assistant'"
+              :message="message"
+              :active="orderDraftOpen && canCreateOrder && message.id === orderQuestionId"
+              :busy="orderDraftBusy"
+              @answer="orderFlow.answerOption(message, $event)"
+              @confirm="orderFlow.confirmSummary(message)"
+            />
+            <div v-else class="nomi-message-bubble">
               <div
                 v-if="message.role === 'assistant'"
                 class="nomi-message-content nomi-markdown"
@@ -102,7 +122,7 @@
           <div v-if="failedQuestion" class="nomi-message-row is-user">
             <div class="nomi-message-bubble">{{ failedQuestion }}</div>
           </div>
-          <div v-if="sending" class="nomi-message-row is-assistant">
+          <div v-if="sending || orderDraftBusy" class="nomi-message-row is-assistant">
             <div class="nomi-message-bubble nomi-loading-bubble" aria-label="固固助手正在思考">
               <span></span><span></span><span></span>
             </div>
@@ -110,7 +130,7 @@
         </template>
       </div>
 
-      <div v-if="sendError && apiConfigured" class="nomi-send-error" role="alert">
+      <div v-if="sendError && apiConfigured && !orderDraftOpen" class="nomi-send-error" role="alert">
         <span>{{ sendError }}</span>
         <button v-if="failedQuestion && !sending" type="button" class="nomi-link-button" @click="sendMessage(failedQuestion)">
           重试
@@ -119,26 +139,27 @@
       <form
         v-if="apiConfigured && !statusLoading && !statusError"
         class="nomi-admin-composer"
-        @submit.prevent="sendMessage()"
+        @submit.prevent="handleComposerSubmit"
       >
         <textarea
           ref="composerRef"
           v-model="draft"
-          :disabled="sending"
+          :disabled="sending || orderDraftBusy"
           rows="2"
           maxlength="4000"
-          placeholder="输入任务或问题..."
-          aria-label="输入任务或问题"
+          :placeholder="orderDraftOpen ? '输入订单内容，或回复固固的问题...' : '输入任务或问题...'"
+          :aria-label="orderDraftOpen ? '输入订单内容或回复' : '输入任务或问题'"
           @compositionstart="composing = true"
           @compositionend="composing = false"
           @keydown="handleComposerKeydown"
         ></textarea>
         <button
-          v-if="sending"
+          v-if="sending || orderDraftBusy"
           class="nomi-send-button"
           type="button"
           title="停止等待"
           aria-label="停止等待"
+          :disabled="orderDraftOpening"
           @click="stopWaiting"
         >
           <Square :size="15" :stroke-width="1.9" />
@@ -147,7 +168,7 @@
           v-else
           class="nomi-send-button"
           type="submit"
-          :disabled="sending || !draft.trim()"
+          :disabled="sending || orderDraftBusy || !draft.trim()"
           title="发送消息"
           aria-label="发送消息"
         >
@@ -173,18 +194,25 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { KeyRound, Send, Settings2, Square, Trash2, X } from '@lucide/vue'
+import { FilePlus2, KeyRound, Send, Settings2, Square, Trash2, X } from '@lucide/vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import request from '@/api/request'
 import NomiAvatar from '@/components/common/NomiAvatar.vue'
+import GuGuOrderDraft from '@/components/admin/GuGuOrderDraft.vue'
 import { useUserStore } from '@/stores/user'
 import { ADMIN_ROUTE_BRANCH_PERMISSIONS } from '@/utils/adminAccess'
+import { ADMIN_SALES_ORDER_PERMISSIONS } from '@/utils/accessControl'
+import { looksLikeGuGuOrderRequest, useGuGuOrderConversation } from '@/composables/useGuGuOrderConversation'
 
 const props = defineProps({
   modelValue: {
     type: Boolean,
     default: false
+  },
+  openOrder: {
+    type: Function,
+    required: true
   }
 })
 
@@ -193,6 +221,22 @@ const userStore = useUserStore()
 const canConfigure = computed(() =>
   userStore.hasPerm(ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.SETTINGS)
 )
+const canCreateOrder = computed(() => userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.CREATE))
+const handleDraftConfigurationError = message => {
+  apiConfigured.value = false
+  configurationError.value = message
+}
+
+const toggleOrderDraft = () => {
+  if (!canCreateOrder.value || sending.value || orderDraftBusy.value) return
+  if (orderDraftOpen.value) orderDraftOpen.value = false
+  else orderFlow.start()
+  if (orderDraftOpen.value) {
+    failedQuestion.value = ''
+    sendError.value = ''
+  }
+  nextTick(() => composerRef.value?.focus())
+}
 
 const close = () => {
   stopDrag()
@@ -233,6 +277,18 @@ const statusLoading = ref(true)
 const statusError = ref('')
 const apiConfigured = ref(false)
 const configurationError = ref('')
+const orderFlow = useGuGuOrderConversation({
+  messages,
+  request,
+  openOrder: summary => props.openOrder(summary),
+  onConfigurationError: handleDraftConfigurationError
+})
+const {
+  active: orderDraftOpen,
+  busy: orderDraftBusy,
+  opening: orderDraftOpening,
+  activeQuestionId: orderQuestionId
+} = orderFlow
 let replyController
 let statusController
 let previousFocus
@@ -547,12 +603,32 @@ const loadStatus = async () => {
 }
 
 const clearConversation = () => {
-  if (sending.value) return
+  if (sending.value || orderDraftBusy.value) return
+  orderFlow.reset()
   messages.value = []
   failedQuestion.value = ''
   sendError.value = ''
   draft.value = ''
   composerRef.value?.focus()
+}
+
+const handleComposerSubmit = () => {
+  const content = draft.value.trim()
+  if (!content || sending.value || orderDraftBusy.value || !apiConfigured.value) return
+  if (canCreateOrder.value && orderDraftOpen.value) {
+    draft.value = ''
+    orderFlow.submit(content)
+    return
+  }
+  if (canCreateOrder.value && looksLikeGuGuOrderRequest(content)) {
+    orderFlow.start()
+    draft.value = ''
+    failedQuestion.value = ''
+    sendError.value = ''
+    orderFlow.submit(content)
+    return
+  }
+  sendMessage()
 }
 
 const sendMessage = async (question = draft.value) => {
@@ -573,7 +649,8 @@ const sendMessage = async (question = draft.value) => {
   await scrollToBottom()
 
   try {
-    const context = messages.value.slice(-19).map(({ role, content }) => ({ role, content }))
+    const context = messages.value.filter(message => !message.orderFlow).slice(-19)
+      .map(({ role, content }) => ({ role, content }))
     while (context.length > 1 && context.reduce((sum, item) => sum + Array.from(item.content).length, 0) > 60000) {
       context.splice(0, 2)
     }
@@ -614,13 +691,16 @@ const sendMessage = async (question = draft.value) => {
   }
 }
 
-const stopWaiting = () => replyController?.abort()
+const stopWaiting = () => {
+  replyController?.abort()
+  orderFlow.cancel()
+}
 
 const handleComposerKeydown = event => {
   if (event.key !== 'Enter' || event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) return
   if (event.isComposing || composing.value || event.keyCode === 229) return
   event.preventDefault()
-  sendMessage()
+  handleComposerSubmit()
 }
 
 const handleKeydown = event => {
@@ -629,7 +709,7 @@ const handleKeydown = event => {
     close()
   }
   if (event.key !== 'Tab') return
-  const focusable = [...(dialogRef.value?.querySelectorAll('button:not([disabled]), textarea:not([disabled])') || [])]
+  const focusable = [...(dialogRef.value?.querySelectorAll('button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled])') || [])]
     .filter(element => element.getClientRects().length)
   const first = focusable[0]
   const last = focusable.at(-1)
@@ -660,7 +740,16 @@ watch(() => props.modelValue, async isOpen => {
   clampDialogBounds()
   dialogRef.value?.focus()
   await loadStatus()
-  if (props.modelValue && !sending.value) composerRef.value?.focus()
+  if (props.modelValue && !sending.value && !orderDraftBusy.value) composerRef.value?.focus()
+})
+
+watch(() => messages.value.length, scrollToBottom)
+watch(orderDraftBusy, async busy => {
+  await scrollToBottom()
+  if (!busy && props.modelValue) composerRef.value?.focus()
+})
+watch(canCreateOrder, allowed => {
+  if (!allowed) orderFlow.reset()
 })
 
 const handleWindowBlur = () => {
@@ -680,6 +769,7 @@ onUnmounted(() => {
   window.removeEventListener('blur', handleWindowBlur)
   replyController?.abort()
   statusController?.abort()
+  orderFlow.reset()
 })
 </script>
 
