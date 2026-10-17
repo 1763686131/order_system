@@ -285,7 +285,7 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
         return
       }
     }
-    ask('信息已整理好，请检查订单摘要。需要修改也可以直接告诉我，例如“第1项件数改成50”。',
+    ask('信息已整理好，请检查订单摘要。地址、收货人、电话、项目或备注可以直接说“收货地址要修改一下”或“收货地址改成……”；商品型号、数量和件数可按序号修改。',
       { type: 'summary' }, [], { summary: makeSummary() })
   }
 
@@ -418,6 +418,11 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
     }
   }
 
+  const normalizeContactValue = (value, field) => {
+    const normalized = String(value || '').trim()
+      .replace(/^(?:请)?(?:改成|改为|修改为|更改为|换成|改一下|修改一下|更改一下)\s*/, '')
+    return field === 'contactAddress' && /^(自提|自取)$/.test(normalized) ? '客户自提' : normalized
+  }
   const applyCorrection = text => {
     const detail = text.match(/^第\s*(\d+)\s*(?:项|条|个商品)?\s*(?:的)?\s*(型号|规格|件数|数量)\s*(?:改成|改为|修改为|换成|[:：])\s*(.+)$/)
     if (detail) {
@@ -434,7 +439,26 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       }
       return true
     }
-    const header = text.match(/^(收货人|联系人|联系电话|电话|收货地址|地址|项目名称|项目|订单备注|备注|门店|仓库|客户)\s*(?:改成|改为|修改为|换成|[:：])\s*(.+)$/)
+    const fieldPattern = '(收货人|联系人|联系电话|电话|收货地址|地址|项目名称|项目|订单备注|备注)'
+    const editIntent = text.match(new RegExp(`^(?:(?:请|麻烦)?(?:帮我)?|我(?:想|要)?)(?:把)?${fieldPattern}(?:信息)?(?:要|需要|想)?(?:修改|更改|改|换)(?:一下)?[。！!]*$`)) ||
+      text.match(new RegExp(`^(?:(?:请|麻烦)?(?:帮我)?|我(?:想|要)?)(?:修改|更改|改|换)(?:一下)?(?:订单的)?${fieldPattern}(?:信息)?[。！!]*$`))
+    if (editIntent) {
+      const field = {
+        收货人: 'contactPerson', 联系人: 'contactPerson', 联系电话: 'contactPhone', 电话: 'contactPhone',
+        收货地址: 'contactAddress', 地址: 'contactAddress', 项目名称: 'projectName', 项目: 'projectName',
+        订单备注: 'remark', 备注: 'remark'
+      }[editIntent[1]]
+      const labels = {
+        contactPerson: '收货人姓名',
+        contactPhone: '联系电话',
+        contactAddress: '收货地址',
+        projectName: '项目名称',
+        remark: '订单备注'
+      }
+      ask(`好的，请告诉我新的${labels[field]}。`, { type: 'contact', field })
+      return true
+    }
+    const header = text.match(/^(收货人|联系人|联系电话|电话|收货地址|地址|项目名称|项目|订单备注|备注|门店|仓库|客户)\s*(?:要|需要)?\s*(?:改成|改为|修改为|更改为|换成|[:：])\s*(.+)$/)
     if (!header) return false
     const field = {
       收货人: 'contactPerson', 联系人: 'contactPerson', 联系电话: 'contactPhone', 电话: 'contactPhone',
@@ -447,7 +471,7 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       if (record) chooseScope(field, record)
       else ask('请从当前可用资料中选择。', { type: field }, choices(records, entry => entry.customerName || entry.name))
     } else {
-      draft.value[field] = header[2].trim()
+      draft.value[field] = normalizeContactValue(header[2], field)
       nextQuestion()
     }
     return true
@@ -537,10 +561,10 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
         nextQuestion()
       } else recordNumber(question.itemIndex, question.field, content)
     } else if (question.type === 'contact') {
-      draft.value[question.field] = question.field === 'contactAddress' && /^(自提|自取)$/.test(content) ? '客户自提' : content
+      draft.value[question.field] = normalizeContactValue(content, question.field)
       nextQuestion()
     } else if (question.type === 'summary') {
-      say('可以告诉我需要修改的内容，例如“第1项型号改为B型”“地址改为……”；确认无误后点击摘要下方的按钮。')
+      say('可以直接说“收货地址要修改一下”，我会追问新地址；也可以说“收货地址改成……”直接更新。商品型号、数量和件数可按序号修改。')
     }
   }
   const answerOption = (message, option) => {
