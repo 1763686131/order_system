@@ -35,7 +35,9 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
   const catalogue = ref({ stores: [], warehouses: [], customers: [], products: [], units: [] })
   let sequence = 0
   let controller
+  let revisionController
   let sourceText = ''
+  let revisionMessages = []
 
   const currentQuestion = computed(() => messages.value.find(message =>
     message.orderFlow && message.id === activeQuestionId.value
@@ -196,6 +198,24 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       remark: item.notes || ''
     }))
   })
+  const makeRevisionDraft = () => {
+    const summary = makeSummary()
+    return {
+      ...summary,
+      items: summary.items.map((item, index) => {
+        const product = selectedProduct(draft.value.items[index])
+        return {
+          ...item,
+          packageConversions: (Array.isArray(product?.unitConversions) ? product.unitConversions : [])
+            .map(conversion => ({
+              unit: catalogue.value.units.find(unit => sameId(unit.id, conversion?.fromUnitId))?.name || '',
+              rate: Number(conversion?.value)
+            }))
+            .filter(conversion => conversion.unit && positive(conversion.rate))
+        }
+      })
+    }
+  }
 
   const askProduct = (itemIndex, candidates = candidateProducts(draft.value.items[itemIndex])) => {
     const item = draft.value.items[itemIndex]
@@ -367,6 +387,7 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
 
   const parseSource = async text => {
     sourceText = text
+    revisionMessages = []
     const operation = new AbortController()
     controller = operation
     busy.value = true
@@ -422,6 +443,85 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
     const normalized = String(value || '').trim()
       .replace(/^(?:请)?(?:修改成|更改成|改成|改为|修改为|更改为|换成|改一下|修改一下|更改一下)\s*/, '')
     return field === 'contactAddress' && /^(自提|自取)$/.test(normalized) ? '客户自提' : normalized
+  }
+  const applyRevisionUpdates = updates => {
+    if (!Array.isArray(updates) || updates.length > 20) return false
+    const orderFields = new Set([
+      'contactPerson', 'contactPhone', 'contactAddress', 'projectName', 'orderRemark'
+    ])
+    const itemFields = new Set(['quantity', 'packages', 'remark'])
+    const normalized = []
+    const seen = new Set()
+    for (const update of updates) {
+      if (!update || typeof update !== 'object' || Array.isArray(update)) return false
+      if (orderFields.has(update.field)) {
+        if (Object.keys(update).some(key => !['field', 'value'].includes(key)) ||
+          typeof update.value !== 'string' || update.value.length > 500) return false
+        const key = update.field
+        if (seen.has(key)) return false
+        seen.add(key)
+        normalized.push(update)
+        continue
+      }
+      if (!itemFields.has(update.field) ||
+        !Number.isInteger(update.itemIndex) ||
+        update.itemIndex < 0 || update.itemIndex >= draft.value.items.length ||
+        Object.keys(update).some(key => !['itemIndex', 'field', 'value'].includes(key))) return false
+      if (update.field === 'remark') {
+        if (typeof update.value !== 'string' || update.value.length > 300) return false
+      } else if (typeof update.value !== 'number' ||
+        !Number.isFinite(update.value) || update.value <= 0) return false
+      const key = `${update.itemIndex}:${update.field}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      normalized.push(update)
+    }
+    for (const update of normalized) {
+      if (update.itemIndex != null) {
+        const item = draft.value.items[update.itemIndex]
+        item[update.field === 'remark' ? 'notes' : update.field] = update.value
+      } else {
+        const field = update.field === 'orderRemark' ? 'remark' : update.field
+        draft.value[field] = update.value
+      }
+    }
+    return true
+  }
+  const reviseDraftWithAI = async content => {
+    const conversation = [...revisionMessages, { role: 'user', content }].slice(-12)
+    revisionMessages = conversation
+    const operation = new AbortController()
+    revisionController?.abort()
+    revisionController = operation
+    busy.value = true
+    try {
+      const response = await request.post('/ai/order-draft/revise', {
+        draft: makeRevisionDraft(),
+        messages: conversation
+      }, { timeout: 75000, signal: operation.signal })
+      if (operation.signal.aborted || revisionController !== operation) return
+      if (!response.success || !response.data) {
+        throw new Error(response.message || 'AI 返回的修改内容无法安全应用，请换种说法重试。')
+      }
+      const reply = String(response.data.reply || '').trim()
+      if (!reply) throw new Error('AI 没有返回修改说明，请重试。')
+      if (!applyRevisionUpdates(response.data.updates)) {
+        throw new Error('AI 返回的修改内容无法安全应用，请换种说法重试。')
+      }
+      revisionMessages = [...conversation, { role: 'assistant', content: reply }].slice(-12)
+      ask(reply, { type: 'summary' }, [], { summary: makeSummary() })
+    } catch (error) {
+      if (operation.signal.aborted || revisionController !== operation) return
+      const code = error.response?.data?.code
+      const message = error.response?.data?.message || error.message || '订单修改失败，请重试。'
+      if (['missing_api_key', 'invalid_api_key'].includes(code)) onConfigurationError?.(message)
+      ask(`AI 暂时无法处理这次修改：${message}`, { type: 'summary' }, [], { summary: makeSummary() })
+    } finally {
+      if (revisionController === operation) {
+        revisionController = null
+        busy.value = false
+      }
+    }
   }
   const applyCorrection = text => {
     const detail = text.match(/^第\s*(\d+)\s*(?:项|条|个商品)?\s*(?:的)?\s*(型号|规格|件数|数量)\s*(?:改成|改为|修改为|换成|[:：])\s*(.+)$/)
@@ -493,11 +593,15 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       activeQuestionId.value = 0
       draft.value = null
       sourceText = ''
+      revisionMessages = []
+      revisionController?.abort()
+      revisionController = null
       say('已退出新增订单整理，可以继续日常聊天；尚未创建订单。')
       return
     }
     if (/^(重新开始|重来|重新整理|换一单)$/.test(content)) {
       draft.value = null
+      revisionMessages = []
       activeQuestionId.value = 0
       start()
       return
@@ -510,6 +614,10 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       } else if (/^(?:请|帮我|我要|我想|固固|GuGu|，|。|\s)*(?:新增|新建|创建|录入|整理|生成)(?:一张|一个)?(?:订单|销售单)[。！!，,\s]*$/i.test(content)) {
         ask('好的，把客户发来的商品、数量和收货信息贴给我。', { type: 'source' })
       } else await parseSource(content)
+      return
+    }
+    if (question.type === 'summary' && draft.value) {
+      await reviseDraftWithAI(content)
       return
     }
     if (draft.value && applyCorrection(content)) return
@@ -563,8 +671,6 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
     } else if (question.type === 'contact') {
       draft.value[question.field] = normalizeContactValue(content, question.field)
       nextQuestion()
-    } else if (question.type === 'summary') {
-      say('可以直接说“收货地址要修改一下”，我会追问新地址；也可以说“收货地址改成……”直接更新。商品型号、数量和件数可按序号修改。')
     }
   }
   const answerOption = (message, option) => {
@@ -599,11 +705,14 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
   const reset = () => {
     controller?.abort()
     controller = null
+    revisionController?.abort()
+    revisionController = null
     active.value = false
     busy.value = false
     draft.value = null
     activeQuestionId.value = 0
     sourceText = ''
+    revisionMessages = []
   }
   return { active, busy, opening, activeQuestionId, start, submit, answerOption, confirmSummary, cancel, reset }
 }

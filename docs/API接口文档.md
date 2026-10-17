@@ -72,6 +72,7 @@
 
 ## 版本历史
 
+- **v5.18** (2026-10-17，固固助手 AI 订单草稿修订) - 新增 `POST /api/ai/order-draft/revise`；摘要阶段将当前草稿和最近修改上下文交给 AI 理解，支持追问及白名单字段更新，服务端校验结果，仍由用户检查并保存订单
 - **v5.17** (2026-10-17，固固助手（GuGu）服务器历史聊天与对话式订单整理) - 新增按用户隔离的历史聊天列表、读取、保存和删除接口；前端聊天自动保存、恢复后继续上下文；新增订单文字解析接口及字段确认流程，最终仍由用户在原订单页面检查并保存
 - **v5.16** (2026-10-16，固固助手（GuGu）只读订单工具) - 聊天支持按权限调用订单列表和详情查询，复用原订单接口的门店范围；增加组合筛选、分页、后端汇总、工具调用次数限制及 `orderQueryUsed` 返回字段
 - **v5.15** (2026-10-16，固固助手（GuGu）后台聊天与多服务商配置) - 新增 AI 状态、文字聊天、服务商配置读取、连接验证与启用、密钥清除接口；支持七类服务商预设和自定义 OpenAI 兼容接口，各服务商独立加密保存密钥，兼容旧 DeepSeek 配置
@@ -5739,6 +5740,7 @@ CREATE TABLE logistics_copy_settings (
 | `PUT` | `/api/ai/histories/{history_id}` | 已登录且 `canAccessAdmin=true` | 新建或更新当前用户的一条历史聊天 |
 | `DELETE` | `/api/ai/histories/{history_id}` | 已登录且 `canAccessAdmin=true` | 删除当前用户的一条历史聊天 |
 | `POST` | `/api/ai/order-draft` | 后台访问及 `admin.sales.order.create` | 将客户下单文字解析为待确认的订单草稿 |
+| `POST` | `/api/ai/order-draft/revise` | 后台访问及 `admin.sales.order.create` | 结合当前草稿和最近对话理解修改、追问或返回受限字段更新 |
 | `GET` | `/api/settings/ai` | 后台访问及 `admin.route.system.settings` | 读取配置、密钥掩码和服务商预设 |
 | `PUT` | `/api/settings/ai` | 后台访问及 `admin.route.system.settings` | 验证并启用配置，或清除密钥 |
 
@@ -6181,6 +6183,81 @@ CREATE TABLE logistics_copy_settings (
 全部必要字段确认后，前端将数据填入既有新增销售订单页面；用户仍须检查订单页面并显式保存。此接口和 AI 助手均不直接调用销售订单创建接口，不创建、审核或提交订单。订单整理模式可通过顶部模式按钮或输入退出指令返回普通聊天。解析失败、上游缺少密钥、权限不足和服务商异常分别按对应参数校验及第 20.7 节错误规则处理。
 
 空白或超过 4000 字符的 `text` 返回 `400`；超过请求体上限返回 `413`；当前服务商缺少密钥返回 `409 missing_api_key`，密钥无法解密返回 `409 invalid_api_key`；模型未返回可用草稿时返回 `502 invalid_order_draft`。未登录返回 `401`，无后台访问或销售新增权限返回 `403`。
+
+### 20.12 AI 修订待确认订单草稿
+
+- **URL**：`/api/ai/order-draft/revise`
+- **Method**：`POST`
+- **权限**：登录用户须具有 `admin.sales.order.create`；仍使用当前启用的 AI 服务商配置
+- **请求体上限**：512 KiB
+- **用途**：在新增订单摘要阶段，根据自然语言修改当前草稿；每次修改请求均由当前 AI 服务商结合草稿和最近对话理解
+
+请求体包含当前待确认草稿 `draft` 和最近对话 `messages`。前端通常发送最近 12 条消息；服务端最多接受 20 条，并遵循普通 AI 消息的单条长度及上下文长度限制。最后一条消息必须是本轮用户输入。
+
+```json
+{
+  "draft": {
+    "storeName": "中国",
+    "warehouseName": "中国车间",
+    "customerName": "赛文",
+    "contactPerson": "钱兴静",
+    "contactPhone": "15555119577",
+    "contactAddress": "浙江省丽水市遂昌县妙高镇北街143号",
+    "projectName": "",
+    "orderRemark": "发到这里",
+    "items": [
+      {
+        "label": "碳纤维胶 · 20kg/组 · DA-T",
+        "quantity": 1000,
+        "unit": "公斤",
+        "packages": 50,
+        "remark": "",
+        "packageConversions": [
+          { "unit": "公斤", "rate": 20 }
+        ]
+      }
+    ]
+  },
+  "messages": [
+    { "role": "user", "content": "收货地址要修改一下" },
+    { "role": "assistant", "content": "请告诉我新的收货地址。" },
+    { "role": "user", "content": "浙江省丽水市遂昌县妙高镇北街143号" }
+  ]
+}
+```
+
+`draft.items` 必须包含 1 至 30 项；每项的 `quantity`、`packages` 均须为正数。`packageConversions` 是商品包装换算信息，最多 8 项，仅用于帮助 AI 判断是否能按精确换算联动数量和件数；不能据此更改商品身份。草稿中的门店、仓库、客户及商品标识信息只作为上下文，不允许模型更新。
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "data": {
+    "reply": "收货地址已更新，数量和件数保持不变。",
+    "updates": [
+      {
+        "field": "contactAddress",
+        "value": "浙江省丽水市遂昌县妙高镇北街143号"
+      }
+    ],
+    "model": "deepseek-chat"
+  }
+}
+```
+
+模型需要补充信息或无法确定修改目标时，返回追问文字且 `updates` 为空；客户端保留草稿，用户补充后会连同最近对话再次请求 AI。修改明确时，`updates` 仅允许以下字段：
+
+| 目标 | 允许字段 | 说明 |
+| --- | --- | --- |
+| 订单 | `contactPerson`、`contactPhone`、`contactAddress`、`projectName`、`orderRemark` | 字符串；用户明确要求清空时可更新为空字符串 |
+| 明细 | `itemIndex` + `quantity`、`packages` 或 `remark` | `itemIndex` 从 0 开始；数量与件数必须为正数，备注可清空 |
+
+普通“备注”指订单备注；明确指向商品明细时才改明细备注。数量使用草稿中的单位，其他单位仅在可以明确换算时接受；未明确要求时不擅自改变件数，包装换算能精确得出件数时可建议并说明。每个字段在一次响应中最多更新一次。服务端拒绝未列入白名单的字段、越界明细序号、重复更新和无效数值；前端应用更新后重新生成订单摘要供用户确认。
+
+该接口只返回草稿更新，不会创建或提交销售订单。门店、仓库、客户及商品身份、已保存订单、审核状态、库存和实时账务均不能由此接口修改。用户仍须检查摘要并在原新增销售订单页面显式保存。
+
+无效 JSON、消息或草稿字段返回 `400`；请求体超过限制返回 `413`；未配置密钥或密钥无法解密返回 `409 missing_api_key` / `409 invalid_api_key`；模型响应无法解析或字段校验失败返回 `502 invalid_order_revision`；未登录返回 `401`，无后台访问或销售新增权限返回 `403`。成功响应设置 `Cache-Control: no-store`。
 
 ---
 

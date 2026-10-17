@@ -180,3 +180,46 @@ def parse_order_draft():
             "success": False, "code": error.code, "message": str(error)
         }), error.status
     return jsonify({"success": True, "data": result})
+
+
+@ai_bp.route("/order-draft/revise", methods=["POST"])
+@require_admin_permission("admin.sales.order.create")
+def revise_order_draft():
+    if request.content_length and request.content_length > ai_client.MAX_REQUEST_BYTES:
+        return jsonify({"success": False, "message": "订单修改请求过大"}), 413
+    data = request.get_json(silent=True)
+    try:
+        if not isinstance(data, dict):
+            raise ValueError("请提交有效的订单修改内容")
+        messages = ai_client.normalize_messages(data.get("messages"))
+        draft = ai_order_draft.normalize_revision_draft(data.get("draft"))
+    except ValueError as error:
+        return jsonify({"success": False, "message": str(error)}), 400
+
+    try:
+        config = ai_config.get_config()
+        api_key = decrypt_api_key(config["encryptedApiKey"])
+    except RuntimeError as error:
+        return jsonify({
+            "success": False, "code": "invalid_api_key", "message": str(error)
+        }), 409
+    if not api_key:
+        return jsonify({
+            "success": False,
+            "code": "missing_api_key",
+            "message": "尚未配置 AI 接口，请先在系统设置中配置服务商和 API 密钥。",
+        }), 409
+
+    try:
+        result = ai_order_draft.revise_order_draft(
+            config, api_key, draft, messages
+        )
+    except ValueError as error:
+        return jsonify({"success": False, "message": str(error)}), 400
+    except ai_client.AIProviderError as error:
+        return jsonify({
+            "success": False, "code": error.code, "message": str(error)
+        }), error.status
+    response = jsonify({"success": True, "data": result})
+    response.headers["Cache-Control"] = "no-store"
+    return response
