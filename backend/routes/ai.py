@@ -2,12 +2,83 @@
 
 from flask import Blueprint, jsonify, request
 
-from utils import ai_client, ai_config, ai_order_draft, ai_order_tools
+from utils import ai_chat_history, ai_client, ai_config, ai_order_draft, ai_order_tools
 from utils.ai_secrets import decrypt_api_key
-from utils.auth import require_admin_access, require_admin_permission
+from utils.auth import get_current_user, require_admin_access, require_admin_permission
+from utils.db import get_db
 
 
 ai_bp = Blueprint("ai", __name__, url_prefix="/api/ai")
+
+
+@ai_bp.route("/histories", methods=["GET"])
+@require_admin_access
+def list_chat_histories():
+    user = get_current_user()
+    with get_db() as conn:
+        ai_chat_history.ensure_schema(conn)
+        items = ai_chat_history.list_histories(conn, user["id"])
+    response = jsonify({"success": True, "items": items})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@ai_bp.route("/histories/<history_id>", methods=["GET"])
+@require_admin_access
+def get_chat_history(history_id):
+    try:
+        history_id = ai_chat_history.validate_history_id(history_id)
+    except ValueError as error:
+        return jsonify({"success": False, "message": str(error)}), 400
+    user = get_current_user()
+    with get_db() as conn:
+        ai_chat_history.ensure_schema(conn)
+        history = ai_chat_history.get_history(conn, user["id"], history_id)
+    if not history:
+        return jsonify({"success": False, "message": "历史聊天不存在"}), 404
+    response = jsonify({"success": True, "data": history})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@ai_bp.route("/histories/<history_id>", methods=["PUT"])
+@require_admin_access
+def save_chat_history(history_id):
+    if request.content_length and request.content_length > ai_chat_history.MAX_HISTORY_BYTES + 8192:
+        return jsonify({"success": False, "message": "历史聊天请求过大"}), 413
+    try:
+        history_id = ai_chat_history.validate_history_id(history_id)
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            raise ValueError("请提交有效的历史聊天内容")
+        user = get_current_user()
+        with get_db() as conn:
+            ai_chat_history.ensure_schema(conn)
+            data = ai_chat_history.save_history(conn, user["id"], history_id, payload)
+    except ValueError as error:
+        return jsonify({"success": False, "message": str(error)}), 400
+    response = jsonify({"success": True, "data": data})
+    response.headers["Cache-Control"] = "no-store"
+    return response
+
+
+@ai_bp.route("/histories/<history_id>", methods=["DELETE"])
+@require_admin_access
+def delete_chat_history(history_id):
+    try:
+        history_id = ai_chat_history.validate_history_id(history_id)
+    except ValueError as error:
+        return jsonify({"success": False, "message": str(error)}), 400
+    user = get_current_user()
+    with get_db() as conn:
+        ai_chat_history.ensure_schema(conn)
+        cursor = conn.execute(
+            "DELETE FROM ai_chat_histories WHERE user_id = ? AND id = ?",
+            (user["id"], history_id),
+        )
+    if cursor.rowcount == 0:
+        return jsonify({"success": False, "message": "历史聊天不存在"}), 404
+    return jsonify({"success": True})
 
 
 @ai_bp.route("/status", methods=["GET"])

@@ -72,6 +72,7 @@
 
 ## 版本历史
 
+- **v5.17** (2026-10-17，固固助手（GuGu）服务器历史聊天与对话式订单整理) - 新增按用户隔离的历史聊天列表、读取、保存和删除接口；前端聊天自动保存、恢复后继续上下文；新增订单文字解析接口及字段确认流程，最终仍由用户在原订单页面检查并保存
 - **v5.16** (2026-10-16，固固助手（GuGu）只读订单工具) - 聊天支持按权限调用订单列表和详情查询，复用原订单接口的门店范围；增加组合筛选、分页、后端汇总、工具调用次数限制及 `orderQueryUsed` 返回字段
 - **v5.15** (2026-10-16，固固助手（GuGu）后台聊天与多服务商配置) - 新增 AI 状态、文字聊天、服务商配置读取、连接验证与启用、密钥清除接口；支持七类服务商预设和自定义 OpenAI 兼容接口，各服务商独立加密保存密钥，兼容旧 DeepSeek 配置
 - **v5.14** (2026-10-11，供应商财务入口合并) - 应收/应付与收款/付款共用页面；应付汇总增加联系人字段，对账支持时间排序，付款响应补充锁期标记，统一退款账户选项字段；现有财务写入接口与权限编码保持不变
@@ -5733,12 +5734,17 @@ CREATE TABLE logistics_copy_settings (
 | --- | --- | --- | --- |
 | `GET` | `/api/ai/status` | 已登录且 `canAccessAdmin=true` | 获取当前启用配置的状态 |
 | `POST` | `/api/ai/chat` | 已登录且 `canAccessAdmin=true` | 使用当前启用配置聊天 |
+| `GET` | `/api/ai/histories` | 已登录且 `canAccessAdmin=true` | 列出当前用户的历史聊天 |
+| `GET` | `/api/ai/histories/{history_id}` | 已登录且 `canAccessAdmin=true` | 读取当前用户的一条历史聊天 |
+| `PUT` | `/api/ai/histories/{history_id}` | 已登录且 `canAccessAdmin=true` | 新建或更新当前用户的一条历史聊天 |
+| `DELETE` | `/api/ai/histories/{history_id}` | 已登录且 `canAccessAdmin=true` | 删除当前用户的一条历史聊天 |
+| `POST` | `/api/ai/order-draft` | 后台访问及 `admin.sales.order.create` | 将客户下单文字解析为待确认的订单草稿 |
 | `GET` | `/api/settings/ai` | 后台访问及 `admin.route.system.settings` | 读取配置、密钥掩码和服务商预设 |
 | `PUT` | `/api/settings/ai` | 后台访问及 `admin.route.system.settings` | 验证并启用配置，或清除密钥 |
 
 上述接口沿用 Session Cookie 鉴权；未登录返回 `401`，没有后台访问或所需设置权限返回 `403`。有后台访问权限的员工可使用管理员已经配置好的聊天服务，无需额外授予系统设置权限。
 
-未配置密钥时，对话区域中央显示配置引导；具有设置权限的账号可点击“去设置 API”，其他账号提示联系管理员。配置完成后显示普通聊天界面，不显示固定服务商品牌副标题或底部密钥管理栏。对话仅存在于当前页面内存，刷新后丢失，没有服务端聊天记录保存接口。
+未配置密钥时，对话区域中央显示配置引导；具有设置权限的账号可点击“去设置 API”，其他账号提示联系管理员。配置完成后显示普通聊天界面，不显示固定服务商品牌副标题或底部密钥管理栏。后台聊天消息自动保存到服务器，历史列表按当前登录用户隔离；恢复历史后可继续携带原消息上下文聊天。前端不提供手动保存按钮。窗口位置和尺寸属于浏览器本地界面偏好，不属于服务器聊天记录。
 
 ### 20.2 获取当前聊天配置状态
 
@@ -5982,7 +5988,7 @@ CREATE TABLE logistics_copy_settings (
 
 ### 20.8 数据存储、加密与部署
 
-配置使用现有 `system_settings` 表，键为 `ai.providers_config`，无需新建 AI 专用表。设置值为 JSON，包含当前 `activeProvider` 和以服务商标识为键的 `profiles`；每份配置保存 `baseUrl`、`model`、`apiKey`，其中 `apiKey` 是带 `fernet:v1:` 前缀的 Fernet 密文，不是明文。聊天记录不写入数据库。
+配置使用现有 `system_settings` 表，键为 `ai.providers_config`。设置值为 JSON，包含当前 `activeProvider` 和以服务商标识为键的 `profiles`；每份配置保存 `baseUrl`、`model`、`apiKey`，其中 `apiKey` 是带 `fernet:v1:` 前缀的 Fernet 密文，不是明文。聊天记录独立保存在 `ai_chat_histories` 表中，不与服务商密钥配置混存。
 
 在没有 DeepSeek 独立配置时，兼容读取旧键 `ai.deepseek_api_key`；读取不会自动写入新配置，后续保存 DeepSeek 配置时写入新结构。
 
@@ -6023,7 +6029,158 @@ CREATE TABLE logistics_copy_settings (
 
 后端仅注册这两个只读工具，每次执行都重新检查订单读取权限，并使用原接口的门店过滤，不接受模型提供的身份或权限。单次工具参数最多 4096 字符，工具结果超过 24000 字符时返回缩小查询范围提示；每次聊天最多两轮、累计四次工具调用，最后一轮只请求最终文字回复。
 
-工具内部失败以结构化结果交给模型解释，包括 `permission_denied`、`order_not_found`、`invalid_tool_arguments`、`unknown_tool`、`query_failed`、`result_too_large`，这些不是新增的 HTTP 状态码。当前模型或兼容网关拒绝工具参数时，后端尝试退回普通聊天，并明确本次无法查询实时订单；其他鉴权、网络和限流异常仍按第 20.7 节处理。普通聊天和系统设置的连接验证不执行订单查询。
+工具内部失败以结构化结果交给模型解释，包括 `permission_denied`、`order_not_found`、`invalid_tool_arguments`、`unknown_tool`、`query_failed`、`result_too_large`，这些不是新增的 HTTP 状态码。当前模型或兼容网关拒绝工具参数时，后端尝试退回普通聊天，并明确本次无法查询实时订单；其他鉴权、网络和限流异常仍按第 20.7 节处理。系统设置的连接验证不执行订单查询。
+
+### 20.10 服务器历史聊天
+
+历史聊天接口仅要求登录并具有后台访问权限，不要求系统设置权限。每条记录以 `(user_id, id)` 作为唯一键；服务端所有读取、更新和删除都同时限定当前 session 用户 ID。其他用户的记录与不存在的记录一样返回 `404`，不会因猜测历史 ID 跨账号读取或覆盖。
+
+`ai_chat_histories` 表及其索引在首次访问历史接口时自动创建，无需手动执行数据库迁移。
+
+#### 列出当前用户的历史聊天
+
+- **URL**: `/api/ai/histories`
+- **Method**: `GET`
+
+成功响应按更新时间倒序排列，最多返回 30 条，不包含完整消息正文：
+
+```json
+{
+  "success": true,
+  "items": [
+    {
+      "id": "gugu-chat-001",
+      "title": "查询本月未完成订单",
+      "messageCount": 4,
+      "createdAt": "2026-10-17 10:20:30.000",
+      "updatedAt": "2026-10-17 10:22:15.000"
+    }
+  ]
+}
+```
+
+响应使用 `Cache-Control: no-store`。
+
+#### 读取一条历史聊天
+
+- **URL**: `/api/ai/histories/{history_id}`
+- **Method**: `GET`
+
+`history_id` 仅允许 1 至 64 个 ASCII 字母、数字、下划线或连字符。成功响应：
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "gugu-chat-001",
+    "title": "查询本月未完成订单",
+    "messages": [
+      { "role": "user", "content": "查询本月未完成订单" },
+      { "role": "assistant", "content": "本月共有 3 笔未完成订单。" }
+    ],
+    "messageCount": 2,
+    "createdAt": "2026-10-17 10:20:30.000",
+    "updatedAt": "2026-10-17 10:22:15.000"
+  }
+}
+```
+
+`messages` 可保留用于渲染历史及订单整理交互的受支持字段；提交给普通聊天模型的上下文仍只包含 `role` 和 `content`。
+
+#### 新建或更新历史聊天
+
+- **URL**: `/api/ai/histories/{history_id}`
+- **Method**: `PUT`
+- **请求体上限**: `MAX_HISTORY_BYTES + 8192` 字节，其中消息 JSON 上限为 450 KiB
+
+```json
+{
+  "title": "查询本月未完成订单",
+  "messages": [
+    { "role": "user", "content": "查询本月未完成订单" },
+    { "role": "assistant", "content": "本月共有 3 笔未完成订单。" }
+  ]
+}
+```
+
+| 字段或限制 | 规则 |
+| --- | --- |
+| `title` | 必须是非空字符串，首尾空白去除，最多保存 120 字符 |
+| `messages` | 必须为 1 至 200 条消息的数组 |
+| `role` | 仅允许 `user`、`assistant` |
+| 用户消息 `content` | 必须是字符串，最多 4000 字符 |
+| 助手消息 `content` | 必须是字符串，最多 16000 字符 |
+| `history_id` | 1 至 64 个字母、数字、下划线或连字符 |
+
+同一用户使用相同 ID 再次提交会更新原记录；保存成功后返回 `data.id`、`data.title` 和 `data.messageCount`。每位用户最多保留 30 条，超出时服务端自动删除该用户最早更新的记录。前端在消息变化后约 350 毫秒自动保存；打开历史列表前会先提交当前聊天，恢复的历史在继续对话时仍使用原记录 ID。升级后首次打开历史列表时会尝试将旧版浏览器 `localStorage` 中的历史迁移到服务器；迁移失败的记录继续留在本机，之后可重试。
+
+无效内容或 ID 返回 `400`，超出请求体上限返回 `413`。此接口不会接受其他用户的 ID 对当前用户记录进行覆盖。
+
+#### 删除历史聊天
+
+- **URL**: `/api/ai/histories/{history_id}`
+- **Method**: `DELETE`
+
+成功响应为 `{"success": true}`。ID 格式错误返回 `400`；记录不存在或不属于当前用户返回 `404`。
+
+历史聊天内容以 JSON 文本保存在业务 SQLite 数据库，遵循该数据库的备份与访问控制；它不是端到端加密数据。备份或导出数据库时应按可能包含客户和业务信息的敏感数据保护。
+
+### 20.11 对话式新增订单草稿
+
+- **URL**: `/api/ai/order-draft`
+- **Method**: `POST`
+- **权限**: 登录用户须具有 `admin.sales.order.create`；仍使用当前启用的 AI 服务商配置
+- **请求体上限**: 与 AI 聊天相同，512 KiB；`text` 最多 4000 字符
+
+```json
+{
+  "text": "客户A。碳纤维胶 1500公斤；粘钢胶 1080公斤。收货人张女士，电话13800000000，地址某省某市某区示例路XX号。"
+}
+```
+
+成功响应中的 `data.draft` 是待确认的数据，不是已创建的销售订单：
+
+```json
+{
+  "success": true,
+  "data": {
+    "draft": {
+      "customerName": "赛文",
+      "contactPerson": "钱兴静",
+      "contactPhone": "15555119577",
+      "contactAddress": "浙江省丽水市遂昌县妙高镇北街143号遂昌县人民医院",
+      "projectName": "",
+      "remark": "",
+      "items": [
+        {
+          "name": "碳纤维胶",
+          "spec": "",
+          "unit": "公斤",
+          "quantity": 1500,
+          "packages": null,
+          "notes": ""
+        },
+        {
+          "name": "粘钢胶",
+          "spec": "",
+          "unit": "公斤",
+          "quantity": 1080,
+          "packages": null,
+          "notes": ""
+        }
+      ]
+    },
+    "model": "qwen-plus",
+    "truncated": false
+  }
+}
+```
+
+解析器不推测未明确给出的商品型号或包装件数；没有识别到的客户、联系人、电话、地址、单位或数量留空/为 `null`，由后续交互确认。最多整理 30 行商品。前端随后加载当前用户可访问的门店、仓库、客户、商品和单位资料，逐步确认商品具体档案/型号、数量和单位、包装件数、收货信息及订单归属。权限校验及商品、客户选择不能由模型替代。
+
+全部必要字段确认后，前端将数据填入既有新增销售订单页面；用户仍须检查订单页面并显式保存。此接口和 AI 助手均不直接调用销售订单创建接口，不创建、审核或提交订单。订单整理模式可通过顶部模式按钮或输入退出指令返回普通聊天。解析失败、上游缺少密钥、权限不足和服务商异常分别按对应参数校验及第 20.7 节错误规则处理。
+
+空白或超过 4000 字符的 `text` 返回 `400`；超过请求体上限返回 `413`；当前服务商缺少密钥返回 `409 missing_api_key`，密钥无法解密返回 `409 invalid_api_key`；模型未返回可用草稿时返回 `502 invalid_order_draft`。未登录返回 `401`，无后台访问或销售新增权限返回 `403`。
 
 ---
 
@@ -6072,6 +6229,7 @@ CREATE TABLE logistics_copy_settings (
 - `role_warehouses` - 角色组仓库范围
 - `auth_sessions` - 登录设备、Session 哈希、IP、活动时间和撤销状态
 - `operation_logs` - 操作人快照、模块/动作、目标单据、来源、请求元数据和结果
+- `ai_chat_histories` - 按用户隔离的固固助手历史对话与消息 JSON
 - `logistics_copy_settings` - 物流列表复制字段的共享配置 JSON 和更新时间
 - `suppliers` - 供应商基础资料表
 - `purchase_orders` - 原材料采购申请/订单表，保存审核和应付快照

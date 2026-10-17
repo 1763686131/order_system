@@ -32,20 +32,32 @@
             v-if="canCreateOrder"
             class="nomi-icon-button"
             type="button"
-            title="整理新增订单"
-            aria-label="整理新增订单"
+            :title="orderDraftOpen ? '切换到日常聊天' : '整理新增订单'"
+            :aria-label="orderDraftOpen ? '切换到日常聊天' : '整理新增订单'"
             :aria-pressed="orderDraftOpen"
             :disabled="sending || orderDraftBusy || !apiConfigured || statusLoading || Boolean(statusError)"
             @click="toggleOrderDraft"
           >
-            <FilePlus2 :size="18" :stroke-width="1.8" />
+            <MessageSquareText v-if="orderDraftOpen" :size="18" :stroke-width="1.8" />
+            <FilePlus2 v-else :size="18" :stroke-width="1.8" />
+          </button>
+          <button
+            class="nomi-icon-button"
+            type="button"
+            title="保存/查看历史聊天"
+            aria-label="保存/查看历史聊天"
+            :aria-pressed="historyOpen"
+            :disabled="sending || orderDraftBusy"
+            @click="toggleHistory"
+          >
+            <History :size="18" :stroke-width="1.8" />
           </button>
           <button
             class="nomi-icon-button"
             type="button"
             title="清空对话"
             aria-label="清空对话"
-            :disabled="sending || orderDraftBusy || (!messages.length && !failedQuestion && !orderDraftOpen)"
+            :disabled="historyOpen || sending || orderDraftBusy || (!messages.length && !failedQuestion && !orderDraftOpen)"
             @click="clearConversation"
           >
             <Trash2 :size="17" :stroke-width="1.8" />
@@ -62,7 +74,68 @@
         </div>
       </header>
 
-      <div ref="messageListRef" class="nomi-admin-messages" role="log" aria-label="固固助手对话记录" aria-live="polite" :aria-busy="sending || orderDraftBusy">
+      <section v-if="historyOpen" class="nomi-admin-history-panel" aria-label="历史聊天">
+        <div class="nomi-admin-history-heading">
+          <div>
+            <strong>历史聊天</strong>
+          </div>
+          <button
+            class="nomi-history-close"
+            type="button"
+            title="返回当前聊天"
+            aria-label="返回当前聊天"
+            @click="historyOpen = false"
+          >
+            <X :size="17" :stroke-width="1.8" />
+          </button>
+        </div>
+        <p v-if="historyNotice" class="nomi-history-notice" role="status">{{ historyNotice }}</p>
+        <div v-if="historyError" class="nomi-history-error" role="alert">
+          {{ historyError }}
+          <button type="button" class="nomi-link-button" @click="loadChatHistories">重试</button>
+        </div>
+        <div v-else-if="historyLoading" class="nomi-history-empty" role="status">
+          <LoaderCircle class="nomi-history-spinner" :size="24" :stroke-width="1.8" />
+          <span>正在读取服务器历史...</span>
+        </div>
+        <div v-else-if="!chatHistories.length" class="nomi-history-empty">
+          <History :size="26" :stroke-width="1.5" />
+          <span>还没有保存的聊天记录</span>
+        </div>
+        <div v-else class="nomi-history-list">
+          <article
+            v-for="history in chatHistories"
+            :key="history.id"
+            :class="['nomi-history-item', { 'is-active': history.id === activeHistoryId }]"
+          >
+            <button
+              class="nomi-history-open"
+              type="button"
+              :title="`打开：${history.title}`"
+              :disabled="historyRestoring"
+              @click="restoreConversation(history)"
+            >
+              <MessageSquareText :size="16" :stroke-width="1.8" />
+              <span class="nomi-history-copy">
+                <strong>{{ history.title }}</strong>
+                <small>{{ formatHistoryTime(history.updatedAt) }} · {{ history.messageCount }} 条消息</small>
+              </span>
+            </button>
+            <button
+              class="nomi-history-delete"
+              type="button"
+              title="删除历史聊天"
+              aria-label="删除历史聊天"
+              :disabled="historyRestoring || historySaving"
+              @click="deleteHistory(history.id)"
+            >
+              <Trash2 :size="15" :stroke-width="1.8" />
+            </button>
+          </article>
+        </div>
+      </section>
+
+      <div v-else ref="messageListRef" class="nomi-admin-messages" role="log" aria-label="固固助手对话记录" aria-live="polite" :aria-busy="sending || orderDraftBusy">
         <div v-if="statusLoading" class="nomi-admin-state">
           正在检查固固助手配置...
         </div>
@@ -130,14 +203,14 @@
         </template>
       </div>
 
-      <div v-if="sendError && apiConfigured && !orderDraftOpen" class="nomi-send-error" role="alert">
+      <div v-if="sendError && apiConfigured && !orderDraftOpen && !historyOpen" class="nomi-send-error" role="alert">
         <span>{{ sendError }}</span>
         <button v-if="failedQuestion && !sending" type="button" class="nomi-link-button" @click="sendMessage(failedQuestion)">
           重试
         </button>
       </div>
       <form
-        v-if="apiConfigured && !statusLoading && !statusError"
+        v-if="apiConfigured && !statusLoading && !statusError && !historyOpen"
         class="nomi-admin-composer"
         @submit.prevent="handleComposerSubmit"
       >
@@ -194,7 +267,7 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { FilePlus2, KeyRound, Send, Settings2, Square, Trash2, X } from '@lucide/vue'
+import { FilePlus2, History, KeyRound, LoaderCircle, MessageSquareText, Send, Settings2, Square, Trash2, X } from '@lucide/vue'
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import request from '@/api/request'
@@ -229,7 +302,7 @@ const handleDraftConfigurationError = message => {
 
 const toggleOrderDraft = () => {
   if (!canCreateOrder.value || sending.value || orderDraftBusy.value) return
-  if (orderDraftOpen.value) orderDraftOpen.value = false
+  if (orderDraftOpen.value) orderFlow.reset()
   else orderFlow.start()
   if (orderDraftOpen.value) {
     failedQuestion.value = ''
@@ -277,6 +350,20 @@ const statusLoading = ref(true)
 const statusError = ref('')
 const apiConfigured = ref(false)
 const configurationError = ref('')
+const historyOpen = ref(false)
+const chatHistories = ref([])
+const activeHistoryId = ref('')
+const historyNotice = ref('')
+const historyError = ref('')
+const historyLoading = ref(false)
+const historySaving = ref(false)
+const historyRestoring = ref(false)
+let historyNoticeTimer
+let historySaveTimer
+let restoringHistory = false
+let historySaveQueue = Promise.resolve()
+let pendingHistoryId = ''
+let historyGeneration = 0
 const orderFlow = useGuGuOrderConversation({
   messages,
   request,
@@ -296,6 +383,261 @@ let dragState
 let resizeState
 
 const DIALOG_BOUNDS_STORAGE_KEY = 'admin_gugu_chat_window_bounds'
+const CHAT_HISTORY_STORAGE_KEY = 'admin_gugu_chat_histories'
+const MAX_CHAT_HISTORIES = 30
+const MAX_CHAT_HISTORY_MESSAGES = 200
+const MAX_CHAT_HISTORY_BYTES = 450 * 1024
+
+const cloneMessages = source => {
+  try {
+    return JSON.parse(JSON.stringify(source))
+  } catch {
+    return []
+  }
+}
+
+const newHistoryId = () => {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID().replaceAll('-', '')
+  return `gugu-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`
+}
+
+const historyPayload = (title, source) => {
+  const messages = source.slice(-MAX_CHAT_HISTORY_MESSAGES)
+  const payload = { title, messages }
+  if (new TextEncoder().encode(JSON.stringify(payload)).length > MAX_CHAT_HISTORY_BYTES) return null
+  return payload
+}
+
+const loadLegacyHistories = () => {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(CHAT_HISTORY_STORAGE_KEY) || '[]')
+    return Array.isArray(stored)
+      ? stored.filter(item => item?.id && item?.title && Array.isArray(item.messages)).slice(0, MAX_CHAT_HISTORIES)
+      : []
+  } catch {
+    return []
+  }
+}
+
+const showHistoryNotice = message => {
+  historyNotice.value = message
+  clearTimeout(historyNoticeTimer)
+  historyNoticeTimer = setTimeout(() => {
+    historyNotice.value = ''
+  }, 2600)
+}
+
+const historyTitle = source => {
+  const firstUserMessage = source.find(message => message.role === 'user' && message.content)
+  const firstMessage = firstUserMessage || source.find(message => message.content)
+  const title = String(firstMessage?.content || '未命名聊天').replace(/\s+/g, ' ').trim()
+  return title.length > 32 ? `${Array.from(title).slice(0, 32).join('')}...` : title
+}
+
+const formatHistoryTime = value => {
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '时间未知'
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const migrateLegacyHistories = async () => {
+  const legacy = loadLegacyHistories()
+  if (!legacy.length) return
+  const remaining = []
+  for (const history of [...legacy].reverse()) {
+    const payload = historyPayload(history.title, cloneMessages(history.messages))
+    if (!payload) {
+      remaining.push(history)
+      continue
+    }
+    try {
+      const response = await request.put(`/ai/histories/${encodeURIComponent(history.id)}`, payload)
+      if (!response.success) throw new Error(response.message || '迁移本地历史聊天失败')
+    } catch {
+      remaining.push(history)
+    }
+  }
+  if (remaining.length) {
+    window.localStorage.setItem(CHAT_HISTORY_STORAGE_KEY, JSON.stringify(remaining))
+    showHistoryNotice(`${remaining.length} 条旧聊天暂未迁移，仍保留在本机。`)
+  } else {
+    window.localStorage.removeItem(CHAT_HISTORY_STORAGE_KEY)
+  }
+}
+
+const saveConversation = async (snapshot, { quiet = false } = {}) => {
+  if (!snapshot.length) return null
+  const payload = historyPayload(historyTitle(snapshot), snapshot)
+  if (!payload) {
+    if (!quiet) historyError.value = '当前聊天内容过长，无法保存。'
+    else showHistoryNotice('当前聊天过长，无法自动保存。')
+    return null
+  }
+  const generation = historyGeneration
+  const id = activeHistoryId.value || (pendingHistoryId ||= newHistoryId())
+  historySaveQueue = historySaveQueue.catch(() => {}).then(async () => {
+    const response = await request.put(`/ai/histories/${encodeURIComponent(id)}`, payload)
+    if (!response.success) throw new Error(response.message || '保存历史聊天失败')
+    if (historyGeneration === generation && messages.value.length) {
+      activeHistoryId.value = id
+      pendingHistoryId = ''
+    }
+    const current = chatHistories.value.find(history => history.id === id)
+    const saved = {
+      id,
+      title: response.data?.title || payload.title,
+      messageCount: response.data?.messageCount || snapshot.length,
+      createdAt: current?.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    }
+    chatHistories.value = [saved, ...chatHistories.value.filter(history => history.id !== id)]
+      .slice(0, MAX_CHAT_HISTORIES)
+    historyError.value = ''
+    return saved
+  })
+  try {
+    if (!quiet) historySaving.value = true
+    const saved = await historySaveQueue
+    if (!quiet) showHistoryNotice('当前对话已保存到服务器。')
+    return saved
+  } catch (error) {
+    if (quiet) showHistoryNotice('历史聊天自动保存失败，请检查网络连接后重试。')
+    else historyError.value = error.response?.data?.message || error.message || '保存历史聊天失败'
+    return null
+  } finally {
+    if (!quiet) historySaving.value = false
+  }
+}
+
+const saveCurrentConversation = async () => {
+  if (!messages.value.length) {
+    showHistoryNotice('当前还没有可保存的聊天内容。')
+    return null
+  }
+  clearTimeout(historySaveTimer)
+  return saveConversation(cloneMessages(messages.value))
+}
+
+const loadChatHistories = async () => {
+  historyLoading.value = true
+  historyError.value = ''
+  try {
+    await migrateLegacyHistories()
+    const response = await request.get('/ai/histories')
+    if (!response.success || !Array.isArray(response.items)) {
+      throw new Error(response.message || '读取服务器历史聊天失败')
+    }
+    chatHistories.value = response.items
+  } catch (error) {
+    historyError.value = error.response?.data?.message || error.message || '读取服务器历史聊天失败'
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+const toggleHistory = async () => {
+  if (sending.value || orderDraftBusy.value) return
+  if (historyOpen.value) {
+    historyOpen.value = false
+    nextTick(() => composerRef.value?.focus())
+    return
+  }
+  historyOpen.value = true
+  historyError.value = ''
+  historyLoading.value = true
+  clearTimeout(historySaveTimer)
+  try {
+    await migrateLegacyHistories()
+    if (messages.value.length) {
+      const saved = await saveCurrentConversation()
+      if (!saved) throw new Error(historyError.value || '当前聊天未能保存到服务器')
+    }
+    const response = await request.get('/ai/histories')
+    if (!response.success || !Array.isArray(response.items)) {
+      throw new Error(response.message || '读取服务器历史聊天失败')
+    }
+    chatHistories.value = response.items
+  } catch (error) {
+    historyError.value = error.response?.data?.message || error.message || '读取服务器历史聊天失败'
+  } finally {
+    historyLoading.value = false
+  }
+  nextTick(() => dialogRef.value?.focus())
+}
+
+const restoreConversation = async history => {
+  if (sending.value || orderDraftBusy.value || historyRestoring.value) return
+  historyRestoring.value = true
+  historyError.value = ''
+  clearTimeout(historySaveTimer)
+  try {
+    await historySaveQueue.catch(() => {})
+    const response = await request.get(`/ai/histories/${encodeURIComponent(history.id)}`)
+    if (!response.success || !Array.isArray(response.data?.messages)) {
+      throw new Error(response.message || '读取历史聊天失败')
+    }
+    historyGeneration += 1
+    pendingHistoryId = ''
+    orderFlow.reset()
+    restoringHistory = true
+    messages.value = cloneMessages(response.data.messages).map((message, index) => ({
+      ...message,
+      id: `history-${history.id}-${index}`
+    }))
+    activeHistoryId.value = history.id
+    failedQuestion.value = ''
+    sendError.value = ''
+    draft.value = ''
+    historyOpen.value = false
+    await nextTick()
+    restoringHistory = false
+    await scrollToBottom()
+    composerRef.value?.focus()
+  } catch (error) {
+    historyError.value = error.response?.data?.message || error.message || '读取历史聊天失败'
+  } finally {
+    restoringHistory = false
+    historyRestoring.value = false
+  }
+}
+
+const deleteHistory = async id => {
+  clearTimeout(historySaveTimer)
+  const deletingActiveHistory = activeHistoryId.value === id
+  if (deletingActiveHistory) {
+    historyGeneration += 1
+    activeHistoryId.value = ''
+    pendingHistoryId = ''
+  }
+  try {
+    historySaveQueue = historySaveQueue.catch(() => {}).then(() =>
+      request.delete(`/ai/histories/${encodeURIComponent(id)}`)
+    )
+    const response = await historySaveQueue
+    if (!response.success) throw new Error(response.message || '删除历史聊天失败')
+    chatHistories.value = chatHistories.value.filter(item => item.id !== id)
+    if (activeHistoryId.value === id) activeHistoryId.value = ''
+    showHistoryNotice('服务器历史聊天已删除。')
+  } catch (error) {
+    historyError.value = error.response?.data?.message || error.message || '删除历史聊天失败'
+  }
+}
+
+const queueHistorySave = () => {
+  if (restoringHistory || !messages.value.length) return
+  clearTimeout(historySaveTimer)
+  historySaveTimer = setTimeout(() => {
+    saveConversation(cloneMessages(messages.value), { quiet: true })
+  }, 350)
+}
+
+watch(messages, queueHistorySave, { deep: true, flush: 'post' })
 
 const loadStoredDialogBounds = () => {
   try {
@@ -603,12 +945,16 @@ const loadStatus = async () => {
 }
 
 const clearConversation = () => {
-  if (sending.value || orderDraftBusy.value) return
+  if (historyOpen.value || sending.value || orderDraftBusy.value) return
+  historyGeneration += 1
+  pendingHistoryId = ''
+  clearTimeout(historySaveTimer)
   orderFlow.reset()
   messages.value = []
   failedQuestion.value = ''
   sendError.value = ''
   draft.value = ''
+  activeHistoryId.value = ''
   composerRef.value?.focus()
 }
 
@@ -649,7 +995,7 @@ const sendMessage = async (question = draft.value) => {
   await scrollToBottom()
 
   try {
-    const context = messages.value.filter(message => !message.orderFlow).slice(-19)
+    const context = messages.value.slice(-19)
       .map(({ role, content }) => ({ role, content }))
     while (context.length > 1 && context.reduce((sum, item) => sum + Array.from(item.content).length, 0) > 60000) {
       context.splice(0, 2)
@@ -770,6 +1116,8 @@ onUnmounted(() => {
   replyController?.abort()
   statusController?.abort()
   orderFlow.reset()
+  clearTimeout(historyNoticeTimer)
+  clearTimeout(historySaveTimer)
 })
 </script>
 
@@ -963,6 +1311,165 @@ onUnmounted(() => {
   background: #e9f8f3;
 }
 
+.nomi-admin-history-panel {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  padding: 14px 16px;
+  overflow: hidden;
+  background: #f8fafb;
+}
+
+.nomi-admin-history-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 12px;
+}
+
+.nomi-admin-history-heading > div,
+.nomi-history-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.nomi-admin-history-heading strong {
+  color: #172033;
+  font-size: 14px;
+}
+
+.nomi-admin-history-heading span,
+.nomi-history-copy small {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.nomi-history-close,
+.nomi-history-delete {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 5px;
+  color: #596579;
+  background: transparent;
+  cursor: pointer;
+}
+
+.nomi-history-close:hover,
+.nomi-history-delete:hover {
+  color: #08745a;
+  background: #e9f8f3;
+}
+
+.nomi-history-notice {
+  margin: 8px 0 0;
+  color: #596579;
+  font-size: 12px;
+}
+
+.nomi-history-error {
+  margin-top: 10px;
+  color: #b42318;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.nomi-history-error .nomi-link-button {
+  margin-left: 8px;
+}
+
+.nomi-history-spinner {
+  animation: nomi-history-spin 1s linear infinite;
+}
+
+@keyframes nomi-history-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.nomi-history-empty {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.nomi-history-list {
+  min-height: 0;
+  flex: 1;
+  margin-top: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.nomi-history-item {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 3px 5px 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.nomi-history-item.is-active {
+  background: #eef8f4;
+}
+
+.nomi-history-open {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 2px;
+  border: 0;
+  color: #596579;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nomi-history-copy strong {
+  overflow: hidden;
+  color: #253349;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nomi-history-copy small {
+  margin-top: 3px;
+}
+
+.nomi-history-delete {
+  color: #7b8797;
+}
+
+.nomi-history-delete:hover {
+  color: #b42318;
+  background: #fff1f2;
+}
+
+.nomi-history-open:disabled,
+.nomi-history-delete:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
 .nomi-admin-messages {
   min-height: 0;
   flex: 1;
@@ -1042,6 +1549,13 @@ onUnmounted(() => {
 }
 
 .nomi-admin-dialog button:focus-visible {
+  outline: 2px solid #0f9f78;
+  outline-offset: 2px;
+}
+
+.nomi-history-open:focus-visible,
+.nomi-history-delete:focus-visible,
+.nomi-history-close:focus-visible {
   outline: 2px solid #0f9f78;
   outline-offset: 2px;
 }

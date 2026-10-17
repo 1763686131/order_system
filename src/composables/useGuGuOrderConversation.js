@@ -367,11 +367,12 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
     if (!content || busy.value) return
     active.value = true
     userReply(content)
-    if (/^(取消|取消这单|退出录单|返回聊天)$/.test(content)) {
+    if (/^(取消|取消这单|退出录单|退出订单整理|退出新增订单|返回聊天|返回日常聊天|切换到聊天|切换到日常聊天|普通聊天)$/.test(content)) {
       active.value = false
       activeQuestionId.value = 0
       draft.value = null
-      say('已取消本次整理，尚未创建订单。')
+      sourceText = ''
+      say('已退出新增订单整理，可以继续日常聊天；尚未创建订单。')
       return
     }
     if (/^(重新开始|重来|重新整理|换一单)$/.test(content)) {
