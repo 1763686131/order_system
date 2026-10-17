@@ -1,12 +1,18 @@
 <template>
-  <div class="gugu-order-message">
+  <div
+    :class="['gugu-order-message', { 'has-customer-options': message.question?.type === 'customer' }]"
+  >
     <p class="gugu-order-text">{{ message.content }}</p>
 
-    <div v-if="message.options?.length" class="gugu-order-options">
+    <div
+      v-if="message.options?.length"
+      :class="['gugu-order-options', { 'is-customer-options': message.question?.type === 'customer' }]"
+    >
       <button
         v-for="option in message.options"
         :key="option.key"
         type="button"
+        :title="option.label"
         :disabled="!active || busy"
         @click="emit('answer', option)"
       >
@@ -78,6 +84,10 @@ const emit = defineEmits(['answer', 'confirm'])
   overflow-wrap: anywhere;
 }
 
+.gugu-order-message.has-customer-options {
+  width: min(100%, 680px);
+}
+
 .gugu-order-text {
   margin: 0;
   white-space: pre-wrap;
@@ -87,6 +97,24 @@ const emit = defineEmits(['answer', 'confirm'])
   display: grid;
   gap: 6px;
   margin-top: 10px;
+}
+
+.gugu-order-options.is-customer-options {
+  grid-template-columns: repeat(auto-fit, minmax(min(120px, 100%), 1fr));
+  width: 100%;
+  max-height: min(42vh, 320px);
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.gugu-order-options.is-customer-options button {
+  min-height: 30px;
+  padding: 5px 8px;
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .gugu-order-options button,

@@ -19,9 +19,11 @@ const numberReply = text => {
 
 export const looksLikeGuGuOrderRequest = text => {
   if (/查询|查一下|查找|统计|多少订单|订单多少|查订单/.test(text)) return false
+  const hasQuantity = /\d+(?:\.\d+)?\s*(公斤|千克|kg|吨|桶|箱|件)/i.test(text)
+  const isCustomerDelivery = /给.{1,20}(?:发|寄|送)|(?:发|寄|送)给.{1,20}/.test(text)
   return /(?:新增|新建|录入|创建|整理|生成|做一?张|开一?张).{0,8}(?:订单|销售单)|客户下单|帮我做单|帮我录单/.test(text) ||
-    (/\d+(?:\.\d+)?\s*(公斤|千克|kg|吨|桶|箱|件)/i.test(text) &&
-      (/\b1[3-9]\d{9}\b/.test(text) || /(?:胶|商品|收货|下单|送到)/.test(text)))
+    (hasQuantity && (/\b1[3-9]\d{9}\b/.test(text) ||
+      /(?:胶|商品|收货|下单|送到)/.test(text) || isCustomerDelivery))
 }
 
 export function useGuGuOrderConversation({ messages, request, openOrder, onConfigurationError }) {
@@ -50,6 +52,15 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
     (!product.warehouseId || sameId(product.warehouseId, draft.value?.warehouseId))
   ))
   const productUnit = product => catalogue.value.units.find(unit => sameId(unit.id, product?.unitId))?.name || ''
+  const productConversion = product => {
+    const conversion = (Array.isArray(product?.unitConversions) ? product.unitConversions : [])
+      .map(entry => ({
+        unit: catalogue.value.units.find(unit => sameId(unit.id, entry?.fromUnitId))?.name || '',
+        rate: Number(entry?.value)
+      }))
+      .find(entry => entry.unit && positive(entry.rate))
+    return conversion || null
+  }
   const productLabel = product => [product?.name, product?.specification || product?.spec, product?.code].filter(Boolean).join(' · ')
   const selectedProduct = item => products.value.find(product => sameId(product.id, item.productId))
   const itemComplete = item => Boolean(selectedProduct(item) && item.unit && item.modelConfirmed &&
@@ -93,11 +104,73 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       if (!draft.value[field]) draft.value[field] = value || ''
     }
   }
+  const customerLabel = customer => customer.customerName || customer.name || ''
+  const findCustomerMatches = () => {
+    const rawHint = String(draft.value?.customerName || '')
+    const hintVariants = [...new Set([
+      rawHint,
+      rawHint.replace(/^(?:(?:帮我|请|要)?(?:给|向|找|联系))/, '')
+        .replace(/(?:发货|发|寄出|寄|送货|送|下单|要)+$/, '')
+    ].map(normalize).filter(Boolean))]
+    const source = normalize(sourceText)
+    return customers.value
+      .filter(customer => {
+        const name = normalize(customerLabel(customer))
+        const code = normalize(customer.customerCode || customer.code)
+        return hintVariants.some(hint => name.includes(hint) || (code && code.includes(hint))) ||
+          (name.length >= 2 && source.includes(name))
+      })
+      .sort((left, right) =>
+        Number(hintVariants.includes(normalize(customerLabel(right)))) -
+        Number(hintVariants.includes(normalize(customerLabel(left))))
+      )
+  }
+  const askCustomerSelection = (prefix = '', includeMatches = true) => {
+    const matches = includeMatches ? findCustomerMatches() : []
+    if (matches.length > 1) {
+      ask(
+        `${prefix}找到多个可能的客户，请确认具体客户${draft.value.customerName ? `（原文提到“${draft.value.customerName}”）` : ''}。`,
+        { type: 'customer', candidateIds: matches.map(customer => customer.id) },
+        [...choices(matches, customerLabel), { key: 'other', label: '以上都不是' }]
+      )
+      return
+    }
+    ask(
+      `${prefix}请选择系统中的客户${draft.value.customerName ? `，原文提到“${draft.value.customerName}”，也可以直接输入简称搜索` : ''}。`,
+      { type: 'customer' },
+      choices(customers.value, customerLabel)
+    )
+  }
+  const askCustomerConfirmation = () => {
+    const matches = findCustomerMatches()
+    const storeName = stores.value.find(store => sameId(store.id, draft.value.storeId))?.name || '所选门店'
+    if (matches.length === 1) {
+      const customer = matches[0]
+      ask(
+        `在“${storeName}”下，您说的“${draft.value.customerName || customerLabel(customer)}”是客户“${customerLabel(customer)}”吗？`,
+        { type: 'customer-confirm', customerId: customer.id },
+        [{ key: 'yes', label: '是' }, { key: 'other', label: '不是，重新选择' }]
+      )
+      return
+    }
+    if (matches.length > 1) {
+      ask(
+        `在“${storeName}”下，原文中的“${draft.value.customerName}”可能对应多个客户，请选择。`,
+        { type: 'customer', candidateIds: matches.map(customer => customer.id) },
+        [...choices(matches, customerLabel), { key: 'other', label: '以上都不是' }]
+      )
+      return
+    }
+    askCustomerSelection(`在“${storeName}”下没有找到与“${draft.value.customerName || '原文客户信息'}”完全匹配的客户。`)
+  }
   const resetProductConfirmation = item => {
+    const hadInferredPackages = Boolean(item.packageConversion)
     item.productId = ''
     item.modelConfirmed = false
     item.packagesConfirmed = false
     item.quantityConfirmed = false
+    if (hadInferredPackages) item.packages = ''
+    item.packageConversion = null
     item.announced = false
   }
 
@@ -138,10 +211,14 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
   const askNumber = (itemIndex, field, forceInput = false, prefix = '') => {
     const item = draft.value.items[itemIndex]
     const label = field === 'packages' ? '件数' : '数量'
-    const unit = field === 'packages' ? '件' : item.unit
+    const conversion = field === 'packages' ? item.packageConversion : null
+    const unit = field === 'packages' ? (conversion?.unit || '件') : item.unit
     const hasValue = positive(item[field])
+    const suggestion = conversion && hasValue
+      ? `按商品规格换算：1${conversion.unit}=${conversion.rate}${item.unit}，${item.quantity}${item.unit}可换算为${item.packages}${conversion.unit}。`
+      : ''
     ask(
-      `${prefix}第 ${itemIndex + 1} 项“${productLabel(selectedProduct(item))}”${hasValue && !forceInput
+      `${prefix}${suggestion ? `${suggestion} ` : ''}第 ${itemIndex + 1} 项“${productLabel(selectedProduct(item))}”${hasValue && !forceInput
         ? `识别为 ${item[field]} ${unit}，请确认${label}。`
         : `请填写${label}（${unit}）${field === 'packages' && positive(item.quantity) ? `，商品总数量是 ${item.quantity} ${item.unit}` : ''}。`}`,
       { type: 'number', itemIndex, field },
@@ -156,6 +233,13 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
     if (!draft.value.storeId) {
       ask('请选择这张销售单所属的门店。', { type: 'store' }, choices(stores.value, store => store.name))
       if (!stores.value.length) say('当前账号没有可用门店，请先完善门店资料或联系管理员。')
+      return
+    }
+    if (!draft.value.customerId) {
+      const customerMatches = findCustomerMatches()
+      if (draft.value.customerName || customerMatches.length) askCustomerConfirmation()
+      else askCustomerSelection('我暂时没有从原文识别出明确客户，')
+      if (!customers.value.length) say('当前门店没有可用客户，请先添加客户资料。')
       return
     }
     if (!draft.value.warehouseId) {
@@ -193,12 +277,6 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
         item.announced = true
       }
     }
-    if (!draft.value.customerId) {
-      ask(`请选择系统中的客户${draft.value.customerName ? `，原文识别为“${draft.value.customerName}”` : ''}。`,
-        { type: 'customer' }, choices(customers.value, customer => customer.customerName || customer.name).slice(0, 16))
-      if (!customers.value.length) say('当前门店没有可用客户，请先添加客户资料。')
-      return
-    }
     for (const [field, label] of [
       ['contactPerson', '收货人姓名'], ['contactPhone', '收货人联系电话'], ['contactAddress', '收货地址，客户自提可回复“自提”']
     ]) {
@@ -219,6 +297,14 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
     item.unit = productUnit(product)
     item.unitMismatch = Boolean(item.quantityUnit && normalizeUnit(item.quantityUnit) !== normalizeUnit(item.unit))
     if (item.unitMismatch) item.quantity = ''
+    const conversion = productConversion(product)
+    if (!positive(item.packages) && positive(item.quantity) && conversion) {
+      const inferredPackages = Number(item.quantity) / conversion.rate
+      if (Number.isInteger(inferredPackages) && inferredPackages > 0) {
+        item.packages = inferredPackages
+        item.packageConversion = conversion
+      }
+    }
     nextQuestion()
   }
   const chooseScope = (type, record) => {
@@ -228,10 +314,6 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       if (type === 'store') {
         draft.value.warehouseId = ''
         draft.value.customerId = ''
-        const exactCustomers = customers.value.filter(customer =>
-          normalize(customer.customerName || customer.name) === normalize(draft.value.customerName)
-        )
-        if (exactCustomers.length === 1) setCustomer(exactCustomers[0])
       }
       draft.value.items.forEach(resetProductConfirmation)
     }
@@ -240,8 +322,10 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
   const recordNumber = (itemIndex, field, text) => {
     const item = draft.value.items[itemIndex]
     const parsed = numberReply(text)
+    const packageUnit = item.packageConversion?.unit
     const validUnit = !parsed?.unit || (field === 'packages'
-      ? ['件', '桶', '箱', '包', '套', '个'].includes(parsed.unit)
+      ? ['件', '桶', '箱', '包', '套', '个'].includes(parsed.unit) ||
+        normalize(parsed.unit) === normalize(packageUnit)
       : normalizeUnit(parsed.unit) === normalizeUnit(item.unit))
     if (!parsed || !validUnit) {
       askNumber(itemIndex, field, true, `请回复大于 0 的数字${field === 'packages' ? '件数，例如“50件”' : `，单位为“${item.unit}”`}。`)
@@ -253,6 +337,21 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
     if (field === 'quantity') {
       item.quantityUnit = item.unit
       item.unitMismatch = false
+      if (item.packageConversion) {
+        const conversion = productConversion(selectedProduct(item))
+        const inferredPackages = conversion ? Number(item.quantity) / conversion.rate : 0
+        if (conversion && Number.isInteger(inferredPackages) && inferredPackages > 0) {
+          item.packages = inferredPackages
+          item.packagesConfirmed = false
+          item.packageConversion = conversion
+        } else {
+          item.packages = ''
+          item.packagesConfirmed = false
+          item.packageConversion = null
+        }
+      }
+    } else {
+      item.packageConversion = null
     }
     nextQuestion()
   }
@@ -276,7 +375,7 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       const signal = operation.signal
       const [parsed, ...lists] = await Promise.all([
         request.post('/ai/order-draft', { text }, { timeout: 75000, signal }),
-        ...['/stores', '/warehouses', '/customers', '/products/inventory', '/products/units/measurements']
+        ...['/stores', '/warehouses', '/customers', '/products/inventory', '/products/units/measurements', '/products/units/packagings']
           .map(url => request.get(url, { signal }))
       ])
       if (signal.aborted || controller !== operation) return
@@ -285,26 +384,24 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
           { apiCode: parsed.code })
       }
       if (!lists.every(Array.isArray)) throw new Error('订单基础资料加载失败，请重试。')
-      catalogue.value = Object.fromEntries(['stores', 'warehouses', 'customers', 'products', 'units']
-        .map((key, index) => [key, lists[index]]))
+      catalogue.value = {
+        stores: lists[0],
+        warehouses: lists[1],
+        customers: lists[2],
+        products: lists[3],
+        units: [...lists[4], ...lists[5]]
+      }
       const raw = parsed.data.draft
       draft.value = {
         ...raw, storeId: '', warehouseId: '', customerId: '',
         items: raw.items.map(item => ({
           ...item, sourceSpec: item.spec || '', quantityUnit: item.unit || '', productId: '',
           unit: '', packages: item.packages ?? '', quantity: item.quantity ?? '',
-          modelConfirmed: false, packagesConfirmed: false, quantityConfirmed: false
+          modelConfirmed: false, packagesConfirmed: false, quantityConfirmed: false,
+          packageConversion: null
         }))
       }
-      const exactCustomers = catalogue.value.customers.filter(customer =>
-        raw.customerName && normalize(customer.customerName || customer.name) === normalize(raw.customerName) &&
-        stores.value.some(store => sameId(store.id, customer.storeId))
-      )
-      if (exactCustomers.length === 1) {
-        draft.value.storeId = exactCustomers[0].storeId
-        setCustomer(exactCustomers[0])
-      } else if (stores.value.length === 1) draft.value.storeId = stores.value[0].id
-      say(`识别到 ${raw.items.length} 项商品${raw.contactPerson ? `，收货人为 ${raw.contactPerson}` : ''}。我来逐项确认型号、件数和数量。`)
+      say(`识别到 ${raw.items.length} 项商品${raw.contactPerson ? `，收货人为 ${raw.contactPerson}` : ''}。我会先确认门店和客户，再逐项核对商品。`)
       nextQuestion()
     } catch (error) {
       if (operation.signal.aborted || controller !== operation) return
@@ -348,7 +445,7 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       const records = field === 'store' ? stores.value : field === 'warehouse' ? warehouses.value : customers.value
       const record = findChoice(records, header[2], entry => entry.customerName || entry.name)
       if (record) chooseScope(field, record)
-      else ask('请从当前可用资料中选择。', { type: field }, choices(records, entry => entry.customerName || entry.name).slice(0, 16))
+      else ask('请从当前可用资料中选择。', { type: field }, choices(records, entry => entry.customerName || entry.name))
     } else {
       draft.value[field] = header[2].trim()
       nextQuestion()
@@ -392,9 +489,32 @@ export function useGuGuOrderConversation({ messages, request, openOrder, onConfi
       return
     }
     if (draft.value && applyCorrection(content)) return
-    if (['store', 'warehouse', 'customer'].includes(question.type)) {
-      const records = question.type === 'store' ? stores.value : question.type === 'warehouse' ? warehouses.value : customers.value
-      const record = findChoice(records, content, entry => entry.customerName || entry.name, option)
+    if (question.type === 'customer-confirm') {
+      const affirmative = option?.key === 'yes' ||
+        /^(是|对|没错|正确|是的|好的|好|可以)$/.test(content)
+      const negative = option?.key === 'other' ||
+        /^(不是|不对|否|不是这个|换一个|重新选择)$/.test(content)
+      const customer = customers.value.find(entry => sameId(entry.id, question.customerId))
+      const replacement = !affirmative && !negative
+        ? findChoice(customers.value, content, customerLabel)
+        : null
+      if (affirmative && customer) chooseScope('customer', customer)
+      else if (negative) askCustomerSelection('好的，请重新选择客户。', false)
+      else if (replacement) chooseScope('customer', replacement)
+      else if (customer && findChoice([customer], content, customerLabel, option)) chooseScope('customer', customer)
+      else ask(`请确认“${customerLabel(customer || {})}”是否为本次客户，或选择重新查找。`, question, message.options)
+    } else if (['store', 'warehouse', 'customer'].includes(question.type)) {
+      const allRecords = question.type === 'store' ? stores.value :
+        question.type === 'warehouse' ? warehouses.value : customers.value
+      const records = question.candidateIds
+        ? allRecords.filter(entry => question.candidateIds.some(id => sameId(id, entry.id)))
+        : allRecords
+      if (question.type === 'customer' &&
+        (option?.key === 'other' || /^(以上都不是|都不是|不是这些|重新选择)$/.test(content))) {
+        askCustomerSelection('好的，请从当前门店的客户中重新选择。', false)
+        return
+      }
+      const record = findChoice(records, content, question.type === 'customer' ? customerLabel : entry => entry.name, option)
       if (record) chooseScope(question.type, record)
       else ask('没有找到唯一匹配，请回复完整名称或选择下方选项。', question, message.options)
     } else if (question.type === 'product') {
