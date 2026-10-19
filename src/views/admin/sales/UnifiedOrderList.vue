@@ -365,7 +365,27 @@
                 />
               </th>
               <th class="document-column" data-column-key="order-number" data-min-width="100">订单编号</th>
-              <th data-column-key="date" data-min-width="100">日期</th>
+              <th
+                data-column-key="date"
+                data-min-width="100"
+                :aria-sort="sortOrder === 'desc' ? 'descending' : 'ascending'"
+              >
+                <button
+                  class="date-sort-button"
+                  type="button"
+                  :title="sortOrder === 'desc' ? '切换为从远到近' : '切换为从近到远'"
+                  @click="toggleSort"
+                >
+                  日期
+                  <span class="date-sort-indicator" aria-hidden="true">
+                    <Triangle class="date-sort-arrow" :class="{ active: sortOrder === 'asc' }" />
+                    <Triangle
+                      class="date-sort-arrow date-sort-arrow-desc"
+                      :class="{ active: sortOrder === 'desc' }"
+                    />
+                  </span>
+                </button>
+              </th>
               <th data-column-key="customer" data-min-width="80">客户</th>
               <th data-column-key="contact-person">收货人</th>
               <th data-column-key="phone" data-min-width="100">电话</th>
@@ -1354,7 +1374,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Copy, Printer } from '@lucide/vue'
+import { Copy, Printer, Triangle } from '@lucide/vue'
 import request from '@/api/request'
 import { resolveLogisticsCopySettings } from '@/api/logisticsCopy'
 import { useOrderStore } from '@/stores/order'
@@ -2847,6 +2867,7 @@ const showCopyMessage = (text, type = 'success') => {
 // 切换排序
 const toggleSort = () => {
   sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+  currentPage.value = 1
 }
 
 // 获取订单状态文本
@@ -4045,6 +4066,57 @@ svg {
   text-align: left;
   white-space: nowrap;
   vertical-align: middle;
+}
+
+.date-sort-button {
+  display: inline-flex;
+  height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.date-sort-button:hover {
+  color: var(--accent-dark);
+}
+
+.date-sort-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.date-sort-indicator {
+  display: inline-flex;
+  width: 10px;
+  height: 16px;
+  flex: 0 0 10px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+}
+
+.date-sort-arrow {
+  width: 8px;
+  height: 6px;
+  flex: 0 0 6px;
+  color: #c9cdd3;
+  fill: currentColor;
+  stroke: none;
+}
+
+.date-sort-arrow.active {
+  color: #7c8594;
+}
+
+.date-sort-arrow-desc {
+  transform: rotate(180deg);
 }
 
 .records-table.resizable-columns-table th,
