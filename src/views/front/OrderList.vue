@@ -26,21 +26,22 @@
                   <span v-if="item.quantity !== ''" class="goods-quantity">{{ item.quantity }}</span>
                   <span v-if="item.unit" class="goods-unit">{{ item.unit }}</span>
                 </div>
-              </div>
-              <div v-if="item.remark" class="product-remark">
-                <span class="product-remark-label">注意：</span>
-                <span class="product-remark-text">{{ item.remark }}</span>
+                <div v-if="item.remark" class="product-remark-bookmark" :title="item.remark">
+                  <span class="product-remark-label">注意：</span>
+                  <span class="product-remark-text">{{ item.remark }}</span>
+                </div>
+                <div v-if="item.packages > 0" class="goods-packages">{{ item.packages }} 件</div>
               </div>
             </div>
+            <div v-if="order.isLastCard && order.remark" class="product-item order-remark">备注：{{ order.remark }}</div>
             <div v-if="order.indicatorHtml" class="card-part-indicator" v-html="order.partLetter"></div>
           </div>
 
           <div v-if="order.isFirstCard && order.tagsHtml" class="tags-wrapper">
-            <div class="tags-label">标签&备注</div>
+            <div class="tags-label">标签</div>
             <div class="tags-container">
               <div v-if="order.goods_packaging" class="tag tag-blue">包装:{{ order.goods_packaging }}</div>
               <div v-if="order.goods_weight" class="tag tag-cyan">重量:{{ order.goods_weight }}</div>
-              <div v-if="order.remark" class="tag tag-red">备注:{{ order.remark }}</div>
               <div v-if="order.goods_quantity" class="tag tag-green">件数:{{ order.goods_quantity }}</div>
             </div>
           </div>
@@ -259,6 +260,11 @@ const getStoreClass = (order) => {
 }
 
 // 处理订单数据，拆分卡片
+const getGoodsRowLineCount = (item) => {
+  const hasBookmarkRow = item.remark || (props.statusType === 'pending' && item.packages > 0)
+  return hasBookmarkRow ? 2 : 1
+}
+
 const processedOrders = computed(() => {
   const result = []
   const isMobile = window.innerWidth <= 768
@@ -276,6 +282,7 @@ const processedOrders = computed(() => {
       spec: item.spec || '',
       quantity: item.quantity ?? '',
       unit: item.unit || '',
+      packages: item.packages ?? 0,
       remark: typeof item.remark === 'string' ? item.remark.trim() : ''
     })).filter(item => item.goodsName || item.spec || item.quantity !== '' || item.unit)
 
@@ -319,7 +326,7 @@ const processedOrders = computed(() => {
       let chunk = []
       let lineCount = 0
       for (const item of goodsRows) {
-        const itemLines = item.remark ? 2 : 1
+        const itemLines = getGoodsRowLineCount(item)
         if (chunk.length && lineCount + itemLines > 9) {
           chunks.push(chunk)
           chunk = []
@@ -333,10 +340,11 @@ const processedOrders = computed(() => {
 
     chunks.forEach((chunkGoodsRows, chunkIndex) => {
       const isFirstCard = chunkIndex === 0
+      const isLastCard = chunkIndex === chunks.length - 1
       const isSplit = chunks.length > 1
       const partLetter = String.fromCharCode(65 + chunkIndex)
       const compactClass = (!isMobile && chunkGoodsRows.reduce(
-        (count, item) => count + (item.remark ? 2 : 1), 0
+        (count, item) => count + getGoodsRowLineCount(item), 0
       ) >= 8) ? 'compact' : ''
       const typeClass = getStoreClass(order)
       const storeColor = getStoreColor(order)
@@ -373,7 +381,7 @@ const processedOrders = computed(() => {
       let goodsPackaging = '桶装'
       let goodsWeight = ''
       let goodsQuantity = ''
-      let remark = order.remark || ''
+      const remark = typeof order.remark === 'string' ? order.remark.trim() : ''
       let logisticsService = '送货上门+回单拍照回传'
 
       if (order.order_goods && Array.isArray(order.order_goods) && order.order_goods.length > 0) {
@@ -411,6 +419,7 @@ const processedOrders = computed(() => {
         allGoodsLines: goodsLines,
         allGoodsRows: goodsRows,
         isFirstCard,
+        isLastCard,
         isSplit,
         partLetter,
         compactClass,
@@ -421,7 +430,7 @@ const processedOrders = computed(() => {
         shortDate,
         isMobile,
         indicatorHtml: (!isMobile && isSplit),
-        tagsHtml: isFirstCard && (goodsPackaging || goodsWeight || remark || goodsQuantity),
+        tagsHtml: isFirstCard && (goodsPackaging || goodsWeight || goodsQuantity),
         // 覆盖字段
         receiver_name: receiverName,
         receiver_phone: receiverPhone,
@@ -452,7 +461,7 @@ const toggleCard = (event) => {
 </script>
 
 <style scoped>
-/* 商品主行保留名称/型号和数量两列，备注独占下一行。 */
+/* 名称和数量共用主行，备注和件数书签共用下一行。 */
 .product-row {
   display: flex;
   flex-direction: column;
@@ -462,19 +471,26 @@ const toggleCard = (event) => {
 }
 
 .front .product-list:not(.compact) {
-  gap: 20px;
+  gap: 5px;
 }
 
 .front .product-list.compact {
-  gap: 12px;
+  gap: 10px;
+}
+
+.order-remark {
+  flex-shrink: 0;
+  min-width: 0;
+  color: #ff4d4f;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .product-main-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content;
   column-gap: 12px;
-  row-gap: 8px;
+  row-gap: 0;
   width: 100%;
 }
 
@@ -516,6 +532,36 @@ const toggleCard = (event) => {
   overflow-wrap: anywhere;
 }
 
+.product-remark-bookmark {
+  grid-column: 1;
+  grid-row: 2;
+  justify-self: start;
+  align-self: start;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  min-width: 0;
+  max-width: calc(100% - 16px);
+  width: fit-content;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid #e4e7eb;
+  border-top: 0;
+  border-radius: 0 0 5px 5px;
+  background: #f2f4f6;
+  color: #b4232f;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.product-remark-bookmark .product-remark-text {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+
 @media (min-width: 769px) {
   .front .product-list,
   .back .product-list,
@@ -535,8 +581,9 @@ const toggleCard = (event) => {
 }
 
 .product-info-box {
-  flex: 1 1 160px;
-  min-width: 160px;
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
@@ -545,14 +592,31 @@ const toggleCard = (event) => {
 }
 
 .product-quantity-box {
-  flex: 0 0 auto;
-  width: max-content;
-  max-width: 100%;
-  display: inline-flex;
+  grid-column: 2;
+  grid-row: 1;
+  display: flex;
   align-items: baseline;
   gap: 6px;
-  margin-left: auto;
   white-space: nowrap;
+}
+
+.goods-packages {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: center;
+  align-self: start;
+  position: relative;
+  min-width: 54px;
+  padding: 1px 8px;
+  border: 1px solid #b7eb8f;
+  border-top: 0;
+  border-radius: 0 0 5px 5px;
+  background: #f6ffed;
+  color: #389e0d;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.4;
 }
 
 .goods-name {
