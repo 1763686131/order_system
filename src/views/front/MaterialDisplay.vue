@@ -152,6 +152,16 @@ const isAllowedProduct = productId => (
   || allowedProductIds.value.has(String(productId ?? ''))
 )
 
+const displayProducedQuantity = (record, item) => {
+  // 草稿中的明细 finishedQuantity 默认是 0，待审核时应展示录入时保存的整单数量。
+  if (statusClass(record.status) === 'draft') return record.producedQuantity
+
+  const finishedQuantity = Number(item?.finishedQuantity)
+  return Number.isFinite(finishedQuantity) && finishedQuantity > 0
+    ? finishedQuantity
+    : record.producedQuantity
+}
+
 const materialDisplayRecords = computed(() => records.value
   .filter(record => statusClass(record.status) !== 'cancelled')
   .flatMap(record => {
@@ -177,7 +187,7 @@ const materialDisplayRecords = computed(() => records.value
       parentDocumentNo,
       displayItem: item,
       displayQuantity: item?.quantity ?? record.totalQuantity,
-      displayProducedQuantity: item?.finishedQuantity ?? record.producedQuantity,
+      displayProducedQuantity: displayProducedQuantity(record, item),
       displayFinishedName: (
         item?.finishedProductName
         || record.finishedProductName

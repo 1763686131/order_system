@@ -576,6 +576,8 @@ const makeRow = (item, index = 0) => {
       }
     : {}
   const source = { ...legacyFinished, ...(item || {}) }
+  const itemFinishedQuantity = Number(item?.finishedQuantity || 0)
+  const fallbackFinishedQuantity = Number(legacyFinished.finishedQuantity || 0)
   return {
     id: `row-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     productId: item?.productId ? String(item.productId) : '',
@@ -595,9 +597,9 @@ const makeRow = (item, index = 0) => {
     finishedUnit: source.finishedProductUnit || '',
     finishedWarehouseId: source.finishedWarehouseId ? String(source.finishedWarehouseId) : '',
     finishedWarehouseName: source.finishedWarehouseName || '',
-    finishedQuantity: Number(source.finishedQuantity || 0) > 0
-      ? String(source.finishedQuantity)
-      : '',
+    finishedQuantity: itemFinishedQuantity > 0
+      ? String(item.finishedQuantity)
+      : (fallbackFinishedQuantity > 0 ? String(legacyFinished.finishedQuantity) : ''),
     finishedRemark: source.finishedRemark || (item ? (item.remark || props.record?.remark || '') : '')
   }
 }
