@@ -1958,6 +1958,7 @@ def _ensure_material_outbound_schema(conn):
                 finished_warehouse_id INTEGER,
                 finished_warehouse_name TEXT NOT NULL DEFAULT '',
                 finished_remark TEXT NOT NULL DEFAULT '',
+                finished_linked INTEGER NOT NULL DEFAULT 1,
                 updated_at TEXT
             )
             """
@@ -1976,6 +1977,7 @@ def _ensure_material_outbound_schema(conn):
             "finished_warehouse_id": "INTEGER",
             "finished_warehouse_name": "TEXT NOT NULL DEFAULT ''",
             "finished_remark": "TEXT NOT NULL DEFAULT ''",
+            "finished_linked": "INTEGER NOT NULL DEFAULT 1",
         }
         for column, definition in outbound_columns_to_add.items():
             if column not in outbound_columns:

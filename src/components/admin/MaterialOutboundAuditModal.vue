@@ -154,7 +154,18 @@
                   <th>仓库原材料数量</th>
                   <th>出库数量</th>
                   <th class="module-divider-header">
-                    <Link2 :size="15" :stroke-width="1.8" aria-hidden="true" />
+                    <button
+                      type="button"
+                      class="link-toggle"
+                      :class="{ disconnected: !finishedLinked }"
+                      :disabled="!editing || saving"
+                      :aria-label="finishedLinked ? '断开成品入库关联' : '恢复成品入库关联'"
+                      :title="finishedLinked ? '点击断开成品入库关联' : '点击恢复成品入库关联'"
+                      @click="toggleFinishedLink"
+                    >
+                      <Link2 v-if="finishedLinked" :size="15" :stroke-width="1.8" aria-hidden="true" />
+                      <Unlink2 v-else :size="15" :stroke-width="1.8" aria-hidden="true" />
+                    </button>
                   </th>
                   <th>成品商品</th>
                   <th>规格型号</th>
@@ -277,9 +288,16 @@
                   </td>
                   <td class="module-divider-cell">
                     <Link2
-                      v-if="hasMaterial(row)"
+                      v-if="hasMaterial(row) && finishedLinked"
                       :size="15"
                       :stroke-width="1.8"
+                      aria-hidden="true"
+                    />
+                    <Unlink2
+                      v-if="hasMaterial(row) && !finishedLinked"
+                      :size="15"
+                      :stroke-width="1.8"
+                      class="disconnected"
                       aria-hidden="true"
                     />
                   </td>
@@ -290,14 +308,17 @@
                           v-model="row.finishedProductQuery"
                           class="table-input"
                           :class="{ invalid: rowErrors[index]?.finishedProductId }"
-                          :readonly="!editing || saving"
+                          :disabled="!editing || saving || !finishedLinked"
                           type="text"
                           autocomplete="off"
                           aria-label="成品商品"
                           @focus="openPicker(`finished-${index}`)"
                           @input="openPicker(`finished-${index}`)"
                         />
-                        <div v-if="activePicker === `finished-${index}` && editing" class="picker-options">
+                        <div
+                          v-if="activePicker === `finished-${index}` && editing && finishedLinked"
+                          class="picker-options"
+                        >
                           <button
                             v-for="product in filteredFinishedProducts(row.finishedProductQuery, row)"
                             :key="product.id"
@@ -331,7 +352,7 @@
                         v-model="row.finishedWarehouseId"
                         class="table-input"
                         :class="{ invalid: rowErrors[index]?.finishedWarehouseId }"
-                        :disabled="!editing || saving"
+                        :disabled="!editing || saving || !finishedLinked"
                         aria-label="入库仓库"
                       >
                         <option value="">请选择仓库</option>
@@ -354,7 +375,7 @@
                         v-model="row.finishedQuantity"
                         class="table-input number-input"
                         :class="{ invalid: rowErrors[index]?.finishedQuantity }"
-                        :readonly="!editing || saving"
+                        :disabled="!editing || saving || !finishedLinked"
                         type="number"
                         min="0"
                         step="0.0001"
@@ -414,7 +435,15 @@
               </label>
               <label class="info-group wide remark-field">
                 <span>备注信息</span>
-                <input :value="primaryRemark" type="text" readonly />
+                <input v-if="finishedLinked" :value="primaryRemark" type="text" readonly />
+                <input
+                  v-else
+                  v-model.trim="form.finishedRemark"
+                  type="text"
+                  maxlength="200"
+                  placeholder="请输入单据备注"
+                  :readonly="!editing || saving"
+                />
               </label>
               <label class="info-group">
                 <span>修改人</span>
@@ -453,7 +482,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import request from '@/api/request'
-import { Link2 } from '@lucide/vue'
+import { Link2, Unlink2 } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
 
 const props = defineProps({
@@ -483,6 +512,7 @@ const saving = ref(false)
 const editing = ref(false)
 const formError = ref('')
 const initializedRecordId = ref(null)
+const finishedLinked = ref(true)
 
 const form = reactive({
   storeId: '',
@@ -511,6 +541,23 @@ const createdByDisplay = computed(() => (
 const createdAtDisplay = computed(() => (
   isCreateMode.value ? '-' : (props.record?.createdAt || '-')
 ))
+const recordFinishedLinked = record => {
+  if (!record) return true
+  if (typeof record.finishedLinked === 'boolean') return record.finishedLinked
+  if (record.source !== 'admin') return true
+  const items = Array.isArray(record.items) ? record.items : []
+  return Boolean(
+    record.finishedInboundId
+    || record.finishedProductId
+    || record.finishedWarehouseId
+    || Number(record.producedQuantity || 0) > 0
+    || items.some(item => (
+      item.finishedProductId
+      || item.finishedWarehouseId
+      || Number(item.finishedQuantity || 0) > 0
+    ))
+  )
+}
 const filledRows = computed(() => rows.value.filter(row => (
   row.productId
   || row.productQuery
@@ -525,7 +572,11 @@ const hasMaterial = row => Boolean(
   row.productId || String(row.productQuery || '').trim()
 )
 const hasActiveProducts = computed(() => rows.value.some(hasMaterial))
-const primaryRemark = computed(() => filledRows.value[0]?.remark || form.finishedRemark || '')
+const primaryRemark = computed(() => (
+  finishedLinked.value
+    ? (filledRows.value[0]?.remark || form.finishedRemark || '')
+    : (form.finishedRemark || '')
+))
 const totalQuantity = computed(() => rows.value.reduce(
   (sum, row) => sum + Number(row.quantity || 0),
   0
@@ -625,6 +676,7 @@ const localDate = () => {
 const resetForm = ({ editable = isCreateMode.value } = {}) => {
   clearErrors()
   if (isCreateMode.value) {
+    finishedLinked.value = true
     editing.value = true
     form.storeId = ''
     form.warehouseId = ''
@@ -638,6 +690,7 @@ const resetForm = ({ editable = isCreateMode.value } = {}) => {
   }
 
   editing.value = editable
+  finishedLinked.value = recordFinishedLinked(props.record)
   form.storeId = props.record?.storeId ? String(props.record.storeId) : ''
   form.warehouseId = props.record?.warehouseId ? String(props.record.warehouseId) : ''
   form.warehouseName = props.record?.warehouseName || ''
@@ -787,7 +840,12 @@ const initialize = async () => {
 }
 
 const openPicker = key => {
-  if (editing.value) activePicker.value = key
+  if (
+    editing.value
+    && (!String(key).startsWith('finished-') || finishedLinked.value)
+  ) {
+    activePicker.value = key
+  }
 }
 
 const selectRawProduct = (product, index) => {
@@ -805,6 +863,7 @@ const selectRawProduct = (product, index) => {
 }
 
 const selectFinishedProduct = (product, index) => {
+  if (!finishedLinked.value) return
   const row = rows.value[index]
   if (!row) return
   row.finishedProductId = String(product.id)
@@ -817,6 +876,26 @@ const selectFinishedProduct = (product, index) => {
   )?.name || ''
   rowErrors.value[index] = { ...(rowErrors.value[index] || {}), finishedProductId: '' }
   activePicker.value = ''
+}
+
+const toggleFinishedLink = () => {
+  if (!editing.value || saving.value) return
+  finishedLinked.value = !finishedLinked.value
+  activePicker.value = ''
+  clearErrors()
+  if (!finishedLinked.value) {
+    rows.value.forEach(row => {
+      row.finishedProductId = ''
+      row.finishedProductQuery = ''
+      row.finishedProductCode = ''
+      row.finishedSpecification = ''
+      row.finishedUnit = ''
+      row.finishedWarehouseId = ''
+      row.finishedWarehouseName = ''
+      row.finishedQuantity = ''
+      row.finishedRemark = ''
+    })
+  }
 }
 
 const syncStore = () => {
@@ -906,18 +985,20 @@ const validate = () => {
       rowError.quantity = '数量必须大于 0'
       valid = false
     }
-    if (!row.finishedProductId) {
-      rowError.finishedProductId = '请选择成品商品'
-      valid = false
-    }
-    if (!row.finishedWarehouseId) {
-      rowError.finishedWarehouseId = '请选择入库仓库'
-      valid = false
-    }
-    const finishedQuantity = Number(row.finishedQuantity)
-    if (!Number.isFinite(finishedQuantity) || finishedQuantity <= 0) {
-      rowError.finishedQuantity = '入库数量必须大于 0'
-      valid = false
+    if (finishedLinked.value) {
+      if (!row.finishedProductId) {
+        rowError.finishedProductId = '请选择成品商品'
+        valid = false
+      }
+      if (!row.finishedWarehouseId) {
+        rowError.finishedWarehouseId = '请选择入库仓库'
+        valid = false
+      }
+      const finishedQuantity = Number(row.finishedQuantity)
+      if (!Number.isFinite(finishedQuantity) || finishedQuantity <= 0) {
+        rowError.finishedQuantity = '入库数量必须大于 0'
+        valid = false
+      }
     }
     rowErrors.value[index] = rowError
   })
@@ -950,6 +1031,19 @@ const submitChanges = async () => {
   try {
     const activeRows = filledRows.value
     const firstRow = activeRows[0]
+    const finishedPayload = finishedLinked.value
+      ? {
+          finishedProductId: Number(firstRow?.finishedProductId || 0),
+          finishedWarehouseId: Number(firstRow?.finishedWarehouseId || 0),
+          finishedQuantity: Number(firstRow?.finishedQuantity || 0),
+          finishedRemark: firstRow?.finishedRemark || firstRow?.remark || primaryRemark.value
+        }
+      : {
+          finishedProductId: 0,
+          finishedWarehouseId: 0,
+          finishedQuantity: 0,
+          finishedRemark: ''
+        }
     const payload = {
       documentDate: form.documentDate,
       storeId: Number(form.storeId),
@@ -957,19 +1051,21 @@ const submitChanges = async () => {
       quantity: Number(firstRow?.quantity || 0),
       productId: Number(firstRow?.productId || 0),
       remark: primaryRemark.value,
+      finishedLinked: finishedLinked.value,
       items: activeRows.map(row => ({
         productId: Number(row.productId),
         quantity: Number(row.quantity),
-        remark: row.remark || primaryRemark.value,
-        finishedProductId: Number(row.finishedProductId),
-        finishedWarehouseId: Number(row.finishedWarehouseId),
-        finishedQuantity: Number(row.finishedQuantity),
-        finishedRemark: row.finishedRemark || row.remark || primaryRemark.value
+        remark: row.remark || (finishedLinked.value ? primaryRemark.value : ''),
+        ...(finishedLinked.value
+          ? {
+              finishedProductId: Number(row.finishedProductId),
+              finishedWarehouseId: Number(row.finishedWarehouseId),
+              finishedQuantity: Number(row.finishedQuantity),
+              finishedRemark: row.finishedRemark || row.remark || primaryRemark.value
+            }
+          : {})
       })),
-      finishedProductId: Number(firstRow?.finishedProductId || 0),
-      finishedWarehouseId: Number(firstRow?.finishedWarehouseId || 0),
-      finishedQuantity: Number(firstRow?.finishedQuantity || 0),
-      finishedRemark: firstRow?.finishedRemark || firstRow?.remark || primaryRemark.value
+      ...finishedPayload
     }
     const response = await request({
       url: isCreateMode.value
@@ -1520,6 +1616,34 @@ button:disabled {
 .module-divider-cell svg {
   display: inline-block;
   vertical-align: middle;
+}
+
+.link-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.link-toggle:hover:not(:disabled),
+.link-toggle:focus-visible {
+  background: rgba(21, 154, 124, .12);
+  outline: none;
+}
+
+.link-toggle.disconnected,
+.module-divider-cell .disconnected {
+  color: #c33d47;
+}
+
+.link-toggle:disabled {
+  cursor: default;
+  opacity: .65;
 }
 
 .total-row td {

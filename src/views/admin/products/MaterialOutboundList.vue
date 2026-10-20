@@ -403,7 +403,9 @@
               <span :class="['status-badge', `status-${detailRecord.status}`]">
                 {{ statusLabel(detailRecord.status) }}
               </span>
-              <span>审核后扣减原材料库存，并完成成品入库</span>
+              <span>
+                审核后扣减原材料库存<span v-if="detailRecord?.finishedLinked !== false">，并完成成品入库</span>
+              </span>
             </div>
             <dl class="detail-grid">
               <div><dt>门店</dt><dd>{{ detailRecord.storeName || '-' }}</dd></div>
@@ -922,38 +924,41 @@ const handleAuditSlideRelease = async () => {
     return
   }
   const rawItems = detailItems(record)
-  const hasPerRowFinished = rawItems.some(item => (
-    item.finishedProductId
-    || item.finishedWarehouseId
-    || Number(item.finishedQuantity || 0) > 0
-  ))
-  const legacyFinishedReady = (
-    record.finishedWarehouseId
-    && record.finishedProductId
-    && Number(record.producedQuantity || 0) > 0
-  )
+  const finishedLinked = record.finishedLinked !== false
   let itemPayload
-  if (hasPerRowFinished) {
-    const incompleteIndex = rawItems.findIndex(item => (
-      !item.finishedWarehouseId
-      || !item.finishedProductId
-      || Number(item.finishedQuantity || 0) <= 0
+  if (finishedLinked) {
+    const hasPerRowFinished = rawItems.some(item => (
+      item.finishedProductId
+      || item.finishedWarehouseId
+      || Number(item.finishedQuantity || 0) > 0
     ))
-    if (incompleteIndex >= 0) {
+    const legacyFinishedReady = (
+      record.finishedWarehouseId
+      && record.finishedProductId
+      && Number(record.producedQuantity || 0) > 0
+    )
+    if (hasPerRowFinished) {
+      const incompleteIndex = rawItems.findIndex(item => (
+        !item.finishedWarehouseId
+        || !item.finishedProductId
+        || Number(item.finishedQuantity || 0) <= 0
+      ))
+      if (incompleteIndex >= 0) {
+        auditSlideValue.value = 0
+        detailActionError.value = `请先点击“修改”补充第 ${incompleteIndex + 1} 行的成品商品、入库仓库和入库数量。`
+        return
+      }
+      itemPayload = rawItems.map(item => ({
+        finishedProductId: item.finishedProductId,
+        finishedWarehouseId: item.finishedWarehouseId,
+        finishedQuantity: item.finishedQuantity,
+        finishedRemark: item.finishedRemark || item.remark || record.finishedRemark || record.remark || ''
+      }))
+    } else if (!legacyFinishedReady || rawItems.length > 1) {
       auditSlideValue.value = 0
-      detailActionError.value = `请先点击“修改”补充第 ${incompleteIndex + 1} 行的成品商品、入库仓库和入库数量。`
+      detailActionError.value = '请先点击“修改”补充每一行的成品商品、入库仓库和入库数量。'
       return
     }
-    itemPayload = rawItems.map(item => ({
-      finishedProductId: item.finishedProductId,
-      finishedWarehouseId: item.finishedWarehouseId,
-      finishedQuantity: item.finishedQuantity,
-      finishedRemark: item.finishedRemark || item.remark || record.finishedRemark || record.remark || ''
-    }))
-  } else if (!legacyFinishedReady || rawItems.length > 1) {
-    auditSlideValue.value = 0
-    detailActionError.value = '请先点击“修改”补充每一行的成品商品、入库仓库和入库数量。'
-    return
   }
 
   auditLoading.value = true
@@ -963,6 +968,7 @@ const handleAuditSlideRelease = async () => {
       url: `/material-outbounds/${record.id}/audit`,
       method: 'POST',
       data: {
+        finishedLinked,
         ...(itemPayload ? { items: itemPayload } : {}),
         finishedWarehouseId: record.finishedWarehouseId,
         finishedProductId: record.finishedProductId,

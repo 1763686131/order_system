@@ -151,6 +151,16 @@ def _present_value(data, keys, fallback=None):
     return fallback
 
 
+def _as_bool(value, default=True):
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float)):
+        return bool(value)
+    return str(value).strip().lower() not in {"", "0", "false", "no", "off"}
+
+
 def _resolve_finished_audit_values(conn, document, data):
     document_values = dict(document)
     store_id = int(document_values["store_id"])
@@ -335,6 +345,20 @@ def _resolve_finished_items(conn, document, item_rows, payloads=None):
     return values
 
 
+def _empty_finished_item():
+    return {
+        "warehouse_id": None,
+        "warehouse_name": "",
+        "product_id": None,
+        "product_code": "",
+        "product_name": "",
+        "product_specification": "",
+        "product_unit": "",
+        "quantity": 0,
+        "remark": "",
+    }
+
+
 def _location_rows(conn):
     stores = [
         dict(row)
@@ -514,6 +538,7 @@ def _serialize_document(conn, row, include_items=True):
     document["finishedWarehouseId"] = document.pop("finished_warehouse_id", None)
     document["finishedWarehouseName"] = document.pop("finished_warehouse_name", "") or ""
     document["finishedRemark"] = document.pop("finished_remark", "") or ""
+    document["finishedLinked"] = bool(document.pop("finished_linked", 1))
     document["updatedAt"] = document.pop("updated_at", None)
     if include_items:
         items = conn.execute(
@@ -878,7 +903,14 @@ def _insert_draft(conn, values):
     return outbound_id, item_cursor.lastrowid
 
 
-def _insert_admin_draft(conn, values, items, finished_items, document_date):
+def _insert_admin_draft(
+    conn,
+    values,
+    items,
+    finished_items,
+    document_date,
+    finished_linked=True,
+):
     now = _now()
     total_quantity = sum(item["quantity"] for item in items)
     produced_quantity = sum(item["quantity"] for item in finished_items)
@@ -891,10 +923,11 @@ def _insert_admin_draft(conn, values, items, finished_items, document_date):
             produced_quantity, remark, source, created_by, created_at, updated_at,
             finished_product_id, finished_product_code, finished_product_name,
             finished_product_specification, finished_product_unit,
-            finished_warehouse_id, finished_warehouse_name, finished_remark
+            finished_warehouse_id, finished_warehouse_name, finished_remark,
+            finished_linked
         ) VALUES (
             ?, ?, ?, ?, ?, ?, 'draft', ?, ?, ?, 'admin', ?, ?, ?,
-            ?, ?, ?, ?, ?, ?, ?, ?
+            ?, ?, ?, ?, ?, ?, ?, ?, ?
         )
         """,
         (
@@ -918,6 +951,7 @@ def _insert_admin_draft(conn, values, items, finished_items, document_date):
             first_finished["warehouse_id"],
             first_finished["warehouse_name"],
             first_finished["remark"],
+            1 if finished_linked else 0,
         ),
     )
     outbound_id = cursor.lastrowid
@@ -1495,17 +1529,22 @@ def create_admin_material_outbound():
                 if not settings:
                     raise ValueError("原材料出库设置尚未初始化")
                 items = _resolve_admin_items(conn, data, values, settings)
+                finished_linked = _as_bool(data.get("finishedLinked"), True)
                 item_payloads = data.get("items")
                 document_for_finished = {
                     "store_id": values["store_id"],
                     "remark": values["remark"],
                     "produced_quantity": 0,
                 }
-                finished_items = _resolve_finished_items(
-                    conn,
-                    document_for_finished,
-                    items,
-                    item_payloads,
+                finished_items = (
+                    _resolve_finished_items(
+                        conn,
+                        document_for_finished,
+                        items,
+                        item_payloads,
+                    )
+                    if finished_linked
+                    else [_empty_finished_item() for _ in items]
                 )
                 outbound_id = _insert_admin_draft(
                     conn,
@@ -1513,6 +1552,7 @@ def create_admin_material_outbound():
                     items,
                     finished_items,
                     document_date,
+                    finished_linked=finished_linked,
                 )
                 row = conn.execute(
                     "SELECT * FROM material_outbounds WHERE id = ?",
@@ -1620,6 +1660,10 @@ def update_material_outbound(outbound_id):
                     """,
                     (outbound_id,),
                 ).fetchall()
+                finished_linked = _as_bool(
+                    data.get("finishedLinked"),
+                    bool(row["finished_linked"]),
+                )
                 existing = dict(row)
                 if old_items:
                     existing.update(dict(old_items[0]))
@@ -1655,11 +1699,15 @@ def update_material_outbound(outbound_id):
                     previous = dict(old_items[index]) if index < len(old_items) else {}
                     previous.update(item)
                     finished_fallback_rows.append(previous)
-                finished_items = _resolve_finished_items(
-                    conn,
-                    document_for_finished,
-                    finished_fallback_rows,
-                    item_payloads,
+                finished_items = (
+                    _resolve_finished_items(
+                        conn,
+                        document_for_finished,
+                        finished_fallback_rows,
+                        item_payloads,
+                    )
+                    if finished_linked
+                    else [_empty_finished_item() for _ in items]
                 )
                 first_finished = finished_items[0]
                 finished_total = sum(item["quantity"] for item in finished_items)
@@ -1675,6 +1723,7 @@ def update_material_outbound(outbound_id):
                         finished_product_name = ?, finished_product_specification = ?,
                         finished_product_unit = ?, finished_warehouse_id = ?,
                         finished_warehouse_name = ?, finished_remark = ?,
+                        finished_linked = ?,
                         updated_at = ?
                     WHERE id = ?
                     """,
@@ -1695,6 +1744,7 @@ def update_material_outbound(outbound_id):
                         first_finished["warehouse_id"],
                         first_finished["warehouse_name"],
                         first_finished["remark"],
+                        1 if finished_linked else 0,
                         now,
                         outbound_id,
                     ),
@@ -1814,23 +1864,32 @@ def audit_material_outbound(outbound_id):
                 ).fetchall()
                 if not items:
                     raise ValueError("出库单没有原材料明细")
+                finished_linked = bool(document["finished_linked"])
                 item_payloads = data.get("items")
                 if not isinstance(item_payloads, list) or not item_payloads:
                     item_payloads = [data]
-                finished_items = _resolve_finished_items(
-                    conn,
-                    document,
-                    items,
-                    item_payloads,
+                finished_items = (
+                    _resolve_finished_items(
+                        conn,
+                        document,
+                        items,
+                        item_payloads,
+                    )
+                    if finished_linked
+                    else [_empty_finished_item() for _ in items]
                 )
                 first_finished = finished_items[0]
                 finished_total = sum(item["quantity"] for item in finished_items)
                 for item in items:
                     _post_inventory(conn, document, item)
-                finished_inbound = _create_finished_inbound(
-                    conn,
-                    document,
-                    finished_items,
+                finished_inbound = (
+                    _create_finished_inbound(
+                        conn,
+                        document,
+                        finished_items,
+                    )
+                    if finished_linked
+                    else None
                 )
                 now = _now()
                 conn.execute(
@@ -1842,14 +1901,14 @@ def audit_material_outbound(outbound_id):
                         finished_product_code = ?, finished_product_name = ?,
                         finished_product_specification = ?, finished_product_unit = ?,
                         finished_warehouse_id = ?, finished_warehouse_name = ?,
-                        finished_remark = ?, updated_at = ?
+                        finished_remark = ?, finished_linked = ?, updated_at = ?
                     WHERE id = ?
                     """,
                     (
                         _operator(conn),
                         now,
                         finished_total,
-                        finished_inbound["id"],
+                        finished_inbound["id"] if finished_inbound else None,
                         first_finished["product_id"],
                         first_finished["product_code"],
                         first_finished["product_name"],
@@ -1858,6 +1917,7 @@ def audit_material_outbound(outbound_id):
                         first_finished["warehouse_id"],
                         first_finished["warehouse_name"],
                         first_finished["remark"],
+                        1 if finished_linked else 0,
                         now,
                         outbound_id,
                     ),
@@ -1876,10 +1936,14 @@ def audit_material_outbound(outbound_id):
                 return jsonify(
                     {
                         "success": True,
-                        "message": "审核成功，原材料已出库，成品已入库",
+                        "message": (
+                            "审核成功，原材料已出库，成品已入库"
+                            if finished_linked
+                            else "审核成功，原材料已出库"
+                        ),
                         "materialOutbound": material_outbound,
-                        "finishedInboundId": finished_inbound["id"],
-                        "finishedInboundNo": finished_inbound["document_no"],
+                        "finishedInboundId": finished_inbound["id"] if finished_inbound else None,
+                        "finishedInboundNo": finished_inbound["document_no"] if finished_inbound else None,
                     }
                 )
     except ValueError as exc:
