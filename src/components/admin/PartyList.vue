@@ -1618,6 +1618,16 @@ textarea:focus {
 }
 
 .detail-modal-layer {
+  /* Teleport 到 body 后不再继承页面根容器的主题变量。 */
+  --accent: #0f9f78;
+  --accent-dark: #08745a;
+  --accent-soft: #e9f8f3;
+  --accent-border: #a9e5d2;
+  --page-bg: #f4f8f5;
+  --panel-bg: #fff;
+  --border: #e2e8f0;
+  --text: #172033;
+  --muted: #667085;
   position: fixed;
   z-index: 2147482000;
   inset: 0;
