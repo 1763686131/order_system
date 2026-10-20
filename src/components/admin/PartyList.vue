@@ -102,20 +102,40 @@
       </header>
 
       <div class="table-scroll">
-        <table class="records-table">
+        <table
+          v-resizable-columns="{
+            storageKey: isSupplier ? 'party-suppliers-list' : 'party-customers-list',
+            minWidth: 64,
+            resizeMode: 'fit'
+          }"
+          class="records-table"
+        >
+          <colgroup>
+            <col data-column-key="party-code" style="width: 140px" />
+            <col data-column-key="party-name" style="width: 180px" />
+            <col data-column-key="store" style="width: 120px" />
+            <col data-column-key="contact-person" style="width: 120px" />
+            <col data-column-key="phone" style="width: 140px" />
+            <col data-column-key="address" style="width: 180px" />
+            <col data-column-key="primary-money" style="width: 130px" />
+            <col data-column-key="secondary-money" style="width: 130px" />
+            <col data-column-key="status" style="width: 100px" />
+            <col data-column-key="created-at" style="width: 130px" />
+            <col data-column-key="actions" data-resizable="false" style="width: 115px" />
+          </colgroup>
           <thead>
             <tr>
-              <th class="document-column">{{ entityConfig.name }}编号</th>
-              <th>{{ entityConfig.name }}名称</th>
-              <th>所属门店</th>
-              <th>联系人</th>
-              <th>联系电话</th>
-              <th class="address-column">联系地址</th>
-              <th class="number-column">{{ entityConfig.primaryMoneyLabel }}</th>
-              <th class="number-column">{{ entityConfig.secondaryMoneyLabel }}</th>
-              <th>状态</th>
-              <th>创建时间</th>
-              <th class="operation-column">操作</th>
+              <th class="document-column" data-column-key="party-code" data-min-width="100">{{ entityConfig.name }}编号</th>
+              <th data-column-key="party-name" data-min-width="120">{{ entityConfig.name }}名称</th>
+              <th data-column-key="store" data-min-width="90">所属门店</th>
+              <th data-column-key="contact-person" data-min-width="90">联系人</th>
+              <th data-column-key="phone" data-min-width="110">联系电话</th>
+              <th class="address-column" data-column-key="address" data-min-width="120">联系地址</th>
+              <th class="number-column" data-column-key="primary-money" data-min-width="110">{{ entityConfig.primaryMoneyLabel }}</th>
+              <th class="number-column" data-column-key="secondary-money" data-min-width="110">{{ entityConfig.secondaryMoneyLabel }}</th>
+              <th data-column-key="status" data-min-width="80">状态</th>
+              <th data-column-key="created-at" data-min-width="110">创建时间</th>
+              <th class="operation-column" data-column-key="actions" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -568,6 +588,7 @@
 
     <CustomModal
       v-model:visible="modal.visible"
+      :z-index="2147483647"
       :type="modal.type"
       :title="modal.title"
       :message="modal.message"
