@@ -88,6 +88,21 @@ test('pending cards keep their existing front and back actions', async () => {
   assert.ok(!text(byClass(tree, 'back')[0]).includes('完成时间'))
 })
 
+test('only completed cards show a stamp beside each front and back title, including continuation cards', async () => {
+  const goods = Array.from({ length: 5 }, () => ({ ...order.order_goods[0] }))
+  for (const statusType of ['pending', 'completed']) {
+    const tree = await render(statusType, { goods })
+    const cards = byClass(tree, 'order-card')
+    assert.equal(cards.length, 3)
+    for (const card of cards) {
+      const [title] = byClass(card, 'order-title')
+      const stamps = byClass(title, 'completed-stamp')
+      assert.equal(stamps.length, statusType === 'completed' ? 1 : 0)
+      if (stamps.length) assert.equal(text(stamps[0]), '已完成')
+    }
+  }
+})
+
 test('completed card actions and private details still respect permissions', async () => {
   const tree = await render('completed', { permissions: ['touch.order.read'] })
   assert.deepEqual(buttons(byClass(tree, 'front')[0]), ['详情页面'])
@@ -115,4 +130,5 @@ test('mobile completed orders keep all goods together on a single minimal card',
   const tree = await render('completed', { goods, width: 390 })
   assert.equal(byClass(tree, 'front').length, 1)
   assert.equal(byClass(byClass(tree, 'front')[0], 'product-row').length, 10)
+  assert.equal(byClass(byClass(tree, 'front')[0], 'completed-stamp').length, 1)
 })
