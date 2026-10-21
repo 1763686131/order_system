@@ -20,7 +20,7 @@
       >
         <div class="nomi-admin-title-wrap">
           <div class="nomi-admin-avatar" aria-hidden="true">
-            <NomiAvatar :thinking="sending || orderDraftBusy" />
+            <GuGuAvatar :thinking="sending || orderDraftBusy" />
           </div>
           <div>
             <h2 id="nomi-admin-title">固固助手（GuGu）</h2>
@@ -163,7 +163,7 @@
 
         <template v-else>
           <div v-if="!messages.length && !orderDraftOpen && !failedQuestion" class="nomi-admin-empty">
-            <div class="nomi-welcome-avatar"><NomiAvatar /></div>
+            <div class="nomi-welcome-avatar"><GuGuAvatar /></div>
             <strong>你好，我是固固助手（GuGu）</strong>
             <p>今天有什么想聊的？</p>
           </div>
@@ -271,8 +271,8 @@ import { FilePlus2, History, KeyRound, LoaderCircle, MessageSquareText, Send, Se
 import DOMPurify from 'dompurify'
 import { marked } from 'marked'
 import request from '@/api/request'
-import NomiAvatar from '@/components/common/NomiAvatar.vue'
-import GuGuOrderDraft from '@/components/admin/GuGuOrderDraft.vue'
+import GuGuAvatar from './GuGuAvatar.vue'
+import GuGuOrderDraft from './GuGuOrderDraft.vue'
 import { useUserStore } from '@/stores/user'
 import { ADMIN_ROUTE_BRANCH_PERMISSIONS } from '@/utils/adminAccess'
 import { ADMIN_SALES_ORDER_PERMISSIONS } from '@/utils/accessControl'

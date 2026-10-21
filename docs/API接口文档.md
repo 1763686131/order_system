@@ -5727,7 +5727,7 @@ CREATE TABLE logistics_copy_settings (
 
 模块前缀：`/api/ai`、`/api/settings/ai`。
 
-后台 `Admin.vue` 顶栏的机器人按钮打开 `NomiAdminChat.vue`；系统设置中的“固固助手 AI 配置”管理服务商配置，英文名为 `GuGu`，直达地址为 `/admin/settings?section=nomi`。触屏端 `NomiFloatingAI.vue` 继续使用原有筛选等辅助功能。
+后台 `Admin.vue` 与触屏 `MainView.vue` 均引用 `src/components/common/GuGuAssistant.vue`，分别使用 `mode="admin"` 与 `mode="touch"`。后台顶栏的机器人按钮打开公共组件内的 `GuGuChat.vue`；系统设置中的“固固助手 AI 配置”管理服务商配置，英文名为 `GuGu`，直达地址为 `/admin/settings?section=nomi`。触屏端由 `GuGuTouchTools.vue` 提供原有筛选等辅助功能，不调用后台聊天接口。
 
 ### 20.1 权限与使用流程
 

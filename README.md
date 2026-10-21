@@ -13,7 +13,7 @@
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
 | 权限/API 文档版本 | `5.18` |
-| 文档更新 | `2026-10-17` |
+| 文档更新 | `2026-10-21` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -236,7 +236,7 @@ order_system/
 │  │  ├─ orderDraft.js               # 销售订单草稿
 │  │  ├─ documentDraft.js            # 销售退货、采购申请、采购入库和采购退货的独立会话草稿
 │  │  ├─ stockDraft.js               # 入库单会话内存草稿
-│  │  └─ nomi.js                     # 辅助工具状态
+│  │  └─ nomi.js                     # 固固触屏工具、日期筛选和提示状态（保留历史 store 名称）
 │  ├─ components/
 │  │  ├─ CustomModal.vue             # 自定义通用弹窗组件（符合设计规范）
 │  │  ├─ common/
@@ -244,8 +244,12 @@ order_system/
 │  │  │  ├─ ConfirmModal.vue         # 通用确认弹窗
 │  │  │  ├─ ShippedOrderActionModal.vue # 物流发货-回单上传窗口
 │  │  │  ├─ ToggleSwitch.vue         # 通用滑块开关
-│  │  │  ├─ NomiAvatar.vue           # 固固助手方形机器人头像、触角、耳朵和眨眼动画
-│  │  │  └─ NomiFloatingAI.vue       # 触屏端固固助手筛选等辅助工具
+│  │  │  ├─ GuGuAssistant.vue        # 固固公共入口，mode 区分后台与触屏功能
+│  │  │  ├─ GuGuAvatar.vue           # 两端共用的绿色机器人头像、触角、耳朵和眨眼动画
+│  │  │  ├─ GuGuLauncher.vue         # 两端共用入口按钮，仅尺寸与浮动交互不同
+│  │  │  ├─ GuGuChat.vue             # 后台聊天、服务器历史、拖动缩放与订单整理入口
+│  │  │  ├─ GuGuOrderDraft.vue       # 订单整理消息、字段确认和新增订单摘要
+│  │  │  └─ GuGuTouchTools.vue       # 触屏悬浮、日期筛选、原材料录入入口和退出登录
 │  │  ├─ admin/
 │  │  │  ├─ BusinessDocumentForm.vue # 销售、销售退货、采购申请、采购入库和采购退货共用录入界面
 │  │  │  ├─ MaterialOutboundAuditModal.vue # 原材料出库后台新增、修改与批量明细
@@ -253,8 +257,6 @@ order_system/
 │  │  │  ├─ DirectoryPanel.vue       # 后台通讯录搜索、部门折叠和员工状态
 │  │  │  ├─ MessageInbox.vue         # 留言会话与审核通知双模式面板
 │  │  │  ├─ ChatWindow.vue           # 可拖动的一对一留言和附件窗口
-│  │  │  ├─ NomiAdminChat.vue        # 后台固固助手聊天、服务器历史和订单整理
-│  │  │  ├─ GuGuOrderDraft.vue       # 订单整理消息、字段确认和新增订单摘要
 │  │  │  ├─ LogisticsCopySettingsDialog.vue # 物流复制模板、变量、绑定和预览设置
 │  │  │  ├─ ProductFormModal.vue     # 成品/原材料共用档案弹窗
 │  │  │  ├─ InventoryMovementModal.vue # 原材料库存流水详情弹窗
@@ -277,9 +279,9 @@ order_system/
 │  │  └─ front/
 │  │     └─ UploadMaterialModal.vue  # 前台原材料录入弹窗
 │  ├─ views/
-│  │  ├─ Admin.vue                   # 后台布局、菜单、router-view 页面容器和公共弹窗
+│  │  ├─ Admin.vue                   # 后台布局、菜单、页面容器；以 admin 模式接入固固公共组件
 │  │  ├─ LoginView.vue               # 登录与首次部署超级管理员初始化
-│  │  ├─ MainView.vue                # 前台业务容器
+│  │  ├─ MainView.vue                # 触屏业务容器；以 touch 模式接入固固公共组件
 │  │  ├─ front/                      # 前台触屏页面
 │  │  │  ├─ OrderList.vue            # 前台订单列表
 │  │  │  ├─ ShippedOrderList.vue     # 前台已出库订单列表
@@ -332,6 +334,8 @@ order_system/
 │  ├─ App.vue                        # 应用根组件
 │  ├─ main.js                        # 前端入口，全局注册 v-resizable-columns 并引入样式
 │  └─ assets/styles/                 # 本地全局样式
+│     ├─ main.css                    # 全局样式入口，不再导入机器人样式
+│     ├─ original-search.css         # 旧版搜索样式，与固固组件样式分离
 │     ├─ resizable-columns.css       # 表格列宽调整手柄、拖动状态和打印隐藏样式
 │     └─ ...                         # 其它全局与业务样式
 ├─ data/
@@ -1027,7 +1031,47 @@ order-system-print-client-config
 
 ### 入口与聊天
 
-后台 `Admin.vue` 顶栏显示固固助手（GuGu）机器人按钮，点击打开 `NomiAdminChat.vue` 对话框。头像为绿色方形机器人头，带触角、耳朵、白色眼睛和眨眼动画。触屏端继续使用 `NomiFloatingAI.vue` 的原有筛选等辅助功能。
+后台和触屏端统一引用 `src/components/common/GuGuAssistant.vue`，分别传入 `mode="admin"` 和 `mode="touch"`。两端共用 `GuGuAvatar.vue` 与 `GuGuLauncher.vue`，视觉以后台端为准：绿色方形机器人头，带触角、耳朵、白色眼睛和眨眼动画；触屏入口仅放大尺寸并支持拖动，不再保留另一套圆形外壳、脸部结构或红色激活皮肤。
+
+后台顶栏点击机器人打开 `GuGuChat.vue`；触屏端由 `GuGuTouchTools.vue` 提供日期筛选、原材料录入入口、退出登录和提示气泡，不调用后台聊天接口。原材料录入入口只在原材料页签且具有 `touch.material.create` 权限时显示，日期筛选只在物流订单和原材料页签显示。
+
+### 组件接入与维护
+
+所有固固 Vue 组件均位于 `src/components/common/`。页面只引用公共入口，不再自行绘制头像或编写机器人的按钮样式：
+
+```vue
+<!-- Admin.vue 顶栏；回调负责页面导航及与其他面板互斥 -->
+<GuGuAssistant
+  v-model="nomiChatOpen"
+  mode="admin"
+  :open-order="openGuGuOrderDraft"
+  @open="openNomiChat"
+  @open-settings="openNomiSettings"
+/>
+
+<!-- MainView.vue；事件仍交给触屏页面处理 -->
+<GuGuAssistant
+  mode="touch"
+  @create-material="handleCreateMaterial"
+  @date-filter="handleDateFilter"
+/>
+```
+
+| 维护内容 | 文件 / 接口 |
+| --- | --- |
+| 公共入口与模式分发 | `GuGuAssistant.vue`；后台用 `v-model` 控制打开状态，`open` 事件供页面关闭其他面板 |
+| 头像外观、触角、耳朵与眨眼 | `GuGuAvatar.vue`，两端只维护这一份 |
+| 入口按钮、悬浮尺寸与焦点样式 | `GuGuLauncher.vue` |
+| 后台聊天窗口、消息、历史、输入框、拖动与缩放 | `GuGuChat.vue` |
+| 订单确认消息与摘要样式 | `GuGuOrderDraft.vue`；问答逻辑继续放在 `src/composables/useGuGuOrderConversation.js` |
+| 触屏菜单、提示与筛选框、拖动与边缘定位 | `GuGuTouchTools.vue` |
+| 触屏页签、筛选状态与提示计时 | `src/stores/nomi.js`，保留历史名称以兼容现有调用 |
+
+机器人样式随对应组件的 `<style scoped>` 维护，不在 `Admin.vue`、`MainView.vue` 或全局 CSS 中覆写。旧 `original-nomi.css` 已移除，其中与机器人无关的搜索样式原样保留到 `original-search.css`。后台聊天历史、窗口位置、订单草稿的已有存储键以及后端 API 均不变。
+
+相关回归测试可执行 `node --test src/components/common/GuGuAssistant.test.js src/stores/nomi.test.js`，发布前仍需执行 `npm run build`。
+
+### 聊天与订单整理
 
 未配置 API 时，对话区域中央显示配置提示；具有系统设置权限的账号可以点击“去设置 API”，进入 `/admin/settings?section=nomi`。没有该权限时提示联系管理员。配置成功后显示正常聊天界面，不再显示配置引导；标题和输入区不显示固定服务商品牌副标题、“密钥已配置”或“管理 API”栏。
 
@@ -1146,6 +1190,7 @@ AI 只能调整尚未提交的订单草稿，不能更改门店、仓库、客�
 - 页面级组件放在 `src/views/`，可复用弹窗放在 `src/components/`。
 - 客户、供应商等结构相近的基础资料列表优先复用 `src/components/admin/PartyList.vue`，通过实体类型配置差异，避免复制整套页面。
 - 组件样式优先使用 `<style scoped>`，公共样式放在 `src/assets/styles/`。
+- 固固助手统一通过 `src/components/common/GuGuAssistant.vue` 接入，按 `mode` 区分后台和触屏功能；头像、按钮及各功能样式在固固组件内维护，不复制到页面或增加全局机器人样式。
 - API 请求统一使用 `src/api/request.js`，接口地址保持 `/api` 相对路径。
 - 登录和身份统一依赖服务端 Session Cookie，禁止重新增加 `Username`、`Role` 等客户端身份请求头。
 - 页面权限、角色并集和数据范围统一使用 `src/utils/accessControl.js`；后台菜单与路由权限映射统一使用 `src/utils/adminAccess.js`。

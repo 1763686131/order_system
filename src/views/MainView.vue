@@ -90,9 +90,9 @@
     <ShippedOrderActionModal ref="shippedActionModal" />
     <UploadMaterialModal ref="uploadMaterialModal" />
 
-    <!-- 小圆智能助手 -->
-    <NomiFloatingAI
-      :user-role="userStore.role"
+    <!-- 固固助手：触屏工具模式 -->
+    <GuGuAssistant
+      mode="touch"
       @create-material="handleCreateMaterial"
       @date-filter="handleDateFilter"
     />
@@ -111,7 +111,7 @@ import MaterialDisplay from '@/views/front/MaterialDisplay.vue'
 import ConfirmModal from '@/components/common/ConfirmModal.vue'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import UploadMaterialModal from '@/components/front/UploadMaterialModal.vue'
-import NomiFloatingAI from '@/components/common/NomiFloatingAI.vue'
+import GuGuAssistant from '@/components/common/GuGuAssistant.vue'
 
 const orderStore = useOrderStore()
 const userStore = useUserStore()
@@ -271,18 +271,18 @@ const handleViewReceipt = (orderId) => {
   window.triggerShippedActionModal(orderId, 'view_receipt')
 }
 
-// 获取当前 Tab 名称（供小圆组件使用）
+// 获取当前 Tab 名称（供固固助手使用）
 const getCurrentTabName = () => {
   const tabNames = ['pending', 'completed', 'shipped', 'materials']
   return tabNames[nomiStore.currentTab] || 'pending'
 }
 
-// 小圆组件：创建原材料
+// 固固助手：创建原材料
 const handleCreateMaterial = () => {
   uploadMaterialModal.value?.open()
 }
 
-// 小圆组件：日期筛选
+// 固固助手：日期筛选
 const handleDateFilter = ({ type, startDate, endDate }) => {
   if (type === 'shipped') {
     if (startDate && endDate) {

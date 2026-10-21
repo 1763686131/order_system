@@ -4,7 +4,7 @@ import { ref, computed } from 'vue'
 export const useNomiStore = defineStore('nomi', () => {
   // AI 语音短语列表
   const aiPhrases = [
-    "主人，我叫小圆，是你的智能小助手~",
+    "主人，我叫固固，是你的智能小助手~",
     "主人，今天的订单都处理完了吗？",
     "今天又有什么新订单呀？",
     "需要我帮你查库存吗？",

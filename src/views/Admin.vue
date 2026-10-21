@@ -114,17 +114,13 @@
           </TransitionGroup>
 
           <div class="header-icons">
-            <button
-              class="icon-btn nomi-header-button"
-              type="button"
-              title="打开固固助手（GuGu）"
-              aria-label="打开固固助手（GuGu）"
-              aria-haspopup="dialog"
-              :aria-expanded="nomiChatOpen"
-              @click="openNomiChat"
-            >
-              <NomiAvatar />
-            </button>
+            <GuGuAssistant
+              v-model="nomiChatOpen"
+              mode="admin"
+              :open-order="openGuGuOrderDraft"
+              @open="openNomiChat"
+              @open-settings="openNomiSettings"
+            />
             <button v-if="!isMobileViewport" class="icon-btn" title="系统公告">
               <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
                 <path d="M12 2L2 7l10 5 10-5-10-5z"/>
@@ -367,11 +363,6 @@
       @message-sent="messageInboxRef?.refresh()"
       @open-contact="openChat"
     />
-    <NomiAdminChat
-      v-model="nomiChatOpen"
-      :open-order="openGuGuOrderDraft"
-      @open-settings="openNomiSettings"
-    />
   </div>
 </template>
 
@@ -398,8 +389,7 @@ import {
 import ChatWindow from '@/components/admin/ChatWindow.vue'
 import DirectoryPanel from '@/components/admin/DirectoryPanel.vue'
 import MessageInbox from '@/components/admin/MessageInbox.vue'
-import NomiAdminChat from '@/components/admin/NomiAdminChat.vue'
-import NomiAvatar from '@/components/common/NomiAvatar.vue'
+import GuGuAssistant from '@/components/common/GuGuAssistant.vue'
 import ShippedOrderActionModal from '@/components/common/ShippedOrderActionModal.vue'
 import StockInOrderModal from '@/components/common/StockInOrderModal.vue'
 import LogisticsCopySettingsDialog from '@/components/admin/LogisticsCopySettingsDialog.vue'
@@ -1686,18 +1676,6 @@ const logout = async () => {
   background: var(--accent-soft);
   border-color: var(--accent-border);
   color: var(--accent-dark);
-}
-
-.icon-btn.nomi-header-button {
-  padding: 0;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-}
-
-.icon-btn.nomi-header-button:hover,
-.icon-btn.nomi-header-button[aria-expanded="true"] {
-  box-shadow: 0 0 0 2px #a9e5d2;
 }
 
 .icon-btn:focus-visible {
