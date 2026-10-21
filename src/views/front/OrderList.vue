@@ -1,14 +1,14 @@
 <template>
   <div v-for="order in processedOrders" :key="order.id + '-' + order.cardIndex">
-    <!-- 未完成订单卡片 (Tab 0) -->
-    <div v-if="statusType === 'pending'" class="flip-container">
+    <!-- 未完成和已完成订单共用正反面卡片布局 -->
+    <div v-if="statusType === 'pending' || statusType === 'completed'" class="flip-container">
       <div class="flipper" :class="{ 'no-flip': !order.isFirstCard }">
         <!-- 正面 -->
         <div class="order-card front" :style="{ backgroundColor: order.storeColor, color: order.storeTextColor }">
           <div class="order-title">{{ order.order_client || '未命名归属' }}订单</div>
           <div class="order-header">
             <span><strong>{{ order.typeName }}</strong> 产品列表 {{ order.isFirstCard ? '' : '(续集)' }}</span>
-            <span>{{ order.isFirstCard ? (order.date || '未知时间') : '' }}</span>
+            <span>{{ order.isFirstCard ? (statusType === 'completed' ? order.shortDate : (order.date || '未知时间')) : '' }}</span>
           </div>
 
           <div class="product-list" :class="order.compactClass">
@@ -46,14 +46,37 @@
             </div>
           </div>
 
-          <div v-if="order.isFirstCard" class="actions">
+          <div v-if="order.isFirstCard" :class="statusType === 'completed' ? 'actions-back' : 'actions'">
             <button
-              v-if="userStore.hasPerm('touch.order.complete')"
+              v-if="statusType === 'pending' && userStore.hasPerm('touch.order.complete')"
               class="btn btn-primary"
               @click="$emit('complete', order.id)"
             >
               确定完成
             </button>
+            <template v-if="statusType === 'completed'">
+              <button
+                v-if="userStore.hasPerm('touch.order.reopen')"
+                class="btn btn-default"
+                @click="$emit('uncomplete', order.id)"
+              >
+                撤销已完成
+              </button>
+              <button
+                v-if="userStore.hasPerm('touch.order.delete')"
+                class="btn btn-danger"
+                @click="$emit('delete', order.id)"
+              >
+                删除
+              </button>
+              <button
+                v-if="userStore.hasPerm('touch.order.copy')"
+                class="btn btn-success"
+                @click="$emit('copy', order.id)"
+              >
+                复制
+              </button>
+            </template>
             <button
               v-if="userStore.hasPerm('touch.order.read')"
               class="btn btn-default"
@@ -98,6 +121,9 @@
               <span class="info-label">备注：</span>
               <span class="text-red text-bold">{{ order.remark }}</span>
             </div>
+            <div v-if="statusType === 'completed'" class="info-row">
+              <span class="info-label">完成时间：</span>{{ order.completed_date || '未知' }}
+            </div>
           </div>
 
           <div class="actions-back">
@@ -109,12 +135,28 @@
               ⇦返回
             </button>
             <button
-              v-if="userStore.hasPerm('touch.order.complete')"
+              v-if="statusType === 'pending' && userStore.hasPerm('touch.order.complete')"
               class="btn btn-primary"
               @click="$emit('complete', order.id)"
             >
               确定完成
             </button>
+            <template v-if="statusType === 'completed'">
+              <button
+                v-if="userStore.hasPerm('touch.order.reopen')"
+                class="btn btn-default"
+                @click="$emit('uncomplete', order.id)"
+              >
+                撤销已完成
+              </button>
+              <button
+                v-if="userStore.hasPerm('touch.order.delete')"
+                class="btn btn-danger"
+                @click="$emit('delete', order.id)"
+              >
+                删除
+              </button>
+            </template>
             <button
               v-if="userStore.hasPerm('touch.order.copy')"
               class="btn btn-success"
@@ -124,80 +166,6 @@
             </button>
           </div>
         </div>
-      </div>
-    </div>
-
-    <!-- 已完成订单卡片 (Tab 1) -->
-    <div v-else-if="statusType === 'completed'" class="completed-card" :style="{ backgroundColor: order.storeColor, color: order.storeTextColor, padding: '20px 24px', fontSize: '15px' }">
-      <div class="order-title" style="font-size: 28px; margin-bottom: 8px;">{{ order.order_client || '未命名归属' }}订单</div>
-      <div class="order-header" style="font-size: 15px; padding-bottom: 8px; margin-bottom: 12px;">
-        <span><strong>{{ order.typeName }}</strong> 发货核对明细 {{ order.isFirstCard ? '' : '(续)' }}</span>
-        <span>{{ order.isFirstCard ? order.shortDate : '' }}</span>
-      </div>
-
-      <div class="product-list" :class="order.compactClass" style="position:relative;">
-        <template v-if="order.isFirstCard">
-          <div class="info-row" style="display: flex; justify-content: space-between;">
-            <span>收货姓名：{{ order.receiver_name || '未填' }}</span>
-            <span>电话：{{ isEmployee ? '***' : (order.receiver_phone || '未填') }}</span>
-          </div>
-          <div class="info-row">收货地址：{{ order.receiver_address || '未填' }}</div>
-          <div class="info-row info-label" style="margin-top: 6px;">货物信息：</div>
-        </template>
-
-        <div v-for="(line, idx) in order.chunkLines" :key="idx" class="goods-detail">
-          <div class="info-row text-red text-bold" v-html="line"></div>
-          <div v-if="order.chunkGoodsRows[idx].remark" class="product-remark">
-            <span class="product-remark-label">商品备注</span>
-            <span class="product-remark-text">{{ order.chunkGoodsRows[idx].remark }}</span>
-          </div>
-        </div>
-
-        <div v-if="order.indicatorHtml && !order.isMobile" class="card-part-indicator" style="font-size:70px;">{{ order.partLetter }}</div>
-
-        <template v-if="order.isFirstCard">
-          <div style="margin-top: auto; padding-top: 12px; display: flex; flex-direction: column; gap: 4px; flex-shrink: 0;">
-            <div style="display: flex; gap: 24px;">
-              <div class="info-row"><span class="info-label">包装：</span>{{ order.goods_packaging || '无' }}</div>
-              <div class="info-row"><span class="info-label">数量：</span><span class="text-red text-bold">{{ order.goods_weight || '无' }}</span></div>
-            </div>
-            <div style="display: flex; gap: 24px;">
-              <div class="info-row"><span class="info-label">件数：</span>{{ order.goods_quantity || '无' }}</div>
-              <div class="info-row"><span class="info-label">物流：</span>{{ isEmployee ? '***' : (order.logistics_service || '无') }}</div>
-            </div>
-            <div v-if="order.remark" class="info-row">
-              <span class="info-label">备注信息：</span>
-              <span class="text-red text-bold">{{ order.remark }}</span>
-            </div>
-            <div class="info-row" style="color: #888; border-top: 1px dashed #f0f0f0; padding-top: 8px; margin-top: 4px;">
-              <span class="info-label" style="color: #333;">完成时间：</span>{{ order.completed_date || '未知' }}
-            </div>
-          </div>
-        </template>
-      </div>
-
-      <div v-if="order.isFirstCard" class="actions-back" style="margin-top: 12px; padding-top: 12px;">
-        <button
-          v-if="userStore.hasPerm('touch.order.reopen')"
-          class="btn btn-default"
-          @click="$emit('uncomplete', order.id)"
-        >
-          撤销已完成
-        </button>
-        <button
-          v-if="userStore.hasPerm('touch.order.delete')"
-          class="btn btn-danger"
-          @click="$emit('delete', order.id)"
-        >
-          删除
-        </button>
-        <button
-          v-if="userStore.hasPerm('touch.order.copy')"
-          class="btn btn-success"
-          @click="$emit('copy', order.id)"
-        >
-          复制
-        </button>
       </div>
     </div>
   </div>
@@ -261,7 +229,7 @@ const getStoreClass = (order) => {
 
 // 处理订单数据，拆分卡片
 const getGoodsRowLineCount = (item) => {
-  const hasBookmarkRow = item.remark || (props.statusType === 'pending' && item.packages > 0)
+  const hasBookmarkRow = item.remark || item.packages > 0
   return hasBookmarkRow ? 2 : 1
 }
 
@@ -276,7 +244,7 @@ const processedOrders = computed(() => {
       return
     }
 
-    // 保留结构化数据，供未完成订单正面使用两列对齐布局
+    // 保留结构化数据，供订单正面使用两列对齐布局
     const goodsRows = order.order_goods.map(item => ({
       goodsName: item.goods_name || '',
       spec: item.spec || '',
@@ -286,7 +254,7 @@ const processedOrders = computed(() => {
       remark: typeof item.remark === 'string' ? item.remark.trim() : ''
     })).filter(item => item.goodsName || item.spec || item.quantity !== '' || item.unit)
 
-    // 生成背面和已完成订单继续使用的商品 HTML
+    // 生成背面详情使用的商品 HTML
     const goodsLines = goodsRows.map(item => {
       const parts = []
 
@@ -351,25 +319,6 @@ const processedOrders = computed(() => {
       const storeTextColor = getStoreTextColor(order)
       const typeName = getStoreName(order) + '订单'
       const shortDate = order.completed_date ? order.completed_date.split(' ')[0] : '未知日期'
-      const chunkLines = chunkGoodsRows.map(item => {
-        const parts = []
-
-        if (item.goodsName) {
-          parts.push(`<span class="goods-name">${item.goodsName}</span>`)
-        }
-        if (item.spec) {
-          const specWithStyle = item.spec.replace(/([a-zA-Z0-9.]+)/g, '<span class="text-red-bold">$1</span>')
-          parts.push(`<span class="goods-spec">${specWithStyle}</span>`)
-        }
-        if (item.quantity !== '') {
-          parts.push(`<span class="text-red-bold">${item.quantity}</span>`)
-        }
-        if (item.unit) {
-          parts.push(`<span class="goods-unit">${item.unit}</span>`)
-        }
-
-        return parts.join(' ')
-      })
 
       // 使用新字段
       const receiverName = order.contact_person || '未填'
@@ -414,7 +363,6 @@ const processedOrders = computed(() => {
       result.push({
         ...order,
         cardIndex: chunkIndex,
-        chunkLines,
         chunkGoodsRows,
         allGoodsLines: goodsLines,
         allGoodsRows: goodsRows,
@@ -450,7 +398,7 @@ const processedOrders = computed(() => {
 
 // 切换卡片翻转
 const toggleCard = (event) => {
-  const card = event.target.closest('.flip-container') || event.target.closest('.completed-card')
+  const card = event.currentTarget.closest('.flip-container')
   if (!card) return
 
   const flipper = card.querySelector('.flipper')
@@ -564,8 +512,7 @@ const toggleCard = (event) => {
 
 @media (min-width: 769px) {
   .front .product-list,
-  .back .product-list,
-  .completed-card .product-list {
+  .back .product-list {
     overflow-x: hidden !important;
     overflow-y: auto !important;
   }

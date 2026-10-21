@@ -29,7 +29,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
 
 #tab-0, #tab-1 { flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; height: calc(100vh - 280px); align-items: stretch; padding-top: 15px; padding-bottom: 32px; gap: 64px; -ms-overflow-style: none; scrollbar-width: none; }
 #tab-0::-webkit-scrollbar, #tab-1::-webkit-scrollbar { display: none; }
-#tab-0 .flip-container, #tab-1 .completed-card { flex: 0 0 calc((100vw - 312px) / 4); min-width: 380px; max-width: none; height: 100%; }
+#tab-0 .flip-container, #tab-1 .flip-container { flex: 0 0 calc((100vw - 312px) / 4); min-width: 380px; max-width: none; height: 100%; }
 
 .flipper { height: 100%; transition: 0.6s; transform-style: preserve-3d; position: relative; display: grid; }
 .flipper.flipped { transform: rotateY(180deg); }
@@ -142,7 +142,7 @@ body { background-color: #EDF5FC; font-family: -apple-system, BlinkMacSystemFont
   .nav-item { font-size: 16px !important; padding: 12px 0 !important; flex: 1 1 45% !important; text-align: center !important; }
   
   #tab-0, #tab-1 { height: auto !important; flex-wrap: wrap !important; overflow: visible !important; padding-bottom: 0 !important; gap: 24px !important; }
-  #tab-0 .flip-container, #tab-1 .completed-card { flex: 1 1 100% !important; min-width: 100% !important; height: auto !important; }
+  #tab-0 .flip-container, #tab-1 .flip-container { flex: 1 1 100% !important; min-width: 100% !important; height: auto !important; }
 
   /* 完全拔除高度死锁，且决不触碰 overflow 破坏3D翻转！ */
   .flipper { height: auto !important; }
