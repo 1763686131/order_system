@@ -108,6 +108,7 @@ from routes.hr_reports import hr_reports_bp
 from routes.settings import settings_bp
 from routes.logistics_copy import logistics_copy_bp
 from routes.stock_inbounds import stock_inbounds_bp
+from routes.dashboard import dashboard_bp
 from routes.purchase_orders import purchase_orders_bp
 from routes.supplier_finance import supplier_finance_bp
 from routes.supplier_payments import supplier_payments_bp
@@ -144,6 +145,7 @@ app.register_blueprint(hr_reports_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(logistics_copy_bp)
 app.register_blueprint(stock_inbounds_bp)
+app.register_blueprint(dashboard_bp)
 app.register_blueprint(purchase_orders_bp)
 app.register_blueprint(supplier_finance_bp)
 app.register_blueprint(supplier_payments_bp)

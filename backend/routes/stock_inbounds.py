@@ -1402,7 +1402,11 @@ def reverse_audit_stock_inbound(inbound_id):
 
 @stock_inbounds_bp.route('/stock-balances', methods=['GET'])
 def list_stock_balances():
-    receipt_type = request.args.get('type')
+    return jsonify(read_stock_balances(request.args.get('type')))
+
+
+def read_stock_balances(receipt_type=None):
+    """Read the same inventory valuation used by stock pages and the dashboard."""
     with get_db() as conn:
         sql = '''
             WITH inbound_costs AS (
@@ -1450,7 +1454,7 @@ def list_stock_balances():
             params.append(_type(receipt_type))
         sql += ' GROUP BY product_type, product_id, warehouse_id, store_id ORDER BY product_id'
         rows = conn.execute(sql, params).fetchall()
-        return jsonify([
+        return [
             {
                 'productType': row['product_type'],
                 'productId': row['product_id'],
@@ -1462,7 +1466,7 @@ def list_stock_balances():
                 'updatedAt': row['updated_at'],
             }
             for row in rows
-        ])
+        ]
 
 
 @stock_inbounds_bp.route('/stock-movements', methods=['GET'])

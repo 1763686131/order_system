@@ -3972,6 +3972,59 @@ taxAmount = totalAmount - amount
 `averageUnitCost` 按同一物料、仓库、门店、货位和批次的有效入库流水进行加权计算，
 `inventoryAmount` 为当前库存余额乘以对应加权入库单价后的汇总金额（不含税）。没有单价的历史余额按 `0` 计价。
 
+### 11.10.1 后台首页库存概览
+
+- **URL**: `/api/admin/dashboard/inventory`
+- **Method**: `GET`
+- **权限**: 登录账号具有后台访问能力及 `admin.route.dashboard`，同时具有
+  `admin.route.inventory.products`（成品）或 `admin.route.inventory.materials`（原材料）；超级管理员直接通过。
+- **数据范围**: 服务端仅汇总有对应库存权限的物料类型，并同时按账号授权门店和仓库过滤。
+  只具备原材料权限时，不读取、返回成品商品档案数量。
+
+**响应结构**:
+
+```json
+{
+  "success": true,
+  "inventoryAmount": 0,
+  "productTypes": ["finished-product", "raw-material"],
+  "products": {
+    "total": 0,
+    "enabled": 0,
+    "disabled": 0,
+    "lowStock": 0
+  },
+  "updatedAt": "2026-10-21 12:00:00"
+}
+```
+
+示例中的 `0` 仅表示空数据；实际值从数据库查询，不是固定默认值。`inventoryAmount` 复用
+第 11.10 节的库存成本口径（不含税），只包括有权限类型的已入账库存，不按零售价估值。
+没有单价的历史库存仍按原库存接口的规则计价。成品档案同时按 `storeIds` 和
+`warehouseId` 筛选；`enabled`/`disabled` 按档案启用状态统计，`lowStock` 只统计启用且库存
+不大于零或低于配置最低库存的商品。受门店/仓库范围限制的账号使用其可见的已入账成品余额；
+全部门店和仓库账号兼容旧 `inventory` 数量。没有成品读取权限时 `products` 为 `null`。
+接口仅返回汇总，不返回订单、员工资料或库存明细。未登录返回 `401`，权限不足返回 `403`。
+
+#### 首页其他数据与展示口径
+
+`src/views/admin/Dashboard.vue` 同时复用以下已存在接口，不新增权限代码：
+
+| 区域 | 数据来源 | 口径 |
+|------|----------|------|
+| 今日订单与日/周/月趋势 | `GET /api/orders`，要求 `touch.order.read` | 只统计服务端返回的授权门店订单；优先按 `order_date/orderDate`，否则按 `date` |
+| 今日订单额和趋势订单金额 | 同上 | 优先使用 `should_receive`，保留显式零金额；兼容旧单的折后金额、价税合计或未税小计及其它费用，缺失财务信息的历史单不贡献金额 |
+| 本月完成订单额 | 同上 | `completed`/`shipped` 且 `completed_date`（缺失时 `shipped_date`）在本月截至今日的订单应收金额，不等同现金收入；后续发货会更新完成日期，沿用现有订单状态口径 |
+| 订单待办 | 同上 | 未完成为 `pending`，待补充物流为 `completed`；待过账销售单为 `shipped`、`audit_state=0`，且同时具备订单编号及商品明细的销售单 |
+| 商品概览与库存成本 | `GET /api/admin/dashboard/inventory` | 使用本节的服务端授权汇总 |
+| 员工概览 | `GET /api/admin/employees`，要求 `admin.employee.read` | 员工档案总数；`active`/`probation` 在职人数；`accountStatus=active` 启用账号人数 |
+
+“日”展示今日 24 小时，“周”展示周一至今日，“月”展示月初至今日，缺少订单的日期补零；
+页面日期按浏览器本地时间计算，金额不代表已审核收入或现金收款。每次进入首页或手动刷新
+会重新读取各区域接口，部分请求失败不影响其他区域；失败/无权限显示不可用，不用虚假零值替代。
+旧占位中的“待跟进客户订单”“检验制单项目”和“广告管理”没有对应业务接口/页面，已移除；
+快捷入口按现有业务路由与账号权限展示。
+
 ### 11.11 获取库存流水
 
 - **URL**: `/api/stock-movements`
