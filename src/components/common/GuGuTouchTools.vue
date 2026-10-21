@@ -7,6 +7,7 @@
   >
     <GuGuLauncher
       floating
+      :angry="isAngry"
       :expanded="nomiStore.isMenuActive"
       aria-controls="gugu-touch-menu"
       @pointerdown="handleDragStart"
@@ -76,6 +77,13 @@
         </div>
       </form>
     </div>
+
+    <CustomModal
+      v-model:visible="showLogoutModal"
+      title="退出登录"
+      message="确定要退出登录吗？"
+      @confirm="confirmLogout"
+    />
   </div>
 </template>
 
@@ -84,6 +92,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { CalendarRange, LogOut, PackagePlus } from '@lucide/vue'
 import { useNomiStore } from '@/stores/nomi'
 import { useUserStore } from '@/stores/user'
+import CustomModal from '@/components/CustomModal.vue'
 import GuGuLauncher from './GuGuLauncher.vue'
 
 const emit = defineEmits(['create-material', 'date-filter'])
@@ -99,9 +108,12 @@ const menuPosition = ref({ left: '12px', top: '12px' })
 const bubblePosition = ref({ left: '12px', top: '12px' })
 const filterStartDate = ref('')
 const filterEndDate = ref('')
+const isAngry = ref(false)
+const showLogoutModal = ref(false)
 let dragState
 let hasDragged = false
 let speechInterval
+let angryTimeout
 
 const clamp = (value, minimum, maximum) => Math.max(minimum, Math.min(value, maximum))
 
@@ -187,7 +199,13 @@ const handleDragEnd = event => {
   if (handle.hasPointerCapture(pointerId)) handle.releasePointerCapture(pointerId)
 }
 const handleClick = event => {
-  if (!hasDragged || event.detail === 0) nomiStore.toggleMenu()
+  if (hasDragged && event.detail !== 0) return
+  isAngry.value = true
+  clearTimeout(angryTimeout)
+  angryTimeout = setTimeout(() => {
+    isAngry.value = false
+  }, 900)
+  nomiStore.toggleMenu()
 }
 const closeTools = () => {
   nomiStore.closeMenu()
@@ -228,12 +246,13 @@ const openDateFilter = () => {
   nomiStore.closeMenu()
   nomiStore.showDateFilterBubble(nomiStore.currentTab === 2 ? 'shipped' : 'material')
 }
-const handleLogout = async () => {
+const handleLogout = () => {
   nomiStore.closeMenu()
-  if (confirm('确定要退出登录吗？')) {
-    await userStore.logout()
-    window.location.reload()
-  }
+  showLogoutModal.value = true
+}
+const confirmLogout = async () => {
+  await userStore.logout()
+  window.location.reload()
 }
 const formatDate = date => {
   const year = date.getFullYear()
@@ -293,6 +312,7 @@ onUnmounted(() => {
   window.removeEventListener('resize', handleViewportResize)
   window.removeEventListener('blur', handleDragEnd)
   clearInterval(speechInterval)
+  clearTimeout(angryTimeout)
   closeTools()
 })
 </script>

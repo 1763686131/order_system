@@ -8,7 +8,7 @@
     :aria-expanded="expanded"
     :aria-haspopup="floating ? 'menu' : 'dialog'"
   >
-    <GuGuAvatar />
+    <GuGuAvatar :angry="floating && angry" />
   </button>
 </template>
 
@@ -17,7 +17,8 @@ import GuGuAvatar from './GuGuAvatar.vue'
 
 defineProps({
   floating: Boolean,
-  expanded: Boolean
+  expanded: Boolean,
+  angry: Boolean
 })
 </script>
 

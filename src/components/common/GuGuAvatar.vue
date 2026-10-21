@@ -1,11 +1,13 @@
 <template>
-  <span class="nomi-avatar" :class="{ 'is-thinking': thinking }" aria-hidden="true">
+  <span class="nomi-avatar" :class="{ 'is-thinking': thinking, 'is-angry': angry }" aria-hidden="true">
     <span class="nomi-avatar-antenna">
       <span class="nomi-avatar-antenna-dot"></span>
     </span>
     <span class="nomi-avatar-ear is-left"></span>
     <span class="nomi-avatar-ear is-right"></span>
     <span class="nomi-avatar-face">
+      <span class="nomi-avatar-eyebrow is-left"></span>
+      <span class="nomi-avatar-eyebrow is-right"></span>
       <span class="nomi-avatar-eye is-left"></span>
       <span class="nomi-avatar-eye is-right"></span>
       <span class="nomi-avatar-mouth"></span>
@@ -14,7 +16,10 @@
 </template>
 
 <script setup>
-defineProps({ thinking: Boolean })
+defineProps({
+  thinking: Boolean,
+  angry: Boolean
+})
 </script>
 
 <style scoped>
@@ -100,6 +105,39 @@ defineProps({ thinking: Boolean })
   animation: nomi-avatar-blink 4s infinite;
 }
 
+.nomi-avatar-eyebrow {
+  position: absolute;
+  z-index: 1;
+  top: 17%;
+  width: 28%;
+  height: 5%;
+  border-radius: 2px;
+  background: #ffffff;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.nomi-avatar-eyebrow.is-left {
+  left: 18%;
+  transform: rotate(14deg);
+  transform-origin: right center;
+}
+
+.nomi-avatar-eyebrow.is-right {
+  right: 18%;
+  transform: rotate(-14deg);
+  transform-origin: left center;
+}
+
+.nomi-avatar.is-angry .nomi-avatar-eyebrow {
+  opacity: 1;
+}
+
+.nomi-avatar.is-angry .nomi-avatar-eye {
+  top: 31%;
+  height: 23%;
+}
+
 .nomi-avatar-eye.is-left { left: 22%; }
 .nomi-avatar-eye.is-right { right: 22%; }
 
@@ -113,6 +151,13 @@ defineProps({ thinking: Boolean })
   border-radius: 0 0 3px 3px;
 }
 
+.nomi-avatar.is-angry .nomi-avatar-mouth {
+  top: 70%;
+  border-top: 2px solid #ffffff;
+  border-bottom: 0;
+  border-radius: 3px 3px 0 0;
+}
+
 .nomi-avatar.is-thinking .nomi-avatar-eye {
   animation: nomi-avatar-blink 1.2s infinite;
 }
@@ -124,8 +169,10 @@ defineProps({ thinking: Boolean })
 
 @media (prefers-reduced-motion: reduce) {
   .nomi-avatar-eye,
-  .nomi-avatar.is-thinking .nomi-avatar-eye {
+  .nomi-avatar.is-thinking .nomi-avatar-eye,
+  .nomi-avatar-eyebrow {
     animation: none;
+    transition: none;
   }
 }
 </style>
