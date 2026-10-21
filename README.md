@@ -1069,7 +1069,7 @@ order-system-print-client-config
 
 机器人样式随对应组件的 `<style scoped>` 维护，不在 `Admin.vue`、`MainView.vue` 或全局 CSS 中覆写。旧 `original-nomi.css` 已移除，其中与机器人无关的搜索样式原样保留到 `original-search.css`。后台聊天历史、窗口位置、订单草稿的已有存储键以及后端 API 均不变。
 
-相关回归测试可执行 `node --test src/components/common/GuGuAssistant.test.js src/stores/nomi.test.js`，发布前仍需执行 `npm run build`。
+触屏助手状态回归测试可执行 `node --test src/stores/nomi.test.js`，发布前仍需执行 `npm run build`。
 
 ### 聊天与订单整理
 
