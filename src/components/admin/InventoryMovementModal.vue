@@ -23,10 +23,28 @@
           <div v-else-if="error" class="movement-state error" role="alert">{{ error }}</div>
           <div v-else-if="records.length === 0" class="movement-state">暂无已审核的入库或出库记录</div>
           <div v-else class="movement-table-wrap">
-            <table class="movement-table">
+            <table
+              class="movement-table"
+              v-resizable-columns="{ storageKey: 'inventory-movement-detail-v2', resizeMode: 'fit', minWidth: 64 }"
+            >
+              <colgroup>
+                <col style="width: 22%" />
+                <col style="width: 18%" />
+                <col style="width: 9%" />
+                <col style="width: 18%" />
+                <col style="width: 13%" />
+                <col style="width: 10%" />
+                <col style="width: 10%" />
+              </colgroup>
               <thead>
                 <tr>
-                  <th>单据编号</th><th>日期</th><th>类型</th><th class="movement-number">数量</th><th>仓库</th><th>备注</th>
+                  <th data-column-key="documentNo" data-min-width="120">单据编号</th>
+                  <th data-column-key="date" data-min-width="100">日期</th>
+                  <th data-column-key="type" data-min-width="64">类型</th>
+                  <th class="movement-number" data-column-key="quantity" data-min-width="90">数量</th>
+                  <th data-column-key="warehouse" data-min-width="90">仓库</th>
+                  <th data-column-key="purpose" data-min-width="90">用途</th>
+                  <th class="movement-produced-quantity" data-column-key="producedQuantity" data-min-width="80">成品数量</th>
                 </tr>
               </thead>
               <tbody>
@@ -38,11 +56,12 @@
                     {{ movement.movementType === 'in' ? '+' : '-' }}{{ formatNumber(movement.quantity) }}<small>{{ item.unit }}</small>
                   </td>
                   <td>{{ movement.warehouseName || '-' }}</td>
-                  <td class="movement-note">
-                    <span>{{ String(movement.remark || '').trim() || '-' }}</span>
-                    <span v-if="movement.movementType === 'out' && movement.producedQuantity !== null && movement.producedQuantity !== undefined" class="movement-produced-quantity">
-                      {{ formatNumber(movement.producedQuantity) }}公斤
-                    </span>
+                  <td class="movement-note">{{ String(movement.remark || '').trim() || '-' }}</td>
+                  <td class="movement-produced-quantity">
+                    <template v-if="hasProducedQuantity(movement)">
+                      {{ formatNumber(movement.producedQuantity) }}<small>公斤</small>
+                    </template>
+                    <template v-else-if="movement.producedQuantity === null || movement.producedQuantity === undefined">-</template>
                   </td>
                 </tr>
               </tbody>
@@ -67,6 +86,11 @@ defineEmits(['close'])
 const formatNumber = value => Number(value || 0).toLocaleString('zh-CN', { maximumFractionDigits: 3 })
 const formatMovementDate = value => String(value || '').slice(0, 16) || '-'
 const movementKey = movement => [movement.movementType, movement.sourceDocumentId, movement.documentNo, movement.warehouseId, movement.storeId].join('-')
+const hasProducedQuantity = movement => (
+  movement.movementType === 'out'
+  && Number.isFinite(Number(movement.producedQuantity))
+  && Number(movement.producedQuantity) > 0
+)
 </script>
 
 <style scoped>
@@ -87,7 +111,7 @@ const movementKey = movement => [movement.movementType, movement.sourceDocumentI
 }
 .inventory-detail-modal {
   display: flex;
-  width: min(820px, calc(100vw - 48px));
+  width: min(1180px, calc(100vw - 48px));
   max-height: min(680px, calc(100vh - 48px));
   flex-direction: column;
   overflow: hidden;
@@ -122,27 +146,22 @@ const movementKey = movement => [movement.movementType, movement.sourceDocumentI
 .movement-state { display: flex; min-height: 180px; align-items: center; justify-content: center; margin-top: 13px; color: #475569; background: #fff; border: 1px solid var(--border); border-radius: 7px; font-size: 15px; font-weight: 600; padding: 16px; }
 .movement-state.error { color: #b42318; }
 .movement-table-wrap { margin-top: 13px; overflow-x: auto; background: #fff; border: 1px solid var(--border); border-radius: 7px; }
-.movement-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: fixed; font-size: 15px; }
+.movement-table { width: 100%; min-width: 835px; border-collapse: collapse; table-layout: fixed; font-size: 15px; }
 .movement-table th { height: 46px; padding: 0 12px; color: #334155; background: #f8fafc; border-bottom: 1px solid var(--border); font-size: 14px; font-weight: 700; text-align: left; white-space: nowrap; }
 .movement-table td { height: 56px; padding: 8px 12px; overflow: hidden; color: #1f2937; border-bottom: 1px solid #edf1f5; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .movement-table tbody tr:last-child td { border-bottom: 0; }
-.movement-table th:nth-child(1) { width: 170px; }
-.movement-table th:nth-child(2) { width: 140px; }
-.movement-table th:nth-child(3) { width: 88px; }
-.movement-table th:nth-child(4) { width: 135px; }
-.movement-table th:nth-child(5) { width: 135px; }
 .movement-document { color: var(--accent-dark) !important; font-weight: 800; }
 .movement-number { font-variant-numeric: tabular-nums; text-align: right !important; }
 .movement-table td.movement-number { font-size: 16px; font-weight: 800; }
-.movement-number small { margin-left: 3px; font-size: 13px; }
+.movement-number small, .movement-produced-quantity small { margin-left: 3px; font-size: 13px; }
 .movement-type { display: inline-flex; min-height: 29px; align-items: center; padding: 0 10px; border-radius: 5px; font-size: 14px; font-weight: 700; }
 .movement-in { color: #13734f !important; }
 .movement-type.movement-in { background: #eaf8f1; }
 .movement-out { color: #dc2626 !important; }
 .movement-type.movement-out { background: #fef2f2; }
 .movement-note { color: #334155 !important; line-height: 1.55; overflow-wrap: anywhere; white-space: normal !important; }
-.movement-note span { display: block; }
-.movement-produced-quantity { margin-top: 3px; color: #475569; font-size: 14px; font-weight: 700; }
+.movement-produced-quantity { color: #334155 !important; font-variant-numeric: tabular-nums; text-align: left; }
+.movement-table td.movement-produced-quantity { font-size: 16px; font-weight: 800; }
 @media (max-width: 640px) {
   .inventory-detail-layer { padding: 0; }
   .inventory-detail-modal { width: 100vw; max-height: 100vh; height: 100vh; border-radius: 0; }

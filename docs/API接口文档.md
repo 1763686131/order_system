@@ -4107,7 +4107,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 | `totalAmount` | number/null | 入库金额合计；出库流水返回 `null` |
 | `batchNos` | string | 本单涉及的库存批次，多个批次使用逗号连接 |
 
-原材料库存明细页面将出库备注显示为 `remark · producedQuantity`。由于 FIFO 出库可能从多个批次扣减，
+原材料库存明细页面将 `remark` 单独显示在“用途”列，并将大于 0 的 `producedQuantity` 显示在“成品数量”列；为 0 时不显示数量。由于 FIFO 出库可能从多个批次扣减，
 本接口会把同一出库单产生的多条批次流水聚合为一条，避免页面重复显示同一单据。
 
 `productId` 缺失时返回 HTTP `400`；`type` 无效时同样返回 HTTP `400`。
