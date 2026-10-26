@@ -5,9 +5,9 @@
       <div class="flipper" :class="{ 'no-flip': !order.isFirstCard }">
         <!-- 正面 -->
         <div class="order-card front" :style="{ backgroundColor: order.storeColor, color: order.storeTextColor }">
-          <div class="order-title" :class="{ 'order-title-completed': statusType === 'completed' }">
+          <span v-if="statusType === 'completed'" class="completed-stamp">已完成</span>
+          <div class="order-title">
             <span class="order-title-text">{{ order.order_client || '未命名归属' }}订单</span>
-            <span v-if="statusType === 'completed'" class="completed-stamp">已完成</span>
           </div>
           <div class="order-header">
             <span><strong>{{ order.typeName }}</strong> 产品列表 {{ order.isFirstCard ? '' : '(续集)' }}</span>
@@ -92,9 +92,9 @@
 
         <!-- 背面 -->
         <div v-if="order.isFirstCard" class="order-card back" :style="{ backgroundColor: order.storeColor, color: order.storeTextColor }">
-          <div class="order-title" :class="{ 'order-title-completed': statusType === 'completed' }">
+          <span v-if="statusType === 'completed'" class="completed-stamp">已完成</span>
+          <div class="order-title">
             <span class="order-title-text">{{ order.order_client || '未命名归属' }}订单</span>
-            <span v-if="statusType === 'completed'" class="completed-stamp">已完成</span>
           </div>
           <div class="order-header">
             <span><strong>{{ order.typeName }}</strong> 产品列表</span>
@@ -415,24 +415,19 @@ const toggleCard = (event) => {
 </script>
 
 <style scoped>
-.order-title-completed {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.order-title-completed .order-title-text {
-  flex: 1;
-  min-width: 0;
-  overflow-wrap: anywhere;
+.order-card {
+  position: relative;
 }
 
 .completed-stamp {
-  position: relative;
+  position: absolute;
+  top: 28px;
+  right: 32px;
+  z-index: 3;
   display: inline-flex;
-  flex: 0 0 100px;
   align-items: center;
   justify-content: center;
+  width: 100px;
   height: 46px;
   border: 3px solid currentColor;
   border-radius: 4px;

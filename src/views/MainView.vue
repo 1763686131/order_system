@@ -10,6 +10,13 @@
         @click="switchTab(index)"
       >
         {{ tab.label }}
+        <span
+          v-if="nomiStore.currentTab === index && isIdleReturnTab"
+          class="nav-item-countdown"
+          :class="{ 'is-urgent': idleReturnSeconds <= 10 }"
+          role="timer"
+          :aria-label="`${idleReturnSeconds}秒后返回未完成订单`"
+        >{{ idleReturnSeconds }}s</span>
       </div>
     </div>
 
@@ -100,7 +107,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useOrderStore } from '@/stores/order'
 import { useUserStore } from '@/stores/user'
 import { useNomiStore } from '@/stores/nomi'
@@ -131,6 +138,53 @@ const tabs = [
   { label: '物流订单' },
   { label: '原材料出库' }
 ]
+
+const IDLE_RETURN_DELAY_MS = 60 * 1000
+const idleReturnSeconds = ref(IDLE_RETURN_DELAY_MS / 1000)
+const isIdleReturnTab = computed(() => nomiStore.currentTab === 1 || nomiStore.currentTab === 2)
+const idleActivityEvents = ['click', 'pointerdown', 'pointermove', 'keydown', 'input', 'wheel', 'scroll', 'touchstart', 'touchmove']
+let idleReturnDeadline = 0
+let idleReturnInterval = null
+
+const resetIdleReturnCountdown = () => {
+  if (!isIdleReturnTab.value) return
+
+  idleReturnDeadline = Date.now() + IDLE_RETURN_DELAY_MS
+  idleReturnSeconds.value = IDLE_RETURN_DELAY_MS / 1000
+}
+
+const stopIdleReturnCountdown = () => {
+  if (idleReturnInterval !== null) {
+    clearInterval(idleReturnInterval)
+    idleReturnInterval = null
+  }
+  idleReturnDeadline = 0
+  idleReturnSeconds.value = IDLE_RETURN_DELAY_MS / 1000
+}
+
+const updateIdleReturnCountdown = () => {
+  if (!isIdleReturnTab.value || !idleReturnDeadline) return
+
+  idleReturnSeconds.value = Math.max(0, Math.ceil((idleReturnDeadline - Date.now()) / 1000))
+  if (idleReturnSeconds.value === 0) {
+    navBarHidden.value = false
+    switchTab(0)
+  }
+}
+
+const syncIdleReturnCountdown = () => {
+  stopIdleReturnCountdown()
+  if (!isIdleReturnTab.value) return
+
+  resetIdleReturnCountdown()
+  idleReturnInterval = setInterval(updateIdleReturnCountdown, 250)
+}
+
+const handleIdleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    updateIdleReturnCountdown()
+  }
+}
 
 const formatMaterialStock = value => Number(value || 0).toLocaleString('zh-CN', {
   maximumFractionDigits: 3
@@ -371,6 +425,13 @@ const connectOrderEvents = () => {
 }
 
 onMounted(() => {
+  watch(() => nomiStore.currentTab, syncIdleReturnCountdown, { immediate: true, flush: 'sync' })
+  // 捕获阶段监听，弹窗内的操作和不冒泡的滚动也会重置倒计时。
+  idleActivityEvents.forEach(event => {
+    document.addEventListener(event, resetIdleReturnCountdown, { capture: true, passive: true })
+  })
+  document.addEventListener('visibilitychange', handleIdleVisibilityChange)
+
   // 先建立实时连接，再加载初始数据
   connectOrderEvents()
   fetchOrders()
@@ -496,6 +557,12 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  stopIdleReturnCountdown()
+  idleActivityEvents.forEach(event => {
+    document.removeEventListener(event, resetIdleReturnCountdown, true)
+  })
+  document.removeEventListener('visibilitychange', handleIdleVisibilityChange)
+
   orderEventSource?.close()
   if (fallbackPollingInterval) {
     clearInterval(fallbackPollingInterval)
@@ -554,6 +621,35 @@ body {
   background: #EDF5FC;
   margin: -160px -60px -80px -60px;
   padding: 160px 60px 80px 60px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.nav-item-countdown {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  box-sizing: border-box;
+  min-width: 42px;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: rgba(24, 144, 255, 0.08);
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+}
+
+.nav-item-countdown.is-urgent {
+  color: #d4380d;
+  background: #fff2e8;
 }
 
 .tab-pane {
