@@ -86,7 +86,7 @@
       <ul class="info-list">
         <li>门店ID用于关联订单、商品等数据，创建后不可修改</li>
         <li>停用门店后，相关数据仍然保留，但无法创建新的关联数据</li>
-        <li>删除门店前请确保没有关联的订单数据，否则可能导致数据异常</li>
+        <li>关联了订单、客户、仓库等业务数据的门店不能删除，不再使用时请停用</li>
       </ul>
     </div>
 
@@ -157,13 +157,13 @@ const handleToggleStatus = async (store) => {
     }
   } catch (error) {
     console.error('更新门店状态失败:', error)
-    alert(`${action}失败`)
+    alert(`${action}失败：${error.response?.data?.error || error.message || '未知错误'}`)
   }
 }
 
 // 删除门店
 const handleDelete = async (store) => {
-  if (!confirm(`确定要删除门店"${store.name}"吗？\n\n删除前请确保该门店没有关联的订单数据！`)) {
+  if (!confirm(`确定要删除门店"${store.name}"吗？\n\n关联了订单、客户、仓库等业务数据的门店不能删除，不再使用时请停用。`)) {
     return
   }
 
@@ -179,7 +179,7 @@ const handleDelete = async (store) => {
     }
   } catch (error) {
     console.error('删除门店失败:', error)
-    alert('删除失败：' + (error.message || '未知错误'))
+    alert('删除失败：' + (error.response?.data?.error || error.message || '未知错误'))
   }
 }
 
@@ -199,7 +199,7 @@ const handleSave = async (storeData) => {
     }
   } catch (error) {
     console.error('保存门店失败:', error)
-    alert('保存失败：' + (error.message || '未知错误'))
+    alert('保存失败：' + (error.response?.data?.error || error.message || '未知错误'))
   }
 }
 

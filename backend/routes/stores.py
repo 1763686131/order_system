@@ -4,6 +4,7 @@
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+import sqlite3
 from utils.db_helper import read_stores, write_stores
 from utils.db import get_db
 
@@ -88,32 +89,38 @@ def update_store(store_id):
 @stores_bp.route('/<int:store_id>', methods=['DELETE'])
 def delete_store(store_id):
     """删除门店"""
-    stores = read_stores()
+    try:
+        with get_db() as conn:
+            if conn.execute('SELECT id FROM stores WHERE id = ?', (store_id,)).fetchone() is None:
+                return jsonify({'error': '门店不存在'}), 404
 
-    store_index = next((i for i, s in enumerate(stores) if s['id'] == store_id), None)
-    if store_index is None:
-        return jsonify({'error': '门店不存在'}), 404
+            order_count = conn.execute(
+                'SELECT COUNT(*) AS count FROM orders WHERE store_id = ?',
+                (store_id,)
+            ).fetchone()['count']
+            customer_count = conn.execute(
+                'SELECT COUNT(*) AS count FROM customers WHERE store_id = ?',
+                (store_id,)
+            ).fetchone()['count']
+            warehouse_count = conn.execute(
+                'SELECT COUNT(*) AS count FROM warehouses WHERE store_id = ?',
+                (store_id,)
+            ).fetchone()['count']
 
-    with get_db() as conn:
-        cursor = conn.cursor()
-        order_count = cursor.execute(
-            'SELECT COUNT(*) AS count FROM orders WHERE store_id = ?',
-            (store_id,)
-        ).fetchone()['count']
-        customer_count = cursor.execute(
-            'SELECT COUNT(*) AS count FROM customers WHERE store_id = ?',
-            (store_id,)
-        ).fetchone()['count']
+            if order_count or customer_count or warehouse_count:
+                return jsonify({
+                    'error': (
+                        f'门店已关联{order_count}条订单、{customer_count}个客户、'
+                        f'{warehouse_count}个仓库，不能删除。如不再使用，请停用该门店。'
+                    )
+                }), 409
 
-    if order_count or customer_count:
+            conn.execute('DELETE FROM stores WHERE id = ?', (store_id,))
+    except sqlite3.IntegrityError as error:
+        if 'FOREIGN KEY constraint failed' not in str(error):
+            raise
         return jsonify({
-            'error': (
-                f'门店已关联{order_count}条订单、{customer_count}个客户，'
-                '不能删除'
-            )
+            'error': '门店仍有关联的业务数据，不能删除。如不再使用，请停用该门店。'
         }), 409
-
-    stores.pop(store_index)
-    write_stores(stores)
 
     return jsonify({'success': True, 'message': '删除成功'})

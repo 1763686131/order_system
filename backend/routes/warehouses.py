@@ -3,6 +3,7 @@
 """
 from flask import Blueprint, request, jsonify
 from datetime import datetime
+import sqlite3
 from utils.db_helper import read_warehouses, write_warehouses
 
 warehouses_bp = Blueprint('warehouses', __name__, url_prefix='/api/warehouses')
@@ -123,7 +124,12 @@ def delete_warehouse(warehouse_id):
             return jsonify({'error': '仓库不存在'}), 404
 
         warehouses.pop(warehouse_index)
-        write_warehouses(warehouses)
+        try:
+            write_warehouses(warehouses)
+        except sqlite3.IntegrityError as error:
+            if 'FOREIGN KEY constraint failed' not in str(error):
+                raise
+            return jsonify({'error': '仓库仍有关联的订单、商品等业务数据，不能删除。'}), 409
 
         return jsonify({'message': '删除成功'})
     except Exception as e:

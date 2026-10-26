@@ -779,6 +779,15 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 - **URL**: `/api/stores/<int:store_id>`
 - **Method**: `DELETE`
 
+门店不存在时返回 `404`。门店关联了订单、客户或仓库时返回 `409`，响应中包含关联数量；其他业务数据的外键引用也会阻止删除并返回 `409`。不再使用的门店可通过更新接口将 `status` 设置为 `inactive`，保留历史数据。
+
+**冲突响应示例（409）**:
+```json
+{
+  "error": "门店已关联8条订单、9个客户、1个仓库，不能删除。如不再使用，请停用该门店。"
+}
+```
+
 **响应示例**:
 ```json
 {
@@ -876,6 +885,8 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 - **URL**: `/api/warehouses/<int:warehouse_id>`
 - **Method**: `DELETE`
 
+仓库被订单、商品等业务数据通过外键引用时，返回 `409` 和 `error` 提示，保留仓库及其关联数据。
+
 **响应示例**:
 ```json
 {
@@ -886,6 +897,8 @@ GIF，最大 5MB。文件保存到 `uploads/employee-avatars/YYYY-MM/`，数据�
 ### 3.6 新增仓库分类
 - **URL**: `/api/warehouses/<int:warehouse_id>/categories`
 - **Method**: `POST`
+
+新增成功返回 `201`。分类保存在仓库的 `categories` 中，新增、修改和删除分类会更新现有仓库记录，保留仓库 ID、创建时间及已有订单、商品的引用。
 
 **请求参数**:
 ```json

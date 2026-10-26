@@ -133,11 +133,10 @@ def read_warehouses():
 
 
 def write_warehouses(warehouses_list):
-    """批量写入仓库"""
+    """新增或更新仓库，兼容旧的列表式调用。"""
     import json
     with get_db() as conn:
         cursor = conn.cursor()
-        cursor.execute('DELETE FROM warehouses')
 
         for warehouse in warehouses_list:
             # 处理 storeId -> store_id 转换
@@ -154,6 +153,17 @@ def write_warehouses(warehouses_list):
                 status, remark, categories, created_at, updated_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                code = excluded.code,
+                name = excluded.name,
+                store_id = excluded.store_id,
+                address = excluded.address,
+                manager = excluded.manager,
+                phone = excluded.phone,
+                status = excluded.status,
+                remark = excluded.remark,
+                categories = excluded.categories,
+                updated_at = excluded.updated_at
             ''', (
                 warehouse.get('id'),
                 warehouse.get('code', ''),
@@ -168,6 +178,16 @@ def write_warehouses(warehouses_list):
                 warehouse.get('created_at', ''),
                 warehouse.get('updated_at', '')
             ))
+
+        warehouse_ids = [warehouse.get('id') for warehouse in warehouses_list]
+        if warehouse_ids:
+            placeholders = ', '.join('?' for _ in warehouse_ids)
+            cursor.execute(
+                f'DELETE FROM warehouses WHERE id NOT IN ({placeholders})',
+                warehouse_ids
+            )
+        else:
+            cursor.execute('DELETE FROM warehouses')
 
 
 # ==========================================
