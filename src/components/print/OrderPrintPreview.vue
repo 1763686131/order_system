@@ -32,7 +32,7 @@
               class="preview-footer-button preview-icon-button preview-template-reload"
               title="刷新打印模板"
               aria-label="刷新打印模板"
-              :disabled="templatesLoading || printing"
+              :disabled="templatesLoading || printing || sharingImage"
               @click="emit('reload-templates')"
             >
               <RefreshCw :size="15" aria-hidden="true" />
@@ -54,7 +54,7 @@
               :aria-expanded="templateDropdownOpen"
               :aria-controls="`${templatePickerId}-list`"
               :title="template?.name || '打印模板'"
-              :disabled="templatesLoading || printing || !templateOptions.length"
+              :disabled="templatesLoading || printing || sharingImage || !templateOptions.length"
               @click="toggleTemplateDropdown"
             >
               <span>{{ template?.name || (templatesLoading ? '正在加载模板...' : '暂无可用模板') }}</span>
@@ -143,7 +143,7 @@
             class="preview-frame"
             title="订单打印预览"
             :srcdoc="previewHtml"
-            @load="fitPreviewToWidth"
+            @load="handlePreviewLoad"
           ></iframe>
           <div v-else class="preview-state">
             {{ templateSelection ? '暂无可用的打印模板' : '暂无可预览内容' }}
@@ -152,8 +152,12 @@
       </div>
 
       <div class="order-print-preview-footer">
-        <span :class="{ 'preview-footer-error': printErrorMessage }">
-          {{ printErrorMessage || printDestinationHint }}
+        <span
+          role="status"
+          aria-live="polite"
+          :class="{ 'preview-footer-error': imageShareError || printErrorMessage }"
+        >
+          {{ imageShareError || printErrorMessage || imageShareMessage || printDestinationHint }}
         </span>
         <div class="preview-footer-actions">
           <button
@@ -161,7 +165,7 @@
             class="preview-footer-button preview-icon-button"
             title="打印设置"
             aria-label="打印设置"
-            :disabled="printing"
+            :disabled="printing || sharingImage"
             @click="settingsVisible = true"
           >
             <Settings :size="16" aria-hidden="true" />
@@ -172,10 +176,23 @@
             class="preview-footer-button preview-icon-button"
             title="重新检测打印服务"
             aria-label="重新检测打印服务"
-            :disabled="checkingPrintService || printing"
+            :disabled="checkingPrintService || printing || sharingImage"
             @click="recheckPrintService"
           >
             <RefreshCw :size="16" aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            class="preview-footer-button preview-share-button"
+            :title="imageShareTitle"
+            :disabled="!imageShareReady"
+            :aria-busy="preparingImage || sharingImage"
+            @click="handleShareImage"
+          >
+            <LoaderCircle v-if="preparingImage || sharingImage" :size="16" class="preview-share-spinner" aria-hidden="true" />
+            <Download v-else-if="imageShareAction === 'download'" :size="16" aria-hidden="true" />
+            <Share2 v-else :size="16" aria-hidden="true" />
+            {{ imageShareLabel }}
           </button>
           <button
             type="button"
@@ -209,12 +226,14 @@
 
 <script setup>
 import { computed, getCurrentInstance, nextTick, ref, watch } from 'vue'
-import { Check, ChevronDown, FileText, Printer, RefreshCw, Search, Settings, X } from '@lucide/vue'
+import { Check, ChevronDown, Download, FileText, LoaderCircle, Printer, RefreshCw, Search, Settings, Share2, X } from '@lucide/vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 import { openConfiguredPrintPreview } from '@/utils/lodopPrint'
 import { getPrintClientConfig } from '@/utils/printClientConfig'
 import { usePrintAvailability } from '@/composables/usePrintAvailability'
+import { usePrintImageShare } from '@/composables/usePrintImageShare'
+import { printImageFileName } from '@/utils/printImageShare'
 import PrintClientSettingsDialog from '@/components/print/PrintClientSettingsDialog.vue'
 
 const props = defineProps({
@@ -270,6 +289,39 @@ const {
 const renderedTemplateId = ref(null)
 const designerInstanceKey = ref(0)
 let renderRequestId = 0
+const {
+  preparing: preparingImage,
+  sharing: sharingImage,
+  ready: preparedImageReady,
+  action: imageShareAction,
+  label: imageShareLabel,
+  title: imageShareTitle,
+  error: imageShareError,
+  message: imageShareMessage,
+  prepare: prepareShareImage,
+  share: shareImage,
+  invalidate: invalidateShareImage
+} = usePrintImageShare({
+  fileName: computed(() => printImageFileName(
+    props.template?.name || props.title,
+    props.documentNumber || props.variables?.orderNumber || props.variables?.orderNo
+  ))
+})
+
+const imageShareReady = computed(() => (
+  props.visible && !props.templatesLoading && !props.templatesError &&
+  !loading.value && !errorMessage.value && !printing.value &&
+  !preparingImage.value && !sharingImage.value && Boolean(renderedHtml.value) &&
+  renderedTemplateId.value === getTemplateIdentity(props.template) &&
+  (preparedImageReady.value || Boolean(imageShareError.value))
+))
+
+const handleShareImage = () => {
+  if (!imageShareReady.value) return
+  printErrorMessage.value = ''
+  if (preparedImageReady.value) shareImage()
+  else prepareShareImage(previewFrameRef.value?.contentDocument?.getElementById('preview-paper-content'))
+}
 
 const filteredTemplates = computed(() => {
   const keyword = templateSearch.value.trim().toLocaleLowerCase()
@@ -299,7 +351,7 @@ const scrollActiveTemplateIntoView = () => {
 }
 
 const openTemplateDropdown = async () => {
-  if (props.templatesLoading || printing.value || !props.templateOptions.length) return
+  if (props.templatesLoading || printing.value || sharingImage.value || !props.templateOptions.length) return
   templateSearch.value = ''
   activeTemplateIndex.value = Math.max(0, props.templateOptions.findIndex(option => (
     String(option.id) === String(props.template?.id)
@@ -316,7 +368,7 @@ const toggleTemplateDropdown = () => {
 }
 
 const selectTemplateOption = (option) => {
-  if (!option || props.templatesLoading || printing.value) return
+  if (!option || props.templatesLoading || printing.value || sharingImage.value) return
   emit('select-template', option.id)
   closeTemplateDropdown(true)
 }
@@ -403,6 +455,7 @@ const printReady = computed(() => (
   !props.templatesError &&
   !loading.value &&
   !printing.value &&
+  !sharingImage.value &&
   !checkingPrintService.value &&
   printAvailable.value &&
   Boolean(renderedHtml.value) &&
@@ -493,14 +546,14 @@ const wrapPreviewHtml = (html) => `<!doctype html>
     <style>
       html, body { margin: 0; padding: 0; background: #eef1f5; }
       body { min-height: 100vh; display: flex; justify-content: safe center; padding: 24px; box-sizing: border-box; }
-      #preview-paper-content { width: max-content; flex: 0 0 auto; }
+      #preview-paper-content { width: max-content; flex: 0 0 auto; align-self: flex-start; }
       * { box-sizing: border-box; }
       @media (max-width: 780px) {
         body { padding: 12px; }
       }
     </style>
   </head>
-  <body><div id="preview-paper-content">${html}</div></body>
+  <body><div id="preview-paper-content" data-preview-request="${renderRequestId}">${html}</div></body>
 </html>`
 
 const fitPreviewToWidth = () => {
@@ -516,6 +569,13 @@ const fitPreviewToWidth = () => {
   const availableWidth = previewDocument.documentElement.clientWidth -
     parseFloat(bodyStyle.paddingLeft) - parseFloat(bodyStyle.paddingRight)
   content.style.zoom = String(Math.min(1, Math.max(1, availableWidth) / paperWidth))
+}
+
+const handlePreviewLoad = () => {
+  const content = previewFrameRef.value?.contentDocument?.getElementById('preview-paper-content')
+  if (!props.visible || loading.value || content?.dataset.previewRequest !== String(renderRequestId)) return
+  fitPreviewToWidth()
+  prepareShareImage(content)
 }
 
 watch(previewFrameRef, (frame, previousFrame, onCleanup) => {
@@ -848,6 +908,7 @@ const clonePreviewDesign = (
 }
 
 const loadPreview = async () => {
+  invalidateShareImage()
   const designer = designerRef.value
   const template = props.template
   const requestId = ++renderRequestId
@@ -908,6 +969,7 @@ const handleDesignerReady = async () => {
 }
 
 const resetPreview = () => {
+  invalidateShareImage()
   autoPrintConsumed.value = false
   loading.value = Boolean(props.template)
   errorMessage.value = ''
@@ -923,6 +985,7 @@ watch(
   () => props.visible,
   async (visible) => {
     if (!visible) {
+      invalidateShareImage()
       cancelPrintCheck()
       settingsVisible.value = false
       autoPrintConsumed.value = false
@@ -1383,9 +1446,16 @@ const handleClose = () => emit('close')
   border-top: 1px solid #d9e0e8;
 }
 
+.order-print-preview-footer > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .preview-footer-actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -1401,6 +1471,19 @@ const handleClose = () => emit('close')
   background: #fff;
   color: #475569;
   cursor: pointer;
+  white-space: nowrap;
+}
+
+.preview-share-button {
+  min-width: 100px;
+}
+
+.preview-share-spinner {
+  animation: preview-share-spin 1s linear infinite;
+}
+
+@keyframes preview-share-spin {
+  to { transform: rotate(360deg); }
 }
 
 .preview-footer-button svg {

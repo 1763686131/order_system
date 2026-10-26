@@ -906,10 +906,17 @@ GET 响应使用数据库下划线字段，`src/api/printTemplate.js` 会标准�
 | `PrintTemplateSelector.vue` | 按业务类型选择模板和打印方式 |
 | `PrintClientSettingsDialog.vue` | 设置浏览器/C-Lodop、端口和打印机 |
 | `OrderPrintPreview.vue` | 将模板和业务变量生成统一预览 HTML |
+| `usePrintImageShare.js` / `printImageShare.js` | 将当前预览转成 PNG，电脑复制、手机系统分享及下载备用入口 |
 | `lodopPrint.js` | 将预览 HTML 交给浏览器或 C-Lodop |
 | `printClientConfig.js` | 读取、校验和保存当前电脑的打印配置 |
 
 业务页面只负责把原始单据转换为统一打印变量。不要在每个页面重复实现模板读取、C-Lodop 检测或打印 HTML 生成。
+
+### 单据图片分享
+
+预览底部的“分享”将当前单据全部页面生成一张 PNG：电脑端复制到剪贴板，手机端调起系统分享面板，由用户选择接收应用。图片提前生成，切换模板、单据数据或关闭窗口后清空，不需要打印机，也不上传单据图片。
+
+HTTPS 且浏览器支持相应接口时可直接复制或分享；普通 HTTP 局域网页面、浏览器不支持或权限被拒绝时，提供“下载图片”备用入口。手机内置浏览器能否直接分享取决于其文件分享能力。详细行为、部署条件和验收项见 [打印机项目实现：分享单据图片](docs/打印机项目实现.md#125-分享单据图片)。
 
 ### 客户端本地配置
 
