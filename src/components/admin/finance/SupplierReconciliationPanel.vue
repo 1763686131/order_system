@@ -35,7 +35,7 @@
     </div>
     <div class="sf-table-scroll">
       <table
-        v-resizable-columns="{ storageKey: 'finance-reconciliation-list', resizeMode: 'fit', minWidth: 64 }"
+        v-table-layout="{ storageKey: 'finance-reconciliation-list', resizeMode: 'fit', minWidth: 64 }"
         class="sf-table reconciliation-table"
         style="min-width: 1030px"
       >
@@ -101,7 +101,7 @@
             </div>
             <div class="sf-table-scroll">
               <table
-                v-resizable-columns="{ storageKey: 'finance-reconciliation-snapshot', resizeMode: 'fit', minWidth: 64 }"
+                v-table-layout="{ storageKey: 'finance-reconciliation-snapshot', resizeMode: 'fit', minWidth: 64 }"
                 class="sf-table reconciliation-table"
                 style="min-width: 1120px"
               >

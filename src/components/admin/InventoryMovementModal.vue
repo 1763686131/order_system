@@ -25,7 +25,7 @@
           <div v-else class="movement-table-wrap">
             <table
               class="movement-table"
-              v-resizable-columns="{ storageKey: 'inventory-movement-detail-v2', resizeMode: 'fit', minWidth: 64 }"
+              v-table-layout="{ storageKey: 'inventory-movement-detail-v2', resizeMode: 'fit', minWidth: 64 }"
             >
               <colgroup>
                 <col style="width: 22%" />

@@ -1,6 +1,6 @@
 <template>
   <div class="sf-table-scroll">
-    <table v-resizable-columns="resizableColumns && invoice ? { storageKey: 'purchase-order-invoice-allocations', resizeMode: 'fit', minWidth: 80 } : false" class="sf-table sf-allocation-table">
+    <table v-table-layout="resizableColumns && invoice ? { storageKey: 'purchase-order-invoice-allocations', resizeMode: 'fit', minWidth: 80 } : false" class="sf-table sf-allocation-table">
       <colgroup v-if="resizableColumns && invoice">
         <col style="width: 210px">
         <col>

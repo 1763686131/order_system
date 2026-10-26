@@ -110,7 +110,7 @@
           <span>已审核单据<strong>{{ returnAuditedCount }}</strong></span>
         </div>
         <div class="table-scroll">
-          <table v-resizable-columns="{ storageKey: 'purchase-returns-list', resizeMode: 'fit' }" class="records-table return-records-table">
+          <table v-table-layout="{ storageKey: 'purchase-returns-list', resizeMode: 'fit' }" class="records-table return-records-table">
             <colgroup>
               <col style="width: 9%">
               <col style="width: 10%">
@@ -136,7 +136,7 @@
                 <th>确认退货金额</th>
                 <th>状态</th>
                 <th>制单 / 审核</th>
-                <th class="action-column" data-resizable="false">操作</th>
+                <th class="action-column" data-column-fixed="end" data-resizable="false">操作</th>
               </tr>
             </thead>
             <tbody v-if="loading">
@@ -407,7 +407,7 @@
       </header>
 
       <div class="table-scroll">
-        <table v-resizable-columns="{ storageKey: `purchase-${mode}-list`, resizeMode: 'fit' }" class="records-table">
+        <table v-table-layout="{ storageKey: `purchase-${mode}-list`, resizeMode: 'fit' }" class="records-table">
           <colgroup v-if="isInbound">
             <col style="width: 38px">
             <col style="width: 150px">
@@ -470,7 +470,7 @@
               <th data-column-key="status">{{ isInbound ? '入库状态' : '履约状态' }}</th>
               <th v-if="!isInbound" class="finance-column">开票状态</th>
               <th>备注</th>
-              <th class="action-column" data-resizable="false">操作</th>
+              <th class="action-column" data-column-fixed="end" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody v-if="loading">
@@ -804,7 +804,7 @@
                   <span>{{ isInbound ? `共 ${selectedRecord.itemCount} 项物料` : `共 ${selectedRecord.itemCount} 项 · ${selectedRecord.progressBasis === 'lines' ? '已完成 / 总行数' : '实收 / 采购'} ${receiptLabel(selectedRecord)}` }}</span>
                 </div>
                 <div class="detail-items-scroll">
-                  <table v-resizable-columns="{ storageKey: `purchase-${mode}-detail-items`, resizeMode: 'fit' }" class="detail-items-table" :class="{ 'inbound-items-table': isInbound }">
+                  <table v-table-layout="{ storageKey: `purchase-${mode}-detail-items`, resizeMode: 'fit' }" class="detail-items-table" :class="{ 'inbound-items-table': isInbound }">
                     <colgroup v-if="isInbound">
                       <col style="width: 115px">
                       <col style="width: 130px">
@@ -905,7 +905,7 @@
                   <span>共 {{ selectedRecord.batches.length }} 批</span>
                 </div>
                 <div class="detail-items-scroll">
-                  <table v-resizable-columns="{ storageKey: 'purchase-order-inbound-batches', resizeMode: 'fit' }" class="detail-items-table batch-items-table">
+                  <table v-table-layout="{ storageKey: 'purchase-order-inbound-batches', resizeMode: 'fit' }" class="detail-items-table batch-items-table">
                     <colgroup>
                       <col style="width: 10%">
                       <col style="width: 18%">
@@ -2586,59 +2586,59 @@ onBeforeUnmount(() => {
   background: #fbfcfd;
 }
 
-.records-table th:nth-child(1),
-.records-table td:nth-child(1) {
+.records-table th:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)),
+.records-table td:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)) {
   width: 42px;
   padding-left: 22px;
 }
 
-.records-table th:nth-child(2),
-.records-table td:nth-child(2) {
+.records-table th:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)),
+.records-table td:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)) {
   width: 145px;
 }
 
-.records-table th:nth-child(3),
-.records-table td:nth-child(3) {
+.records-table th:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)),
+.records-table td:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)) {
   width: 100px;
 }
 
-.records-table th:nth-child(4),
-.records-table td:nth-child(4) {
+.records-table th:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)),
+.records-table td:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)) {
   width: 150px;
 }
 
-.records-table th:nth-child(5),
-.records-table td:nth-child(5) {
+.records-table th:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)),
+.records-table td:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)) {
   width: 180px;
 }
 
-.records-table th:nth-child(6),
-.records-table td:nth-child(6) {
+.records-table th:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)),
+.records-table td:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)) {
   width: 132px;
 }
 
-.records-table th:nth-child(7),
-.records-table td:nth-child(7) {
+.records-table th:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)),
+.records-table td:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)) {
   width: 112px;
 }
 
-.records-table th:nth-child(8),
-.records-table td:nth-child(8) {
+.records-table th:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)),
+.records-table td:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)) {
   width: 105px;
 }
 
-.records-table th:nth-child(9),
-.records-table td:nth-child(9) {
+.records-table th:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)),
+.records-table td:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)) {
   width: 103px;
 }
 
-.records-table th:nth-child(10),
-.records-table td:nth-child(10) {
+.records-table th:is([data-layout-column-index="10"], :not([data-layout-column-index]):nth-child(10)),
+.records-table td:is([data-layout-column-index="10"], :not([data-layout-column-index]):nth-child(10)) {
   width: 155px;
 }
 
-.records-table th:nth-child(11),
-.records-table td:nth-child(11) {
+.records-table th:is([data-layout-column-index="11"], :not([data-layout-column-index]):nth-child(11)),
+.records-table td:is([data-layout-column-index="11"], :not([data-layout-column-index]):nth-child(11)) {
   width: 92px;
 }
 
@@ -3665,62 +3665,62 @@ onBeforeUnmount(() => {
   border-bottom: 0;
 }
 
-.records-table th:nth-child(1),
-.records-table td:nth-child(1) {
+.records-table th:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)),
+.records-table td:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)) {
   width: 50px;
   padding: 0 16px;
   text-align: center;
 }
 
-.records-table th:nth-child(2),
-.records-table td:nth-child(2) {
+.records-table th:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)),
+.records-table td:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)) {
   width: 140px;
 }
 
-.records-table th:nth-child(3),
-.records-table td:nth-child(3) {
+.records-table th:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)),
+.records-table td:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)) {
   width: 110px;
 }
 
-.records-table th:nth-child(4),
-.records-table td:nth-child(4) {
+.records-table th:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)),
+.records-table td:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)) {
   width: 150px;
 }
 
-.records-table th:nth-child(5),
-.records-table td:nth-child(5) {
+.records-table th:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)),
+.records-table td:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)) {
   width: 170px;
 }
 
-.records-table th:nth-child(6),
-.records-table td:nth-child(6) {
+.records-table th:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)),
+.records-table td:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)) {
   width: 110px;
   text-align: right;
 }
 
-.records-table th:nth-child(7),
-.records-table td:nth-child(7) {
+.records-table th:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)),
+.records-table td:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)) {
   width: 120px;
 }
 
-.records-table th:nth-child(8),
-.records-table td:nth-child(8) {
+.records-table th:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)),
+.records-table td:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)) {
   width: 110px;
   text-align: right;
 }
 
-.records-table th:nth-child(9),
-.records-table td:nth-child(9) {
+.records-table th:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)),
+.records-table td:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)) {
   width: 110px;
 }
 
-.records-table th:nth-child(10),
-.records-table td:nth-child(10) {
+.records-table th:is([data-layout-column-index="10"], :not([data-layout-column-index]):nth-child(10)),
+.records-table td:is([data-layout-column-index="10"], :not([data-layout-column-index]):nth-child(10)) {
   width: 140px;
 }
 
-.records-table th:nth-child(11),
-.records-table td:nth-child(11) {
+.records-table th:is([data-layout-column-index="11"], :not([data-layout-column-index]):nth-child(11)),
+.records-table td:is([data-layout-column-index="11"], :not([data-layout-column-index]):nth-child(11)) {
   width: 100px;
   text-align: center !important;
 }
@@ -4001,8 +4001,8 @@ onBeforeUnmount(() => {
   text-align: left !important;
 }
 
-.is-inbound .records-table th:nth-child(12),
-.is-inbound .records-table td:nth-child(12) {
+.is-inbound .records-table th:is([data-layout-column-index="12"], :not([data-layout-column-index]):nth-child(12)),
+.is-inbound .records-table td:is([data-layout-column-index="12"], :not([data-layout-column-index]):nth-child(12)) {
   width: auto !important;
   text-align: left !important;
 }
@@ -4316,7 +4316,7 @@ onBeforeUnmount(() => {
 }
 
 .detail-items-table tfoot .detail-total-label,
-.detail-items-table tfoot td:nth-child(3) {
+.detail-items-table tfoot td:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)) {
   text-align: left;
 }
 
@@ -4349,44 +4349,44 @@ onBeforeUnmount(() => {
   text-align: right;
 }
 
-.batch-items-table th:nth-child(1) {
+.batch-items-table th:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)) {
   width: 10%;
 }
 
-.batch-items-table th:nth-child(2) {
+.batch-items-table th:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)) {
   width: 18%;
 }
 
-.batch-items-table th:nth-child(3) {
+.batch-items-table th:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)) {
   width: 17%;
 }
 
-.batch-items-table th:nth-child(4) {
+.batch-items-table th:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)) {
   width: 7%;
 }
 
-.batch-items-table th:nth-child(5) {
+.batch-items-table th:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)) {
   width: 8%;
 }
 
-.batch-items-table th:nth-child(6) {
+.batch-items-table th:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)) {
   width: 11%;
 }
 
-.batch-items-table th:nth-child(7) {
+.batch-items-table th:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)) {
   width: 12%;
 }
 
-.batch-items-table th:nth-child(8) {
+.batch-items-table th:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)) {
   width: 8%;
 }
 
-.batch-items-table th:nth-child(9) {
+.batch-items-table th:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)) {
   width: 9%;
 }
 
-.detail-items-table th:nth-last-child(-n + 3),
-.detail-items-table td:nth-last-child(-n + 3) {
+.detail-items-table th:is([data-layout-column-end-index="1"], [data-layout-column-end-index="2"], [data-layout-column-end-index="3"], :not([data-layout-column-index]):nth-last-child(-n + 3)),
+.detail-items-table td:is([data-layout-column-end-index="1"], [data-layout-column-end-index="2"], [data-layout-column-end-index="3"], :not([data-layout-column-index]):nth-last-child(-n + 3)) {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -4771,60 +4771,60 @@ onBeforeUnmount(() => {
   padding-left: 8px;
 }
 
-.is-return .return-records-table th:nth-child(1),
-.is-return .return-records-table td:nth-child(1) {
+.is-return .return-records-table th:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)),
+.is-return .return-records-table td:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)) {
   width: 9%;
 }
 
-.is-return .return-records-table th:nth-child(2),
-.is-return .return-records-table td:nth-child(2) {
+.is-return .return-records-table th:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)),
+.is-return .return-records-table td:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)) {
   width: 10%;
 }
 
-.is-return .return-records-table th:nth-child(3),
-.is-return .return-records-table td:nth-child(3) {
+.is-return .return-records-table th:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)),
+.is-return .return-records-table td:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)) {
   width: 14%;
 }
 
-.is-return .return-records-table th:nth-child(4),
-.is-return .return-records-table td:nth-child(4) {
+.is-return .return-records-table th:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)),
+.is-return .return-records-table td:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)) {
   width: 8%;
 }
 
-.is-return .return-records-table th:nth-child(5),
-.is-return .return-records-table td:nth-child(5) {
+.is-return .return-records-table th:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)),
+.is-return .return-records-table td:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)) {
   width: 5%;
   text-align: center;
 }
 
-.is-return .return-records-table th:nth-child(6),
-.is-return .return-records-table td:nth-child(6) {
+.is-return .return-records-table th:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)),
+.is-return .return-records-table td:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)) {
   width: 9%;
   display: table-cell;
   text-align: center;
   white-space: nowrap;
 }
 
-.is-return .return-records-table th:nth-child(7),
-.is-return .return-records-table td:nth-child(7),
-.is-return .return-records-table th:nth-child(8),
-.is-return .return-records-table td:nth-child(8) {
+.is-return .return-records-table th:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)),
+.is-return .return-records-table td:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)),
+.is-return .return-records-table th:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)),
+.is-return .return-records-table td:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)) {
   width: 10%;
   text-align: right;
 }
 
-.is-return .return-records-table th:nth-child(9),
-.is-return .return-records-table td:nth-child(9) {
+.is-return .return-records-table th:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)),
+.is-return .return-records-table td:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)) {
   width: 7%;
 }
 
-.is-return .return-records-table th:nth-child(10),
-.is-return .return-records-table td:nth-child(10) {
+.is-return .return-records-table th:is([data-layout-column-index="10"], :not([data-layout-column-index]):nth-child(10)),
+.is-return .return-records-table td:is([data-layout-column-index="10"], :not([data-layout-column-index]):nth-child(10)) {
   width: 9%;
 }
 
-.is-return .return-records-table th:nth-child(11),
-.is-return .return-records-table td:nth-child(11) {
+.is-return .return-records-table th:is([data-layout-column-index="11"], :not([data-layout-column-index]):nth-child(11)),
+.is-return .return-records-table td:is([data-layout-column-index="11"], :not([data-layout-column-index]):nth-child(11)) {
   width: 9%;
 }
 

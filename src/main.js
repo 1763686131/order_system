@@ -2,7 +2,7 @@ import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import router from './router'
 import App from './App.vue'
-import resizableColumns from './directives/resizableColumns'
+import tableLayout from './directives/tableLayout'
 import './assets/styles/main.css'
 import './assets/styles/resizable-columns.css'
 
@@ -11,5 +11,6 @@ const pinia = createPinia()
 
 app.use(pinia)
 app.use(router)
-app.directive('resizable-columns', resizableColumns)
+app.directive('table-layout', tableLayout)
+app.directive('resizable-columns', tableLayout)
 app.mount('#app')

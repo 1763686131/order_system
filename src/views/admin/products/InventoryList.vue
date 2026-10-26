@@ -92,7 +92,7 @@
       </div>
       <div class="table-container">
         <table
-          v-resizable-columns="{ storageKey: `inventory-${mode}-list-v2`, resizeMode: 'fit', minWidth: 40 }"
+          v-table-layout="{ storageKey: `inventory-${mode}-list-v2`, resizeMode: 'fit', minWidth: 40 }"
           class="inventory-table"
         >
           <colgroup>
@@ -113,7 +113,7 @@
             <col data-column-key="stock-status" data-min-width="52" style="width: calc(var(--inventory-column-unit) * 90)" />
             <col data-column-key="product-status" data-min-width="52" style="width: calc(var(--inventory-column-unit) * 90)" />
             <col data-column-key="notes" data-min-width="64" style="width: calc(var(--inventory-column-unit) * 120)" />
-            <col data-column-key="actions" data-resizable="false" style="width: var(--inventory-actions-width)" />
+            <col data-column-key="actions" data-column-fixed="end" data-resizable="false" style="width: var(--inventory-actions-width)" />
           </colgroup>
           <thead>
             <tr>
@@ -144,7 +144,7 @@
               <th class="col-status" data-column-key="stock-status">库存状态</th>
               <th class="col-product-status" data-column-key="product-status">{{ entityLabel }}状态</th>
               <th class="col-notes" data-column-key="notes">备注信息</th>
-              <th class="col-actions" data-column-key="actions" data-resizable="false">操作</th>
+              <th class="col-actions" data-column-key="actions" data-column-fixed="end" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody>

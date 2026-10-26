@@ -156,7 +156,7 @@
 
       <div class="table-scroll">
         <table
-          v-resizable-columns="{
+          v-table-layout="{
             storageKey: payableMode ? 'finance-payables-list' : 'finance-receivables-list',
             resizeMode: 'fit',
             minWidth: 64

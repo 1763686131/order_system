@@ -16,7 +16,7 @@ const optionsFor = value => ({
   onResize: value?.onResize
 })
 
-function createInstance(table, value) {
+export function createResizableColumns(table, value) {
   const document = table.ownerDocument
   const window = document.defaultView
   const originalStyle = {
@@ -338,6 +338,13 @@ function createInstance(table, value) {
 
   return {
     sync,
+    suspend() {
+      stopDrag()
+      restoreStyles()
+      removeHandles()
+      columns = []
+      pendingRestore = false
+    },
     destroy() {
       stopDrag()
       observer?.disconnect()
@@ -350,7 +357,7 @@ function createInstance(table, value) {
 
 export default {
   mounted(table, binding) {
-    instances.set(table, createInstance(table, binding.value))
+    instances.set(table, createResizableColumns(table, binding.value))
   },
   updated(table, binding) {
     instances.get(table)?.sync(binding.value)

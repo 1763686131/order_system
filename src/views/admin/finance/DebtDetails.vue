@@ -75,7 +75,7 @@
     <p v-if="error" class="statement-error" role="alert">{{ error }}</p>
     <div class="statement-table-scroll">
       <table
-        v-resizable-columns="{
+        v-table-layout="{
           storageKey: type === 'payable' ? 'finance-debt-details-payable' : 'finance-debt-details-receivable-compact',
           resizeMode: 'fit',
           minWidth: 64

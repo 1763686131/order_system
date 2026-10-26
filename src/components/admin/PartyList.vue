@@ -103,7 +103,7 @@
 
       <div class="table-scroll">
         <table
-          v-resizable-columns="{
+          v-table-layout="{
             storageKey: isSupplier ? 'party-suppliers-list' : 'party-customers-list',
             minWidth: 64,
             resizeMode: 'fit'

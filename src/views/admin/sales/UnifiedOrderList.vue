@@ -317,60 +317,37 @@
 
       <div class="table-scroll">
         <table
-          v-resizable-columns="{ storageKey: `sales-${mode}-list`, minWidth: 64, resizeMode: 'fit' }"
+          v-table-layout="{ storageKey: `sales-${mode}-list`, minWidth: 64, resizeMode: 'fit' }"
           class="records-table"
         >
           <colgroup>
             <col
-              v-if="mode !== 'finance' || canDeleteSalesOrders"
-              data-column-key="selection"
-              style="width: 50px"
+              v-for="column in orderedColumns"
+              :key="column.key"
+              :data-column-key="column.key"
+              :style="{ width: `${column.width}px` }"
             />
-            <col data-column-key="order-number" style="width: 140px" />
-            <col data-column-key="date" style="width: 110px" />
-            <col data-column-key="customer" style="width: 140px" />
-            <col data-column-key="contact-person" style="width: 100px" />
-            <col data-column-key="phone" style="width: 120px" />
-            <col data-column-key="address" style="width: 140px" />
-            <col data-column-key="goods" style="width: 150px" />
-            <template v-if="mode === 'finance'">
-              <col data-column-key="receivable" style="width: 100px" />
-              <col data-column-key="received" style="width: 100px" />
-              <col data-column-key="outstanding" style="width: 100px" />
-            </template>
-            <template v-if="mode === 'logistics'">
-              <col data-column-key="weight" style="width: 80px" />
-              <col data-column-key="shipping-method" style="width: 100px" />
-              <col data-column-key="tracking-number" style="width: 120px" />
-              <col data-column-key="receipt" style="width: 64px" />
-            </template>
-            <col v-if="mode === 'finance'" data-column-key="status" style="width: 90px" />
-            <col v-if="mode === 'logistics'" data-column-key="freight" style="width: 100px" />
-            <col data-column-key="remark" style="width: 120px" />
-            <col data-column-key="actions" style="width: 136px" />
           </colgroup>
           <thead>
             <tr>
               <th
-                v-if="mode !== 'finance' || canDeleteSalesOrders"
-                class="col-checkbox"
-                data-column-key="selection"
-                data-resizable="false"
+                v-for="column in orderedColumns"
+                :key="column.key"
+                :class="column.headerClass"
+                :data-column-key="column.key"
+                :data-min-width="column.minWidth"
+                :data-resizable="column.resizable === false ? 'false' : undefined"
+                :aria-sort="column.key === 'date' ? (sortOrder === 'desc' ? 'descending' : 'ascending') : undefined"
               >
                 <input
+                  v-if="column.key === 'selection'"
                   type="checkbox"
                   :checked="isAllSelected"
                   :indeterminate="isPagePartiallySelected"
                   @change="toggleSelectAll"
                 />
-              </th>
-              <th class="document-column" data-column-key="order-number" data-min-width="100">订单编号</th>
-              <th
-                data-column-key="date"
-                data-min-width="100"
-                :aria-sort="sortOrder === 'desc' ? 'descending' : 'ascending'"
-              >
                 <button
+                  v-else-if="column.key === 'date'"
                   class="date-sort-button"
                   type="button"
                   :title="sortOrder === 'desc' ? '切换为从远到近' : '切换为从近到远'"
@@ -385,32 +362,8 @@
                     />
                   </span>
                 </button>
+                <template v-else>{{ column.label }}</template>
               </th>
-              <th data-column-key="customer" data-min-width="80">客户</th>
-              <th data-column-key="contact-person">收货人</th>
-              <th data-column-key="phone" data-min-width="100">电话</th>
-              <th class="address-column" data-column-key="address" data-min-width="80">地址</th>
-              <th class="material-column" data-column-key="goods" data-min-width="80">货物</th>
-
-              <!-- 财务模式列 -->
-              <template v-if="mode === 'finance'">
-                <th class="number-column" data-column-key="receivable" data-min-width="90">应收金额</th>
-                <th class="number-column" data-column-key="received" data-min-width="90">已收金额</th>
-                <th class="number-column" data-column-key="outstanding" data-min-width="90">未收金额</th>
-              </template>
-
-              <!-- 物流模式列 -->
-              <template v-if="mode === 'logistics'">
-                <th data-column-key="weight">重量</th>
-                <th data-column-key="shipping-method" data-min-width="80">发货方式</th>
-                <th data-column-key="tracking-number" data-min-width="80">单号</th>
-                <th data-column-key="receipt">回单</th>
-              </template>
-
-              <th v-if="mode === 'finance'" data-column-key="status" data-min-width="80">状态</th>
-              <th v-if="mode === 'logistics'" class="number-column" data-column-key="freight" data-min-width="80">运费</th>
-              <th data-column-key="remark">备注</th>
-              <th class="operation-column" data-column-key="actions" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -443,58 +396,54 @@
               @click="openOrderDetail(order)"
               @keydown.enter.self.prevent="openOrderDetail(order)"
             >
-              <td
-                v-if="mode !== 'finance' || canDeleteSalesOrders"
-                class="col-checkbox"
-                @click.stop
-              >
-                <input
-                  type="checkbox"
-                  :checked="isSelected(order.id)"
-                  :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
-                  :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
-                  @change="toggleSelect(order.id)"
-                />
-              </td>
-              <td>
-                <button class="document-link" type="button" @click.stop="openOrderDetail(order)">
-                  {{ order.order_number || order.id }}
-                  <svg aria-hidden="true" viewBox="0 0 24 24">
-                    <path d="m9 18 6-6-6-6"></path>
-                  </svg>
-                </button>
-              </td>
-              <td class="date-cell">{{ formatDate(order) }}</td>
-              <td>{{ order.order_client || '-' }}</td>
-              <td class="party-cell" :title="getContactPerson(order)">
-                {{ getContactPerson(order) }}
-              </td>
-              <td>{{ getContactPhone(order) }}</td>
-              <td class="address-cell" :title="getContactAddress(order)">
-                {{ getContactAddress(order).substring(0, 15) }}{{ getContactAddress(order).length > 15 ? '...' : '' }}
-              </td>
-              <td class="material-cell" :title="getGoodsTooltip(order)">
-                <div class="goods-summary">
-                  <strong class="goods-summary-name">
-                    {{ getGoodsDisplay(order).substring(0, 12) }}{{ getGoodsDisplay(order).length > 12 ? '...' : '' }}
-                  </strong>
-                  <span v-if="getGoodsCount(order) > 1" class="goods-count-badge">
-                    商品+{{ getGoodsCount(order) }}
-                  </span>
-                </div>
-              </td>
+              <template v-for="column in orderedColumns" :key="column.key">
+                <td
+                  v-if="column.key === 'selection'"
+                  class="col-checkbox"
+                  @click.stop
+                >
+                  <input
+                    type="checkbox"
+                    :checked="isSelected(order.id)"
+                    :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
+                    :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
+                    @change="toggleSelect(order.id)"
+                  />
+                </td>
+                <td v-else-if="column.key === 'order-number'">
+                  <button class="document-link" type="button" @click.stop="openOrderDetail(order)">
+                    {{ order.order_number || order.id }}
+                    <svg aria-hidden="true" viewBox="0 0 24 24">
+                      <path d="m9 18 6-6-6-6"></path>
+                    </svg>
+                  </button>
+                </td>
+                <td v-else-if="column.key === 'date'" class="date-cell">{{ formatDate(order) }}</td>
+                <td v-else-if="column.key === 'customer'">{{ order.order_client || '-' }}</td>
+                <td v-else-if="column.key === 'contact-person'" class="party-cell" :title="getContactPerson(order)">
+                  {{ getContactPerson(order) }}
+                </td>
+                <td v-else-if="column.key === 'phone'">{{ getContactPhone(order) }}</td>
+                <td v-else-if="column.key === 'address'" class="address-cell" :title="getContactAddress(order)">
+                  {{ getContactAddress(order).substring(0, 15) }}{{ getContactAddress(order).length > 15 ? '...' : '' }}
+                </td>
+                <td v-else-if="column.key === 'goods'" class="material-cell" :title="getGoodsTooltip(order)">
+                  <div class="goods-summary">
+                    <strong class="goods-summary-name">
+                      {{ getGoodsDisplay(order).substring(0, 12) }}{{ getGoodsDisplay(order).length > 12 ? '...' : '' }}
+                    </strong>
+                    <span v-if="getGoodsCount(order) > 1" class="goods-count-badge">
+                      商品+{{ getGoodsCount(order) }}
+                    </span>
+                  </div>
+                </td>
 
-              <!-- 财务模式列 -->
-              <template v-if="mode === 'finance'">
-                <td class="number-column numeric">{{ getShouldReceive(order) }}</td>
-                <td class="number-column numeric">{{ getCurrentPayment(order) }}</td>
-                <td class="number-column numeric">{{ getCurrentDebt(order) }}</td>
-              </template>
+                <td v-else-if="column.key === 'receivable'" class="number-column numeric">{{ getShouldReceive(order) }}</td>
+                <td v-else-if="column.key === 'received'" class="number-column numeric">{{ getCurrentPayment(order) }}</td>
+                <td v-else-if="column.key === 'outstanding'" class="number-column numeric">{{ getCurrentDebt(order) }}</td>
 
-              <!-- 物流模式列 -->
-              <template v-if="mode === 'logistics'">
-                <td>{{ getTotalWeight(order) }}</td>
-                <td>
+                <td v-else-if="column.key === 'weight'">{{ getTotalWeight(order) }}</td>
+                <td v-else-if="column.key === 'shipping-method'">
                   <span
                     :class="['shipping-tag', 'clickable', { 'can-edit': hasLogistics(order) }]"
                     @click.stop="handleShippingTagClick(order)"
@@ -502,7 +451,7 @@
                     {{ getShippingMethodText(order) }}
                   </span>
                 </td>
-                <td class="tracking-cell">
+                <td v-else-if="column.key === 'tracking-number'" class="tracking-cell">
                   <span
                     v-if="order.logistics_no"
                     class="tracking-number clickable"
@@ -512,7 +461,7 @@
                   </span>
                   <span v-else>-</span>
                 </td>
-                <td>
+                <td v-else-if="column.key === 'receipt'">
                   <span
                     v-if="hasReceipt(order)"
                     class="receipt-status has-receipt clickable"
@@ -521,73 +470,73 @@
                     回单
                   </span>
                 </td>
-              </template>
 
-              <td v-if="mode === 'finance'">
-                <span :class="['status-tag', getStatusClass(order)]">
-                  <i aria-hidden="true"></i>
-                  {{ getStatusText(order) }}
-                </span>
-              </td>
-              <td v-if="mode === 'logistics'" class="number-column money-value">
-                <span v-if="getFreightTotal(order) > 0" class="freight-amount" @click.stop="showFreightDetail(order)">
-                  ¥{{ getFreightTotal(order).toFixed(2) }}
-                </span>
-                <span v-else>-</span>
-              </td>
-              <td class="remark-cell">
-                {{ order.remark && order.remark.length > 4 ? order.remark.substring(0, 4) + '...' : (order.remark || '-') }}
-              </td>
-              <td class="operation-column" @click.stop>
-                <div class="row-actions">
-                  <button
-                    v-if="mode === 'finance' && canCreateSalesOrders && isNewOrder(order)"
-                    type="button"
-                    title="复制为新订单"
-                    @click="handleCopySalesOrder(order)"
-                  >
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <rect x="8" y="8" width="12" height="12" rx="2"></rect>
-                      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
-                    </svg>
-                  </button>
-                  <button
-                    v-if="mode === 'logistics'"
-                    type="button"
-                    title="物流信息"
-                    @click="handleCopyOrderInfo(order)"
-                  >
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <rect x="8" y="8" width="12" height="12" rx="2"></rect>
-                      <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
-                    </svg>
-                  </button>
-                  <button
-                    v-if="canPrintSalesOrders"
-                    type="button"
-                    title="打印订单"
-                    @click="handlePrintOrder(order)"
-                  >
-                    <svg aria-hidden="true" viewBox="0 0 24 24">
-                      <path d="M6 9V2h12v7"></path>
-                      <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
-                      <path d="M6 14h12v8H6z"></path>
-                    </svg>
-                  </button>
-                  <button
-                    v-if="hasRowMenuActions(order)"
-                    class="row-menu-trigger"
-                    type="button"
-                    title="更多操作"
-                    :aria-label="`订单 ${order.order_number || order.id} 更多操作`"
-                    aria-haspopup="menu"
-                    :aria-expanded="openActionMenuOrderId === order.id"
-                    @click="toggleActionMenu(order, $event)"
-                  >
-                    <span aria-hidden="true">⋮</span>
-                  </button>
-                </div>
-              </td>
+                <td v-else-if="column.key === 'status'">
+                  <span :class="['status-tag', getStatusClass(order)]">
+                    <i aria-hidden="true"></i>
+                    {{ getStatusText(order) }}
+                  </span>
+                </td>
+                <td v-else-if="column.key === 'freight'" class="number-column money-value">
+                  <span v-if="getFreightTotal(order) > 0" class="freight-amount" @click.stop="showFreightDetail(order)">
+                    ¥{{ getFreightTotal(order).toFixed(2) }}
+                  </span>
+                  <span v-else>-</span>
+                </td>
+                <td v-else-if="column.key === 'remark'" class="remark-cell">
+                  {{ order.remark && order.remark.length > 4 ? order.remark.substring(0, 4) + '...' : (order.remark || '-') }}
+                </td>
+                <td v-else-if="column.key === 'actions'" class="operation-column" @click.stop>
+                  <div class="row-actions">
+                    <button
+                      v-if="mode === 'finance' && canCreateSalesOrders && isNewOrder(order)"
+                      type="button"
+                      title="复制为新订单"
+                      @click="handleCopySalesOrder(order)"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+                      </svg>
+                    </button>
+                    <button
+                      v-if="mode === 'logistics'"
+                      type="button"
+                      title="物流信息"
+                      @click="handleCopyOrderInfo(order)"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <rect x="8" y="8" width="12" height="12" rx="2"></rect>
+                        <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+                      </svg>
+                    </button>
+                    <button
+                      v-if="canPrintSalesOrders"
+                      type="button"
+                      title="打印订单"
+                      @click="handlePrintOrder(order)"
+                    >
+                      <svg aria-hidden="true" viewBox="0 0 24 24">
+                        <path d="M6 9V2h12v7"></path>
+                        <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+                        <path d="M6 14h12v8H6z"></path>
+                      </svg>
+                    </button>
+                    <button
+                      v-if="hasRowMenuActions(order)"
+                      class="row-menu-trigger"
+                      type="button"
+                      title="更多操作"
+                      :aria-label="`订单 ${order.order_number || order.id} 更多操作`"
+                      aria-haspopup="menu"
+                      :aria-expanded="openActionMenuOrderId === order.id"
+                      @click="toggleActionMenu(order, $event)"
+                    >
+                      <span aria-hidden="true">⋮</span>
+                    </button>
+                  </div>
+                </td>
+              </template>
             </tr>
             <tr v-if="filteredOrders.length === 0 && !loading">
               <td :colspan="columnCount" class="empty-cell">
@@ -926,7 +875,7 @@
                 </div>
                 <div class="detail-table-scroll">
                   <table
-                    v-resizable-columns="{ storageKey: 'sales-order-detail-items', resizeMode: 'fit' }"
+                    v-table-layout="{ storageKey: 'sales-order-detail-items', resizeMode: 'fit' }"
                     class="detail-table order-goods-table"
                   >
                     <colgroup>
@@ -1744,10 +1693,46 @@ const emptyMessage = computed(() => {
   return props.mode === 'logistics' ? '暂无物流订单数据' : '暂无订单数据'
 })
 
-const columnCount = computed(() => {
-  if (props.mode === 'logistics') return 15
-  return canDeleteSalesOrders.value ? 14 : 13
+const tableColumns = computed(() => {
+  const columns = [
+    { key: 'order-number', label: '订单编号', width: 140, minWidth: 100, headerClass: 'document-column' },
+    { key: 'date', label: '日期', width: 110, minWidth: 100 },
+    { key: 'customer', label: '客户', width: 140, minWidth: 80 },
+    { key: 'contact-person', label: '收货人', width: 100 },
+    { key: 'phone', label: '电话', width: 120, minWidth: 100 },
+    { key: 'address', label: '地址', width: 140, minWidth: 80, headerClass: 'address-column' },
+    { key: 'goods', label: '货物', width: 150, minWidth: 80, headerClass: 'material-column' }
+  ]
+  if (props.mode !== 'finance' || canDeleteSalesOrders.value) {
+    columns.unshift({
+      key: 'selection', label: '多选', width: 50, headerClass: 'col-checkbox', resizable: false, fixed: 'start'
+    })
+  }
+  if (props.mode === 'finance') {
+    columns.push(
+      { key: 'receivable', label: '应收金额', width: 100, minWidth: 90, headerClass: 'number-column' },
+      { key: 'received', label: '已收金额', width: 100, minWidth: 90, headerClass: 'number-column' },
+      { key: 'outstanding', label: '未收金额', width: 100, minWidth: 90, headerClass: 'number-column' },
+      { key: 'status', label: '状态', width: 90, minWidth: 80 }
+    )
+  } else {
+    columns.push(
+      { key: 'weight', label: '重量', width: 80 },
+      { key: 'shipping-method', label: '发货方式', width: 100, minWidth: 80 },
+      { key: 'tracking-number', label: '单号', width: 120, minWidth: 80 },
+      { key: 'receipt', label: '回单', width: 64 },
+      { key: 'freight', label: '运费', width: 100, minWidth: 80, headerClass: 'number-column' }
+    )
+  }
+  columns.push(
+    { key: 'remark', label: '备注', width: 120 },
+    { key: 'actions', label: '操作', width: 136, headerClass: 'operation-column', resizable: false }
+  )
+  return columns
 })
+
+const orderedColumns = tableColumns
+const columnCount = computed(() => orderedColumns.value.length)
 
 // 获取订单数据
 const fetchOrdersData = async () => {
@@ -4207,10 +4192,15 @@ svg {
   top: 0;
 }
 .document-column { width: 140px; }
-.records-table th:nth-child(3) { width: 110px; }
-.records-table th:nth-child(4) { width: 140px; }
-.records-table th:nth-child(5) { width: 100px; }
-.records-table th:nth-child(6) { width: 120px; }
+.records-table th[data-column-key="date"] { width: 110px; }
+.records-table th[data-column-key="customer"] { width: 140px; }
+.records-table th[data-column-key="contact-person"] { width: 100px; }
+.records-table th[data-column-key="phone"] { width: 120px; }
+
+.records-table thead:focus-visible {
+  outline: 2px solid var(--accent, #0f9f78);
+  outline-offset: -2px;
+}
 .address-column { width: 140px; }
 .material-column { width: 150px; }
 .number-column { width: 100px; text-align: right !important; }
@@ -5248,38 +5238,38 @@ svg {
   border-bottom: 0;
 }
 
-.detail-table th:nth-child(1) { width: 45px; text-align: center; }
+.detail-table th:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)) { width: 45px; text-align: center; }
 .detail-table .material-detail-column { width: auto; min-width: 120px; }
-.detail-table th:nth-child(3) { width: 90px; }
-.detail-table th:nth-child(4) { width: 50px; text-align: center; }
-.detail-table th:nth-child(5) { width: 55px; }
-.detail-table th:nth-child(6) { width: 65px; }
-.detail-table th:nth-child(7) { width: 75px; }
-.detail-table th:nth-child(8) { width: 85px; }
-.detail-table th:nth-child(9) { width: 95px; }
+.detail-table th:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)) { width: 90px; }
+.detail-table th:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)) { width: 50px; text-align: center; }
+.detail-table th:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)) { width: 55px; }
+.detail-table th:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)) { width: 65px; }
+.detail-table th:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)) { width: 75px; }
+.detail-table th:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)) { width: 85px; }
+.detail-table th:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)) { width: 95px; }
 
 .order-goods-table {
   min-width: 880px;
 }
 
-.order-goods-table th:nth-child(1) { width: 45px; text-align: center; }
+.order-goods-table th:is([data-layout-column-index="1"], :not([data-layout-column-index]):nth-child(1)) { width: 45px; text-align: center; }
 .order-goods-table .material-detail-column { width: auto; min-width: 130px; }
-.order-goods-table th:nth-child(3) { width: 90px; }
-.order-goods-table th:nth-child(4) { width: 50px; text-align: center; }
-.order-goods-table th:nth-child(5) { width: 55px; }
-.order-goods-table th:nth-child(6) { width: 65px; }
-.order-goods-table th:nth-child(7) { width: 75px; }
-.order-goods-table th:nth-child(8) { width: 88px; }
-.order-goods-table th:nth-child(9) { width: 62px; }
-.order-goods-table th:nth-child(10) { width: 85px; }
-.order-goods-table th:nth-child(11) { width: 95px; }
+.order-goods-table th:is([data-layout-column-index="3"], :not([data-layout-column-index]):nth-child(3)) { width: 90px; }
+.order-goods-table th:is([data-layout-column-index="4"], :not([data-layout-column-index]):nth-child(4)) { width: 50px; text-align: center; }
+.order-goods-table th:is([data-layout-column-index="5"], :not([data-layout-column-index]):nth-child(5)) { width: 55px; }
+.order-goods-table th:is([data-layout-column-index="6"], :not([data-layout-column-index]):nth-child(6)) { width: 65px; }
+.order-goods-table th:is([data-layout-column-index="7"], :not([data-layout-column-index]):nth-child(7)) { width: 75px; }
+.order-goods-table th:is([data-layout-column-index="8"], :not([data-layout-column-index]):nth-child(8)) { width: 88px; }
+.order-goods-table th:is([data-layout-column-index="9"], :not([data-layout-column-index]):nth-child(9)) { width: 62px; }
+.order-goods-table th:is([data-layout-column-index="10"], :not([data-layout-column-index]):nth-child(10)) { width: 85px; }
+.order-goods-table th:is([data-layout-column-index="11"], :not([data-layout-column-index]):nth-child(11)) { width: 95px; }
 
 .order-goods-table th:last-child,
 .order-goods-table td:last-child {
   padding-right: 14px;
 }
 
-.detail-table td:first-child {
+.detail-table td:is([data-layout-column-index="1"], :not([data-layout-column-index]):first-child) {
   text-align: center;
 }
 

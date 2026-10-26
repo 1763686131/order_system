@@ -30,7 +30,7 @@
         <span>本单可开票金额<strong>{{ formatMoney(contextData.availableAmount) }}</strong></span>
       </div>
       <div class="sf-table-scroll">
-        <table v-resizable-columns="{ storageKey: 'purchase-order-invoice-records', resizeMode: 'fit', minWidth: 64 }" class="sf-table invoice-record-table">
+        <table v-table-layout="{ storageKey: 'purchase-order-invoice-records', resizeMode: 'fit', minWidth: 64 }" class="sf-table invoice-record-table">
           <colgroup>
             <col style="width: 160px">
             <col>
@@ -257,8 +257,8 @@ defineExpose({ requestLeave, createInvoice, requestReverse, resetEditor, actionS
 .invoice-toolbar h3 { margin: 0; font-size: 15px; }
 .invoice-toolbar h3 span { margin-left: 8px; }
 .invoice-record-table { min-width: 850px; }
-.invoice-record-table th:first-child { width: 160px; }
-.invoice-record-table th:last-child { width: 64px; }
+.invoice-record-table th[data-layout-column-index="1"] { width: 160px; }
+.invoice-record-table th[data-layout-column-index="8"] { width: 64px; }
 .invoice-reverse-choice { margin-bottom: 16px; text-align: left; }
 .invoice-reverse-message { margin: 0; color: #596579; font-size: 14px; line-height: 1.6; white-space: pre-line; overflow-wrap: anywhere; }
 </style>

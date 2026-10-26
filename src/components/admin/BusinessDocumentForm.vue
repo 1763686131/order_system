@@ -72,7 +72,7 @@
           {{ ui.sourceLoading ? '正在读取可退入库批次...' : ui.sourceError || '暂无可退入库批次' }}
         </div>
         <div class="products-table-wrapper">
-          <table v-if="isPurchaseReturn" v-resizable-columns="tableResizeOptions" class="products-table purchase-return-table">
+          <table v-if="isPurchaseReturn" v-table-layout="tableResizeOptions" class="products-table purchase-return-table">
             <colgroup>
               <col style="width: 40px" /><col style="width: 54px" /><col style="width: 270px" /><col style="width: 95px" /><col style="width: 105px" /><col style="width: 55px" />
               <col style="width: 110px" /><col style="width: 100px" /><col style="width: 90px" /><col style="width: 90px" /><col style="width: 100px" /><col style="width: 110px" />
@@ -113,7 +113,7 @@
               <tr class="total-row"><td colspan="10" class="center">合计</td><td class="right">{{ money(ui.totalQuantity) }}</td><td></td><td class="right">{{ money(ui.totalOriginalCost) }}</td><td class="right">{{ money(ui.totalReturnAmount) }}</td><td></td></tr>
             </tbody>
           </table>
-          <table v-else v-resizable-columns="tableResizeOptions" class="products-table" :class="{ 'inbound-entry-table': hidePurchaseAmounts, 'purchase-order-tax-table': isPurchaseOrder && showTaxColumns }">
+          <table v-else v-table-layout="tableResizeOptions" class="products-table" :class="{ 'inbound-entry-table': hidePurchaseAmounts, 'purchase-order-tax-table': isPurchaseOrder && showTaxColumns }">
             <colgroup>
               <col style="width: 40px" /><col :style="{ width: isPurchaseOrder || hidePurchaseAmounts ? '72px' : '54px' }" />
               <col v-if="isPurchaseOrder" :style="{ width: isPurchaseApplication ? '145px' : '106px' }" />
@@ -532,7 +532,7 @@ button:disabled { cursor: default; opacity: .5; }
 .products-table-wrapper { overflow-x: auto; }
 .products-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
 .products-table.inbound-entry-table { min-width: 1280px; }
-.inbound-entry-table td:nth-child(2) { white-space: nowrap; }
+.inbound-entry-table td:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)) { white-space: nowrap; }
 .products-table th, .products-table td { height: 43px; padding: 4px 7px; border-bottom: 1px solid #e9eef1; border-right: 1px solid #eef1f3; overflow: hidden; }
 .products-table th { font-weight: 600; font-size: 12px; color: #6c7a85; background: #f8fafb; text-align: left; white-space: nowrap; }
 .products-table td input, .products-table td select { width: 100%; height: 32px; min-width: 0; border: 1px solid transparent; border-radius: 3px; color: inherit; background: transparent; padding: 0 4px; }
@@ -629,8 +629,8 @@ fieldset:disabled .save-button, fieldset:disabled .btn-icon, fieldset:disabled .
 .business-document-form.purchase-application-form .products-table th.right { text-align: left; }
 .business-document-form.purchase-application-form .products-table td input[type="number"] { text-align: left; }
 .business-document-form.purchase-application-form .products-table .purchase-stock-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
-.business-document-form.purchase-application-form .products-table td:nth-child(2) { white-space: nowrap; }
-.business-document-form.purchase-application-form .products-table td:nth-child(2) .btn-icon { flex: 0 0 24px; }
+.business-document-form.purchase-application-form .products-table td:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)) { white-space: nowrap; }
+.business-document-form.purchase-application-form .products-table td:is([data-layout-column-index="2"], :not([data-layout-column-index]):nth-child(2)) .btn-icon { flex: 0 0 24px; }
 .business-document-form[data-document-type="purchase-order"] .finance-row-full .info-group input[type="number"] { width: 110px; }
 .business-document-form[data-document-type="purchase-order"] .finance-row-full select,
 .business-document-form[data-document-type="purchase-order"] .balance-toggle { height: 38px; }
