@@ -155,9 +155,9 @@
         <span
           role="status"
           aria-live="polite"
-          :class="{ 'preview-footer-error': imageShareError || printErrorMessage }"
+          :class="{ 'preview-footer-error': imageShareError || printErrorMessage || imageShareUnavailableReason }"
         >
-          {{ imageShareError || printErrorMessage || imageShareMessage || printDestinationHint }}
+          {{ imageShareError || printErrorMessage || imageShareMessage || imageShareUnavailableReason || printDestinationHint }}
         </span>
         <div class="preview-footer-actions">
           <button
@@ -190,7 +190,6 @@
             @click="handleShareImage"
           >
             <LoaderCircle v-if="preparingImage || sharingImage" :size="16" class="preview-share-spinner" aria-hidden="true" />
-            <Download v-else-if="imageShareAction === 'download'" :size="16" aria-hidden="true" />
             <Share2 v-else :size="16" aria-hidden="true" />
             {{ imageShareLabel }}
           </button>
@@ -226,7 +225,7 @@
 
 <script setup>
 import { computed, getCurrentInstance, nextTick, ref, watch } from 'vue'
-import { Check, ChevronDown, Download, FileText, LoaderCircle, Printer, RefreshCw, Search, Settings, Share2, X } from '@lucide/vue'
+import { Check, ChevronDown, FileText, LoaderCircle, Printer, RefreshCw, Search, Settings, Share2, X } from '@lucide/vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
 import { openConfiguredPrintPreview } from '@/utils/lodopPrint'
@@ -293,7 +292,7 @@ const {
   preparing: preparingImage,
   sharing: sharingImage,
   ready: preparedImageReady,
-  action: imageShareAction,
+  unavailableReason: imageShareUnavailableReason,
   label: imageShareLabel,
   title: imageShareTitle,
   error: imageShareError,

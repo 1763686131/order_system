@@ -20,47 +20,123 @@ export function isMobileShareDevice(navigator = globalThis.navigator) {
 }
 
 export function getPrintImageAction(file, environment = globalThis) {
-  const { navigator, ClipboardItem, isSecureContext } = environment
-  if (isSecureContext === false) return 'download'
+  return isMobileShareDevice(environment.navigator) ? 'share' : 'copy'
+}
+
+function canWriteImageClipboard(environment) {
+  const { navigator, ClipboardItem } = environment
+  if (typeof navigator?.clipboard?.write !== 'function' || typeof ClipboardItem !== 'function') {
+    return false
+  }
+  try {
+    return !ClipboardItem.supports || ClipboardItem.supports('image/png')
+  } catch {
+    return false
+  }
+}
+
+export function getPrintImageUnavailableReason(file, environment = globalThis) {
+  const { navigator, document } = environment
   if (isMobileShareDevice(navigator)) {
+    if (typeof navigator?.share !== 'function') {
+      return '当前浏览器不支持系统图片分享，请在支持文件分享的手机浏览器中打开。'
+    }
     try {
-      return navigator?.share && navigator?.canShare?.({ files: [file] }) ? 'share' : 'download'
+      if (typeof navigator.canShare === 'function' && !navigator.canShare({ files: [file] })) {
+        return '当前浏览器无法分享这张图片，请换用支持图片文件分享的手机浏览器。'
+      }
     } catch {
-      return 'download'
+      return '当前浏览器无法检查图片分享能力，请换用支持文件分享的手机浏览器。'
+    }
+    return ''
+  }
+  if (canWriteImageClipboard(environment)) return ''
+  if (typeof document?.execCommand === 'function' && typeof document?.createElement === 'function') {
+    return ''
+  }
+  return '当前浏览器不支持复制图片，请换用支持图片剪贴板或网页复制的浏览器。'
+}
+
+export function blobToDataUrl(blob, environment = globalThis) {
+  if (typeof environment.FileReader !== 'function') {
+    return Promise.resolve('')
+  }
+  return new Promise((resolve, reject) => {
+    const reader = new environment.FileReader()
+    reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '')
+    reader.onerror = () => reject(reader.error || new Error('图片读取失败。'))
+    reader.readAsDataURL(blob)
+  })
+}
+
+function copyPrintImageWithLegacyApi(file, environment, dataUrl = '') {
+  const document = environment.document
+  const body = document?.body
+  if (!body || typeof document.execCommand !== 'function') {
+    throw new Error('当前浏览器不支持网页复制图片。')
+  }
+
+  const objectUrl = dataUrl ? '' : environment.URL?.createObjectURL?.(file)
+  const imageUrl = dataUrl || objectUrl
+  if (!imageUrl) throw new Error('当前浏览器无法准备图片复制内容。')
+
+  const container = document.createElement('div')
+  const image = document.createElement('img')
+  container.contentEditable = 'true'
+  container.setAttribute('aria-hidden', 'true')
+  container.style.position = 'fixed'
+  container.style.left = '-10000px'
+  container.style.top = '0'
+  container.style.width = '1px'
+  container.style.height = '1px'
+  container.style.opacity = '0.01'
+  image.src = imageUrl
+  image.alt = ''
+  image.draggable = false
+  container.appendChild(image)
+  body.appendChild(container)
+
+  const selection = environment.getSelection?.()
+  const range = document.createRange()
+  container.focus?.()
+  range.selectNodeContents(container)
+  selection?.removeAllRanges()
+  selection?.addRange(range)
+
+  let copied = false
+  try {
+    copied = Boolean(document.execCommand('copy'))
+  } finally {
+    selection?.removeAllRanges()
+    container.remove()
+    const revoke = () => objectUrl && environment.URL.revokeObjectURL(objectUrl)
+    if (objectUrl && typeof environment.setTimeout === 'function') {
+      // Some browsers read the selected image after execCommand returns.
+      environment.setTimeout(revoke, 60000)
+    } else if (objectUrl) {
+      revoke()
     }
   }
-  return navigator?.clipboard?.write && ClipboardItem &&
-    (!ClipboardItem.supports || ClipboardItem.supports('image/png'))
-    ? 'copy'
-    : 'download'
+  if (!copied) throw new Error('图片复制失败，请再次点击分享重试。')
 }
 
-export function downloadPrintImage(file, environment = globalThis) {
-  const url = environment.URL.createObjectURL(file)
-  const link = environment.document.createElement('a')
-  link.href = url
-  link.download = file.name
-  environment.document.body.appendChild(link)
-  try {
-    link.click()
-  } finally {
-    link.remove()
-    // Mobile browsers may read the download URL after the click handler returns.
-    environment.setTimeout(() => environment.URL.revokeObjectURL(url), 60000)
-  }
-}
-
-export function sendPrintImage(file, action, environment = globalThis) {
+export function sendPrintImage(file, action, environment = globalThis, options = {}) {
+  const unavailableReason = getPrintImageUnavailableReason(file, environment)
+  if (unavailableReason) throw new Error(unavailableReason)
   if (action === 'share') {
-    return environment.navigator.share({ files: [file], title: file.name.replace(/\.png$/i, '') })
+    // Files only: browsers without file sharing must not silently share just a title.
+    return environment.navigator.share({ files: [file] })
   }
   if (action === 'copy') {
-    return environment.navigator.clipboard.write([
-      new environment.ClipboardItem({ 'image/png': file })
-    ])
+    if (canWriteImageClipboard(environment)) {
+      return environment.navigator.clipboard.write([
+        new environment.ClipboardItem({ 'image/png': file })
+      ])
+    }
+    copyPrintImageWithLegacyApi(file, environment, options.legacyDataUrl)
+    return Promise.resolve()
   }
-  downloadPrintImage(file, environment)
-  return Promise.resolve()
+  throw new Error('无法识别图片分享方式，请重新打开打印预览后重试。')
 }
 
 function abortError() {
