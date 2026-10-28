@@ -108,6 +108,7 @@ ADMIN_ROUTE_BRANCH_PERMISSIONS = {
     },
     "hr": {
         "company": "admin.route.hr.company",
+        "qualifications": "admin.route.hr.qualifications",
         "reports": "admin.route.hr.reports",
     },
     "system": {
@@ -231,7 +232,7 @@ PERMISSION_MODULES = [
             {
                 "code": ADMIN_ROUTE_PERMISSIONS["hr"],
                 "name": "访问人事行政",
-                "description": "显示并访问员工、公司资料和检测报告",
+                "description": "显示并访问员工、公司资料、公司资质和检测报告",
             },
             {
                 "code": ADMIN_ROUTE_PERMISSIONS["system"],
@@ -347,6 +348,11 @@ PERMISSION_MODULES = [
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["company"],
                 "name": "访问公司资料",
                 "description": "显示并访问公司资料",
+            },
+            {
+                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["qualifications"],
+                "name": "访问公司资质",
+                "description": "显示公司资质文件夹，查看、新增和编辑资质档案",
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["reports"],
@@ -779,6 +785,12 @@ _ROUTE_PERMISSION_MODULES = [
         "公司资料",
         "控制公司资料页面访问",
         [ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["company"]],
+    ),
+    (
+        "admin_company_qualifications",
+        "公司资质",
+        "控制公司资质目录和资质文件页面访问",
+        [ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["qualifications"]],
     ),
     (
         "admin_inspection_reports",

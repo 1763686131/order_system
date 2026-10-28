@@ -883,6 +883,11 @@ const allMenuItems = [
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.COMPANY
       },
       {
+        label: '公司资质',
+        path: '/admin/hr/qualifications',
+        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.QUALIFICATIONS
+      },
+      {
         label: '检测报告',
         path: '/admin/hr/reports',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.REPORTS
@@ -965,6 +970,8 @@ const isChildActive = (children) => {
 
 const currentPath = computed(() => route.name === 'admin-finance-debt-details'
   ? `/admin/finance/${route.params.type === 'payable' ? 'payables' : 'receivables'}`
+  : /^\/admin\/hr\/qualifications(\/|$)/.test(route.path)
+    ? '/admin/hr/qualifications'
   : route.path)
 const dockedDocuments = computed(() => {
   const documents = []

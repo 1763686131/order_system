@@ -434,6 +434,33 @@ const routes = [
         meta: { requiresAuth: true, documentForm: true }
       },
       {
+        path: 'hr/qualifications',
+        name: 'admin-hr-qualifications',
+        component: () => import('@/views/admin/hr/Qualifications.vue'),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'hr/qualifications/create',
+        name: 'admin-hr-qualification-create',
+        component: () => import('@/views/admin/hr/QualificationForm.vue'),
+        props: route => ({ mode: 'create', folderId: route.query.folderId || '' }),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'hr/qualifications/:id/edit',
+        name: 'admin-hr-qualification-edit',
+        component: () => import('@/views/admin/hr/QualificationForm.vue'),
+        props: route => ({ mode: 'edit', qualificationId: route.params.id }),
+        meta: { requiresAuth: true }
+      },
+      {
+        path: 'hr/qualifications/:id',
+        name: 'admin-hr-qualification-view',
+        component: () => import('@/views/admin/hr/QualificationForm.vue'),
+        props: route => ({ mode: 'view', qualificationId: route.params.id }),
+        meta: { requiresAuth: true }
+      },
+      {
         path: 'hr/reports',
         name: 'admin-hr-reports',
         component: () => import('@/views/admin/hr/Reports.vue'),

@@ -45,6 +45,8 @@ _operation_logs_schema_lock = Lock()
 _operation_logs_schema_ready = False
 _supplier_finance_schema_lock = Lock()
 _supplier_finance_schema_ready = False
+_hr_qualifications_schema_lock = Lock()
+_hr_qualifications_schema_ready = False
 
 DEFAULT_PACKAGING_NAMES = ('无', '桶装', '纸箱', '托盘', '袋装')
 DEFAULT_DEPARTMENT_NAMES = ('仓储部', '财务部', '销售部', '人事行政', '运营部')
@@ -1187,6 +1189,109 @@ def _ensure_hr_reports_schema(conn):
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_hr_reports_type ON hr_reports(file_type)")
 
         conn.commit()
+
+
+def _ensure_hr_qualifications_schema(conn):
+    """Store qualification directories separately from qualification files."""
+    global _hr_qualifications_schema_ready
+    if _hr_qualifications_schema_ready:
+        return
+
+    with _hr_qualifications_schema_lock:
+        if _hr_qualifications_schema_ready:
+            return
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS hr_qualification_folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                created_by TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime'))
+            )
+            """
+        )
+
+        qualification_table = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'hr_company_qualifications'"
+        ).fetchone()
+        if not qualification_table:
+            conn.execute(
+                """
+                CREATE TABLE hr_company_qualifications (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    folder_id INTEGER NOT NULL,
+                    folder_name TEXT NOT NULL DEFAULT '',
+                    certificate_no TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                    company_name TEXT NOT NULL,
+                    certification_basis TEXT NOT NULL,
+                    registered_address TEXT NOT NULL,
+                    audit_address TEXT NOT NULL,
+                    certification_scope TEXT NOT NULL,
+                    issue_date TEXT NOT NULL,
+                    valid_until TEXT NOT NULL,
+                    certificate_status TEXT NOT NULL DEFAULT '有效',
+                    created_by TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
+                    CHECK (valid_until >= issue_date),
+                    CHECK (certificate_status IN ('有效', '暂停', '撤销', '注销', '过期')),
+                    FOREIGN KEY (folder_id) REFERENCES hr_qualification_folders(id)
+                )
+                """
+            )
+        else:
+            columns = {
+                row["name"]
+                for row in conn.execute(
+                    "PRAGMA table_info(hr_company_qualifications)"
+                ).fetchall()
+            }
+            if "folder_id" not in columns:
+                conn.execute(
+                    "ALTER TABLE hr_company_qualifications "
+                    "ADD COLUMN folder_id INTEGER "
+                    "REFERENCES hr_qualification_folders(id)"
+                )
+
+            legacy_rows = conn.execute(
+                """
+                SELECT id, folder_name
+                FROM hr_company_qualifications
+                WHERE folder_id IS NULL OR folder_id = 0
+                """
+            ).fetchall()
+            for row in legacy_rows:
+                folder_name = str(row["folder_name"] or "").strip() or "未分类"
+                conn.execute(
+                    """
+                    INSERT INTO hr_qualification_folders (name)
+                    VALUES (?)
+                    ON CONFLICT(name) DO NOTHING
+                    """,
+                    (folder_name,),
+                )
+                folder = conn.execute(
+                    "SELECT id FROM hr_qualification_folders WHERE name = ? COLLATE NOCASE",
+                    (folder_name,),
+                ).fetchone()
+                conn.execute(
+                    """
+                    UPDATE hr_company_qualifications
+                    SET folder_id = ?
+                    WHERE id = ?
+                    """,
+                    (folder["id"], row["id"]),
+                )
+
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_hr_qualifications_folder_id "
+            "ON hr_company_qualifications(folder_id)"
+        )
+        conn.commit()
+        _hr_qualifications_schema_ready = True
 
 
 def _ensure_system_settings_schema(conn):
@@ -2680,6 +2785,7 @@ def get_db():
         _ensure_units_schema(conn)
         _ensure_customer_schema(conn)
         _ensure_hr_reports_schema(conn)
+        _ensure_hr_qualifications_schema(conn)
         _ensure_system_settings_schema(conn)
         _ensure_logistics_copy_schema(conn)
         _ensure_bank_accounts_schema(conn)

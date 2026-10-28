@@ -45,6 +45,7 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
     EMPLOYEES: ADMIN_EMPLOYEE_PERMISSIONS.READ,
     DEPARTMENTS: ADMIN_DEPARTMENT_PERMISSIONS.READ,
     COMPANY: 'admin.route.hr.company',
+    QUALIFICATIONS: 'admin.route.hr.qualifications',
     REPORTS: 'admin.route.hr.reports'
   },
   SYSTEM: {
@@ -85,6 +86,7 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.EMPLOYEES, path: '/admin/hr/employees' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.DEPARTMENTS, path: '/admin/hr/departments' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.COMPANY, path: '/admin/hr/company' },
+  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.QUALIFICATIONS, path: '/admin/hr/qualifications' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.REPORTS, path: '/admin/hr/reports' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.STORES, path: '/admin/stores' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.SYSTEM.SETTINGS, path: '/admin/settings' },
@@ -171,6 +173,9 @@ export function getAdminRoutePermission(path = '') {
   if (path === '/admin/hr/departments') return ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.DEPARTMENTS
   if (/^\/admin\/hr\/company(\/|$)/.test(path)) {
     return ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.COMPANY
+  }
+  if (/^\/admin\/hr\/qualifications(\/|$)/.test(path)) {
+    return ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.QUALIFICATIONS
   }
   if (/^\/admin\/hr\/reports(\/|$)/.test(path)) {
     return ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.REPORTS
