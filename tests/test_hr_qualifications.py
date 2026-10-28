@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 from pathlib import Path
+import json
 import sqlite3
 import sys
 import tempfile
@@ -10,7 +11,7 @@ from flask import Flask, g
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
-from routes.hr_qualifications import FIELDS, QUALIFICATION_PERMISSION, hr_qualifications_bp
+from routes.hr_qualifications import QUALIFICATION_PERMISSION, hr_qualifications_bp
 import utils.db as db_module
 from utils.db import _ensure_hr_qualifications_schema
 from utils.permission_catalog import ALL_PERMISSION_CODES, PERMISSION_MODULES
@@ -44,15 +45,12 @@ class CompanyQualificationTests(unittest.TestCase):
         self.client = app.test_client()
         self.payload = {
             "folderId": 1,
-            "certificateNo": "TEST-2026-001",
-            "companyName": "测试复合材料有限公司",
-            "certificationBasis": "GB/T24001-2016/ISO14001:2015",
-            "registeredAddress": "测试注册地址",
-            "auditAddress": "测试审核地址",
-            "certificationScope": "复合材料的销售及相关环境管理活动",
-            "issueDate": "2026-03-11",
-            "validUntil": "2029-03-10",
-            "certificateStatus": "有效",
+            "title": "年度企业资料",
+            "fields": [
+                {"label": "资料编号", "value": "TEST-2026-001"},
+                {"label": "负责人", "value": "资料管理员"},
+                {"label": "使用范围", "value": "销售业务\n资料备案"},
+            ],
         }
         self.assertEqual(self.create_folder().status_code, 201)
 
@@ -105,8 +103,8 @@ class CompanyQualificationTests(unittest.TestCase):
                 "SELECT * FROM hr_company_qualifications WHERE id = ?", (created["id"],)
             ).fetchone()
             self.assertEqual(row["folder_id"], 1)
-            for key, (column, _, _) in FIELDS.items():
-                self.assertEqual(row[column], self.payload[key])
+            self.assertEqual(row["title"], self.payload["title"])
+            self.assertEqual(json.loads(row["fields_json"]), self.payload["fields"])
             self.assertEqual(row["created_by"], "Qualification tester")
         detail = self.client.get(f'/api/hr/qualifications/{created["id"]}')
         self.assertEqual(detail.status_code, 200)
@@ -120,7 +118,7 @@ class CompanyQualificationTests(unittest.TestCase):
         self.assertNotEqual(original["folderId"], second_folder["id"])
         response = self.client.put(
             f'/api/hr/qualifications/{original["id"]}',
-            json={**self.payload, "folderId": second_folder["id"], "certificateNo": "TEST-MOVED"},
+            json={**self.payload, "folderId": second_folder["id"], "title": "已修改名称"},
         )
         self.assertEqual(response.status_code, 200, response.get_json())
         saved = response.get_json()["data"]
@@ -178,11 +176,49 @@ class CompanyQualificationTests(unittest.TestCase):
         response = self.create_folder("test directory")
         self.assertEqual(response.status_code, 409, response.get_json())
 
-    def test_duplicate_certificate_is_rejected_case_insensitively(self):
+    def test_files_are_not_limited_by_certificate_number_or_status(self):
         self.assertEqual(self.create().status_code, 201)
-        response = self.create(certificateNo=self.payload["certificateNo"].lower())
-        self.assertEqual(response.status_code, 409, response.get_json())
-        self.assertEqual(len(self.client.get("/api/hr/qualifications").get_json()["data"]), 1)
+        fields = [
+            {"label": "工作进度", "value": "待确认"},
+            {"label": "计划时间", "value": "下季度"},
+            {"label": "说明", "value": "第一项"},
+            {"label": "说明", "value": "第二项"},
+        ]
+        response = self.create(fields=fields)
+        self.assertEqual(response.status_code, 201, response.get_json())
+        self.assertEqual(response.get_json()["data"]["fields"], fields)
+        self.assertEqual(len(self.client.get("/api/hr/qualifications").get_json()["data"]), 2)
+
+    def test_edit_updates_titles_values_and_field_order(self):
+        original = self.create().get_json()["data"]
+        fields = [
+            {"label": "新的标题", "value": "任意文本内容"},
+            {"label": "备注", "value": "<script>alert('plain text')</script>\n第二行"},
+        ]
+        response = self.client.put(
+            f'/api/hr/qualifications/{original["id"]}',
+            json={**self.payload, "title": "文件新名称", "fields": fields},
+        )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        saved = self.client.get(f'/api/hr/qualifications/{original["id"]}').get_json()["data"]
+        self.assertEqual(saved["title"], "文件新名称")
+        self.assertEqual(saved["fields"], fields)
+        self.assertEqual(saved["folderId"], original["folderId"])
+        self.assertEqual(saved["createdAt"], original["createdAt"])
+
+    def test_title_and_fields_are_trimmed_and_maximum_lengths_are_accepted(self):
+        response = self.create(
+            title="  自定义名称  ",
+            fields=[{"label": "  自定义标题  ", "value": "  内容\n下一行  "}],
+        )
+        self.assertEqual(response.status_code, 201, response.get_json())
+        self.assertEqual(response.get_json()["data"]["title"], "自定义名称")
+        self.assertEqual(response.get_json()["data"]["fields"], [{"label": "自定义标题", "value": "内容\n下一行"}])
+        response = self.create(
+            title="文" * 200,
+            fields=[{"label": "题" * 100, "value": "内" * 5000}] * 50,
+        )
+        self.assertEqual(response.status_code, 201, response.get_json())
 
     def test_invalid_folder_and_fields_do_not_create_records(self):
         invalid = [
@@ -192,18 +228,28 @@ class CompanyQualificationTests(unittest.TestCase):
             {"folderId": 1.5},
             {"folderId": 0},
             {"folderId": 10**30},
-            {"certificateNo": None},
-            {"companyName": ["invalid"]},
-            {"certificationBasis": "x" * 501},
-            {"issueDate": "2026-02-30"},
-            {"issueDate": "20260311"},
-            {"validUntil": "2026-01-01"},
-            {"certificateStatus": "unknown"},
+            {"title": None},
+            {"title": "  "},
+            {"title": ["invalid"]},
+            {"title": "x" * 201},
+            {"fields": None},
+            {"fields": {}},
+            {"fields": []},
+            {"fields": self.payload["fields"] * 17},
+            {"fields": ["invalid"]},
+            {"fields": [{"label": "  ", "value": "内容"}]},
+            {"fields": [{"label": True, "value": "内容"}]},
+            {"fields": [{"label": "x" * 101, "value": "内容"}]},
+            {"fields": [{"label": "标题", "value": "  "}]},
+            {"fields": [{"label": "标题", "value": ["invalid"]}]},
+            {"fields": [{"label": "标题", "value": "x" * 5001}]},
+            {"fields": [{"label": "标题"}]},
+            {"fields": [{"value": "内容"}]},
         ]
         for changes in invalid:
             with self.subTest(changes=changes):
                 self.assertEqual(self.create(**changes).status_code, 400)
-        for key in [*FIELDS, "folderId"]:
+        for key in ["title", "fields", "folderId"]:
             with self.subTest(missing=key):
                 payload = {field: value for field, value in self.payload.items() if field != key}
                 self.assertEqual(self.client.post("/api/hr/qualifications", json=payload).status_code, 400)
@@ -218,7 +264,7 @@ class CompanyQualificationTests(unittest.TestCase):
 
     def test_failed_edit_keeps_original_file_and_directory(self):
         original = self.create().get_json()["data"]
-        for changes, expected in (({"folderId": 999}, 400), ({"validUntil": "2020-01-01"}, 400)):
+        for changes, expected in (({"folderId": 999}, 400), ({"fields": [{"label": "", "value": "内容"}]}, 400)):
             with self.subTest(changes=changes):
                 response = self.client.put(
                     f'/api/hr/qualifications/{original["id"]}', json={**self.payload, **changes}
@@ -229,7 +275,7 @@ class CompanyQualificationTests(unittest.TestCase):
                     original,
                 )
 
-    def test_legacy_file_rows_are_migrated_into_directories(self):
+    def install_legacy_schema(self, folder_id=None):
         with self.get_db() as conn:
             conn.execute("DROP TABLE hr_company_qualifications")
             conn.execute(
@@ -252,25 +298,51 @@ class CompanyQualificationTests(unittest.TestCase):
                 )
                 """
             )
+            if folder_id is not None:
+                conn.execute("ALTER TABLE hr_company_qualifications ADD COLUMN folder_id INTEGER")
             conn.execute(
                 """
                 INSERT INTO hr_company_qualifications
-                (folder_name, certificate_no, company_name, certification_basis,
+                (id, folder_name, certificate_no, company_name, certification_basis,
                  registered_address, audit_address, certification_scope,
-                 issue_date, valid_until)
-                VALUES ('旧目录', 'LEGACY-001', '旧公司', '依据', '注册地址',
-                        '审核地址', '认证范围', '2026-01-01', '2027-01-01')
+                 issue_date, valid_until, created_by, created_at, updated_at)
+                VALUES (41, '旧目录', 'LEGACY-001', '旧公司', '依据', '注册地址',
+                        '审核地址', '认证范围', '2026-01-01', '2027-01-01',
+                        '旧录入人', '2026-01-02 10:00:00', '2026-01-03 11:00:00')
                 """
             )
+            if folder_id is not None:
+                conn.execute("UPDATE hr_company_qualifications SET folder_id = ?", (folder_id,))
+
+    def test_legacy_file_rows_are_migrated_into_directories(self):
+        self.install_legacy_schema()
+        with self.get_db() as conn:
             db_module._hr_qualifications_schema_ready = False
             _ensure_hr_qualifications_schema(conn)
-        folder = self.client.get("/api/hr/qualifications/folders").get_json()["data"][0]
-        self.assertEqual(folder["name"], "旧目录")
+        folder = next(
+            folder for folder in self.client.get("/api/hr/qualifications/folders").get_json()["data"]
+            if folder["name"] == "旧目录"
+        )
         files = self.client.get(
             f"/api/hr/qualifications?folder_id={folder['id']}"
         ).get_json()["data"]
-        self.assertEqual(files[0]["certificateNo"], "LEGACY-001")
+        self.assertEqual(files[0]["id"], 41)
+        self.assertEqual(files[0]["title"], "LEGACY-001")
+        self.assertEqual(files[0]["fields"], [
+            {"label": "证书编号", "value": "LEGACY-001"},
+            {"label": "中文名称", "value": "旧公司"},
+            {"label": "认证依据", "value": "依据"},
+            {"label": "注册地址", "value": "注册地址"},
+            {"label": "审核地址", "value": "审核地址"},
+            {"label": "认证范围", "value": "认证范围"},
+            {"label": "发证日期", "value": "2026年1月1日"},
+            {"label": "有效日期", "value": "2027年1月1日"},
+            {"label": "证书状态", "value": "有效"},
+        ])
+        self.assertEqual(files[0]["createdAt"], "2026-01-02 10:00:00")
+        self.assertEqual(files[0]["updatedAt"], "2026-01-03 11:00:00")
         with self.get_db() as conn:
+            self.assertEqual(conn.execute("SELECT created_by FROM hr_company_qualifications WHERE id = 41").fetchone()[0], "旧录入人")
             db_module._hr_qualifications_schema_ready = False
             _ensure_hr_qualifications_schema(conn)
             self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
@@ -278,6 +350,45 @@ class CompanyQualificationTests(unittest.TestCase):
             self.client.get(f"/api/hr/qualifications?folder_id={folder['id']}").get_json()["data"],
             files,
         )
+        response = self.client.put(
+            "/api/hr/qualifications/41",
+            json={**self.payload, "folderId": folder["id"], "fields": [{"label": "修改标题", "value": "新的内容"}]},
+        )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(response.get_json()["data"]["fields"], [{"label": "修改标题", "value": "新的内容"}])
+
+    def test_current_certificate_schema_migrates_without_changing_folder(self):
+        self.install_legacy_schema(folder_id=1)
+        with self.get_db() as conn:
+            db_module._hr_qualifications_schema_ready = False
+            _ensure_hr_qualifications_schema(conn)
+            self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
+        saved = self.client.get("/api/hr/qualifications/41").get_json()["data"]
+        self.assertEqual(saved["folderId"], 1)
+        self.assertEqual(saved["folderName"], "环境管理体系认证")
+        self.assertEqual(saved["title"], "LEGACY-001")
+
+    def test_failed_migration_rolls_back_original_table_and_data(self):
+        self.install_legacy_schema(folder_id=1)
+        with self.get_db() as conn:
+            conn.set_authorizer(
+                lambda action, name, *_: sqlite3.SQLITE_DENY
+                if action == sqlite3.SQLITE_DROP_TABLE and name == "hr_company_qualifications_legacy"
+                else sqlite3.SQLITE_OK
+            )
+            db_module._hr_qualifications_schema_ready = False
+            try:
+                with self.assertRaises(sqlite3.DatabaseError):
+                    _ensure_hr_qualifications_schema(conn)
+            finally:
+                conn.set_authorizer(None)
+            columns = {row["name"] for row in conn.execute("PRAGMA table_info(hr_company_qualifications)")}
+            self.assertIn("certificate_no", columns)
+            self.assertNotIn("fields_json", columns)
+            self.assertEqual(conn.execute("SELECT certificate_no FROM hr_company_qualifications WHERE id = 41").fetchone()[0], "LEGACY-001")
+            self.assertIsNone(conn.execute(
+                "SELECT name FROM sqlite_master WHERE name = 'hr_company_qualifications_legacy'"
+            ).fetchone())
 
     def test_missing_records_return_404(self):
         self.assertEqual(self.client.get("/api/hr/qualifications/999").status_code, 404)

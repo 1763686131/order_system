@@ -1,6 +1,6 @@
-"""Company qualification directories and certificate files."""
+"""Company qualification directories and customizable data files."""
 
-from datetime import date
+import json
 import sqlite3
 
 from flask import Blueprint, jsonify, request
@@ -14,30 +14,22 @@ hr_qualifications_bp = Blueprint(
     "hr_qualifications", __name__, url_prefix="/api/hr/qualifications"
 )
 QUALIFICATION_PERMISSION = ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["qualifications"]
-CERTIFICATE_STATUSES = {"有效", "暂停", "撤销", "注销", "过期"}
-FIELDS = {
-    "certificateNo": ("certificate_no", "证书编号", 100),
-    "companyName": ("company_name", "中文名称", 200),
-    "certificationBasis": ("certification_basis", "认证依据", 500),
-    "registeredAddress": ("registered_address", "注册地址", 1000),
-    "auditAddress": ("audit_address", "审核地址", 1000),
-    "certificationScope": ("certification_scope", "认证范围", 5000),
-    "issueDate": ("issue_date", "发证日期", 10),
-    "validUntil": ("valid_until", "有效日期", 10),
-    "certificateStatus": ("certificate_status", "证书状态", 20),
-}
 FOLDER_NAME_MAX_LENGTH = 100
+FILE_TITLE_MAX_LENGTH = 200
+FIELD_LABEL_MAX_LENGTH = 100
+FIELD_VALUE_MAX_LENGTH = 5000
+MAX_FIELDS = 50
 
 
 def _parse_folder_id(value):
     if isinstance(value, bool) or not isinstance(value, (int, str)):
-        raise ValueError("请选择有效的所属文件夹")
+        raise ValueError("请从有效的文件夹内新建文件")
     try:
         folder_id = int(value)
     except (TypeError, ValueError):
-        raise ValueError("请选择有效的所属文件夹") from None
+        raise ValueError("请从有效的文件夹内新建文件") from None
     if not 0 < folder_id <= 9223372036854775807:
-        raise ValueError("请选择有效的所属文件夹")
+        raise ValueError("请从有效的文件夹内新建文件")
     return folder_id
 
 
@@ -56,28 +48,33 @@ def _validate_folder_name(data):
 def _validate_payload(data):
     if not isinstance(data, dict):
         raise ValueError("请提交有效的资质信息")
-    values = {}
-    values["folder_id"] = _parse_folder_id(data.get("folderId"))
-    for key, (column, label, max_length) in FIELDS.items():
-        value = data.get(key)
+    title = data.get("title")
+    if not isinstance(title, str) or not title.strip():
+        raise ValueError("文件名称不能为空")
+    if len(title.strip()) > FILE_TITLE_MAX_LENGTH:
+        raise ValueError("文件名称不能超过200个字符")
+    fields = data.get("fields")
+    if not isinstance(fields, list) or not 1 <= len(fields) <= MAX_FIELDS:
+        raise ValueError("请填写1至50个字段")
+    normalized_fields = []
+    for index, field in enumerate(fields, 1):
+        if not isinstance(field, dict):
+            raise ValueError(f"第{index}个字段格式无效")
+        label, value = field.get("label"), field.get("value")
+        if not isinstance(label, str) or not label.strip():
+            raise ValueError(f"第{index}个字段的标题不能为空")
+        if len(label.strip()) > FIELD_LABEL_MAX_LENGTH:
+            raise ValueError(f"第{index}个字段的标题不能超过100个字符")
         if not isinstance(value, str) or not value.strip():
-            raise ValueError(f"{label}不能为空")
-        value = value.strip()
-        if len(value) > max_length:
-            raise ValueError(f"{label}不能超过{max_length}个字符")
-        values[column] = value
-    for column, label in (("issue_date", "发证日期"), ("valid_until", "有效日期")):
-        try:
-            parsed = date.fromisoformat(values[column])
-            if parsed.isoformat() != values[column]:
-                raise ValueError
-        except ValueError:
-            raise ValueError(f"{label}格式无效，请使用YYYY-MM-DD") from None
-    if values["valid_until"] < values["issue_date"]:
-        raise ValueError("有效日期不能早于发证日期")
-    if values["certificate_status"] not in CERTIFICATE_STATUSES:
-        raise ValueError("证书状态无效")
-    return values
+            raise ValueError(f"第{index}个字段的内容不能为空")
+        if len(value.strip()) > FIELD_VALUE_MAX_LENGTH:
+            raise ValueError(f"第{index}个字段的内容不能超过5000个字符")
+        normalized_fields.append({"label": label.strip(), "value": value.strip()})
+    return {
+        "folder_id": _parse_folder_id(data.get("folderId")),
+        "title": title.strip(),
+        "fields_json": json.dumps(normalized_fields, ensure_ascii=False),
+    }
 
 
 def _serialize(row):
@@ -85,7 +82,8 @@ def _serialize(row):
         "id": row["id"],
         "folderId": row["folder_id"],
         "folderName": row["folder_name"],
-        **{key: row[column] for key, (column, _, _) in FIELDS.items()},
+        "title": row["title"],
+        "fields": json.loads(row["fields_json"]),
         "createdAt": row["created_at"],
         "updatedAt": row["updated_at"],
     }
@@ -94,10 +92,7 @@ def _serialize(row):
 def _find(conn, qualification_id):
     return conn.execute(
         """
-        SELECT q.id, q.folder_id, f.name AS folder_name,
-               q.certificate_no, q.company_name, q.certification_basis,
-               q.registered_address, q.audit_address, q.certification_scope,
-               q.issue_date, q.valid_until, q.certificate_status,
+        SELECT q.id, q.folder_id, f.name AS folder_name, q.title, q.fields_json,
                q.created_at, q.updated_at
         FROM hr_company_qualifications AS q
         INNER JOIN hr_qualification_folders AS f ON f.id = q.folder_id
@@ -181,10 +176,7 @@ def list_qualifications():
         if folder_id is not None and not _folder(conn, folder_id):
             return jsonify({"success": False, "message": "文件夹不存在"}), 404
         query = """
-            SELECT q.id, q.folder_id, f.name AS folder_name,
-                   q.certificate_no, q.company_name, q.certification_basis,
-                   q.registered_address, q.audit_address, q.certification_scope,
-                   q.issue_date, q.valid_until, q.certificate_status,
+            SELECT q.id, q.folder_id, f.name AS folder_name, q.title, q.fields_json,
                    q.created_at, q.updated_at
             FROM hr_company_qualifications AS q
             INNER JOIN hr_qualification_folders AS f ON f.id = q.folder_id
@@ -226,21 +218,14 @@ def create_qualification():
                 return jsonify({"success": False, "message": "所属文件夹不存在"}), 400
             cursor = conn.execute(
                 """
-                INSERT INTO hr_company_qualifications (
-                    folder_id, folder_name, certificate_no, company_name, certification_basis,
-                    registered_address, audit_address, certification_scope,
-                    issue_date, valid_until, certificate_status, created_by
-                ) VALUES (
-                    :folder_id, :folder_name, :certificate_no, :company_name, :certification_basis,
-                    :registered_address, :audit_address, :certification_scope,
-                    :issue_date, :valid_until, :certificate_status, :created_by
-                )
+                INSERT INTO hr_company_qualifications (folder_id, title, fields_json, created_by)
+                VALUES (:folder_id, :title, :fields_json, :created_by)
                 """,
-                {**values, "folder_name": folder["name"], "created_by": creator},
+                {**values, "created_by": creator},
             )
             data = _serialize(_find(conn, cursor.lastrowid))
     except sqlite3.IntegrityError:
-        return jsonify({"success": False, "message": "证书编号已存在，请勿重复录入"}), 409
+        return jsonify({"success": False, "message": "文件夹已变更，请刷新后重试"}), 409
     return jsonify({"success": True, "message": "公司资质已创建", "data": data}), 201
 
 
@@ -262,18 +247,13 @@ def update_qualification(qualification_id):
             conn.execute(
                 """
                 UPDATE hr_company_qualifications
-                SET folder_id = :folder_id, folder_name = :folder_name,
-                    certificate_no = :certificate_no,
-                    company_name = :company_name, certification_basis = :certification_basis,
-                    registered_address = :registered_address, audit_address = :audit_address,
-                    certification_scope = :certification_scope, issue_date = :issue_date,
-                    valid_until = :valid_until, certificate_status = :certificate_status,
+                SET folder_id = :folder_id, title = :title, fields_json = :fields_json,
                     updated_at = datetime('now', 'localtime')
                 WHERE id = :id
                 """,
-                {**values, "folder_name": folder["name"], "id": qualification_id},
+                {**values, "id": qualification_id},
             )
             data = _serialize(_find(conn, qualification_id))
     except sqlite3.IntegrityError:
-        return jsonify({"success": False, "message": "证书编号已存在，请勿重复录入"}), 409
+        return jsonify({"success": False, "message": "文件夹已变更，请刷新后重试"}), 409
     return jsonify({"success": True, "message": "公司资质已更新", "data": data})

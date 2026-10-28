@@ -15,14 +15,14 @@
 
     <nav class="breadcrumb" aria-label="当前位置">
       <RouterLink :to="{ name: 'admin-hr-qualifications' }">公司资质</RouterLink>
-      <template v-if="form.folderId && selectedFolderName">
+      <template v-if="form.folderId && form.folderName">
         <ChevronRight :size="14" aria-hidden="true" />
         <RouterLink :to="{ name: 'admin-hr-qualifications', query: { folderId: form.folderId } }">
-          {{ selectedFolderName }}
+          {{ form.folderName }}
         </RouterLink>
       </template>
       <ChevronRight :size="14" aria-hidden="true" />
-      <span>{{ isViewing ? form.certificateNo || '资质文件' : pageTitle }}</span>
+      <span>{{ isViewing ? form.title || '资质文件' : pageTitle }}</span>
     </nav>
 
     <div v-if="loading" class="state-message" role="status">正在加载资质文件...</div>
@@ -32,69 +32,68 @@
     </div>
 
     <section v-else-if="isViewing" class="details-section" aria-label="资质文件详情">
+      <h3 class="section-title">{{ form.title }}</h3>
       <dl class="certificate-details">
-        <div v-for="field in detailFields" :key="field.key" class="detail-row">
+        <div v-for="(field, index) in form.fields" :key="index" class="detail-row">
           <dt>{{ field.label }}：</dt>
-          <dd>{{ field.date ? formatDate(form[field.key]) : form[field.key] }}</dd>
+          <dd>{{ field.value }}</dd>
         </div>
       </dl>
     </section>
 
     <form v-else class="qualification-form" @submit.prevent="saveQualification">
       <fieldset :disabled="saving">
-        <h3 class="section-title">资质文件信息</h3>
+        <h3 class="section-title">文件信息</h3>
         <div class="form-fields">
-          <div class="form-field full-width">
-            <label for="folder-id">所属文件夹 <span class="required">*</span></label>
-            <select id="folder-id" v-model="form.folderId" required>
-              <option value="" disabled>请选择文件夹</option>
-              <option v-for="folder in folders" :key="folder.id" :value="folder.id">{{ folder.name }}</option>
-            </select>
-            <span v-if="!folders.length" class="field-hint">暂无文件夹，请先返回公司资质新建文件夹</span>
-          </div>
           <div class="form-field">
-            <label for="certificate-no">证书编号 <span class="required">*</span></label>
-            <input id="certificate-no" v-model="form.certificateNo" type="text" maxlength="100" required placeholder="请输入证书编号" />
+            <label for="file-title">文件名称 <span class="required">*</span></label>
+            <input id="file-title" v-model="form.title" type="text" maxlength="200" required placeholder="请输入文件名称" />
           </div>
-          <div class="form-field">
-            <label for="company-name">中文名称 <span class="required">*</span></label>
-            <input id="company-name" v-model="form.companyName" type="text" maxlength="200" required placeholder="请输入公司中文名称" />
-          </div>
-          <div class="form-field full-width">
-            <label for="certification-basis">认证依据 <span class="required">*</span></label>
-            <input id="certification-basis" v-model="form.certificationBasis" type="text" maxlength="500" required placeholder="请输入认证标准或依据" />
-          </div>
-          <div class="form-field full-width">
-            <label for="registered-address">注册地址 <span class="required">*</span></label>
-            <textarea id="registered-address" v-model="form.registeredAddress" rows="2" maxlength="1000" required placeholder="请输入注册地址"></textarea>
-          </div>
-          <div class="form-field full-width">
-            <label for="audit-address">审核地址 <span class="required">*</span></label>
-            <textarea id="audit-address" v-model="form.auditAddress" rows="2" maxlength="1000" required placeholder="请输入审核地址"></textarea>
-          </div>
-          <div class="form-field full-width">
-            <label for="certification-scope">认证范围 <span class="required">*</span></label>
-            <textarea id="certification-scope" v-model="form.certificationScope" rows="3" maxlength="5000" required placeholder="请输入认证范围"></textarea>
-          </div>
-          <div class="form-field">
-            <label for="issue-date">发证日期 <span class="required">*</span></label>
-            <input id="issue-date" v-model="form.issueDate" type="date" max="9999-12-31" required />
-          </div>
-          <div class="form-field">
-            <label for="valid-until">有效日期 <span class="required">*</span></label>
-            <input id="valid-until" v-model="form.validUntil" type="date" :min="form.issueDate || undefined" max="9999-12-31" required />
-          </div>
-          <div class="form-field">
-            <label for="certificate-status">证书状态 <span class="required">*</span></label>
-            <select id="certificate-status" v-model="form.certificateStatus" required>
-              <option v-for="status in certificateStatuses" :key="status" :value="status">{{ status }}</option>
-            </select>
+          <div class="custom-fields">
+            <div class="field-column-headings" aria-hidden="true">
+              <span>字段标题</span>
+              <span>字段内容</span>
+            </div>
+            <div v-for="(field, index) in form.fields" :key="field.id" class="custom-field-row">
+              <input
+                :id="`field-label-${field.id}`"
+                v-model="field.label"
+                :aria-label="`第${index + 1}项字段标题`"
+                type="text"
+                maxlength="100"
+                required
+                placeholder="请输入标题"
+              />
+              <textarea
+                :id="`field-value-${field.id}`"
+                v-model="field.value"
+                :aria-label="`${field.label || `第${index + 1}项`}的内容`"
+                rows="2"
+                maxlength="5000"
+                required
+                placeholder="请输入内容"
+              ></textarea>
+              <button
+                class="remove-field-button"
+                type="button"
+                :aria-label="`删除第${index + 1}项字段`"
+                title="删除字段"
+                :disabled="form.fields.length === 1"
+                @click="removeField(index)"
+              >
+                <Trash2 :size="18" aria-hidden="true" />
+              </button>
+            </div>
+            <button class="text-button add-field-button" type="button" :disabled="form.fields.length >= 50" @click="addField">
+              <Plus :size="16" aria-hidden="true" />
+              添加字段
+            </button>
           </div>
         </div>
         <p v-if="saveError" class="save-error" role="alert">{{ saveError }}</p>
         <footer class="form-actions">
           <button class="secondary-button" type="button" @click="cancel">取消</button>
-          <button class="primary-button" type="submit" :disabled="!folders.length">
+          <button class="primary-button" type="submit">
             <Save :size="16" aria-hidden="true" />
             {{ saving ? '保存中...' : '保存文件' }}
           </button>
@@ -105,9 +104,9 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { ArrowLeft, ChevronRight, Pencil, Save } from '@lucide/vue'
+import { ArrowLeft, ChevronRight, Pencil, Plus, Save, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 
 const props = defineProps({
@@ -121,37 +120,19 @@ const loaded = ref(false)
 const saving = ref(false)
 const loadError = ref('')
 const saveError = ref('')
-const folders = ref([])
-const certificateStatuses = ['有效', '暂停', '撤销', '注销', '过期']
-const detailFields = [
-  { key: 'certificateNo', label: '证书编号' },
-  { key: 'companyName', label: '中文名称' },
-  { key: 'certificationBasis', label: '认证依据' },
-  { key: 'registeredAddress', label: '注册地址' },
-  { key: 'auditAddress', label: '审核地址' },
-  { key: 'certificationScope', label: '认证范围' },
-  { key: 'issueDate', label: '发证日期', date: true },
-  { key: 'validUntil', label: '有效日期', date: true },
-  { key: 'certificateStatus', label: '证书状态' }
-]
+const defaultLabels = ['证书编号', '中文名称', '认证依据', '注册地址', '审核地址', '认证范围', '发证日期', '有效日期', '证书状态']
+let nextFieldId = 0
+const createField = (label = '', value = '') => ({ id: ++nextFieldId, label, value })
 
 const emptyForm = () => ({
   folderId: props.folderId ? Number(props.folderId) : '',
   folderName: '',
-  certificateNo: '',
-  companyName: '',
-  certificationBasis: '',
-  registeredAddress: '',
-  auditAddress: '',
-  certificationScope: '',
-  issueDate: '',
-  validUntil: '',
-  certificateStatus: '有效'
+  title: '',
+  fields: defaultLabels.map(label => createField(label))
 })
 const form = reactive(emptyForm())
 const isViewing = computed(() => props.mode === 'view')
 const pageTitle = computed(() => ({ create: '新建文件', edit: '编辑文件', view: '文件预览' })[props.mode])
-const selectedFolderName = computed(() => folders.value.find(folder => folder.id === form.folderId)?.name || form.folderName)
 
 const folderPath = () => form.folderId
   ? { name: 'admin-hr-qualifications', query: { folderId: form.folderId } }
@@ -161,10 +142,16 @@ const editQualification = () => router.push({ name: 'admin-hr-qualification-edit
 const cancel = () => props.mode === 'edit'
   ? router.push({ name: 'admin-hr-qualification-view', params: { id: props.qualificationId } })
   : backToList()
-const formatDate = value => {
-  if (!value) return ''
-  const [year, month, day] = value.split('-')
-  return `${year}年${Number(month)}月${Number(day)}日`
+async function addField() {
+  if (form.fields.length >= 50) return
+  const field = createField()
+  form.fields.push(field)
+  await nextTick()
+  document.getElementById(`field-label-${field.id}`)?.focus()
+}
+
+function removeField(index) {
+  if (form.fields.length > 1) form.fields.splice(index, 1)
 }
 
 let loadVersion = 0
@@ -175,21 +162,30 @@ async function loadForm() {
   saveError.value = ''
   loadError.value = ''
   try {
-    const folderResponse = await request.get('/hr/qualifications/folders')
-    if (!folderResponse.success) throw new Error(folderResponse.message || '加载文件夹失败')
-    if (version !== loadVersion) return
-    folders.value = folderResponse.data
     Object.assign(form, emptyForm())
 
     if (props.mode !== 'create') {
       const response = await request.get(`/hr/qualifications/${props.qualificationId}`)
       if (!response.success) throw new Error(response.message || '加载资质文件失败')
       if (version !== loadVersion) return
-      Object.keys(form).forEach(key => {
-        if (response.data[key] !== undefined) form[key] = response.data[key]
+      const data = response.data
+      Object.assign(form, {
+        folderId: data.folderId,
+        folderName: data.folderName,
+        title: data.title,
+        fields: data.fields.map(field => createField(field.label, field.value))
       })
-    } else if (form.folderId && !folders.value.some(folder => folder.id === form.folderId)) {
-      form.folderId = ''
+    } else {
+      if (!Number.isSafeInteger(form.folderId) || form.folderId <= 0) {
+        await router.replace({ name: 'admin-hr-qualifications' })
+        return
+      }
+      const folderResponse = await request.get('/hr/qualifications/folders')
+      if (!folderResponse.success) throw new Error(folderResponse.message || '加载文件夹失败')
+      if (version !== loadVersion) return
+      const folder = folderResponse.data.find(folder => folder.id === form.folderId)
+      if (!folder) throw new Error('当前文件夹不存在，请返回公司资质选择文件夹')
+      form.folderName = folder.name
     }
     loaded.value = true
   } catch (error) {
@@ -204,18 +200,15 @@ async function saveQualification() {
   saveError.value = ''
   const payload = {
     folderId: Number(form.folderId),
-    ...Object.fromEntries(
-      Object.entries(form)
-        .filter(([key]) => !['folderId', 'folderName'].includes(key))
-        .map(([key, value]) => [key, value.trim()])
-    )
+    title: form.title.trim(),
+    fields: form.fields.map(field => ({ label: field.label.trim(), value: field.value.trim() }))
   }
-  if (!payload.folderId || Object.values(payload).some(value => !value)) {
-    saveError.value = '请完整填写所有必填项'
+  if (!payload.folderId || !payload.title) {
+    saveError.value = '请填写文件名称，并从有效的文件夹内新建文件'
     return
   }
-  if (payload.validUntil < payload.issueDate) {
-    saveError.value = '有效日期不能早于发证日期'
+  if (!payload.fields.length || payload.fields.some(field => !field.label || !field.value)) {
+    saveError.value = '请填写每项字段的标题和内容'
     return
   }
   saving.value = true
@@ -324,9 +317,9 @@ fieldset {
 }
 
 .form-fields {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
   padding: 24px;
 }
 
@@ -337,8 +330,6 @@ fieldset {
   min-width: 0;
 }
 
-.full-width { grid-column: 1 / -1; }
-
 .form-field label {
   color: #374151;
   font-size: 14px;
@@ -348,8 +339,8 @@ fieldset {
 .required { color: #dc2626; }
 
 .form-field input,
-.form-field textarea,
-.form-field select {
+.custom-field-row input,
+.custom-field-row textarea {
   width: 100%;
   min-width: 0;
   padding: 10px 12px;
@@ -363,20 +354,43 @@ fieldset {
   box-sizing: border-box;
 }
 
-.form-field textarea { resize: vertical; }
+.custom-field-row textarea { resize: vertical; }
 
 .form-field input:focus,
-.form-field textarea:focus,
-.form-field select:focus {
+.custom-field-row input:focus,
+.custom-field-row textarea:focus {
   outline: none;
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgb(59 130 246 / 10%);
 }
 
-.field-hint {
-  color: #b45309;
-  font-size: 12px;
+.field-column-headings,
+.custom-field-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(0, 3fr) 36px;
+  align-items: start;
+  gap: 12px;
 }
+
+.field-column-headings { margin-bottom: 10px; color: #374151; font-size: 14px; font-weight: 500; }
+.custom-field-row { margin-bottom: 16px; }
+.remove-field-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #6b7280;
+  cursor: pointer;
+}
+.remove-field-button:hover:not(:disabled) { background: #fef2f2; color: #b91c1c; }
+.remove-field-button:disabled { cursor: not-allowed; opacity: 0.35; }
+.add-field-button { display: inline-flex; align-items: center; gap: 6px; padding: 8px 0; font: inherit; font-size: 14px; }
+.add-field-button:disabled { cursor: not-allowed; opacity: 0.5; }
 
 .form-actions {
   display: flex;
@@ -449,7 +463,12 @@ a:focus-visible {
   .page-title { font-size: 22px; }
   .primary-button,
   .secondary-button { padding: 10px 12px; }
-  .form-fields { grid-template-columns: minmax(0, 1fr); padding: 20px 16px; }
+  .form-fields { padding: 20px 16px; }
+  .field-column-headings { display: none; }
+  .custom-field-row { grid-template-columns: minmax(0, 1fr) 36px; gap: 8px; }
+  .custom-field-row input { grid-column: 1; }
+  .custom-field-row textarea { grid-column: 1; }
+  .remove-field-button { grid-column: 2; grid-row: 1 / 3; }
   .section-title,
   .form-actions { padding: 16px; }
   .detail-row { padding: 12px 16px; }

@@ -19,7 +19,7 @@
           <FolderPlus :size="18" aria-hidden="true" />
           新建文件夹
         </button>
-        <button class="primary-button" type="button" @click="createFile">
+        <button v-if="currentFolder" class="primary-button" type="button" @click="createFile">
           <FilePlus :size="18" aria-hidden="true" />
           新建文件
         </button>
@@ -44,7 +44,7 @@
           v-model="search"
           type="search"
           :aria-label="currentFolder ? '搜索资质文件' : '搜索文件夹'"
-          :placeholder="currentFolder ? '搜索证书编号或中文名称' : '搜索文件夹'"
+          :placeholder="currentFolder ? '搜索文件名称或内容' : '搜索文件夹'"
         />
       </label>
     </div>
@@ -85,13 +85,13 @@
           :key="file.id"
           class="file-card"
           type="button"
-          :aria-label="`打开${file.certificateNo}`"
+          :aria-label="`打开${file.title}`"
           @click="openFile(file)"
         >
           <FileText class="file-icon" :size="62" stroke-width="1.5" aria-hidden="true" />
-          <span class="file-name" :title="file.certificateNo">{{ file.certificateNo }}</span>
-          <span class="file-company" :title="file.companyName">{{ file.companyName }}</span>
-          <span class="file-status" :class="statusClass(file.certificateStatus)">{{ file.certificateStatus }}</span>
+          <span class="file-name" :title="file.title">{{ file.title }}</span>
+          <span class="file-company" :title="file.fields[0]?.value">{{ file.fields[0]?.value }}</span>
+          <span class="file-field-count">{{ file.fields.length }} 项内容</span>
         </button>
         <button class="file-card add-file" type="button" @click="createFile">
           <FilePlus class="file-icon" :size="62" stroke-width="1.25" aria-hidden="true" />
@@ -163,12 +163,10 @@ const filteredFolders = computed(() => {
 const filteredFiles = computed(() => {
   const keyword = search.value.trim().toLocaleLowerCase()
   return files.value.filter(file =>
-    [file.certificateNo, file.companyName, file.certificationBasis]
+    [file.title, ...file.fields.flatMap(field => [field.label, field.value])]
       .some(value => value.toLocaleLowerCase().includes(keyword))
   )
 })
-
-const statusClass = status => status === '有效' ? 'status-valid' : status === '暂停' ? 'status-paused' : 'status-inactive'
 
 function openRoot() {
   router.push({ name: 'admin-hr-qualifications' })
@@ -179,9 +177,10 @@ function openFolder(folder) {
 }
 
 function createFile() {
+  if (!currentFolder.value) return
   router.push({
     name: 'admin-hr-qualification-create',
-    query: folderId.value ? { folderId: folderId.value } : undefined
+    query: { folderId: currentFolder.value.id }
   })
 }
 
@@ -475,7 +474,7 @@ onMounted(loadCurrentView)
 
 .folder-count,
 .file-company,
-.file-status {
+.file-field-count {
   margin-top: 6px;
   color: #6b7280;
   font-size: 12px;
@@ -487,10 +486,7 @@ onMounted(loadCurrentView)
   white-space: nowrap;
 }
 
-.file-status { margin-top: auto; }
-.status-valid { color: #15803d; }
-.status-paused { color: #b45309; }
-.status-inactive { color: #b91c1c; }
+.file-field-count { margin-top: auto; }
 
 .add-file {
   border: 2px dashed #9ca3af;

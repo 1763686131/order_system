@@ -2,6 +2,7 @@
 数据库连接模块（生产环境使用）
 """
 import os
+import json
 import sqlite3
 from contextlib import contextmanager
 from threading import Lock
@@ -1192,7 +1193,7 @@ def _ensure_hr_reports_schema(conn):
 
 
 def _ensure_hr_qualifications_schema(conn):
-    """Store qualification directories separately from qualification files."""
+    """Store files as ordered, editable title/content pairs."""
     global _hr_qualifications_schema_ready
     if _hr_qualifications_schema_ready:
         return
@@ -1213,83 +1214,94 @@ def _ensure_hr_qualifications_schema(conn):
             """
         )
 
-        qualification_table = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
-            "AND name = 'hr_company_qualifications'"
-        ).fetchone()
-        if not qualification_table:
+        columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(hr_company_qualifications)")
+        }
+        conn.execute("SAVEPOINT hr_qualification_fields")
+        try:
+            # Rebuild the certificate-only schema atomically, preserving file IDs and dates.
+            legacy_rows = []
+            if columns and "fields_json" not in columns:
+                legacy_rows = conn.execute(
+                    "SELECT * FROM hr_company_qualifications ORDER BY id"
+                ).fetchall()
+                conn.execute(
+                    "ALTER TABLE hr_company_qualifications "
+                    "RENAME TO hr_company_qualifications_legacy"
+                )
             conn.execute(
                 """
-                CREATE TABLE hr_company_qualifications (
+                CREATE TABLE IF NOT EXISTS hr_company_qualifications (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     folder_id INTEGER NOT NULL,
-                    folder_name TEXT NOT NULL DEFAULT '',
-                    certificate_no TEXT NOT NULL UNIQUE COLLATE NOCASE,
-                    company_name TEXT NOT NULL,
-                    certification_basis TEXT NOT NULL,
-                    registered_address TEXT NOT NULL,
-                    audit_address TEXT NOT NULL,
-                    certification_scope TEXT NOT NULL,
-                    issue_date TEXT NOT NULL,
-                    valid_until TEXT NOT NULL,
-                    certificate_status TEXT NOT NULL DEFAULT '有效',
+                    title TEXT NOT NULL,
+                    fields_json TEXT NOT NULL,
                     created_by TEXT NOT NULL DEFAULT '',
                     created_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now', 'localtime')),
-                    CHECK (valid_until >= issue_date),
-                    CHECK (certificate_status IN ('有效', '暂停', '撤销', '注销', '过期')),
                     FOREIGN KEY (folder_id) REFERENCES hr_qualification_folders(id)
                 )
                 """
             )
-        else:
-            columns = {
-                row["name"]
-                for row in conn.execute(
-                    "PRAGMA table_info(hr_company_qualifications)"
-                ).fetchall()
-            }
-            if "folder_id" not in columns:
-                conn.execute(
-                    "ALTER TABLE hr_company_qualifications "
-                    "ADD COLUMN folder_id INTEGER "
-                    "REFERENCES hr_qualification_folders(id)"
-                )
-
-            legacy_rows = conn.execute(
-                """
-                SELECT id, folder_name
-                FROM hr_company_qualifications
-                WHERE folder_id IS NULL OR folder_id = 0
-                """
-            ).fetchall()
+            legacy_fields = (
+                ("certificate_no", "证书编号"),
+                ("company_name", "中文名称"),
+                ("certification_basis", "认证依据"),
+                ("registered_address", "注册地址"),
+                ("audit_address", "审核地址"),
+                ("certification_scope", "认证范围"),
+                ("issue_date", "发证日期"),
+                ("valid_until", "有效日期"),
+                ("certificate_status", "证书状态"),
+            )
             for row in legacy_rows:
-                folder_name = str(row["folder_name"] or "").strip() or "未分类"
-                conn.execute(
-                    """
-                    INSERT INTO hr_qualification_folders (name)
-                    VALUES (?)
-                    ON CONFLICT(name) DO NOTHING
-                    """,
-                    (folder_name,),
-                )
+                folder_id = row["folder_id"] if "folder_id" in columns else None
                 folder = conn.execute(
-                    "SELECT id FROM hr_qualification_folders WHERE name = ? COLLATE NOCASE",
-                    (folder_name,),
+                    "SELECT id FROM hr_qualification_folders WHERE id = ?", (folder_id,)
                 ).fetchone()
+                if not folder:
+                    folder_name = str(row["folder_name"] or "").strip() or "未分类"
+                    conn.execute(
+                        "INSERT INTO hr_qualification_folders (name) VALUES (?) "
+                        "ON CONFLICT(name) DO NOTHING",
+                        (folder_name,),
+                    )
+                    folder_id = conn.execute(
+                        "SELECT id FROM hr_qualification_folders WHERE name = ? COLLATE NOCASE",
+                        (folder_name,),
+                    ).fetchone()["id"]
+                fields = []
+                for column, label in legacy_fields:
+                    value = row[column]
+                    if column in ("issue_date", "valid_until") and value:
+                        parts = value.split("-")
+                        if len(parts) == 3 and all(part.isdigit() for part in parts):
+                            value = f"{parts[0]}年{int(parts[1])}月{int(parts[2])}日"
+                    fields.append({"label": label, "value": value})
                 conn.execute(
                     """
-                    UPDATE hr_company_qualifications
-                    SET folder_id = ?
-                    WHERE id = ?
+                    INSERT INTO hr_company_qualifications
+                        (id, folder_id, title, fields_json, created_by, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
                     """,
-                    (folder["id"], row["id"]),
+                    (
+                        row["id"], folder_id, row["certificate_no"],
+                        json.dumps(fields, ensure_ascii=False), row["created_by"],
+                        row["created_at"], row["updated_at"],
+                    ),
                 )
-
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_hr_qualifications_folder_id "
-            "ON hr_company_qualifications(folder_id)"
-        )
+            if columns and "fields_json" not in columns:
+                conn.execute("DROP TABLE hr_company_qualifications_legacy")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_hr_qualifications_folder_id "
+                "ON hr_company_qualifications(folder_id)"
+            )
+            conn.execute("RELEASE SAVEPOINT hr_qualification_fields")
+        except Exception:
+            conn.execute("ROLLBACK TO SAVEPOINT hr_qualification_fields")
+            conn.execute("RELEASE SAVEPOINT hr_qualification_fields")
+            raise
         conn.commit()
         _hr_qualifications_schema_ready = True
 
