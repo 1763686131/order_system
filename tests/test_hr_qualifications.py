@@ -395,6 +395,167 @@ class CompanyQualificationTests(unittest.TestCase):
         self.assertEqual(
             self.client.put("/api/hr/qualifications/999", json=self.payload).status_code, 404
         )
+
+    def test_sharing_is_disabled_by_default_and_cannot_be_enabled_by_file_payload(self):
+        file = self.create(shareEnabled=True, share_token="attacker").get_json()["data"]
+        response = self.client.get(f'/api/hr/qualifications/{file["id"]}/share')
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.get_json()["data"], {"enabled": False, "path": None})
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        with self.get_db() as conn:
+            row = conn.execute(
+                "SELECT share_enabled, share_token FROM hr_company_qualifications WHERE id = ?",
+                (file["id"],),
+            ).fetchone()
+            self.assertEqual(tuple(row), (0, None))
+
+    def test_enabled_share_exposes_only_the_document_without_logging_in(self):
+        file = self.create().get_json()["data"]
+        response = self.client.put(
+            f'/api/hr/qualifications/{file["id"]}/share', json={"enabled": True}
+        )
+        self.assertEqual(response.status_code, 200, response.get_json())
+        settings = response.get_json()["data"]
+        token = settings["path"].rsplit("/", 1)[1]
+        self.assertRegex(token, r"^[A-Za-z0-9_-]{43}$")
+        with self.get_db() as conn:
+            row = conn.execute(
+                "SELECT share_enabled, share_token FROM hr_company_qualifications WHERE id = ?",
+                (file["id"],),
+            ).fetchone()
+            self.assertEqual(tuple(row), (1, token))
+        self.user = None
+        response = self.client.get(f"/api/hr/qualifications/share/{token}")
+        self.assertEqual(response.status_code, 200, response.get_json())
+        self.assertEqual(
+            response.get_json(), {"success": True, "data": {"title": file["title"], "fields": file["fields"]}}
+        )
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.assertEqual(response.headers["Referrer-Policy"], "no-referrer")
+        self.assertIn("noindex", response.headers["X-Robots-Tag"])
+        self.assertNotIn("Set-Cookie", response.headers)
+
+    def test_disabling_share_revokes_visitors_and_reenabling_preserves_printed_qr(self):
+        file = self.create().get_json()["data"]
+        path = f'/api/hr/qualifications/{file["id"]}/share'
+        enabled = self.client.put(path, json={"enabled": True}).get_json()["data"]
+        token = enabled["path"].rsplit("/", 1)[1]
+        public_path = f"/api/hr/qualifications/share/{token}"
+        admin = self.user
+        self.user = None
+        self.assertEqual(self.client.get(public_path).status_code, 200)
+        self.user = admin
+        disabled = self.client.put(path, json={"enabled": False})
+        self.assertEqual(disabled.status_code, 200)
+        self.assertFalse(disabled.get_json()["data"]["enabled"])
+        self.user = None
+        response = self.client.get(public_path)
+        self.assertEqual(response.status_code, 404)
+        self.assertNotIn("data", response.get_json())
+        self.assertIn("no-store", response.headers["Cache-Control"])
+        self.user = admin
+        reenabled = self.client.put(path, json={"enabled": True}).get_json()["data"]
+        self.assertEqual(reenabled, enabled)
+        self.user = None
+        self.assertEqual(self.client.get(public_path).status_code, 200)
+
+    def test_share_token_does_not_grant_access_to_admin_data_or_mutations(self):
+        file = self.create().get_json()["data"]
+        settings = self.client.put(
+            f'/api/hr/qualifications/{file["id"]}/share', json={"enabled": True}
+        ).get_json()["data"]
+        token = settings["path"].rsplit("/", 1)[1]
+        self.user = None
+        self.assertEqual(self.client.get(f"/api/hr/qualifications/share/{token}").status_code, 200)
+        protected_calls = [
+            ("get", "/api/hr/qualifications", {}),
+            ("get", "/api/hr/qualifications/folders", {}),
+            ("get", f'/api/hr/qualifications/{file["id"]}', {}),
+            ("get", f'/api/hr/qualifications/{file["id"]}?share_token={token}', {}),
+            ("get", f'/api/hr/qualifications/{file["id"]}/share', {}),
+            ("put", f'/api/hr/qualifications/{file["id"]}', {"json": self.payload}),
+            ("post", "/api/hr/qualifications", {"json": self.payload}),
+            ("put", f'/api/hr/qualifications/{file["id"]}/share', {"json": {"enabled": True}}),
+        ]
+        for method, path, kwargs in protected_calls:
+            with self.subTest(method=method, path=path):
+                self.assertEqual(getattr(self.client, method)(path, **kwargs).status_code, 401)
+
+    def test_invalid_and_modified_tokens_never_expose_files(self):
+        file = self.create().get_json()["data"]
+        settings = self.client.put(
+            f'/api/hr/qualifications/{file["id"]}/share', json={"enabled": True}
+        ).get_json()["data"]
+        token = settings["path"].rsplit("/", 1)[1]
+        altered = ("A" if token[0] != "A" else "B") + token[1:]
+        self.user = None
+        for invalid in ("1", str(file["id"]), "not-a-token", "a" * 100, token[:-1], altered, "' OR 1=1 --"):
+            with self.subTest(token=invalid):
+                response = self.client.get(f"/api/hr/qualifications/share/{invalid}")
+                self.assertEqual(response.status_code, 404)
+                self.assertNotIn("data", response.get_json())
+
+    def test_share_token_cannot_be_used_to_edit_the_public_document(self):
+        file = self.create().get_json()["data"]
+        settings = self.client.put(
+            f'/api/hr/qualifications/{file["id"]}/share', json={"enabled": True}
+        ).get_json()["data"]
+        token = settings["path"].rsplit("/", 1)[1]
+        self.user = None
+        for method in ("put", "post", "delete"):
+            response = getattr(self.client, method)(
+                f"/api/hr/qualifications/share/{token}", json=self.payload
+            )
+            self.assertEqual(response.status_code, 405)
+
+    def test_enabled_share_remains_scoped_to_one_file_and_shows_edits(self):
+        original = self.create().get_json()["data"]
+        private_file = self.create(title="不公开的文件").get_json()["data"]
+        share_path = f'/api/hr/qualifications/{original["id"]}/share'
+        settings = self.client.put(share_path, json={"enabled": True}).get_json()["data"]
+        token = settings["path"].rsplit("/", 1)[1]
+        fields = [{"label": "公开更新", "value": "新的内容"}]
+        response = self.client.put(
+            f'/api/hr/qualifications/{original["id"]}',
+            json={**self.payload, "title": "体系认证", "fields": fields},
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(self.client.get(share_path).get_json()["data"], settings)
+        self.assertEqual(
+            self.client.get(f'/api/hr/qualifications/{private_file["id"]}/share').get_json()["data"],
+            {"enabled": False, "path": None},
+        )
+        self.user = None
+        response = self.client.get(f"/api/hr/qualifications/share/{token}")
+        self.assertEqual(response.get_json()["data"], {"title": "体系认证", "fields": fields})
+        self.assertEqual(self.client.get(f'/api/hr/qualifications/{private_file["id"]}').status_code, 401)
+
+    def test_share_settings_validate_booleans_and_missing_files(self):
+        file = self.create().get_json()["data"]
+        for payload in (None, [], "true", {}, {"enabled": "true"}, {"enabled": 1}, {"enabled": None}):
+            with self.subTest(payload=payload):
+                response = self.client.put(f'/api/hr/qualifications/{file["id"]}/share', json=payload)
+                self.assertEqual(response.status_code, 400)
+        self.assertEqual(self.client.get("/api/hr/qualifications/999/share").status_code, 404)
+        self.assertEqual(
+            self.client.put("/api/hr/qualifications/999/share", json={"enabled": True}).status_code, 404
+        )
+
+    def test_share_schema_upgrade_keeps_existing_content_and_starts_disabled(self):
+        file = self.create().get_json()["data"]
+        with self.get_db() as conn:
+            conn.execute("DROP INDEX idx_hr_qualifications_share_token")
+            conn.execute("ALTER TABLE hr_company_qualifications DROP COLUMN share_token")
+            conn.execute("ALTER TABLE hr_company_qualifications DROP COLUMN share_enabled")
+            db_module._hr_qualifications_schema_ready = False
+            _ensure_hr_qualifications_schema(conn)
+            self.assertEqual(conn.execute("PRAGMA foreign_key_check").fetchall(), [])
+        self.assertEqual(self.client.get(f'/api/hr/qualifications/{file["id"]}').get_json()["data"], file)
+        self.assertEqual(
+            self.client.get(f'/api/hr/qualifications/{file["id"]}/share').get_json()["data"],
+            {"enabled": False, "path": None},
+        )
+
     def test_every_endpoint_requires_login_and_admin_permission(self):
         calls = [
             ("get", "/api/hr/qualifications/folders", {}),
@@ -403,6 +564,8 @@ class CompanyQualificationTests(unittest.TestCase):
             ("get", "/api/hr/qualifications/1", {}),
             ("post", "/api/hr/qualifications", {"json": self.payload}),
             ("put", "/api/hr/qualifications/1", {"json": self.payload}),
+            ("get", "/api/hr/qualifications/1/share", {}),
+            ("put", "/api/hr/qualifications/1/share", {"json": {"enabled": True}}),
         ]
         for user, expected in (
             (None, 401),

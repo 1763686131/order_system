@@ -1,6 +1,8 @@
 """Company qualification directories and customizable data files."""
 
 import json
+import re
+import secrets
 import sqlite3
 
 from flask import Blueprint, jsonify, request
@@ -19,6 +21,87 @@ FILE_TITLE_MAX_LENGTH = 200
 FIELD_LABEL_MAX_LENGTH = 100
 FIELD_VALUE_MAX_LENGTH = 5000
 MAX_FIELDS = 50
+SHARE_TOKEN_PATTERN = re.compile(r"[A-Za-z0-9_-]{43}")
+
+
+def _private_response(payload, status=200):
+    response = jsonify(payload)
+    response.status_code = status
+    response.headers["Cache-Control"] = "no-store, private, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    return response
+
+
+def _share_settings(row):
+    token = row["share_token"]
+    return {
+        "enabled": bool(row["share_enabled"]),
+        "path": f"/share/qualifications/{token}" if token else None,
+    }
+
+
+@hr_qualifications_bp.route("/share/<token>", methods=["GET"])
+def get_shared_qualification(token):
+    if not SHARE_TOKEN_PATTERN.fullmatch(token):
+        return _private_response({"success": False, "message": "分享已关闭或链接无效"}, 404)
+    with get_db() as conn:
+        row = conn.execute(
+            """
+            SELECT title, fields_json FROM hr_company_qualifications
+            WHERE share_token = ? AND share_enabled = 1
+            """,
+            (token,),
+        ).fetchone()
+        if not row:
+            return _private_response({"success": False, "message": "分享已关闭或链接无效"}, 404)
+        return _private_response({
+            "success": True,
+            "data": {"title": row["title"], "fields": json.loads(row["fields_json"])},
+        })
+
+
+@hr_qualifications_bp.route("/<int:qualification_id>/share", methods=["GET"])
+@require_admin_permission(QUALIFICATION_PERMISSION)
+def get_share_settings(qualification_id):
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT share_enabled, share_token FROM hr_company_qualifications WHERE id = ?",
+            (qualification_id,),
+        ).fetchone()
+        if not row:
+            return _private_response({"success": False, "message": "公司资质不存在"}, 404)
+        return _private_response({"success": True, "data": _share_settings(row)})
+
+
+@hr_qualifications_bp.route("/<int:qualification_id>/share", methods=["PUT"])
+@require_admin_permission(QUALIFICATION_PERMISSION)
+def update_share_settings(qualification_id):
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get("enabled"), bool):
+        return _private_response({"success": False, "message": "请提交有效的分享开关状态"}, 400)
+    with get_db() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT share_enabled, share_token FROM hr_company_qualifications WHERE id = ?",
+            (qualification_id,),
+        ).fetchone()
+        if not row:
+            return _private_response({"success": False, "message": "公司资质不存在"}, 404)
+        # Keep printed product QR codes stable when sharing is switched off and on.
+        token = row["share_token"]
+        if data["enabled"] and not token:
+            token = secrets.token_urlsafe(32)
+        conn.execute(
+            "UPDATE hr_company_qualifications SET share_enabled = ?, share_token = ? WHERE id = ?",
+            (int(data["enabled"]), token, qualification_id),
+        )
+        row = conn.execute(
+            "SELECT share_enabled, share_token FROM hr_company_qualifications WHERE id = ?",
+            (qualification_id,),
+        ).fetchone()
+        return _private_response({"success": True, "data": _share_settings(row)})
 
 
 def _parse_folder_id(value):

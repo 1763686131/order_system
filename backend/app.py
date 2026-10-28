@@ -245,6 +245,15 @@ def uploaded_file(filename):
 # ==========================================
 # 前端静态文件路由（必须放在最后）
 # ==========================================
+@app.route('/share/qualifications/<token>')
+def shared_qualification_page(token):
+    response = send_from_directory(FRONTEND_DIR, 'index.html')
+    response.headers["Cache-Control"] = "no-store, private, max-age=0"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["X-Robots-Tag"] = "noindex, nofollow, noarchive"
+    return response
+
+
 @app.route('/<path:path>')
 def send_static_files(path):
     """前端路由拦截器"""

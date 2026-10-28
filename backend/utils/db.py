@@ -1293,6 +1293,24 @@ def _ensure_hr_qualifications_schema(conn):
                 )
             if columns and "fields_json" not in columns:
                 conn.execute("DROP TABLE hr_company_qualifications_legacy")
+            file_columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(hr_company_qualifications)")
+            }
+            if "share_enabled" not in file_columns:
+                conn.execute(
+                    "ALTER TABLE hr_company_qualifications "
+                    "ADD COLUMN share_enabled INTEGER NOT NULL DEFAULT 0 "
+                    "CHECK (share_enabled IN (0, 1))"
+                )
+            if "share_token" not in file_columns:
+                conn.execute(
+                    "ALTER TABLE hr_company_qualifications ADD COLUMN share_token TEXT"
+                )
+            conn.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS idx_hr_qualifications_share_token "
+                "ON hr_company_qualifications(share_token)"
+            )
             conn.execute(
                 "CREATE INDEX IF NOT EXISTS idx_hr_qualifications_folder_id "
                 "ON hr_company_qualifications(folder_id)"

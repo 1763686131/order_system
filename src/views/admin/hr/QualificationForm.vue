@@ -7,10 +7,16 @@
         </button>
         <h2 class="page-title">{{ pageTitle }}</h2>
       </div>
-      <button v-if="isViewing && loaded" class="primary-button" type="button" @click="editQualification">
-        <Pencil :size="16" aria-hidden="true" />
-        编辑文件
-      </button>
+      <div v-if="isViewing && loaded" class="toolbar-actions">
+        <button class="secondary-button" type="button" @click="showShareDialog = true">
+          <QrCode :size="16" aria-hidden="true" />
+          分享二维码
+        </button>
+        <button class="primary-button" type="button" @click="editQualification">
+          <Pencil :size="16" aria-hidden="true" />
+          编辑文件
+        </button>
+      </div>
     </header>
 
     <nav class="breadcrumb" aria-label="当前位置">
@@ -31,15 +37,7 @@
       <button class="text-button" type="button" @click="loadForm">重新加载</button>
     </div>
 
-    <section v-else-if="isViewing" class="details-section" aria-label="资质文件详情">
-      <h3 class="section-title">{{ form.title }}</h3>
-      <dl class="certificate-details">
-        <div v-for="(field, index) in form.fields" :key="index" class="detail-row">
-          <dt>{{ field.label }}：</dt>
-          <dd>{{ field.value }}</dd>
-        </div>
-      </dl>
-    </section>
+    <QualificationDetails v-else-if="isViewing" :title="form.title" :fields="form.fields" />
 
     <form v-else class="qualification-form" @submit.prevent="saveQualification">
       <fieldset :disabled="saving">
@@ -100,14 +98,23 @@
         </footer>
       </fieldset>
     </form>
+    <QualificationShareDialog
+      v-if="showShareDialog && isViewing && loaded"
+      :key="qualificationId"
+      :qualification-id="qualificationId"
+      :title="form.title"
+      @close="showShareDialog = false"
+    />
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
-import { ArrowLeft, ChevronRight, Pencil, Plus, Save, Trash2 } from '@lucide/vue'
+import { ArrowLeft, ChevronRight, Pencil, Plus, QrCode, Save, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
+import QualificationDetails from '@/components/qualifications/QualificationDetails.vue'
+import QualificationShareDialog from '@/components/qualifications/QualificationShareDialog.vue'
 
 const props = defineProps({
   mode: { type: String, default: 'create' },
@@ -120,6 +127,7 @@ const loaded = ref(false)
 const saving = ref(false)
 const loadError = ref('')
 const saveError = ref('')
+const showShareDialog = ref(false)
 const defaultLabels = ['证书编号', '中文名称', '认证依据', '注册地址', '审核地址', '认证范围', '发证日期', '有效日期', '证书状态']
 let nextFieldId = 0
 const createField = (label = '', value = '') => ({ id: ++nextFieldId, label, value })
@@ -161,6 +169,7 @@ async function loadForm() {
   loaded.value = false
   saveError.value = ''
   loadError.value = ''
+  showShareDialog.value = false
   try {
     Object.assign(form, emptyForm())
 
@@ -235,7 +244,8 @@ watch(() => [props.mode, props.qualificationId, props.folderId], loadForm, { imm
 }
 
 .toolbar,
-.heading {
+.heading,
+.toolbar-actions {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -243,6 +253,7 @@ watch(() => [props.mode, props.qualificationId, props.folderId], loadForm, { imm
 
 .toolbar {
   justify-content: space-between;
+  flex-wrap: wrap;
   margin-bottom: 20px;
 }
 
@@ -288,16 +299,13 @@ watch(() => [props.mode, props.qualificationId, props.folderId], loadForm, { imm
   text-decoration: none;
 }
 
-.qualification-form,
-.details-section {
+.qualification-form {
   max-width: 960px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #fff;
   overflow: hidden;
 }
-
-.details-section { max-width: 760px; }
 
 fieldset {
   min-width: 0;
@@ -428,21 +436,6 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
-.certificate-details { margin: 0; }
-
-.detail-row {
-  padding: 12px 18px;
-  border-bottom: 1px solid #e5e7eb;
-  color: #374151;
-  font-size: 16px;
-  line-height: 1.65;
-  overflow-wrap: anywhere;
-}
-
-.detail-row:last-child { border-bottom: 0; }
-.detail-row dt { display: inline; font-weight: 600; }
-.detail-row dd { display: inline; margin: 0; white-space: pre-wrap; }
-
 .state-message {
   display: flex;
   justify-content: center;
@@ -461,6 +454,7 @@ a:focus-visible {
 @media (max-width: 600px) {
   .qualification-container { padding: 16px; }
   .page-title { font-size: 22px; }
+  .toolbar-actions { flex-wrap: wrap; }
   .primary-button,
   .secondary-button { padding: 10px 12px; }
   .form-fields { padding: 20px 16px; }
@@ -471,7 +465,6 @@ a:focus-visible {
   .remove-field-button { grid-column: 2; grid-row: 1 / 3; }
   .section-title,
   .form-actions { padding: 16px; }
-  .detail-row { padding: 12px 16px; }
   .save-error { padding: 0 16px 16px; }
 }
 </style>

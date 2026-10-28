@@ -24,6 +24,13 @@ const routes = [
     meta: { requiresAuth: false }
   },
   {
+    path: '/share/qualifications/:token',
+    name: 'public-qualification',
+    component: () => import('@/views/public/QualificationShare.vue'),
+    props: route => ({ token: route.params.token }),
+    meta: { requiresAuth: false, publicQualification: true }
+  },
+  {
     path: '/main',
     name: 'main',
     component: MainView,
@@ -500,6 +507,10 @@ const routes = [
         }
       }
     ]
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    redirect: '/login'
   }
 ]
 
@@ -509,6 +520,7 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  if (to.name === 'public-qualification' && to.meta.publicQualification) return true
   const userStore = useUserStore()
   const loggedIn = await userStore.restoreSession()
 
