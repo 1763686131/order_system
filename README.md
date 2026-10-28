@@ -1,21 +1,21 @@
 # 订单与进销存管理系统
 
-基于 Vue 3、Vite、Pinia、Flask 和 SQLite 的内网业务管理系统，覆盖销售订单、物流出库、客户应收、收款历史、商品与原材料档案、供应商、仓库库存、入库审核、打印模板、回单和运费对账等流程。
+基于 Vue 3、Vite、Pinia、Flask 和 SQLite 的内网业务管理系统，覆盖销售订单、物流出库、客户应收、收款历史、商品与原材料档案、供应商、仓库库存、入库审核、打印模板、回单、运费对账及公司资质管理等流程。
 
 系统采用前后端分离开发、同源部署的方式运行。所有前端资源均由本地项目构建，不依赖在线 CDN、Google Fonts 或在线图标库，适合纯内网和本地环境。
 
 项目当前功能和使用规则以本文为准，版本变更、阶段进度和历史迁移记录统一维护在
 [版本更新日志](版本更新日志.md)。
 
-快速入口：[快速开始](#快速开始) · [项目结构](#项目结构) · [主要页面](#主要页面) · [统一表格布局](#统一表格布局) · [部署说明](#部署说明) · [常见问题](#常见问题) · [相关文档](#相关文档)
+快速入口：[快速开始](#快速开始) · [项目结构](#项目结构) · [主要页面](#主要页面) · [公司资质与外部二维码](#公司资质与外部二维码) · [统一表格布局](#统一表格布局) · [部署说明](#部署说明) · [常见问题](#常见问题) · [相关文档](#相关文档)
 
 ## 当前版本
 
 | 项目 | 内容 |
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
-| 权限/API 文档版本 | `5.18` |
-| 文档更新 | `2026-10-26` |
+| 权限/API 文档版本 | `5.19` |
+| 文档更新 | `2026-10-28` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -47,6 +47,8 @@
 - 首次部署超级管理员初始化、员工档案、登录账号和角色组管理
 - 员工头像裁剪、缩放、上传、替换和物理文件清理
 - 部门配置、员工多部门归属、部门员工维护和职位内联编辑
+- 公司资质目录和自定义内容文件，文件名称、字段标题及内容保存到数据库，在当前目录内新建并以网页预览
+- 公司资质外部链接和二维码，按文件开启/关闭游客访问，扫码独立展示内容，不显示后台菜单
 - 后台顶栏通讯录，支持部门折叠、员工搜索、头像、职位、电话和在线状态
 - 固固助手（GuGu）后台聊天助手，支持多服务商配置、只读订单查询、服务器历史聊天和对话式新增订单草稿；触屏端保留原有筛选等辅助功能
 - 后台路由权限、触屏操作权限、门店/仓库数据范围和登录设备管理
@@ -185,7 +187,8 @@ order_system/
 │  │  ├─ ai.py                       # 固固助手配置状态与后台聊天接口
 │  │  ├─ print_templates.py          # 打印模板 CRUD、默认模板和历史模板迁移
 │  │  ├─ freight.py                  # 运费与对账接口
-│  │  └─ hr_reports.py               # 人事报告接口
+│  │  ├─ hr_reports.py               # 人事报告接口
+│  │  └─ hr_qualifications.py        # 公司资质目录、自定义文件及游客分享接口
 │  ├─ utils/
 │  │  ├─ auth.py                     # Session、权限装饰器和当前用户序列化
 │  │  ├─ avatar_storage.py            # 员工头像校验、保存、删除和历史 Base64 迁移
@@ -277,6 +280,9 @@ order_system/
 │  │  │  │  ├─ SupplierBalanceDialog.vue       # 供应商预付款/贷项核销及历史记录
 │  │  │  │  └─ SupplierDocumentDialog.vue      # 供应商付款和采购发票新增、审核弹窗
 │  │  │  └─ StoreFormModal.vue       # 门店维护弹窗
+│  │  ├─ qualifications/
+│  │  │  ├─ QualificationDetails.vue # 后台预览和游客页面共用的标题/字段展示
+│  │  │  └─ QualificationShareDialog.vue # 游客访问开关、链接复制和二维码下载
 │  │  ├─ print/
 │  │  │  ├─ PrintDesignerEditor.vue  # 可视化模板设计器封装
 │  │  │  ├─ PrintTemplateSelector.vue # 模板、打印方式和打印机选择
@@ -292,6 +298,8 @@ order_system/
 │  │  │  ├─ OrderList.vue            # 前台订单列表
 │  │  │  ├─ ShippedOrderList.vue     # 前台已出库订单列表
 │  │  │  └─ MaterialDisplay.vue      # 前台原材料流水与辅助出库
+│  │  ├─ public/
+│  │  │  └─ QualificationShare.vue   # 无后台布局的公司资质游客页面
 │  │  └─ admin/
 │  │     ├─ Dashboard.vue           # 后台首页
 │  │     ├─ products/               # 商品档案、库存和出入库页面
@@ -324,6 +332,8 @@ order_system/
 │  │     └─ hr/                      # 人事行政
 │  │        ├─ AccountManage.vue     # 员工档案、可选登录账号和头像上传
 │  │        ├─ DepartmentManage.vue  # 部门配置、员工归属和职位维护
+│  │        ├─ Qualifications.vue    # 公司资质目录及目录内的文件列表
+│  │        ├─ QualificationForm.vue # 当前目录新建文件、编辑和网页预览
 │  │        └─ Reports.vue           # 人事检测报告
 │  ├─ router/index.js                # 前端路由和登录守卫
 │  ├─ utils/
@@ -661,6 +671,11 @@ import {
 | `/admin/system/operation-logs` | 操作日志查询、筛选和清空 | `/api/admin/operation-logs` |
 | `/admin/hr/employees` | 员工档案、登录账号和头像维护 | `/api/admin/employees`、`/api/admin/employees/:id/avatar` |
 | `/admin/hr/departments` | 部门配置和部门员工管理 | `/api/admin/departments`、`/api/admin/employees` |
+| `/admin/hr/qualifications` | 公司资质文件夹；`?folderId=:id` 查看目录内文件 | `/api/hr/qualifications/folders`、`/api/hr/qualifications?folder_id=:id` |
+| `/admin/hr/qualifications/create?folderId=:id` | 在当前目录新建自定义文件 | `/api/hr/qualifications` |
+| `/admin/hr/qualifications/:id/edit` | 编辑文件名称及字段标题、内容 | `/api/hr/qualifications/:id` |
+| `/admin/hr/qualifications/:id` | 后台文件预览、分享二维码和游客开关 | `/api/hr/qualifications/:id`、`/api/hr/qualifications/:id/share` |
+| `/share/qualifications/:token` | 游客独立浏览页，无后台菜单；仅分享开启时返回内容 | `/api/hr/qualifications/share/:token` |
 
 供应商财务菜单只保留“应付欠款”和“付款历史”。`Receivables.vue` 由路由传入 `receivable/payable` 模式，按客户/供应商切换接口、字段和金额摘要；点击“欠款详情”跳转 `/admin/finance/debt-details/:type/:targetId`，由 `views/admin/finance/DebtDetails.vue` 共用独立页面，使用完整后台内容区，不再使用详情弹窗。页面保留客户商品展开和供应商账务来源、基础开票状态、筛选、分页、打印；通过 `name/storeId` 传入名称和门店范围，支持直接刷新与返回欠款列表。供应商的应付、预付款和贷项分开展示，不能仅替换客户文案或使用旧档案余额。
 
@@ -736,6 +751,39 @@ import {
 采购退货新增、编辑和详情统一进入公共表单，不再使用列表内的独立录入弹窗。明细必须选择该门店、供应商已确认应付的可退原材料入库批次，仓库、批次、货位和原单价由来源带出且只读；可编辑表单默认 8 行，空行不提交，同一来源不能重复选择，退货数量不能超过可退数量，确认退货金额与原成本不一致时必须填写差异原因。已保存退货的门店、供应商不可更换；只读详情使用历史明细快照，不依赖可退批次接口。切换菜单保留独立采购退货草稿，保存或确认关闭后清除；编辑草稿恢复时校验服务端版本。保存仍只生成草稿，审核才扣库存并冲减应付或形成贷项。
 
 进货单保存使用 `/api/stock-inbounds`。独立进货单提交 `status: 'draft'`、`postOnSave: true` 和幂等键，由后端在同一事务中保存并审核为 `reviewed`，实收数量立即入库；此操作仍要求 `admin.inventory.stock_inbound.audit` 权限，失败整笔回滚。仓库录入页不展示结算归属、结算备注和单价金额，供应商及采购单价留空；保存后转为只读并清除会话草稿。关联采购订单入库及其他不传 `postOnSave` 的接口调用仍只保存草稿，再由入库审核写库存。采购审核继续使用现有归属/应付接口，权限代码不变；已确认应付的采购信息不得直接改写。
+
+## 公司资质与外部二维码
+
+入口为“人事行政 / 公司资质”。“新建文件夹”只创建目录；进入目录后点击“新建文件”，填写文件名称和多组“字段标题 / 字段内容”。文件默认属于当前目录，表单不再提供所属文件夹下拉框。初始证书字段仅作为填写模板，标题和内容均可修改，支持新增、删除字段，保存后按录入顺序以网页显示。
+
+后台目录、文件查看/新增/编辑和分享设置统一要求已登录、具备后台访问资格及 `admin.route.hr.qualifications` 权限。目前未拆分单独的新增、编辑或分享操作权限，授权该页面即同时授权上述操作。
+
+### 分享使用流程
+
+1. 打开文件预览，点击“分享二维码”。
+2. 开启“允许游客访问”，首次开启时服务端生成该文件的随机分享标识。
+3. 复制外部访问链接，或下载 PNG 二维码用于产品标签；可通过“打开预览”检查页面。
+4. 客户扫码后只看到该文件的名称和字段内容，无后台侧栏、顶栏、编辑按钮或文件夹列表。
+5. 关闭开关后，后续游客读取返回 `404`。已打开的页面在可见状态下每 30 秒检查一次，切回页面时也会重新检查并在失效后清空展示。
+
+新文件默认关闭分享，升级前的文件也不会自动公开。关闭再开启沿用原链接，方便复用已印刷的二维码；编辑文件后，原链接在下次读取时展示最新内容。当前没有自动到期或链接轮换功能，关闭分享也不能撤回客户已经保存的截图或内容。
+
+分享链接使用 `/share/qualifications/:token`，其中 `token` 是服务端生成的 43 位随机标识，不是文件 ID。持有链接的任何人均可在开关开启期间浏览该文件；它不会授予后台登录、目录查询或修改权限。未登录用户将地址改为 `/admin/...` 时仍需登录，受保护的业务 API 也继续独立校验登录与权限。
+
+二维码在浏览器本地生成，不调用外部二维码服务。链接使用当前浏览器的域名和端口；面向客户发放前，须通过客户可访问的系统地址打开后台再生成二维码，具体见[游客二维码部署](#游客二维码部署)。
+
+### 关键接口
+
+| 方法 | 地址 | 访问要求 / 用途 |
+| --- | --- | --- |
+| `GET` / `POST` | `/api/hr/qualifications/folders` | 后台权限；查询 / 新建目录 |
+| `GET` | `/api/hr/qualifications?folder_id=:id` | 后台权限；查询当前目录文件 |
+| `POST` | `/api/hr/qualifications` | 后台权限；提交 `folderId/title/fields` 新建文件 |
+| `GET` / `PUT` | `/api/hr/qualifications/:id` | 后台权限；查看 / 编辑文件 |
+| `GET` / `PUT` | `/api/hr/qualifications/:id/share` | 后台权限；读取分享设置 / 提交布尔值 `enabled` |
+| `GET` | `/api/hr/qualifications/share/:token` | 无须登录；仅在分享开启时返回该文件的 `title/fields` |
+
+请求参数、数据结构、长度限制、错误码及迁移规则见 [API 文档第 21 章](docs/API接口文档.md#21-公司资质自定义文件与二维码分享)。公司资质保存的是结构化内容，与“检测报告”的 PDF/文件管理及分享接口独立。
 
 ## 员工与头像关键接口
 
@@ -1216,6 +1264,13 @@ AI 只能调整尚未提交的订单草稿，不能更改门店、仓库、客�
 
 固固助手历史聊天保存在 `ai_chat_histories`，以登录用户隔离，记录消息内容、数量和更新时间。
 
+公司资质保存在以下两张表，随主数据库一起备份：
+
+- `hr_qualification_folders`：目录名称、创建人和创建/更新时间；名称不区分大小写唯一。
+- `hr_company_qualifications`：所属目录 `folder_id`、文件名称 `title`、有序字段数组 `fields_json`、创建人和时间，以及游客开关 `share_enabled`、分享标识 `share_token`。
+
+重启后端后的首次数据库访问会自动建表或升级结构。旧版固定证书字段转换为自定义字段数组，并保留文件 ID、目录归属、创建人和时间；新增分享字段默认关闭。二维码由链接在客户端生成，不额外保存图片文件。分享标识纳入数据库备份，恢复备份可能恢复当时的开关状态，恢复后应核对需要对外开放的文件。
+
 退货单审核会在 `stock_balances`、`stock_movements` 中留下可追溯的库存返还记录；反审核按退货单号删除对应库存流水并恢复审核前库存。
 
 收款附件保存到 `uploads/payment-receipts/YYYY-MM/`，数据库仅保存附件访问地址。删除待审核收款单或替换附件时，后端会同步清理不再使用的文件。
@@ -1241,7 +1296,7 @@ AI 只能调整尚未提交的订单草稿，不能更改门店、仓库、客�
 - 客户、供应商等结构相近的基础资料列表优先复用 `src/components/admin/PartyList.vue`，通过实体类型配置差异，避免复制整套页面。
 - 组件样式优先使用 `<style scoped>`，公共样式放在 `src/assets/styles/`。
 - 固固助手统一通过 `src/components/common/GuGuAssistant.vue` 接入，按 `mode` 区分后台和触屏功能；头像、按钮及各功能样式在固固组件内维护，不复制到页面或增加全局机器人样式。
-- API 请求统一使用 `src/api/request.js`，接口地址保持 `/api` 相对路径。
+- 后台 API 请求统一使用 `src/api/request.js`，接口地址保持 `/api` 相对路径；公司资质游客页面使用独立 `fetch`，明确设置 `credentials: 'omit'`、`cache: 'no-store'` 和 `referrerPolicy: 'no-referrer'`。
 - 登录和身份统一依赖服务端 Session Cookie，禁止重新增加 `Username`、`Role` 等客户端身份请求头。
 - 页面权限、角色并集和数据范围统一使用 `src/utils/accessControl.js`；后台菜单与路由权限映射统一使用 `src/utils/adminAccess.js`。
 - 后端权限校验统一使用 `backend/utils/auth.py` 的装饰器，门店/仓库数据过滤统一使用 `backend/utils/access_scope.py`。
@@ -1278,6 +1333,14 @@ docker restart my_order_app
 ```
 
 发布后访问 `http://localhost:7899/api/health` 检查后端，再强制刷新浏览器确认加载了新的静态资源。更新数据库结构前应先备份 `data/order_system.db`。
+
+### 游客二维码部署
+
+对外分享需要客户的设备能够访问系统地址；内网部署不会因为开启分享自动获得公网访问能力。二维码链接取自生成时浏览器的协议、域名和端口，`localhost`、`127.0.0.1` 或仅公司内网可达的地址不能供外网客户使用。建议使用客户可达的 HTTPS 域名，随后在该域名下打开后台并重新下载二维码；变更域名或端口后也需重新生成二维码图片。
+
+反向代理需同时支持 `/share/qualifications/:token` 的前端页面及 `/api/hr/qualifications/share/:token` 的读取接口，直接打开或刷新分享地址均应正常。不要将整个 `/api` 或 `/admin` 配置为匿名访问；如入口代理额外设置了统一登录，只按需豁免分享页面、它依赖的静态资源及对应的只读分享接口。
+
+发布时同时更新前端构建产物与后端并重启服务，首次访问自动补齐数据库结构；升级前先备份主数据库。分享页面和数据响应设置禁止缓存、禁止发送来源及禁止搜索索引的响应头，代理/CDN 不应覆盖这些设置或缓存分享接口。正式印刷前用未登录浏览器或手机检查：开启后可读、关闭后不可读，手工打开后台地址仍需登录。
 
 ### 离线部署
 
