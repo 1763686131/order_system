@@ -9,7 +9,9 @@ function moveNodes(parent, nodes) {
   nodes.forEach((node, index) => {
     const current = parent.childNodes[index] || null
     if (current === node) return
-    if (parent.moveBefore && node.isConnected && parent.isConnected) parent.moveBefore(node, current)
+    // Restore focused controls with preventScroll instead of moveBefore's automatic focus scrolling.
+    const containsFocus = node.contains(parent.ownerDocument.activeElement)
+    if (parent.moveBefore && node.isConnected && parent.isConnected && !containsFocus) parent.moveBefore(node, current)
     else parent.insertBefore(node, current)
   })
 }

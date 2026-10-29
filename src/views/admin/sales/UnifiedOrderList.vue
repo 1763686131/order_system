@@ -205,7 +205,7 @@
             class="button button-delete"
             :class="{ 'has-selection': selectedOrders.length > 0 }"
             type="button"
-            :disabled="selectedOrders.length === 0"
+            :disabled="loading || selectedOrders.length === 0"
             @click="handleBatchDelete"
           >
             <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -405,8 +405,7 @@
                   <input
                     type="checkbox"
                     :checked="isSelected(order.id)"
-                    :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
-                    :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
+                    :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已审核单据可勾选，删除前请先反审核' : '选择订单'"
                     @change="toggleSelect(order.id)"
                   />
                 </td>
@@ -592,9 +591,8 @@
                 <input
                   type="checkbox"
                   :checked="isSelected(order.id)"
-                  :disabled="mode !== 'logistics' && isSalesOrderLocked(order)"
                   :aria-label="`选择订单 ${order.order_number || order.id}`"
-                  :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已过账单据不可删除，请先反审核' : '选择订单'"
+                  :title="mode !== 'logistics' && isSalesOrderLocked(order) ? '已审核单据可勾选，删除前请先反审核' : '选择订单'"
                   @change="toggleSelect(order.id)"
                 />
               </label>
@@ -1327,6 +1325,7 @@ import request from '@/api/request'
 import { resolveLogisticsCopySettings } from '@/api/logisticsCopy'
 import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
+import { useOrderSelectionStore } from '@/stores/orderSelection'
 import { useUserStore } from '@/stores/user'
 import {
   ADMIN_SALES_ORDER_PERMISSIONS,
@@ -1358,6 +1357,7 @@ const props = defineProps({
 
 const orderStore = useOrderStore()
 const orderDraftStore = useOrderDraftStore()
+const orderSelectionStore = useOrderSelectionStore()
 const userStore = useUserStore()
 const canCreateSalesOrders = computed(() =>
   userStore.hasPerm(ADMIN_SALES_ORDER_PERMISSIONS.CREATE)
@@ -1516,9 +1516,7 @@ onMounted(() => {
   }
 
   // 注册全局刷新回调，当弹窗操作完成后刷新数据
-  window.refreshUnifiedOrderList = () => {
-    fetchOrdersData()
-  }
+  window.refreshUnifiedOrderList = fetchOrdersData
 
   // 添加点击外部关闭下拉框的监听
   document.addEventListener('click', handleClickOutside)
@@ -1529,6 +1527,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  if (window.refreshUnifiedOrderList === fetchOrdersData) {
+    delete window.refreshUnifiedOrderList
+  }
   // 清理事件监听
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('scroll', handleActionMenuScroll, true)
@@ -1655,7 +1656,10 @@ const selectedShippingMethodText = computed(() => {
 })
 
 // 选中的订单
-const selectedOrders = ref([])
+const selectedOrders = computed({
+  get: () => orderSelectionStore.selectedIdsFor(props.mode, userStore.id),
+  set: ids => orderSelectionStore.setSelectedIds(props.mode, userStore.id, ids)
+})
 
 // 展开弹窗状态
 const expandModal = ref({
@@ -1791,6 +1795,8 @@ const fetchOrdersData = async () => {
       } else {
         orders.value = scopedOrders
       }
+      const availableIds = new Set(orders.value.map(order => order.id))
+      selectedOrders.value = selectedOrders.value.filter(id => availableIds.has(id))
     } else {
       orders.value = []
     }
@@ -1981,12 +1987,7 @@ watch(paginatedOrders, () => {
 const pageStart = computed(() => filteredOrders.value.length ? (currentPage.value - 1) * pageSize.value + 1 : 0)
 const pageEnd = computed(() => Math.min(currentPage.value * pageSize.value, filteredOrders.value.length))
 
-// 物流列表没有删除操作，所有订单都允许勾选；财务列表仍排除已过账订单
-const selectableOrders = computed(() => {
-  return props.mode === 'logistics'
-    ? paginatedOrders.value
-    : paginatedOrders.value.filter(canDeleteOrder)
-})
+const selectableOrders = computed(() => paginatedOrders.value)
 
 const isAllSelected = computed(() => {
   return selectableOrders.value.length > 0 &&
@@ -2443,18 +2444,9 @@ const closeOrderDetail = () => {
 // ========== 原有方法 ==========
 
 const toggleSelect = (orderId) => {
-  const order = orders.value.find(item => item.id === orderId)
-  if (props.mode !== 'logistics' && isSalesOrderLocked(order)) {
-    showNotice('已过账单据不可删除，请先反审核', 'error')
-    return
-  }
-
-  const index = selectedOrders.value.indexOf(orderId)
-  if (index > -1) {
-    selectedOrders.value.splice(index, 1)
-  } else {
-    selectedOrders.value.push(orderId)
-  }
+  selectedOrders.value = selectedOrders.value.includes(orderId)
+    ? selectedOrders.value.filter(id => id !== orderId)
+    : [...selectedOrders.value, orderId]
 }
 
 const toggleSelectAll = () => {
@@ -3068,7 +3060,7 @@ const handleDelete = async (order) => {
 }
 
 const handleBatchDelete = async () => {
-  if (!canDeleteSalesOrders.value) return
+  if (!canDeleteSalesOrders.value || loading.value) return
   if (selectedOrders.value.length === 0) {
     showNotice('请先选择要删除的订单', 'error')
     return
@@ -3076,6 +3068,10 @@ const handleBatchDelete = async () => {
 
   // 统计新旧订单数量
   const selectedOrdersData = orders.value.filter(o => selectedOrders.value.includes(o.id))
+  if (selectedOrdersData.length !== selectedOrders.value.length) {
+    showNotice('选中单据的数据尚未更新，请刷新列表后重试', 'error')
+    return
+  }
   const lockedOrders = selectedOrdersData.filter(isSalesOrderLocked)
   if (lockedOrders.length > 0) {
     showNotice(
