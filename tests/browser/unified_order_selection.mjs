@@ -120,9 +120,12 @@ const checkPersistedSelection = async () => {
   const selectedIds = () => [...store.selectedIdsFor('finance', 7)].sort((a, b) => a - b)
   const assertSelection = ids => assert(JSON.stringify(selectedIds()) === JSON.stringify(ids), 'The original selected IDs must be preserved')
   if (sessionStorage.getItem('order-selection-test-phase') === 'reload') {
-    assertSelection([1, 2])
-    assert(findOrderRow(1)?.querySelector('input').checked, 'Reload must restore the first checkbox')
-    assert(findOrderRow(2)?.querySelector('input').checked, 'Reload must restore audited selections')
+    assertSelection([])
+    assert(!findOrderRow(1)?.querySelector('input').checked, 'Browser reload must clear the first checkbox')
+    assert(!findOrderRow(2)?.querySelector('input').checked, 'Browser reload must clear audited selections')
+    assert(!document.querySelector('.selection-count'), 'Browser reload must clear the selected count')
+    assert(!document.querySelector('.records-table thead input').indeterminate, 'Browser reload must reset select-all')
+    assert(document.querySelector('.button-delete').disabled, 'Browser reload must disable deletion without a selection')
     sessionStorage.removeItem('order-selection-test-phase')
     results.phase = 'complete'
     return
