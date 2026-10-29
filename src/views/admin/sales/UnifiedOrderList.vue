@@ -806,7 +806,6 @@
                   <div class="overview-head-actions">
                     <span>{{ getCategoryText(selectedOrder) }}</span>
                     <button
-                      v-if="mode === 'finance'"
                       class="detail-copy-button"
                       type="button"
                       title="复制订单信息"

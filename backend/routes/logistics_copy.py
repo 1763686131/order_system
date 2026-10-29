@@ -199,14 +199,20 @@ def resolve_logistics_copy_settings():
     if target not in COPY_BINDING_TARGETS:
         return jsonify({"success": False, "message": "复制入口不正确"}), 400
 
-    route_code = ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"][
-        "orders" if target == "order-info" else "logistics"
-    ]
-    if not auth.admin_permission_granted(route_code):
+    route_codes = (
+        [
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["orders"],
+            ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["logistics"],
+        ]
+        if target == "order-info"
+        else [ADMIN_ROUTE_BRANCH_PERMISSIONS["sales"]["logistics"]]
+    )
+    if not any(auth.admin_permission_granted(code) for code in route_codes):
         return jsonify({
             "success": False,
             "message": "当前账号没有执行此操作的权限",
-            "permission": route_code,
+            "permission": route_codes[0],
+            "permissions": route_codes,
         }), 403
 
     user_id = auth.get_current_user()["id"]

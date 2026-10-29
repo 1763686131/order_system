@@ -5540,7 +5540,7 @@ offered -> accepted -> transferring -> completed
 
 - **URL**: `/api/settings/logistics-copy/resolve?target=logistics-info` 或 `?target=order-info`
 - **Method**: `GET`
-- **权限**: 后台访问权限；`logistics-info` 需要 `admin.route.sales.logistics`，`order-info` 需要 `admin.route.sales.orders`。无需复制模板管理权限。
+- **权限**: 后台访问权限；`logistics-info` 需要 `admin.route.sales.logistics`，`order-info` 需要 `admin.route.sales.orders` 或 `admin.route.sales.logistics` 任一权限，供销售订单和物流模式下各状态单据的详情共用。无需复制模板管理权限。
 
 ```json
 {
