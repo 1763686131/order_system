@@ -2102,39 +2102,6 @@ receipt_image: File (图片文件)
 - **说明**: 前端通过并发调用 DELETE 接口实现批量删除
 - **逻辑**: 使用 `Promise.allSettled()` 确保所有请求完成，统计成功和失败数量
 
-### 5.10 更新订单已支付金额
-- **URL**: `/api/orders/<int:order_id>/paid-amount`
-- **Method**: `PUT`
-- **权限**: 仅超级管理员
-- **说明**: 更新运费的已支付金额（用于物流对账）
-
-**请求参数**:
-```json
-{
-  "freightCostIndex": 0,
-  "paidAmount": 50
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "order": {
-    "id": 1,
-    "freight_costs": [
-      {
-        "note": "运费",
-        "amount": 50,
-        "paid_amount": 50,
-        "updated_at": "2026-08-30 12:00:00",
-        "updated_by": "admin"
-      }
-    ]
-  }
-}
-```
-
 ---
 
 ## 6. 运营商标签管理
@@ -2789,166 +2756,11 @@ receipt_image: File (图片文件)
 
 ---
 
-## 9. 运费记录管理
+## 9. 运费记录管理（已移除）
 
-### 9.1 获取所有运费记录
-- **URL**: `/api/freight-records`
-- **Method**: `GET`
+员工费用原型、物流/专车对账和快运/快递对账已于 2026-10-29 移除。运费对账、备用金及对账专用的已支付运费更新接口同步停用。订单发货时的运费录入、订单运费展示和物流订单导出继续保留。
 
-**响应示例**:
-```json
-[
-  {
-    "id": "uuid-string",
-    "type": "insulation",
-    "year": 2026,
-    "month": 8,
-    "period": "上半月",
-    "orders": [1, 2, 3],
-    "totalAmount": 500,
-    "reserveFund": 100,
-    "createdAt": "2026-08-30 12:00:00",
-    "createdBy": "管理员"
-  }
-]
-```
-
-### 9.2 创建运费记录
-- **URL**: `/api/freight-records`
-- **Method**: `POST`
-- **操作人**: 从服务端 Session 获取；未登录时使用系统默认名称
-
-**请求参数**:
-```json
-{
-  "type": "insulation",
-  "year": 2026,
-  "month": 8,
-  "period": "上半月",
-  "orders": [1, 2, 3],
-  "totalAmount": 500,
-  "reserveFund": 100
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "record": {
-    "id": "uuid-string",
-    "type": "insulation",
-    "year": 2026,
-    "month": 8,
-    "period": "上半月",
-    "orders": [1, 2, 3],
-    "totalAmount": 500,
-    "reserveFund": 100,
-    "createdAt": "2026-08-30 12:00:00",
-    "createdBy": "admin"
-  }
-}
-```
-
-### 9.3 获取所有备用金记录
-- **URL**: `/api/freight-records/reserve-fund`
-- **Method**: `GET`
-
-**响应示例**:
-```json
-[
-  {
-    "id": "uuid-string",
-    "type": "deposit",
-    "amount": 1000,
-    "date": "2026-08-30",
-    "note": "充值备用金",
-    "createdAt": "2026-08-30 12:00:00",
-    "createdBy": "管理员"
-  }
-]
-```
-
-### 9.4 创建备用金记录
-- **URL**: `/api/freight-records/reserve-fund`
-- **Method**: `POST`
-- **操作人**: 从服务端 Session 获取；未登录时使用系统默认名称
-
-**请求参数**:
-```json
-{
-  "type": "deposit",
-  "amount": 1000,
-  "date": "2026-08-30",
-  "note": "充值备用金"
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "fund": {
-    "id": "uuid-string",
-    "type": "deposit",
-    "amount": 1000,
-    "date": "2026-08-30",
-    "note": "充值备用金",
-    "createdAt": "2026-08-30 12:00:00",
-    "createdBy": "admin"
-  }
-}
-```
-
-### 9.5 获取最新备用金余额
-- **URL**: `/api/freight-records/reserve-fund/latest`
-- **Method**: `GET`
-
-**响应示例**:
-```json
-{
-  "balance": 1500,
-  "latestRecord": {
-    "id": "uuid-string",
-    "type": "deposit",
-    "amount": 1000,
-    "date": "2026-08-30",
-    "note": "充值备用金",
-    "createdAt": "2026-08-30 12:00:00",
-    "createdBy": "管理员"
-  }
-}
-```
-
-### 9.6 更新备用金金额
-- **URL**: `/api/freight-records/reserve-fund/<fund_id>`
-- **Method**: `PUT`
-- **操作人**: 从服务端 Session 获取；未登录时使用系统默认名称
-
-**请求参数**:
-```json
-{
-  "amount": 1200
-}
-```
-
-**响应示例**:
-```json
-{
-  "success": true,
-  "fund": {
-    "id": "uuid-string",
-    "type": "deposit",
-    "amount": 1200,
-    "date": "2026-08-30",
-    "note": "充值备用金",
-    "createdAt": "2026-08-30 12:00:00",
-    "createdBy": "管理员",
-    "updatedAt": "2026-08-30 13:00:00",
-    "updatedBy": "admin"
-  }
-}
-```
+对应专用表 `freight_records`、`reserve_funds`（含其记录和索引）及已移除模块的权限、角色授权关联，在后端首次数据库访问时自动清理。执行升级前应备份数据库；订单的 `freight_costs` 字段及其他业务数据继续保留。
 
 ---
 
@@ -6534,8 +6346,6 @@ ON print_templates(is_default);
 | `admin.route.finance.receivables` | 应收管理 | 应收欠款和债务详情 |
 | `admin.route.finance.payment_history` | 收款历史 | 收款历史 |
 | `admin.route.finance.bank_accounts` | 银行账户 | 银行账户 |
-| `admin.route.finance.logistics_truck` | 物流专车对账 | 物流/专车对账 |
-| `admin.route.finance.express_courier` | 快运快递对账 | 快运/快递对账 |
 | `admin.route.hr.company` | 公司资料 | 公司资料 |
 | `admin.route.hr.reports` | 检测报告 | 检测报告 |
 | `admin.route.system.stores` | 门店管理 | 门店管理 |
@@ -6858,7 +6668,7 @@ SQLite 支持**多读一写**模式：
 
 独立的采购费用归属接口已移除，采购申请的 `otherFees` 字段仍保留。升级前须备份数据库；后端首次数据库访问会删除旧 `purchase_expense_lines` 表及其记录、索引和对应权限关联，已过账的账务与库存流水保持不变。
 
-第二阶段接口已实现，契约见下节。第三阶段接口见文末“采购模块第三阶段新增接口”。员工费用仍仅为前端页面临时状态，没有后端实体或真实审核/付款接口。
+第二阶段接口已实现，契约见下节。第三阶段接口见文末“采购模块第三阶段新增接口”。
 
 ## 采购模块第二阶段新增接口（v5.12）
 

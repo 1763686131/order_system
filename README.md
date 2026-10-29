@@ -1,6 +1,6 @@
 # 订单与进销存管理系统
 
-基于 Vue 3、Vite、Pinia、Flask 和 SQLite 的内网业务管理系统，覆盖销售订单、物流出库、客户应收、收款历史、商品与原材料档案、供应商、仓库库存、入库审核、打印模板、回单、运费对账及公司资质管理等流程。
+基于 Vue 3、Vite、Pinia、Flask 和 SQLite 的内网业务管理系统，覆盖销售订单、物流出库、客户应收、收款历史、商品与原材料档案、供应商、仓库库存、入库审核、打印模板、回单及公司资质管理等流程。
 
 系统采用前后端分离开发、同源部署的方式运行。所有前端资源均由本地项目构建，不依赖在线 CDN、Google Fonts 或在线图标库，适合纯内网和本地环境。
 
@@ -15,7 +15,7 @@
 | --- | --- |
 | 应用版本 | `3.0.0`（以 `package.json` 为准） |
 | 权限/API 文档版本 | `5.19` |
-| 文档更新 | `2026-10-28` |
+| 文档更新 | `2026-10-29` |
 | 前端 | Vue 3、Vite 8、Pinia、Vue Router、Axios、vue-print-designer |
 | 后端 | Python、Flask、SQLite |
 | 开发端口 | 前端 `3000`，后端 `7899` |
@@ -42,7 +42,6 @@
 - 入库单待审核、审核、反审核、红冲、重新启用和删除
 - 入库记录与出库记录统一流水组件
 - 回单上传、查看、旋转和删除
-- 物流、快递运费对账
 - 数据库打印模板、可视化设计、业务变量预览、浏览器打印和 C-Lodop 本地打印
 - 首次部署超级管理员初始化、员工档案、登录账号和角色组管理
 - 员工头像裁剪、缩放、上传、替换和物理文件清理
@@ -186,7 +185,6 @@ order_system/
 │  │  ├─ settings.py                 # 系统路径、固固助手服务商配置和登录设备会话管理
 │  │  ├─ ai.py                       # 固固助手配置状态与后台聊天接口
 │  │  ├─ print_templates.py          # 打印模板 CRUD、默认模板和历史模板迁移
-│  │  ├─ freight.py                  # 运费与对账接口
 │  │  ├─ hr_reports.py               # 人事报告接口
 │  │  └─ hr_qualifications.py        # 公司资质目录、自定义文件及游客分享接口
 │  ├─ utils/
@@ -319,10 +317,7 @@ order_system/
 │  │     │  ├─ Receivables.vue       # receivable/payable 双模式应收/应付汇总
 │  │     │  ├─ DebtDetails.vue       # 客户/供应商共用的独立对账页面、筛选和打印
 │  │     │  ├─ PaymentHistory.vue    # receipt/payment 双模式收款/付款历史、录单与审核
-│  │     │  ├─ BankAccounts.vue      # 银行账户管理和余额展示
-│  │     │  ├─ EmployeeExpenses.vue  # 员工费用前端临时原型
-│  │     │  ├─ ExpressCourierReconciliation.vue # 快递运费对账
-│  │     │  └─ LogisticsTruckReconciliation.vue # 物流运费对账
+│  │     │  └─ BankAccounts.vue      # 银行账户管理和余额展示
 │  │     ├─ system/                  # 角色组、门店、打印模板、操作日志和系统配置
 │  │     │  ├─ RoleGroupManage.vue   # 权限、成员、会话策略和数据范围
 │  │     │  ├─ StoreManage.vue       # 门店档案管理
@@ -664,7 +659,6 @@ import {
 | `/admin/finance/payables?tab=reconciliation` | 应付欠款内的正式对账页签，快照确认和期间锁定 | `/api/supplier-reconciliations` |
 | `/admin/finance/supplier-payments` | 付款历史，共用收款历史；付款单录入、审核、反审核和银行流水 | `/api/supplier-payments` |
 | `/admin/finance/supplier-payments?tab=refund` | 付款历史内的退款入账页签 | `/api/supplier-refunds` |
-| `/admin/finance/employee-expenses` | 员工采购/费用报销前端原型 | 仅页面临时状态，不调用正式财务接口 |
 | `/admin/finance/bank-accounts` | 银行账户管理 | `/api/bank-accounts`、`/api/upload/bank-*` |
 | `/admin/finance/debt-details/:type/:targetId` | 客户/供应商共用的独立欠款详情页面，支持刷新和返回 | `/api/customers/:id/debt-details` 或 `/api/suppliers/:id/debt-details` |
 | `/admin/system/print-template` | 打印模板管理和设计器 | `/api/print-templates` |
@@ -1228,6 +1222,11 @@ AI 只能调整尚未提交的订单草稿，不能更改门店、仓库、客�
 ## 数据存储
 
 系统当前以 SQLite 为业务数据源，本地和 Docker 默认都使用 `data/order_system.db`。
+
+员工费用原型及物流/快递运费对账已移除。重启后端后的首次数据库访问会删除专用的
+`freight_records`、`reserve_funds` 表（含其记录和索引），并清理对应权限及角色授权关联。
+升级前请备份数据库。订单的 `freight_costs` 字段仍用于发货录入、运费展示和物流订单导出，
+继续保留；员工档案及其他业务表不受此次清理影响。
 
 库存核心表：
 

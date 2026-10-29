@@ -34,12 +34,9 @@ export const ADMIN_ROUTE_BRANCH_PERMISSIONS = {
     SUPPLIER_PAYMENTS: 'admin.route.finance.supplier_payments',
     SUPPLIER_REFUNDS: 'admin.route.finance.supplier_refunds',
     SUPPLIER_RECONCILIATIONS: 'admin.route.finance.supplier_reconciliations',
-    EMPLOYEE_EXPENSES: 'admin.route.finance.employee_expenses',
     RECEIVABLES: 'admin.route.finance.receivables',
     PAYMENT_HISTORY: 'admin.route.finance.payment_history',
-    BANK_ACCOUNTS: 'admin.route.finance.bank_accounts',
-    LOGISTICS_TRUCK: 'admin.route.finance.logistics_truck',
-    EXPRESS_COURIER: 'admin.route.finance.express_courier'
+    BANK_ACCOUNTS: 'admin.route.finance.bank_accounts'
   },
   HR: {
     EMPLOYEES: ADMIN_EMPLOYEE_PERMISSIONS.READ,
@@ -71,7 +68,6 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_REFUNDS, path: '/admin/finance/supplier-payments?tab=refund' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_RECONCILIATIONS, path: '/admin/finance/payables?tab=reconciliation' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES, path: '/admin/finance/payables' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES, path: '/admin/finance/employee-expenses' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS, path: '/admin/inventory' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIALS, path: '/admin/inventory/materials' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIAL_OUTBOUNDS, path: '/admin/inventory/material-outbounds' },
@@ -81,8 +77,6 @@ export const ADMIN_ROUTE_ENTRIES = [
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.RECEIVABLES, path: '/admin/finance/receivables' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYMENT_HISTORY, path: '/admin/finance/payment-history' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.BANK_ACCOUNTS, path: '/admin/finance/bank-accounts' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.LOGISTICS_TRUCK, path: '/admin/finance/logistics-truck' },
-  { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EXPRESS_COURIER, path: '/admin/finance/express-courier' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.EMPLOYEES, path: '/admin/hr/employees' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.DEPARTMENTS, path: '/admin/hr/departments' },
   { permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.HR.COMPANY, path: '/admin/hr/company' },
@@ -106,7 +100,6 @@ export function getAdminRoutePermission(path = '') {
   if (/^\/admin\/finance\/supplier-refunds(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.SUPPLIER_PAYMENTS
   if (/^\/admin\/finance\/supplier-reconciliations(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
   if (/^\/admin\/finance\/(payables|supplier-statement)(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.PAYABLES
-  if (/^\/admin\/finance\/employee-expenses(\/|$)/.test(path)) return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES
   if (path === '/admin/dashboard') return ADMIN_ROUTE_PERMISSIONS.DASHBOARD
   if (path === '/admin/products') return ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.PRODUCTS
   if (path === '/admin/materials') return ADMIN_ROUTE_BRANCH_PERMISSIONS.INVENTORY.MATERIALS
@@ -159,12 +152,6 @@ export function getAdminRoutePermission(path = '') {
   }
   if (/^\/admin\/finance\/bank-accounts(\/|$)/.test(path)) {
     return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.BANK_ACCOUNTS
-  }
-  if (/^\/admin\/finance\/logistics-truck(\/|$)/.test(path)) {
-    return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.LOGISTICS_TRUCK
-  }
-  if (/^\/admin\/finance\/express-courier(\/|$)/.test(path)) {
-    return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EXPRESS_COURIER
   }
   if (/^\/admin\/finance\/receivables(\/|$)/.test(path)) {
     return ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.RECEIVABLES

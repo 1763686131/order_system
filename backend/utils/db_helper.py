@@ -780,33 +780,6 @@ def write_orders(orders_data):
 
 
 # ==========================================
-# 物流记录相关
-# ==========================================
-
-def read_freight_records():
-    """读取物流记录"""
-    with get_db() as conn:
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM freight_records ORDER BY created_at DESC')
-        rows = cursor.fetchall()
-        freight_records = [dict(row) for row in rows]
-
-        cursor.execute('SELECT * FROM reserve_funds ORDER BY created_at DESC')
-        rows = cursor.fetchall()
-        reserve_funds = [dict(row) for row in rows]
-
-        return {
-            'freight_records': freight_records,
-            'reserve_funds': reserve_funds
-        }
-
-
-def write_freight_records(data):
-    """写入物流记录"""
-    pass
-
-
-# ==========================================
 # 客户相关
 # ==========================================
 

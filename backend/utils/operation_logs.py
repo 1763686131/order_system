@@ -76,18 +76,11 @@ _RULES = (
         "department",
     ),
     (
-        r"/api/orders(?:/\d+(?:/(?:edit|upload_receipt|receipt|paid-amount))?)?",
+        r"/api/orders(?:/\d+(?:/(?:edit|upload_receipt|receipt))?)?",
         {"POST", "PUT", "DELETE"},
         "sales_orders",
         "销售订单",
         "sales_order",
-    ),
-    (
-        r"/api/freight-records|/api/freight-records/reserve-fund(?:/latest|/[^/]+)?",
-        {"POST", "PUT", "DELETE"},
-        "logistics",
-        "物流管理",
-        "freight_record",
     ),
     (
         r"/api/carrier_tags",

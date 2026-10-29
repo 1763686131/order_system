@@ -887,6 +887,7 @@ def _ensure_auth_schema(conn):
         from utils.avatar_storage import migrate_avatar_data_urls
 
         migrate_avatar_data_urls(conn)
+        _remove_retired_finance_schema(conn)
         conn.commit()
         _auth_schema_ready = True
 
@@ -2801,6 +2802,48 @@ def _ensure_customer_schema(conn):
         )
         conn.commit()
         _schema_ready = True
+
+
+def _remove_retired_finance_schema(conn):
+    """Remove retired expense and freight reconciliation storage atomically."""
+    retired_permissions = (
+        "admin.route.finance.employee_expenses",
+        "admin.finance.employee_expense.read",
+        "admin.route.finance.logistics_truck",
+        "admin.route.finance.express_courier",
+    )
+    placeholders = ",".join("?" for _ in retired_permissions)
+    conn.execute("SAVEPOINT retired_finance_cleanup")
+    try:
+        conn.execute("DROP TABLE IF EXISTS freight_records")
+        conn.execute("DROP TABLE IF EXISTS reserve_funds")
+        tables = {
+            row[0]
+            for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )
+        }
+        if "permissions" in tables:
+            if "role_permissions" in tables:
+                conn.execute(
+                    f"""
+                    DELETE FROM role_permissions
+                    WHERE permission_id IN (
+                        SELECT id FROM permissions
+                        WHERE code IN ({placeholders})
+                    )
+                    """,
+                    retired_permissions,
+                )
+            conn.execute(
+                f"DELETE FROM permissions WHERE code IN ({placeholders})",
+                retired_permissions,
+            )
+        conn.execute("RELEASE SAVEPOINT retired_finance_cleanup")
+    except Exception:
+        conn.execute("ROLLBACK TO SAVEPOINT retired_finance_cleanup")
+        conn.execute("RELEASE SAVEPOINT retired_finance_cleanup")
+        raise
 
 
 @contextmanager

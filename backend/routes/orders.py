@@ -13,7 +13,6 @@ from utils.auth import (
     require_admin_permission,
     require_login,
     require_permission,
-    require_super_admin,
 )
 from utils.bank_account_helpers import (
     adjust_bank_account_balance,
@@ -1507,51 +1506,6 @@ def delete_order_receipt(order_id):
     broadcast_order_event('updated', order=order)
 
     return jsonify({"success": True, "message": "回单图片已彻底删除"})
-
-@orders_bp.route('/<int:order_id>/paid-amount', methods=['PUT'])
-@require_super_admin
-def update_order_paid_amount(order_id):
-    """更新订单的已支付金额"""
-    req_data = request.json
-
-    with orders_lock:
-        data = read_orders()
-        orders = data.get('orders', [])
-
-        # 查找对应的订单
-        order_index = None
-        for i, order in enumerate(orders):
-            if order.get('id') == order_id:
-                order_index = i
-                break
-
-        if order_index is None:
-            return jsonify({'success': False, 'message': '订单不存在'}), 404
-
-        order = orders[order_index]
-
-        # 确保 freight_costs 数组存在
-        if 'freight_costs' not in order or not isinstance(order['freight_costs'], list):
-            order['freight_costs'] = []
-
-        freight_cost_index = req_data.get('freightCostIndex', 0)
-        paid_amount = float(req_data.get('paidAmount', 0))
-
-        # 如果对应的运费记录不存在，创建一个
-        if freight_cost_index >= len(order['freight_costs']):
-            return jsonify({'success': False, 'message': '运费记录索引超出范围'}), 400
-
-        # 更新已支付金额
-        order['freight_costs'][freight_cost_index]['paid_amount'] = paid_amount
-        order['freight_costs'][freight_cost_index]['updated_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        order['freight_costs'][freight_cost_index]['updated_by'] = current_identity()
-
-        orders[order_index] = order
-        data['orders'] = orders
-        write_orders(data)
-        broadcast_order_event('updated', order=order)
-
-    return jsonify({'success': True, 'order': order})
 
 # ==========================================
 # 运营商标签接口

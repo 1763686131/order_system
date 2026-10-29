@@ -832,11 +832,6 @@ const allMenuItems = [
         alternativePath: '/admin/finance/supplier-payments?tab=refund'
       },
       {
-        label: '员工费用原型',
-        path: '/admin/finance/employee-expenses',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EMPLOYEE_EXPENSES
-      },
-      {
         label: '应收欠款',
         path: '/admin/finance/receivables',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.RECEIVABLES
@@ -850,16 +845,6 @@ const allMenuItems = [
         label: '银行账户',
         path: '/admin/finance/bank-accounts',
         permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.BANK_ACCOUNTS
-      },
-      {
-        label: '物流/专车对账',
-        path: '/admin/finance/logistics-truck',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.LOGISTICS_TRUCK
-      },
-      {
-        label: '快运/快递对账',
-        path: '/admin/finance/express-courier',
-        permission: ADMIN_ROUTE_BRANCH_PERMISSIONS.FINANCE.EXPRESS_COURIER
       }
     ]
   },

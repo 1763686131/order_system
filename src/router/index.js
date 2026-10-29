@@ -117,12 +117,6 @@ const routes = [
         meta: { requiresAuth: true, permission: 'admin.finance.supplier_statement.read' }
       },
       {
-        path: 'finance/employee-expenses',
-        name: 'admin-employee-expenses',
-        component: () => import('@/views/admin/finance/EmployeeExpenses.vue'),
-        meta: { requiresAuth: true, permission: 'admin.finance.employee_expense.read' }
-      },
-      {
         path: 'dashboard',
         name: 'admin-dashboard',
         component: () => import('@/views/admin/Dashboard.vue'),
@@ -242,18 +236,6 @@ const routes = [
         path: 'finance/bank-accounts',
         name: 'admin-finance-bank-accounts',
         component: () => import('@/views/admin/finance/BankAccounts.vue'),
-        meta: { requiresAuth: true }
-      },
-      {
-        path: 'finance/logistics-truck',
-        name: 'admin-finance-logistics-truck',
-        component: () => import('@/views/admin/finance/LogisticsTruckReconciliation.vue'),
-        meta: { requiresAuth: true }
-      },
-      {
-        path: 'finance/express-courier',
-        name: 'admin-finance-express-courier',
-        component: () => import('@/views/admin/finance/ExpressCourierReconciliation.vue'),
         meta: { requiresAuth: true }
       },
       {

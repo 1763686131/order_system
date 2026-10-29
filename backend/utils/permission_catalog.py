@@ -100,11 +100,8 @@ ADMIN_ROUTE_BRANCH_PERMISSIONS = {
         "supplier_payments": "admin.route.finance.supplier_payments",
         "supplier_refunds": "admin.route.finance.supplier_refunds",
         "supplier_reconciliations": "admin.route.finance.supplier_reconciliations",
-        "employee_expenses": "admin.route.finance.employee_expenses",
         "payment_history": "admin.route.finance.payment_history",
         "bank_accounts": "admin.route.finance.bank_accounts",
-        "logistics_truck": "admin.route.finance.logistics_truck",
-        "express_courier": "admin.route.finance.express_courier",
     },
     "hr": {
         "company": "admin.route.hr.company",
@@ -333,16 +330,6 @@ PERMISSION_MODULES = [
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["bank_accounts"],
                 "name": "访问银行账户",
                 "description": "显示并访问银行账户",
-            },
-            {
-                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["logistics_truck"],
-                "name": "访问物流专车对账",
-                "description": "显示并访问物流和专车对账",
-            },
-            {
-                "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["express_courier"],
-                "name": "访问快运快递对账",
-                "description": "显示并访问快运和快递对账",
             },
             {
                 "code": ADMIN_ROUTE_BRANCH_PERMISSIONS["hr"]["company"],
@@ -769,18 +756,6 @@ _ROUTE_PERMISSION_MODULES = [
         [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["bank_accounts"]],
     ),
     (
-        "admin_logistics_reconciliation",
-        "物流专车对账",
-        "控制物流和专车对账页面访问",
-        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["logistics_truck"]],
-    ),
-    (
-        "admin_courier_reconciliation",
-        "快运快递对账",
-        "控制快运和快递对账页面访问",
-        [ADMIN_ROUTE_BRANCH_PERMISSIONS["finance"]["express_courier"]],
-    ),
-    (
         "admin_company_profile",
         "公司资料",
         "控制公司资料页面访问",
@@ -934,15 +909,6 @@ PERMISSION_MODULES.extend([
             {"code": "admin.finance.supplier_reconciliation.create", "name": "创建供应商对账", "description": "创建或刷新供应商对账快照"},
             {"code": "admin.finance.supplier_reconciliation.confirm", "name": "确认供应商对账", "description": "确认供应商余额并锁定对账期间"},
             {"code": "admin.finance.supplier_reconciliation.cancel", "name": "取消供应商对账", "description": "取消尚未确认的对账草稿"},
-        ],
-    },
-    {
-        "code": "admin_employee_expenses",
-        "name": "员工费用原型",
-        "description": "仅临时前端费用数据，不产生正式财务业务",
-        "permissions": [
-            {"code": "admin.route.finance.employee_expenses", "name": "访问员工费用原型", "description": "访问员工费用原型"},
-            {"code": "admin.finance.employee_expense.read", "name": "查看员工费用原型", "description": "查看临时费用数据"},
         ],
     },
 ])
