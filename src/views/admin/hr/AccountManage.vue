@@ -103,20 +103,36 @@
         </div>
 
       <div class="table-scroll">
-        <table class="employee-table">
+        <table
+          v-table-layout="{ storageKey: 'hr-account-employee-list', resizeMode: 'fit', minWidth: 64 }"
+          class="employee-table"
+        >
+          <colgroup>
+            <col data-column-key="employee" data-min-width="150" style="width: 200px">
+            <col data-column-key="account" data-min-width="110" style="width: 155px">
+            <col data-column-key="job" data-min-width="120" style="width: 165px">
+            <col data-column-key="phone" data-min-width="100" style="width: 120px">
+            <col data-column-key="birthday" data-min-width="100" style="width: 120px">
+            <col data-column-key="age" data-min-width="60" style="width: 72px">
+            <col data-column-key="status" data-min-width="80" style="width: 100px">
+            <col data-column-key="role" data-min-width="120" style="width: 200px">
+            <col data-column-key="device" data-min-width="120" style="width: 190px">
+            <col data-column-key="time" data-min-width="130" style="width: 160px">
+            <col data-column-key="actions" data-column-fixed="end" data-resizable="false" style="width: 180px">
+          </colgroup>
           <thead>
             <tr>
-              <th class="col-employee">员工信息</th>
-              <th class="col-account">登录账号</th>
-              <th class="col-job">部门 / 职位</th>
-              <th class="col-phone">联系电话</th>
-              <th class="col-birthday">生日</th>
-              <th class="col-age">年龄</th>
-              <th class="col-status">状态</th>
-              <th class="col-role">权限组</th>
-              <th class="col-device">设备信息</th>
-              <th class="col-time">入职 / 最近活跃</th>
-              <th class="col-actions">操作</th>
+              <th class="col-employee" data-column-key="employee">员工信息</th>
+              <th class="col-account" data-column-key="account">登录账号</th>
+              <th class="col-job" data-column-key="job">部门 / 职位</th>
+              <th class="col-phone" data-column-key="phone">联系电话</th>
+              <th class="col-birthday" data-column-key="birthday">生日</th>
+              <th class="col-age" data-column-key="age">年龄</th>
+              <th class="col-status" data-column-key="status">状态</th>
+              <th class="col-role" data-column-key="role">权限组</th>
+              <th class="col-device" data-column-key="device">设备信息</th>
+              <th class="col-time" data-column-key="time">入职 / 最近活跃</th>
+              <th class="col-actions" data-column-key="actions" data-column-fixed="end" data-resizable="false">操作</th>
             </tr>
           </thead>
           <tbody>
