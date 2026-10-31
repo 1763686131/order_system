@@ -228,236 +228,96 @@
     <SupplierDocumentDialog v-if="paymentDialogOpen && paymentMode" :key="paymentDocumentId || 'new-payment'" mode="payment" :document-id="paymentDocumentId" :options="supplierOptions" :initial-supplier-id="paymentSupplierId" :initial-store-id="paymentStoreId" @close="closePayment" @updated="loadData" />
     <CustomModal :visible="Boolean(confirmation)" :title="confirmation?.title || (confirmation?.action === 'audit' ? '审核付款单' : confirmation?.action === 'delete' ? '删除付款单' : '反审核付款单')" :message="confirmation?.message || ''" :danger="confirmation?.action !== 'audit'" :confirm-disabled="Boolean(busyId)" @confirm="performPaymentAction" @cancel="cancelConfirmation" />
 
-    <Teleport to="body">
-      <Transition name="modal-fade">
-        <div v-if="modalVisible" class="modal-overlay" @mousedown.self="closeModal">
-          <section class="payment-modal" role="dialog" aria-modal="true">
-            <header class="modal-header">
-              <div class="modal-title-area">
-                <span class="modal-icon">
-                  <svg viewBox="0 0 24 24">
-                    <path d="M5 4h14v16H5zM8 8h8M8 12h8M8 16h5"></path>
-                  </svg>
-                </span>
-                <div>
-                  <span>{{ editingId ? '修改收款单' : '收款单录入' }}</span>
-                  <h2>{{ form.documentNo || '新收款单' }}</h2>
-                </div>
-              </div>
-              <button class="modal-close" type="button" title="关闭" @click="closeModal">
-                <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"></path></svg>
-              </button>
-            </header>
-
-            <form class="modal-body" @submit.prevent="saveReceipt">
-              <section class="form-section">
-                <header class="section-header">
-                  <span>01</span>
-                  <div>
-                    <h3>基本信息</h3>
-                    <p>收款单自动关联客户、门店与当前欠款。</p>
-                  </div>
-                </header>
-                <div class="form-grid basic-grid">
-                  <label class="form-field customer-select-field">
-                    <span>客户 <b>*</b></span>
-                    <select v-model.number="form.customerId" required @change="handleCustomerChange">
-                      <option value="">请选择客户</option>
-                      <option
-                        v-for="customer in modalCustomers"
-                        :key="customer.id"
-                        :value="customer.id"
-                      >
-                        {{ customer.customerName }}（#{{ customer.customerCode || customer.id }}）
-                        · 欠款{{ formatMoney(customer.receivable) }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="form-field">
-                    <span>欠款金额</span>
-                    <span class="readonly-value debt-value">{{ formatMoney(currentDebt) }}</span>
-                  </label>
-                  <label class="form-field">
-                    <span>单据编号</span>
-                    <span class="readonly-value document-value">
-                      {{ form.documentNo || '保存时自动生成' }}
-                    </span>
-                  </label>
-                  <label class="form-field">
-                    <span>单据日期 <b>*</b></span>
-                    <input v-model="form.documentDate" type="date" required @change="loadNextNumber">
-                  </label>
-                </div>
-              </section>
-
-              <section class="form-section">
-                <header class="section-header">
-                  <span>02</span>
-                  <div>
-                    <h3>收款信息</h3>
-                    <p>审核后才核销欠款，多收的实收金额自动转入客户储值。</p>
-                  </div>
-                </header>
-                <div class="form-grid payment-grid">
-                  <label class="form-field">
-                    <span>结算账户</span>
-                    <select v-model="form.settlementAccount" class="form-input">
-                      <option value="">请选择结算账户</option>
-                      <option
-                        v-if="form.settlementAccount && !customerBankAccounts.some(account => (account.value || account.accountName) === form.settlementAccount)"
-                        :value="form.settlementAccount"
-                      >
-                        {{ form.settlementAccount }}
-                      </option>
-                      <option
-                        v-for="account in customerBankAccounts"
-                        :key="account.id"
-                        :value="account.value || account.accountName"
-                      >
-                        {{ account.label || account.accountName }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="form-field">
-                    <span>收款方式</span>
-                    <input v-model.trim="form.paymentMethod" maxlength="30" placeholder="微信、银行转账等">
-                  </label>
-                  <label class="form-field">
-                    <span>收款金额 <b>*</b></span>
-                    <span class="money-input">
-                      <i>¥</i>
-                      <input
-                        v-model="form.paymentAmount"
-                        type="number"
-                        min="0.01"
-                        step="0.01"
-                        required
-                        placeholder="0.00"
-                      >
-                    </span>
-                  </label>
-                  <label class="form-field">
-                    <span>优惠金额</span>
-                    <span class="money-input">
-                      <i>¥</i>
-                      <input
-                        v-model="form.discountAmount"
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        placeholder="0.00"
-                      >
-                    </span>
-                  </label>
-                  <label class="form-field">
-                    <span>合计金额</span>
-                    <span class="readonly-value total-value">{{ formatMoney(formTotal) }}</span>
-                  </label>
-                </div>
-                <div class="account-preview">
-                  <div>
-                    <span>预计核销欠款</span>
-                    <strong>{{ formatMoney(previewWriteoff) }}</strong>
-                  </div>
-                  <div>
-                    <span>预计转入预收</span>
-                    <strong>{{ formatMoney(previewAdvance) }}</strong>
-                  </div>
-                  <p :class="{ warning: Number(form.discountAmount) > currentDebt }">
-                    {{
-                      Number(form.discountAmount) > currentDebt
-                        ? '优惠金额不能超过客户当前欠款。'
-                        : '当前仅为预览，审核时按客户实时欠款重新计算。'
-                    }}
-                  </p>
-                </div>
-              </section>
-
-              <section class="form-section">
-                <header class="section-header">
-                  <span>03</span>
-                  <div>
-                    <h3>其他信息</h3>
-                    <p>补充制单人、备注与收款凭证，便于后续对账追溯。</p>
-                  </div>
-                </header>
-                <div class="form-grid other-grid">
-                  <label class="form-field">
-                    <span>制单人</span>
-                    <input v-model.trim="form.creator" maxlength="30">
-                  </label>
-                  <label class="form-field">
-                    <span>备注</span>
-                    <textarea
-                      v-model.trim="form.remark"
-                      rows="4"
-                      maxlength="300"
-                      placeholder="可填写收款说明、银行流水号等"
-                    ></textarea>
-                  </label>
-                  <div class="form-field">
-                    <span>上传附件图片</span>
-                    <label class="attachment-uploader">
-                      <input
-                        ref="attachmentInput"
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp,image/gif"
-                        @change="handleAttachment"
-                      >
-                      <img v-if="attachmentPreview" :src="attachmentPreview" alt="收款附件预览">
-                      <span v-else class="upload-placeholder">
-                        <svg viewBox="0 0 24 24">
-                          <path d="M4 5h16v14H4z"></path>
-                          <circle cx="9" cy="10" r="2"></circle>
-                          <path d="m4 17 5-4 3 3 2-2 6 5"></path>
-                        </svg>
-                        <strong>选择收款凭证</strong>
-                        <small>图片最大 10MB</small>
-                      </span>
-                    </label>
-                    <button
-                      v-if="attachmentPreview"
-                      class="remove-attachment"
-                      type="button"
-                      @click="removeAttachment"
-                    >
-                      移除附件
-                    </button>
-                  </div>
-                </div>
-              </section>
-            </form>
-
-            <footer class="modal-footer">
-              <span class="draft-tip">
-                <svg viewBox="0 0 24 24">
-                  <circle cx="12" cy="12" r="9"></circle>
-                  <path d="M12 8v5M12 17h.01"></path>
-                </svg>
-                保存后是待审核草稿，不会立即改变客户账户。
-              </span>
-              <div class="modal-actions">
-                <button class="button button-secondary" type="button" @click="closeModal">取消</button>
-                <button
-                  class="button button-primary"
-                  type="button"
-                  :disabled="saving"
-                  @click="saveReceipt"
-                >
-                  <svg v-if="saving" class="spinning" viewBox="0 0 24 24">
-                    <path d="M20 11a8 8 0 1 0-2.3 5.7"></path>
-                  </svg>
-                  <svg v-else viewBox="0 0 24 24">
-                    <path d="M5 4h12l2 2v14H5zM8 4v6h8V4M8 16h8"></path>
-                  </svg>
-                  {{ saving ? '保存中...' : '保存收款单' }}
-                </button>
-              </div>
-            </footer>
-          </section>
+    <FinanceDocumentDialog
+      v-if="modalVisible"
+      :title="`${editingId ? '修改收款单' : '收款单'}${form.documentNo ? ` · ${form.documentNo}` : ''}`"
+      aria-label="收款单"
+      form-id="receipt-document-form"
+      close-label="取消"
+      :busy="saving"
+      @close="closeModal"
+      @submit="saveReceipt"
+    >
+      <fieldset class="sf-plain-fieldset sf-form-grid" :disabled="saving">
+        <label class="sf-field">
+          门店
+          <select v-model.number="form.storeId" required @change="handleReceiptStoreChange">
+            <option value="">请先选择门店</option>
+            <option v-for="store in activeStores" :key="store.id" :value="store.id">{{ store.name }}</option>
+            <option v-if="form.storeId && !stores.some(store => Number(store.id) === Number(form.storeId))" :value="form.storeId">
+              {{ form.storeName || form.storeId }}
+            </option>
+          </select>
+        </label>
+        <label class="sf-field">
+          客户
+          <select v-model.number="form.customerId" required :disabled="!form.storeId" @change="handleCustomerChange">
+            <option value="">{{ form.storeId ? '请选择客户' : '请先选择门店' }}</option>
+            <option v-for="customer in modalCustomers" :key="customer.id" :value="customer.id">
+              {{ customer.customerName }}
+            </option>
+          </select>
+        </label>
+        <label class="sf-field">欠款金额<input class="receipt-debt" :value="formatMoney(currentDebt)" readonly></label>
+        <label class="sf-field">单据编号<input :value="form.documentNo || '保存时自动生成'" readonly></label>
+        <label class="sf-field">单据日期<input v-model="form.documentDate" type="date" required @change="loadNextNumber"></label>
+        <label class="sf-field">
+          结算账户
+          <select v-model="form.settlementAccount">
+            <option value="">请选择结算账户</option>
+            <option
+              v-if="form.settlementAccount && !customerBankAccounts.some(account => (account.value || account.accountName) === form.settlementAccount)"
+              :value="form.settlementAccount"
+            >
+              {{ form.settlementAccount }}
+            </option>
+            <option v-for="account in customerBankAccounts" :key="account.id" :value="account.value || account.accountName">
+              {{ account.label || account.accountName }}
+            </option>
+          </select>
+        </label>
+        <label class="sf-field">收款方式<input v-model.trim="form.paymentMethod" maxlength="30" placeholder="微信、银行转账等"></label>
+        <label class="sf-field">本次实际收款<input v-model="form.paymentAmount" type="number" min="0.01" step="0.01" required placeholder="0.00"></label>
+        <label class="sf-field">优惠金额<input v-model="form.discountAmount" type="number" min="0" step="0.01" placeholder="0.00"></label>
+        <label class="sf-field">合计金额<input :value="formatMoney(formTotal)" readonly></label>
+        <label class="sf-field">制单人<input v-model.trim="form.creator" maxlength="30"></label>
+        <label class="sf-field wide">备注<textarea v-model.trim="form.remark" maxlength="300" placeholder="可填写收款说明、银行流水号等"></textarea></label>
+      </fieldset>
+      <div class="sf-summary">
+        <span>实际收款<strong>{{ formatMoney(form.paymentAmount) }}</strong></span>
+        <span>预计核销欠款<strong>{{ formatMoney(previewWriteoff) }}</strong></span>
+        <span>预计转入预收<strong>{{ formatMoney(previewAdvance) }}</strong></span>
+      </div>
+      <p :class="Number(form.discountAmount) > currentDebt ? 'sf-error' : 'sf-muted'">
+        {{ Number(form.discountAmount) > currentDebt ? '优惠金额不能超过客户当前欠款。' : '当前仅为预览，审核时按客户实时欠款重新计算。' }}
+      </p>
+      <div class="sf-attachments">
+        <div class="sf-actions">
+          <strong>附件</strong>
+          <button type="button" class="sf-button" :disabled="saving" @click="attachmentInput?.click()">
+            <Paperclip :size="16" />{{ attachmentPreview ? '更换附件' : '添加附件' }}
+          </button>
+          <input ref="attachmentInput" class="sf-file-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" :disabled="saving" @change="handleAttachment">
+          <span class="sf-muted">{{ attachmentPreview ? '图片最大 10MB' : '暂无附件，图片最大 10MB' }}</span>
         </div>
-      </Transition>
+        <ul v-if="attachmentPreview" class="sf-attachment-list">
+          <li>
+            <a class="receipt-attachment-preview" :href="attachmentPreview" target="_blank" rel="noopener">
+              <img :src="attachmentPreview" alt="收款附件预览">
+            </a>
+            <button class="sf-button icon danger" type="button" title="移除附件" aria-label="移除附件" :disabled="saving" @click="removeAttachment"><X :size="16" /></button>
+          </li>
+        </ul>
+      </div>
+      <p class="sf-muted">保存后是待审核草稿，不会立即改变客户账户。</p>
+      <template #actions>
+        <button class="sf-button primary" type="submit" form="receipt-document-form" :disabled="saving">
+          <Save :size="16" />{{ saving ? '保存中...' : '保存草稿' }}
+        </button>
+      </template>
+    </FinanceDocumentDialog>
 
+    <Teleport to="body">
       <Transition name="notice">
         <div v-if="notice.visible" :class="['page-notice', `notice-${notice.type}`]">
           <svg viewBox="0 0 24 24">
@@ -475,7 +335,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Search } from '@lucide/vue'
+import { Paperclip, Save, Search, X } from '@lucide/vue'
 import * as XLSX from 'xlsx'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
@@ -483,6 +343,7 @@ import { documentStatusLabels, operationKey } from '@/utils/supplierFinance'
 import SupplierDocumentDialog from '@/components/admin/purchase/SupplierDocumentDialog.vue'
 import SupplierRefundPanel from '@/components/admin/finance/SupplierRefundPanel.vue'
 import CustomModal from '@/components/CustomModal.vue'
+import FinanceDocumentDialog from '@/components/common/FinanceDocumentDialog.vue'
 
 const props = defineProps({ mode: { type: String, default: 'receipt', validator: value => ['receipt', 'payment'].includes(value) } })
 const route = useRoute()
@@ -573,6 +434,8 @@ const todayText = () => {
 const emptyForm = () => ({
   documentNo: '',
   documentDate: todayText(),
+  storeId: '',
+  storeName: '',
   customerId: '',
   settlementAccount: '',
   paymentMethod: '',
@@ -615,18 +478,17 @@ const totals = computed(() =>
   }, { paymentAmount: 0, discountAmount: 0, writeoffAmount: 0, advanceAmount: 0 })
 )
 const modalCustomers = computed(() => {
-  if (selectedStoreId.value === null || editingId.value) return customers.value
+  if (!form.storeId) return []
   return customers.value.filter(
-    customer => Number(customer.storeId) === selectedStoreId.value
+    customer => Number(customer.storeId) === Number(form.storeId)
   )
 })
 const selectedCustomer = computed(() =>
-  customers.value.find(customer => Number(customer.id) === Number(form.customerId))
+  modalCustomers.value.find(customer => Number(customer.id) === Number(form.customerId))
 )
 const customerBankAccounts = computed(() => {
-  const storeId = selectedCustomer.value?.storeId
   return bankAccounts.value
-    .filter(account => Number(account.storeId) === Number(storeId))
+    .filter(account => Number(account.storeId) === Number(form.storeId))
     .slice()
     .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)))
 })
@@ -750,6 +612,10 @@ const loadNextNumber = async () => {
 const openCreateModal = async () => {
   if (paymentMode.value) { openPayment(); return }
   resetForm()
+  if (selectedStoreId.value !== null) {
+    form.storeId = selectedStoreId.value
+    form.storeName = stores.value.find(store => Number(store.id) === selectedStoreId.value)?.name || ''
+  }
   modalVisible.value = true
   await loadNextNumber()
 }
@@ -761,7 +627,17 @@ const openQueryCreate = async () => {
   }
   if (route.query.create !== '1') return
   resetForm()
-  if (route.query.customerId) form.customerId = Number(route.query.customerId)
+  if (route.query.customerId) {
+    const customer = customers.value.find(item => Number(item.id) === Number(route.query.customerId))
+    if (customer) {
+      form.storeId = customer.storeId
+      form.storeName = customer.storeName || ''
+      form.customerId = customer.id
+    }
+  } else if (selectedStoreId.value !== null) {
+    form.storeId = selectedStoreId.value
+    form.storeName = stores.value.find(store => Number(store.id) === selectedStoreId.value)?.name || ''
+  }
   handleCustomerChange()
   modalVisible.value = true
   await loadNextNumber()
@@ -773,6 +649,8 @@ const openEditModal = item => {
   Object.assign(form, {
     documentNo: item.documentNo,
     documentDate: item.documentDate,
+    storeId: item.storeId,
+    storeName: item.storeName,
     customerId: item.customerId,
     settlementAccount: item.settlementAccount,
     paymentMethod: item.paymentMethod,
@@ -796,9 +674,14 @@ const closeModal = () => {
     router.replace({ query })
   }
 }
+const handleReceiptStoreChange = () => {
+  form.storeName = stores.value.find(store => Number(store.id) === Number(form.storeId))?.name || ''
+  form.customerId = ''
+  form.settlementAccount = ''
+}
 const handleCustomerChange = () => {
   const store = stores.value.find(
-    item => Number(item.id) === Number(selectedCustomer.value?.storeId)
+    item => Number(item.id) === Number(form.storeId)
   )
   const account = customerBankAccounts.value.find(item => item.isDefault) ||
     customerBankAccounts.value[0]
@@ -846,6 +729,7 @@ const uploadAttachment = async () => {
 }
 
 const saveReceipt = async () => {
+  if (saving.value) return
   let validationError = ''
   if (!form.customerId) validationError = '请选择客户'
   else if (!form.documentDate) validationError = '请选择单据日期'
@@ -1123,7 +1007,7 @@ svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;str
 .slider-tab{display:inline-flex;height:36px;flex:0 0 auto;align-items:center;gap:7px;padding:0 15px;color:var(--text-secondary);background:transparent;border:0;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap}
 .slider-tab:hover{color:var(--accent-dark);background:rgba(var(--accent-rgb),.1)}.slider-tab.active{color:#fff;background:var(--accent);box-shadow:0 2px 6px rgba(var(--accent-rgb),.3)}
 .count-badge{display:inline-flex;min-width:20px;height:20px;align-items:center;justify-content:center;padding:0 6px;background:rgba(0,0,0,.1);border-radius:10px;font-size:11px;font-weight:700}.slider-tab.active .count-badge{background:rgba(255,255,255,.25)}
-.toolbar-actions,.row-actions,.pagination,.modal-actions{display:flex;align-items:center;gap:8px}.toolbar-actions{flex:0 0 auto}.selected-hint{color:var(--text-secondary);font-size:12px}.selected-hint strong{color:var(--accent-dark)}
+.toolbar-actions,.row-actions,.pagination{display:flex;align-items:center;gap:8px}.toolbar-actions{flex:0 0 auto}.selected-hint{color:var(--text-secondary);font-size:12px}.selected-hint strong{color:var(--accent-dark)}
 .button{display:inline-flex;height:38px;align-items:center;justify-content:center;gap:7px;padding:0 15px;border:1px solid transparent;border-radius:5px;cursor:pointer;font-size:13px;font-weight:600;white-space:nowrap}
 .button:disabled{cursor:not-allowed;opacity:.5}.button svg{width:16px;height:16px}.button-primary{color:#fff;background:var(--accent);border-color:var(--accent);box-shadow:0 2px 5px rgba(var(--accent-rgb),.18)}.button-primary:hover:not(:disabled){background:var(--accent-dark)}
 .button-secondary{color:#445066;background:#fff;border-color:var(--border-strong)}.button-secondary:hover{color:var(--accent-dark);background:var(--accent-soft);border-color:var(--accent-border)}
@@ -1142,19 +1026,12 @@ svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;str
 .records-table tfoot{background:#f8fafc;border-top:2px solid var(--border);font-weight:700}.total-label{padding-left:20px!important}.empty-cell{height:290px!important;color:var(--text-muted)!important;text-align:center}.empty-cell strong,.empty-cell span{display:block}.empty-cell strong{margin-top:11px;color:#4c586b}.empty-cell span{margin-top:5px;font-size:12px}
 .empty-mark{display:inline-flex;width:48px;height:48px;align-items:center;justify-content:center;color:#aab4c0;background:#f1f4f7;border-radius:50%}.empty-mark svg{width:24px;height:24px}.skeleton-row span{display:block;width:78%;height:10px;background:linear-gradient(90deg,#eef2f5 25%,#e2e8ee 50%,#eef2f5 75%);background-size:200% 100%;border-radius:3px;animation:shimmer 1.25s linear infinite}@keyframes shimmer{to{background-position:-200% 0}}
 .table-footer{display:flex;min-width:0;min-height:58px;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;color:var(--text-secondary);border-top:1px solid var(--border);font-size:12px}.table-footer strong{color:var(--text)}.pagination select{height:32px;padding:0 8px;border:1px solid var(--border-strong);border-radius:5px}.pagination button{display:inline-flex;width:31px;height:31px;align-items:center;justify-content:center;color:var(--text-secondary);background:#fff;border:1px solid var(--border-strong);border-radius:5px}.pagination button:disabled{opacity:.45}.pagination svg{width:15px;height:15px}.page-number{min-width:58px;text-align:center}
-.modal-overlay{position:fixed;inset:0;z-index:2200;display:flex;align-items:center;justify-content:center;padding:24px;overflow:auto;background:rgba(15,23,42,.42);backdrop-filter:blur(1px)}
-.payment-modal{display:flex;width:min(960px,calc(100vw - 48px));max-height:min(880px,calc(100vh - 48px));min-height:0;flex-direction:column;overflow:hidden;color:#172033;background:#f4f7f9;border:1px solid #dfe5ec;border-radius:7px;box-shadow:0 24px 70px rgba(15,23,42,.24)}
-.modal-header{display:flex;min-height:78px;flex:0 0 auto;align-items:center;justify-content:space-between;padding:14px 20px;background:#fff;border-bottom:1px solid #dfe5ec}.modal-title-area{display:flex;min-width:0;align-items:center;gap:12px}.modal-title-area>div{min-width:0}.modal-title-area>div>span{color:#7a8799;font-size:11px;font-weight:650}.modal-title-area h2{margin:3px 0 0;overflow:hidden;color:#172033;font-size:18px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}.modal-icon{display:inline-flex;flex:0 0 40px;width:40px;height:40px;align-items:center;justify-content:center;color:#08745a;background:#e9f8f3;border-radius:7px}.modal-icon svg{width:22px;height:22px}
-.modal-close{display:inline-flex;width:34px;height:34px;align-items:center;justify-content:center;color:#718096;background:transparent;border:0;border-radius:5px;cursor:pointer}.modal-close:hover{background:#f1f5f9}.modal-close svg{width:19px;height:19px}
-.modal-body{display:flex;min-height:0;flex:1;flex-direction:column;gap:14px;overflow-y:auto;padding:14px 16px;scrollbar-gutter:stable}.form-section{padding:15px 16px;background:#fff;border:1px solid #dfe5ec;border-radius:7px;box-shadow:0 1px 2px rgba(15,23,42,.025)}.section-header{display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:11px;border-bottom:1px solid #edf1f5}.section-header>span{display:inline-flex;flex:0 0 31px;width:31px;height:31px;align-items:center;justify-content:center;color:#08745a;background:#e9f8f3;border-radius:5px;font-size:11px;font-weight:800}.section-header h3{margin:0;color:#172033;font-size:14px;font-weight:700}.section-header p{margin:2px 0 0;color:#8a96a8;font-size:11px;line-height:1.5}
-.form-grid{display:grid;min-width:0;gap:14px}.basic-grid{grid-template-columns:1.35fr .85fr 1fr .85fr}.payment-grid{grid-template-columns:1.25fr 1fr 1fr 1fr 1fr}.other-grid{grid-template-columns:.65fr 1.5fr 1fr;align-items:start}.form-field{display:flex;min-width:0;flex-direction:column;gap:7px}.form-field>span:first-child{color:#596579;font-size:12px;font-weight:650}.form-field b{color:#dc3545}
-.form-field input,.form-field select,.form-field textarea{width:100%;color:#172033;background:#fff;border:1px solid #cbd5e1;border-radius:5px;outline:none}.form-field input,.form-field select{height:38px;padding:0 11px}.form-field textarea{min-height:98px;padding:10px 11px;resize:vertical}.form-field input:focus,.form-field select:focus,.form-field textarea:focus{border-color:#0f9f78;box-shadow:0 0 0 3px rgba(15,159,120,.12)}
-.readonly-value{display:flex;min-height:38px;align-items:center;padding:0 11px;overflow:hidden;color:#445066;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;text-overflow:ellipsis;white-space:nowrap}.debt-value{color:#dc3545;font-weight:750}.document-value{color:#08745a;font-weight:700}.money-input{position:relative}.money-input i{position:absolute;top:10px;left:11px;color:#7a8799;font-style:normal}.money-input input{padding-left:28px}.total-value{font-size:15px;font-weight:800}
-.account-preview{display:grid;grid-template-columns:180px 180px minmax(0,1fr);align-items:center;gap:14px;margin-top:14px;padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px}.account-preview div{min-width:0;padding-right:14px;border-right:1px solid #e2e8f0}.account-preview span,.account-preview strong{display:block}.account-preview span{color:#7a8799;font-size:11px}.account-preview strong{margin-top:3px;color:#172033;font-size:15px;font-variant-numeric:tabular-nums}.account-preview div:nth-child(2) strong{color:#07805f}.account-preview p{margin:0;color:#7a8799;font-size:11px;line-height:1.5}.account-preview p.warning{color:#b4232f;font-weight:650}
-.attachment-uploader{position:relative;display:flex;min-height:130px;align-items:center;justify-content:center;overflow:hidden;background:#fafcfd;border:1px dashed #aeb9c8;border-radius:5px;cursor:pointer}.attachment-uploader:hover{background:#f0faf6;border-color:#0f9f78}.attachment-uploader input{position:absolute;width:1px;height:1px;opacity:0}.attachment-uploader img{width:100%;height:160px;object-fit:contain}.upload-placeholder{display:flex;align-items:center;flex-direction:column;color:#718096}.upload-placeholder svg{width:29px;height:29px;margin-bottom:8px;color:#0f9f78}.upload-placeholder strong{font-size:12px}.upload-placeholder small{margin-top:4px;font-size:10px}.remove-attachment{align-self:flex-start;padding:0;color:#dc3545;background:transparent;border:0;cursor:pointer;font-size:11px}
-.modal-footer{display:flex;min-height:68px;flex:0 0 auto;align-items:center;justify-content:space-between;gap:16px;padding:12px 18px;background:#fff;border-top:1px solid #dfe5ec}.draft-tip{display:flex;min-width:0;align-items:center;gap:7px;color:#7a8799;font-size:11px;line-height:1.5}.draft-tip svg{width:16px;height:16px;flex:0 0 16px;color:#a4510b}
-.page-notice{position:fixed;top:24px;left:50%;z-index:3000;display:flex;min-width:0;min-height:44px;align-items:center;gap:9px;max-width:min(520px,calc(100vw - 32px));padding:10px 16px;color:#172033;background:#fff;border:1px solid #dfe5ec;border-radius:6px;box-shadow:0 10px 30px rgba(15,23,42,.16);transform:translateX(-50%);font-size:13px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}.page-notice svg{width:19px;height:19px;flex:0 0 19px}.notice-success svg{color:#0f9f78}.notice-error svg{color:#dc3545}
-.modal-fade-enter-active,.modal-fade-leave-active{transition:opacity .2s}.modal-fade-enter-active .payment-modal,.modal-fade-leave-active .payment-modal{transition:transform .2s,opacity .2s}.modal-fade-enter-from,.modal-fade-leave-to{opacity:0}.modal-fade-enter-from .payment-modal,.modal-fade-leave-to .payment-modal{opacity:0;transform:translateY(10px) scale(.985)}.notice-enter-active,.notice-leave-active{transition:opacity .18s,transform .18s}.notice-enter-from,.notice-leave-to{opacity:0;transform:translate(-50%,-8px)}
-@media(max-width:1280px){.records-toolbar{align-items:flex-start;flex-direction:column}.store-filter-area{width:100%}.store-slider{max-width:none;flex:1}.toolbar-actions{width:100%;align-self:stretch;justify-content:flex-end;flex-wrap:wrap}.basic-grid,.payment-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.other-grid{grid-template-columns:.7fr 1.3fr}.other-grid .form-field:last-child{grid-column:1/-1}}
-@media(max-width:780px){.records-toolbar,.store-filter-area{align-items:stretch}.store-filter-area{flex-direction:column}.toolbar-actions{width:100%;justify-content:space-between}.table-footer{align-items:flex-start;flex-direction:column}.pagination{align-self:flex-end}.modal-overlay{padding:0}.payment-modal{width:100vw;height:100vh;max-height:100vh;border:0;border-radius:0}.modal-header{padding:14px 16px}.modal-body{padding:12px}.form-section{padding:14px}.basic-grid,.payment-grid,.other-grid,.account-preview{grid-template-columns:1fr}.account-preview div{padding:0 0 10px;border-right:0;border-bottom:1px solid #e2e8f0}.account-preview p{padding-top:2px}.modal-footer{align-items:stretch;flex-direction:column}.draft-tip{align-items:flex-start}.modal-actions{justify-content:flex-end}}
+.sf-field .receipt-debt{color:#dc3545;font-weight:700}
+.sf-field input[readonly]{background:#f8fafc}
+.receipt-attachment-preview{display:block;max-width:240px}
+.receipt-attachment-preview img{display:block;max-width:100%;max-height:160px;object-fit:contain}
+.page-notice{position:fixed;top:24px;left:50%;z-index:4000;display:flex;min-width:0;min-height:44px;align-items:center;gap:9px;max-width:min(520px,calc(100vw - 32px));padding:10px 16px;color:#172033;background:#fff;border:1px solid #dfe5ec;border-radius:6px;box-shadow:0 10px 30px rgba(15,23,42,.16);transform:translateX(-50%);font-size:13px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}.page-notice svg{width:19px;height:19px;flex:0 0 19px}.notice-success svg{color:#0f9f78}.notice-error svg{color:#dc3545}
+.notice-enter-active,.notice-leave-active{transition:opacity .18s,transform .18s}.notice-enter-from,.notice-leave-to{opacity:0;transform:translate(-50%,-8px)}
+@media(max-width:1280px){.records-toolbar{align-items:flex-start;flex-direction:column}.store-filter-area{width:100%}.store-slider{max-width:none;flex:1}.toolbar-actions{width:100%;align-self:stretch;justify-content:flex-end;flex-wrap:wrap}}
+@media(max-width:780px){.records-toolbar,.store-filter-area{align-items:stretch}.store-filter-area{flex-direction:column}.toolbar-actions{width:100%;justify-content:space-between}.table-footer{align-items:flex-start;flex-direction:column}.pagination{align-self:flex-end}}
 </style>

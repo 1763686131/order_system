@@ -1,69 +1,70 @@
 <template>
+  <FinanceDocumentDialog
+    ref="documentElement"
+    :title="`${invoiceMode ? '采购发票' : '供应商付款'}${form.invoiceNo || form.documentNo ? ` · ${form.invoiceNo || form.documentNo}` : ''}`"
+    :aria-label="invoiceMode ? '采购发票登记' : '供应商付款单'"
+    form-id="supplier-document-form"
+    :embedded="embedded"
+    :close-label="embedded ? '返回发票记录' : '关闭'"
+    :busy="busy"
+    :loading="loading"
+    :load-failed="loadFailed"
+    :error="error"
+    @close="close"
+    @submit="save"
+  >
+    <template #title-extra><span v-if="form.id" class="sf-badge">{{ documentStatusLabels[form.status] }}</span></template>
+    <template #default>
+      <div class="sf-form-grid">
+        <label class="sf-field">门店<select v-model="form.storeId" required :disabled="readonly || embedded || invoiceMode && !!form.id || !!form.auditedAt" @change="changeParty"><option value="">请选择</option><option v-for="store in options.stores" :key="store.id" :value="store.id">{{ store.name }}</option><option v-if="form.storeId && !options.stores.some(store => Number(store.id) === Number(form.storeId))" :value="form.storeId">{{ form.storeName || form.storeId }}</option></select></label>
+        <label class="sf-field">供应商<select v-model="form.supplierId" required :disabled="readonly || invoiceMode && !!form.id || !!form.auditedAt" @change="changeParty"><option value="">请选择</option><option v-for="supplier in suppliers" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option><option v-if="form.supplierId && !suppliers.some(supplier => Number(supplier.id) === Number(form.supplierId))" :value="form.supplierId">{{ form.supplierName || form.supplierId }}</option></select></label>
+        <label class="sf-field">业务日期<input v-model="form.businessDate" type="date" required :disabled="readonly" /></label>
+        <template v-if="invoiceMode">
+          <label class="sf-field">发票号码<input v-model.trim="form.invoiceNo" name="invoiceNo" maxlength="100" required :disabled="readonly" /></label>
+          <label class="sf-field">发票日期<input v-model="form.invoiceDate" type="date" required :disabled="readonly" /></label>
+          <label class="sf-field">发票类型<select v-model="form.invoiceType" required :disabled="readonly"><option value="vat-special">增值税专用发票</option><option value="vat-normal">增值税普通发票</option><option value="vat">增值税发票</option><option value="electronic">电子发票</option><option value="other">其他发票</option><option v-if="form.invoiceType && !['vat-special', 'vat-normal', 'vat', 'electronic', 'other'].includes(form.invoiceType)" :value="form.invoiceType">{{ form.invoiceType }}</option></select></label>
+        </template>
+        <template v-else>
+          <label class="sf-field">银行账户<select v-model="form.bankAccountId" required :disabled="readonly"><option value="">请选择</option><option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.accountName }} · {{ bank.bankName }}</option></select></label>
+          <label class="sf-field">付款日期<input v-model="form.paymentDate" type="date" required :disabled="readonly" /></label>
+          <label class="sf-field">付款方式<select v-model="form.paymentMethod" required :disabled="readonly"><option value="bank-transfer">银行转账</option><option value="cash">现金账户</option><option value="online">线上支付</option><option value="other">其他</option><option v-if="form.paymentMethod === 'transfer'" value="transfer">银行转账</option><option v-else-if="form.paymentMethod && !['bank-transfer', 'cash', 'online', 'other'].includes(form.paymentMethod)" :value="form.paymentMethod">{{ form.paymentMethod }}</option></select></label>
+          <label class="sf-field">本次实际付款<input v-model.number="form.paymentAmount" type="number" min="0.01" step="0.01" required :disabled="readonly" /></label>
+          <label class="sf-field wide">未开票付款原因<textarea v-model.trim="form.unbilledReason" maxlength="500" :required="requiresUnbilledReason" :disabled="readonly" /></label>
+          <label v-if="user.hasPerm('admin.finance.supplier_payment.invoice_override') || form.invoiceOverride" class="sf-check wide"><input v-model="form.invoiceOverride" type="checkbox" :disabled="readonly" />财务豁免见票付款</label>
+        </template>
+        <label class="sf-field wide">备注<textarea v-model="form.remark" maxlength="500" :disabled="readonly" /></label>
+      </div>
+      <div class="sf-header sf-section-title"><h3>{{ invoiceMode ? '发票分配明细' : '付款抵扣明细' }}</h3><button v-if="!readonly" class="sf-button icon" type="button" title="刷新可分配余额" aria-label="刷新可分配余额" :disabled="sourcesLoading || !form.supplierId || !form.storeId" @click="loadSources()"><RefreshCw :size="16" /></button></div>
+      <label v-if="embedded && invoiceMode && !readonly" class="sf-check"><input v-model="includeOtherOrders" type="checkbox" :disabled="busy" />合并同供应商其他单据</label>
+      <PayableAllocationTable v-model="allocationRows" :sources="visibleSources" :invoice="invoiceMode" :resizable-columns="embedded && invoiceMode" :readonly="readonly || !invoiceMode" :loading="sourcesLoading" />
+      <div class="sf-summary">
+        <template v-if="invoiceMode"><span>未税合计<strong>{{ formatMoney(baseTotal) }}</strong></span><span>税额合计<strong>{{ formatMoney(taxTotal) }}</strong></span><span>价税合计<strong>{{ formatMoney(baseTotal + taxTotal) }}</strong></span><span v-if="embedded">本单分配<strong>{{ formatMoney(currentDocumentTotal) }}</strong></span></template>
+        <template v-else><span>实际付款<strong>{{ formatMoney(form.paymentAmount) }}</strong></span><span>{{ editing || draft ? '预计抵扣应付' : '已抵扣应付' }}<strong>{{ formatMoney(allocatedTotal) }}</strong></span><span>新增预付款<strong :class="{ 'sf-error': advanceTotal < 0 }">{{ formatMoney(advanceTotal) }}</strong></span></template>
+      </div>
+      <div v-if="invoiceMode" class="sf-form-grid sf-section-title">
+        <label class="sf-check wide"><input v-model="form.hasDifference" type="checkbox" :disabled="readonly" />发票金额或税额存在差异</label>
+        <label class="sf-field wide">差异原因<textarea v-model="form.differenceReason" maxlength="500" :required="form.hasDifference" :disabled="readonly" /></label>
+      </div>
+      <SupplierAttachments v-model="form.attachments" :store-id="form.storeId" :readonly="readonly" @uploading="uploading = $event" />
+      <template v-if="!invoiceMode && form.bankTransactions?.length">
+        <div class="sf-header sf-section-title"><h3>银行流水</h3></div>
+        <div class="sf-table-scroll"><table class="sf-table"><thead><tr><th>业务日期</th><th>类型</th><th>银行账户</th><th>余额变动</th><th>变动后余额</th><th>操作人 / 时间</th></tr></thead><tbody><tr v-for="movement in form.bankTransactions" :key="movement.id"><td>{{ movement.businessDate }}</td><td>{{ movement.reversalOfId ? '付款冲销' : '付款扣款' }}</td><td>{{ options.bankAccounts.find(bank => bank.id === movement.bankAccountId)?.accountName || movement.bankAccountId }}</td><td class="sf-number">{{ formatMoney(movement.change) }}</td><td class="sf-number">{{ formatMoney(movement.balanceAfter) }}</td><td>{{ movement.createdBy }}<div class="sf-muted">{{ movement.createdAt }}</div></td></tr></tbody></table></div>
+      </template>
+      <div v-if="form.id" class="sf-meta">
+        <span>制单：{{ form.createdBy }} · {{ form.createdAt }}</span>
+        <span v-if="form.confirmedAt || form.auditedAt">{{ invoiceMode ? '确认' : '审核' }}：{{ form.confirmedBy || form.auditedBy }} · {{ form.confirmedAt || form.auditedAt }}</span>
+        <span v-if="form.reversedAt">撤销：{{ form.reversedAt }}</span>
+      </div>
+    </template>
+    <template #actions>
+      <button v-if="!editing && draft && can('edit')" class="sf-button" :disabled="busy" @click="startEditing"><Pencil :size="16" />编辑</button>
+      <button v-if="!editing && draft && can('delete')" class="sf-button icon danger" title="删除单据" aria-label="删除单据" :disabled="busy" @click="confirmAction('delete')"><Trash2 :size="16" /></button>
+      <button v-if="editing && !loadFailed && can(form.id ? 'edit' : 'create')" form="supplier-document-form" type="submit" class="sf-button primary" :disabled="busy || !!confirmation"><Save :size="16" />{{ saving ? '保存中...' : '保存草稿' }}</button>
+      <button v-if="!editing && draft && can(invoiceMode ? 'confirm' : 'audit')" class="sf-button primary" :disabled="busy" @click="confirmAction('post')"><Check :size="16" />{{ invoiceMode ? '确认发票' : '审核付款' }}</button>
+      <button v-if="!editing && posted && can(invoiceMode ? 'reverse_confirm' : 'reverse_audit')" class="sf-button danger" :disabled="busy" @click="confirmAction('reverse')"><RotateCcw :size="16" />{{ invoiceMode ? '撤销确认' : '反审核付款' }}</button>
+    </template>
+  </FinanceDocumentDialog>
   <Teleport to="body" :disabled="embedded">
-    <div :class="embedded ? 'sf-embedded-layer' : 'sf-modal-layer'" @click.self="close">
-      <section ref="documentElement" class="supplier-finance-dialog" :class="{ 'sf-embedded-document': embedded }" :role="embedded ? 'region' : 'dialog'" :aria-modal="embedded ? undefined : true" :aria-label="invoiceMode ? '采购发票登记' : '供应商付款单'">
-        <header class="sf-header">
-          <h2>{{ invoiceMode ? '采购发票' : '供应商付款' }}{{ form.invoiceNo || form.documentNo ? ` · ${form.invoiceNo || form.documentNo}` : '' }} <span v-if="form.id" class="sf-badge">{{ documentStatusLabels[form.status] }}</span></h2>
-          <button v-if="!embedded" type="button" class="sf-button icon" title="关闭" aria-label="关闭" :disabled="busy" @click="close"><X :size="18" /></button>
-        </header>
-        <div class="sf-dialog-body">
-          <p v-if="error" class="sf-error" role="alert">{{ error }}</p>
-          <p v-if="loading" class="sf-empty">加载单据中...</p>
-          <form v-else-if="!loadFailed" id="supplier-document-form" @submit.prevent="save">
-            <div class="sf-form-grid">
-              <label class="sf-field">门店<select v-model="form.storeId" required :disabled="readonly || embedded || invoiceMode && !!form.id || !!form.auditedAt" @change="changeParty"><option value="">请选择</option><option v-for="store in options.stores" :key="store.id" :value="store.id">{{ store.name }}</option><option v-if="form.storeId && !options.stores.some(store => Number(store.id) === Number(form.storeId))" :value="form.storeId">{{ form.storeName || form.storeId }}</option></select></label>
-              <label class="sf-field">供应商<select v-model="form.supplierId" required :disabled="readonly || invoiceMode && !!form.id || !!form.auditedAt" @change="changeParty"><option value="">请选择</option><option v-for="supplier in suppliers" :key="supplier.id" :value="supplier.id">{{ supplier.supplierName }}</option><option v-if="form.supplierId && !suppliers.some(supplier => Number(supplier.id) === Number(form.supplierId))" :value="form.supplierId">{{ form.supplierName || form.supplierId }}</option></select></label>
-              <label class="sf-field">业务日期<input v-model="form.businessDate" type="date" required :disabled="readonly" /></label>
-              <template v-if="invoiceMode">
-                <label class="sf-field">发票号码<input v-model.trim="form.invoiceNo" name="invoiceNo" maxlength="100" required :disabled="readonly" /></label>
-                <label class="sf-field">发票日期<input v-model="form.invoiceDate" type="date" required :disabled="readonly" /></label>
-                <label class="sf-field">发票类型<select v-model="form.invoiceType" required :disabled="readonly"><option value="vat-special">增值税专用发票</option><option value="vat-normal">增值税普通发票</option><option value="vat">增值税发票</option><option value="electronic">电子发票</option><option value="other">其他发票</option><option v-if="form.invoiceType && !['vat-special', 'vat-normal', 'vat', 'electronic', 'other'].includes(form.invoiceType)" :value="form.invoiceType">{{ form.invoiceType }}</option></select></label>
-              </template>
-              <template v-else>
-                <label class="sf-field">银行账户<select v-model="form.bankAccountId" required :disabled="readonly"><option value="">请选择</option><option v-for="bank in banks" :key="bank.id" :value="bank.id">{{ bank.accountName }} · {{ bank.bankName }}</option></select></label>
-                <label class="sf-field">付款日期<input v-model="form.paymentDate" type="date" required :disabled="readonly" /></label>
-                <label class="sf-field">付款方式<select v-model="form.paymentMethod" required :disabled="readonly"><option value="bank-transfer">银行转账</option><option value="cash">现金账户</option><option value="online">线上支付</option><option value="other">其他</option><option v-if="form.paymentMethod === 'transfer'" value="transfer">银行转账</option><option v-else-if="form.paymentMethod && !['bank-transfer', 'cash', 'online', 'other'].includes(form.paymentMethod)" :value="form.paymentMethod">{{ form.paymentMethod }}</option></select></label>
-                <label class="sf-field">本次实际付款<input v-model.number="form.paymentAmount" type="number" min="0.01" step="0.01" required :disabled="readonly" /></label>
-                <label class="sf-field wide">未开票付款原因<textarea v-model.trim="form.unbilledReason" maxlength="500" :required="requiresUnbilledReason" :disabled="readonly" /></label>
-                <label v-if="user.hasPerm('admin.finance.supplier_payment.invoice_override') || form.invoiceOverride" class="sf-check wide"><input v-model="form.invoiceOverride" type="checkbox" :disabled="readonly" />财务豁免见票付款</label>
-              </template>
-              <label class="sf-field wide">备注<textarea v-model="form.remark" maxlength="500" :disabled="readonly" /></label>
-            </div>
-            <div class="sf-header sf-section-title"><h3>{{ invoiceMode ? '发票分配明细' : '付款抵扣明细' }}</h3><button v-if="!readonly" class="sf-button icon" type="button" title="刷新可分配余额" aria-label="刷新可分配余额" :disabled="sourcesLoading || !form.supplierId || !form.storeId" @click="loadSources()"><RefreshCw :size="16" /></button></div>
-            <label v-if="embedded && invoiceMode && !readonly" class="sf-check"><input v-model="includeOtherOrders" type="checkbox" :disabled="busy" />合并同供应商其他单据</label>
-            <PayableAllocationTable v-model="allocationRows" :sources="visibleSources" :invoice="invoiceMode" :resizable-columns="embedded && invoiceMode" :readonly="readonly || !invoiceMode" :loading="sourcesLoading" />
-            <div class="sf-summary">
-              <template v-if="invoiceMode"><span>未税合计<strong>{{ formatMoney(baseTotal) }}</strong></span><span>税额合计<strong>{{ formatMoney(taxTotal) }}</strong></span><span>价税合计<strong>{{ formatMoney(baseTotal + taxTotal) }}</strong></span><span v-if="embedded">本单分配<strong>{{ formatMoney(currentDocumentTotal) }}</strong></span></template>
-              <template v-else><span>实际付款<strong>{{ formatMoney(form.paymentAmount) }}</strong></span><span>{{ editing || draft ? '预计抵扣应付' : '已抵扣应付' }}<strong>{{ formatMoney(allocatedTotal) }}</strong></span><span>新增预付款<strong :class="{ 'sf-error': advanceTotal < 0 }">{{ formatMoney(advanceTotal) }}</strong></span></template>
-            </div>
-            <div v-if="invoiceMode" class="sf-form-grid sf-section-title">
-              <label class="sf-check wide"><input v-model="form.hasDifference" type="checkbox" :disabled="readonly" />发票金额或税额存在差异</label>
-              <label class="sf-field wide">差异原因<textarea v-model="form.differenceReason" maxlength="500" :required="form.hasDifference" :disabled="readonly" /></label>
-            </div>
-            <SupplierAttachments v-model="form.attachments" :store-id="form.storeId" :readonly="readonly" @uploading="uploading = $event" />
-            <template v-if="!invoiceMode && form.bankTransactions?.length">
-              <div class="sf-header sf-section-title"><h3>银行流水</h3></div>
-              <div class="sf-table-scroll"><table class="sf-table"><thead><tr><th>业务日期</th><th>类型</th><th>银行账户</th><th>余额变动</th><th>变动后余额</th><th>操作人 / 时间</th></tr></thead><tbody><tr v-for="movement in form.bankTransactions" :key="movement.id"><td>{{ movement.businessDate }}</td><td>{{ movement.reversalOfId ? '付款冲销' : '付款扣款' }}</td><td>{{ options.bankAccounts.find(bank => bank.id === movement.bankAccountId)?.accountName || movement.bankAccountId }}</td><td class="sf-number">{{ formatMoney(movement.change) }}</td><td class="sf-number">{{ formatMoney(movement.balanceAfter) }}</td><td>{{ movement.createdBy }}<div class="sf-muted">{{ movement.createdAt }}</div></td></tr></tbody></table></div>
-            </template>
-            <div v-if="form.id" class="sf-meta">
-              <span>制单：{{ form.createdBy }} · {{ form.createdAt }}</span>
-              <span v-if="form.confirmedAt || form.auditedAt">{{ invoiceMode ? '确认' : '审核' }}：{{ form.confirmedBy || form.auditedBy }} · {{ form.confirmedAt || form.auditedAt }}</span>
-              <span v-if="form.reversedAt">撤销：{{ form.reversedAt }}</span>
-            </div>
-          </form>
-        </div>
-        <footer class="sf-footer">
-          <button class="sf-button" type="button" :disabled="busy" @click="close"><ArrowLeft v-if="embedded" :size="16" />{{ embedded ? '返回发票记录' : '关闭' }}</button>
-          <div class="sf-actions">
-            <button v-if="!editing && draft && can('edit')" class="sf-button" :disabled="busy" @click="startEditing"><Pencil :size="16" />编辑</button>
-            <button v-if="!editing && draft && can('delete')" class="sf-button icon danger" title="删除单据" aria-label="删除单据" :disabled="busy" @click="confirmAction('delete')"><Trash2 :size="16" /></button>
-            <button v-if="editing && !loadFailed && can(form.id ? 'edit' : 'create')" form="supplier-document-form" type="submit" class="sf-button primary" :disabled="busy || !!confirmation"><Save :size="16" />{{ saving ? '保存中...' : '保存草稿' }}</button>
-            <button v-if="!editing && draft && can(invoiceMode ? 'confirm' : 'audit')" class="sf-button primary" :disabled="busy" @click="confirmAction('post')"><Check :size="16" />{{ invoiceMode ? '确认发票' : '审核付款' }}</button>
-            <button v-if="!editing && posted && can(invoiceMode ? 'reverse_confirm' : 'reverse_audit')" class="sf-button danger" :disabled="busy" @click="confirmAction('reverse')"><RotateCcw :size="16" />{{ invoiceMode ? '撤销确认' : '反审核付款' }}</button>
-          </div>
-        </footer>
-      </section>
-    </div>
     <div v-if="!embedded && confirmation" class="sf-modal-layer sf-confirm-layer">
       <section class="supplier-finance-dialog sf-confirm-dialog" role="dialog" aria-modal="true" aria-label="确认操作">
         <header class="sf-header"><h2>{{ confirmation.title }}</h2></header>
@@ -87,15 +88,15 @@
 
 <script setup>
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { ArrowLeft, Check, Pencil, RefreshCw, RotateCcw, Save, Trash2, X } from '@lucide/vue'
+import { Check, Pencil, RefreshCw, RotateCcw, Save, Trash2 } from '@lucide/vue'
 import request from '@/api/request'
 import CustomModal from '@/components/CustomModal.vue'
+import FinanceDocumentDialog from '@/components/common/FinanceDocumentDialog.vue'
 import { useUserStore } from '@/stores/user'
 import { localDate } from '@/composables/documents/documentModels'
 import { documentStatusLabels, formatMoney, invoiceSourceKey, operationKey, paymentAllocationPreview, sumMoney } from '@/utils/supplierFinance'
 import PayableAllocationTable from './PayableAllocationTable.vue'
 import SupplierAttachments from './SupplierAttachments.vue'
-import '@/assets/styles/supplier-finance.css'
 
 const props = defineProps({
   mode: { type: String, required: true }, documentId: { type: Number, default: null },
@@ -304,7 +305,7 @@ onMounted(async () => {
   await load()
   if (props.embedded && editing.value && !loadFailed.value) {
     await nextTick()
-    documentElement.value?.querySelector('[name="invoiceNo"]')?.focus({ preventScroll: true })
+    documentElement.value?.focusField('[name="invoiceNo"]')
   }
 })
 watch(() => form.value.businessDate, () => {
