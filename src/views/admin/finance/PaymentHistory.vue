@@ -289,15 +289,27 @@
             <h3>收款抵扣明细</h3>
             <span class="sf-muted">已选 {{ selectedReceivableKeys.length }} / {{ receivableDocuments.length }} 笔</span>
           </div>
-          <button
-            class="sf-button"
-            type="button"
-            title="按单据日期从早到晚抵扣"
-            :disabled="saving || receivableLoading || !receivableDocuments.length || allocationTarget <= 0"
-            @click="autoAllocate"
-          >
-            <ListChecks :size="16" />自动抵扣
-          </button>
+          <div class="receipt-allocation-mode" role="group" aria-label="收款抵扣方式">
+            <button
+              class="sf-button"
+              type="button"
+              title="按单据日期从早到晚自动抵扣"
+              :aria-pressed="receiptAllocationMode === 'fifo'"
+              :disabled="saving || receivableLoading"
+              @click="receiptAllocationMode = 'fifo'"
+            >
+              <ListChecks :size="16" />自动抵扣
+            </button>
+            <button
+              class="sf-button"
+              type="button"
+              :aria-pressed="receiptAllocationMode === 'manual'"
+              :disabled="saving || receivableLoading"
+              @click="receiptAllocationMode = 'manual'"
+            >
+              <SquareCheck :size="16" />手动抵扣
+            </button>
+          </div>
         </header>
         <div v-if="receivableLoading" class="sf-empty">正在加载欠款单据...</div>
         <div v-else-if="receivableError" class="receipt-allocation-error" role="alert">
@@ -325,7 +337,7 @@
                     type="checkbox"
                     :value="receivableKey(document)"
                     :aria-label="`选择抵扣单据 ${document.documentNo}`"
-                    :disabled="saving || Number(document.outstandingAmount) <= 0"
+                    :disabled="saving || receiptAllocationMode !== 'manual' || Number(document.outstandingAmount) <= 0"
                   >
                 </td>
                 <td>
@@ -349,7 +361,7 @@
         <span>预计转入预收<strong>{{ formatMoney(previewAdvance) }}</strong></span>
       </div>
       <p :class="Number(form.discountAmount) > previewWriteoff ? 'sf-error' : 'sf-muted'">
-        {{ Number(form.discountAmount) > previewWriteoff ? '已选单据的抵扣金额不能覆盖优惠金额，请增加抵扣单据。' : '保存后按所选单据抵扣，审核时会复核单据余额。' }}
+        {{ Number(form.discountAmount) > previewWriteoff ? '抵扣金额不能覆盖优惠金额，请检查金额或所选单据。' : receiptAllocationMode === 'manual' ? '按已选单据抵扣，审核时会复核单据余额。' : '按单据日期从早到晚自动抵扣，审核时以最新欠款为准。' }}
       </p>
       <div class="sf-attachments">
         <div class="sf-actions">
@@ -395,7 +407,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ListChecks, Paperclip, RefreshCw, Save, Search, X } from '@lucide/vue'
+import { ListChecks, Paperclip, RefreshCw, Save, Search, SquareCheck, X } from '@lucide/vue'
 import * as XLSX from 'xlsx'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
@@ -480,6 +492,7 @@ const attachmentPreview = ref('')
 const localPreviewUrl = ref('')
 const receivableDocuments = ref([])
 const selectedReceivableKeys = ref([])
+const receiptAllocationMode = ref('fifo')
 const receivableLoading = ref(false)
 const loadedReceivableDebt = ref(null)
 const receivableError = ref('')
@@ -700,6 +713,7 @@ const resetForm = () => {
   ++receivableRequestToken
   receivableDocuments.value = []
   selectedReceivableKeys.value = []
+  receiptAllocationMode.value = 'fifo'
   loadedReceivableDebt.value = null
   receivableError.value = ''
   receivableLoading.value = false
@@ -780,6 +794,7 @@ const openEditModal = async item => {
       attachmentUrl: receipt.attachmentUrl || ''
     })
     attachmentPreview.value = receipt.attachmentUrl || ''
+    receiptAllocationMode.value = receipt.allocationMode === 'manual' ? 'manual' : 'fifo'
     modalVisible.value = true
     const loaded = await loadReceivableDocuments(receipt.customerId)
     if (!loaded || requestToken !== modalRequestToken || Number(form.customerId) !== Number(receipt.customerId)) return
@@ -791,7 +806,7 @@ const openEditModal = async item => {
         receivableError.value = '草稿中有单据已结清或欠款已变化，请刷新欠款明细后重新选择。'
       }
     } else {
-      selectOldestReceivables(receipt.writeoffAmount)
+      selectOldestReceivables(allocationTarget.value)
     }
   } catch (error) {
     if (requestToken !== modalRequestToken) return
@@ -811,6 +826,7 @@ const closeModal = () => {
 }
 const handleReceiptStoreChange = () => {
   ++receivableRequestToken
+  receiptAllocationMode.value = 'fifo'
   receivableDocuments.value = []
   selectedReceivableKeys.value = []
   loadedReceivableDebt.value = null
@@ -857,8 +873,8 @@ const selectOldestReceivables = amount => {
   }
   selectedReceivableKeys.value = selected
 }
-const autoAllocate = () => selectOldestReceivables(allocationTarget.value)
 const handleCustomerChange = async () => {
+  receiptAllocationMode.value = 'fifo'
   const store = stores.value.find(
     item => Number(item.id) === Number(form.storeId)
   )
@@ -932,12 +948,12 @@ const saveReceipt = async () => {
       paymentMethod: form.paymentMethod,
       paymentAmount: Number(form.paymentAmount),
       discountAmount: Number(form.discountAmount) || 0,
-      allocationMode: 'manual',
-      allocations: allocationPreview.value.map(({ sourceType, sourceId, amount }) => ({
+      allocationMode: receiptAllocationMode.value,
+      allocations: receiptAllocationMode.value === 'manual' ? allocationPreview.value.map(({ sourceType, sourceId, amount }) => ({
         sourceType,
         sourceId,
         amount
-      })),
+      })) : [],
       creator: form.creator || '王醒',
       remark: form.remark,
       attachmentUrl: await uploadAttachment()
@@ -1135,6 +1151,9 @@ async function performPaymentAction() {
   finally { busyId.value = null }
 }
 
+watch([allocationTarget, receivableDocuments, receiptAllocationMode], () => {
+  if (receiptAllocationMode.value === 'fifo') selectOldestReceivables(allocationTarget.value)
+}, { flush: 'sync' })
 watch(totalPages, pages => {
   if (currentPage.value > pages) currentPage.value = pages
 })
@@ -1220,8 +1239,13 @@ svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;str
 .sf-field .receipt-debt{color:#dc3545;font-weight:700}
 .sf-field input[readonly]{background:#f8fafc}
 .receipt-allocation{margin-top:20px;border-top:1px solid #e2e8f0}
-.receipt-allocation-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0}
+.receipt-allocation-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;padding:14px 0}
 .receipt-allocation-header>div{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px;min-width:0}
+.receipt-allocation-header>.receipt-allocation-mode{align-items:center;flex-direction:row;flex-wrap:nowrap;gap:0}
+.receipt-allocation-mode .sf-button{border-radius:0}
+.receipt-allocation-mode .sf-button:first-child{border-radius:4px 0 0 4px}
+.receipt-allocation-mode .sf-button:last-child{margin-left:-1px;border-radius:0 4px 4px 0}
+.receipt-allocation-mode .sf-button[aria-pressed="true"]{position:relative;color:#08745a;background:#e8f6f0;border-color:#0f9f78}
 .receipt-allocation-header h3{margin:0;color:#172033;font-size:14px}
 .receipt-allocation-scroll{max-height:260px;border:1px solid #e2e8f0;border-radius:4px}
 .receipt-allocation-table{min-width:640px;table-layout:fixed}

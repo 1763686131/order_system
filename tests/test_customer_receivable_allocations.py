@@ -360,6 +360,38 @@ class ReceiptAllocationApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_json())
         self.assertEqual(self.conn.execute('SELECT COUNT(*) FROM customer_payment_allocations').fetchone()[0], 0)
 
+    def test_automatic_receipt_surplus_becomes_advance_and_reverses_cleanly(self):
+        receipt = self.create_receipt(paymentAmount=250, discountAmount=10, allocationMode='fifo', allocations=[])
+        self.assertEqual(receipt['allocationMode'], 'fifo')
+        self.assertEqual(receipt['writeoffAmount'], 200)
+        self.assertEqual(receipt['advanceAmount'], 60)
+        result = self.client.post(f"/api/payment-receipts/{receipt['id']}/audit")
+        self.assertEqual(result.status_code, 200, result.get_json())
+        self.assertEqual(self.documents(), [])
+        customer = self.conn.execute('SELECT receivable, balance FROM customers WHERE id = 1').fetchone()
+        self.assertEqual(tuple(customer), (0, 60))
+        self.assertEqual(self.conn.execute('SELECT balance FROM bank_accounts').fetchone()[0], 1250)
+        result = self.client.delete(f"/api/payment-receipts/{receipt['id']}/audit")
+        self.assertEqual(result.status_code, 200, result.get_json())
+        self.assertEqual([row['outstandingAmount'] for row in self.documents()], [100, 100])
+        self.assertEqual(self.conn.execute('SELECT balance FROM customers WHERE id = 1').fetchone()[0], 0)
+
+    def test_switching_draft_to_automatic_clears_manual_allocations(self):
+        receipt = self.create_receipt()
+        result = self.client.put(f"/api/payment-receipts/{receipt['id']}", json={
+            'allocationMode': 'fifo', 'allocations': [],
+        })
+        self.assertEqual(result.status_code, 200, result.get_json())
+        receipt = result.get_json()['receipt']
+        self.assertEqual(receipt['allocationMode'], 'fifo')
+        self.assertEqual(receipt['allocations'], [])
+        self.assertEqual(receipt['writeoffAmount'], 130)
+        self.assertEqual(receipt['advanceAmount'], 0)
+        self.assertEqual(self.conn.execute('SELECT COUNT(*) FROM customer_payment_allocations').fetchone()[0], 0)
+        result = self.client.post(f"/api/payment-receipts/{receipt['id']}/audit")
+        self.assertEqual(result.status_code, 200, result.get_json())
+        self.assertEqual([row['outstandingAmount'] for row in self.documents()], [70])
+
     def test_customer_cannot_allocate_against_another_customers_document(self):
         self.conn.execute("INSERT INTO customers (id, customer_name, store_id, receivable, status) VALUES (2, 'Other customer', 1, 50, 'active')")
         self.conn.commit()

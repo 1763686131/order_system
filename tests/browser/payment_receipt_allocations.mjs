@@ -60,11 +60,14 @@ request.defaults.adapter = async config => {
   } else if (config.url === '/customers/2/receivable-documents') {
     if (failCustomer) throw new Error('Simulated debt loading failure')
     data = { receivable: 0, items: [] }
-  } else if (config.url === '/payment-receipts' && config.method === 'post') {
+  } else if ((config.url === '/payment-receipts' && config.method === 'post') || (config.url === '/payment-receipts/1' && config.method === 'put')) {
     const payload = JSON.parse(config.data)
+    const writeoffAmount = payload.allocationMode === 'manual'
+      ? payload.allocations.reduce((sum, row) => sum + row.amount, 0)
+      : Math.min(230, payload.paymentAmount + payload.discountAmount)
     saved = { ...payload, id: 1, documentNo: 'SK-TEST', storeId: 1, storeName: 'Store A',
       customerName: 'Customer A', status: 'draft',
-      writeoffAmount: payload.allocations.reduce((sum, row) => sum + row.amount, 0), advanceAmount: 0 }
+      writeoffAmount, advanceAmount: payload.paymentAmount - (writeoffAmount - payload.discountAmount) }
     data = { receipt: saved }
   } else if (config.url === '/payment-receipts/1') data = saved
   else if (config.url === '/payment-receipts') data = { items: saved ? [saved] : [] }
@@ -85,7 +88,18 @@ const checks = () => [...document.querySelectorAll('.receipt-allocation-table in
 const amounts = () => [...document.querySelectorAll('.receipt-allocation-amount')].map(cell => Number(cell.textContent.replace(/[^0-9.]/g, '')))
 const change = async (element, value) => { element.value = value; element.dispatchEvent(new Event('change', { bubbles: true })); await settle() }
 const input = async (element, value) => { element.value = value; element.dispatchEvent(new Event('input', { bubbles: true })); await settle() }
-const auto = () => document.querySelector('.receipt-allocation-header button').click()
+const modeButton = mode => document.querySelectorAll('.receipt-allocation-mode button')[mode === 'fifo' ? 0 : 1]
+const auto = () => modeButton('fifo').click()
+const summaryAmount = index => Number(document.querySelectorAll('.sf-summary strong')[index].textContent.replace(/[^0-9.]/g, ''))
+const toggleCheck = async index => { checks()[index].click(); await settle() }
+const submit = async () => {
+  form().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await waitFor(() => !form())
+}
+const edit = async () => {
+  document.querySelector('.action-edit').click()
+  await waitFor(() => checks().length === 3)
+}
 const saveButton = () => document.querySelector('[form=receipt-document-form]')
 try {
   await waitFor(() => document.querySelector('.toolbar-actions .button-primary'))
@@ -97,31 +111,52 @@ try {
   assert(customerSelect().options.length === 2 && customerSelect().options[1].textContent.trim() === 'Customer A', 'Customer options must show only names and match the store')
   await change(customerSelect(), '1')
   await waitFor(() => checks().length === 3)
-  assert(checks().every(box => !box.checked), 'New receipts must allow explicit manual selection')
+  assert(modeButton('fifo').getAttribute('aria-pressed') === 'true' && checks().every(box => box.disabled), 'New receipts must default to automatic allocation')
   assert(form().querySelector('.receipt-debt').value.replace(/[^0-9.]/g, '') === '230.00', 'Debt must refresh from the document endpoint')
   await input(form().querySelectorAll('input[type=number]')[0], '100')
-  checks()[2].click()
+  assert(JSON.stringify(amounts()) === '[60,40,0]', 'Automatic allocation must run when the amount is entered, without clicking a button')
+  await input(form().querySelectorAll('input[type=number]')[0], '200')
+  assert(JSON.stringify(amounts()) === '[60,70,70]', 'Automatic allocation must follow amount changes and partially cover the final document')
+  await input(form().querySelectorAll('input[type=number]')[0], '300')
+  assert(JSON.stringify(amounts()) === '[60,70,100]' && summaryAmount(2) === 70, 'Excess automatic payment must become an advance')
+  await submit()
+  assert(saved.allocationMode === 'fifo' && saved.allocations.length === 0 && saved.advanceAmount === 70, 'Saving must preserve automatic mode and its advance')
+  await edit()
+  assert(modeButton('fifo').getAttribute('aria-pressed') === 'true' && JSON.stringify(amounts()) === '[60,70,100]', 'Editing an automatic draft must restore automatic mode')
+  await input(form().querySelectorAll('input[type=number]')[0], '100')
+  modeButton('manual').click()
   await settle()
+  assert(checks().every(box => !box.disabled), 'Manual mode must allow editing the current selection')
+  await toggleCheck(0)
+  await toggleCheck(1)
+  assert(summaryAmount(2) === 100, 'An empty manual selection must leave all cash as an advance: ' + JSON.stringify({ amounts: amounts(), summary: [...document.querySelectorAll('.sf-summary strong')].map(item => item.textContent), checked: checks().map(box => box.checked) }))
+  await toggleCheck(2)
   assert(JSON.stringify(amounts()) === '[0,0,100]', 'Manual selection must allocate only against the checked document')
-  checks()[0].click()
-  await settle()
+  await toggleCheck(0)
   assert(JSON.stringify(amounts()) === '[0,0,100]', 'Manual selection must preserve the order in which documents were checked')
+  await toggleCheck(0)
+  await input(form().querySelectorAll('input[type=number]')[0], '120')
+  assert(JSON.stringify(amounts()) === '[0,0,100]' && summaryAmount(2) === 20, 'Manual amount changes must keep the selection and convert leftover cash into an advance')
+  await input(form().querySelectorAll('input[type=number]')[1], '10')
+  assert(summaryAmount(2) === 30, 'Manual discount must reduce cash writeoff without spending the remaining advance')
+  await submit()
+  assert(saved.allocationMode === 'manual' && saved.allocations.length === 1 && saved.allocations[0].sourceId === 103 && saved.advanceAmount === 30, 'Saving must persist manual selections and their advance')
+  await edit()
+  assert(modeButton('manual').getAttribute('aria-pressed') === 'true' && JSON.stringify(amounts()) === '[0,0,100]', 'Editing a manual draft must restore its mode and selection')
   auto()
   await settle()
-  assert(JSON.stringify(amounts()) === '[60,40,0]', 'Auto allocation must use oldest documents first and partially cover the last one')
+  assert(JSON.stringify(amounts()) === '[60,70,0]', 'Switching back to automatic mode must restore oldest-first allocation')
   assert(checks()[0].checked && checks()[1].checked && !checks()[2].checked, 'Auto allocation must replace the selection')
-  await input(form().querySelectorAll('input[type=number]')[1], '10')
+  await input(form().querySelectorAll('input[type=number]')[0], '100')
   assert(JSON.stringify(amounts()) === '[60,50,0]', 'Discount must be included in receivable reduction')
-  form().dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
-  await waitFor(() => !form())
-  assert(saved.allocationMode === 'manual' && JSON.stringify(saved.allocations.map(row => row.amount)) === '[60,50]', 'Saving must persist the actual allocations')
-  document.querySelector('.action-edit').click()
-  await waitFor(() => checks().length === 3 && checks()[1].checked)
-  assert(JSON.stringify(amounts()) === '[60,50,0]', 'Editing a draft must restore its allocations')
-  result.checks.push('manual selection', 'oldest-first automatic allocation', 'partial allocation', 'discount', 'save and edit')
+  await submit()
+  assert(saved.allocationMode === 'fifo' && saved.allocations.length === 0, 'Saving after a mode change must clear old manual allocations')
+  await edit()
+  assert(JSON.stringify(amounts()) === '[60,50,0]' && checks().every(box => box.disabled), 'Editing must restore automatic mode after switching from manual')
+  result.checks.push('automatic default', 'live oldest-first allocation', 'manual mode and selection', 'surplus advance in both modes', 'partial allocation', 'discount', 'save and edit both modes')
 
   await change(storeSelect(), '2')
-  assert(customerSelect().value === '' && checks().length === 0, 'Store changes must clear customer and allocations')
+  assert(customerSelect().value === '' && checks().length === 0 && modeButton('fifo').getAttribute('aria-pressed') === 'true', 'Store changes must clear customer and allocations and default to automatic mode')
   failCustomer = true
   await change(customerSelect(), '2')
   await waitFor(() => document.querySelector('.receipt-allocation-error'))
