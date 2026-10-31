@@ -11,6 +11,7 @@ from utils.db import get_db
 from utils.auth import current_identity, require_admin_permission
 from utils.notifications import create_audit_notifications, complete_audit_notifications
 from utils.permission_catalog import ADMIN_AUDIT_NOTIFICATION_PERMISSIONS
+from utils.customer_receivables import validate_allocations
 from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
@@ -96,12 +97,55 @@ def _receipt_row(conn, receipt_id):
     ).fetchone()
 
 
-def _serialize(row):
+def _receipt_allocations(conn, receipt_id):
+    return [
+        {
+            'sourceType': row['source_type'],
+            'sourceId': row['source_id'],
+            'documentNo': row['source_document_no'],
+            'amount': round(float(row['amount'] or 0), 2),
+        }
+        for row in conn.execute(
+            '''SELECT source_type, source_id, source_document_no, amount
+               FROM customer_payment_allocations
+               WHERE payment_id = ? ORDER BY id''',
+            (receipt_id,),
+        ).fetchall()
+    ]
+
+
+def _save_receipt_allocations(conn, receipt_id, customer_id, allocations):
+    conn.execute(
+        'DELETE FROM customer_payment_allocations WHERE payment_id = ?',
+        (receipt_id,),
+    )
+    for allocation in allocations:
+        conn.execute(
+            '''INSERT INTO customer_payment_allocations (
+                   payment_id, customer_id, source_type, source_id,
+                   source_document_no, amount
+               ) VALUES (?, ?, ?, ?, ?, ?)''',
+            (
+                receipt_id,
+                customer_id,
+                allocation['sourceType'],
+                allocation['sourceId'],
+                allocation['documentNo'],
+                float(allocation['amount']),
+            ),
+        )
+
+
+def _receipt_response(conn, receipt_id):
+    return _serialize(_receipt_row(conn, receipt_id), _receipt_allocations(conn, receipt_id))
+
+
+def _serialize(row, allocations=None):
     if not row:
         return None
     item = dict(row)
 
-    return {
+    result = {
         'id': item['id'],
         'documentNo': item.get('document_no') or '',
         'documentDate': item.get('document_date') or '',
@@ -127,12 +171,16 @@ def _serialize(row):
         'remark': item.get('remark') or '',
         'attachmentUrl': item.get('attachment_url') or '',
         'status': item.get('status') or 'draft',
+        'allocationMode': item.get('allocation_mode') or 'fifo',
         'accountTransactionId': item.get('account_transaction_id'),
         'auditedBy': item.get('audited_by') or '',
         'auditedAt': item.get('audited_at') or '',
         'createdAt': item.get('created_at') or '',
         'updatedAt': item.get('updated_at') or '',
     }
+    if allocations is not None:
+        result['allocations'] = allocations
+    return result
 
 
 def _validate_values(conn, data):
@@ -177,8 +225,22 @@ def _validate_values(conn, data):
     if discount_amount > debt_before:
         raise ValueError('优惠金额不能超过客户当前欠款')
 
-    cash_writeoff = min(payment_amount, debt_before - discount_amount)
-    writeoff_amount = discount_amount + cash_writeoff
+    allocation_mode = str(data.get('allocationMode') or 'fifo').strip().lower()
+    if allocation_mode not in {'fifo', 'manual'}:
+        raise ValueError('收款抵扣方式无效')
+    if allocation_mode == 'manual':
+        allocations, writeoff_amount = validate_allocations(
+            conn,
+            customer_id,
+            data.get('allocations', []),
+            payment_amount + discount_amount,
+            discount_amount,
+        )
+        cash_writeoff = writeoff_amount - discount_amount
+    else:
+        allocations = []
+        cash_writeoff = min(payment_amount, debt_before - discount_amount)
+        writeoff_amount = discount_amount + cash_writeoff
     advance_amount = payment_amount - cash_writeoff
     settlement_account = resolve_settlement_account(
         conn,
@@ -191,6 +253,8 @@ def _validate_values(conn, data):
         'document_date': _date(data.get('documentDate')),
         'store_id': store['id'],
         'customer_id': customer['id'],
+        'allocation_mode': allocation_mode,
+        'allocations': allocations,
         'settlement_account': settlement_account,
         'payment_method': str(data.get('paymentMethod') or '').strip(),
         'payment_amount': payment_amount,
@@ -318,13 +382,14 @@ def create_payment_receipt():
                     '''
                     INSERT INTO payment_receipts (
                         document_no, document_date, store_id, customer_id,
+                        allocation_mode,
                         settlement_account, payment_method, payment_amount,
                         discount_amount, total_amount, writeoff_amount,
                         advance_amount, debt_before, debt_after,
                         balance_before, balance_after, creator, remark,
                         attachment_url, status, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                             ?, ?, 'draft', ?, ?)
                     ''',
                     (
@@ -332,6 +397,7 @@ def create_payment_receipt():
                         values['document_date'],
                         values['store_id'],
                         values['customer_id'],
+                        values['allocation_mode'],
                         values['settlement_account'],
                         values['payment_method'],
                         float(values['payment_amount']),
@@ -350,7 +416,10 @@ def create_payment_receipt():
                         now,
                     )
                 )
-                receipt = _serialize(_receipt_row(conn, cursor.lastrowid))
+                _save_receipt_allocations(
+                    conn, cursor.lastrowid, values['customer_id'], values['allocations']
+                )
+                receipt = _receipt_response(conn, cursor.lastrowid)
                 create_audit_notifications(
                     conn,
                     "payment_receipt",
@@ -367,6 +436,15 @@ def create_payment_receipt():
         return jsonify({'error': str(error)}), 400
     except Exception as error:
         return jsonify({'error': f'保存收款单失败：{error}'}), 500
+
+
+@payment_receipts_bp.route('/<int:receipt_id>', methods=['GET'])
+def get_payment_receipt(receipt_id):
+    with get_db() as conn:
+        receipt = _receipt_response(conn, receipt_id)
+    if not receipt:
+        return jsonify({'error': '收款单不存在'}), 404
+    return jsonify(receipt)
 
 
 @payment_receipts_bp.route('/<int:receipt_id>', methods=['PUT'])
@@ -390,6 +468,10 @@ def update_payment_receipt(receipt_id):
 
                 merged = {
                     'customerId': data.get('customerId', existing['customer_id']),
+                    'allocationMode': data.get('allocationMode', existing['allocation_mode']),
+                    'allocations': data.get(
+                        'allocations', _receipt_allocations(conn, receipt_id)
+                    ),
                     'documentDate': data.get(
                         'documentDate',
                         existing['document_date']
@@ -424,6 +506,7 @@ def update_payment_receipt(receipt_id):
                     '''
                     UPDATE payment_receipts
                     SET document_date = ?, store_id = ?, customer_id = ?,
+                        allocation_mode = ?,
                         settlement_account = ?, payment_method = ?,
                         payment_amount = ?, discount_amount = ?,
                         total_amount = ?, writeoff_amount = ?,
@@ -436,6 +519,7 @@ def update_payment_receipt(receipt_id):
                         values['document_date'],
                         values['store_id'],
                         values['customer_id'],
+                        values['allocation_mode'],
                         values['settlement_account'],
                         values['payment_method'],
                         float(values['payment_amount']),
@@ -454,7 +538,10 @@ def update_payment_receipt(receipt_id):
                         receipt_id,
                     )
                 )
-                receipt = _serialize(_receipt_row(conn, receipt_id))
+                _save_receipt_allocations(
+                    conn, receipt_id, values['customer_id'], values['allocations']
+                )
+                receipt = _receipt_response(conn, receipt_id)
         if (
             old_attachment_url
             and old_attachment_url != new_attachment_url
@@ -549,11 +636,28 @@ def audit_payment_receipt(receipt_id):
                         'error': '客户当前欠款已发生变化，优惠金额不能超过当前欠款，请修改后再审核'
                     }), 409
 
-                cash_writeoff = min(
-                    payment_amount,
-                    debt_before - discount_amount
-                )
-                writeoff_amount = discount_amount + cash_writeoff
+                if receipt['allocation_mode'] == 'manual':
+                    try:
+                        _, writeoff_amount = validate_allocations(
+                            conn,
+                            receipt['customer_id'],
+                            _receipt_allocations(conn, receipt_id),
+                            payment_amount + discount_amount,
+                            discount_amount,
+                        )
+                    except ValueError as error:
+                        return jsonify({'error': str(error)}), 409
+                    if writeoff_amount > debt_before:
+                        return jsonify({
+                            'error': '客户当前欠款已发生变化，抵扣金额超过当前欠款，请修改后再审核'
+                        }), 409
+                    cash_writeoff = writeoff_amount - discount_amount
+                else:
+                    cash_writeoff = min(
+                        payment_amount,
+                        debt_before - discount_amount
+                    )
+                    writeoff_amount = discount_amount + cash_writeoff
                 advance_amount = payment_amount - cash_writeoff
                 debt_after = debt_before - writeoff_amount
                 balance_after = balance_before + advance_amount
@@ -628,7 +732,7 @@ def audit_payment_receipt(receipt_id):
                     )
                 )
                 complete_audit_notifications(conn, "payment_receipt", receipt_id)
-                result = _serialize(_receipt_row(conn, receipt_id))
+                result = _receipt_response(conn, receipt_id)
         return jsonify({
             'success': True,
             'message': (
@@ -758,17 +862,21 @@ def reverse_payment_receipt(receipt_id):
                 )
 
                 discount_amount = _money(receipt['discount_amount'])
-                preview_cash = min(
-                    payment_amount,
-                    max(
+                if receipt['allocation_mode'] == 'manual':
+                    preview_writeoff = sum(
+                        (_money(row['amount']) for row in _receipt_allocations(conn, receipt_id)),
                         Decimal('0.00'),
-                        receivable_after - discount_amount
                     )
-                )
-                preview_writeoff = min(
-                    receivable_after,
-                    discount_amount + preview_cash
-                )
+                    preview_cash = max(Decimal('0.00'), preview_writeoff - discount_amount)
+                else:
+                    preview_cash = min(
+                        payment_amount,
+                        max(Decimal('0.00'), receivable_after - discount_amount),
+                    )
+                    preview_writeoff = min(
+                        receivable_after,
+                        discount_amount + preview_cash,
+                    )
                 preview_advance = payment_amount - preview_cash
                 conn.execute(
                     '''
@@ -791,7 +899,7 @@ def reverse_payment_receipt(receipt_id):
                         receipt_id,
                     )
                 )
-                result = _serialize(_receipt_row(conn, receipt_id))
+                result = _receipt_response(conn, receipt_id)
                 create_audit_notifications(
                     conn,
                     "payment_receipt",

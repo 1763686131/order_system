@@ -2630,12 +2630,41 @@ def _ensure_customer_schema(conn):
                 remark TEXT NOT NULL DEFAULT '',
                 attachment_url TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'draft',
+                allocation_mode TEXT NOT NULL DEFAULT 'fifo',
                 account_transaction_id INTEGER,
                 audited_by TEXT,
                 audited_at TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT
             )
+            """
+        )
+        payment_receipt_columns = {
+            row["name"] for row in cursor.execute("PRAGMA table_info(payment_receipts)")
+        }
+        if "allocation_mode" not in payment_receipt_columns:
+            cursor.execute(
+                "ALTER TABLE payment_receipts ADD COLUMN allocation_mode TEXT NOT NULL DEFAULT 'fifo'"
+            )
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS customer_payment_allocations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                payment_id INTEGER NOT NULL REFERENCES payment_receipts(id) ON DELETE CASCADE,
+                customer_id INTEGER NOT NULL,
+                source_type TEXT NOT NULL,
+                source_id INTEGER NOT NULL,
+                source_document_no TEXT NOT NULL DEFAULT '',
+                amount REAL NOT NULL CHECK (amount > 0),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(payment_id, source_type, source_id)
+            )
+            """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_customer_payment_allocations_source
+            ON customer_payment_allocations(customer_id, source_type, source_id)
             """
         )
         cursor.execute(

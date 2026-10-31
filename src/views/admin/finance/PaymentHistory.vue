@@ -283,13 +283,73 @@
         <label class="sf-field">制单人<input v-model.trim="form.creator" maxlength="30"></label>
         <label class="sf-field wide">备注<textarea v-model.trim="form.remark" maxlength="300" placeholder="可填写收款说明、银行流水号等"></textarea></label>
       </fieldset>
+      <section class="receipt-allocation">
+        <header class="receipt-allocation-header">
+          <div>
+            <h3>收款抵扣明细</h3>
+            <span class="sf-muted">已选 {{ selectedReceivableKeys.length }} / {{ receivableDocuments.length }} 笔</span>
+          </div>
+          <button
+            class="sf-button"
+            type="button"
+            title="按单据日期从早到晚抵扣"
+            :disabled="saving || receivableLoading || !receivableDocuments.length || allocationTarget <= 0"
+            @click="autoAllocate"
+          >
+            <ListChecks :size="16" />自动抵扣
+          </button>
+        </header>
+        <div v-if="receivableLoading" class="sf-empty">正在加载欠款单据...</div>
+        <div v-else-if="receivableError" class="receipt-allocation-error" role="alert">
+          <span class="sf-error">{{ receivableError }}</span>
+          <button class="sf-button" type="button" :disabled="saving" @click="loadReceivableDocuments(form.customerId)"><RefreshCw :size="16" />重试</button>
+        </div>
+        <div v-else-if="!form.customerId" class="sf-empty">选择客户后加载欠款单据</div>
+        <div v-else-if="!receivableDocuments.length" class="sf-empty">当前没有未抵扣欠款</div>
+        <div v-else class="sf-table-scroll receipt-allocation-scroll">
+          <table class="sf-table receipt-allocation-table">
+            <thead>
+              <tr>
+                <th class="receipt-check-column"><span class="visually-hidden">选择</span></th>
+                <th>欠款单据</th>
+                <th class="sf-number">单据金额</th>
+                <th class="sf-number">未抵扣金额</th>
+                <th class="sf-number">本次抵扣</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="document in receivableDocuments" :key="receivableKey(document)">
+                <td>
+                  <input
+                    v-model="selectedReceivableKeys"
+                    type="checkbox"
+                    :value="receivableKey(document)"
+                    :aria-label="`选择抵扣单据 ${document.documentNo}`"
+                    :disabled="saving || Number(document.outstandingAmount) <= 0"
+                  >
+                </td>
+                <td>
+                  <strong>{{ document.documentNo }}</strong>
+                  <span class="receipt-document-date">{{ document.documentDate || '-' }}</span>
+                </td>
+                <td class="sf-number">{{ formatMoney(document.amount) }}</td>
+                <td class="sf-number">{{ formatMoney(document.outstandingAmount) }}</td>
+                <td class="sf-number receipt-allocation-amount">
+                  {{ formatMoney(allocationAmountByKey[receivableKey(document)] || 0) }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="sf-muted receipt-allocation-hint">未抵扣的实收金额转为预收款。</p>
+      </section>
       <div class="sf-summary">
         <span>实际收款<strong>{{ formatMoney(form.paymentAmount) }}</strong></span>
         <span>预计核销欠款<strong>{{ formatMoney(previewWriteoff) }}</strong></span>
         <span>预计转入预收<strong>{{ formatMoney(previewAdvance) }}</strong></span>
       </div>
-      <p :class="Number(form.discountAmount) > currentDebt ? 'sf-error' : 'sf-muted'">
-        {{ Number(form.discountAmount) > currentDebt ? '优惠金额不能超过客户当前欠款。' : '当前仅为预览，审核时按客户实时欠款重新计算。' }}
+      <p :class="Number(form.discountAmount) > previewWriteoff ? 'sf-error' : 'sf-muted'">
+        {{ Number(form.discountAmount) > previewWriteoff ? '已选单据的抵扣金额不能覆盖优惠金额，请增加抵扣单据。' : '保存后按所选单据抵扣，审核时会复核单据余额。' }}
       </p>
       <div class="sf-attachments">
         <div class="sf-actions">
@@ -311,7 +371,7 @@
       </div>
       <p class="sf-muted">保存后是待审核草稿，不会立即改变客户账户。</p>
       <template #actions>
-        <button class="sf-button primary" type="submit" form="receipt-document-form" :disabled="saving">
+        <button class="sf-button primary" type="submit" form="receipt-document-form" :disabled="saving || receivableLoading || Boolean(receivableError)">
           <Save :size="16" />{{ saving ? '保存中...' : '保存草稿' }}
         </button>
       </template>
@@ -335,7 +395,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Paperclip, Save, Search, X } from '@lucide/vue'
+import { ListChecks, Paperclip, RefreshCw, Save, Search, X } from '@lucide/vue'
 import * as XLSX from 'xlsx'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
@@ -418,8 +478,15 @@ const attachmentInput = ref(null)
 const attachmentFile = ref(null)
 const attachmentPreview = ref('')
 const localPreviewUrl = ref('')
+const receivableDocuments = ref([])
+const selectedReceivableKeys = ref([])
+const receivableLoading = ref(false)
+const loadedReceivableDebt = ref(null)
+const receivableError = ref('')
 let noticeTimer = null
 let loadRequestToken = 0
+let receivableRequestToken = 0
+let modalRequestToken = 0
 
 const notice = reactive({ visible: false, type: 'success', message: '' })
 
@@ -493,19 +560,60 @@ const customerBankAccounts = computed(() => {
     .sort((a, b) => Number(Boolean(b.isDefault)) - Number(Boolean(a.isDefault)))
 })
 const currentDebt = computed(() =>
-  Math.max(0, Number(selectedCustomer.value?.receivable) || 0)
+  Math.max(0, Number(loadedReceivableDebt.value ?? selectedCustomer.value?.receivable) || 0)
 )
+const receivableDocumentsTotal = computed(() => receivableDocuments.value.reduce(
+  (total, document) => total + (Number(document.outstandingAmount) || 0), 0
+))
 const formTotal = computed(() =>
   Math.max(0, Number(form.paymentAmount) || 0) +
   Math.max(0, Number(form.discountAmount) || 0)
 )
-const previewWriteoff = computed(() => Math.min(currentDebt.value, formTotal.value))
+const allocationTarget = computed(() => Math.min(
+  currentDebt.value,
+  receivableDocumentsTotal.value,
+  formTotal.value
+))
+const allocationPreview = computed(() => {
+  let remaining = Math.round(allocationTarget.value * 100)
+  const allocations = []
+  const documentsByKey = new Map(receivableDocuments.value.map(document => [receivableKey(document), document]))
+  for (const key of selectedReceivableKeys.value) {
+    const document = documentsByKey.get(key)
+    if (!document) continue
+    const available = Math.max(0, Math.round((Number(document.outstandingAmount) || 0) * 100))
+    const amount = Math.min(remaining, available)
+    if (amount > 0) {
+      allocations.push({
+        sourceType: document.sourceType,
+        sourceId: document.sourceId,
+        documentNo: document.documentNo,
+        amount: amount / 100
+      })
+      remaining -= amount
+    }
+    if (remaining <= 0) break
+  }
+  return allocations
+})
+const allocationAmountByKey = computed(() => Object.fromEntries(
+  allocationPreview.value.map(allocation => [
+    receivableKey(allocation), allocation.amount
+  ])
+))
+const previewWriteoff = computed(() => allocationPreview.value.reduce(
+  (total, allocation) => total + Math.round(allocation.amount * 100), 0
+) / 100)
 const previewAdvance = computed(() => {
   const payment = Math.max(0, Number(form.paymentAmount) || 0)
   const discount = Math.max(0, Number(form.discountAmount) || 0)
-  const cashWriteoff = Math.min(payment, Math.max(0, currentDebt.value - discount))
-  return Math.max(0, payment - cashWriteoff)
+  const cashWriteoff = Math.max(0, previewWriteoff.value - discount)
+  return Math.max(0, Math.round((payment - cashWriteoff) * 100) / 100)
 })
+
+function receivableKey(document) {
+  return `${document.sourceType}:${document.sourceId}`
+}
 
 const formatMoney = value => `¥${(Number(value) || 0).toLocaleString('zh-CN', {
   minimumFractionDigits: 2,
@@ -588,6 +696,13 @@ const clearLocalPreview = () => {
   localPreviewUrl.value = ''
 }
 const resetForm = () => {
+  ++modalRequestToken
+  ++receivableRequestToken
+  receivableDocuments.value = []
+  selectedReceivableKeys.value = []
+  loadedReceivableDebt.value = null
+  receivableError.value = ''
+  receivableLoading.value = false
   Object.assign(form, emptyForm())
   editingId.value = null
   attachmentFile.value = null
@@ -638,35 +753,55 @@ const openQueryCreate = async () => {
     form.storeId = selectedStoreId.value
     form.storeName = stores.value.find(store => Number(store.id) === selectedStoreId.value)?.name || ''
   }
-  handleCustomerChange()
   modalVisible.value = true
+  await handleCustomerChange()
   await loadNextNumber()
 }
-const openEditModal = item => {
+const openEditModal = async item => {
   if (paymentMode.value) { openPayment(item.id); return }
   resetForm()
-  editingId.value = item.id
-  Object.assign(form, {
-    documentNo: item.documentNo,
-    documentDate: item.documentDate,
-    storeId: item.storeId,
-    storeName: item.storeName,
-    customerId: item.customerId,
-    settlementAccount: item.settlementAccount,
-    paymentMethod: item.paymentMethod,
-    paymentAmount: item.paymentAmount,
-    discountAmount: item.discountAmount,
-    creator: item.creator || '王醒',
-    remark: item.remark || '',
-    attachmentUrl: item.attachmentUrl || ''
-  })
-  attachmentPreview.value = item.attachmentUrl || ''
-  modalVisible.value = true
+  const requestToken = modalRequestToken
+  try {
+    const receipt = await request.get(`/payment-receipts/${item.id}`)
+    if (requestToken !== modalRequestToken) return
+    editingId.value = receipt.id
+    Object.assign(form, {
+      documentNo: receipt.documentNo,
+      documentDate: receipt.documentDate,
+      storeId: receipt.storeId,
+      storeName: receipt.storeName,
+      customerId: receipt.customerId,
+      settlementAccount: receipt.settlementAccount,
+      paymentMethod: receipt.paymentMethod,
+      paymentAmount: receipt.paymentAmount,
+      discountAmount: receipt.discountAmount,
+      creator: receipt.creator || '王醒',
+      remark: receipt.remark || '',
+      attachmentUrl: receipt.attachmentUrl || ''
+    })
+    attachmentPreview.value = receipt.attachmentUrl || ''
+    modalVisible.value = true
+    const loaded = await loadReceivableDocuments(receipt.customerId)
+    if (!loaded || requestToken !== modalRequestToken || Number(form.customerId) !== Number(receipt.customerId)) return
+    if (receipt.allocationMode === 'manual') {
+      const savedKeys = (receipt.allocations || []).map(receivableKey)
+      const openKeys = new Set(receivableDocuments.value.map(receivableKey))
+      selectedReceivableKeys.value = savedKeys.filter(key => openKeys.has(key))
+      if (savedKeys.some(key => !openKeys.has(key))) {
+        receivableError.value = '草稿中有单据已结清或欠款已变化，请刷新欠款明细后重新选择。'
+      }
+    } else {
+      selectOldestReceivables(receipt.writeoffAmount)
+    }
+  } catch (error) {
+    if (requestToken !== modalRequestToken) return
+    showNotice(errorMessage(error, '加载收款单失败'), 'error')
+  }
 }
 const closeModal = () => {
   if (saving.value) return
   modalVisible.value = false
-  window.setTimeout(resetForm, 180)
+  resetForm()
   if (route.query.create || route.query.customerId) {
     const query = { ...route.query }
     delete query.create
@@ -675,11 +810,55 @@ const closeModal = () => {
   }
 }
 const handleReceiptStoreChange = () => {
+  ++receivableRequestToken
+  receivableDocuments.value = []
+  selectedReceivableKeys.value = []
+  loadedReceivableDebt.value = null
+  receivableError.value = ''
+  receivableLoading.value = false
   form.storeName = stores.value.find(store => Number(store.id) === Number(form.storeId))?.name || ''
   form.customerId = ''
   form.settlementAccount = ''
 }
-const handleCustomerChange = () => {
+const loadReceivableDocuments = async customerId => {
+  const requestToken = ++receivableRequestToken
+  receivableDocuments.value = []
+  selectedReceivableKeys.value = []
+  loadedReceivableDebt.value = null
+  receivableError.value = ''
+  if (!customerId) {
+    receivableLoading.value = false
+    return true
+  }
+  receivableLoading.value = true
+  try {
+    const response = await request.get(`/customers/${customerId}/receivable-documents`)
+    if (requestToken !== receivableRequestToken || Number(form.customerId) !== Number(customerId)) return false
+    receivableDocuments.value = Array.isArray(response?.items) ? response.items : []
+    loadedReceivableDebt.value = Number(response?.receivable) || 0
+    return true
+  } catch (error) {
+    if (requestToken !== receivableRequestToken) return false
+    receivableError.value = errorMessage(error, '加载客户欠款单据失败')
+    return false
+  } finally {
+    if (requestToken === receivableRequestToken) receivableLoading.value = false
+  }
+}
+const selectOldestReceivables = amount => {
+  let remaining = Math.max(0, Math.round((Number(amount) || 0) * 100))
+  const selected = []
+  for (const document of receivableDocuments.value) {
+    if (remaining <= 0) break
+    const outstanding = Math.max(0, Math.round((Number(document.outstandingAmount) || 0) * 100))
+    if (!outstanding) continue
+    selected.push(receivableKey(document))
+    remaining -= outstanding
+  }
+  selectedReceivableKeys.value = selected
+}
+const autoAllocate = () => selectOldestReceivables(allocationTarget.value)
+const handleCustomerChange = async () => {
   const store = stores.value.find(
     item => Number(item.id) === Number(form.storeId)
   )
@@ -688,6 +867,7 @@ const handleCustomerChange = () => {
   form.settlementAccount = account?.value || account?.accountName || (
     store ? `${store.name}结算账户` : ''
   )
+  await loadReceivableDocuments(form.customerId)
 }
 
 const handleAttachment = event => {
@@ -729,14 +909,14 @@ const uploadAttachment = async () => {
 }
 
 const saveReceipt = async () => {
-  if (saving.value) return
+  if (saving.value || receivableLoading.value || receivableError.value) return
   let validationError = ''
   if (!form.customerId) validationError = '请选择客户'
   else if (!form.documentDate) validationError = '请选择单据日期'
   else if (!(Number(form.paymentAmount) > 0)) validationError = '收款金额必须大于0'
   else if (Number(form.discountAmount) < 0) validationError = '优惠金额不能小于0'
-  else if (Number(form.discountAmount) > currentDebt.value) {
-    validationError = '优惠金额不能超过客户当前欠款'
+  else if (Number(form.discountAmount) > previewWriteoff.value) {
+    validationError = '已选单据的抵扣金额不能覆盖优惠金额，请增加抵扣单据'
   }
   if (validationError) {
     showNotice(validationError, 'error')
@@ -752,6 +932,12 @@ const saveReceipt = async () => {
       paymentMethod: form.paymentMethod,
       paymentAmount: Number(form.paymentAmount),
       discountAmount: Number(form.discountAmount) || 0,
+      allocationMode: 'manual',
+      allocations: allocationPreview.value.map(({ sourceType, sourceId, amount }) => ({
+        sourceType,
+        sourceId,
+        amount
+      })),
       creator: form.creator || '王醒',
       remark: form.remark,
       attachmentUrl: await uploadAttachment()
@@ -791,7 +977,9 @@ const auditReceipt = async item => {
   const prompt = [
     `确定审核收款单 ${item.documentNo} 吗？`,
     `实收 ${formatMoney(item.paymentAmount)}，优惠 ${formatMoney(item.discountAmount)}。`,
-    '审核后会立即核销客户欠款，多收金额转为客户储值。'
+    item.allocationMode === 'manual'
+      ? `按已选单据抵扣 ${formatMoney(item.writeoffAmount)}，转入预收 ${formatMoney(item.advanceAmount)}；审核时会复核单据余额。`
+      : '审核后会立即核销客户欠款，多收金额转为客户储值。'
   ].join('\n')
   if (!await confirmReceipt(prompt, '审核收款单', 'audit')) return
   busyId.value = item.id
@@ -964,6 +1152,7 @@ watch(() => route.query.create, value => {
 watch(() => route.query.documentId, id => { if (paymentMode.value && id && !refundTab.value) openPayment(Number(id)) })
 watch(() => props.mode, async () => {
   cancelConfirmation()
+  resetForm()
   Object.assign(paymentFilters, { keyword: '', status: '', startDate: '', endDate: '' })
   modalVisible.value = false; paymentDialogOpen.value = false; receipts.value = []; selectedIds.value = []
   selectedStoreId.value = route.query.storeId ? Number(route.query.storeId) : null
@@ -973,6 +1162,8 @@ watch(() => props.mode, async () => {
 })
 onBeforeUnmount(() => {
   ++loadRequestToken
+  ++receivableRequestToken
+  ++modalRequestToken
   cancelConfirmation()
   document.body.style.overflow = ''
   clearLocalPreview()
@@ -1028,10 +1219,27 @@ svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;str
 .table-footer{display:flex;min-width:0;min-height:58px;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;color:var(--text-secondary);border-top:1px solid var(--border);font-size:12px}.table-footer strong{color:var(--text)}.pagination select{height:32px;padding:0 8px;border:1px solid var(--border-strong);border-radius:5px}.pagination button{display:inline-flex;width:31px;height:31px;align-items:center;justify-content:center;color:var(--text-secondary);background:#fff;border:1px solid var(--border-strong);border-radius:5px}.pagination button:disabled{opacity:.45}.pagination svg{width:15px;height:15px}.page-number{min-width:58px;text-align:center}
 .sf-field .receipt-debt{color:#dc3545;font-weight:700}
 .sf-field input[readonly]{background:#f8fafc}
+.receipt-allocation{margin-top:20px;border-top:1px solid #e2e8f0}
+.receipt-allocation-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0}
+.receipt-allocation-header>div{display:flex;align-items:baseline;flex-wrap:wrap;gap:10px;min-width:0}
+.receipt-allocation-header h3{margin:0;color:#172033;font-size:14px}
+.receipt-allocation-scroll{max-height:260px;border:1px solid #e2e8f0;border-radius:4px}
+.receipt-allocation-table{min-width:640px;table-layout:fixed}
+.receipt-allocation-table th,.receipt-allocation-table td{padding:8px 10px}
+.receipt-allocation-table th:first-child,.receipt-allocation-table td:first-child{width:42px;text-align:center}
+.receipt-allocation-table th:nth-child(2){width:34%}
+.receipt-allocation-table td:nth-child(2) strong,.receipt-document-date{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.receipt-document-date{margin-top:3px;color:#8a96a8;font-size:11px}
+.receipt-allocation-table input[type="checkbox"]{width:16px;height:16px;accent-color:#0f9f78;cursor:pointer}
+.receipt-allocation-amount{color:#08745a;font-weight:700}
+.receipt-allocation-hint{margin:8px 0 0}
+.receipt-allocation-error{display:flex;align-items:center;flex-wrap:wrap;gap:12px;padding:10px 0}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 .receipt-attachment-preview{display:block;max-width:240px}
 .receipt-attachment-preview img{display:block;max-width:100%;max-height:160px;object-fit:contain}
 .page-notice{position:fixed;top:24px;left:50%;z-index:4000;display:flex;min-width:0;min-height:44px;align-items:center;gap:9px;max-width:min(520px,calc(100vw - 32px));padding:10px 16px;color:#172033;background:#fff;border:1px solid #dfe5ec;border-radius:6px;box-shadow:0 10px 30px rgba(15,23,42,.16);transform:translateX(-50%);font-size:13px;font-weight:600;line-height:1.5;overflow-wrap:anywhere}.page-notice svg{width:19px;height:19px;flex:0 0 19px}.notice-success svg{color:#0f9f78}.notice-error svg{color:#dc3545}
 .notice-enter-active,.notice-leave-active{transition:opacity .18s,transform .18s}.notice-enter-from,.notice-leave-to{opacity:0;transform:translate(-50%,-8px)}
 @media(max-width:1280px){.records-toolbar{align-items:flex-start;flex-direction:column}.store-filter-area{width:100%}.store-slider{max-width:none;flex:1}.toolbar-actions{width:100%;align-self:stretch;justify-content:flex-end;flex-wrap:wrap}}
 @media(max-width:780px){.records-toolbar,.store-filter-area{align-items:stretch}.store-filter-area{flex-direction:column}.toolbar-actions{width:100%;justify-content:space-between}.table-footer{align-items:flex-start;flex-direction:column}.pagination{align-self:flex-end}}
+@media(max-width:600px){.receipt-allocation-header{align-items:flex-start}.receipt-allocation-header>div{align-items:flex-start;flex-direction:column;gap:4px}}
 </style>

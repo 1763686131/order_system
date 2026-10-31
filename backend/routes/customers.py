@@ -7,6 +7,7 @@ from flask import Blueprint, jsonify, request
 
 from utils.db import get_db
 from utils.db_helper import read_customers
+from utils.customer_receivables import get_open_receivable_documents
 
 
 customers_bp = Blueprint('customers', __name__, url_prefix='/api/customers')
@@ -860,6 +861,26 @@ def get_customer_debt_details(customer_id):
         },
         'records': response_records,
         'total': len(response_records),
+    })
+
+
+@customers_bp.route('/<int:customer_id>/receivable-documents', methods=['GET'])
+def get_customer_receivable_documents(customer_id):
+    """Return outstanding source documents for receipt allocation."""
+    with get_db() as conn:
+        customer = conn.execute(
+            'SELECT id, customer_name, receivable FROM customers WHERE id = ?',
+            (customer_id,),
+        ).fetchone()
+        if not customer:
+            return jsonify({'error': '客户不存在'}), 404
+        documents = get_open_receivable_documents(conn, customer_id)
+    return jsonify({
+        'customerId': customer['id'],
+        'customerName': customer['customer_name'] or '',
+        'receivable': round(float(customer['receivable'] or 0), 2),
+        'items': documents or [],
+        'total': len(documents or []),
     })
 
 
