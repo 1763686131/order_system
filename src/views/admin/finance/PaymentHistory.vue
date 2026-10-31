@@ -287,7 +287,7 @@
         <header class="receipt-allocation-header">
           <div>
             <h3>收款抵扣明细</h3>
-            <span class="sf-muted">已选 {{ selectedReceivableKeys.length }} / {{ receivableDocuments.length }} 笔</span>
+            <span v-if="receiptAllocationMode === 'manual'" class="sf-muted">已选 {{ selectedReceivableKeys.length }} / {{ receivableDocuments.length }} 笔</span>
           </div>
           <div class="receipt-allocation-mode" role="group" aria-label="收款抵扣方式">
             <button
@@ -317,42 +317,65 @@
           <button class="sf-button" type="button" :disabled="saving" @click="loadReceivableDocuments(form.customerId)"><RefreshCw :size="16" />重试</button>
         </div>
         <div v-else-if="!form.customerId" class="sf-empty">选择客户后加载欠款单据</div>
-        <div v-else-if="!receivableDocuments.length" class="sf-empty">当前没有未抵扣欠款</div>
-        <div v-else class="sf-table-scroll receipt-allocation-scroll">
-          <table class="sf-table receipt-allocation-table">
-            <thead>
-              <tr>
-                <th class="receipt-check-column"><span class="visually-hidden">选择</span></th>
-                <th>欠款单据</th>
-                <th class="sf-number">单据金额</th>
-                <th class="sf-number">未抵扣金额</th>
-                <th class="sf-number">本次抵扣</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="document in receivableDocuments" :key="receivableKey(document)">
-                <td>
-                  <input
-                    v-model="selectedReceivableKeys"
-                    type="checkbox"
-                    :value="receivableKey(document)"
-                    :aria-label="`选择抵扣单据 ${document.documentNo}`"
-                    :disabled="saving || receiptAllocationMode !== 'manual' || Number(document.outstandingAmount) <= 0"
-                  >
-                </td>
-                <td>
-                  <strong>{{ document.documentNo }}</strong>
-                  <span class="receipt-document-date">{{ document.documentDate || '-' }}</span>
-                </td>
-                <td class="sf-number">{{ formatMoney(document.amount) }}</td>
-                <td class="sf-number">{{ formatMoney(document.outstandingAmount) }}</td>
-                <td class="sf-number receipt-allocation-amount">
-                  {{ formatMoney(allocationAmountByKey[receivableKey(document)] || 0) }}
-                </td>
-              </tr>
-            </tbody>
-          </table>
+        <div v-else-if="receiptAllocationMode === 'fifo'" class="receipt-auto-allocation-hint">
+          <ListChecks :size="16" />
+          <span>{{ receivableDocuments.length ? `按单据日期从早到晚自动抵扣，预计核销 ${formatMoney(previewWriteoff)}` : '当前没有未抵扣欠款，实收金额将转为预付款' }}</span>
         </div>
+        <div v-else-if="!receivableDocuments.length" class="sf-empty">当前没有未抵扣欠款</div>
+        <template v-else>
+          <div class="sf-table-scroll receipt-allocation-scroll">
+            <table class="sf-table receipt-allocation-table">
+              <thead>
+                <tr>
+                  <th class="receipt-check-column"><span class="visually-hidden">选择</span></th>
+                  <th>欠款单据</th>
+                  <th class="sf-number">单据金额</th>
+                  <th class="sf-number">未抵扣金额</th>
+                  <th class="sf-number">本次抵扣</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="document in pagedReceivableDocuments" :key="receivableKey(document)">
+                  <td>
+                    <input
+                      v-model="selectedReceivableKeys"
+                      type="checkbox"
+                      :value="receivableKey(document)"
+                      :aria-label="`选择抵扣单据 ${document.documentNo}`"
+                      :disabled="saving || receiptAllocationMode !== 'manual' || Number(document.outstandingAmount) <= 0"
+                    >
+                  </td>
+                  <td>
+                    <strong>{{ document.documentNo }}</strong>
+                    <span class="receipt-document-date">{{ document.documentDate || '-' }}</span>
+                  </td>
+                  <td class="sf-number">{{ formatMoney(document.amount) }}</td>
+                  <td class="sf-number">{{ formatMoney(document.outstandingAmount) }}</td>
+                  <td class="sf-number receipt-allocation-amount">
+                    {{ formatMoney(allocationAmountByKey[receivableKey(document)] || 0) }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <footer v-if="receivableDocuments.length > receivablePageSize" class="receipt-allocation-pagination">
+            <span>共 {{ receivableDocuments.length }} 笔</span>
+            <div>
+              <select v-model.number="receivablePageSize" aria-label="抵扣明细每页显示数量" @change="receivablePage = 1">
+                <option :value="10">10 条/页</option>
+                <option :value="20">20 条/页</option>
+                <option :value="50">50 条/页</option>
+              </select>
+              <button type="button" title="上一页" aria-label="抵扣明细上一页" :disabled="receivablePage <= 1" @click="receivablePage -= 1">
+                <ChevronLeft :size="16" />
+              </button>
+              <span class="page-number">{{ receivablePage }} / {{ receivableTotalPages }}</span>
+              <button type="button" title="下一页" aria-label="抵扣明细下一页" :disabled="receivablePage >= receivableTotalPages" @click="receivablePage += 1">
+                <ChevronRight :size="16" />
+              </button>
+            </div>
+          </footer>
+        </template>
         <p class="sf-muted receipt-allocation-hint">未抵扣的实收金额转为预收款。</p>
       </section>
       <div class="sf-summary">
@@ -407,7 +430,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ListChecks, Paperclip, RefreshCw, Save, Search, SquareCheck, X } from '@lucide/vue'
+import { ChevronLeft, ChevronRight, ListChecks, Paperclip, RefreshCw, Save, Search, SquareCheck, X } from '@lucide/vue'
 import * as XLSX from 'xlsx'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
@@ -491,6 +514,8 @@ const attachmentFile = ref(null)
 const attachmentPreview = ref('')
 const localPreviewUrl = ref('')
 const receivableDocuments = ref([])
+const receivablePage = ref(1)
+const receivablePageSize = ref(10)
 const selectedReceivableKeys = ref([])
 const receiptAllocationMode = ref('fifo')
 const receivableLoading = ref(false)
@@ -578,6 +603,11 @@ const currentDebt = computed(() =>
 const receivableDocumentsTotal = computed(() => receivableDocuments.value.reduce(
   (total, document) => total + (Number(document.outstandingAmount) || 0), 0
 ))
+const receivableTotalPages = computed(() => Math.max(1, Math.ceil(receivableDocuments.value.length / receivablePageSize.value)))
+const pagedReceivableDocuments = computed(() => {
+  const start = (receivablePage.value - 1) * receivablePageSize.value
+  return receivableDocuments.value.slice(start, start + receivablePageSize.value)
+})
 const formTotal = computed(() =>
   Math.max(0, Number(form.paymentAmount) || 0) +
   Math.max(0, Number(form.discountAmount) || 0)
@@ -712,6 +742,7 @@ const resetForm = () => {
   ++modalRequestToken
   ++receivableRequestToken
   receivableDocuments.value = []
+  receivablePage.value = 1
   selectedReceivableKeys.value = []
   receiptAllocationMode.value = 'fifo'
   loadedReceivableDebt.value = null
@@ -828,6 +859,7 @@ const handleReceiptStoreChange = () => {
   ++receivableRequestToken
   receiptAllocationMode.value = 'fifo'
   receivableDocuments.value = []
+  receivablePage.value = 1
   selectedReceivableKeys.value = []
   loadedReceivableDebt.value = null
   receivableError.value = ''
@@ -839,6 +871,7 @@ const handleReceiptStoreChange = () => {
 const loadReceivableDocuments = async customerId => {
   const requestToken = ++receivableRequestToken
   receivableDocuments.value = []
+  receivablePage.value = 1
   selectedReceivableKeys.value = []
   loadedReceivableDebt.value = null
   receivableError.value = ''
@@ -1154,6 +1187,9 @@ async function performPaymentAction() {
 watch([allocationTarget, receivableDocuments, receiptAllocationMode], () => {
   if (receiptAllocationMode.value === 'fifo') selectOldestReceivables(allocationTarget.value)
 }, { flush: 'sync' })
+watch(receivableTotalPages, pages => {
+  if (receivablePage.value > pages) receivablePage.value = pages
+})
 watch(totalPages, pages => {
   if (currentPage.value > pages) currentPage.value = pages
 })
@@ -1247,7 +1283,14 @@ svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;str
 .receipt-allocation-mode .sf-button:last-child{margin-left:-1px;border-radius:0 4px 4px 0}
 .receipt-allocation-mode .sf-button[aria-pressed="true"]{position:relative;color:#08745a;background:#e8f6f0;border-color:#0f9f78}
 .receipt-allocation-header h3{margin:0;color:#172033;font-size:14px}
+.receipt-auto-allocation-hint{display:flex;align-items:center;gap:8px;padding:13px 0;color:#596579;font-size:12px}
+.receipt-auto-allocation-hint svg{flex:none;color:#08745a}
 .receipt-allocation-scroll{max-height:260px;border:1px solid #e2e8f0;border-radius:4px}
+.receipt-allocation-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;color:#596579;font-size:12px}
+.receipt-allocation-pagination>div{display:flex;align-items:center;gap:8px}
+.receipt-allocation-pagination select{height:32px;padding:0 8px;color:#596579;background:#fff;border:1px solid #cbd5e1;border-radius:4px;font:inherit}
+.receipt-allocation-pagination button{display:inline-flex;width:31px;height:31px;align-items:center;justify-content:center;color:#596579;background:#fff;border:1px solid #cbd5e1;border-radius:4px;cursor:pointer}
+.receipt-allocation-pagination button:disabled{opacity:.45;cursor:not-allowed}
 .receipt-allocation-table{min-width:640px;table-layout:fixed}
 .receipt-allocation-table th,.receipt-allocation-table td{padding:8px 10px}
 .receipt-allocation-table th:first-child,.receipt-allocation-table td:first-child{width:42px;text-align:center}

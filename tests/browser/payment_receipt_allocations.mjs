@@ -47,6 +47,7 @@ const documents = [
 ]
 let failCustomer = false
 let delayCustomer = false
+let includeMoreDocuments = false
 let saved = null
 request.defaults.adapter = async config => {
   let data
@@ -56,7 +57,13 @@ request.defaults.adapter = async config => {
   else if (config.url === '/payment-receipts/next-number') data = { documentNo: 'SK-TEST' }
   else if (config.url === '/customers/1/receivable-documents') {
     if (delayCustomer) await pause(300)
-    data = { receivable: 230, items: documents }
+    const extraDocuments = includeMoreDocuments
+      ? Array.from({ length: 10 }, (_, index) => ({
+        sourceType: 'order', sourceId: 200 + index, documentNo: 'SO-EXTRA-' + (index + 1),
+        documentDate: '2025-04-' + String(index + 1).padStart(2, '0'), amount: 20, outstandingAmount: 20
+      }))
+      : []
+    data = { receivable: 230 + extraDocuments.length * 20, items: [...documents, ...extraDocuments] }
   } else if (config.url === '/customers/2/receivable-documents') {
     if (failCustomer) throw new Error('Simulated debt loading failure')
     data = { receivable: 0, items: [] }
@@ -85,6 +92,7 @@ const form = () => document.querySelector('#receipt-document-form')
 const storeSelect = () => form().querySelectorAll('select')[0]
 const customerSelect = () => form().querySelectorAll('select')[1]
 const checks = () => [...document.querySelectorAll('.receipt-allocation-table input[type=checkbox]')]
+const autoHint = () => document.querySelector('.receipt-auto-allocation-hint')
 const amounts = () => [...document.querySelectorAll('.receipt-allocation-amount')].map(cell => Number(cell.textContent.replace(/[^0-9.]/g, '')))
 const change = async (element, value) => { element.value = value; element.dispatchEvent(new Event('change', { bubbles: true })); await settle() }
 const input = async (element, value) => { element.value = value; element.dispatchEvent(new Event('input', { bubbles: true })); await settle() }
@@ -98,7 +106,7 @@ const submit = async () => {
 }
 const edit = async () => {
   document.querySelector('.action-edit').click()
-  await waitFor(() => checks().length === 3)
+  await waitFor(() => saved?.allocationMode === 'manual' ? checks().length === 3 : Boolean(autoHint()))
 }
 const saveButton = () => document.querySelector('[form=receipt-document-form]')
 try {
@@ -110,22 +118,23 @@ try {
   await change(storeSelect(), '1')
   assert(customerSelect().options.length === 2 && customerSelect().options[1].textContent.trim() === 'Customer A', 'Customer options must show only names and match the store')
   await change(customerSelect(), '1')
-  await waitFor(() => checks().length === 3)
-  assert(modeButton('fifo').getAttribute('aria-pressed') === 'true' && checks().every(box => box.disabled), 'New receipts must default to automatic allocation')
+  await waitFor(() => Boolean(autoHint()))
+  assert(modeButton('fifo').getAttribute('aria-pressed') === 'true' && !document.querySelector('.receipt-allocation-table'), 'Automatic mode must be the default and hide the document list')
   assert(form().querySelector('.receipt-debt').value.replace(/[^0-9.]/g, '') === '230.00', 'Debt must refresh from the document endpoint')
   await input(form().querySelectorAll('input[type=number]')[0], '100')
-  assert(JSON.stringify(amounts()) === '[60,40,0]', 'Automatic allocation must run when the amount is entered, without clicking a button')
+  assert(summaryAmount(1) === 100, 'Automatic allocation must run when the amount is entered, without clicking a button')
   await input(form().querySelectorAll('input[type=number]')[0], '200')
-  assert(JSON.stringify(amounts()) === '[60,70,70]', 'Automatic allocation must follow amount changes and partially cover the final document')
+  assert(summaryAmount(1) === 200, 'Automatic allocation must follow amount changes and partially cover the final document')
   await input(form().querySelectorAll('input[type=number]')[0], '300')
-  assert(JSON.stringify(amounts()) === '[60,70,100]' && summaryAmount(2) === 70, 'Excess automatic payment must become an advance')
+  assert(summaryAmount(1) === 230 && summaryAmount(2) === 70, 'Excess automatic payment must become an advance')
   await submit()
   assert(saved.allocationMode === 'fifo' && saved.allocations.length === 0 && saved.advanceAmount === 70, 'Saving must preserve automatic mode and its advance')
   await edit()
-  assert(modeButton('fifo').getAttribute('aria-pressed') === 'true' && JSON.stringify(amounts()) === '[60,70,100]', 'Editing an automatic draft must restore automatic mode')
+  assert(modeButton('fifo').getAttribute('aria-pressed') === 'true' && !document.querySelector('.receipt-allocation-table'), 'Editing an automatic draft must restore automatic mode without showing documents')
   await input(form().querySelectorAll('input[type=number]')[0], '100')
   modeButton('manual').click()
   await settle()
+  await waitFor(() => checks().length === 3)
   assert(checks().every(box => !box.disabled), 'Manual mode must allow editing the current selection')
   await toggleCheck(0)
   await toggleCheck(1)
@@ -144,15 +153,14 @@ try {
   await edit()
   assert(modeButton('manual').getAttribute('aria-pressed') === 'true' && JSON.stringify(amounts()) === '[0,0,100]', 'Editing a manual draft must restore its mode and selection')
   auto()
-  await settle()
-  assert(JSON.stringify(amounts()) === '[60,70,0]', 'Switching back to automatic mode must restore oldest-first allocation')
-  assert(checks()[0].checked && checks()[1].checked && !checks()[2].checked, 'Auto allocation must replace the selection')
+  await waitFor(() => Boolean(autoHint()) && !document.querySelector('.receipt-allocation-table'))
+  assert(summaryAmount(1) === 130, 'Switching back to automatic mode must restore oldest-first allocation and hide documents')
   await input(form().querySelectorAll('input[type=number]')[0], '100')
-  assert(JSON.stringify(amounts()) === '[60,50,0]', 'Discount must be included in receivable reduction')
+  assert(summaryAmount(1) === 110, 'Discount must be included in automatic receivable reduction')
   await submit()
   assert(saved.allocationMode === 'fifo' && saved.allocations.length === 0, 'Saving after a mode change must clear old manual allocations')
   await edit()
-  assert(JSON.stringify(amounts()) === '[60,50,0]' && checks().every(box => box.disabled), 'Editing must restore automatic mode after switching from manual')
+  assert(!document.querySelector('.receipt-allocation-table'), 'Editing must restore automatic mode and keep the document list hidden')
   result.checks.push('automatic default', 'live oldest-first allocation', 'manual mode and selection', 'surplus advance in both modes', 'partial allocation', 'discount', 'save and edit both modes')
 
   await change(storeSelect(), '2')
@@ -175,9 +183,23 @@ try {
   delayCustomer = false
   await change(storeSelect(), '1')
   await change(customerSelect(), '1')
+  await waitFor(() => Boolean(autoHint()))
+  modeButton('manual').click()
   await waitFor(() => checks().length === 3)
-  auto()
+  includeMoreDocuments = true
+  await change(storeSelect(), '2')
+  await change(storeSelect(), '1')
+  await change(customerSelect(), '1')
+  await waitFor(() => checks().length === 10 && document.querySelector('.receipt-allocation-pagination'))
+  assert(document.querySelectorAll('.receipt-allocation-table tbody tr').length === 10, 'The allocation list must show ten rows on its first page')
+  assert(document.querySelector('.receipt-allocation-pagination .page-number').textContent.trim() === '1 / 2', 'The allocation pager must show the current and total page')
+  document.querySelector('[aria-label="抵扣明细下一页"]').click()
   await settle()
+  assert(document.querySelectorAll('.receipt-allocation-table tbody tr').length === 3 && document.querySelector('.receipt-allocation-table tbody tr:first-child').textContent.includes('SO-EXTRA-8'), 'The next page must show the remaining allocation documents')
+  document.querySelector('[aria-label="抵扣明细上一页"]').click()
+  await settle()
+  assert(document.querySelectorAll('.receipt-allocation-table tbody tr').length === 10, 'The previous-page control must return to the first ten documents')
+  result.checks.push('ten rows per page', 'allocation pagination')
   const dialog = document.querySelector('.supplier-finance-dialog').getBoundingClientRect()
   assert(dialog.left >= 0 && dialog.right <= innerWidth + 1, 'The modal must fit the viewport')
   const scroll = document.querySelector('.receipt-allocation-scroll')
