@@ -1,7 +1,9 @@
 from contextlib import contextmanager
+from io import BytesIO
 from pathlib import Path
 import sqlite3
 import sys
+from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
@@ -12,6 +14,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from utils.customer_receivables import get_open_receivable_documents, validate_allocations
 from routes.customers import customers_bp
 from routes.payment_receipts import payment_receipts_bp
+import routes.payment_receipts as payment_receipt_routes
+from routes.supplier_payments import supplier_payments_bp
+import routes.supplier_payments as supplier_payment_routes
 import utils.db as db_module
 
 
@@ -252,6 +257,10 @@ class ReceiptAllocationApiTests(unittest.TestCase):
                 id INTEGER PRIMARY KEY, store_id INTEGER, account_name TEXT,
                 account_number TEXT, bank_name TEXT, is_default INTEGER, balance REAL, updated_at TEXT
             );
+            CREATE TABLE supplier_finance_attachments (
+                token TEXT PRIMARY KEY, store_id INTEGER, filename TEXT, original_name TEXT,
+                mimetype TEXT, storage_path TEXT NOT NULL DEFAULT '', created_by TEXT, created_at TEXT
+            );
             INSERT INTO stores VALUES (1, 'Test store', 'active');
             INSERT INTO bank_accounts VALUES (1, 1, 'Receipt account', '', '', 1, 1000, NULL);
         ''')
@@ -273,7 +282,7 @@ class ReceiptAllocationApiTests(unittest.TestCase):
             VALUES (1, 101, 'SO-OLD', 'order_audit', 100, 100, 100, '2025-01-01'),
                    (1, 102, 'SO-NEW', 'order_audit', 100, 100, 200, '2025-02-01');
         ''')
-        for target in ('routes.payment_receipts.get_db', 'routes.customers.get_db'):
+        for target in ('routes.payment_receipts.get_db', 'routes.customers.get_db', 'routes.supplier_payments.get_db'):
             patcher = patch(target, self.get_db)
             patcher.start()
             self.addCleanup(patcher.stop)
@@ -290,6 +299,7 @@ class ReceiptAllocationApiTests(unittest.TestCase):
 
         app.register_blueprint(customers_bp)
         app.register_blueprint(payment_receipts_bp)
+        app.register_blueprint(supplier_payments_bp)
         self.client = app.test_client()
 
     @contextmanager
@@ -312,6 +322,70 @@ class ReceiptAllocationApiTests(unittest.TestCase):
         response = self.client.get('/api/customers/1/receivable-documents')
         self.assertEqual(response.status_code, 200, response.get_json())
         return response.get_json()['items']
+
+    def test_receipt_attachment_uses_configured_folder_and_keeps_its_saved_location(self):
+        with TemporaryDirectory() as upload_dir, TemporaryDirectory() as changed_dir:
+            with patch.object(payment_receipt_routes, 'get_payment_receipt_attachment_path', return_value=upload_dir):
+                response = self.client.post('/api/payment-receipts/attachments', data={
+                    'attachment': (BytesIO(b'fake image data'), 'receipt.jpg', 'image/jpeg'),
+                }, content_type='multipart/form-data')
+            self.assertEqual(response.status_code, 200, response.get_json())
+            attachment_url = response.get_json()['attachmentUrl']
+            token = attachment_url.rsplit('/', 1)[-1]
+            row = self.conn.execute(
+                'SELECT storage_path, filename FROM payment_receipt_attachments WHERE token = ?',
+                (token,),
+            ).fetchone()
+            self.assertEqual(row['storage_path'], str(Path(upload_dir) / Path(row['storage_path']).name))
+            self.assertTrue((Path(row['storage_path']) / row['filename']).is_file())
+
+            with patch.object(payment_receipt_routes, 'get_payment_receipt_attachment_path', return_value=changed_dir):
+                downloaded = self.client.get(attachment_url)
+            self.assertEqual(downloaded.status_code, 200)
+            self.assertEqual(downloaded.data, b'fake image data')
+            downloaded.close()
+
+            payment_receipt_routes._remove_attachment(attachment_url)
+            self.assertEqual(self.conn.execute(
+                'SELECT COUNT(*) FROM payment_receipt_attachments WHERE token = ?', (token,)
+            ).fetchone()[0], 0)
+            self.assertFalse((Path(row['storage_path']) / row['filename']).exists())
+
+    def test_supplier_payment_attachment_uses_configured_folder_and_keeps_its_saved_location(self):
+        with TemporaryDirectory() as upload_dir, TemporaryDirectory() as changed_dir, TemporaryDirectory() as invoice_dir:
+            with patch.object(supplier_payment_routes, 'get_supplier_payment_attachment_path', return_value=upload_dir):
+                response = self.client.post('/api/supplier-finance/attachments', data={
+                    'storeId': '1', 'purpose': 'payment',
+                    'attachment': (BytesIO(b'%PDF-1.4\nreceipt attachment'), 'proof.pdf', 'application/pdf'),
+                }, content_type='multipart/form-data')
+            self.assertEqual(response.status_code, 201, response.get_json())
+            attachment_url = response.get_json()['url']
+            token = attachment_url.rsplit('/', 1)[-1]
+            row = self.conn.execute(
+                'SELECT storage_path, filename FROM supplier_finance_attachments WHERE token = ?',
+                (token,),
+            ).fetchone()
+            self.assertEqual(row['storage_path'], upload_dir)
+            self.assertTrue((Path(row['storage_path']) / row['filename']).is_file())
+
+            with patch.object(supplier_payment_routes, 'get_supplier_payment_attachment_path', return_value=changed_dir):
+                downloaded = self.client.get(attachment_url)
+            self.assertEqual(downloaded.status_code, 200)
+            self.assertEqual(downloaded.data, b'%PDF-1.4\nreceipt attachment')
+            downloaded.close()
+
+            with patch.object(supplier_payment_routes, 'attachment_root', return_value=invoice_dir):
+                invoice = self.client.post('/api/supplier-finance/attachments', data={
+                    'storeId': '1',
+                    'attachment': (BytesIO(b'%PDF-1.4\ninvoice attachment'), 'invoice.pdf', 'application/pdf'),
+                }, content_type='multipart/form-data')
+            self.assertEqual(invoice.status_code, 201, invoice.get_json())
+            invoice_token = invoice.get_json()['url'].rsplit('/', 1)[-1]
+            invoice_row = self.conn.execute(
+                'SELECT storage_path FROM supplier_finance_attachments WHERE token = ?',
+                (invoice_token,),
+            ).fetchone()
+            self.assertEqual(invoice_row['storage_path'], invoice_dir)
 
     def test_save_reload_edit_audit_and_reverse_manual_receipt(self):
         receipt = self.create_receipt()

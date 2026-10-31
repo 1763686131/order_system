@@ -15,11 +15,17 @@ from utils.system_settings import (
     DEFAULT_BANK_CARD_BG_PATH,
     DEFAULT_BANK_ICON_PATH,
     DEFAULT_DOCUMENT_PATH,
+    DEFAULT_PAYMENT_RECEIPT_ATTACHMENT_PATH,
     DEFAULT_RECEIPT_PATH,
+    DEFAULT_SUPPLIER_PAYMENT_ATTACHMENT_PATH,
+    PAYMENT_RECEIPT_ATTACHMENT_PATH_KEY,
     REPORT_PATH_KEY,
+    SUPPLIER_PAYMENT_ATTACHMENT_PATH_KEY,
     get_browse_roots,
     get_default_report_path,
+    get_payment_receipt_attachment_path,
     get_report_path,
+    get_supplier_payment_attachment_path,
     get_setting,
     inspect_directory,
     list_directories,
@@ -136,6 +142,8 @@ def get_path_settings():
                 "reportPath": report_path,
                 "documentPath": get_setting("documents.path", DEFAULT_DOCUMENT_PATH),
                 "receiptPath": get_setting("receipts.path", DEFAULT_RECEIPT_PATH),
+                "receiptAttachmentPath": get_payment_receipt_attachment_path(),
+                "paymentAttachmentPath": get_supplier_payment_attachment_path(),
                 "bankCardBgPath": get_setting(
                     "bank_cards.bg_path", DEFAULT_BANK_CARD_BG_PATH
                 ),
@@ -179,6 +187,24 @@ def save_path_settings():
     set_setting("receipts.path", receipt_path)
 
     try:
+        receipt_attachment_path, _ = _save_directory_setting(
+            PAYMENT_RECEIPT_ATTACHMENT_PATH_KEY,
+            data.get(
+                "receiptAttachmentPath",
+                get_payment_receipt_attachment_path(),
+            ),
+            DEFAULT_PAYMENT_RECEIPT_ATTACHMENT_PATH,
+            "收款单附件路径",
+        )
+        payment_attachment_path, _ = _save_directory_setting(
+            SUPPLIER_PAYMENT_ATTACHMENT_PATH_KEY,
+            data.get(
+                "paymentAttachmentPath",
+                get_supplier_payment_attachment_path(),
+            ),
+            DEFAULT_SUPPLIER_PAYMENT_ATTACHMENT_PATH,
+            "付款单附件路径",
+        )
         bank_bg_path, bank_bg_status = _save_directory_setting(
             "bank_cards.bg_path",
             data.get(
@@ -208,6 +234,8 @@ def save_path_settings():
                 "reportPath": get_report_path(),
                 "documentPath": document_path,
                 "receiptPath": receipt_path,
+                "receiptAttachmentPath": receipt_attachment_path,
+                "paymentAttachmentPath": payment_attachment_path,
                 "bankCardBgPath": bank_bg_path,
                 "bankIconPath": bank_icon_path,
                 "reportStatus": inspect_directory(get_report_path()),

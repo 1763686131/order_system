@@ -25,6 +25,7 @@ import request from '@/api/request'
 const props = defineProps({
   modelValue: { type: Array, default: () => [] },
   storeId: { type: [String, Number], default: '' },
+  purpose: { type: String, default: 'invoice', validator: value => ['invoice', 'payment'].includes(value) },
   readonly: Boolean
 })
 const emit = defineEmits(['update:modelValue', 'uploading'])
@@ -42,6 +43,7 @@ async function upload(event) {
   try {
     const body = new FormData()
     body.append('storeId', props.storeId)
+    body.append('purpose', props.purpose)
     body.append('attachment', file)
     const attachment = await request.post('/supplier-finance/attachments', body, { headers: { 'Content-Type': 'multipart/form-data' } })
     emit('update:modelValue', [...props.modelValue, attachment])

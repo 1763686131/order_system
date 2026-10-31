@@ -45,7 +45,7 @@
         <label class="sf-check wide"><input v-model="form.hasDifference" type="checkbox" :disabled="readonly" />发票金额或税额存在差异</label>
         <label class="sf-field wide">差异原因<textarea v-model="form.differenceReason" maxlength="500" :required="form.hasDifference" :disabled="readonly" /></label>
       </div>
-      <SupplierAttachments v-model="form.attachments" :store-id="form.storeId" :readonly="readonly" @uploading="uploading = $event" />
+      <SupplierAttachments v-model="form.attachments" :store-id="form.storeId" :purpose="invoiceMode ? 'invoice' : 'payment'" :readonly="readonly" @uploading="uploading = $event" />
       <template v-if="!invoiceMode && form.bankTransactions?.length">
         <div class="sf-header sf-section-title"><h3>银行流水</h3></div>
         <div class="sf-table-scroll"><table class="sf-table"><thead><tr><th>业务日期</th><th>类型</th><th>银行账户</th><th>余额变动</th><th>变动后余额</th><th>操作人 / 时间</th></tr></thead><tbody><tr v-for="movement in form.bankTransactions" :key="movement.id"><td>{{ movement.businessDate }}</td><td>{{ movement.reversalOfId ? '付款冲销' : '付款扣款' }}</td><td>{{ options.bankAccounts.find(bank => bank.id === movement.bankAccountId)?.accountName || movement.bankAccountId }}</td><td class="sf-number">{{ formatMoney(movement.change) }}</td><td class="sf-number">{{ formatMoney(movement.balanceAfter) }}</td><td>{{ movement.createdBy }}<div class="sf-muted">{{ movement.createdAt }}</div></td></tr></tbody></table></div>

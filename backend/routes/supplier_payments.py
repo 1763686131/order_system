@@ -17,6 +17,7 @@ from utils.supplier_settlement import (
     attachments_value, balance_available, invoice_payment_check, positive_id, post_bank,
     payable_available_cents, require_invoice, required_version, reverse_ledger, supplier_store, text,
 )
+from utils.system_settings import get_supplier_payment_attachment_path
 from routes.supplier_finance import finance_errors, serialize_transaction, supplier_row
 
 
@@ -410,6 +411,9 @@ def reverse_payment(payment_id):
 def upload_finance_attachment():
     store_id = positive_id(request.form.get("storeId"))
     check_scope(store_id)
+    purpose = text(request.form.get("purpose") or "invoice", 20)
+    if purpose not in ("invoice", "payment"):
+        raise FinanceError("附件类型无效")
     file = request.files.get("attachment")
     if not file or not file.filename:
         raise FinanceError("请选择附件")
@@ -433,18 +437,20 @@ def upload_finance_attachment():
         raise FinanceError("附件内容与文件类型不符")
     token = uuid.uuid4().hex
     filename = token + extension
+    root = get_supplier_payment_attachment_path() if purpose == "payment" else attachment_root()
+    os.makedirs(root, exist_ok=True)
     with get_db() as conn:
         if not conn.execute("SELECT 1 FROM stores WHERE id=?", (store_id,)).fetchone():
             raise FinanceError("门店不存在", 404)
-        conn.execute(
-            """INSERT INTO supplier_finance_attachments
-               (token,store_id,filename,original_name,mimetype,created_by,created_at) VALUES (?,?,?,?,?,?,?)""",
-            (token, store_id, filename, text(file.filename, 160), mime[extension], current_identity(), now()),
-        )
-        root = attachment_root()
-        os.makedirs(root, exist_ok=True)
         file.stream.seek(0)
         file.save(os.path.join(root, filename))
+        conn.execute(
+            """INSERT INTO supplier_finance_attachments
+               (token,store_id,filename,original_name,mimetype,storage_path,created_by,created_at)
+               VALUES (?,?,?,?,?,?,?,?)""",
+            (token, store_id, filename, text(file.filename, 160), mime[extension], root,
+             current_identity(), now()),
+        )
     return jsonify({"name": text(file.filename, 160), "url": f"/api/supplier-finance/attachments/{token}"}), 201
 
 
@@ -467,7 +473,8 @@ def download_finance_attachment(token):
         if not row:
             raise FinanceError("附件不存在", 404)
         check_scope(row["store_id"])
-        response = send_from_directory(attachment_root(), row["filename"], mimetype=row["mimetype"],
+        root = row["storage_path"] or attachment_root()
+        response = send_from_directory(root, row["filename"], mimetype=row["mimetype"],
                                        as_attachment=True, download_name=row["original_name"])
         response.headers["Cache-Control"] = "private, no-store"
         response.headers["X-Content-Type-Options"] = "nosniff"

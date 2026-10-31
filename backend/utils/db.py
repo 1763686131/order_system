@@ -2663,6 +2663,18 @@ def _ensure_customer_schema(conn):
         )
         cursor.execute(
             """
+            CREATE TABLE IF NOT EXISTS payment_receipt_attachments (
+                token TEXT PRIMARY KEY,
+                storage_path TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                original_name TEXT NOT NULL DEFAULT '',
+                mimetype TEXT NOT NULL DEFAULT 'application/octet-stream',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_customer_payment_allocations_source
             ON customer_payment_allocations(customer_id, source_type, source_id)
             """

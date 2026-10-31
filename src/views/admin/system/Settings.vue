@@ -158,7 +158,7 @@
               <polyline points="9 22 9 12 15 12 15 22"/>
             </svg>
             <h4 class="section-title">路径参数设置</h4>
-            <span class="section-badge">5 项配置</span>
+            <span class="section-badge">7 项配置</span>
           </div>
           <svg
             class="toggle-icon"
@@ -230,6 +230,54 @@
                   placeholder="/var/data/receipts"
                 />
                 <button class="btn-secondary btn-sm" type="button" title="测试路径" @click="testPath('receiptPath')">
+                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                  </svg>
+                  测试
+                </button>
+              </div>
+            </div>
+
+            <div class="config-item">
+              <label class="config-label">
+                <span class="label-text">收款单附件路径</span>
+                <span class="label-hint">收款单图片附件的服务器存储目录</span>
+              </label>
+              <div class="input-group">
+                <input
+                  v-model="pathConfig.receiptAttachmentPath"
+                  type="text"
+                  class="config-input"
+                  placeholder="/app/uploads/payment-receipts"
+                />
+                <button class="btn-secondary btn-sm" type="button" @click="openDirectoryBrowser('receiptAttachmentPath')">
+                  获取文件夹
+                </button>
+                <button class="btn-secondary btn-sm" type="button" title="测试路径" @click="testPath('receiptAttachmentPath')">
+                  <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                  </svg>
+                  测试
+                </button>
+              </div>
+            </div>
+
+            <div class="config-item">
+              <label class="config-label">
+                <span class="label-text">付款单附件路径</span>
+                <span class="label-hint">供应商付款单附件的服务器存储目录</span>
+              </label>
+              <div class="input-group">
+                <input
+                  v-model="pathConfig.paymentAttachmentPath"
+                  type="text"
+                  class="config-input"
+                  placeholder="/app/uploads/supplier-payments"
+                />
+                <button class="btn-secondary btn-sm" type="button" @click="openDirectoryBrowser('paymentAttachmentPath')">
+                  获取文件夹
+                </button>
+                <button class="btn-secondary btn-sm" type="button" title="测试路径" @click="testPath('paymentAttachmentPath')">
                   <svg viewBox="0 0 24 24" class="btn-icon" aria-hidden="true">
                     <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                   </svg>
@@ -1056,6 +1104,8 @@ const pathConfig = reactive({
   reportPath: '/var/data/reports',
   documentPath: '/var/data/documents',
   receiptPath: '/var/data/receipts',
+  receiptAttachmentPath: '/app/uploads/payment-receipts',
+  paymentAttachmentPath: '/app/uploads/supplier-payments',
   bankCardBgPath: '/app/uploads/bank-cards/backgrounds',
   bankIconPath: '/app/uploads/bank-cards/icons'
 })
@@ -1064,6 +1114,7 @@ const pathSaving = ref(false)
 const directoryBrowserVisible = ref(false)
 const directoryBrowser = reactive({
   loading: false,
+  targetKey: 'reportPath',
   path: '',
   parentPath: '',
   directories: [],
@@ -1329,6 +1380,8 @@ const loadPathConfig = async () => {
         reportPath: response.data.reportPath || '',
         documentPath: response.data.documentPath || '',
         receiptPath: response.data.receiptPath || '',
+        receiptAttachmentPath: response.data.receiptAttachmentPath || '/app/uploads/payment-receipts',
+        paymentAttachmentPath: response.data.paymentAttachmentPath || '/app/uploads/supplier-payments',
         bankCardBgPath: response.data.bankCardBgPath || '/app/uploads/bank-cards/backgrounds',
         bankIconPath: response.data.bankIconPath || '/app/uploads/bank-cards/icons'
       })
@@ -1350,6 +1403,8 @@ const savePathConfig = async () => {
       reportPath: response.data?.reportPath || pathConfig.reportPath,
       documentPath: response.data?.documentPath || pathConfig.documentPath,
       receiptPath: response.data?.receiptPath || pathConfig.receiptPath,
+      receiptAttachmentPath: response.data?.receiptAttachmentPath || pathConfig.receiptAttachmentPath,
+      paymentAttachmentPath: response.data?.paymentAttachmentPath || pathConfig.paymentAttachmentPath,
       bankCardBgPath: response.data?.bankCardBgPath || pathConfig.bankCardBgPath,
       bankIconPath: response.data?.bankIconPath || pathConfig.bankIconPath
     })
@@ -1395,14 +1450,15 @@ const loadDirectories = async (path = '') => {
   }
 }
 
-const openDirectoryBrowser = async () => {
+const openDirectoryBrowser = async (targetKey = 'reportPath') => {
+  directoryBrowser.targetKey = targetKey
   directoryBrowserVisible.value = true
   await loadDirectories()
 }
 
 const useCurrentDirectory = () => {
   if (!directoryBrowser.path) return
-  pathConfig.reportPath = directoryBrowser.path
+  pathConfig[directoryBrowser.targetKey] = directoryBrowser.path
   directoryBrowserVisible.value = false
 }
 

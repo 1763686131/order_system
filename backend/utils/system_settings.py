@@ -26,6 +26,14 @@ DEFAULT_BANK_CARD_BG_PATH = os.path.join(
 DEFAULT_BANK_ICON_PATH = os.path.join(
     _default_upload_root(), "bank-cards", "icons"
 )
+DEFAULT_PAYMENT_RECEIPT_ATTACHMENT_PATH = os.path.join(
+    _default_upload_root(), "payment-receipts"
+)
+DEFAULT_SUPPLIER_PAYMENT_ATTACHMENT_PATH = os.path.join(
+    _default_upload_root(), "supplier-payments"
+)
+PAYMENT_RECEIPT_ATTACHMENT_PATH_KEY = "payment_receipts.attachment_path"
+SUPPLIER_PAYMENT_ATTACHMENT_PATH_KEY = "supplier_payments.attachment_path"
 
 
 def get_default_report_path():
@@ -67,6 +75,16 @@ def set_setting(key, value):
 def get_report_path():
     configured = get_setting(REPORT_PATH_KEY, "").strip()
     return configured or get_default_report_path()
+
+
+def get_payment_receipt_attachment_path():
+    configured = get_setting(PAYMENT_RECEIPT_ATTACHMENT_PATH_KEY, "").strip()
+    return normalize_server_path(configured or DEFAULT_PAYMENT_RECEIPT_ATTACHMENT_PATH)
+
+
+def get_supplier_payment_attachment_path():
+    configured = get_setting(SUPPLIER_PAYMENT_ATTACHMENT_PATH_KEY, "").strip()
+    return normalize_server_path(configured or DEFAULT_SUPPLIER_PAYMENT_ATTACHMENT_PATH)
 
 
 def normalize_server_path(path):

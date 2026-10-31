@@ -172,6 +172,7 @@ def ensure_schema(conn):
             filename TEXT NOT NULL,
             original_name TEXT NOT NULL,
             mimetype TEXT NOT NULL,
+            storage_path TEXT NOT NULL DEFAULT '',
             created_by TEXT NOT NULL,
             created_at TEXT NOT NULL
         );
@@ -278,6 +279,9 @@ def ensure_schema(conn):
         CREATE INDEX IF NOT EXISTS idx_supplier_reconciliation_period
             ON supplier_reconciliations(supplier_id, store_id, period_start, period_end, status);
     """)
+    attachment_columns = {row["name"] for row in conn.execute("PRAGMA table_info(supplier_finance_attachments)")}
+    if "storage_path" not in attachment_columns:
+        conn.execute("ALTER TABLE supplier_finance_attachments ADD COLUMN storage_path TEXT NOT NULL DEFAULT ''")
     refund_columns = {row["name"] for row in conn.execute("PRAGMA table_info(supplier_refunds)")}
     if "credits_json" not in refund_columns:
         conn.execute("ALTER TABLE supplier_refunds ADD COLUMN credits_json TEXT NOT NULL DEFAULT '[]'")

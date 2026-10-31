@@ -370,9 +370,11 @@ order_system/
 │  ├─ 表格列顺序拖动调整.md           # 列排序、显示开关及低层 composable 用法
 │  ├─ 表格导出功能.md                 # Excel 导出、字段映射和样式约定
 │  └─ 权限角色分组优化方案.md        # 账号、员工、角色组和数据范围设计
-├─ uploads/                          # 回单、头像、收款附件、报告和银行卡图片等上传文件
+├─ uploads/                          # 回单、头像、财务附件、报告和银行卡图片等上传文件
 │  ├─ employee-avatars/              # 员工头像，内部继续按 YYYY-MM 分目录
 │  ├─ chat-attachments/              # 私有聊天附件，上传时创建，通过鉴权接口下载
+│  ├─ payment-receipts/              # 收款单附件，默认按 YYYY-MM 分目录
+│  ├─ supplier-payments/             # 付款单附件，支持在系统路径设置中修改目录
 │  └─ bank-cards/                    # 银行卡相关文件（由系统配置指定路径）
 │     ├─ backgrounds/                # 银行卡背景图
 │     └─ icons/                      # 银行 LOGO 图标
@@ -1278,7 +1280,7 @@ AI 只能调整尚未提交的订单草稿，不能更改门店、仓库、客�
 
 退货单审核会在 `stock_balances`、`stock_movements` 中留下可追溯的库存返还记录；反审核按退货单号删除对应库存流水并恢复审核前库存。
 
-收款附件保存到 `uploads/payment-receipts/YYYY-MM/`，数据库仅保存附件访问地址。删除待审核收款单或替换附件时，后端会同步清理不再使用的文件。
+收款附件默认保存到 `uploads/payment-receipts/YYYY-MM/`，付款附件默认保存到 `uploads/supplier-payments/`；两个目录均可在后台“系统设置 / 路径参数设置”中分别修改。附件索引记录其实际存储目录，因此修改配置不会影响已有附件的查看和下载。删除待审核收款单或替换附件时，后端会同步清理不再使用的收款附件。
 
 收款单的分配方式保存在 `payment_receipts.allocation_mode`，逐单抵扣明细保存在 `customer_payment_allocations`。重启后的首次数据库访问自动补齐结构，旧收款单默认保留自动抵扣模式；反审核恢复原欠款，草稿删除级联清理对应分配明细。相关回归测试见 `tests/test_customer_receivable_allocations.py` 和 `tests/browser/payment_receipt_allocations.mjs`，后者可加 `mobile` 参数验证窄屏。
 

@@ -5,7 +5,7 @@ import os
 import threading
 import uuid
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_from_directory
 
 from utils.db import get_db
 from utils.auth import current_identity, require_admin_permission
@@ -16,6 +16,7 @@ from utils.bank_account_helpers import (
     adjust_bank_account_balance,
     resolve_settlement_account,
 )
+from utils.system_settings import get_payment_receipt_attachment_path
 
 
 payment_receipts_bp = Blueprint(
@@ -273,6 +274,35 @@ def _validate_values(conn, data):
 
 
 def _remove_attachment(attachment_url):
+    attachment_prefix = '/api/payment-receipts/attachments/'
+    if attachment_url.startswith(attachment_prefix):
+        token = attachment_url.removeprefix(attachment_prefix)
+        if len(token) != 32 or any(char not in '0123456789abcdef' for char in token):
+            return
+        with get_db() as conn:
+            if conn.execute(
+                'SELECT 1 FROM payment_receipts WHERE attachment_url = ? LIMIT 1',
+                (attachment_url,)
+            ).fetchone():
+                return
+            attachment = conn.execute(
+                'SELECT storage_path, filename FROM payment_receipt_attachments WHERE token = ?',
+                (token,)
+            ).fetchone()
+            if not attachment:
+                return
+            directory = os.path.abspath(attachment['storage_path'])
+            target = os.path.abspath(os.path.join(directory, attachment['filename']))
+            try:
+                if os.path.commonpath([directory, target]) != directory:
+                    return
+            except ValueError:
+                return
+            if os.path.isfile(target):
+                os.remove(target)
+            conn.execute('DELETE FROM payment_receipt_attachments WHERE token = ?', (token,))
+        return
+
     if not attachment_url.startswith('/uploads/payment-receipts/'):
         return
     relative_path = attachment_url.removeprefix('/uploads/')
@@ -358,14 +388,46 @@ def upload_attachment():
         return jsonify({'error': '附件仅支持jpg、png、webp或gif图片'}), 400
 
     month = datetime.now().strftime('%Y-%m')
-    target_dir = os.path.join(BASE_UPLOAD_DIR, 'payment-receipts', month)
+    target_dir = os.path.join(get_payment_receipt_attachment_path(), month)
     os.makedirs(target_dir, exist_ok=True)
-    filename = f"payment_{datetime.now().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:8]}{extension}"
+    token = uuid.uuid4().hex
+    filename = f"payment_{token}{extension}"
     file.save(os.path.join(target_dir, filename))
+    with get_db() as conn:
+        conn.execute(
+            '''INSERT INTO payment_receipt_attachments
+               (token, storage_path, filename, original_name, mimetype)
+               VALUES (?, ?, ?, ?, ?)''',
+            (token, target_dir, filename, os.path.basename(file.filename), file.mimetype or 'application/octet-stream')
+        )
     return jsonify({
         'success': True,
-        'attachmentUrl': f'/uploads/payment-receipts/{month}/{filename}'
+        'attachmentUrl': f'/api/payment-receipts/attachments/{token}'
     })
+
+
+@payment_receipts_bp.route('/attachments/<token>', methods=['GET'])
+def get_payment_receipt_attachment(token):
+    if len(token) != 32 or any(char not in '0123456789abcdef' for char in token):
+        return jsonify({'error': '附件不存在'}), 404
+    with get_db() as conn:
+        attachment = conn.execute(
+            'SELECT storage_path, filename, mimetype FROM payment_receipt_attachments WHERE token = ?',
+            (token,)
+        ).fetchone()
+    if not attachment:
+        return jsonify({'error': '附件不存在'}), 404
+    try:
+        response = send_from_directory(
+            attachment['storage_path'],
+            attachment['filename'],
+            mimetype=attachment['mimetype'],
+        )
+    except (OSError, ValueError):
+        return jsonify({'error': '附件文件不存在'}), 404
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @payment_receipts_bp.route('', methods=['POST'])

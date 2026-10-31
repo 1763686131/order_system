@@ -4024,7 +4024,14 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 - **文件字段**: `attachment`
 - **限制**: 支持 JPG、JPEG、PNG、WebP、GIF，最大 10MB
 
-接口把图片保存到 `uploads/payment-receipts/YYYY-MM/`，数据库仅保存返回的 `attachmentUrl`。
+接口把图片保存到路径配置 `receiptAttachmentPath` 对应目录下的 `YYYY-MM/` 子目录，默认 `uploads/payment-receipts/YYYY-MM/`。响应 `attachmentUrl` 为 `/api/payment-receipts/attachments/{token}`，数据库保存访问地址和上传时的实际存储目录；目录配置变更后历史附件仍可访问。
+
+### 12.3.1 读取收款附件
+
+- **URL**: `/api/payment-receipts/attachments/{token}`
+- **Method**: `GET`
+
+使用上传响应中的不透明令牌读取图片；收款单草稿删除或附件替换后，不再被单据引用的文件会同步清理。
 
 ### 12.4 新增收款单草稿
 
@@ -4042,7 +4049,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
   "discountAmount": 100,
   "creator": "王醒",
   "remark": "9月货款",
-  "attachmentUrl": "/uploads/payment-receipts/2026-09/payment_xxx.jpg"
+  "attachmentUrl": "/api/payment-receipts/attachments/{token}"
 }
 ```
 
@@ -4371,7 +4378,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 模块前缀：`/api/settings`
 
-系统路径配置保存在 SQLite 的 `system_settings` 表中。检测报告模块使用键 `reports.path` 保存报告根目录；银行卡背景图和银行图标分别使用 `bank_cards.bg_path`、`bank_cards.icon_path`。相关上传和静态访问接口都会在请求时读取这些配置。
+系统路径配置保存在 SQLite 的 `system_settings` 表中。检测报告模块使用键 `reports.path` 保存报告根目录；银行卡背景图和银行图标分别使用 `bank_cards.bg_path`、`bank_cards.icon_path`；收款单附件和供应商付款单附件分别使用 `payment_receipts.attachment_path`、`supplier_payments.attachment_path`。相关上传接口读取当前目录，附件记录保留各文件原存储目录，因此修改配置不影响历史附件访问。默认目录分别为 `uploads/payment-receipts` 和 `uploads/supplier-payments`。
 
 同属 `/api/settings` 的固固助手服务商配置接口见 [第 20 章](#20-gugu-ai)，其读取和写入均要求 `admin.route.system.settings` 权限。
 
@@ -4379,7 +4386,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 
 - **URL**: `/api/settings/paths`
 - **Method**: `GET`
-- **说明**: 获取当前检测报告、公司资料、回单上传路径以及银行卡背景图和银行图标上传路径。
+- **说明**: 获取当前检测报告、公司资料、回单、收款单附件、供应商付款单附件、银行卡背景图和银行图标上传路径。
 
 **响应示例**:
 
@@ -4390,6 +4397,8 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
     "reportPath": "/mnt/nas/reports",
     "documentPath": "/var/data/documents",
     "receiptPath": "/var/data/receipts",
+    "receiptAttachmentPath": "/app/uploads/payment-receipts",
+    "paymentAttachmentPath": "/app/uploads/supplier-payments",
     "bankCardBgPath": "/app/uploads/bank-cards/backgrounds",
     "bankIconPath": "/app/uploads/bank-cards/icons",
     "reportPathConfigured": true,
@@ -4413,7 +4422,7 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
 - **URL**: `/api/settings/paths`
 - **Method**: `PUT`
 - **Content-Type**: `application/json`
-- **说明**: 保存系统路径配置。`reportPath` 必须是后端服务器可访问的已存在文件夹，并且至少具有读取权限。
+- **说明**: 保存系统路径配置。收款/付款附件目录保存时自动创建；两个附件路径、银行卡图片路径必须可读写。`reportPath` 必须是后端服务器可访问的已存在文件夹，并且至少具有读取权限。
 
 **请求示例**:
 
@@ -4422,6 +4431,8 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
   "reportPath": "/mnt/nas/reports",
   "documentPath": "/var/data/documents",
   "receiptPath": "/var/data/receipts",
+  "receiptAttachmentPath": "/app/uploads/payment-receipts",
+  "paymentAttachmentPath": "/app/uploads/supplier-payments",
   "bankCardBgPath": "/app/uploads/bank-cards/backgrounds",
   "bankIconPath": "/app/uploads/bank-cards/icons"
 }
@@ -4437,6 +4448,8 @@ GET /api/stock-movements?type=raw-material&productId=3&storeId=2&warehouseId=1&l
     "reportPath": "/mnt/nas/reports",
     "documentPath": "/var/data/documents",
     "receiptPath": "/var/data/receipts",
+    "receiptAttachmentPath": "/app/uploads/payment-receipts",
+    "paymentAttachmentPath": "/app/uploads/supplier-payments",
     "bankCardBgPath": "/app/uploads/bank-cards/backgrounds",
     "bankIconPath": "/app/uploads/bank-cards/icons",
     "bankCardBgStatus": {
@@ -6795,7 +6808,7 @@ SQLite 支持**多读一写**模式：
 
 ### 私有财务附件
 
-`POST /api/supplier-finance/attachments` 使用 multipart 字段 `storeId/attachment`，需付款或发票新增/编辑权限。支持 PDF/JPG/PNG/WEBP，单文件最多 10MB、单据最多 10 个附件，校验扩展名、MIME 和文件头。返回 `{name,url}`，单据 `attachments` 使用该对象数组。
+`POST /api/supplier-finance/attachments` 使用 multipart 字段 `storeId/attachment`，可选字段 `purpose=payment|invoice`，缺省为 `invoice`；需对应付款或发票新增/编辑权限。付款用途文件存入路径配置 `paymentAttachmentPath`，默认 `uploads/supplier-payments/`；发票用途沿用采购财务附件目录。支持 PDF/JPG/PNG/WEBP，单文件最多 10MB、单据最多 10 个附件，校验扩展名、MIME 和文件头。返回 `{name,url}`，单据 `attachments` 使用该对象数组。文件记录保存实际目录，修改付款附件路径不改变已上传文件的下载位置。
 
 `GET /api/supplier-finance/attachments/{token}` 需付款/发票/应付菜单权限之一并校验附件门店，强制下载且私有禁止缓存；不可经 `/uploads/supplier-finance/...` 公共路径访问。单据保存会验证附件确为已上传且属于当前门店。
 
