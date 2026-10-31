@@ -76,7 +76,7 @@
             <col class="checkbox-col"><col class="date-col"><col class="number-col">
             <col class="customer-col"><col class="money-col"><col class="money-col">
             <col class="money-col"><col class="money-col"><col class="creator-col">
-            <col class="status-col"><col class="remark-col"><col class="operation-col">
+            <col class="status-col"><col class="voucher-col"><col class="remark-col"><col class="operation-col">
           </colgroup>
           <thead>
             <tr>
@@ -98,6 +98,7 @@
               <th class="money-cell">{{ paymentMode ? '新增预付款' : '本次预收' }}</th>
               <th>制单人</th>
               <th class="center-cell">审核状态</th>
+              <th class="center-cell">凭证</th>
               <th>备注</th>
               <th class="center-cell">操作</th>
             </tr>
@@ -105,11 +106,11 @@
           <tbody>
             <template v-if="loading">
               <tr v-for="index in 6" :key="`loading-${index}`" class="skeleton-row">
-                <td v-for="cell in 12" :key="cell"><span></span></td>
+                <td v-for="cell in 13" :key="cell"><span></span></td>
               </tr>
             </template>
             <tr v-else-if="pagedReceipts.length === 0">
-              <td colspan="12" class="empty-cell">
+              <td colspan="13" class="empty-cell">
                 <div class="empty-mark">
                   <svg viewBox="0 0 24 24">
                     <path d="M4 5h16v15H4zM8 3h8v4H8zM8 11h8M8 15h5"></path>
@@ -147,6 +148,19 @@
                 <span :class="['status-badge', `status-${item.status}`]">
                   <i></i>{{ statusLabel(item.status) }}
                 </span>
+              </td>
+              <td class="center-cell">
+                <button
+                  v-if="voucherFiles(item).length"
+                  class="action-button action-voucher"
+                  type="button"
+                  :title="`查看${item.documentNo}的凭证`"
+                  @click="openVoucherPreview(item)"
+                >
+                  <Image :size="14" aria-hidden="true" />凭证
+                  <span v-if="voucherFiles(item).length > 1">{{ voucherFiles(item).length }}</span>
+                </button>
+                <span v-else>-</span>
               </td>
               <td :title="item.remark || '-'">{{ item.remark || '-' }}</td>
               <td class="operation-cell">
@@ -200,7 +214,7 @@
               <td :class="{ 'money-cell': !paymentMode }">{{ paymentMode ? '' : formatMoney(totals.discountAmount) }}</td>
               <td class="money-cell">{{ formatMoney(totals.writeoffAmount) }}</td>
               <td class="money-cell">{{ formatMoney(totals.advanceAmount) }}</td>
-              <td colspan="4"></td>
+              <td colspan="5"></td>
             </tr>
           </tfoot>
         </table>
@@ -225,6 +239,12 @@
       </footer>
     </section>
     </template>
+    <FinanceAttachmentPreview
+      v-if="voucherPreview"
+      :title="`${voucherPreview.documentNo} · 凭证`"
+      :files="voucherPreview.files"
+      @close="voucherPreview = null"
+    />
     <SupplierDocumentDialog v-if="paymentDialogOpen && paymentMode" :key="paymentDocumentId || 'new-payment'" mode="payment" :document-id="paymentDocumentId" :options="supplierOptions" :initial-supplier-id="paymentSupplierId" :initial-store-id="paymentStoreId" @close="closePayment" @updated="loadData" />
     <CustomModal :visible="Boolean(confirmation)" :title="confirmation?.title || (confirmation?.action === 'audit' ? '审核付款单' : confirmation?.action === 'delete' ? '删除付款单' : '反审核付款单')" :message="confirmation?.message || ''" :danger="confirmation?.action !== 'audit'" :confirm-disabled="Boolean(busyId)" @confirm="performPaymentAction" @cancel="cancelConfirmation" />
 
@@ -430,7 +450,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChevronLeft, ChevronRight, ListChecks, Paperclip, RefreshCw, Save, Search, SquareCheck, X } from '@lucide/vue'
+import { ChevronLeft, ChevronRight, Image, ListChecks, Paperclip, RefreshCw, Save, Search, SquareCheck, X } from '@lucide/vue'
 import * as XLSX from 'xlsx'
 import request from '@/api/request'
 import { useUserStore } from '@/stores/user'
@@ -439,6 +459,7 @@ import SupplierDocumentDialog from '@/components/admin/purchase/SupplierDocument
 import SupplierRefundPanel from '@/components/admin/finance/SupplierRefundPanel.vue'
 import CustomModal from '@/components/CustomModal.vue'
 import FinanceDocumentDialog from '@/components/common/FinanceDocumentDialog.vue'
+import FinanceAttachmentPreview from '@/components/common/FinanceAttachmentPreview.vue'
 
 const props = defineProps({ mode: { type: String, default: 'receipt', validator: value => ['receipt', 'payment'].includes(value) } })
 const route = useRoute()
@@ -509,6 +530,7 @@ const busyId = ref(null)
 const modalVisible = ref(false)
 const editingId = ref(null)
 const saving = ref(false)
+const voucherPreview = ref(null)
 const attachmentInput = ref(null)
 const attachmentFile = ref(null)
 const attachmentPreview = ref('')
@@ -527,6 +549,15 @@ let receivableRequestToken = 0
 let modalRequestToken = 0
 
 const notice = reactive({ visible: false, type: 'success', message: '' })
+
+const voucherFiles = item => paymentMode.value
+  ? (Array.isArray(item.attachments) ? item.attachments.filter(file => file?.url) : [])
+  : (item.attachmentUrl ? [{ name: '收款凭证', url: item.attachmentUrl }] : [])
+
+const openVoucherPreview = item => {
+  const files = voucherFiles(item)
+  if (files.length) voucherPreview.value = { documentNo: item.documentNo, files }
+}
 
 const todayText = () => {
   const now = new Date()
@@ -1206,6 +1237,7 @@ watch(() => route.query.create, value => {
 })
 watch(() => route.query.documentId, id => { if (paymentMode.value && id && !refundTab.value) openPayment(Number(id)) })
 watch(() => props.mode, async () => {
+  voucherPreview.value = null
   cancelConfirmation()
   resetForm()
   Object.assign(paymentFilters, { keyword: '', status: '', startDate: '', endDate: '' })
@@ -1259,7 +1291,7 @@ svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;str
 .button-secondary{color:#445066;background:#fff;border-color:var(--border-strong)}.button-secondary:hover{color:var(--accent-dark);background:var(--accent-soft);border-color:var(--accent-border)}
 .icon-button{display:inline-flex;width:36px;height:36px;align-items:center;justify-content:center;padding:0;color:#667085;background:#fff;border:1px solid var(--border-strong);border-radius:5px;cursor:pointer}.icon-button:hover:not(:disabled){color:var(--accent-dark);background:var(--accent-soft)}.icon-button:disabled{opacity:.45}.icon-button svg{width:17px;height:17px}
 .spinning{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}.table-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-x:contain}
-.records-table{width:100%;min-width:1440px;border-collapse:collapse;table-layout:fixed}.checkbox-col{width:44px}.date-col{width:104px}.number-col{width:150px}.customer-col{width:170px}.money-col{width:112px}.creator-col{width:80px}.status-col{width:100px}.remark-col{width:130px}.operation-col{width:220px}
+.records-table{width:100%;min-width:1540px;border-collapse:collapse;table-layout:fixed}.checkbox-col{width:44px}.date-col{width:104px}.number-col{width:150px}.customer-col{width:170px}.money-col{width:112px}.creator-col{width:80px}.status-col{width:100px}.voucher-col{width:100px}.remark-col{width:130px}.operation-col{width:220px}
 .records-table th{height:45px;padding:0 12px;color:#566176;background:#f8fafc;border-bottom:1px solid var(--border);font-size:12px;font-weight:650;text-align:left;white-space:nowrap}
 .records-table td{height:57px;padding:9px 12px;overflow:hidden;color:#344054;border-bottom:1px solid #edf1f5;text-overflow:ellipsis;white-space:nowrap}.records-table tbody tr:hover{background:rgba(var(--accent-rgb),.08)}.records-table tbody tr.selected{background:rgba(var(--accent-rgb),.12)}
 .center-cell,.operation-cell{text-align:center!important}.center-cell input{width:15px;height:15px;accent-color:var(--accent);cursor:pointer}.money-cell{text-align:right!important;font-variant-numeric:tabular-nums}
@@ -1269,6 +1301,7 @@ svg{fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;str
 .row-actions{justify-content:center;flex-wrap:wrap}.action-button{display:inline-flex;height:30px;align-items:center;justify-content:center;padding:0 10px;border:1px solid transparent;border-radius:4px;cursor:pointer;font-size:12px;font-weight:650;white-space:nowrap}.action-button:disabled{opacity:.45}
 .action-audit{color:#fff;background:#0f9f78}.action-reverse{color:#8a470c;background:#fff7e8;border-color:#f3c887}.action-print{color:#445066;background:#fff;border-color:var(--border-strong)}.action-edit{color:#fff;background:#2563eb}.action-delete{color:#dc3545;background:#fff;border-color:#f0a5ad}
 .action-audit:hover{background:#08745a}.action-reverse:hover{background:#ffedc8}.action-print:hover{background:#f1f5f9}.action-edit:hover{background:#1d4ed8}.action-delete:hover{color:#fff;background:#dc3545}
+.action-voucher{gap:5px;color:var(--accent-dark);background:var(--accent-soft);border-color:var(--accent-border)}.action-voucher:hover{background:#d4f1e6}.action-voucher span{font-size:11px}
 .records-table tfoot{background:#f8fafc;border-top:2px solid var(--border);font-weight:700}.total-label{padding-left:20px!important}.empty-cell{height:290px!important;color:var(--text-muted)!important;text-align:center}.empty-cell strong,.empty-cell span{display:block}.empty-cell strong{margin-top:11px;color:#4c586b}.empty-cell span{margin-top:5px;font-size:12px}
 .empty-mark{display:inline-flex;width:48px;height:48px;align-items:center;justify-content:center;color:#aab4c0;background:#f1f4f7;border-radius:50%}.empty-mark svg{width:24px;height:24px}.skeleton-row span{display:block;width:78%;height:10px;background:linear-gradient(90deg,#eef2f5 25%,#e2e8ee 50%,#eef2f5 75%);background-size:200% 100%;border-radius:3px;animation:shimmer 1.25s linear infinite}@keyframes shimmer{to{background-position:-200% 0}}
 .table-footer{display:flex;min-width:0;min-height:58px;align-items:center;justify-content:space-between;gap:12px;padding:10px 16px;color:var(--text-secondary);border-top:1px solid var(--border);font-size:12px}.table-footer strong{color:var(--text)}.pagination select{height:32px;padding:0 8px;border:1px solid var(--border-strong);border-radius:5px}.pagination button{display:inline-flex;width:31px;height:31px;align-items:center;justify-content:center;color:var(--text-secondary);background:#fff;border:1px solid var(--border-strong);border-radius:5px}.pagination button:disabled{opacity:.45}.pagination svg{width:15px;height:15px}.page-number{min-width:58px;text-align:center}

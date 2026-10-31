@@ -1055,7 +1055,7 @@ const canManageAi = computed(() =>
 // 控制各区块展开/收起
 const expandedSections = reactive({
   nomi: route.query.section === 'nomi',
-  path: true,
+  path: false,
   message: false,
   business: false,
   security: false,

@@ -26,6 +26,7 @@ import { createPinia } from 'pinia'
 import { createRouter, createMemoryHistory, RouterView } from 'vue-router'
 import PaymentHistory from '/src/views/admin/finance/PaymentHistory.vue'
 import request from '/src/api/request.js'
+import { useUserStore } from '/src/stores/user.js'
 
 const result = { errors: [], checks: [] }
 window.addEventListener('error', event => result.errors.push(event.message))
@@ -33,9 +34,9 @@ window.addEventListener('unhandledrejection', event => result.errors.push(String
 const assert = (condition, message) => { if (!condition) throw new Error(message) }
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms))
 const settle = async () => { await nextTick(); await pause(50) }
-const waitFor = async predicate => {
+const waitFor = async (predicate, label = 'UI state') => {
   for (let i = 0; i < 100; i++) { if (predicate()) return; await pause(50) }
-  throw new Error('Timed out waiting for UI state')
+  throw new Error('Timed out waiting for ' + label)
 }
 const stores = [{ id: 1, name: 'Store A', status: 'active' }, { id: 2, name: 'Store B', status: 'active' }]
 const customers = [{ id: 1, storeId: 1, customerName: 'Customer A', customerCode: '001', receivable: 250 },
@@ -49,9 +50,41 @@ let failCustomer = false
 let delayCustomer = false
 let includeMoreDocuments = false
 let saved = null
+let failPreview = false
+const attachmentCalls = []
+const canvas = document.createElement('canvas')
+canvas.width = 640
+canvas.height = 400
+const context = canvas.getContext('2d')
+context.fillStyle = '#e9f8f3'
+context.fillRect(0, 0, 640, 400)
+context.fillStyle = '#08745a'
+context.font = '32px sans-serif'
+context.fillText('Payment voucher', 60, 100)
+const voucherImage = await new Promise(resolve => canvas.toBlob(resolve, 'image/png'))
+const payments = [
+  { id: 11, documentNo: 'FK-TEST', businessDate: '2026-10-31', supplierId: 1, supplierName: 'Supplier A',
+    storeId: 1, storeName: 'Store A', status: 'draft', paymentAmount: 100, allocatedAmount: 100,
+    advanceAmount: 0, createdBy: 'Tester', remark: 'Payment with vouchers',
+    attachments: [
+      { name: 'first.png', url: '/api/supplier-finance/attachments/image-one' },
+      { name: 'second.png', url: '/api/supplier-finance/attachments/image-two' },
+      { name: 'voucher.pdf', url: '/api/supplier-finance/attachments/document' }
+    ] },
+  { id: 12, documentNo: 'FK-EMPTY', businessDate: '2026-10-31', supplierId: 1, supplierName: 'Supplier A',
+    storeId: 1, storeName: 'Store A', status: 'draft', paymentAmount: 0, attachments: [] }
+]
 request.defaults.adapter = async config => {
   let data
-  if (config.url === '/stores') data = stores
+  if (config.responseType === 'blob') {
+    attachmentCalls.push(config)
+    assert(request.getUri(config) === config.url, 'Voucher requests must preserve API and legacy upload URLs')
+    assert(config.headers['X-Client-Surface'], 'Private voucher requests must retain client headers')
+    if (failPreview) throw new Error('Simulated voucher loading failure')
+    data = config.url.endsWith('/document') ? new Blob(['%PDF-1.4'], { type: 'application/pdf' }) : voucherImage
+  } else if (config.url === '/supplier-finance/options') data = { stores, suppliers: [], bankAccounts: [] }
+  else if (config.url === '/supplier-payments') data = { items: payments }
+  else if (config.url === '/stores') data = stores
   else if (config.url === '/customers') data = customers
   else if (config.url === '/bank-accounts/options') data = { items: [{ id: 1, storeId: 1, accountName: 'Bank', isDefault: true }] }
   else if (config.url === '/payment-receipts/next-number') data = { documentNo: 'SK-TEST' }
@@ -81,11 +114,16 @@ request.defaults.adapter = async config => {
   else throw new Error('Unexpected API request: ' + config.url)
   return { data, status: 200, statusText: 'OK', headers: {}, config }
 }
-const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/', component: PaymentHistory }] })
+const router = createRouter({ history: createMemoryHistory(), routes: [
+  { path: '/', component: PaymentHistory },
+  { path: '/payments', component: PaymentHistory, props: { mode: 'payment' } }
+] })
 await router.push('/')
 await router.isReady()
 const app = createApp({ render: () => h(RouterView) })
-app.use(createPinia()).use(router)
+const pinia = createPinia()
+useUserStore(pinia).$patch({ isSuperAdmin: true, allStores: true })
+app.use(pinia).use(router)
 app.config.errorHandler = error => result.errors.push(String(error.stack || error))
 app.mount('#app')
 const form = () => document.querySelector('#receipt-document-form')
@@ -190,6 +228,8 @@ try {
   await change(storeSelect(), '2')
   await change(storeSelect(), '1')
   await change(customerSelect(), '1')
+  await waitFor(() => Boolean(autoHint()))
+  modeButton('manual').click()
   await waitFor(() => checks().length === 10 && document.querySelector('.receipt-allocation-pagination'))
   assert(document.querySelectorAll('.receipt-allocation-table tbody tr').length === 10, 'The allocation list must show ten rows on its first page')
   assert(document.querySelector('.receipt-allocation-pagination .page-number').textContent.trim() === '1 / 2', 'The allocation pager must show the current and total page')
@@ -206,6 +246,71 @@ try {
   assert(scroll.getBoundingClientRect().right <= dialog.right, 'The debt table must scroll inside the modal on mobile')
   assert(result.errors.length === 0, 'The component must not report Vue errors')
   result.checks.push('store/customer linkage', 'load failure and retry', 'stale request rejection', 'responsive modal')
+
+  document.querySelector('.sf-modal-layer .sf-header button').click()
+  await waitFor(() => !form(), 'receipt form to close')
+  const headers = [...document.querySelectorAll('.records-table th')].map(th => th.textContent.trim())
+  assert(headers.length === 13 && headers.indexOf('凭证') + 1 === headers.indexOf('备注'), 'Voucher column must appear immediately before remarks')
+  assert(!document.querySelector('.action-voucher'), 'Receipts without an attachment must not show a photo button')
+  saved.attachmentUrl = '/uploads/payment-receipts/2026-10/legacy.png'
+  document.querySelector('.toolbar-actions .icon-button').click()
+  await waitFor(() => document.querySelector('.action-voucher'), 'receipt voucher row')
+  const preview = () => document.querySelector('.finance-attachment-preview')
+  const image = () => preview()?.querySelector('img')
+  const waitForImage = () => waitFor(() => image()?.complete && image().naturalWidth === 640)
+  const closePreview = async () => {
+    preview().querySelector('[aria-label="关闭预览"]').click()
+    await waitFor(() => !preview())
+    assert(document.body.style.overflow === '', 'Closing a preview must restore page scrolling')
+  }
+  document.querySelector('.action-voucher').click()
+  await waitForImage()
+  assert(preview().open && !preview().querySelector('.voucher-pagination'), 'Single receipt vouchers must open an image preview without paging')
+  const bounds = preview().getBoundingClientRect()
+  assert(bounds.left >= 0 && bounds.right <= innerWidth + 1 && bounds.top >= 0 && bounds.bottom <= innerHeight + 1, 'Voucher preview must fit the viewport')
+  assert(image().getBoundingClientRect().right <= bounds.right, 'Voucher image must fit inside the dialog')
+  assert(preview().querySelector('[download]')?.href.startsWith('blob:'), 'Voucher previews must offer the original file for download')
+  const previewUrl = image().src
+  await closePreview()
+  assert(await fetch(previewUrl).then(() => false, () => true), 'Closing a preview must release the image object URL')
+  saved.attachmentUrl = '/api/payment-receipts/attachments/current'
+  document.querySelector('.toolbar-actions .icon-button').click()
+  await settle()
+  document.querySelector('.action-voucher').click()
+  await waitForImage()
+  assert(attachmentCalls.at(-1).url === saved.attachmentUrl, 'Token-based receipt attachments must load at their original API URL')
+  preview().dispatchEvent(new Event('cancel', { cancelable: true }))
+  await waitFor(() => !preview())
+  result.checks.push('voucher column placement', 'conditional photo buttons', 'legacy and token receipt URLs', 'responsive image preview', 'download and object URL cleanup', 'Escape close')
+
+  await router.push('/payments')
+  await waitFor(() => document.querySelectorAll('.records-table tbody tr').length === 2, 'payment list')
+  await settle()
+  const rows = document.querySelectorAll('.records-table tbody tr')
+  assert(rows[0].querySelector('.action-voucher')?.textContent.includes('3') && !rows[1].querySelector('.action-voucher'), 'Payment photo buttons must show attachment counts only when files exist')
+  document.querySelector('.action-voucher').click()
+  await waitForImage()
+  assert(preview().querySelector('.voucher-pagination span').textContent.trim() === '1 / 3', 'Payment preview must begin with its first attachment')
+  assert(preview().querySelector('[aria-label="上一张"]').disabled, 'First attachment must disable the previous button')
+  preview().querySelector('[aria-label="下一张"]').click()
+  await waitFor(() => preview()?.querySelector('.voucher-filename').textContent === 'second.png')
+  await waitForImage()
+  preview().dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+  await waitFor(() => preview()?.querySelector('.voucher-message a'))
+  assert(!image() && preview().querySelector('.voucher-message a').download === 'voucher.pdf', 'PDF attachments must offer a download without a broken image')
+  assert(preview().querySelector('[aria-label="下一张"]').disabled, 'Last attachment must disable the next button')
+  preview().querySelector('[aria-label="上一张"]').click()
+  await waitForImage()
+  await closePreview()
+  failPreview = true
+  document.querySelector('.action-voucher').click()
+  await waitFor(() => preview()?.querySelector('[role="alert"]'))
+  failPreview = false
+  preview().querySelector('.voucher-retry').click()
+  await waitForImage()
+  await closePreview()
+  assert(result.errors.length === 0, 'Voucher previews must not report Vue errors')
+  result.checks.push('multiple payment images', 'previous and next controls', 'keyboard navigation', 'PDF fallback', 'preview failure and retry')
   result.pass = true
 } catch (error) { result.errors.push(String(error.stack || error)); result.pass = false }
 document.querySelector('#result').textContent = JSON.stringify(result)
