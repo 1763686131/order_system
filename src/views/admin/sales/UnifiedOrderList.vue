@@ -658,10 +658,10 @@
                 class="mobile-order-product"
               >
                 <strong class="mobile-order-product-name">{{ getGoodsItemName(item) }}</strong>
-                <strong class="mobile-order-product-amount">{{ getMobileGoodsAmount(order, item) }}</strong>
+                <strong class="mobile-order-product-amount">¥{{ getMobileGoodsAmount(order, item) }}</strong>
                 <span class="mobile-order-product-spec">{{ getGoodsItemSpec(item) }}</span>
                 <span class="mobile-order-product-calc">
-                  {{ item.quantity ?? '-' }} × {{ formatMobileMoney(getMobileGoodsPrice(order, item)) }}
+                  {{ item.quantity ?? '-' }}{{ item.unit || '' }} × ¥{{ formatMobileMoney(getMobileGoodsPrice(order, item)) }}
                 </span>
               </div>
             </section>
