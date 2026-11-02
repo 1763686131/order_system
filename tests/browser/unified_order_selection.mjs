@@ -448,6 +448,15 @@ const checkMobileCreation = async () => {
   await addProduct()
   editor().querySelector('[aria-label="删除第1项商品"]').click()
   await settle()
+  const draftDeleteConfirm = document.querySelector('.confirm-dialog')
+  assert(draftDeleteConfirm?.textContent.includes('确认删除商品') && draftDeleteConfirm.textContent.includes('Added product'), 'Deleting a draft product must ask for confirmation')
+  draftDeleteConfirm.querySelector('.confirm-dialog-cancel').click()
+  await settle()
+  assert(draft().querySelector('.mobile-order-product') && createAttempts === 0, 'Cancelling product deletion must preserve the draft product')
+  editor().querySelector('[aria-label="删除第1项商品"]').click()
+  await settle()
+  document.querySelector('.confirm-dialog-submit').click()
+  await settle()
   assert(!draft().querySelector('.mobile-order-product') && createAttempts === 0, 'A new draft must allow removing its last product locally')
   await addProduct()
   editor().querySelector('.cancel-button').click()
@@ -801,7 +810,7 @@ const checkInlineEditing = async () => {
     })
     await settle()
     window.inlineScreenshotName = name
-    window.inlineScreenshotClip = { x: 0, y: 0, width: innerWidth, height: dialog() ? innerHeight : document.documentElement.scrollHeight, scale: 1 }
+    window.inlineScreenshotClip = { x: 0, y: 0, width: innerWidth, height: dialog() || document.querySelector('.confirm-dialog') ? innerHeight : document.documentElement.scrollHeight, scale: 1 }
     await new Promise(resolve => { window.continueInlineTest = resolve })
   }
   card().querySelector('.mobile-order-select input').click()
@@ -875,13 +884,12 @@ const checkInlineEditing = async () => {
   assert(row(0).textContent.includes('1kg') && !row(0).textContent.includes('2kg'), 'Order cancellation must also discard confirmed product drafts')
   assert(saveAttempts === 0, 'Cancel must not send a save request')
 
-  card().querySelector('.mobile-order-action.is-primary').click()
+  card().querySelector('.row-menu-trigger').click()
   await settle()
-  document.querySelector('.detail-modal-footer .button-edit').click()
+  document.querySelector('.row-action-menu [role="menuitem"]').click()
   await settle()
-  for (let count = 0; count < 20 && document.querySelector('.detail-modal'); count++) await pause()
-  assert(editor() && !document.querySelector('.detail-modal'), 'Editing from mobile detail must return to the inline card')
-  assert(router.currentRoute.value.name === 'admin-sales', 'Mobile detail edit must not navigate')
+  assert(editor() && !document.querySelector('.detail-modal'), 'Reopening mobile edit must return to the inline card')
+  assert(router.currentRoute.value.name === 'admin-sales', 'Reopening mobile edit must not navigate')
   await setValue(field('收货人'), 'Updated contact')
   await setValue(field('收货电话'), '13900000000')
   await setValue(field('客户地址'), 'Updated address')
@@ -940,7 +948,21 @@ const checkInlineEditing = async () => {
   dialog().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
   await settle()
   assert(!dialog() && row(1).textContent.includes('4kg'), 'Escape must cancel product edits')
+  const totalBeforeDelete = field('应收金额').value
   editor().querySelector('[aria-label="删除第2项商品"]').click()
+  await settle()
+  const deleteConfirmation = document.querySelector('.confirm-dialog')
+  assert(deleteConfirmation?.textContent.includes('确认删除商品') && deleteConfirmation.textContent.includes('Added product'), 'Deleting a product must identify it in a confirmation dialog')
+  const confirmationRect = deleteConfirmation.getBoundingClientRect()
+  assert(confirmationRect.left >= 0 && confirmationRect.right <= innerWidth && confirmationRect.top >= 0 && confirmationRect.bottom <= innerHeight, 'Product deletion confirmation must fit the mobile viewport')
+  assert(deleteConfirmation.scrollWidth <= deleteConfirmation.clientWidth, 'Product deletion confirmation must not overflow horizontally')
+  await captureVisual('delete-product-confirm')
+  deleteConfirmation.querySelector('.confirm-dialog-cancel').click()
+  await settle()
+  assert(row(1)?.textContent.includes('Added product') && field('应收金额').value === totalBeforeDelete, 'Cancelling deletion must preserve the product and totals')
+  editor().querySelector('[aria-label="删除第2项商品"]').click()
+  await settle()
+  document.querySelector('.confirm-dialog-submit').click()
   await settle()
   assert(!row(1) && saveAttempts === 0, 'Removing a product must remain a local draft change')
   assert(Number(field('应收金额').value) === expectedFirst + 2, 'Removing a product must recalculate totals')
@@ -1010,7 +1032,7 @@ const checkInlineEditing = async () => {
   await waitForOrders()
   assert(!document.querySelector('.mobile-order-editor'), 'Switching list modes must clear inline editing state')
   assert(results.errors.length === 0, 'Inline editing must not cause Vue runtime errors')
-  results.checks = ['original layout preserved', 'inline menu and detail edit', 'order draft cancellation', 'product dialog confirm and cancel', 'local product add and delete', 'no request before final save', 'product name/specification/code search', 'store and warehouse filtering', 'search empty state and selection validation', 'keyboard selection and IME', 'unchanged product preservation', 'package conversion', 'tax totals', 'validation', 'failed save and retry', 'duplicate prevention', 'metadata preservation', 'permissions', 'mobile layout', 'mode switch cleanup']
+  results.checks = ['original layout preserved', 'inline menu edit and re-entry', 'order draft cancellation', 'product dialog confirm and cancel', 'product deletion confirmation and cancellation', 'local product add and delete', 'no request before final save', 'product name/specification/code search', 'store and warehouse filtering', 'search empty state and selection validation', 'keyboard selection and IME', 'unchanged product preservation', 'package conversion', 'tax totals', 'validation', 'failed save and retry', 'duplicate prevention', 'metadata preservation', 'permissions', 'mobile layout', 'mode switch cleanup']
 }
 const checkPersistedSelection = async () => {
   const store = useOrderSelectionStore(pinia)

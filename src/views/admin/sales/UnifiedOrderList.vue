@@ -728,7 +728,7 @@
                 </span>
                 <div v-if="isMobileOrderEditing(order.id)" class="mobile-order-product-actions">
                   <button class="mobile-order-edit-item" type="button" :aria-label="`修改第${index + 1}项商品`" title="修改商品" :disabled="editor.saving" @click="editor.editItem(index)"><Pencil aria-hidden="true" /></button>
-                  <button class="mobile-order-delete-item" type="button" :aria-label="`删除第${index + 1}项商品`" title="删除商品" :disabled="editor.saving || (!isMobileOrderDraft(order.id) && editor.form.items.length === 1)" @click="editor.removeItem(index)"><Trash2 aria-hidden="true" /></button>
+                  <button class="mobile-order-delete-item" type="button" :aria-label="`删除第${index + 1}项商品`" title="删除商品" :disabled="editor.saving || (!isMobileOrderDraft(order.id) && editor.form.items.length === 1)" @click="handleMobileRemoveItem(order, editor, index)"><Trash2 aria-hidden="true" /></button>
                 </div>
               </div>
               <p v-if="isMobileOrderDraft(order.id) && !editor.form.items.length" class="mobile-order-draft-empty">暂无商品</p>
@@ -1764,6 +1764,21 @@ const resolveConfirmation = (confirmed) => {
   confirmationResolver = null
   confirmation.value.visible = false
   resolver?.(confirmed)
+}
+
+const handleMobileRemoveItem = async (order, editor, index) => {
+  if (editor.saving || !isMobileOrderEditing(order.id)) return
+  const item = editor.form.items[index]
+  if (!item || (!isMobileOrderDraft(order.id) && editor.form.items.length === 1)) return
+  const confirmed = await requestConfirmation({
+    title: '确认删除商品',
+    message: `确定删除商品“${item.goodsName || `第${index + 1}项商品`}”吗？删除后订单金额和件数将重新计算。`,
+    confirmText: '删除商品',
+    danger: true
+  })
+  if (!confirmed || !isMobileOrderEditing(order.id) || editor.saving) return
+  const currentIndex = editor.form.items.findIndex(candidate => candidate.key === item.key)
+  if (currentIndex !== -1) editor.removeItem(currentIndex)
 }
 
 // 发货方式输入
