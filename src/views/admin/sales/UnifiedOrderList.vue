@@ -583,6 +583,22 @@
           :class="{ selected: isSelected(order.id), expanded: isMobileOrderExpanded(order.id) }"
           :style="{ '--store-bg-color': getStoreColor(order) }"
         >
+          <MobileOrderEditor
+            v-slot="editor"
+            :order="order"
+            :editing="isMobileOrderEditing(order.id)"
+            :products="products"
+            :warehouses="warehouses"
+            @saved="handleMobileOrderSaved"
+            @cancel="stopMobileOrderEditing(order.id)"
+          >
+          <form
+            :class="{ 'mobile-order-editor': isMobileOrderEditing(order.id) }"
+            :data-order-editor-id="isMobileOrderEditing(order.id) ? order.id : undefined"
+            :aria-label="isMobileOrderEditing(order.id) ? '修改订单' : undefined"
+            :aria-busy="editor.saving"
+            @submit.prevent="editor.save()"
+          >
           <div class="mobile-order-strip">
             <label
               v-if="mode !== 'finance' || canDeleteSalesOrders"
@@ -601,12 +617,13 @@
               type="button"
               :aria-expanded="isMobileOrderExpanded(order.id)"
               :aria-controls="`mobile-order-body-${order.id}`"
+              :disabled="isMobileOrderEditing(order.id)"
               @click="toggleMobileOrder(order.id)"
             >
               <span class="mobile-order-strip-text">
                 <span class="mobile-order-strip-line">
                   <strong class="mobile-order-customer">{{ order.order_client || '-' }}</strong>
-                  <strong class="mobile-order-total">{{ getShouldReceive(order) }}</strong>
+                  <strong class="mobile-order-total">{{ getShouldReceive(editor.order) }}</strong>
                 </span>
                 <span class="mobile-order-strip-line mobile-order-strip-meta">
                   <span class="mobile-order-date">{{ formatDate(order) }}</span>
@@ -626,16 +643,32 @@
             :id="`mobile-order-body-${order.id}`"
             class="mobile-order-body"
           >
-
             <div class="mobile-order-contact-row">
               <div class="mobile-order-field">
                 <span>收货人</span>
-                <strong>{{ getContactPerson(order) }}</strong>
+                <input
+                  v-if="isMobileOrderEditing(order.id)"
+                  v-model.trim="editor.form.contactPerson"
+                  class="mobile-order-inline-input"
+                  aria-label="收货人"
+                  :disabled="editor.saving"
+                  required
+                />
+                <strong v-else>{{ getContactPerson(order) }}</strong>
               </div>
               <div class="mobile-order-field">
                 <span>收货电话</span>
+                <input
+                  v-if="isMobileOrderEditing(order.id)"
+                  v-model.trim="editor.form.contactPhone"
+                  class="mobile-order-inline-input"
+                  aria-label="收货电话"
+                  type="tel"
+                  :disabled="editor.saving"
+                  required
+                />
                 <a
-                  v-if="getMobilePhoneHref(order)"
+                  v-else-if="getMobilePhoneHref(order)"
                   class="mobile-order-phone"
                   :href="getMobilePhoneHref(order)"
                 >{{ getContactPhone(order) }}</a>
@@ -643,41 +676,84 @@
               </div>
               <div class="mobile-order-field mobile-order-address-field">
                 <span>客户地址</span>
-                <strong>{{ getContactAddress(order) }}</strong>
+                <textarea
+                  v-if="isMobileOrderEditing(order.id)"
+                  v-model.trim="editor.form.contactAddress"
+                  class="mobile-order-inline-input"
+                  aria-label="客户地址"
+                  rows="2"
+                  :disabled="editor.saving"
+                ></textarea>
+                <strong v-else>{{ getContactAddress(order) }}</strong>
               </div>
             </div>
 
             <section class="mobile-order-products" aria-label="商品明细">
               <div class="mobile-order-products-head">
-                <span>商品明细 · 共 {{ getMobileGoodsItems(order).length }} 项</span>
+                <span>商品明细 · 共 {{ editor.order.order_goods?.length ?? getMobileGoodsItems(order).length }} 项</span>
                 <span v-if="hasMobileTax(order)" class="mobile-order-tax-tag">含税价</span>
+                <button
+                  v-if="isMobileOrderEditing(order.id)"
+                  class="mobile-order-add-product"
+                  type="button"
+                  :disabled="editor.saving || !editor.unitsReady"
+                  @click="editor.addItem()"
+                ><Plus aria-hidden="true" />新增商品</button>
               </div>
               <div
-                v-for="(item, index) in getMobileGoodsItems(order)"
+                v-for="(item, index) in editor.order.order_goods?.length ? editor.order.order_goods : getMobileGoodsItems(order)"
                 :key="`${order.id}-mobile-item-${index}`"
                 class="mobile-order-product"
+                :class="{ 'is-editing': isMobileOrderEditing(order.id) }"
               >
                 <strong class="mobile-order-product-name">{{ getGoodsItemName(item) }}</strong>
-                <strong class="mobile-order-product-amount">¥{{ getMobileGoodsAmount(order, item) }}</strong>
+                <strong class="mobile-order-product-amount">¥{{ getMobileGoodsAmount(editor.order, item) }}</strong>
                 <span class="mobile-order-product-spec">{{ getGoodsItemSpec(item) }}</span>
                 <span class="mobile-order-product-calc">
-                  {{ item.quantity ?? '-' }}{{ item.unit || '' }} × ¥{{ formatMobileMoney(getMobileGoodsPrice(order, item)) }}
+                  {{ item.quantity ?? '-' }}{{ item.unit || '' }} × ¥{{ formatMobileMoney(getMobileGoodsPrice(editor.order, item)) }}
                 </span>
+                <div v-if="isMobileOrderEditing(order.id)" class="mobile-order-product-actions">
+                  <button class="mobile-order-edit-item" type="button" :aria-label="`修改第${index + 1}项商品`" title="修改商品" :disabled="editor.saving" @click="editor.editItem(index)"><Pencil aria-hidden="true" /></button>
+                  <button class="mobile-order-delete-item" type="button" :aria-label="`删除第${index + 1}项商品`" title="删除商品" :disabled="editor.saving || editor.form.items.length === 1" @click="editor.removeItem(index)"><Trash2 aria-hidden="true" /></button>
+                </div>
               </div>
             </section>
 
             <div class="mobile-order-summary" :class="{ 'is-finance': mode === 'finance' }">
               <div class="mobile-order-field mobile-order-money">
                 <span>应收金额</span>
-                <strong>{{ getShouldReceive(order) }}</strong>
+                <input
+                  v-if="isMobileOrderEditing(order.id)"
+                  :value="editor.order.should_receive"
+                  class="mobile-order-inline-input"
+                  aria-label="应收金额"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputmode="decimal"
+                  :disabled="editor.saving"
+                  @input="editor.changeReceivable($event.target.value)"
+                />
+                <strong v-else>{{ getShouldReceive(order) }}</strong>
               </div>
               <div v-if="mode === 'finance'" class="mobile-order-field mobile-order-money">
                 <span>已收金额</span>
-                <strong>{{ getCurrentPayment(order) }}</strong>
+                <input
+                  v-if="isMobileOrderEditing(order.id)"
+                  v-model.number="editor.form.currentPayment"
+                  class="mobile-order-inline-input"
+                  aria-label="已收金额"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  inputmode="decimal"
+                  :disabled="editor.saving"
+                />
+                <strong v-else>{{ getCurrentPayment(order) }}</strong>
               </div>
               <div class="mobile-order-field mobile-order-money">
                 <span>未收金额</span>
-                <strong>{{ getCurrentDebt(order) }}</strong>
+                <strong>{{ getCurrentDebt(editor.order) }}</strong>
               </div>
             </div>
 
@@ -727,11 +803,25 @@
               </div>
             </div>
 
-            <p v-if="order.remark" class="mobile-order-remark">
-              <span>备注</span>{{ order.remark }}
-            </p>
+            <div v-if="order.remark || isMobileOrderEditing(order.id)" class="mobile-order-remark">
+              <span>备注</span>
+              <textarea
+                v-if="isMobileOrderEditing(order.id)"
+                v-model="editor.form.orderRemark"
+                class="mobile-order-inline-input"
+                aria-label="订单备注"
+                rows="1"
+                :disabled="editor.saving"
+              ></textarea>
+              <template v-else>{{ order.remark }}</template>
+            </div>
 
-            <footer class="mobile-order-actions">
+            <p v-if="isMobileOrderEditing(order.id) && editor.error" class="mobile-order-save-error" role="alert">{{ editor.error }}</p>
+            <footer v-if="isMobileOrderEditing(order.id)" class="mobile-order-actions">
+              <button class="mobile-order-action cancel-button" type="button" :disabled="editor.saving" @click="editor.cancel()">取消</button>
+              <button class="mobile-order-action mobile-order-save-button save-button" type="submit" :disabled="editor.saving"><Check aria-hidden="true" />{{ editor.saving ? '保存中...' : '修改完成' }}</button>
+            </footer>
+            <footer v-else class="mobile-order-actions">
               <button
                 class="mobile-order-action is-primary"
                 type="button"
@@ -771,6 +861,8 @@
               </button>
             </footer>
           </div>
+          </form>
+          </MobileOrderEditor>
         </article>
       </div>
 
@@ -1415,7 +1507,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ChevronDown, Copy, FileText, Printer, Triangle } from '@lucide/vue'
+import { Check, ChevronDown, Copy, FileText, Pencil, Plus, Printer, Trash2, Triangle } from '@lucide/vue'
 import request from '@/api/request'
 import { resolveLogisticsCopySettings } from '@/api/logisticsCopy'
 import { useOrderStore } from '@/stores/order'
@@ -1438,6 +1530,7 @@ import { toChineseMoney } from '@/utils/chineseMoney'
 import { DATA_STYLE, TITLE_STYLE, exportToExcel } from '@/utils/excelExport'
 import { useAdminStickyPanel } from '@/composables/useAdminStickyPanel'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
+import MobileOrderEditor from '@/components/admin/MobileOrderEditor.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -1644,6 +1737,7 @@ onUnmounted(() => {
 // 监听 mode 变化，重新获取数据
 watch(() => props.mode, () => {
   closeActionMenu()
+  editingMobileOrderIds.value = new Set()
   fetchOrdersData()
 })
 
@@ -2487,8 +2581,23 @@ const openOrderDetail = (order) => {
 
 // 手机端订单卡片默认折叠为一行摘要，点击后展开明细；可同时展开多张
 const expandedMobileOrderIds = ref(new Set())
+const editingMobileOrderIds = ref(new Set())
 
 const isMobileOrderExpanded = (id) => expandedMobileOrderIds.value.has(id)
+const isMobileOrderEditing = (id) => editingMobileOrderIds.value.has(id)
+
+const stopMobileOrderEditing = (id) => {
+  const next = new Set(editingMobileOrderIds.value)
+  next.delete(id)
+  editingMobileOrderIds.value = next
+}
+
+const handleMobileOrderSaved = (updatedOrder) => {
+  orders.value = orders.value.map(order => order.id === updatedOrder.id ? updatedOrder : order)
+  orderStore.updateOrder(updatedOrder.id, updatedOrder)
+  stopMobileOrderEditing(updatedOrder.id)
+  showNotice('订单修改成功')
+}
 
 const toggleMobileOrder = (id) => {
   const next = new Set(expandedMobileOrderIds.value)
@@ -2634,10 +2743,21 @@ const handleEdit = (order) => {
   }))
 }
 
-// 编辑订单（跳转到编辑页面）
-const handleEditOrder = (order) => {
-  if (!canEditSalesOrders.value) return
+// 手机端在订单卡片中编辑，桌面端继续使用完整编辑页面。
+const handleEditOrder = async (order) => {
+  if (!canEditSalesOrders.value || !isSalesOrder(order) || isOrderAudited(order)) return
   closeDetailModal()
+  if (window.matchMedia('(max-width: 780px)').matches) {
+    const orderIndex = filteredOrders.value.findIndex(item => item.id === order.id)
+    if (orderIndex >= 0 && !showAll.value) {
+      currentPage.value = Math.floor(orderIndex / pageSize.value) + 1
+    }
+    expandedMobileOrderIds.value = new Set([...expandedMobileOrderIds.value, order.id])
+    editingMobileOrderIds.value = new Set([...editingMobileOrderIds.value, order.id])
+    await nextTick()
+    document.querySelector(`[data-order-editor-id="${order.id}"]`)?.scrollIntoView({ block: 'nearest' })
+    return
+  }
   openOrderTask({ name: 'admin-sales-edit', params: { id: order.id } })
 }
 
@@ -4715,6 +4835,44 @@ svg {
   overflow-wrap: anywhere;
 }
 
+.mobile-order-inline-input {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 2px 4px;
+  color: #2f3946;
+  background: #fff;
+  border: 1px solid var(--accent-border);
+  border-radius: 4px;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+textarea.mobile-order-inline-input {
+  display: block;
+  field-sizing: content;
+  resize: vertical;
+}
+
+.mobile-order-summary .mobile-order-inline-input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.mobile-order-summary .mobile-order-inline-input::-webkit-inner-spin-button,
+.mobile-order-summary .mobile-order-inline-input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.mobile-order-save-error {
+  margin: 10px 12px 0;
+  color: #b4232f;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .mobile-order-phone {
   display: inline-block;
   align-self: flex-start;
@@ -4742,12 +4900,107 @@ svg {
   font-size: 12px;
 }
 
+.mobile-order-products-head > span:first-child {
+  min-width: 0;
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+.mobile-order-add-product {
+  display: inline-flex;
+  min-height: 28px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  padding: 0 5px;
+  color: var(--accent-dark);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.mobile-order-add-product svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mobile-order-product.is-editing {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 30px;
+  column-gap: 6px;
+}
+
+.mobile-order-product.is-editing .mobile-order-product-name {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.mobile-order-product.is-editing .mobile-order-product-amount {
+  grid-column: 2;
+  grid-row: 1;
+  overflow-wrap: anywhere;
+}
+
+.mobile-order-product.is-editing .mobile-order-product-spec {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.mobile-order-product.is-editing .mobile-order-product-calc {
+  grid-column: 2;
+  grid-row: 2;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.mobile-order-product-actions {
+  display: flex;
+  grid-column: 3;
+  grid-row: 1 / span 2;
+  flex-direction: column;
+  align-items: center;
+}
+
+.mobile-order-product-actions button {
+  display: inline-flex;
+  width: 30px;
+  height: 28px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: #1677ff;
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.mobile-order-product-actions .mobile-order-delete-item {
+  color: #b4232f;
+}
+
+.mobile-order-product-actions svg {
+  width: 15px;
+  height: 15px;
+}
+
+.mobile-order-editor .mobile-order-action:disabled,
+.mobile-order-editor .mobile-order-add-product:disabled,
+.mobile-order-product-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .mobile-order-tax-tag {
+  flex: 0 0 auto;
   padding: 1px 6px;
   color: var(--accent-dark);
   background: var(--accent-soft);
   border-radius: 4px;
   font-size: 11px;
+  white-space: nowrap;
 }
 
 .mobile-order-product {
@@ -4935,6 +5188,13 @@ svg {
   color: var(--accent-dark);
   background: var(--accent-soft);
   border-color: var(--accent-border);
+}
+
+.mobile-order-action.mobile-order-save-button {
+  flex-grow: 2;
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 .mobile-order-action:active,
