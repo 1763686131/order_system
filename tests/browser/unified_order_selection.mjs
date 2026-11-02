@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
 // Run from the repository root: node tests/browser/unified_order_selection.mjs [scenario]
-// Scenarios: default, reordered, reordered-hidden, reordered-legacy, reordered-mobile, reordered-persistence, inline-mobile, inline-tax-mobile.
+// Scenarios also include inline-mobile, inline-tax-mobile, create-mobile, create-tax-mobile, create-empty-mobile.
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const scenario = process.argv[2] || 'reordered-hidden'
 const browserPath = [
@@ -61,8 +61,10 @@ let orderData = Array.from({ length: 40 }, (_, index) => ({
   total_amount: 10
 }))
 const inline = location.search.includes('inline')
-const taxed = location.search.includes('inline-tax')
-if (inline) {
+const creating = location.search.includes('create-')
+const emptyCreation = creating && location.search.includes('empty')
+const taxed = location.search.includes('inline-tax') || location.search.includes('create-tax') || location.search.includes('zero-tax')
+if (inline || creating) {
   orderData = orderData.map(order => ({
     ...order,
     customer_id: 9, warehouse_id: 1,
@@ -78,30 +80,87 @@ if (inline) {
     }]
   }))
 }
+if (emptyCreation) orderData = []
 let failOrders = false
 let delayOrders = false
 let failSave = false
 let saveAttempts = 0
 const editPayloads = []
+let failCustomers = false
+let failCreate = false
+let createAttempts = 0
+const createPayloads = []
 request.defaults.adapter = async config => {
   results.calls.push([config.method, config.url])
   let data = []
-  if (config.url === '/orders') {
+  if (config.url === '/orders' && config.method === 'get') {
     if (delayOrders) await new Promise(resolve => setTimeout(resolve, 400))
     if (failOrders) throw new Error('Simulated order refresh failure')
     data = orderData
   }
-  if (config.url === '/stores') data = [{ id: 1, name: 'Test store', status: 'active' }]
-  if (inline && config.url === '/warehouses') data = [
-    { id: 1, storeId: 1, name: 'Test warehouse' }, { id: 2, storeId: 2, name: 'Other warehouse' }
+  if (config.url === '/stores') data = creating ? [
+    { id: 1, name: 'Test store', status: 'active' },
+    { id: 2, name: 'Other store', status: 'active' },
+    { id: 3, name: 'Inactive store', status: 'inactive' }
+  ] : [{ id: 1, name: 'Test store', status: 'active' }]
+  if ((inline || creating) && config.url === '/warehouses') data = [
+    { id: 1, storeId: 1, name: 'Test warehouse' }, { id: 2, storeId: 2, name: 'Other warehouse' },
+    ...(creating ? [{ id: 3, storeId: 1, name: 'Restricted warehouse' }] : [])
   ]
-  if (inline && config.url === '/products/units/measurements') data = [{ id: 1, name: 'kg' }]
-  if (inline && config.url === '/products/inventory') data = [
+  if ((inline || creating) && config.url === '/products/units/measurements') data = [{ id: 1, name: 'kg' }]
+  if ((inline || creating) && config.url === '/products/inventory') data = [
     { id: 1, code: 'SKU-001', name: 'Test product', specification: 'Original spec', unitId: 1, price: 10, storeIds: [1], warehouseId: 1 },
     { id: 2, code: 'SKU-002', name: 'Added product', specification: 'Added spec', unitId: 1, price: 5, storeIds: [1], warehouseId: 1, unitConversions: [{ value: 2 }] },
     { id: 3, code: 'SKU-003', name: 'Other store product', unitId: 1, price: 100, storeIds: [2], warehouseId: 2 },
     { id: 4, code: 'SKU-004', name: 'Other warehouse product', unitId: 1, price: 100, storeIds: [1], warehouseId: 2 }
   ]
+  if (creating && config.url === '/customers') {
+    if (failCustomers) throw new Error('Simulated customer load failure')
+    data = [
+      { id: 9, storeId: 1, customerName: 'Test customer', contactPerson: 'Customer contact', phone: '13800000000', address: 'Customer address' },
+      { id: 10, storeId: 2, customerName: 'Other store customer', contactPerson: 'Other contact', phone: '13900000000', address: 'Other address' }
+    ]
+  }
+  if (creating && config.url === '/bank-accounts/options') data = { data: [
+    { id: 1, storeId: 1, value: 'Test account', label: 'Test account', isDefault: true },
+    { id: 2, storeId: 2, value: 'Other account', label: 'Other account', isDefault: true }
+  ] }
+  if (creating && config.url === '/admin/directory') data = {
+    departments: [{ id: 1, name: '销售部' }],
+    employees: [{ id: 1, displayName: 'Test salesperson', departmentIds: [1] }]
+  }
+  if (creating && config.url === '/orders' && config.method === 'post') {
+    createAttempts++
+    const payload = JSON.parse(config.data)
+    createPayloads.push(payload)
+    await new Promise(resolve => setTimeout(resolve, 150))
+    if (failCreate) {
+      const error = new Error('Simulated creation failure')
+      error.response = { data: { message: 'Creation failed; retry' } }
+      throw error
+    }
+    const id = Math.max(0, ...orderData.map(order => order.id)) + 1
+    const created = {
+      id, type: 1, status: 'shipped', audit_state: 0, order_number: 'NEW-' + id,
+      date: payload.orderDate + ' 12:00', store_id: payload.storeId, customer_id: payload.customerId,
+      order_client: payload.customerId === 9 ? 'Test customer' : 'Other store customer', warehouse_id: payload.warehouseId,
+      contact_person: payload.contactPerson, contact_phone: payload.contactPhone, contact_address: payload.contactAddress,
+      project_name: payload.projectName, goods_packaging: payload.goodsPackaging, logistics_service: payload.logisticsService,
+      sales_person: payload.salesPerson, settlement_account: payload.settlementAccount, creator: payload.creator,
+      remark: payload.orderRemark, total_packages: payload.totalPackages, discount_amount: payload.discountAmount,
+      other_fees: payload.otherFees, current_payment: payload.currentPayment,
+      should_receive: payload.discountAmount + payload.otherFees,
+      current_debt: payload.discountAmount + payload.otherFees - payload.currentPayment,
+      order_goods: payload.items.map(item => ({
+        product_id: item.productId, goods_name: item.goodsName, spec: item.spec, unit: item.unit,
+        warehouse_id: item.warehouseId, packages: item.packages, quantity: item.quantity, price: item.price,
+        amount: item.amount, tax_rate: item.taxRate, tax_included_price: item.taxIncludedPrice,
+        total_amount: item.totalAmount, remark: item.remark
+      }))
+    }
+    orderData.unshift(created)
+    data = { success: true, orderId: id, orderNumber: created.order_number, data: created }
+  }
   if (inline && config.url === '/orders/1' && config.method === 'put') {
     saveAttempts++
     const payload = JSON.parse(config.data)
@@ -166,6 +225,12 @@ app.use(pinia).use(router).directive('table-layout', tableLayout)
 app.config.errorHandler = error => results.errors.push(String(error.stack || error))
 app.mount('#app')
 const waitForOrders = async () => {
+  if (emptyCreation) {
+    for (let count = 0; count < 100 && !document.querySelector('.mobile-order-empty'); count++) await pause()
+    await settle()
+    assert(document.querySelector('.mobile-order-empty'), 'An empty order list must finish loading')
+    return
+  }
   for (let count = 0; count < 100 && document.querySelectorAll('.record-row').length < 30; count++) await pause()
   await settle()
   assert(document.querySelectorAll('.record-row').length === 30, 'Orders must finish loading')
@@ -173,6 +238,198 @@ const waitForOrders = async () => {
 const findOrderRow = id => [...document.querySelectorAll('.record-row')].find(row =>
   row.querySelector('[data-column-key="order-number"]')?.textContent.trim() === 'TEST-' + id
 )
+const checkMobileCreation = async () => {
+  const wizard = () => document.querySelector('.order-create-dialog')
+  const draft = () => document.querySelector('.mobile-order-card.is-new-draft')
+  const editor = () => draft()?.querySelector('.mobile-order-editor')
+  const productDialog = () => document.querySelector('.mobile-product-dialog')
+  const field = name => editor().querySelector('[aria-label="' + name + '"]')
+  const wizardField = name => wizard().querySelector('[aria-label="' + name + '"]')
+  const setValue = async (element, value, event = 'input') => {
+    element.value = value
+    element.dispatchEvent(new Event(event, { bubbles: true }))
+    await settle()
+  }
+  const openWizard = async () => {
+    document.querySelector('.create-button').click()
+    await settle()
+    assert(wizard() && router.currentRoute.value.name === 'admin-sales', 'Mobile creation must open a wizard without navigating')
+    assert(!draft(), 'The wizard must not add a draft before choices are confirmed')
+  }
+  const nextWizard = async () => {
+    wizard().querySelector('form').requestSubmit()
+    await settle()
+  }
+  const captureVisual = async name => {
+    if (wizard()) {
+      const rect = wizard().getBoundingClientRect()
+      assert(rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight, 'Creation questions must fit the mobile viewport')
+      const body = wizard().querySelector('.wizard-body')
+      assert(body.scrollWidth <= body.clientWidth, 'Creation question fields must not overflow horizontally')
+      assert([...wizard().querySelectorAll('.wizard-actions button')].every(button => button.scrollWidth <= button.clientWidth), 'Creation action labels must fit their buttons')
+    }
+    if (!location.search.includes('visual')) return
+    document.querySelector('.main-content').style.height = 'auto'
+    await settle()
+    window.inlineScreenshotName = name
+    window.inlineScreenshotClip = { x: 0, y: 0, width: innerWidth, height: innerHeight, scale: 1 }
+    await new Promise(resolve => { window.continueInlineTest = resolve })
+  }
+  const chooseStore = async id => {
+    wizard().querySelector('input[name="create-store"][value="' + id + '"]').click()
+    await settle()
+    await nextWizard()
+  }
+  const selectCustomerAndWarehouse = async () => {
+    wizard().querySelector('input[name="create-customer"][value="9"]').click()
+    await setValue(wizardField('仓库'), '1', 'change')
+  }
+  const addProduct = async () => {
+    editor().querySelector('.mobile-order-add-product').click()
+    await settle()
+    assert(productDialog(), 'Draft products must use the same product detail dialog as editing')
+    await setValue(productDialog().querySelector('[aria-label="商品"]'), 'SKU-002')
+    productDialog().querySelector('[data-product-id="2"]').click()
+    await settle()
+    await setValue(productDialog().querySelector('[aria-label="件数"]'), '2')
+    assert(productDialog().querySelector('[aria-label="数量"]').value === '4', 'Creation must preserve package conversion')
+    productDialog().querySelector('form').requestSubmit()
+    await settle()
+    assert(!productDialog() && createAttempts === 0, 'Confirming draft products must not create an order')
+  }
+  const originalCount = orderData.length
+  if (originalCount) {
+    document.querySelector('.mobile-order-select input').click()
+    await settle()
+  }
+  await openWizard()
+  assert(wizard().querySelector('.primary-button').disabled, 'A store must be selected before advancing')
+  assert(wizard().querySelectorAll('[name="create-store"]').length === 2 && !wizard().textContent.includes('Inactive store'), 'Only active stores must be offered')
+  await captureVisual('choose-store')
+  wizard().querySelector('.secondary-button').click()
+  await settle()
+  assert(!wizard() && !draft() && createAttempts === 0 && document.body.style.overflow !== 'hidden', 'Cancelling the first question must discard everything and unlock scrolling')
+
+  failCustomers = true
+  await openWizard()
+  await chooseStore(1)
+  assert(wizard().querySelector('.load-error') && wizard().querySelector('.primary-button').disabled, 'Customer load failures must be visible and prevent continuing')
+  failCustomers = false
+  wizard().querySelector('.load-error button').click()
+  await settle()
+  assert(!wizard().querySelector('.load-error') && wizard().querySelector('[name="create-customer"]'), 'Customer data must be retryable')
+  await selectCustomerAndWarehouse()
+  wizard().querySelector('.back-button').click()
+  await settle()
+  await chooseStore(2)
+  assert(wizard().querySelector('[name="create-customer"][value="10"]') && !wizard().querySelector('[name="create-customer"][value="9"]'), 'Customers must be filtered by the chosen store')
+  assert(!wizard().querySelector('[name="create-customer"]:checked') && wizardField('仓库').value === '', 'Changing stores must reset customer and warehouse choices')
+  assert(![...wizardField('仓库').options].some(option => option.value === '1'), 'Warehouses from another store must not be offered')
+  wizard().querySelector('.back-button').click()
+  await settle()
+  await chooseStore(1)
+  await setValue(wizardField('搜索客户'), '1380000')
+  assert(wizard().querySelectorAll('[name="create-customer"]').length === 1, 'Customers must be searchable by phone')
+  await setValue(wizardField('搜索客户'), 'not a customer')
+  assert(!wizard().querySelector('[name="create-customer"]') && wizard().textContent.includes('暂无匹配客户'), 'Customer search must show an empty state')
+  await setValue(wizardField('搜索客户'), '')
+  await selectCustomerAndWarehouse()
+  await captureVisual('choose-customer')
+  await nextWizard()
+  assert(!wizard() && editor() && editor().getAttribute('aria-label') === '新增订单草稿', 'Confirmed choices must create an inline draft card')
+  assert(field('收货人').value === 'Customer contact' && field('收货电话').value === '13800000000' && field('客户地址').value === 'Customer address', 'Customer contact details must fill the draft automatically')
+  assert(draft().textContent.includes('Test store') && draft().textContent.includes('Test warehouse'), 'The draft must show its chosen store and warehouse')
+  assert(!draft().querySelector('.mobile-order-select') && !draft().querySelector('.mobile-order-product'), 'An empty draft must not be selectable or render a placeholder product')
+  assert(orderData.length === originalCount && createAttempts === 0, 'Drafts must not change saved data or counts')
+  editor().requestSubmit()
+  await settle()
+  assert(editor().querySelector('.mobile-order-save-error') && createAttempts === 0, 'Submitting without products must be prevented')
+  await addProduct()
+  editor().querySelector('[aria-label="删除第1项商品"]').click()
+  await settle()
+  assert(!draft().querySelector('.mobile-order-product') && createAttempts === 0, 'A new draft must allow removing its last product locally')
+  await addProduct()
+  editor().querySelector('.cancel-button').click()
+  await settle()
+  assert(!draft() && orderData.length === originalCount && createAttempts === 0, 'Cancelling a populated draft must never create or delete an order')
+  if (originalCount) assert(document.querySelector('.mobile-order-select input').checked, 'Cancelling a draft must preserve existing selections')
+  if (emptyCreation) assert(document.querySelector('.mobile-order-empty'), 'Cancelling the only draft must restore the empty list')
+
+  useUserStore(pinia).$patch({
+    isSuperAdmin: false, permissions: ['admin.sales.order.create'], allStores: false, storeIds: [1],
+    allWarehouses: false, warehouseIds: [1], username: 'test-operator'
+  })
+  await settle()
+  await openWizard()
+  assert(wizard().querySelectorAll('[name="create-store"]').length === 1, 'Create-only users must see only their accessible stores')
+  await chooseStore(1)
+  assert(![...wizardField('仓库').options].some(option => option.value === '3'), 'Restricted warehouses must not be offered')
+  await selectCustomerAndWarehouse()
+  wizard().querySelector('.order-settings').open = true
+  await settle()
+  await setValue(wizardField('订单日期'), '2026-11-02')
+  await setValue(wizardField('项目名称'), 'New project')
+  await setValue(wizardField('商品包装'), '纸箱')
+  await setValue(wizardField('物流服务'), '用户自提', 'change')
+  await setValue(wizardField('业务员'), 'Test salesperson', 'change')
+  if (taxed) {
+    wizardField('含税订单').click()
+    await settle()
+    await setValue(wizardField('订单税率'), location.search.includes('zero-tax') ? '0' : '13')
+  }
+  await captureVisual('order-settings')
+  await nextWizard()
+  assert(editor() && field('收货人').value === 'Customer contact', 'Create permission without edit permission must still allow filling a new draft')
+  document.querySelector('.create-button').click()
+  await settle()
+  assert(!wizard() && document.querySelectorAll('.is-new-draft').length === 1, 'Repeated creation clicks must retain the current draft')
+  await addProduct()
+  const expectedAmount = taxed && !location.search.includes('zero-tax') ? 22.6 : 20
+  assert(Number(field('应收金额').value) === expectedAmount, 'New product amounts must follow the chosen tax setting')
+  await setValue(field('收货人'), 'New contact')
+  await setValue(field('订单备注'), 'New order remark')
+  await setValue(field('已收金额'), '5')
+  const rect = draft().getBoundingClientRect()
+  assert(rect.left >= 0 && rect.right <= innerWidth && editor().scrollWidth <= editor().clientWidth, 'The draft card must fit the mobile viewport')
+  await captureVisual('new-order-card')
+  failCreate = true
+  editor().requestSubmit()
+  editor().requestSubmit()
+  await settle()
+  assert(editor().querySelector('.save-button').disabled && editor().querySelector('.cancel-button').disabled, 'Submitting creation must disable duplicate submissions and cancellation')
+  for (let count = 0; count < 100 && !editor().querySelector('.mobile-order-save-error'); count++) await pause()
+  assert(editor().querySelector('.mobile-order-save-error')?.textContent.includes('Creation failed') && field('收货人').value === 'New contact', 'Failed creation must retain the draft and show the server error')
+  assert(createAttempts === 1 && orderData.length === originalCount, 'A failed repeated submit must produce just one request and no order')
+  failCreate = false
+  editor().requestSubmit()
+  for (let count = 0; count < 100 && editor(); count++) await pause()
+  await settle()
+  assert(!draft() && createAttempts === 2 && orderData.length === originalCount + 1, 'Retry success must replace the draft with exactly one saved order')
+  const payload = createPayloads.at(-1)
+  assert(payload.storeId === 1 && payload.customerId === 9 && payload.warehouseId === 1, 'Creation must use the chosen ownership fields')
+  assert(payload.orderNumber === '' && payload.orderDate === '2026-11-02', 'The server must assign the order number using the chosen date')
+  assert(payload.projectName === 'New project' && payload.goodsPackaging === '纸箱' && payload.logisticsService === '用户自提', 'Questionnaire metadata must be included in final creation')
+  assert(payload.salesPerson === 'Test salesperson' && payload.settlementAccount === 'Test account' && payload.creator === 'test-operator', 'Creation must preserve salesperson, account and current application user')
+  assert(payload.taxEnabled === taxed && payload.taxRate === (taxed && !location.search.includes('zero-tax') ? 13 : 0), 'Creation must preserve tax mode including a zero tax rate')
+  assert(payload.items.length === 1 && payload.items[0].quantity === 4 && payload.totalPackages === 2 && payload.discountAmount === expectedAmount && payload.currentPayment === 5, 'Creation must submit the final product and payment amounts')
+  assert(document.querySelector('.mobile-order-card').textContent.includes(orderData[0].order_number) && document.querySelector('.mobile-order-card').textContent.includes('New contact'), 'The created order and its formal number must appear in the list')
+  if (originalCount) assert(useOrderSelectionStore(pinia).selectedIdsFor('finance', 7).includes(1), 'Successful creation must preserve existing selections even when delete controls are hidden')
+  assert(!results.calls.some(([method]) => method === 'delete' || method === 'put'), 'New-order flows must never use delete or update endpoints')
+  await openWizard()
+  wizard().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+  await settle()
+  assert(!wizard() && document.body.style.overflow !== 'hidden', 'Escape must dismiss the wizard and restore scrolling')
+  await openWizard()
+  await chooseStore(1)
+  await selectCustomerAndWarehouse()
+  await nextWizard()
+  await router.push('/logistics')
+  await settle()
+  assert(!draft() && !wizard() && createAttempts === 2, 'Leaving sales must discard the unsaved creation draft')
+  assert(results.errors.length === 0, 'Creation must not cause Vue runtime errors')
+  results.viewport = { width: innerWidth }
+  results.checks = ['two-step mobile creation', 'active and accessible stores', 'customer loading retry and search', 'store-dependent customer and warehouse reset', 'warehouse access restrictions', 'inline draft and contact autofill', 'draft cancellation without writes', 'empty-list creation', 'local product add and remove', 'create-only permission', 'optional order metadata', 'tax mode and package conversion', 'duplicate prevention', 'failed creation and retry', 'server-assigned order number', 'selection preservation', 'mode switch cleanup']
+}
 const checkInlineEditing = async () => {
   const card = () => document.querySelectorAll('.mobile-order-card')[0]
   const editor = () => card().querySelector('.mobile-order-editor')
@@ -512,7 +769,9 @@ const checkPersistedSelection = async () => {
 }
 try {
   await waitForOrders()
-  if (inline) {
+  if (creating) {
+    await checkMobileCreation()
+  } else if (inline) {
     await checkInlineEditing()
   } else if (location.search.includes('persistence')) {
     await checkPersistedSelection()

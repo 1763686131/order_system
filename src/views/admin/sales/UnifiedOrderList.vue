@@ -62,6 +62,14 @@
       </Transition>
     </Teleport>
 
+    <MobileOrderCreateWizard
+      v-if="mobileCreateWizardOpen"
+      :stores="stores"
+      :warehouses="warehouses"
+      @ready="startMobileOrderDraft"
+      @cancel="mobileCreateWizardOpen = false"
+    />
+
     <!-- 筛选工具栏 - 参考 StockRecordList 风格 -->
     <div
       ref="searchPanelShell"
@@ -555,7 +563,7 @@
       </div>
 
       <div class="mobile-order-list">
-        <div v-if="loading" class="mobile-order-loading" aria-hidden="true">
+        <div v-if="loading && !mobileOrderDraft" class="mobile-order-loading" aria-hidden="true">
           <div v-for="index in 5" :key="`mobile-loading-${index}`" class="mobile-order-skeleton">
             <span></span>
             <span></span>
@@ -563,7 +571,7 @@
           </div>
         </div>
 
-        <div v-else-if="pagedRecords.length === 0" class="mobile-order-empty">
+        <div v-else-if="mobileCardOrders.length === 0" class="mobile-order-empty">
           <div class="empty-mark" aria-hidden="true">
             <svg viewBox="0 0 24 24">
               <path d="M4 6h16v14H4z"></path>
@@ -576,32 +584,34 @@
         </div>
 
         <article
-          v-for="order in paginatedOrders"
+          v-for="order in mobileCardOrders"
           v-else
           :key="order.id"
           class="mobile-order-card"
-          :class="{ selected: isSelected(order.id), expanded: isMobileOrderExpanded(order.id) }"
+          :class="{ selected: isSelected(order.id), expanded: isMobileOrderExpanded(order.id), 'is-new-draft': isMobileOrderDraft(order.id) }"
           :style="{ '--store-bg-color': getStoreColor(order) }"
         >
           <MobileOrderEditor
             v-slot="editor"
             :order="order"
+            :creating="isMobileOrderDraft(order.id)"
             :editing="isMobileOrderEditing(order.id)"
             :products="products"
-            :warehouses="warehouses"
-            @saved="handleMobileOrderSaved"
+            :warehouses="isMobileOrderDraft(order.id) ? filterAccessibleOptions(warehouses, userStore, 'warehouse') : warehouses"
+            @saved="handleMobileOrderSaved($event, order.id)"
             @cancel="stopMobileOrderEditing(order.id)"
           >
           <form
             :class="{ 'mobile-order-editor': isMobileOrderEditing(order.id) }"
             :data-order-editor-id="isMobileOrderEditing(order.id) ? order.id : undefined"
-            :aria-label="isMobileOrderEditing(order.id) ? '修改订单' : undefined"
+            :aria-label="isMobileOrderDraft(order.id) ? '新增订单草稿' : isMobileOrderEditing(order.id) ? '修改订单' : undefined"
             :aria-busy="editor.saving"
             @submit.prevent="editor.save()"
           >
           <div class="mobile-order-strip">
+            <span v-if="isMobileOrderDraft(order.id)" class="mobile-order-draft-icon"><FileText aria-hidden="true" /></span>
             <label
-              v-if="mode !== 'finance' || canDeleteSalesOrders"
+              v-else-if="mode !== 'finance' || canDeleteSalesOrders"
               class="mobile-order-select"
             >
               <input
@@ -627,10 +637,10 @@
                 </span>
                 <span class="mobile-order-strip-line mobile-order-strip-meta">
                   <span class="mobile-order-date">{{ formatDate(order) }}</span>
-                  <span class="mobile-order-no">{{ order.order_number || order.id }}</span>
+                  <span class="mobile-order-no">{{ isMobileOrderDraft(order.id) ? '新建订单' : order.order_number || order.id }}</span>
                   <span :class="['status-tag', 'mobile-order-status', getStatusClass(order)]">
                     <i aria-hidden="true"></i>
-                    {{ getStatusText(order) }}
+                    {{ isMobileOrderDraft(order.id) ? '待提交' : getStatusText(order) }}
                   </span>
                 </span>
               </span>
@@ -643,6 +653,10 @@
             :id="`mobile-order-body-${order.id}`"
             class="mobile-order-body"
           >
+            <div v-if="isMobileOrderDraft(order.id)" class="mobile-order-draft-context">
+              <span>{{ getStoreName(order) }}</span>
+              <span>{{ getWarehouseName(order.warehouse_id) }}</span>
+            </div>
             <div class="mobile-order-contact-row">
               <div class="mobile-order-field">
                 <span>收货人</span>
@@ -701,7 +715,7 @@
                 ><Plus aria-hidden="true" />新增商品</button>
               </div>
               <div
-                v-for="(item, index) in editor.order.order_goods?.length ? editor.order.order_goods : getMobileGoodsItems(order)"
+                v-for="(item, index) in editor.order.order_goods?.length || isMobileOrderDraft(order.id) ? editor.order.order_goods : getMobileGoodsItems(order)"
                 :key="`${order.id}-mobile-item-${index}`"
                 class="mobile-order-product"
                 :class="{ 'is-editing': isMobileOrderEditing(order.id) }"
@@ -714,9 +728,10 @@
                 </span>
                 <div v-if="isMobileOrderEditing(order.id)" class="mobile-order-product-actions">
                   <button class="mobile-order-edit-item" type="button" :aria-label="`修改第${index + 1}项商品`" title="修改商品" :disabled="editor.saving" @click="editor.editItem(index)"><Pencil aria-hidden="true" /></button>
-                  <button class="mobile-order-delete-item" type="button" :aria-label="`删除第${index + 1}项商品`" title="删除商品" :disabled="editor.saving || editor.form.items.length === 1" @click="editor.removeItem(index)"><Trash2 aria-hidden="true" /></button>
+                  <button class="mobile-order-delete-item" type="button" :aria-label="`删除第${index + 1}项商品`" title="删除商品" :disabled="editor.saving || (!isMobileOrderDraft(order.id) && editor.form.items.length === 1)" @click="editor.removeItem(index)"><Trash2 aria-hidden="true" /></button>
                 </div>
               </div>
+              <p v-if="isMobileOrderDraft(order.id) && !editor.form.items.length" class="mobile-order-draft-empty">暂无商品</p>
             </section>
 
             <div class="mobile-order-summary" :class="{ 'is-finance': mode === 'finance' }">
@@ -819,7 +834,7 @@
             <p v-if="isMobileOrderEditing(order.id) && editor.error" class="mobile-order-save-error" role="alert">{{ editor.error }}</p>
             <footer v-if="isMobileOrderEditing(order.id)" class="mobile-order-actions">
               <button class="mobile-order-action cancel-button" type="button" :disabled="editor.saving" @click="editor.cancel()">取消</button>
-              <button class="mobile-order-action mobile-order-save-button save-button" type="submit" :disabled="editor.saving"><Check aria-hidden="true" />{{ editor.saving ? '保存中...' : '修改完成' }}</button>
+              <button class="mobile-order-action mobile-order-save-button save-button" type="submit" :disabled="editor.saving"><Check aria-hidden="true" />{{ editor.saving ? '保存中...' : isMobileOrderDraft(order.id) ? '完成提交' : '修改完成' }}</button>
             </footer>
             <footer v-else class="mobile-order-actions">
               <button
@@ -1531,6 +1546,7 @@ import { DATA_STYLE, TITLE_STYLE, exportToExcel } from '@/utils/excelExport'
 import { useAdminStickyPanel } from '@/composables/useAdminStickyPanel'
 import PrintTemplateSelector from '@/components/print/PrintTemplateSelector.vue'
 import MobileOrderEditor from '@/components/admin/MobileOrderEditor.vue'
+import MobileOrderCreateWizard from '@/components/admin/MobileOrderCreateWizard.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -1584,6 +1600,9 @@ const loading = ref(false)
 const stores = ref([])
 const products = ref([]) // 商品列表，用于反查商品名称
 const warehouses = ref([])
+const mobileCreateWizardOpen = ref(false)
+const mobileOrderDraft = ref(null)
+let mobileDraftSequence = 0
 const showStoreSelector = computed(() => hasMultipleScopeOptions(stores.value))
 
 // 打印模板预览
@@ -1738,7 +1757,14 @@ onUnmounted(() => {
 watch(() => props.mode, () => {
   closeActionMenu()
   editingMobileOrderIds.value = new Set()
+  mobileCreateWizardOpen.value = false
+  mobileOrderDraft.value = null
   fetchOrdersData()
+})
+
+watch([() => userStore.id, canCreateSalesOrders], () => {
+  mobileCreateWizardOpen.value = false
+  mobileOrderDraft.value = null
 })
 
 watch(() => route.query.documentId, () => {
@@ -2165,6 +2191,9 @@ const paginatedOrders = computed(() => {
 })
 
 const pagedRecords = computed(() => paginatedOrders.value)
+const mobileCardOrders = computed(() => mobileOrderDraft.value
+  ? [mobileOrderDraft.value, ...paginatedOrders.value]
+  : paginatedOrders.value)
 const actionMenuOrder = computed(() =>
   paginatedOrders.value.find(order => order.id === openActionMenuOrderId.value) || null
 )
@@ -2384,7 +2413,7 @@ const formatMobileMoney = (value) => {
 }
 
 const hasMobileTax = (order) => {
-  return getMobileGoodsItems(order).some(item =>
+  return Boolean(order.tax_enabled) || getMobileGoodsItems(order).some(item =>
     Number(item.tax_rate ?? item.taxRate) > 0 ||
     Number(item.tax_included_price ?? item.taxIncludedPrice) > 0 ||
     Number(item.total_amount ?? item.totalAmount) > 0
@@ -2583,16 +2612,32 @@ const openOrderDetail = (order) => {
 const expandedMobileOrderIds = ref(new Set())
 const editingMobileOrderIds = ref(new Set())
 
-const isMobileOrderExpanded = (id) => expandedMobileOrderIds.value.has(id)
-const isMobileOrderEditing = (id) => editingMobileOrderIds.value.has(id)
+const isMobileOrderDraft = id => mobileOrderDraft.value?.id === id
+const isMobileOrderExpanded = (id) => isMobileOrderDraft(id) || expandedMobileOrderIds.value.has(id)
+const isMobileOrderEditing = (id) => isMobileOrderDraft(id) || editingMobileOrderIds.value.has(id)
 
 const stopMobileOrderEditing = (id) => {
+  if (isMobileOrderDraft(id)) {
+    mobileOrderDraft.value = null
+    return
+  }
   const next = new Set(editingMobileOrderIds.value)
   next.delete(id)
   editingMobileOrderIds.value = next
 }
 
-const handleMobileOrderSaved = (updatedOrder) => {
+const handleMobileOrderSaved = (updatedOrder, sourceId) => {
+  if (isMobileOrderDraft(sourceId)) {
+    orders.value = [updatedOrder, ...orders.value.filter(order => order.id !== updatedOrder.id)]
+    orderStore.applyOrderEvent({ action: 'created', order: updatedOrder })
+    mobileOrderDraft.value = null
+    handleReset()
+    sortOrder.value = 'desc'
+    currentPage.value = 1
+    expandedMobileOrderIds.value = new Set([...expandedMobileOrderIds.value, updatedOrder.id])
+    showNotice('订单新增成功')
+    return
+  }
   orders.value = orders.value.map(order => order.id === updatedOrder.id ? updatedOrder : order)
   orderStore.updateOrder(updatedOrder.id, updatedOrder)
   stopMobileOrderEditing(updatedOrder.id)
@@ -2731,7 +2776,45 @@ const getStatusCount = (status) => {
 
 const handleAdd = () => {
   if (!canCreateSalesOrders.value) return
+  if (props.mode === 'finance' && window.matchMedia('(max-width: 780px)').matches) {
+    if (mobileOrderDraft.value) {
+      document.querySelector(`[data-order-editor-id="${mobileOrderDraft.value.id}"]`)?.scrollIntoView({ block: 'nearest' })
+      showNotice('请先完成或取消当前新增订单')
+      return
+    }
+    if (loading.value) {
+      showNotice('订单数据正在加载，请稍后再试。', 'error')
+      return
+    }
+    closeActionMenu()
+    closeDetailModal()
+    mobileCreateWizardOpen.value = true
+    return
+  }
   openOrderTask({ name: 'admin-sales-create' })
+}
+
+const startMobileOrderDraft = async setup => {
+  if (!canCreateSalesOrders.value || props.mode !== 'finance' || mobileOrderDraft.value) return
+  mobileOrderDraft.value = {
+    id: `mobile-new-${++mobileDraftSequence}`,
+    type: 1, status: 'pending', audit_state: 0,
+    store_id: setup.store.id, store_name: setup.store.name,
+    customer_id: setup.customer.id, order_client: setup.customer.customerName || setup.customer.name || '',
+    warehouse_id: setup.warehouse.id, warehouse_name: setup.warehouse.name,
+    date: setup.orderDate, order_date: setup.orderDate, order_number: '',
+    contact_person: setup.customer.contactPerson || '', contact_phone: setup.customer.phone || '',
+    contact_address: setup.customer.address || '',
+    project_name: setup.projectName, goods_packaging: setup.packaging,
+    logistics_service: setup.logisticsService, sales_person: setup.salesPerson,
+    settlement_account: setup.settlementAccount, creator: String(userStore.name || userStore.username || ''),
+    tax_enabled: setup.taxEnabled, tax_rate: setup.taxRate,
+    remark: '', discount_amount: 0, other_fees: 0, current_payment: 0,
+    should_receive: 0, current_debt: 0, total_packages: 0, order_goods: []
+  }
+  mobileCreateWizardOpen.value = false
+  await nextTick()
+  document.querySelector(`[data-order-editor-id="${mobileOrderDraft.value?.id}"]`)?.scrollIntoView({ block: 'nearest' })
 }
 
 const handleEdit = (order) => {
@@ -4687,6 +4770,41 @@ svg {
 .mobile-order-card.selected {
   border-color: var(--accent-border);
   background: #f7fcfa;
+}
+
+.mobile-order-card.is-new-draft {
+  border-color: var(--accent);
+}
+
+.mobile-order-draft-icon {
+  display: flex;
+  width: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+
+.mobile-order-draft-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.mobile-order-draft-context {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  padding-bottom: 12px;
+  color: var(--muted, #647086);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.mobile-order-draft-empty {
+  margin: 0;
+  padding: 12px 0;
+  color: var(--muted, #647086);
+  font-size: 12px;
 }
 
 .mobile-order-strip {

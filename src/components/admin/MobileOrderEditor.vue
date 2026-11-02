@@ -112,6 +112,7 @@ import { money } from '@/composables/documents/documentModels'
 
 const props = defineProps({
   order: { type: Object, required: true },
+  creating: { type: Boolean, default: false },
   editing: { type: Boolean, default: false },
   products: { type: Array, default: () => [] },
   warehouses: { type: Array, default: () => [] }
@@ -139,11 +140,11 @@ const units = ref([])
 const unitsReady = ref(false)
 let nextItemKey = 0
 
-const taxEnabled = (props.order.order_goods || []).some(item =>
+const taxEnabled = Boolean(props.creating && props.order.tax_enabled) || (props.order.order_goods || []).some(item =>
   number(item.tax_rate) > 0 || number(item.tax_included_price) > 0 || number(item.total_amount) > 0
 ) || number(props.order.tax_amount) > 0
 const defaultTaxRate = taxEnabled
-  ? number(props.order.order_goods.find(item => number(item.tax_rate) > 0)?.tax_rate) || 13
+  ? props.creating ? number(props.order.tax_rate) : number(props.order.order_goods?.find(item => number(item.tax_rate) > 0)?.tax_rate) || 13
   : 0
 
 const createForm = () => ({
@@ -416,7 +417,7 @@ const confirmItem = () => {
   closeItemDialog()
 }
 const removeItem = index => {
-  if (!props.editing || saving.value || form.value.items.length === 1) return
+  if (!props.editing || saving.value || (!props.creating && form.value.items.length === 1)) return
   form.value.items.splice(index, 1)
   syncPackages()
   syncOrderAmount()
@@ -434,7 +435,7 @@ watch(() => props.editing, async editing => {
     units.value = response
     unitsReady.value = true
   } catch {
-    errorMessage.value = '计量单位加载失败，请重新进入修改后再新增商品。'
+    errorMessage.value = '计量单位加载失败，请重新打开订单后再新增商品。'
   }
 }, { immediate: true })
 onBeforeUnmount(closeItemDialog)
@@ -446,7 +447,7 @@ const saveOrder = async () => {
     errorMessage.value = '请填写收货人和收货电话。'
     return
   }
-  if (Number(props.order.audit_state) === 1) {
+  if (!props.creating && Number(props.order.audit_state) === 1) {
     errorMessage.value = '已审核订单请先反审核再修改。'
     return
   }
@@ -465,10 +466,10 @@ const saveOrder = async () => {
   }
   saving.value = true
   try {
-    // The full-edit endpoint replaces these fields, so retain the order's hidden metadata.
+    // Keep creation local until this single final submission.
     const response = await request({
-      url: `/orders/${props.order.id}`,
-      method: 'PUT',
+      url: props.creating ? '/orders' : `/orders/${props.order.id}`,
+      method: props.creating ? 'POST' : 'PUT',
       data: {
         storeId: props.order.store_id,
         customerId: props.order.customer_id,
@@ -482,6 +483,7 @@ const saveOrder = async () => {
         goodsPackaging: props.order.goods_packaging || '',
         logisticsService: props.order.logistics_service || '',
         salesPerson: props.order.sales_person || '',
+        ...(props.creating ? { creator: props.order.creator || '' } : {}),
         orderRemark: form.value.orderRemark,
         settlementAccount: props.order.settlement_account || '',
         taxEnabled,
@@ -507,10 +509,10 @@ const saveOrder = async () => {
         }))
       }
     })
-    if (!response?.success || !response.data) throw new Error(response?.message || '订单修改失败，请重试。')
+    if (!response?.success || !response.data) throw new Error(response?.message || '订单保存失败，请重试。')
     emit('saved', response.data)
   } catch (error) {
-    errorMessage.value = error.response?.data?.message || error.message || '订单修改失败，请重试。'
+    errorMessage.value = error.response?.data?.message || error.message || '订单保存失败，请重试。'
   } finally {
     saving.value = false
   }
