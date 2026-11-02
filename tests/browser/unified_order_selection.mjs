@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
 // Run from the repository root: node tests/browser/unified_order_selection.mjs [scenario]
-// Scenarios also include inline-mobile, create-mobile, create-tax-mobile, audit-mobile, audit-mobile-narrow.
+// Scenarios also include inline-mobile, create-mobile, audit-mobile, and copy-ios (cold, legacy, denied).
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const scenario = process.argv[2] || 'reordered-hidden'
 const browserPath = [
@@ -38,6 +38,65 @@ import request from '/src/api/request.js'
 
 const results = { errors: [], calls: [], scroll: [] }
 if (location.search.includes('legacy')) Element.prototype.moveBefore = undefined
+const copyIOS = location.search.includes('copy-ios')
+let copyGestureActive = false
+let delayCopySettings = location.search.includes('copy-ios-cold')
+let failCopySettings = location.search.includes('copy-ios-settings-error')
+const copySettingsResolvers = []
+const copiedText = []
+const clipboardCalls = []
+const legacyCopyCalls = []
+let copyFields = [{
+  key: 'custom_editor_content', name: '复制内容',
+  template: 'COPY:@orderNumber\\n客户：@customerName', enabled: true, custom: true
+}]
+if (copyIOS) {
+  Object.defineProperty(window, 'ClipboardItem', {
+    configurable: true,
+    value: location.search.includes('no-item') ? undefined : class {
+      constructor(data) { this.data = data }
+      getType(type) { return Promise.resolve(this.data[type]) }
+    }
+  })
+  Object.defineProperty(navigator, 'clipboard', {
+    configurable: true,
+    value: location.search.includes('legacy') ? undefined : {
+      writeText(text) {
+        clipboardCalls.push({ method: 'writeText', gestureActive: copyGestureActive })
+        if (location.search.includes('sync-reject')) throw new DOMException('Clipboard unavailable', 'NotAllowedError')
+        if (!copyGestureActive || location.search.includes('denied')) {
+          return Promise.reject(new DOMException('User activation expired or denied', 'NotAllowedError'))
+        }
+        copiedText.push(text)
+        return Promise.resolve()
+      },
+      async write(items) {
+        clipboardCalls.push({ method: 'write', gestureActive: copyGestureActive })
+        if (!copyGestureActive || location.search.includes('denied')) {
+          throw new DOMException('User activation expired or denied', 'NotAllowedError')
+        }
+        copiedText.push(await (await items[0].getType('text/plain')).text())
+      }
+    }
+  })
+  document.execCommand = command => {
+    const textarea = document.activeElement
+    legacyCopyCalls.push({
+      command, gestureActive: copyGestureActive,
+      readonly: textarea?.hasAttribute('readonly'),
+      start: textarea?.selectionStart, end: textarea?.selectionEnd, text: textarea?.value
+    })
+    if (command !== 'copy' || !copyGestureActive || location.search.includes('denied')) return false
+    copiedText.push(textarea.value)
+    return true
+  }
+  document.addEventListener('click', event => {
+    if (event.target.closest('.mobile-order-actions button')?.textContent.includes('复制')) {
+      copyGestureActive = true
+      queueMicrotask(() => { copyGestureActive = false })
+    }
+  }, true)
+}
 if (location.search.includes('reordered')) {
   localStorage.setItem('table-column-order:sales-finance-list', JSON.stringify([
     'selection', 'status', 'actions', 'customer', 'date', 'order-number'
@@ -106,6 +165,15 @@ request.defaults.adapter = async config => {
     if (delayOrders) await new Promise(resolve => setTimeout(resolve, 400))
     if (failOrders) throw new Error('Simulated order refresh failure')
     data = orderData
+  }
+  if (config.url === '/settings/logistics-copy/resolve') {
+    if (copyIOS && delayCopySettings) await new Promise(resolve => copySettingsResolvers.push(resolve))
+    if (copyIOS && failCopySettings) throw new Error('Copy settings unavailable')
+    data = { success: true, data: { fields: copyIOS ? copyFields : null } }
+  }
+  if (copyIOS && config.url === '/settings/logistics-copy' && config.method === 'put') {
+    copyFields = JSON.parse(config.data).fields
+    data = { success: true }
   }
   if (config.url === '/stores') data = creating ? [
     { id: 1, name: 'Test store', status: 'active' },
@@ -617,6 +685,73 @@ const checkMobileAudit = async () => {
   results.viewport = { width: innerWidth, sliderWidth: rect.width }
   results.checks = ['pending complete action and status update', 'completed action hidden', 'reopen retained in more menu', 'shipped audit action and permissions', 'left-to-right swipe control', 'incomplete-swipe reset', 'cancel audit slider', 'pending audit controls', 'failed audit and retry', 'audit API and button state change', 'reverse-audit confirmation and cancel', 'confirmed reverse audit', 'audit-only payloads', 'mobile action label fit', 'mode switch cleanup']
 }
+const checkIOSCopy = async () => {
+  const card = () => document.querySelector('.mobile-order-card')
+  card().querySelector('.mobile-order-toggle').click()
+  await settle()
+  const copyButton = () => [...card().querySelectorAll('.mobile-order-actions button')]
+    .find(button => button.textContent.includes('复制'))
+  assert(copyButton(), 'The mobile order card must expose its copy action')
+  const expectedText = 'COPY:TEST-1\\n客户：Test customer'
+  const clickCopy = async () => {
+    copyButton().focus()
+    copyButton().click()
+    await settle()
+  }
+  assert(results.calls.some(([, url]) => url === '/settings/logistics-copy/resolve'), 'The order list must preload its copy configuration')
+  if (delayCopySettings) {
+    await clickCopy()
+    assert(copiedText.length === 0, 'Copy must never silently replace a pending custom format with defaults')
+    if (!location.search.includes('no-item')) {
+      assert(clipboardCalls.at(-1)?.method === 'write' && clipboardCalls.at(-1)?.gestureActive, 'Deferred clipboard writing must start within the original tap')
+    }
+    delayCopySettings = false
+    for (const resolve of copySettingsResolvers.splice(0)) resolve()
+    await settle()
+    if (location.search.includes('no-item')) {
+      assert(document.querySelector('.notice-info')?.textContent.includes('再次点击复制'), 'Older browsers must request a second tap after configuration loads')
+      await clickCopy()
+    }
+  } else if (failCopySettings) {
+    await clickCopy()
+    assert(copiedText.length === 0 && document.querySelector('.notice-error')?.textContent.includes('Copy settings unavailable'), 'Configuration errors must be shown without copying an incorrect default')
+    failCopySettings = false
+    await clickCopy()
+  } else {
+    await settle()
+    await clickCopy()
+  }
+  if (location.search.includes('denied')) {
+    assert(copiedText.length === 0 && document.querySelector('.notice-error'), 'Denied clipboard writes and failed legacy copying must never show false success')
+  } else {
+    assert(copiedText.at(-1) === expectedText, 'Copy must preserve the complete configured Chinese and multiline order content')
+    assert(document.querySelector('.notice-success')?.textContent.includes('复制成功'), 'Successful copying must show success')
+    assert(clipboardCalls.every(call => call.gestureActive), 'Every clipboard write must start within the tap, not after a settings await')
+    if (location.search.includes('legacy') || location.search.includes('sync-reject')) {
+      const legacyCall = legacyCopyCalls.at(-1)
+      assert(legacyCall?.gestureActive && legacyCall.readonly && legacyCall.start === 0 && legacyCall.end === expectedText.length, 'Legacy iOS copying must synchronously select the full readonly textarea')
+      assert(!document.querySelector('textarea') && document.activeElement === copyButton(), 'Legacy copying must remove its temporary field and restore focus')
+    }
+
+    const { putLogisticsCopySettings } = await import('/src/api/logisticsCopy.js')
+    await putLogisticsCopySettings([{
+      key: 'custom_editor_content', name: '复制内容',
+      template: 'UPDATED:@orderNumber', enabled: true, custom: true
+    }], [])
+    await settle()
+    await clickCopy()
+    assert(copiedText.at(-1) === 'UPDATED:TEST-1', 'Saving copy settings must invalidate the cached format without reloading the list')
+    await router.push('/logistics')
+    await waitForOrders()
+    if (!card().querySelector('.mobile-order-actions')) card().querySelector('.mobile-order-toggle').click()
+    await settle()
+    await clickCopy()
+    assert(copiedText.at(-1) === 'UPDATED:TEST-1', 'Logistics mode must preload and copy its own binding')
+  }
+  assert(results.errors.length === 0, 'iOS copy handling must not create runtime errors')
+  results.copy = { clipboardCalls, legacyCopyCalls, copiedText }
+  results.checks = ['configuration preload and invalidation', 'write during tap activation', 'Chinese multiline custom format', 'no silent default copies', 'cold-cache promised clipboard data', 'readonly legacy selection and cleanup', 'failure and retry', 'mode-specific configuration']
+}
 const checkInlineEditing = async () => {
   const card = () => document.querySelectorAll('.mobile-order-card')[0]
   const editor = () => card().querySelector('.mobile-order-editor')
@@ -956,7 +1091,9 @@ const checkPersistedSelection = async () => {
 }
 try {
   await waitForOrders()
-  if (auditMobile) {
+  if (copyIOS) {
+    await checkIOSCopy()
+  } else if (auditMobile) {
     await checkMobileAudit()
   } else if (creating) {
     await checkMobileCreation()
@@ -1067,7 +1204,7 @@ try {
     '--headless', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
     '--disable-background-networking', '--disable-extensions',
     '--disable-background-timer-throttling', '--disable-renderer-backgrounding',
-    '--user-data-dir=' + profile, '--window-size=' + (scenario.includes('mobile') ? '390,844' : '1600,900'),
+    '--user-data-dir=' + profile, '--window-size=' + (scenario.includes('mobile') || scenario.includes('copy-ios') ? '390,844' : '1600,900'),
     '--remote-debugging-port=0',
     'about:blank'
   ], { windowsHide: true })
@@ -1106,7 +1243,7 @@ try {
       socket.addEventListener('message', receive)
       socket.send(JSON.stringify({ id, method, params }))
     })
-    if (scenario.includes('mobile')) {
+    if (scenario.includes('mobile') || scenario.includes('copy-ios')) {
       await send('Emulation.setDeviceMetricsOverride', {
         width: scenario.includes('narrow') ? 320 : 390,
         height: 844, deviceScaleFactor: 1, mobile: true

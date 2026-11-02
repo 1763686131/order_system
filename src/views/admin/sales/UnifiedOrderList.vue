@@ -1597,7 +1597,7 @@ import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } fro
 import { useRoute, useRouter } from 'vue-router'
 import { Check, ChevronDown, Copy, FileText, Pencil, Plus, Printer, RotateCcw, Trash2, Triangle, X } from '@lucide/vue'
 import request from '@/api/request'
-import { resolveLogisticsCopySettings } from '@/api/logisticsCopy'
+import { LOGISTICS_COPY_SETTINGS_CHANGED_EVENT, resolveLogisticsCopySettings } from '@/api/logisticsCopy'
 import { useOrderStore } from '@/stores/order'
 import { useOrderDraftStore } from '@/stores/orderDraft'
 import { useOrderSelectionStore } from '@/stores/orderSelection'
@@ -1691,6 +1691,9 @@ const auditSlideValue = ref(0)
 const auditSlideInput = ref(null)
 const mobileAuditOrderId = ref(null)
 const mobileAuditSlideValue = ref(0)
+const logisticsCopySettingsCache = new Map()
+const logisticsCopySettingsRequests = new Map()
+let logisticsCopySettingsVersion = 0
 const openActionMenuOrderId = ref(null)
 const actionMenuElement = ref(null)
 const actionMenuStyle = ref({})
@@ -1804,7 +1807,9 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('scroll', handleActionMenuScroll, true)
   window.addEventListener('resize', handleActionMenuScroll)
-
+  window.addEventListener(LOGISTICS_COPY_SETTINGS_CHANGED_EVENT, refreshLogisticsCopySettings)
+  window.addEventListener('focus', refreshLogisticsCopySettings)
+  refreshLogisticsCopySettings()
   fetchOrdersData()
 })
 
@@ -1816,6 +1821,8 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('scroll', handleActionMenuScroll, true)
   window.removeEventListener('resize', handleActionMenuScroll)
+  window.removeEventListener(LOGISTICS_COPY_SETTINGS_CHANGED_EVENT, refreshLogisticsCopySettings)
+  window.removeEventListener('focus', refreshLogisticsCopySettings)
   if (noticeTimer) {
     clearTimeout(noticeTimer)
   }
@@ -1836,8 +1843,11 @@ watch(() => props.mode, () => {
   editingMobileOrderIds.value = new Set()
   mobileCreateWizardOpen.value = false
   mobileOrderDraft.value = null
+  refreshLogisticsCopySettings()
   fetchOrdersData()
 })
+
+watch(() => userStore.id, () => refreshLogisticsCopySettings())
 
 watch([() => userStore.id, canCreateSalesOrders], () => {
   mobileCreateWizardOpen.value = false
@@ -2991,51 +3001,146 @@ const hasLogistics = (order) => {
          logistics !== '暂无记录'
 }
 
-// 复制物流极简信息
+const loadLogisticsCopySettings = async bindingTarget => {
+  if (logisticsCopySettingsCache.has(bindingTarget)) {
+    return logisticsCopySettingsCache.get(bindingTarget)
+  }
+  if (logisticsCopySettingsRequests.has(bindingTarget)) {
+    return logisticsCopySettingsRequests.get(bindingTarget)
+  }
+
+  const version = logisticsCopySettingsVersion
+  const requestPromise = resolveLogisticsCopySettings(bindingTarget)
+    .then(settings => {
+      if (!settings?.success) {
+        throw new Error(settings?.message || '读取复制字段设置失败')
+      }
+      if (settings.data?.fields !== null && !Array.isArray(settings.data?.fields)) {
+        throw new Error('复制字段设置数据格式不正确')
+      }
+      const fields = settings.data?.fields === null
+        ? getDefaultLogisticsCopyFields()
+        : normalizeLogisticsCopyFields(settings.data?.fields)
+      if (version !== logisticsCopySettingsVersion) {
+        throw new Error('复制配置已更新，请重新点击复制')
+      }
+      logisticsCopySettingsCache.set(bindingTarget, fields)
+      return fields
+    })
+    .finally(() => {
+      if (logisticsCopySettingsRequests.get(bindingTarget) === requestPromise) {
+        logisticsCopySettingsRequests.delete(bindingTarget)
+      }
+    })
+  logisticsCopySettingsRequests.set(bindingTarget, requestPromise)
+  return requestPromise
+}
+
+const refreshLogisticsCopySettings = () => {
+  logisticsCopySettingsVersion++
+  logisticsCopySettingsCache.clear()
+  logisticsCopySettingsRequests.clear()
+  const target = props.mode === 'finance' ? 'order-info' : 'logistics-info'
+  void loadLogisticsCopySettings(target).catch(error => {
+    console.warn('预加载复制字段设置失败:', error)
+  })
+}
+
+const copyTextWithExecCommand = text => {
+  const textarea = document.createElement('textarea')
+  const previousFocus = document.activeElement
+  const previousScrollY = window.scrollY
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.setAttribute('aria-hidden', 'true')
+  textarea.style.position = 'fixed'
+  textarea.style.top = '0'
+  textarea.style.left = '0'
+  textarea.style.width = '1px'
+  textarea.style.height = '1px'
+  textarea.style.padding = '0'
+  textarea.style.border = '0'
+  textarea.style.opacity = '0'
+  textarea.style.fontSize = '16px'
+  let copied = false
+  try {
+    document.body.appendChild(textarea)
+    textarea.focus({ preventScroll: true })
+    textarea.select()
+    textarea.setSelectionRange(0, textarea.value.length)
+    copied = document.execCommand('copy')
+  } catch {
+    copied = false
+  } finally {
+    textarea.remove()
+    if (previousFocus instanceof HTMLElement && previousFocus.isConnected) {
+      previousFocus.focus({ preventScroll: true })
+    }
+    window.scrollTo(window.scrollX, previousScrollY)
+  }
+  return copied
+}
+
+// 复制字段配置异步读取，剪贴板写入必须在点击事件同步阶段发起，以兼容 iOS Safari。
 const handleCopyOrderInfo = async (order, bindingTarget = 'logistics-info') => {
   try {
-    const settings = await resolveLogisticsCopySettings(bindingTarget)
-    if (!settings?.success) throw new Error(settings?.message || '读取复制字段设置失败')
-    if (settings.data?.fields !== null && !Array.isArray(settings.data?.fields)) {
-      throw new Error('复制字段设置数据格式不正确')
-    }
-    const fields = settings.data?.fields === null
-      ? getDefaultLogisticsCopyFields()
-      : normalizeLogisticsCopyFields(settings.data?.fields)
-    const textToCopy = formatLogisticsOrderForCopy(order, {
+    const formatText = fields => formatLogisticsOrderForCopy(order, {
       storeName: getStoreName(order),
       printVariables: getOrderPrintVariables(order),
       fields
     })
-
-    // 优先使用 Clipboard API
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      await navigator.clipboard.writeText(textToCopy)
-      showCopyMessage('复制成功')
-    } else {
-      // 降级方案：使用传统的 execCommand 方法
-      const textarea = document.createElement('textarea')
-      textarea.value = textToCopy
-      textarea.style.position = 'fixed'
-      textarea.style.opacity = '0'
-      textarea.style.top = '0'
-      textarea.style.left = '0'
-      document.body.appendChild(textarea)
-      textarea.focus()
-      textarea.select()
-
+    const cachedFields = logisticsCopySettingsCache.get(bindingTarget)
+    let textToCopy
+    let textPromise
+    let clipboardWrite
+    if (cachedFields) {
+      textToCopy = formatText(cachedFields)
       try {
-        const successful = document.execCommand('copy')
-        if (successful) {
+        if (window.isSecureContext && navigator.clipboard?.writeText) {
+          clipboardWrite = navigator.clipboard.writeText(textToCopy)
+        } else if (copyTextWithExecCommand(textToCopy)) {
           showCopyMessage('复制成功')
+          return
         } else {
-          throw new Error('execCommand failed')
+          throw new Error('当前浏览器未允许复制，请使用 HTTPS 或系统浏览器重试')
         }
-      } catch (err) {
-        console.error('复制失败:', err)
+      } catch (error) {
+        if (copyTextWithExecCommand(textToCopy)) {
+          showCopyMessage('复制成功')
+          return
+        }
+        throw error
+      }
+    } else {
+      textPromise = loadLogisticsCopySettings(bindingTarget).then(formatText)
+      if (window.isSecureContext && navigator.clipboard?.write && typeof ClipboardItem === 'function') {
+        // WebKit accepts promised data, but write() must start in the original click stack.
+        const blobPromise = textPromise.then(text => new Blob([text], { type: 'text/plain' }))
+        void blobPromise.catch(() => {})
+        try {
+          clipboardWrite = navigator.clipboard.write([
+            new ClipboardItem({ 'text/plain': blobPromise })
+          ])
+        } catch (error) {
+          clipboardWrite = Promise.reject(error)
+        }
+      } else {
+        await textPromise
+        showNotice('复制内容已准备好，请再次点击复制', 'info')
+        return
+      }
+    }
+
+    try {
+      await clipboardWrite
+      showCopyMessage('复制成功')
+    } catch (error) {
+      if (textPromise) textToCopy = await textPromise
+      if (copyTextWithExecCommand(textToCopy)) {
+        showCopyMessage('复制成功')
+      } else {
+        console.error('复制失败:', error)
         showNotice('复制失败，请手动复制', 'error')
-      } finally {
-        document.body.removeChild(textarea)
       }
     }
   } catch (error) {
