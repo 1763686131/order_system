@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
 // Run from the repository root: node tests/browser/unified_order_selection.mjs [scenario]
-// Scenarios also include inline-mobile, inline-tax-mobile, create-mobile, create-tax-mobile, create-empty-mobile.
+// Scenarios also include inline-mobile, create-mobile, create-tax-mobile, audit-mobile, audit-mobile-narrow.
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const scenario = process.argv[2] || 'reordered-hidden'
 const browserPath = [
@@ -62,6 +62,12 @@ let orderData = Array.from({ length: 40 }, (_, index) => ({
 }))
 const inline = location.search.includes('inline')
 const creating = location.search.includes('create-')
+const auditMobile = location.search.includes('audit-mobile')
+if (auditMobile) {
+  orderData[1] = { ...orderData[1], status: 'pending', audit_state: 0 }
+  orderData[2] = { ...orderData[2], status: 'completed', audit_state: 0 }
+  orderData[3] = { ...orderData[3], order_goods: [], audit_state: 0 }
+}
 const emptyCreation = creating && location.search.includes('empty')
 const taxed = location.search.includes('inline-tax') || location.search.includes('create-tax') || location.search.includes('zero-tax')
 if (inline || creating) {
@@ -85,6 +91,9 @@ let failOrders = false
 let delayOrders = false
 let failSave = false
 let saveAttempts = 0
+let failAudit = false
+const auditPayloads = []
+const statusPayloads = []
 const editPayloads = []
 let failCustomers = false
 let failCreate = false
@@ -160,6 +169,30 @@ request.defaults.adapter = async config => {
     }
     orderData.unshift(created)
     data = { success: true, orderId: id, orderNumber: created.order_number, data: created }
+  }
+  if (auditMobile && config.url.startsWith('/orders/') && config.method === 'put') {
+    const orderId = Number(config.url.split('/').pop())
+    const payload = JSON.parse(config.data)
+    if ('audit_state' in payload) {
+      auditPayloads.push(payload)
+      await new Promise(resolve => setTimeout(resolve, 150))
+      if (failAudit) {
+        const error = new Error('Simulated audit failure')
+        error.response = { data: { message: 'Audit failed; retry' } }
+        throw error
+      }
+      orderData = orderData.map(order => order.id === orderId
+        ? { ...order, audit_state: Number(payload.audit_state) }
+        : order)
+      data = { success: true, data: orderData.find(order => order.id === orderId) }
+    }
+    if ('status' in payload) {
+      statusPayloads.push({ orderId, ...payload })
+      orderData = orderData.map(order => order.id === orderId
+        ? { ...order, status: payload.status }
+        : order)
+      data = { success: true, data: orderData.find(order => order.id === orderId) }
+    }
   }
   if (inline && config.url === '/orders/1' && config.method === 'put') {
     saveAttempts++
@@ -429,6 +462,160 @@ const checkMobileCreation = async () => {
   assert(results.errors.length === 0, 'Creation must not cause Vue runtime errors')
   results.viewport = { width: innerWidth }
   results.checks = ['two-step mobile creation', 'active and accessible stores', 'customer loading retry and search', 'store-dependent customer and warehouse reset', 'warehouse access restrictions', 'inline draft and contact autofill', 'draft cancellation without writes', 'empty-list creation', 'local product add and remove', 'create-only permission', 'optional order metadata', 'tax mode and package conversion', 'duplicate prevention', 'failed creation and retry', 'server-assigned order number', 'selection preservation', 'mode switch cleanup']
+}
+const checkMobileAudit = async () => {
+  const card = () => document.querySelector('.mobile-order-card')
+  const cardFor = orderNumber => [...document.querySelectorAll('.mobile-order-card')]
+    .find(item => item.textContent.includes(orderNumber))
+  card()?.querySelector('.mobile-order-toggle')?.click()
+  await settle()
+  const actions = () => card()?.querySelector('.mobile-order-actions')
+  const auditButton = () => actions()?.querySelector('.button-audit')
+  const reverseButton = () => actions()?.querySelector('.button-reverse-audit')
+  const slider = () => actions()?.querySelector('.mobile-audit-slider-input')
+  const detailsModal = () => document.querySelector('.detail-modal')
+  const captureVisual = async name => {
+    assert([...actions().querySelectorAll('button')].every(button => button.scrollWidth <= button.clientWidth), 'Mobile audit action labels must fit their buttons')
+    if (!location.search.includes('visual')) return
+    document.querySelector('.main-content').style.height = 'auto'
+    await settle()
+    window.inlineScreenshotName = name
+    window.inlineScreenshotClip = { x: 0, y: 0, width: innerWidth, height: innerHeight, scale: 1 }
+    await new Promise(resolve => { window.continueInlineTest = resolve })
+  }
+  const submitSwipe = () => {
+    slider().value = '100'
+    slider().dispatchEvent(new Event('input', { bubbles: true }))
+    slider().dispatchEvent(new Event('change', { bubbles: true }))
+  }
+
+  assert(card().textContent.includes('TEST-1'), 'The first mobile card must be the target order')
+  assert(auditButton()?.textContent.includes('审核') && !detailsModal(), 'The mobile details action must become an audit button for eligible shipped sales orders')
+  assert(!actions().textContent.includes('详情'), 'Eligible mobile orders must not retain the old details action')
+  const pendingCard = cardFor('TEST-2')
+  pendingCard.querySelector('.mobile-order-toggle').click()
+  await settle()
+  const completeButton = () => cardFor('TEST-2')?.querySelector('.mobile-order-actions .button-force-complete')
+  assert(completeButton()?.textContent.includes('完成') && !cardFor('TEST-2').querySelector('.button-audit'), 'Pending orders must show complete, not audit')
+  completeButton().click()
+  await settle()
+  const completeConfirmation = document.querySelector('.confirm-dialog')
+  assert(completeConfirmation?.textContent.includes('确认强制完成'), 'Completing a pending order must retain the existing confirmation')
+  completeConfirmation.querySelector('.confirm-dialog-submit').click()
+  for (let count = 0; count < 100 && orderData[1].status !== 'completed'; count++) await pause()
+  await settle()
+  const completedActions = cardFor('TEST-2').querySelector('.mobile-order-actions')
+  assert(orderData[1].status === 'completed' && !completedActions.querySelector('.button-force-complete, .button-audit, .button-reverse-audit'), 'Completed orders must hide the status action buttons')
+  assert(completedActions.querySelector('.row-menu-trigger'), 'Completed orders must retain the more menu')
+  completedActions.querySelector('.row-menu-trigger').click()
+  await settle()
+  const completedMenu = document.querySelector('.row-action-menu')
+  assert([...completedMenu.querySelectorAll('[role="menuitem"]')].some(item => item.textContent.includes('撤销已完成')), 'Reopen must remain available in the more menu')
+  document.body.click()
+  await settle()
+
+  const originalCompletedCard = cardFor('TEST-3')
+  originalCompletedCard.querySelector('.mobile-order-toggle').click()
+  await settle()
+  const originalCompletedActions = cardFor('TEST-3').querySelector('.mobile-order-actions')
+  assert(!originalCompletedActions.querySelector('.button-force-complete, .button-audit, .button-reverse-audit'), 'Already completed orders must not show complete or audit actions')
+  originalCompletedActions.querySelector('.row-menu-trigger').click()
+  await settle()
+  const originalCompletedMenu = document.querySelector('.row-action-menu')
+  const reopenButton = [...originalCompletedMenu.querySelectorAll('[role="menuitem"]')]
+    .find(item => item.textContent.includes('撤销已完成'))
+  assert(reopenButton, 'The existing completed-order reopen action must remain in the more menu')
+  reopenButton.click()
+  await settle()
+  document.querySelector('.confirm-dialog-cancel').click()
+  await settle()
+  assert(orderData[2].status === 'completed' && statusPayloads.length === 1, 'Cancelling reopen must leave the completed order unchanged')
+
+  const legacyCard = cardFor('TEST-4')
+  legacyCard.querySelector('.mobile-order-toggle').click()
+  await settle()
+  const legacyAuditButton = cardFor('TEST-4').querySelector('.mobile-order-actions .button-audit')
+  assert(legacyAuditButton?.disabled && legacyAuditButton.title.includes('已发货'), 'Only shipped orders may show the audit entry, while legacy records remain ineligible')
+  legacyCard.querySelector('.mobile-order-toggle').click()
+  await settle()
+  useUserStore(pinia).$patch({ isSuperAdmin: false, permissions: [] })
+  await settle()
+  assert(auditButton()?.disabled, 'Accounts without audit permission must not audit mobile orders')
+  useUserStore(pinia).$patch({ isSuperAdmin: true })
+  await settle()
+  await captureVisual('audit-button')
+  auditButton().click()
+  await settle()
+  assert(slider() && !auditButton(), 'Tapping audit must reveal the left-to-right slider')
+  const sliderTrack = actions().querySelector('.mobile-audit-slide-track')
+  const rect = sliderTrack.getBoundingClientRect()
+  assert(rect.width > 140 && rect.right <= actions().getBoundingClientRect().right + 1, 'The audit slider must fit inside the mobile action bar')
+  assert(slider().getAttribute('aria-label') === '向右滑动确认审核', 'The audit slider must have an accessible direction label')
+  await captureVisual('audit-slider')
+  slider().value = '60'
+  slider().dispatchEvent(new Event('input', { bubbles: true }))
+  slider().dispatchEvent(new Event('change', { bubbles: true }))
+  await settle()
+  assert(slider() && slider().value === '0' && auditPayloads.length === 0, 'An incomplete swipe must reset without submitting')
+  actions().querySelector('[aria-label="取消审核"]').click()
+  await settle()
+  assert(auditButton() && !slider(), 'The cancel control must restore the audit button')
+  failAudit = true
+  auditButton().click()
+  await settle()
+  submitSwipe()
+  await settle()
+  assert(slider()?.disabled && actions().querySelector('[aria-label="取消审核"]').disabled, 'Pending audits must disable duplicate submissions and cancellation')
+  for (let count = 0; count < 100 && !auditButton(); count++) await pause()
+  await settle()
+  assert(auditButton() && !reverseButton() && orderData[0].audit_state === 0 && auditPayloads.length === 1, 'Failed audits must retain the unaudited order and allow retry')
+  assert(document.querySelector('[role="alert"]')?.textContent.includes('Audit failed; retry'), 'Audit errors must display the server message')
+  failAudit = false
+  auditButton().click()
+  await settle()
+  submitSwipe()
+  for (let count = 0; count < 100 && !reverseButton(); count++) await pause()
+  await settle()
+  assert(
+    !slider() && reverseButton()?.textContent.includes('撤销审核'),
+    'A successful swipe must replace audit with reverse audit (audit_state=' + orderData[0].audit_state +
+      ', actions=' + actions()?.textContent.trim() + ', errors=' + JSON.stringify(results.errors) + ')'
+  )
+  assert(orderData[0].audit_state === 1 && results.calls.some(([method, url]) => method === 'put' && url === '/orders/1'), 'Auditing must update the order through the existing audit endpoint')
+  assert(!detailsModal() && !actions().querySelector('.button-audit'), 'Auditing must not open desktop order details')
+  await captureVisual('reverse-audit-button')
+  useUserStore(pinia).$patch({ isSuperAdmin: false, permissions: [] })
+  await settle()
+  assert(reverseButton()?.disabled, 'Accounts without reverse-audit permission must not reverse mobile audits')
+  useUserStore(pinia).$patch({ isSuperAdmin: true })
+  await settle()
+  reverseButton().click()
+  await settle()
+  const confirmation = document.querySelector('.confirm-dialog')
+  assert(confirmation?.textContent.includes('反审核') && confirmation.textContent.includes('TEST-1'), 'Mobile reverse audit must retain the existing confirmation')
+  confirmation.querySelector('.confirm-dialog-cancel').click()
+  await settle()
+  assert(reverseButton() && orderData[0].audit_state === 1, 'Cancelling reverse audit must preserve the posted order')
+  reverseButton().click()
+  await settle()
+  document.querySelector('.confirm-dialog-submit').click()
+  for (let count = 0; count < 100 && !auditButton(); count++) await pause()
+  await settle()
+  assert(orderData[0].audit_state === 0 && auditButton()?.textContent.includes('审核'), 'Confirmed reverse audit must restore the audit action')
+  assert(auditPayloads.length === 3 && auditPayloads.every(payload => Object.keys(payload).length === 1) && auditPayloads.map(payload => payload.audit_state).join(',') === '1,1,0', 'Mobile audit must only submit the audit state without modifying order fields')
+  auditButton().click()
+  await settle()
+  await router.push('/logistics')
+  await settle()
+  const logisticsCard = document.querySelector('.mobile-order-card')
+  if (!logisticsCard.querySelector('.mobile-order-actions')) {
+    logisticsCard.querySelector('.mobile-order-toggle').click()
+    await settle()
+  }
+  assert(!document.querySelector('.mobile-audit-slider-input') && !document.querySelector('.mobile-order-actions .button-audit') && logisticsCard.querySelector('.mobile-order-actions').textContent.includes('详情'), 'Changing modes must clear the audit slider and preserve logistics details')
+  assert(results.errors.length === 0, 'Mobile audit actions must not cause runtime errors')
+  results.viewport = { width: innerWidth, sliderWidth: rect.width }
+  results.checks = ['pending complete action and status update', 'completed action hidden', 'reopen retained in more menu', 'shipped audit action and permissions', 'left-to-right swipe control', 'incomplete-swipe reset', 'cancel audit slider', 'pending audit controls', 'failed audit and retry', 'audit API and button state change', 'reverse-audit confirmation and cancel', 'confirmed reverse audit', 'audit-only payloads', 'mobile action label fit', 'mode switch cleanup']
 }
 const checkInlineEditing = async () => {
   const card = () => document.querySelectorAll('.mobile-order-card')[0]
@@ -769,7 +956,9 @@ const checkPersistedSelection = async () => {
 }
 try {
   await waitForOrders()
-  if (creating) {
+  if (auditMobile) {
+    await checkMobileAudit()
+  } else if (creating) {
     await checkMobileCreation()
   } else if (inline) {
     await checkInlineEditing()

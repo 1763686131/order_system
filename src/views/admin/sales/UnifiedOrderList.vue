@@ -838,6 +838,77 @@
             </footer>
             <footer v-else class="mobile-order-actions">
               <button
+                v-if="mode === 'finance' && order.status === 'pending'"
+                class="mobile-order-action button-force-complete"
+                type="button"
+                :disabled="orderActionLoading !== '' || !canCompleteSalesOrders"
+                :title="canCompleteSalesOrders ? '将订单状态设为已完成' : '没有完成订单的权限'"
+                @click="handleForceComplete(order)"
+              >
+                <Check aria-hidden="true" />
+                {{ orderActionLoading === 'force-complete' ? '处理中...' : '完成' }}
+              </button>
+              <div
+                v-else-if="mode === 'finance' && order.status === 'shipped' && !isOrderAudited(order) && mobileAuditOrderId === order.id && canAuditOrder(order)"
+                class="audit-slide-row mobile-audit-slide-row"
+              >
+                <div
+                  class="audit-slide-track mobile-audit-slide-track"
+                  :class="{ loading: orderActionLoading === 'audit' }"
+                  :style="{ '--audit-slide-progress': mobileAuditSlideValue }"
+                >
+                  <div class="audit-slide-progress" aria-hidden="true"></div>
+                  <span class="audit-slide-label">
+                    {{ orderActionLoading === 'audit' ? '审核中...' : '滑动以审核' }}
+                  </span>
+                  <input
+                    class="audit-slide-input mobile-audit-slider-input"
+                    type="range"
+                    min="0"
+                    max="100"
+                    step="1"
+                    aria-label="向右滑动确认审核"
+                    :aria-valuetext="`${mobileAuditSlideValue}%`"
+                    :value="mobileAuditSlideValue"
+                    :disabled="orderActionLoading !== ''"
+                    @input="mobileAuditSlideValue = Number($event.target.value)"
+                    @change="handleMobileAuditSlideRelease(order)"
+                    @keydown.esc.prevent="closeMobileAuditSlider"
+                  />
+                </div>
+                <button
+                  class="audit-slide-cancel"
+                  type="button"
+                  title="取消审核"
+                  aria-label="取消审核"
+                  :disabled="orderActionLoading !== ''"
+                  @click="closeMobileAuditSlider"
+                >
+                  <X aria-hidden="true" />
+                </button>
+              </div>
+              <button
+                v-else-if="mode === 'finance' && order.status === 'shipped' && !isOrderAudited(order)"
+                class="mobile-order-action button-audit"
+                type="button"
+                :disabled="orderActionLoading !== '' || !canAuditOrder(order)"
+                :title="canAuditOrder(order) ? '向右滑动确认审核' : '仅支持审核已发货的销售订单，且需具备审核权限'"
+                @click="handleMobileAuditOrder(order, $event)"
+              >
+                <Check aria-hidden="true" />审核
+              </button>
+              <button
+                v-else-if="mode === 'finance' && order.status === 'shipped' && isOrderAudited(order)"
+                class="mobile-order-action button-reverse-audit"
+                type="button"
+                :disabled="orderActionLoading !== '' || !canReverseAuditOrder(order)"
+                :title="canReverseAuditOrder(order) ? '撤销订单审核' : '仅支持撤销已发货销售订单的审核，且需具备反审核权限'"
+                @click="handleReverseAuditOrder(order)"
+              >
+                <RotateCcw aria-hidden="true" /><span>{{ orderActionLoading === 'reverse-audit' ? '撤销中...' : '撤销审核' }}</span>
+              </button>
+              <button
+                v-else-if="mode !== 'finance'"
                 class="mobile-order-action is-primary"
                 type="button"
                 @click="openOrderDetail(order)"
@@ -845,35 +916,37 @@
                 <FileText aria-hidden="true" />
                 详情
               </button>
-              <button
-                class="mobile-order-action"
-                type="button"
-                @click="handleCopyOrderInfo(order, mode === 'finance' ? 'order-info' : 'logistics-info')"
-              >
-                <Copy aria-hidden="true" />
-                复制
-              </button>
-              <button
-                v-if="canPrintSalesOrders"
-                class="mobile-order-action"
-                type="button"
-                @click="handlePrintOrder(order)"
-              >
-                <Printer aria-hidden="true" />
-                打印
-              </button>
-              <button
-                v-if="hasRowMenuActions(order)"
-                class="mobile-order-action row-menu-trigger"
-                type="button"
-                :aria-label="`订单 ${order.order_number || order.id} 更多操作`"
-                aria-haspopup="menu"
-                :aria-expanded="openActionMenuOrderId === order.id"
-                @click="toggleActionMenu(order, $event)"
-              >
-                <span aria-hidden="true">⋯</span>
-                更多
-              </button>
+              <template v-if="!(mode === 'finance' && order.status === 'shipped' && mobileAuditOrderId === order.id && canAuditOrder(order))">
+                <button
+                  class="mobile-order-action"
+                  type="button"
+                  @click="handleCopyOrderInfo(order, mode === 'finance' ? 'order-info' : 'logistics-info')"
+                >
+                  <Copy aria-hidden="true" />
+                  复制
+                </button>
+                <button
+                  v-if="canPrintSalesOrders"
+                  class="mobile-order-action"
+                  type="button"
+                  @click="handlePrintOrder(order)"
+                >
+                  <Printer aria-hidden="true" />
+                  打印
+                </button>
+                <button
+                  v-if="hasRowMenuActions(order)"
+                  class="mobile-order-action row-menu-trigger"
+                  type="button"
+                  :aria-label="`订单 ${order.order_number || order.id} 更多操作`"
+                  aria-haspopup="menu"
+                  :aria-expanded="openActionMenuOrderId === order.id"
+                  @click="toggleActionMenu(order, $event)"
+                >
+                  <span aria-hidden="true">⋯</span>
+                  更多
+                </button>
+              </template>
             </footer>
           </div>
           </form>
@@ -1522,7 +1595,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, inject, h, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Check, ChevronDown, Copy, FileText, Pencil, Plus, Printer, Trash2, Triangle } from '@lucide/vue'
+import { Check, ChevronDown, Copy, FileText, Pencil, Plus, Printer, RotateCcw, Trash2, Triangle, X } from '@lucide/vue'
 import request from '@/api/request'
 import { resolveLogisticsCopySettings } from '@/api/logisticsCopy'
 import { useOrderStore } from '@/stores/order'
@@ -1616,6 +1689,8 @@ const orderActionLoading = ref('')
 const auditSlideVisible = ref(false)
 const auditSlideValue = ref(0)
 const auditSlideInput = ref(null)
+const mobileAuditOrderId = ref(null)
+const mobileAuditSlideValue = ref(0)
 const openActionMenuOrderId = ref(null)
 const actionMenuElement = ref(null)
 const actionMenuStyle = ref({})
@@ -1756,6 +1831,8 @@ onUnmounted(() => {
 // 监听 mode 变化，重新获取数据
 watch(() => props.mode, () => {
   closeActionMenu()
+  mobileAuditOrderId.value = null
+  mobileAuditSlideValue.value = 0
   editingMobileOrderIds.value = new Set()
   mobileCreateWizardOpen.value = false
   mobileOrderDraft.value = null
@@ -3075,6 +3152,35 @@ const updateOrderAuditState = async (order, audited) => {
       closeAuditSlider()
     }
   }
+}
+
+const handleMobileAuditOrder = (order, event) => {
+  if (!canAuditOrder(order) || orderActionLoading.value) return
+  mobileAuditOrderId.value = order.id
+  mobileAuditSlideValue.value = 0
+  const card = event.currentTarget.closest('.mobile-order-card')
+  nextTick(() => card?.querySelector('.mobile-audit-slider-input')?.focus({ preventScroll: true }))
+}
+
+const closeMobileAuditSlider = () => {
+  if (orderActionLoading.value === 'audit') return
+  mobileAuditOrderId.value = null
+  mobileAuditSlideValue.value = 0
+}
+
+const handleMobileAuditSlideRelease = async order => {
+  if (mobileAuditSlideValue.value < 95) {
+    mobileAuditSlideValue.value = 0
+    return
+  }
+  if (!canAuditOrder(order) || orderActionLoading.value) {
+    closeMobileAuditSlider()
+    return
+  }
+  mobileAuditSlideValue.value = 100
+  await updateOrderAuditState(order, true)
+  mobileAuditOrderId.value = null
+  mobileAuditSlideValue.value = 0
 }
 
 const handleAuditOrder = () => {
@@ -5281,6 +5387,34 @@ textarea.mobile-order-inline-input {
   margin-top: 12px;
   padding: 10px 12px 12px;
   border-top: 1px solid #f0f2f4;
+}
+
+.mobile-audit-slide-row {
+  width: 100%;
+  min-width: 0;
+}
+
+.audit-slide-track.mobile-audit-slide-track {
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.mobile-order-action.button-reverse-audit {
+  white-space: normal;
+  line-height: 1.2;
+}
+
+.mobile-order-action.button-reverse-audit svg {
+  flex-shrink: 0;
+}
+
+.mobile-order-action.button-audit:disabled,
+.mobile-order-action.button-reverse-audit:disabled,
+.mobile-order-action.button-force-complete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .mobile-order-action {
