@@ -581,6 +581,7 @@
           :key="order.id"
           class="mobile-order-card"
           :class="{ selected: isSelected(order.id), expanded: isMobileOrderExpanded(order.id) }"
+          :style="{ '--store-bg-color': getStoreColor(order) }"
         >
           <div class="mobile-order-strip">
             <label
@@ -4553,7 +4554,7 @@ svg {
 
 .mobile-order-card {
   min-width: 0;
-  background: #fff;
+  background: var(--store-bg-color, #fff);
   border: 1px solid var(--border);
   border-radius: 8px;
   -webkit-tap-highlight-color: transparent;
