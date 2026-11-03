@@ -7062,13 +7062,56 @@ textarea.mobile-order-inline-input {
     border-radius: 0;
   }
 
-  .mobile-order-card.expanded {
-    box-shadow: none;
+  /* 展开的订单浮起成独立卡片，靠位置和阴影区分，不再给明细染色 */
+  .mobile-order-card {
+    transition: margin 0.2s ease, border-radius 0.2s ease, box-shadow 0.2s ease;
   }
 
-  /* 展开的明细用更深的底色，和上面的订单行区分开 */
+  .mobile-order-card.expanded {
+    position: relative;
+    z-index: 1;
+    margin: 8px;
+    overflow: hidden;
+    border-width: 1px;
+    border-color: #dde3ea;
+    border-radius: 10px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.12);
+  }
+
+  .mobile-order-card.expanded .mobile-order-strip {
+    border-bottom: 1px solid #e5e9ef;
+  }
+
   .mobile-order-card.expanded .mobile-order-body {
-    background: color-mix(in srgb, var(--store-bg-color, #fff) 92%, #475569);
+    background: #fff;
+    border-top: 0;
+  }
+
+  /* 白底上的标签和次要文字加深，方便快速找到内容 */
+  .mobile-order-card.expanded .mobile-order-body .mobile-order-field > span:first-child,
+  .mobile-order-card.expanded .mobile-order-body .mobile-order-product-spec,
+  .mobile-order-card.expanded .mobile-order-body .mobile-order-product-calc,
+  .mobile-order-card.expanded .mobile-order-body .mobile-order-products-head {
+    color: #5b6573;
+  }
+
+  .mobile-order-card.expanded .mobile-order-summary {
+    background: #f6f8fa;
+  }
+
+  .mobile-order-card.expanded .mobile-order-actions {
+    border-top-color: #e5e9ef;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mobile-order-card {
+      transition: none;
+    }
+  }
+
+  /* 列表上方不再有搜索面板，去掉多出来的间距 */
+  .records-panel {
+    margin-top: 0;
   }
 
   .mobile-order-card.expanded .mobile-order-strip {

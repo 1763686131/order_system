@@ -2328,7 +2328,13 @@ const logout = async () => {
   }
 
   .main-content {
-    padding: 12px;
+    padding: 6px 8px 8px;
+  }
+
+  /* 顶栏下方的展开按钮压扁一点，避免挡住列表顶部 */
+  .sticky-panel-toggle {
+    width: 38px;
+    height: 20px;
   }
 }
 
