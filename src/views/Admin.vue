@@ -112,7 +112,11 @@
               <span class="line"></span>
               <span class="line"></span>
             </span>
-            <span v-else class="arrow-icon">→</span>
+            <span v-else class="arrow-icon" aria-hidden="true">
+              <span class="line"></span>
+              <span class="line"></span>
+              <span class="line"></span>
+            </span>
           </button>
           <h2 class="header-page-title">{{ currentMenuLabel }}</h2>
         </div>
@@ -263,6 +267,21 @@
                   aria-label="账户操作"
                 >
                   <template v-if="isMobileViewport">
+                    <button
+                      v-if="activeContentRef?.canExport"
+                      class="account-menu-item account-menu-mobile-action"
+                      type="button"
+                      role="menuitem"
+                      @click="activeContentRef.exportOrders(); closeAccountMenu()"
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                      </svg>
+                      <span>导出 Excel</span>
+                    </button>
+
                     <button
                       class="account-menu-item account-menu-mobile-action"
                       type="button"
@@ -1018,7 +1037,13 @@ const dockedDocuments = computed(() => {
 })
 
 const currentMenuLabel = computed(() => {
-  if (route.name === 'admin-finance-debt-details') return isMobileViewport.value ? '欠款详情' : `财务/${route.params.type === 'payable' ? '应付' : '应收'}欠款/欠款详情`
+  const label = desktopMenuLabel.value
+  // 手机顶栏空间小，只保留最后一级名称
+  return isMobileViewport.value ? label.split('/').at(-1) : label
+})
+
+const desktopMenuLabel = computed(() => {
+  if (route.name === 'admin-finance-debt-details') return `财务/${route.params.type === 'payable' ? '应付' : '应收'}欠款/欠款详情`
   if (currentPath.value.startsWith('/admin/purchase/orders/')) {
     const action = {
       'admin-purchase-order-create': '新增', 'admin-purchase-order-edit': '修改',
@@ -1602,9 +1627,17 @@ const logout = async () => {
 }
 
 .arrow-icon {
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 16px;
+}
+
+.arrow-icon .line {
+  width: 100%;
+  height: 2px;
+  background-color: currentColor;
+  border-radius: 2px;
 }
 
 .header-page-title {
@@ -2239,6 +2272,11 @@ const logout = async () => {
 
   .header-actions:empty {
     display: none;
+  }
+
+  .header-icons :deep(.icon-btn) {
+    border-color: transparent;
+    background: transparent;
   }
 
   .header-page-title {

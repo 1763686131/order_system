@@ -183,7 +183,7 @@
           </button>
           <button
             v-if="mode !== 'finance' || canExportSalesOrders"
-            class="button button-export"
+            class="button button-export mobile-overflow-action"
             type="button"
             title="导出Excel"
             :disabled="loading"
@@ -198,7 +198,7 @@
           </button>
           <button
             v-if="mode === 'finance' && canCreateSalesOrders"
-            class="button button-primary create-button"
+            class="button button-primary create-button mobile-overflow-action"
             type="button"
             @click="handleAdd"
           >
@@ -211,7 +211,7 @@
           <button
             v-if="mode === 'finance' && canDeleteSalesOrders"
             class="button button-delete"
-            :class="{ 'has-selection': selectedOrders.length > 0 }"
+            :class="{ 'has-selection': selectedOrders.length > 0, 'mobile-selection-action': true }"
             type="button"
             :disabled="loading || selectedOrders.length === 0"
             @click="handleBatchDelete"
@@ -252,6 +252,17 @@
     <section class="records-panel">
       <header class="records-toolbar">
         <div class="toolbar-filters">
+          <!-- 手机端多选入口：勾选框平时隐藏，点这里才进入多选 -->
+          <button
+            v-if="mode !== 'finance' || canDeleteSalesOrders"
+            class="mobile-select-toggle"
+            type="button"
+            :aria-pressed="mobileSelecting"
+            @click="toggleMobileSelecting"
+          >
+            {{ mobileSelecting ? '完成' : '选择' }}
+          </button>
+
           <!-- 门店分类滑块 -->
           <div
             v-if="showStoreSelector"
@@ -611,7 +622,7 @@
           <div class="mobile-order-strip">
             <span v-if="isMobileOrderDraft(order.id)" class="mobile-order-draft-icon"><FileText aria-hidden="true" /></span>
             <label
-              v-else-if="mode !== 'finance' || canDeleteSalesOrders"
+              v-else-if="(mode !== 'finance' || canDeleteSalesOrders) && mobileSelecting"
               class="mobile-order-select"
             >
               <input
@@ -633,7 +644,7 @@
               <span class="mobile-order-strip-text">
                 <span class="mobile-order-strip-line">
                   <strong class="mobile-order-customer">{{ order.order_client || '-' }}</strong>
-                  <strong class="mobile-order-total">{{ getShouldReceive(editor.order) }}</strong>
+                  <strong class="mobile-order-total">{{ withThousands(getShouldReceive(editor.order)) }}</strong>
                 </span>
                 <span class="mobile-order-strip-line mobile-order-strip-meta">
                   <span class="mobile-order-date">{{ formatDate(order) }}</span>
@@ -749,7 +760,7 @@
                   :disabled="editor.saving"
                   @input="editor.changeReceivable($event.target.value)"
                 />
-                <strong v-else>{{ getShouldReceive(order) }}</strong>
+                <strong v-else>{{ withThousands(getShouldReceive(order)) }}</strong>
               </div>
               <div v-if="mode === 'finance'" class="mobile-order-field mobile-order-money">
                 <span>已收金额</span>
@@ -764,11 +775,11 @@
                   inputmode="decimal"
                   :disabled="editor.saving"
                 />
-                <strong v-else>{{ getCurrentPayment(order) }}</strong>
+                <strong v-else>{{ withThousands(getCurrentPayment(order)) }}</strong>
               </div>
               <div class="mobile-order-field mobile-order-money">
                 <span>未收金额</span>
-                <strong>{{ getCurrentDebt(editor.order) }}</strong>
+                <strong>{{ withThousands(getCurrentDebt(editor.order)) }}</strong>
               </div>
             </div>
 
@@ -953,6 +964,19 @@
           </MobileOrderEditor>
         </article>
       </div>
+
+      <button
+        v-if="mode === 'finance' && canCreateSalesOrders"
+        class="mobile-create-fab"
+        type="button"
+        :aria-label="addButtonText"
+        @click="handleAdd"
+      >
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <path d="M12 5v14"></path>
+          <path d="M5 12h14"></path>
+        </svg>
+      </button>
 
       <footer class="table-footer">
         <span>
@@ -1937,6 +1961,7 @@ const toggleShippingMethod = (method) => {
 }
 
 const mobileSearchExpanded = ref(false)
+const mobileSelecting = ref(false)
 const searchPanelShell = ref(null)
 const searchPanelContent = ref(null)
 let mobileSearchExpandedBeforePin = false
@@ -2818,6 +2843,12 @@ const toggleSelect = (orderId) => {
   selectedOrders.value = selectedOrders.value.includes(orderId)
     ? selectedOrders.value.filter(id => id !== orderId)
     : [...selectedOrders.value, orderId]
+}
+
+// 手机端平时不显示勾选框，点「选择」才进入多选，点「完成」退出并清空已选
+const toggleMobileSelecting = () => {
+  mobileSelecting.value = !mobileSelecting.value
+  if (!mobileSelecting.value) selectedOrders.value = []
 }
 
 const toggleSelectAll = () => {
@@ -3850,6 +3881,12 @@ const changePageSize = (size) => {
   }
   currentPage.value = 1 // 切换每页显示数量时重置到第一页
 }
+
+// 供顶栏「⋮」菜单调用：手机上导出按钮被收起后，从这里触发
+defineExpose({
+  canExport: computed(() => props.mode !== 'finance' || canExportSalesOrders.value),
+  exportOrders: handleExport
+})
 </script>
 
 <style scoped>
@@ -6653,6 +6690,11 @@ textarea.mobile-order-inline-input {
 
 /* 桌面端视觉优化（不影响 ≤780px 的移动端） */
 @media (min-width: 781px) {
+  /* 多选入口只给手机用，桌面表格本身就有勾选列 */
+  .mobile-select-toggle {
+    display: none;
+  }
+
   /* 搜索框加宽，避免占位文字被截断 */
   .keyword-field {
     flex: 0 1 300px;
@@ -6936,6 +6978,153 @@ textarea.mobile-order-inline-input {
 
   .search-actions .button {
     flex: 1 1 auto;
+  }
+
+  /* 操作区精简：导出、新增、批量删除默认隐藏 */
+  .mobile-overflow-action,
+  .mobile-selection-action {
+    display: none;
+  }
+
+  /* 多选入口只在手机上显示 */
+  .mobile-select-toggle {
+    align-self: flex-end;
+    height: 30px;
+    padding: 0 4px 0 2px;
+    color: var(--accent-dark);
+    background: transparent;
+    border: 0;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .mobile-select-toggle[aria-pressed="true"] {
+    color: var(--text-secondary);
+  }
+
+  /* 勾选订单后，「批量删除」出现在筛选栏下方 */
+  .mobile-selection-action.has-selection {
+    display: inline-flex;
+    width: 100%;
+    margin-top: 2px;
+  }
+
+  /* 筛选条只剩刷新按钮时，去掉整块面板 */
+  .search-panel.is-mobile-collapsed .search-grid:not(:has(.toolbar-actions > :not(.mobile-overflow-action):not(.mobile-selection-action))) {
+    display: none;
+  }
+
+  .search-panel.is-mobile-collapsed:has(.search-grid:not(:has(.toolbar-actions > :not(.mobile-overflow-action):not(.mobile-selection-action)))) {
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .search-panel.is-mobile-collapsed .toolbar-actions:not(:has(.mobile-selection-action.has-selection)) {
+    display: none;
+  }
+
+  /* 两组筛选改为轻量样式，并提示可以横向滑动 */
+  .material-type-slider,
+  .status-filter-slider {
+    position: relative;
+    gap: 2px;
+    padding: 3px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    box-shadow: none;
+    mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent);
+  }
+
+  .material-type-slider .slider-tab,
+  .status-filter-slider .slider-tab {
+    height: 30px;
+    padding: 0 12px;
+    color: var(--text-secondary);
+  }
+
+  .material-type-slider .slider-tab.active,
+  .status-filter-slider .slider-tab.active {
+    color: var(--accent-dark);
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+  }
+
+  .material-type-slider .count-badge,
+  .status-filter-slider .count-badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    color: var(--text-muted);
+    background: rgba(15, 23, 42, 0.06);
+    font-weight: 600;
+  }
+
+  .material-type-slider .slider-tab.active .count-badge,
+  .status-filter-slider .slider-tab.active .count-badge {
+    color: var(--accent-dark);
+    background: var(--accent-soft);
+  }
+
+  /* 订单卡片改为连续列表 */
+  .mobile-order-list {
+    gap: 0;
+    padding: 0;
+    background: #fff;
+  }
+
+  .mobile-order-card {
+    border-width: 0 0 1px;
+    border-radius: 0;
+  }
+
+  .mobile-order-card.expanded {
+    box-shadow: none;
+    background: #fbfcfd;
+  }
+
+  .mobile-order-card.selected {
+    background: #f4fbf8;
+  }
+
+  .mobile-order-strip {
+    min-height: 64px;
+  }
+
+  /* 新增订单悬浮按钮 */
+  .mobile-create-fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(16px + env(safe-area-inset-bottom));
+    z-index: 90;
+    display: flex;
+    width: 52px;
+    height: 52px;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    color: #fff;
+    background: var(--accent);
+    border: 0;
+    border-radius: 50%;
+    box-shadow: 0 6px 16px rgba(var(--accent-rgb), 0.35);
+    cursor: pointer;
+  }
+
+  .mobile-create-fab:active {
+    background: var(--accent-dark);
+  }
+
+  .mobile-create-fab:focus-visible {
+    outline: 2px solid var(--accent-dark);
+    outline-offset: 3px;
+  }
+
+  .mobile-create-fab svg {
+    width: 24px;
+    height: 24px;
+    stroke-width: 2.2;
   }
 
   .detail-modal-layer {
