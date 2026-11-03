@@ -961,10 +961,17 @@
 
       <button
         v-if="mode === 'finance' && canCreateSalesOrders"
+        ref="mobileCreateFab"
         class="mobile-create-fab"
+        :class="{ 'is-dragging': mobileCreateFabDragging }"
+        :style="mobileCreateFabStyle"
         type="button"
         :aria-label="addButtonText"
-        @click="handleAdd"
+        @pointerdown="handleMobileCreateFabPointerDown"
+        @pointermove="handleMobileCreateFabPointerMove"
+        @pointerup="handleMobileCreateFabPointerUp"
+        @pointercancel="handleMobileCreateFabPointerUp"
+        @click="handleMobileCreateFabClick"
       >
         <svg aria-hidden="true" viewBox="0 0 24 24">
           <path d="M12 5v14"></path>
@@ -1840,6 +1847,8 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   document.addEventListener('scroll', handleActionMenuScroll, true)
   window.addEventListener('resize', handleActionMenuScroll)
+  window.addEventListener('resize', restoreMobileCreateFabPosition)
+  restoreMobileCreateFabPosition()
   window.addEventListener(LOGISTICS_COPY_SETTINGS_CHANGED_EVENT, refreshLogisticsCopySettings)
   window.addEventListener('focus', refreshLogisticsCopySettings)
   refreshLogisticsCopySettings()
@@ -1854,6 +1863,7 @@ onUnmounted(() => {
   document.removeEventListener('click', handleClickOutside)
   document.removeEventListener('scroll', handleActionMenuScroll, true)
   window.removeEventListener('resize', handleActionMenuScroll)
+  window.removeEventListener('resize', restoreMobileCreateFabPosition)
   window.removeEventListener(LOGISTICS_COPY_SETTINGS_CHANGED_EVENT, refreshLogisticsCopySettings)
   window.removeEventListener('focus', refreshLogisticsCopySettings)
   if (noticeTimer) {
@@ -2917,6 +2927,99 @@ const handleAdd = () => {
     return
   }
   openOrderTask({ name: 'admin-sales-create' })
+}
+
+// 手机端新增按钮可以拖动，松手后吸附到最近的左右边缘，位置记在本地
+const MOBILE_CREATE_FAB_POSITION_KEY = 'mobile-create-fab-position'
+const MOBILE_CREATE_FAB_MARGIN = 12
+const mobileCreateFab = ref(null)
+const mobileCreateFabPosition = ref(null)
+const mobileCreateFabDragging = ref(false)
+let mobileCreateFabDrag = null
+let mobileCreateFabMoved = false
+
+const clampMobileCreateFab = ({ x, y }) => {
+  const size = mobileCreateFab.value?.offsetWidth || 52
+  const margin = MOBILE_CREATE_FAB_MARGIN
+  return {
+    x: Math.max(margin, Math.min(x, window.innerWidth - size - margin)),
+    y: Math.max(margin, Math.min(y, window.innerHeight - size - margin))
+  }
+}
+
+const mobileCreateFabStyle = computed(() => {
+  const position = mobileCreateFabPosition.value
+  if (!position) return undefined
+  return { left: `${position.x}px`, top: `${position.y}px`, right: 'auto', bottom: 'auto' }
+})
+
+const handleMobileCreateFabPointerDown = event => {
+  if (!event.isPrimary || event.button !== 0 || !mobileCreateFab.value) return
+  const rect = mobileCreateFab.value.getBoundingClientRect()
+  mobileCreateFabDrag = {
+    pointerId: event.pointerId,
+    x: event.clientX,
+    y: event.clientY,
+    left: rect.left,
+    top: rect.top
+  }
+  mobileCreateFabMoved = false
+  event.currentTarget.setPointerCapture(event.pointerId)
+}
+
+const handleMobileCreateFabPointerMove = event => {
+  const drag = mobileCreateFabDrag
+  if (!drag || event.pointerId !== drag.pointerId) return
+  const dx = event.clientX - drag.x
+  const dy = event.clientY - drag.y
+  if (!mobileCreateFabMoved && Math.hypot(dx, dy) < 6) return
+  mobileCreateFabMoved = true
+  mobileCreateFabDragging.value = true
+  mobileCreateFabPosition.value = clampMobileCreateFab({ x: drag.left + dx, y: drag.top + dy })
+}
+
+const handleMobileCreateFabPointerUp = event => {
+  const drag = mobileCreateFabDrag
+  if (!drag || event.pointerId !== drag.pointerId) return
+  mobileCreateFabDrag = null
+  if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+    event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+  mobileCreateFabDragging.value = false
+  if (!mobileCreateFabMoved || !mobileCreateFabPosition.value) return
+  const size = mobileCreateFab.value?.offsetWidth || 52
+  const { y } = mobileCreateFabPosition.value
+  const snapLeft = mobileCreateFabPosition.value.x + size / 2 < window.innerWidth / 2
+  mobileCreateFabPosition.value = clampMobileCreateFab({
+    x: snapLeft ? 0 : window.innerWidth,
+    y
+  })
+  localStorage.setItem(MOBILE_CREATE_FAB_POSITION_KEY, JSON.stringify({
+    side: snapLeft ? 'left' : 'right',
+    ratio: y / window.innerHeight
+  }))
+}
+
+const handleMobileCreateFabClick = () => {
+  // 拖动结束时会触发一次 click，这次不算新增
+  if (mobileCreateFabMoved) {
+    mobileCreateFabMoved = false
+    return
+  }
+  handleAdd()
+}
+
+const restoreMobileCreateFabPosition = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MOBILE_CREATE_FAB_POSITION_KEY) || 'null')
+    if (!saved || !['left', 'right'].includes(saved.side) || !Number.isFinite(saved.ratio)) return
+    mobileCreateFabPosition.value = clampMobileCreateFab({
+      x: saved.side === 'left' ? 0 : window.innerWidth,
+      y: saved.ratio * window.innerHeight
+    })
+  } catch {
+    localStorage.removeItem(MOBILE_CREATE_FAB_POSITION_KEY)
+  }
 }
 
 const startMobileOrderDraft = async setup => {
@@ -7148,6 +7251,20 @@ textarea.mobile-order-inline-input {
 
   .mobile-create-fab:active {
     background: var(--accent-dark);
+  }
+
+  /* 拖动时不让浏览器滚动页面；松手后平滑吸附到边缘 */
+  .mobile-create-fab {
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    transition: left 0.22s ease, top 0.22s ease, transform 0.15s ease;
+  }
+
+  .mobile-create-fab.is-dragging {
+    transform: scale(1.08);
+    transition: none;
   }
 
   .mobile-create-fab:focus-visible {
