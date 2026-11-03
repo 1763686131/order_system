@@ -1213,11 +1213,11 @@ const logout = async () => {
 .sidebar {
   --nav-bg: #161e2e;
   --nav-hover: rgba(148, 163, 184, 0.1);
-  --nav-active: #3b4a68;
+  --nav-active: #11735c;
   --nav-text: #a3adbf;
   --nav-text-strong: #f1f5f9;
   --nav-line: rgba(148, 163, 184, 0.22);
-  --nav-brand: #3b6cf6;
+  --nav-brand: #0f9f78;
 
   width: 232px;
   flex-shrink: 0;
@@ -1247,7 +1247,7 @@ const logout = async () => {
   color: #fff;
   background: var(--nav-brand);
   border-radius: 50%;
-  box-shadow: 0 4px 12px rgba(59, 108, 246, 0.35);
+  box-shadow: 0 4px 12px rgba(15, 159, 120, 0.35);
 }
 
 .system-name {
@@ -2168,6 +2168,20 @@ const logout = async () => {
 
   .header-actions {
     gap: 8px;
+  }
+}
+
+/* 桌面端顶栏图标去边框，悬停时显示底色（不影响移动端） */
+@media (min-width: 781px) {
+  .header-icons :deep(.icon-btn) {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .header-icons :deep(.icon-btn:hover),
+  .header-icons :deep(.icon-btn[aria-expanded="true"]) {
+    border-color: transparent;
+    background: var(--accent-soft);
   }
 }
 

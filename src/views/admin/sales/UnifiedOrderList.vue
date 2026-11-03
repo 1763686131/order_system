@@ -445,9 +445,9 @@
                   </div>
                 </td>
 
-                <td v-else-if="column.key === 'receivable'" class="number-column numeric">{{ getShouldReceive(order) }}</td>
-                <td v-else-if="column.key === 'received'" class="number-column numeric">{{ getCurrentPayment(order) }}</td>
-                <td v-else-if="column.key === 'outstanding'" class="number-column numeric">{{ getCurrentDebt(order) }}</td>
+                <td v-else-if="column.key === 'receivable'" class="number-column numeric">{{ withThousands(getShouldReceive(order)) }}</td>
+                <td v-else-if="column.key === 'received'" class="number-column numeric">{{ withThousands(getCurrentPayment(order)) }}</td>
+                <td v-else-if="column.key === 'outstanding'" class="number-column numeric">{{ withThousands(getCurrentDebt(order)) }}</td>
 
                 <td v-else-if="column.key === 'weight'">{{ getTotalWeight(order) }}</td>
                 <td v-else-if="column.key === 'shipping-method'">
@@ -2431,6 +2431,9 @@ const getPackageCount = (order) => {
   // 2. 回退到旧字段
   return order.goods_quantity || '-'
 }
+
+// 桌面表格金额加千分位：¥10375.00 -> ¥10,375.00
+const withThousands = (text) => String(text).replace(/\d(?=(\d{3})+\.)/g, '$&,')
 
 // 获取应收金额
 const getShouldReceive = (order) => {
@@ -6645,6 +6648,128 @@ textarea.mobile-order-inline-input {
 
   .search-grid.is-logistics .toolbar-actions {
     grid-column: 1 / -1;
+  }
+}
+
+/* 桌面端视觉优化（不影响 ≤780px 的移动端） */
+@media (min-width: 781px) {
+  /* 搜索框加宽，避免占位文字被截断 */
+  .keyword-field {
+    flex: 0 1 300px;
+    min-width: 220px;
+  }
+
+  /* 「查询」降为描边按钮，只保留「新增订单」为主按钮 */
+  .search-actions .button-primary {
+    color: var(--accent-dark);
+    background: #fff;
+    border-color: var(--accent-border);
+    box-shadow: none;
+  }
+
+  .search-actions .button-primary:hover:not(:disabled) {
+    color: var(--accent-dark);
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+
+  /* 门店分类改为下划线标签，与状态筛选区分层级 */
+  .material-type-slider {
+    gap: 2px;
+    padding: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .material-type-slider .slider-tab {
+    padding: 0 12px;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+  }
+
+  .material-type-slider .slider-tab:hover {
+    background: transparent;
+  }
+
+  .material-type-slider .slider-tab.active {
+    color: var(--accent-dark);
+    background: transparent;
+    border-bottom-color: var(--accent);
+    box-shadow: none;
+  }
+
+  /* 两组筛选之间用独立的细竖线分隔 */
+  .material-type-slider + .status-filter-slider {
+    position: relative;
+    margin-left: 25px;
+  }
+
+  .material-type-slider + .status-filter-slider::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: -13px;
+    height: 18px;
+    border-left: 1px solid var(--border);
+    transform: translateY(-50%);
+  }
+
+  /* 状态筛选：轻量分段控件，选中项白底 + 细阴影 */
+  .status-filter-slider {
+    gap: 2px;
+    padding: 3px;
+    background: #f1f5f9;
+    border-radius: 8px;
+    box-shadow: none;
+  }
+
+  .status-filter-slider .slider-tab {
+    height: 30px;
+    padding: 0 12px;
+    color: var(--text-secondary);
+  }
+
+  .status-filter-slider .slider-tab:hover {
+    color: var(--text);
+    background: transparent;
+  }
+
+  .status-filter-slider .slider-tab.active {
+    color: var(--accent-dark);
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(15, 23, 42, 0.04);
+  }
+
+  .status-filter-slider .count-badge {
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    color: var(--text-muted);
+    background: rgba(15, 23, 42, 0.06);
+    font-weight: 600;
+  }
+
+  .status-filter-slider .slider-tab.active .count-badge {
+    color: var(--accent-dark);
+    background: var(--accent-soft);
+  }
+
+  /* 行操作按钮去边框，平时弱化，悬停行时恢复 */
+  .row-actions button {
+    border-color: transparent;
+    background: transparent;
+    opacity: 0.55;
+    transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease;
+  }
+
+  .record-row:hover .row-actions button,
+  .row-actions button:focus-visible,
+  .row-actions .row-menu-trigger[aria-expanded="true"] {
+    opacity: 1;
+  }
+
+  .row-actions button:hover:not(:disabled) {
+    border-color: transparent;
   }
 }
 
