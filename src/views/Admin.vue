@@ -3,6 +3,9 @@
     <!-- 左侧边栏 -->
     <aside id="admin-sidebar" class="sidebar">
       <div class="sidebar-header">
+        <span class="system-logo" aria-hidden="true">
+          <Boxes :size="17" :stroke-width="2" />
+        </span>
         <div class="system-name">后台管理系统</div>
       </div>
 
@@ -56,7 +59,7 @@
                     @click="navigateTo(child.path)"
                   >
                     <span v-if="child.icon" class="nav-subicon" v-html="child.icon"></span>
-                    {{ child.label }}
+                    <span class="nav-sublabel">{{ child.label }}</span>
                   </li>
                 </ul>
               </li>
@@ -64,6 +67,19 @@
           </ul>
         </div>
       </nav>
+
+      <div class="sidebar-footer">
+        <button
+          class="sidebar-collapse-btn"
+          type="button"
+          title="收起菜单"
+          aria-label="收起菜单"
+          @click="closeSidebar"
+        >
+          <ChevronsLeft :size="16" :stroke-width="1.8" aria-hidden="true" />
+          <span>收起菜单</span>
+        </button>
+      </div>
     </aside>
 
     <button
@@ -368,7 +384,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import { ChevronDown, FilePenLine, FilePlus2, PackageCheck, RotateCcw } from '@lucide/vue'
+import { Boxes, ChevronDown, ChevronsLeft, FilePenLine, FilePlus2, PackageCheck, RotateCcw } from '@lucide/vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
@@ -1195,32 +1211,94 @@ const logout = async () => {
 
 /* 左侧边栏样式 */
 .sidebar {
-  width: 240px;
-  background: #0f172a;
-  color: #f8fafc;
+  --nav-bg: #161e2e;
+  --nav-hover: rgba(148, 163, 184, 0.1);
+  --nav-active: #3b4a68;
+  --nav-text: #a3adbf;
+  --nav-text-strong: #f1f5f9;
+  --nav-line: rgba(148, 163, 184, 0.22);
+  --nav-brand: #3b6cf6;
+
+  width: 232px;
+  flex-shrink: 0;
+  background: var(--nav-bg);
+  color: var(--nav-text-strong);
   display: flex;
   flex-direction: column;
-  box-shadow: 2px 0 8px rgba(15, 23, 42, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
   transition: width 0.3s ease;
 }
 
 .sidebar-header {
-  padding: 20px;
-  background: #0B0E14;
-  border-bottom: 1px solid rgba(248, 250, 252, 0.08);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 22px 20px 18px;
+  white-space: nowrap;
+}
+
+.system-logo {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  background: var(--nav-brand);
+  border-radius: 50%;
+  box-shadow: 0 4px 12px rgba(59, 108, 246, 0.35);
 }
 
 .system-name {
-  font-size: 18px;
-  font-weight: 650;
-  color: #f8fafc;
-  letter-spacing: 0.3px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--nav-text-strong);
+  letter-spacing: 0.4px;
 }
 
 .sidebar-nav {
   flex: 1;
-  padding: 12px 8px;
+  padding: 8px 12px 12px;
+  overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.25) transparent;
+}
+
+.sidebar-footer {
+  padding: 12px;
+  border-top: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.sidebar-collapse-btn {
+  display: flex;
+  width: 100%;
+  height: 34px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: var(--nav-text);
+  background: rgba(148, 163, 184, 0.06);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+
+.sidebar-collapse-btn:hover {
+  color: var(--nav-text-strong);
+  background: var(--nav-hover);
+}
+
+.sidebar-collapse-btn:focus-visible,
+.nav-item:focus-visible,
+.nav-subitem:focus-visible {
+  outline: 2px solid var(--nav-brand);
+  outline-offset: 1px;
 }
 
 .nav-list {
@@ -1234,18 +1312,21 @@ const logout = async () => {
 }
 
 .nav-item {
-  padding: 11px 14px;
+  height: 40px;
+  padding: 0 12px;
   cursor: pointer;
-  transition: all 0.18s ease;
-  color: #94a3b8;
-  font-size: 14px;
+  transition: background 0.18s ease, color 0.18s ease;
+  color: var(--nav-text);
+  font-size: 13.5px;
   font-weight: 500;
-  border-radius: 7px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
-  gap: 11px;
+  gap: 10px;
   position: relative;
-  margin-bottom: 2px;
+  margin-bottom: 4px;
+  white-space: nowrap;
+  user-select: none;
 }
 
 .nav-item.has-children {
@@ -1253,8 +1334,8 @@ const logout = async () => {
 }
 
 .nav-icon {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1283,27 +1364,69 @@ const logout = async () => {
   transform: rotate(180deg);
 }
 
+.nav-icon :deep(svg) {
+  width: 17px;
+  height: 17px;
+  stroke-width: 1.7;
+}
+
+.nav-arrow {
+  opacity: 0.6;
+}
+
+.nav-arrow svg {
+  width: 13px;
+  height: 13px;
+}
+
 .nav-item:hover {
-  background: rgba(15, 159, 120, 0.12);
-  color: #e2e8f0;
+  background: var(--nav-hover);
+  color: var(--nav-text-strong);
 }
 
-.nav-item.active {
-  background: var(--accent);
+.nav-item.active:not(.has-children) {
+  background: var(--nav-active);
   color: #ffffff;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+/* 父级：展开或包含当前页时，仅高亮文字 */
+.nav-item.has-children.active,
 .nav-item.expanded {
-  background: rgba(248, 250, 252, 0.05);
-  color: #e2e8f0;
+  color: var(--nav-text-strong);
+  font-weight: 600;
 }
 
-/* 子菜单 */
+/* 覆盖全局 original-style.css 中 .nav-item.active 的浅蓝背景 */
+.nav-item.has-children.active {
+  background: transparent;
+}
+
+.nav-item.has-children.active:hover {
+  background: var(--nav-hover);
+}
+
+.nav-item.expanded .nav-arrow {
+  opacity: 1;
+}
+
+/* 子菜单：左侧竖线 + 选中块 */
 .nav-submenu {
+  position: relative;
   list-style: none;
-  padding: 4px 0;
-  margin: 0;
+  padding: 2px 0 6px 20px;
+  margin: 0 0 4px 0;
   animation: slideDown 0.2s ease;
+}
+
+.nav-submenu::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 10px;
+  left: 20px;
+  border-left: 1px dashed var(--nav-line);
 }
 
 @keyframes slideDown {
@@ -1318,17 +1441,36 @@ const logout = async () => {
 }
 
 .nav-subitem {
-  padding: 9px 14px 9px 45px;
+  position: relative;
+  height: 36px;
+  padding: 0 12px 0 14px;
+  margin: 0 0 3px 10px;
   cursor: pointer;
-  transition: all 0.18s ease;
-  color: #94a3b8;
+  transition: background 0.18s ease, color 0.18s ease;
+  color: var(--nav-text);
   font-size: 13px;
   font-weight: 500;
-  border-radius: 6px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   gap: 9px;
-  margin-bottom: 2px;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* 竖线上的短横 */
+.nav-subitem::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: -10px;
+  width: 8px;
+  border-top: 1px dashed var(--nav-line);
+}
+
+.nav-sublabel {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .nav-subicon {
@@ -1341,14 +1483,15 @@ const logout = async () => {
 }
 
 .nav-subitem:hover {
-  background: rgba(15, 159, 120, 0.1);
-  color: #e2e8f0;
+  background: var(--nav-hover);
+  color: var(--nav-text-strong);
 }
 
 .nav-subitem.active {
-  background: rgba(15, 159, 120, 0.2);
-  color: #4FD1C5;
+  background: var(--nav-active);
+  color: #ffffff;
   font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 /* 右侧主体区域 */
