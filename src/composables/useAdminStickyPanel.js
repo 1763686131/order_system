@@ -10,6 +10,7 @@ import {
 } from 'vue'
 
 const adminStickyPanelKey = Symbol('adminStickyPanel')
+const MOBILE_QUERY = '(max-width: 780px)'
 
 export function provideAdminStickyPanel(mainContentRef, headerRef) {
   const activePanel = shallowRef(null)
@@ -17,7 +18,14 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
   const expanded = ref(false)
   const placeholderHeight = ref(0)
   const geometry = ref({ left: 0, top: 0, width: 0, maxHeight: 0, scrollable: false })
+  const isMobile = ref(typeof window !== 'undefined' && window.matchMedia(MOBILE_QUERY).matches)
   let resizeObserver = null
+  let mobileQueryList = null
+
+  // 手机端：面板默认完全隐藏，只能通过顶栏下方的按钮展开/收起
+  const headerToggleOnly = computed(() =>
+    isMobile.value && Boolean(activePanel.value?.mobileHeaderToggle)
+  )
 
   const updatePosition = () => {
     const container = mainContentRef.value
@@ -60,6 +68,9 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
     const scrollTop = mainContentRef.value?.scrollTop || 0
     if (!panel) return
 
+    // 手机端面板不随滚动固定，由顶栏按钮控制展开和收起
+    if (headerToggleOnly.value) return
+
     if (scrollTop <= 0) {
       restore()
       return
@@ -82,10 +93,18 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
   }
 
   const expand = () => {
-    if (!activePanel.value || !pinned.value) return
+    if (!activePanel.value || !(pinned.value || headerToggleOnly.value)) return
     expanded.value = true
     activePanel.value.onExpand?.()
     nextTick(updatePosition)
+  }
+
+  const toggle = () => (expanded.value ? collapse() : expand())
+
+  const handleMobileQueryChange = event => {
+    isMobile.value = event.matches
+    restore()
+    nextTick(handleScroll)
   }
 
   const register = panel => {
@@ -116,13 +135,15 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
   }
 
   const placeholderStyle = computed(() =>
-    pinned.value ? { height: `${placeholderHeight.value}px` } : {}
+    pinned.value && !headerToggleOnly.value ? { height: `${placeholderHeight.value}px` } : {}
   )
   const contentStyle = computed(() => {
-    if (!pinned.value) return {}
+    if (!pinned.value && !headerToggleOnly.value) return {}
     if (!expanded.value) return { display: 'none' }
     return {
       position: 'fixed',
+      // 手机端展开时给顶栏下方的收起按钮留出位置，避免盖住面板内容
+      paddingTop: headerToggleOnly.value ? '30px' : undefined,
       top: `${geometry.value.top}px`,
       left: `${geometry.value.left}px`,
       width: `${geometry.value.width}px`,
@@ -139,21 +160,29 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
     contentStyle,
     register
   })
-  onMounted(() => window.addEventListener('resize', updatePosition))
+  onMounted(() => {
+    window.addEventListener('resize', updatePosition)
+    mobileQueryList = window.matchMedia(MOBILE_QUERY)
+    mobileQueryList.addEventListener?.('change', handleMobileQueryChange)
+  })
   onBeforeUnmount(() => {
     window.removeEventListener('resize', updatePosition)
+    mobileQueryList?.removeEventListener?.('change', handleMobileQueryChange)
     resizeObserver?.disconnect()
   })
 
   return {
-    visible: computed(() => Boolean(activePanel.value) && pinned.value && !expanded.value),
+    // 手机端按钮常驻，用来展开和收起；桌面端只在固定后、未展开时出现
+    visible: computed(() => Boolean(activePanel.value) &&
+      (headerToggleOnly.value || (pinned.value && !expanded.value))),
+    expanded,
     panelId: computed(() => activePanel.value?.id),
     buttonLabel: computed(() =>
-      `展开${activePanel.value?.label || '筛选栏'}`
+      `${expanded.value ? '收起' : '展开'}${activePanel.value?.label || '筛选栏'}`
     ),
     handleScroll,
     handleWheel,
-    expand
+    expand: toggle
   }
 }
 

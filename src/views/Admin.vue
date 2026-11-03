@@ -347,8 +347,9 @@
         <button
           v-if="stickyPanelVisible"
           class="sticky-panel-toggle"
+          :class="{ 'is-expanded': stickyPanelExpanded }"
           type="button"
-          aria-expanded="false"
+          :aria-expanded="stickyPanelExpanded"
           :aria-controls="stickyPanelId"
           :aria-label="stickyPanelButtonLabel"
           :title="stickyPanelButtonLabel"
@@ -450,6 +451,7 @@ const mainContentRef = ref(null)
 const topHeaderRef = ref(null)
 const {
   visible: stickyPanelVisible,
+  expanded: stickyPanelExpanded,
   panelId: stickyPanelId,
   buttonLabel: stickyPanelButtonLabel,
   handleScroll: handleStickyPanelScroll,
@@ -1566,6 +1568,14 @@ const logout = async () => {
   box-shadow: 0 2px 6px rgba(15, 23, 42, 0.08);
   cursor: pointer;
   transform: translateX(-50%);
+}
+
+.sticky-panel-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.sticky-panel-toggle.is-expanded svg {
+  transform: rotate(180deg);
 }
 
 .sticky-panel-toggle:hover {

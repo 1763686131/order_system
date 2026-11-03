@@ -229,22 +229,6 @@
         </form>
       </section>
 
-      <button
-        v-if="!searchPanelPinned"
-        class="mobile-search-toggle"
-        :class="{ expanded: mobileSearchExpanded }"
-        type="button"
-        :aria-expanded="mobileSearchExpanded"
-        aria-controls="order-search-panel"
-        :aria-label="mobileSearchExpanded ? '收起搜索' : '展开搜索'"
-        :title="mobileSearchExpanded ? '收起搜索' : '展开搜索'"
-        @click="mobileSearchExpanded = !mobileSearchExpanded"
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24">
-          <path v-if="!mobileSearchExpanded" d="m6 9 6 6 6-6"></path>
-          <path v-else d="m6 15 6-6 6 6"></path>
-        </svg>
-      </button>
       </div>
     </div>
 
@@ -253,15 +237,25 @@
       <header class="records-toolbar">
         <div class="toolbar-filters">
           <!-- 手机端多选入口：勾选框平时隐藏，点这里才进入多选 -->
-          <button
-            v-if="mode !== 'finance' || canDeleteSalesOrders"
-            class="mobile-select-toggle"
-            type="button"
-            :aria-pressed="mobileSelecting"
-            @click="toggleMobileSelecting"
-          >
-            {{ mobileSelecting ? '完成' : '选择' }}
-          </button>
+          <div v-if="mode !== 'finance' || canDeleteSalesOrders" class="mobile-select-bar">
+            <button
+              v-if="mobileSelecting && mode === 'finance' && canDeleteSalesOrders"
+              class="mobile-batch-delete"
+              type="button"
+              :disabled="loading || selectedOrders.length === 0"
+              @click="handleBatchDelete"
+            >
+              删除{{ selectedOrders.length ? `（${selectedOrders.length}）` : '' }}
+            </button>
+            <button
+              class="mobile-select-toggle"
+              type="button"
+              :aria-pressed="mobileSelecting"
+              @click="toggleMobileSelecting"
+            >
+              {{ mobileSelecting ? '完成' : '选择' }}
+            </button>
+          </div>
 
           <!-- 门店分类滑块 -->
           <div
@@ -1964,25 +1958,20 @@ const mobileSearchExpanded = ref(false)
 const mobileSelecting = ref(false)
 const searchPanelShell = ref(null)
 const searchPanelContent = ref(null)
-let mobileSearchExpandedBeforePin = false
 const {
-  pinned: searchPanelPinned,
   placeholderStyle: searchPanelPlaceholderStyle,
   contentStyle: searchPanelContentStyle
 } = useAdminStickyPanel(searchPanelShell, searchPanelContent, {
   id: 'order-search-panel',
   label: '订单筛选',
-  onPin: () => {
-    mobileSearchExpandedBeforePin = mobileSearchExpanded.value
-  },
+  // 手机端搜索面板默认隐藏，由顶栏下方的按钮展开
+  mobileHeaderToggle: true,
   onExpand: () => {
     mobileSearchExpanded.value = true
   },
   onCollapse: () => {
     shippingDropdownOpen.value = false
-  },
-  onRestore: () => {
-    mobileSearchExpanded.value = mobileSearchExpandedBeforePin
+    mobileSearchExpanded.value = false
   }
 })
 
@@ -4164,7 +4153,8 @@ svg {
   box-shadow: 0 2px 10px rgba(15, 23, 42, 0.035);
 }
 
-.mobile-search-toggle {
+.mobile-search-toggle,
+.mobile-select-bar {
   display: none;
 }
 
@@ -6690,7 +6680,8 @@ textarea.mobile-order-inline-input {
 
 /* 桌面端视觉优化（不影响 ≤780px 的移动端） */
 @media (min-width: 781px) {
-  /* 多选入口只给手机用，桌面表格本身就有勾选列 */
+  /* 多选入口只在手机上显示，桌面表格本身就有勾选列 */
+  .mobile-select-bar,
   .mobile-select-toggle {
     display: none;
   }
@@ -6817,11 +6808,16 @@ textarea.mobile-order-inline-input {
 
 @media (max-width: 780px) {
   .search-panel-shell {
-    margin-bottom: 14px;
+    margin-bottom: 0;
+  }
+
+  /* 收起时整块搜索面板不占位置，避免顶部出现空白盒子 */
+  .search-panel-shell:has(.search-panel.is-mobile-collapsed) {
+    display: none;
   }
 
   .search-panel-content {
-    padding-bottom: 10px;
+    padding-bottom: 0;
   }
 
   .search-panel {
@@ -6834,33 +6830,7 @@ textarea.mobile-order-inline-input {
   }
 
   .mobile-search-toggle {
-    position: absolute;
-    right: 50%;
-    bottom: 0;
-    display: flex;
-    width: 36px;
-    height: 22px;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    color: var(--text-secondary);
-    background: var(--panel-bg);
-    border: 1px solid var(--border);
-    border-top: 0;
-    border-radius: 0 0 6px 6px;
-    cursor: pointer;
-    transform: translateX(50%);
-    transition: color 0.18s ease, background 0.18s ease;
-  }
-
-  .mobile-search-toggle:hover {
-    color: var(--accent-dark);
-    background: var(--accent-soft);
-  }
-
-  .mobile-search-toggle svg {
-    width: 16px;
-    height: 16px;
+    display: none;
   }
 
   .page-notice {
@@ -6986,12 +6956,19 @@ textarea.mobile-order-inline-input {
     display: none;
   }
 
-  /* 多选入口只在手机上显示 */
-  .mobile-select-toggle {
-    align-self: flex-end;
+  /* 多选入口只在手机上显示，放在筛选栏右上角 */
+  .mobile-select-bar {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+    margin: -4px 0 6px;
+  }
+
+  .mobile-select-toggle,
+  .mobile-batch-delete {
     height: 30px;
-    padding: 0 4px 0 2px;
-    color: var(--accent-dark);
+    padding: 0;
     background: transparent;
     border: 0;
     font-size: 14px;
@@ -6999,15 +6976,21 @@ textarea.mobile-order-inline-input {
     cursor: pointer;
   }
 
+  .mobile-select-toggle {
+    color: var(--accent-dark);
+  }
+
   .mobile-select-toggle[aria-pressed="true"] {
     color: var(--text-secondary);
   }
 
-  /* 勾选订单后，「批量删除」出现在筛选栏下方 */
-  .mobile-selection-action.has-selection {
-    display: inline-flex;
-    width: 100%;
-    margin-top: 2px;
+  .mobile-batch-delete {
+    color: #c2410c;
+  }
+
+  .mobile-batch-delete:disabled {
+    color: #c4c9d1;
+    cursor: not-allowed;
   }
 
   /* 筛选条只剩刷新按钮时，去掉整块面板 */
@@ -7081,7 +7064,15 @@ textarea.mobile-order-inline-input {
 
   .mobile-order-card.expanded {
     box-shadow: none;
-    background: #fbfcfd;
+  }
+
+  /* 展开的明细用更深的底色，和上面的订单行区分开 */
+  .mobile-order-card.expanded .mobile-order-body {
+    background: color-mix(in srgb, var(--store-bg-color, #fff) 92%, #475569);
+  }
+
+  .mobile-order-card.expanded .mobile-order-strip {
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
   }
 
   .mobile-order-card.selected {
