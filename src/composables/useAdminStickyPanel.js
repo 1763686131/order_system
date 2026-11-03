@@ -68,8 +68,11 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
     const scrollTop = mainContentRef.value?.scrollTop || 0
     if (!panel) return
 
-    // 手机端面板不随滚动固定，由顶栏按钮控制展开和收起
-    if (headerToggleOnly.value) return
+    // 手机端面板不随滚动固定，滚动列表时收起已展开的面板
+    if (headerToggleOnly.value) {
+      collapse()
+      return
+    }
 
     if (scrollTop <= 0) {
       restore()
@@ -100,6 +103,14 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
   }
 
   const toggle = () => (expanded.value ? collapse() : expand())
+
+  // 手机端点击面板和顶栏按钮以外的地方时收起
+  const handleOutsidePointerDown = event => {
+    if (!headerToggleOnly.value || !expanded.value) return
+    const content = activePanel.value?.contentRef.value
+    if (content?.contains(event.target) || event.target.closest?.('.sticky-panel-toggle')) return
+    collapse()
+  }
 
   const handleMobileQueryChange = event => {
     isMobile.value = event.matches
@@ -162,11 +173,13 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
   })
   onMounted(() => {
     window.addEventListener('resize', updatePosition)
+    document.addEventListener('pointerdown', handleOutsidePointerDown, true)
     mobileQueryList = window.matchMedia(MOBILE_QUERY)
     mobileQueryList.addEventListener?.('change', handleMobileQueryChange)
   })
   onBeforeUnmount(() => {
     window.removeEventListener('resize', updatePosition)
+    document.removeEventListener('pointerdown', handleOutsidePointerDown, true)
     mobileQueryList?.removeEventListener?.('change', handleMobileQueryChange)
     resizeObserver?.disconnect()
   })
