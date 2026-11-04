@@ -4,6 +4,8 @@
       ref="dialogRef"
       class="order-print-preview-dialog"
       :class="{ 'with-template-picker': templateSelection }"
+      :inert="imagePreviewVisible"
+      :aria-hidden="imagePreviewVisible ? 'true' : undefined"
       role="dialog"
       aria-modal="true"
       :aria-label="title"
@@ -221,6 +223,18 @@
     @close="settingsVisible = false"
     @saved="handlePrintConfigSaved"
   />
+  <PrintImageShareDialog
+    :visible="visible && imagePreviewVisible"
+    :src="sharePreviewImageUrl"
+    :download-url="shareDownloadUrl"
+    :file-name="shareImageName"
+    :can-share="canSystemShareImage"
+    :sharing="sharingImage"
+    :notice="imagePreviewNotice"
+    @close="closeImagePreview"
+    @share="shareImage"
+    @regenerate="regenerateShareImage"
+  />
 </template>
 
 <script setup>
@@ -234,6 +248,7 @@ import { usePrintAvailability } from '@/composables/usePrintAvailability'
 import { usePrintImageShare } from '@/composables/usePrintImageShare'
 import { printImageFileName } from '@/utils/printImageShare'
 import PrintClientSettingsDialog from '@/components/print/PrintClientSettingsDialog.vue'
+import PrintImageShareDialog from '@/components/print/PrintImageShareDialog.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -297,8 +312,16 @@ const {
   title: imageShareTitle,
   error: imageShareError,
   message: imageShareMessage,
+  previewVisible: imagePreviewVisible,
+  previewNotice: imagePreviewNotice,
+  previewImageUrl: sharePreviewImageUrl,
+  downloadUrl: shareDownloadUrl,
+  imageName: shareImageName,
+  canSystemShare: canSystemShareImage,
   prepare: prepareShareImage,
   share: shareImage,
+  openPreview: openImagePreview,
+  closePreview: closeImagePreview,
   invalidate: invalidateShareImage
 } = usePrintImageShare({
   fileName: computed(() => printImageFileName(
@@ -320,6 +343,11 @@ const handleShareImage = () => {
   printErrorMessage.value = ''
   if (preparedImageReady.value) shareImage()
   else prepareShareImage(previewFrameRef.value?.contentDocument?.getElementById('preview-paper-content'))
+}
+
+const regenerateShareImage = async () => {
+  await prepareShareImage(previewFrameRef.value?.contentDocument?.getElementById('preview-paper-content'))
+  if (props.visible && preparedImageReady.value) openImagePreview()
 }
 
 const filteredTemplates = computed(() => {

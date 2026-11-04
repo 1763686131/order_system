@@ -20,7 +20,10 @@ export function isMobileShareDevice(navigator = globalThis.navigator) {
 }
 
 export function getPrintImageAction(file, environment = globalThis) {
-  return isMobileShareDevice(environment.navigator) ? 'share' : 'copy'
+  if (!isMobileShareDevice(environment.navigator)) return 'copy'
+  // Embedded WeChat pages use a real image for the client's long-press menu.
+  if (/MicroMessenger/i.test(environment.navigator?.userAgent || '')) return 'preview'
+  return getPrintImageUnavailableReason(file, environment) ? 'preview' : 'share'
 }
 
 function canWriteImageClipboard(environment) {
