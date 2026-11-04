@@ -2014,7 +2014,7 @@ const currentPage = ref(1)
 const pageSize = ref(30)
 const showAll = ref(false) // 是否显示全部
 
-watch(filters, () => {
+watch([filters, pageSize], () => {
   currentPage.value = 1
 }, { deep: true })
 
