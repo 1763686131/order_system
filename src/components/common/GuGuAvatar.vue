@@ -40,18 +40,18 @@
           <g class="puppy-alert-eyes">
             <g class="puppy-eyes-open" fill="#5a2f00">
               <g class="puppy-gaze">
-                <ellipse cx="350" cy="494" rx="23" ry="31" />
-                <ellipse cx="674" cy="494" rx="23" ry="31" />
+                <ellipse cx="350" cy="494" rx="31" ry="40" />
+                <ellipse cx="674" cy="494" rx="31" ry="40" />
                 <g fill="#fff">
-                  <circle cx="343" cy="484" r="8" />
-                  <circle cx="667" cy="484" r="8" />
+                  <circle cx="341" cy="481" r="10" />
+                  <circle cx="665" cy="481" r="10" />
                 </g>
               </g>
             </g>
           </g>
-          <g class="puppy-eyes-happy" stroke="#5a2f00" stroke-width="23" stroke-linecap="round">
-            <path d="M302 503Q350 468 398 498" />
-            <path d="M626 498Q674 468 722 503" />
+          <g class="puppy-eyes-happy" stroke="#5a2f00" stroke-width="25" stroke-linecap="round">
+            <path d="M296 503Q350 464 404 498" />
+            <path d="M620 498Q674 464 728 503" />
           </g>
           <g class="puppy-brows" stroke="#7c4000" stroke-width="22" stroke-linecap="round">
             <path d="m313 441 78 28" />
