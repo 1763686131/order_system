@@ -50,6 +50,7 @@ html, body { margin: 0; font-family: Arial, sans-serif; user-select: none; touch
 </style></head><body><div id="app"></div><pre id="result">pending</pre>
 <script type="module">
 import { createApp, h, ref, nextTick } from 'vue'
+import { createRouter, createWebHistory, RouterView } from 'vue-router'
 import OrderPrintPreview from '/src/components/print/OrderPrintPreview.vue'
 const scenario = new URLSearchParams(location.search).get('scenario')
 const result = { checks: [], errors: [], shares: 0, copies: 0 }
@@ -66,7 +67,7 @@ const waitFor = async (read, message) => {
 const settle = async () => { await nextTick(); await new Promise(resolve => requestAnimationFrame(resolve)) }
 const mobile = scenario !== 'desktop'
 Object.defineProperty(navigator, 'userAgent', { configurable: true, value: mobile
-  ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' + (scenario === 'wechat' ? ' MicroMessenger/8.0' : ' Safari/605.1')
+  ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' + (['wechat', 'back', 'back-skip'].includes(scenario) ? ' MicroMessenger/8.0' : ' Safari/605.1')
   : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
 let duringTap = false
 document.addEventListener('click', () => {
@@ -92,16 +93,37 @@ const visible = ref(true)
 const variables = ref({ orderNumber: 'PRINT-001', items: [] })
 const template = { id: 1, name: '销售单模板', pageWidth: 159, pageHeight: 225,
   content: { canvasSize: { width: 600, height: 850 }, pages: [{ id: 'fixture', elements: [] }] } }
-const app = createApp({ setup: () => () => h(OrderPrintPreview, {
-  visible: visible.value, template, variables: variables.value, documentNumber: variables.value.orderNumber,
-  printEnabled: false, onClose: () => { visible.value = false }
+let sourceMounts = 0
+const sourceComponent = { setup: () => {
+  sourceMounts++
+  return () => h(OrderPrintPreview, {
+    visible: visible.value, template, variables: variables.value, documentNumber: variables.value.orderNumber,
+    printEnabled: false, onClose: () => { visible.value = false }
+  })
+} }
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [{ path: '/:pathMatch(.*)*', component: sourceComponent }]
+})
+const app = createApp({ setup: () => () => h(RouterView, null, {
+  default: ({ Component, route }) => h(Component, { key: route.fullPath })
 }) })
 app.config.errorHandler = error => result.errors.push(String(error.stack || error))
+app.use(router)
+await router.isReady()
+const sourceUrl = location.href
+const sourcePosition = history.state.position
 app.mount('#app')
 const shareButton = () => document.querySelector('.preview-share-button')
 const preview = () => document.querySelector('.print-image-share')
+const assertSource = () => {
+  assert(location.href === sourceUrl, 'Dialog navigation must preserve the source URL, filters, and hash')
+  assert(sourceMounts === 1, 'Dialog navigation must not remount a fullPath-keyed document form')
+}
 try {
   await waitFor(() => shareButton() && !shareButton().disabled, 'PNG preparation must finish')
+  assertSource()
+  assert(history.state.position === sourcePosition + 1, 'Print preview must reserve one back step')
   const paperDocument = document.querySelector('.preview-frame').contentDocument
   const paperContent = paperDocument.getElementById('preview-paper-content')
   const paperViewport = paperDocument.getElementById('preview-paper-viewport')
@@ -130,11 +152,45 @@ try {
     assert(!status.includes('失败'), 'Cancellation must not be an error')
     if (scenario === 'cancel') assert(!status.includes('已交给'), 'Cancellation must not report success')
     result.checks.push('native result/cancellation', 'desktop copy isolation')
+    if (scenario === 'native') {
+      history.back()
+      await waitFor(() => !document.querySelector('.order-print-preview-overlay'), 'Back must close the print preview')
+      assertSource()
+      assert(history.state.position === sourcePosition, 'Closing the preview must restore the original history position')
+      result.checks.push('back returns to the source page')
+    }
   } else {
     const layer = await waitFor(preview, 'Mobile fallback must open')
     const image = layer.querySelector('img')
     await image.decode()
     await settle()
+    assertSource()
+    assert(history.state.position === sourcePosition + 2, 'Image share must reserve a second back step')
+    if (scenario === 'back-skip') {
+      history.go(-2)
+      await waitFor(() => !preview() && !document.querySelector('.order-print-preview-overlay'), 'Skipping both history entries must close both dialogs')
+      assertSource()
+      assert(history.state.position === sourcePosition, 'Skipping dialogs must stop at the source page')
+      result.checks.push('multi-step back returns to the source page')
+    } else if (scenario === 'back') {
+      history.back()
+      await waitFor(() => !preview(), 'First back must close the image share page')
+      assert(document.querySelector('.order-print-preview-overlay'), 'First back must leave the print preview open')
+      assertSource()
+      assert(history.state.position === sourcePosition + 1, 'First back must consume only the image entry')
+      history.back()
+      await waitFor(() => !document.querySelector('.order-print-preview-overlay'), 'Second back must close the print preview')
+      assertSource()
+      assert(history.state.position === sourcePosition, 'Second back must restore the original history position')
+      visible.value = true
+      await waitFor(() => shareButton() && !shareButton().disabled, 'Print preview must reopen after back')
+      document.querySelector('.preview-close').click()
+      await nextTick()
+      assert(!document.querySelector('.order-print-preview-overlay'), 'Close button must dismiss the print preview immediately')
+      await waitFor(() => history.state.position === sourcePosition, 'Close button must consume the print history entry')
+      assertSource()
+      result.checks.push('back closes image share before print preview', 'back preserves the source route and document form', 'reopen and close-button history cleanup')
+    } else {
     assert(image.naturalWidth === 1200 && image.naturalHeight === 3400, 'PNG must include both full pages')
     const canvas = document.createElement('canvas')
     canvas.width = image.naturalWidth
@@ -183,8 +239,15 @@ try {
     window.captureReady = true
     await new Promise(resolve => { window.resumeAfterCapture = resolve })
     layer.querySelector('[aria-label="返回打印预览"]').click()
-    await settle()
+    await nextTick()
     assert(!preview() && !underlying.inert, 'Closing only the image must keep the print preview')
+    shareButton().click()
+    await waitFor(preview, 'Image must reopen after the pending back navigation finishes')
+    await waitFor(() => history.state.position === sourcePosition + 2, 'Rapid reopening must retain the image back step')
+    preview().querySelector('[aria-label="返回打印预览"]').click()
+    await nextTick()
+    await waitFor(() => history.state.position === sourcePosition + 1, 'Closing the image must consume its history entry')
+    await settle()
     assert(document.activeElement === shareButton(), 'Focus must return to the share button')
     assert(document.body.style.overflow === '', 'Closing must restore scrolling')
     shareButton().click()
@@ -200,8 +263,12 @@ try {
     visible.value = false
     await settle()
     assert(!preview() && !document.querySelector('.order-print-preview-overlay'), 'Closing the print window must close both dialogs')
+    await waitFor(() => history.state.position === sourcePosition, 'Closing both dialogs must leave no extra back steps')
+    assertSource()
     result.checks.push('real two-page PNG and pixel content', 'overlay ordering and focus', 'long-press menu allowed',
-      'download PNG and filename', 'long image scrolling and zoom', 'mobile layout', 'close and document invalidation')
+      'download PNG and filename', 'long image scrolling and zoom', 'mobile layout', 'close and document invalidation',
+      'rapid reopening and history cleanup', 'preserved source URL and document form')
+    }
   }
   assert(result.errors.length === 0, 'No Vue or browser runtime errors')
   result.pass = true
@@ -221,7 +288,7 @@ const server = await createServer({
   cacheDir: join(profile, 'vite-cache'),
   optimizeDeps: {
     noDiscovery: true,
-    include: ['vue', '@lucide/vue', 'html-to-image'],
+    include: ['vue', 'vue-router', '@lucide/vue', 'html-to-image'],
     exclude: ['vue-print-designer']
   },
   server: { host: '127.0.0.1', port: 0, open: false },
@@ -299,7 +366,7 @@ try {
   }
   await send('Page.enable')
   for (const [scenario, width, height] of [
-    ['wechat', 390, 844], ['wechat', 320, 568], ['wechat', 768, 1024],
+    ['back', 390, 844], ['back-skip', 390, 844], ['wechat', 390, 844], ['wechat', 320, 568], ['wechat', 768, 1024],
     ['no-api', 390, 844], ['denied', 390, 844], ['native', 390, 844],
     ['cancel', 390, 844], ['desktop', 1440, 900]
   ]) {
@@ -307,7 +374,7 @@ try {
       width, height, deviceScaleFactor: 1, mobile: scenario !== 'desktop'
     })
     await send('Page.navigate', {
-      url: `http://127.0.0.1:${server.httpServer.address().port}/__print-image-share-check?scenario=${scenario}`
+      url: `http://127.0.0.1:${server.httpServer.address().port}/__print-image-share-check?scenario=${scenario}&status=unpaid&page=3#order-PRINT-001`
     })
     let result
     for (let count = 0; count < 400; count++) {

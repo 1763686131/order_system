@@ -238,7 +238,8 @@
 </template>
 
 <script setup>
-import { computed, getCurrentInstance, nextTick, ref, watch } from 'vue'
+import { computed, getCurrentInstance, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { Check, ChevronDown, FileText, LoaderCircle, Printer, RefreshCw, Search, Settings, Share2, X } from '@lucide/vue'
 import 'vue-print-designer'
 import 'vue-print-designer/style.css'
@@ -273,6 +274,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['close', 'select-template', 'reload-templates'])
+const router = useRouter()
 const dialogRef = ref(null)
 const designerRef = ref(null)
 const loading = ref(false)
@@ -328,6 +330,65 @@ const {
     props.template?.name || props.title,
     props.documentNumber || props.variables?.orderNumber || props.variables?.orderNo
   ))
+})
+const dialogHistory = router.options.history
+const dialogHistoryKey = '__orderPrintPreview'
+let historySession = ''
+let historyPath = ''
+let returningHistory = false
+
+const currentDialogDepth = () => {
+  const marker = dialogHistory.state?.[dialogHistoryKey]
+  return historySession && marker?.session === historySession && dialogHistory.location === historyPath
+    ? marker.depth
+    : 0
+}
+
+const syncDialogHistory = () => {
+  if (returningHistory) return
+  const depth = props.visible ? (imagePreviewVisible.value ? 2 : 1) : 0
+  const currentDepth = currentDialogDepth()
+  if (!historySession && depth) {
+    historySession = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    historyPath = dialogHistory.location
+  }
+  if (!historySession || dialogHistory.location !== historyPath) return
+  if (depth < currentDepth) {
+    returningHistory = true
+    dialogHistory.go(depth - currentDepth)
+  } else {
+    // Keep the URL unchanged so fullPath-keyed document forms retain their state.
+    for (let nextDepth = currentDepth + 1; nextDepth <= depth; nextDepth++) {
+      dialogHistory.push(historyPath, {
+        [dialogHistoryKey]: { session: historySession, depth: nextDepth }
+      })
+    }
+    if (!depth) historySession = ''
+  }
+}
+
+const stopDialogHistory = dialogHistory.listen(() => {
+  if (!historySession) return
+  if (returningHistory && dialogHistory.location === historyPath) {
+    returningHistory = false
+    syncDialogHistory()
+    return
+  }
+  returningHistory = false
+  const depth = currentDialogDepth()
+  if (depth < 2 && imagePreviewVisible.value) closeImagePreview()
+  if (!depth) {
+    historySession = ''
+    if (props.visible) emit('close')
+  }
+})
+
+watch([() => props.visible, imagePreviewVisible], syncDialogHistory, { immediate: true })
+
+onBeforeUnmount(() => {
+  stopDialogHistory()
+  const depth = currentDialogDepth()
+  if (depth && !returningHistory) dialogHistory.go(-depth)
 })
 
 const imageShareReady = computed(() => (
