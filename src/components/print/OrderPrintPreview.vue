@@ -571,22 +571,24 @@ const wrapPreviewHtml = (html) => `<!doctype html>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <style>
-      html, body { margin: 0; padding: 0; background: #eef1f5; }
+      html, body { margin: 0; padding: 0; background: #eef1f5; -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
       body { min-height: 100vh; display: flex; justify-content: safe center; padding: 24px; box-sizing: border-box; }
-      #preview-paper-content { width: max-content; flex: 0 0 auto; align-self: flex-start; }
+      #preview-paper-viewport { flex: 0 0 auto; align-self: flex-start; overflow: hidden; }
+      #preview-paper-content { width: max-content; transform-origin: top left; }
       * { box-sizing: border-box; }
       @media (max-width: 780px) {
         body { padding: 12px; }
       }
     </style>
   </head>
-  <body><div id="preview-paper-content" data-preview-request="${renderRequestId}">${html}</div></body>
+  <body><div id="preview-paper-viewport"><div id="preview-paper-content" data-preview-request="${renderRequestId}">${html}</div></div></body>
 </html>`
 
 const fitPreviewToWidth = () => {
   const previewDocument = previewFrameRef.value?.contentDocument
   const content = previewDocument?.getElementById('preview-paper-content')
-  if (!content) return
+  const viewport = previewDocument?.getElementById('preview-paper-viewport')
+  if (!content || !viewport) return
 
   const pages = Array.from(content.querySelectorAll('.print-page'))
   const paperWidth = Math.max(0, ...pages.map(page => page.offsetWidth)) || content.scrollWidth
@@ -595,7 +597,11 @@ const fitPreviewToWidth = () => {
   const bodyStyle = previewDocument.defaultView.getComputedStyle(previewDocument.body)
   const availableWidth = previewDocument.documentElement.clientWidth -
     parseFloat(bodyStyle.paddingLeft) - parseFloat(bodyStyle.paddingRight)
-  content.style.zoom = String(Math.min(1, Math.max(1, availableWidth) / paperWidth))
+  const scale = Math.min(1, Math.max(1, availableWidth) / paperWidth)
+  // Keep the paper's layout unscaled; only its on-screen presentation should shrink.
+  content.style.transform = `scale(${scale})`
+  viewport.style.width = `${paperWidth * scale}px`
+  viewport.style.height = `${content.scrollHeight * scale}px`
 }
 
 const handlePreviewLoad = () => {

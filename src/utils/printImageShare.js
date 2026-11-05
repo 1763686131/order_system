@@ -251,6 +251,8 @@ export async function capturePrintImage(content, { signal } = {}) {
       style: {
         zoom: '1',
         transform: 'none',
+        webkitTextSizeAdjust: '100%',
+        textSizeAdjust: '100%',
         position: 'relative',
         left: 'auto',
         top: 'auto',

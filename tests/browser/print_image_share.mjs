@@ -29,10 +29,13 @@ class FixtureDesigner extends HTMLElement {
   getPreviewHtml() {
     return [1, 2].map(page => '<section class="print-page" style="box-sizing:border-box;width:600px;height:850px;padding:24px;background:white;position:relative;margin-bottom:16px;font-family:Arial,sans-serif">' +
       '<header style="height:64px;background:' + (page === 1 ? '#0f9f78' : '#1876d2') + ';color:white;padding:12px;font-size:24px;box-sizing:border-box">销售单 / SALES ORDER</header>' +
-      '<h2>' + this.variables.orderNumber + '</h2><p>客户 / Customer: 示例门店</p>' +
-      '<table style="width:100%;border-collapse:collapse;font-size:16px"><thead><tr><th>商品 / Product</th><th>数量</th><th>金额</th></tr></thead><tbody>' +
-      Array.from({ length: 12 }, (_, i) => '<tr style="height:40px;border-bottom:1px solid #ddd"><td>商品 ' + (i + 1) + '</td><td>10</td><td>100.00</td></tr>').join('') +
-      '</tbody></table><p>第 ' + page + ' 页 / Page ' + page + '</p>' +
+      '<h2 style="position:absolute;left:24px;top:100px;margin:0">' + this.variables.orderNumber + '</h2>' +
+      '<p style="position:absolute;left:24px;top:140px;margin:0">客户 / Customer: 示例门店</p>' +
+      '<table style="position:absolute;left:24px;top:200px;width:552px;table-layout:fixed;border-collapse:collapse;font-size:16px"><thead><tr style="height:32px"><th>商品 / Product</th><th>数量</th><th>金额</th></tr></thead><tbody>' +
+      Array.from({ length: 12 }, (_, i) => '<tr style="height:32px;border-bottom:1px solid #ddd"><td>商品 ' + (i + 1) + '</td><td>10</td><td>100.00</td></tr>').join('') +
+      '</tbody></table>' +
+      '<div data-fixture-signoff style="position:absolute;top:640px;left:24px;right:24px;height:32px;background:#0f766e;color:white">制单人 / 业务员 / 电话</div>' +
+      '<p style="position:absolute;left:24px;top:700px;margin:0">第 ' + page + ' 页 / Page ' + page + '</p>' +
       '<div style="position:absolute;bottom:24px;left:24px;right:24px;height:32px;background:#cf304a;color:white">单据末尾 / END OF PAGE</div></section>').join('')
   }
 }
@@ -99,6 +102,23 @@ const shareButton = () => document.querySelector('.preview-share-button')
 const preview = () => document.querySelector('.print-image-share')
 try {
   await waitFor(() => shareButton() && !shareButton().disabled, 'PNG preparation must finish')
+  const paperDocument = document.querySelector('.preview-frame').contentDocument
+  const paperContent = paperDocument.getElementById('preview-paper-content')
+  const paperViewport = paperDocument.getElementById('preview-paper-viewport')
+  const firstPaper = paperContent.querySelector('.print-page')
+  const paperStyle = paperDocument.defaultView.getComputedStyle(firstPaper)
+  assert(paperViewport && (!paperContent.style.zoom || paperContent.style.zoom === '1'), 'Preview must scale visually without changing paper layout through zoom')
+  assert(paperStyle.getPropertyValue('text-size-adjust') === '100%' ||
+    paperStyle.getPropertyValue('-webkit-text-size-adjust') === '100%', 'Paper text must retain the template size on mobile')
+  const table = firstPaper.querySelector('table')
+  const signoff = firstPaper.querySelector('[data-fixture-signoff]')
+  assert(table.offsetTop + table.offsetHeight < signoff.offsetTop, 'The fixed signoff must remain below the table')
+  assert(firstPaper.offsetWidth === 600 && firstPaper.offsetHeight === 850, 'Paper layout dimensions must stay independent of the screen')
+  const scale = Number.parseFloat(paperViewport.style.width) / firstPaper.offsetWidth
+  assert(Math.abs(firstPaper.getBoundingClientRect().width - firstPaper.offsetWidth * scale) < 1, 'Visual preview must fit its reserved viewport')
+  assert(paperViewport.getBoundingClientRect().right <= paperDocument.documentElement.clientWidth, 'Scaled paper must fit the mobile preview')
+  assert(paperDocument.documentElement.scrollWidth <= paperDocument.documentElement.clientWidth + 1, 'Unscaled paper must not leave horizontal overflow in the preview')
+  result.checks.push('unscaled paper layout and fixed signoff', 'mobile text size', 'visual preview scaling')
   shareButton().focus()
   shareButton().click()
   if (['native', 'cancel', 'desktop'].includes(scenario)) {
@@ -123,7 +143,9 @@ try {
     context.drawImage(image, 0, 0)
     const pixel = (x, y) => [...context.getImageData(x, y, 1, 1).data]
     assert(pixel(55, 55).slice(0, 3).join(',') === '15,159,120', 'First page must render its green band')
+    assert(pixel(55, 1290).slice(0, 3).join(',') === '15,118,110', 'Fixed signoff must retain its template position in the PNG')
     assert(pixel(55, 1755).slice(0, 3).join(',') === '24,118,210', 'Second page must render its blue band')
+    assert(pixel(55, 2990).slice(0, 3).join(',') === '15,118,110', 'Second page signoff must retain its template position in the PNG')
     assert(pixel(55, 3340).slice(0, 3).join(',') === '207,48,74', 'The last page footer must not be cut off')
     const underlying = document.querySelector('.order-print-preview-dialog')
     assert(underlying.inert && underlying.getAttribute('aria-hidden') === 'true', 'Underlying dialog must be inactive')
