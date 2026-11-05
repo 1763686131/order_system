@@ -228,12 +228,14 @@
     :src="sharePreviewImageUrl"
     :download-url="shareDownloadUrl"
     :file-name="shareImageName"
+    :show-return-to-sales-list="showReturnToSalesList"
     :can-share="canSystemShareImage"
     :sharing="sharingImage"
     :notice="imagePreviewNotice"
     @close="closeImagePreview"
     @share="shareImage"
     @regenerate="regenerateShareImage"
+    @return-to-sales-list="emit('return-to-sales-list')"
   />
 </template>
 
@@ -253,6 +255,7 @@ import PrintImageShareDialog from '@/components/print/PrintImageShareDialog.vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
+  showReturnToSalesList: { type: Boolean, default: false },
   template: { type: Object, default: null },
   templateSelection: { type: Boolean, default: false },
   templateOptions: { type: Array, default: () => [] },
@@ -273,7 +276,7 @@ const props = defineProps({
   hideZeroValues: { type: Boolean, default: true }
 })
 
-const emit = defineEmits(['close', 'select-template', 'reload-templates'])
+const emit = defineEmits(['close', 'select-template', 'reload-templates', 'return-to-sales-list'])
 const router = useRouter()
 const dialogRef = ref(null)
 const designerRef = ref(null)

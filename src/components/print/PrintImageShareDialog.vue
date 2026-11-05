@@ -63,6 +63,14 @@
         <p v-if="notice" role="status">{{ notice }}</p>
         <div>
           <button
+            v-if="showReturnToSalesList"
+            type="button"
+            class="image-share-button image-share-return"
+            @click="emit('return-to-sales-list')"
+          >
+            <ArrowLeft :size="17" aria-hidden="true" />返回销售单列表
+          </button>
+          <button
             v-if="canShare"
             type="button"
             class="image-share-button"
@@ -88,10 +96,11 @@
 
 <script setup>
 import { nextTick, ref, watch } from 'vue'
-import { Download, RefreshCw, Share2, X, ZoomIn, ZoomOut } from '@lucide/vue'
+import { ArrowLeft, Download, RefreshCw, Share2, X, ZoomIn, ZoomOut } from '@lucide/vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
+  showReturnToSalesList: { type: Boolean, default: false },
   src: { type: String, default: '' },
   downloadUrl: { type: String, default: '' },
   fileName: { type: String, default: '' },
@@ -99,7 +108,7 @@ const props = defineProps({
   sharing: { type: Boolean, default: false },
   notice: { type: String, default: '' }
 })
-const emit = defineEmits(['close', 'share', 'regenerate'])
+const emit = defineEmits(['close', 'share', 'regenerate', 'return-to-sales-list'])
 const dialogRef = ref(null)
 const closeButtonRef = ref(null)
 const imageAreaRef = ref(null)
@@ -132,6 +141,7 @@ watch(() => props.visible, async (visible, previous, onCleanup) => {
 
 function trapFocus(event) {
   const elements = [...dialogRef.value.querySelectorAll('button:not(:disabled), a[href]')]
+    .filter(element => element.getClientRects().length)
   const first = elements[0]
   const last = elements.at(-1)
   if (event.shiftKey && document.activeElement === first) {
@@ -293,9 +303,20 @@ function trapFocus(event) {
   color: #fff;
 }
 
+.image-share-return {
+  display: none;
+}
+
 .image-share-icon:focus-visible,
 .image-share-button:focus-visible {
   outline: 2px solid #0f9f78;
   outline-offset: 2px;
+}
+
+@media (max-width: 780px) {
+  .image-share-return {
+    display: inline-flex;
+    margin-right: auto;
+  }
 }
 </style>

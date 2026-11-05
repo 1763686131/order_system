@@ -67,7 +67,7 @@ const waitFor = async (read, message) => {
 const settle = async () => { await nextTick(); await new Promise(resolve => requestAnimationFrame(resolve)) }
 const mobile = scenario !== 'desktop'
 Object.defineProperty(navigator, 'userAgent', { configurable: true, value: mobile
-  ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' + (['wechat', 'back', 'back-skip'].includes(scenario) ? ' MicroMessenger/8.0' : ' Safari/605.1')
+  ? 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' + (['wechat', 'back', 'back-skip', 'return-sales'].includes(scenario) ? ' MicroMessenger/8.0' : ' Safari/605.1')
   : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' })
 let duringTap = false
 document.addEventListener('click', () => {
@@ -98,7 +98,9 @@ const sourceComponent = { setup: () => {
   sourceMounts++
   return () => h(OrderPrintPreview, {
     visible: visible.value, template, variables: variables.value, documentNumber: variables.value.orderNumber,
-    printEnabled: false, onClose: () => { visible.value = false }
+    printEnabled: false, showReturnToSalesList: scenario === 'return-sales',
+    onClose: () => { visible.value = false },
+    onReturnToSalesList: () => { visible.value = false }
   })
 } }
 const router = createRouter({
@@ -172,6 +174,17 @@ try {
       assertSource()
       assert(history.state.position === sourcePosition, 'Skipping dialogs must stop at the source page')
       result.checks.push('multi-step back returns to the source page')
+    } else if (scenario === 'return-sales') {
+      const returnButton = layer.querySelector('.image-share-return')
+      const saveButton = layer.querySelector('.image-share-save')
+      assert(returnButton && getComputedStyle(returnButton).display !== 'none', 'Mobile sales preview must show a return-to-list button')
+      assert(returnButton.getBoundingClientRect().left < saveButton.getBoundingClientRect().left, 'Return-to-list button must be left of Save Image')
+      returnButton.click()
+      await waitFor(() => !preview() && !document.querySelector('.order-print-preview-overlay'), 'Return-to-list must close the image and print dialogs')
+      assertSource()
+      await waitFor(() => history.state.position === sourcePosition, 'Returning to the sales list must consume both dialog history entries')
+      assertSource()
+      result.checks.push('mobile return-to-sales-list closes both dialogs')
     } else if (scenario === 'back') {
       history.back()
       await waitFor(() => !preview(), 'First back must close the image share page')
@@ -366,7 +379,8 @@ try {
   }
   await send('Page.enable')
   for (const [scenario, width, height] of [
-    ['back', 390, 844], ['back-skip', 390, 844], ['wechat', 390, 844], ['wechat', 320, 568], ['wechat', 768, 1024],
+    ['back', 390, 844], ['back-skip', 390, 844], ['return-sales', 390, 844],
+    ['wechat', 390, 844], ['wechat', 320, 568], ['wechat', 768, 1024],
     ['no-api', 390, 844], ['denied', 390, 844], ['native', 390, 844],
     ['cancel', 390, 844], ['desktop', 1440, 900]
   ]) {

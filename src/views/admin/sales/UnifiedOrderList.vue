@@ -1453,7 +1453,9 @@
       title="打印订单"
       :document-number="printTargetOrder?.order_number || printTargetOrder?.id || ''"
       :variables="printOrderVariables"
+      show-return-to-sales-list
       @close="closePrintTemplateDialog"
+      @return-to-sales-list="closePrintTemplateDialog"
     />
 
     <!-- 展开信息弹窗 -->

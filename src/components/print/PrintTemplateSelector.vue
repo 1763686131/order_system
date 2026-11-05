@@ -11,9 +11,11 @@
     :template-options="templates"
     :templates-loading="loading"
     :templates-error="errorMessage"
+    :show-return-to-sales-list="showReturnToSalesList && businessType === 'sale'"
     @select-template="selectTemplate"
     @reload-templates="loadTemplates"
     @close="emit('close')"
+    @return-to-sales-list="emit('return-to-sales-list')"
   />
 </template>
 
@@ -25,6 +27,7 @@ import OrderPrintPreview from '@/components/print/OrderPrintPreview.vue'
 const props = defineProps({
   visible: { type: Boolean, default: false },
   businessType: { type: String, required: true },
+  showReturnToSalesList: { type: Boolean, default: false },
   title: { type: String, default: '打印单据' },
   documentNumber: { type: [String, Number], default: '' },
   variables: { type: Object, default: () => ({}) },
