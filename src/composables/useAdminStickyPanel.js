@@ -63,6 +63,13 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
     activePanel.value?.onCollapse?.()
   }
 
+  const reset = () => {
+    collapse()
+    restore()
+    placeholderHeight.value = 0
+    if (mainContentRef.value) mainContentRef.value.scrollTop = 0
+  }
+
   const handleScroll = () => {
     const panel = activePanel.value
     const scrollTop = mainContentRef.value?.scrollTop || 0
@@ -169,6 +176,7 @@ export function provideAdminStickyPanel(mainContentRef, headerRef) {
     pinned,
     placeholderStyle,
     contentStyle,
+    reset,
     register
   })
   onMounted(() => {
@@ -213,6 +221,9 @@ export function useAdminStickyPanel(placeholderRef, contentRef, options = {}) {
   onBeforeUnmount(() => unregister?.())
 
   return {
+    reset: () => {
+      if (isActive.value) controller.reset()
+    },
     pinned: computed(() => isActive.value && controller.pinned.value),
     placeholderStyle: computed(() => isActive.value ? controller.placeholderStyle.value : {}),
     contentStyle: computed(() => isActive.value ? controller.contentStyle.value : {})

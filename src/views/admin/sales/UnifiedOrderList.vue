@@ -1880,8 +1880,9 @@ onUnmounted(() => {
   }
 })
 
-// 监听 mode 变化，重新获取数据
+// 切换列表时恢复顶部布局并重新获取数据
 watch(() => props.mode, () => {
+  resetSearchPanel()
   closeActionMenu()
   mobileAuditOrderId.value = null
   mobileAuditSlideValue.value = 0
@@ -1971,6 +1972,7 @@ const mobileSelecting = ref(false)
 const searchPanelShell = ref(null)
 const searchPanelContent = ref(null)
 const {
+  reset: resetSearchPanel,
   placeholderStyle: searchPanelPlaceholderStyle,
   contentStyle: searchPanelContentStyle
 } = useAdminStickyPanel(searchPanelShell, searchPanelContent, {

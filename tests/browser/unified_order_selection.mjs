@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url'
 import { createServer } from 'vite'
 
 // Run from the repository root: node tests/browser/unified_order_selection.mjs [scenario]
-// Scenarios also include inline-mobile, create-mobile, audit-mobile, and copy-ios (cold, legacy, denied).
+// Scenarios also include sticky-navigation (-mobile), inline-mobile, create-mobile, audit-mobile, and copy-ios (cold, legacy, denied).
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const scenario = process.argv[2] || 'reordered-hidden'
 const browserPath = [
@@ -1111,9 +1111,52 @@ const checkPersistedSelection = async () => {
   sessionStorage.setItem('order-selection-test-phase', 'reload')
   results.phase = 'reload'
 }
+const checkStickyNavigation = async () => {
+  const main = document.querySelector('.main-content')
+  const page = document.querySelector('.unified-order-list-page')
+  const shell = () => document.querySelector('.search-panel-shell')
+  const content = () => document.querySelector('.search-panel-content')
+  const mobile = matchMedia('(max-width: 780px)').matches
+  const assertRestored = () => {
+    assert(document.querySelector('.unified-order-list-page') === page, 'Switching modes must exercise the reused order page')
+    assert(main.scrollTop === 0, 'Switching sales and logistics must return the list to the top')
+    assert(!shell().style.height, 'Navigation must clear the previous filter placeholder')
+    assert(!stickyController.expanded.value, 'Navigation must close an expanded filter overlay')
+    if (mobile) {
+      const recordsTop = document.querySelector('.records-panel').getBoundingClientRect().top
+      assert(Math.abs(recordsTop - main.getBoundingClientRect().top - 20) < 1, 'Mobile lists must start without a blank filter gap')
+      assert(getComputedStyle(content()).display === 'none', 'Mobile filters must start collapsed')
+    } else {
+      assert(getComputedStyle(content()).display !== 'none' && getComputedStyle(content()).position !== 'fixed', 'Desktop filters must return to normal layout')
+      assert(!stickyController.visible.value, 'Desktop navigation must clear the old pinned-filter toggle')
+    }
+  }
+  for (const path of ['/logistics', '/', '/logistics', '/']) {
+    main.scrollTop = 60
+    stickyController.handleScroll()
+    await settle()
+    assert(main.scrollTop > 24 && getComputedStyle(content()).display === 'none', 'The source list must be scrolled with hidden filters')
+    await router.push(path)
+    await waitForOrders()
+    assertRestored()
+    main.scrollTop = 180
+    stickyController.handleScroll()
+    await settle()
+    stickyController.expand()
+    await settle()
+    assert(getComputedStyle(content()).position === 'fixed', 'Filters must still expand after navigation')
+  }
+  await router.push('/logistics')
+  await waitForOrders()
+  assertRestored()
+  assert(results.errors.length === 0, 'Repeated navigation must not report Vue errors')
+  results.checks = ['scrolled sales to logistics', 'scrolled logistics to sales', 'filter placeholder cleared', 'expanded overlay cleared', 'filter toggle still works', 'repeated navigation']
+}
 try {
   await waitForOrders()
-  if (copyIOS) {
+  if (location.search.includes('sticky-navigation')) {
+    await checkStickyNavigation()
+  } else if (copyIOS) {
     await checkIOSCopy()
   } else if (auditMobile) {
     await checkMobileAudit()
@@ -1126,6 +1169,8 @@ try {
   } else {
   const main = document.querySelector('.main-content')
   const table = document.querySelector('.records-table')
+  document.querySelector('.mobile-select-toggle').click()
+  await settle()
   const inputs = [...table.querySelectorAll('tbody input[type=checkbox]')]
   results.rowCount = inputs.length
   assert(inputs.length === 30, 'Expected 30 displayed orders')
