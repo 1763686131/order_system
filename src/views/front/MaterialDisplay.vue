@@ -114,12 +114,18 @@ const toFiniteNumber = value => {
   return Number.isFinite(number) ? number : 0
 }
 
+const snapshotNumber = value => {
+  if (value === null || value === undefined || value === '') return null
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
 const normalizedStatus = status => (status === 'posted' ? 'reviewed' : status)
 
 const statusClass = status => normalizedStatus(status) || 'draft'
 
 const stockLabel = status => (
-  statusClass(status) === 'draft' ? '预计剩余库存' : '剩余库存'
+  statusClass(status) === 'draft' ? '预计剩余库存' : '审核后剩余库存'
 )
 
 const statusLabel = status => ({
@@ -228,6 +234,24 @@ const materialRecordsWithStock = computed(() => {
     .sort(compareDisplayRecords)
     .map(record => {
       const item = record.displayItem
+      const quantity = toFiniteNumber(item?.quantity ?? record.totalQuantity)
+      const status = statusClass(record.status)
+
+      if (status === 'reviewed') {
+        const stockBefore = snapshotNumber(item?.stockBefore)
+        const stockAfter = snapshotNumber(item?.stockAfter)
+        return {
+          ...record,
+          remainingStock: stockAfter,
+          remainingStockKnown: stockAfter !== null,
+          stockCalculation: stockAfter === null
+            ? '历史库存未记录'
+            : stockBefore === null
+              ? `审核后库存 ${formatNumber(stockAfter)}`
+              : `审核时：${formatNumber(stockBefore)} - ${formatNumber(quantity)} = ${formatNumber(stockAfter)}`
+        }
+      }
+
       const productId = item?.productId
       const key = inventoryKey(productId, record.warehouseId, record.storeId)
       const hasProduct = productId !== null && productId !== undefined && productId !== ''
@@ -243,8 +267,6 @@ const materialRecordsWithStock = computed(() => {
 
       const baseStock = stockBalanceMap.value.get(key) || 0
       let currentStock = baseStock
-      const quantity = toFiniteNumber(item?.quantity ?? record.totalQuantity)
-      const status = statusClass(record.status)
       let stockCalculation = `库存 ${formatNumber(currentStock)}`
 
       if (status === 'draft') {
@@ -258,8 +280,6 @@ const materialRecordsWithStock = computed(() => {
         stockCalculation = `${formatNumber(baseStock)}${deductions
           .map(value => ` - ${formatNumber(value)}`)
           .join('')} = ${formatNumber(currentStock)}`
-      } else if (status === 'reviewed') {
-        stockCalculation = `库存 ${formatNumber(currentStock)}（已含本单）`
       } else if (status === 'cancelled') {
         stockCalculation = `库存 ${formatNumber(currentStock)}（已作废）`
       }

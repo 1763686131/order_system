@@ -2144,6 +2144,8 @@ def _ensure_material_outbound_schema(conn):
                 specification TEXT,
                 unit TEXT,
                 quantity REAL NOT NULL,
+                stock_before REAL,
+                stock_after REAL,
                 remark TEXT,
                 FOREIGN KEY(outbound_id) REFERENCES material_outbounds(id) ON DELETE CASCADE
             )
@@ -2154,6 +2156,8 @@ def _ensure_material_outbound_schema(conn):
             for row in cursor.execute("PRAGMA table_info(material_outbound_items)")
         }
         outbound_item_columns_to_add = {
+            "stock_before": "REAL",
+            "stock_after": "REAL",
             "finished_product_id": "INTEGER",
             "finished_product_code": "TEXT",
             "finished_product_name": "TEXT",

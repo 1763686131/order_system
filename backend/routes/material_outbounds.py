@@ -499,6 +499,8 @@ def _serialize_item(row):
     item["productId"] = item.pop("product_id", None)
     item["productCode"] = item.pop("product_code", "") or ""
     item["productName"] = item.pop("product_name", "") or ""
+    item["stockBefore"] = item.pop("stock_before", None)
+    item["stockAfter"] = item.pop("stock_after", None)
     item["finishedProductId"] = item.pop("finished_product_id", None)
     item["finishedProductCode"] = item.pop("finished_product_code", "") or ""
     item["finishedProductName"] = item.pop("finished_product_name", "") or ""
@@ -1036,6 +1038,15 @@ def _post_inventory(conn, document, item):
             f"当前可用 {available:g}"
         )
 
+    stock_before = float(conn.execute(
+        """
+        SELECT COALESCE(SUM(quantity), 0) FROM stock_balances
+        WHERE product_type = 'raw-material' AND product_id = ?
+          AND warehouse_id = ? AND store_id = ?
+        """,
+        (item["product_id"], document["warehouse_id"], document["store_id"]),
+    ).fetchone()[0])
+
     now = _now()
     remaining = quantity_needed
     for balance in balances:
@@ -1078,6 +1089,17 @@ def _post_inventory(conn, document, item):
         )
         remaining -= deducted
     conn.execute("DELETE FROM stock_balances WHERE ABS(quantity) < 0.0000001")
+    stock_after = stock_before - quantity_needed
+    if abs(stock_after) < _QUANTITY_EPSILON:
+        stock_after = 0.0
+    # Save each line's balance in the same transaction as its FIFO deduction.
+    conn.execute(
+        """
+        UPDATE material_outbound_items SET stock_before = ?, stock_after = ?
+        WHERE id = ?
+        """,
+        (stock_before, stock_after, item["id"]),
+    )
 
 
 def _reverse_inventory(conn, document):
@@ -1127,6 +1149,14 @@ def _reverse_inventory(conn, document):
           AND source_document_no = ?
         """,
         (document["id"], document["document_no"]),
+    )
+
+    conn.execute(
+        """
+        UPDATE material_outbound_items SET stock_before = NULL, stock_after = NULL
+        WHERE outbound_id = ?
+        """,
+        (document["id"],),
     )
 
 
