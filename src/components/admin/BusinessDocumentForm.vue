@@ -10,7 +10,7 @@
               <option v-for="type in ui.inboundTypes" :key="type" :value="type">{{ type === 'finished-product' ? '成品' : '原材料' }}</option>
             </select>
           </label>
-          <label class="info-group">
+          <label class="info-group" :data-tutorial-target="isTutorialCreate ? 'document-store' : undefined">
             <span>{{ isPurchaseOrder ? '申请门店' : '门店' }}<b v-if="isPurchaseOrder || isPurchaseReturn"> *</b></span>
             <select v-model="ui.form.storeId" :disabled="fieldsDisabled || ui.lockRequestedItems || (isPurchase && Boolean(ui.purchaseOrderId)) || (isPurchaseReturn && ui.partyLocked)" :ref="element => setFieldRef('storeId', element)" @change="handleStoreChange">
               <option value="">请选择门店</option>
@@ -18,7 +18,7 @@
               <option v-for="store in ui.stores" :key="store.id" :value="isSale ? store.id : String(store.id)">{{ store.name }}</option>
             </select>
           </label>
-          <label v-if="!isPurchaseOrder && (!isPurchase || ui.purchaseOrderId)" class="info-group">
+          <label v-if="!isPurchaseOrder && (!isPurchase || ui.purchaseOrderId)" class="info-group" :data-tutorial-target="isTutorialCreate && isSale ? 'document-customer' : undefined">
             <span>{{ ui.config.partyLabel }}<b v-if="isPurchaseReturn"> *</b></span>
             <input v-if="isPurchase && ui.purchaseOrderId" type="text" :value="ui.form.supplierName || '供应商详见采购申请明细'" readonly />
             <select v-else-if="isPurchaseReturn" v-model="ui.form.supplierId" :disabled="fieldsDisabled || ui.partyLocked" :ref="element => setFieldRef('supplierId', element)" required @change="ui.onSupplierChange(); dismissHint('supplierId')">
@@ -45,7 +45,7 @@
           <label v-if="isReturn" class="info-group"><span>原订单编号</span><input v-model.trim="ui.form.originalOrderNumber" :ref="element => setFieldRef('originalOrderNumber', element)" type="text" /></label>
         </fieldset>
         <div class="toolbar-actions">
-          <label v-if="isPurchaseOrder && !isPurchaseApplication" class="invoice-toggle"><input v-model="ui.form.invoiceRequired" type="checkbox" :disabled="fieldsDisabled" /><span>需要发票</span></label>
+          <label v-if="isPurchaseOrder && !isPurchaseApplication" class="invoice-toggle" :data-tutorial-target="isTutorialCreate ? 'document-invoice' : undefined"><input v-model="ui.form.invoiceRequired" type="checkbox" :disabled="fieldsDisabled" /><span>需要发票</span></label>
           <label v-if="!isPurchaseOrder && !isPurchaseReturn && !hidePurchaseAmounts" class="tax-toggle"><input v-model="ui.taxEnabled" type="checkbox" :disabled="fieldsDisabled" /><span>含税</span></label>
           <button v-if="isPurchaseReturn && !ui.readOnly" class="btn close-button" type="button" title="刷新可退批次" aria-label="刷新可退批次" :disabled="fieldsDisabled || !ui.form.storeId || !ui.form.supplierId" @click="ui.loadSources()"><RefreshCw :size="18" aria-hidden="true" /></button>
           <button type="button" class="btn btn-danger" :disabled="fieldsDisabled || ui.lockRequestedItems" @click="confirmation = 'clear'">清空</button>
@@ -55,7 +55,7 @@
       <fieldset :disabled="fieldsDisabled">
         <div v-if="isSale || isPurchase" class="contact-info-bar">
           <template v-if="isSale">
-            <label class="info-group"><span>联系人</span><input v-model="ui.form.contactPerson" :ref="element => setFieldRef('contactPerson', element)" type="text" @input="dismissHint('contactPerson')" /></label>
+            <label class="info-group" :data-tutorial-target="isTutorialCreate ? 'document-contact' : undefined"><span>联系人</span><input v-model="ui.form.contactPerson" :ref="element => setFieldRef('contactPerson', element)" type="text" @input="dismissHint('contactPerson')" /></label>
             <label class="info-group"><span>联系电话</span><input v-model="ui.form.contactPhone" :ref="element => setFieldRef('contactPhone', element)" type="tel" @input="dismissHint('contactPhone')" /></label>
             <label class="info-group address-field"><span>联系地址</span><input v-model="ui.form.contactAddress" type="text" /></label>
             <label class="info-group"><span>工程项目</span><input v-model="ui.form.projectName" type="text" /></label>
@@ -146,7 +146,7 @@
               <tr v-for="(item, index) in ui.form.items" :key="item.key ?? index" :class="{ 'row-focused': ui.focusedRow === index }">
                 <td class="center">{{ index + 1 }}</td>
                 <td class="center" :class="{ 'row-action-cell': isPurchaseOrder }"><span v-if="!isPurchaseOrder || (!ui.readOnly && !ui.lockRequestedItems)" :class="{ 'row-actions': isPurchaseOrder }"><button class="btn-icon" type="button" title="在下方插入一行" aria-label="在下方插入一行" @click="ui.addRow(index)"><Plus :size="16" aria-hidden="true" /></button><button class="btn-icon remove" type="button" title="删除此行" aria-label="删除此行" :disabled="isPurchaseOrder && ui.form.items.length === 1" @click="ui.removeRow(index)"><Trash2 :size="15" aria-hidden="true" /></button></span></td>
-                <td v-if="isPurchaseOrder">
+                <td v-if="isPurchaseOrder" :data-tutorial-target="isTutorialCreate && index === 0 ? 'document-item-warehouse' : undefined">
                   <select v-model="item.warehouseId" :disabled="ui.lockRequestedItems" class="purchase-cell-select" :ref="element => setFieldRef(`item-warehouse-${index}`, element)" aria-label="所属仓库" @focus="activatePurchaseCell(item, 'warehouse')" @blur="activePurchaseCell = ''" @change="ui.onItemWarehouseChange(item); dismissHint(`item-warehouse-${index}`)">
                     <option value="">{{ purchaseCellPlaceholder(item, 'warehouse', ui.form.storeId ? '请选择仓库' : '请先选择门店') }}</option>
                     <option v-if="item.warehouseId && !ui.filteredWarehouses.some(warehouse => String(warehouse.id) === String(item.warehouseId))" :value="item.warehouseId">{{ item.warehouseName || '历史仓库' }}</option>
@@ -161,7 +161,7 @@
                   </select>
                   <span v-else class="blank-cell"></span>
                 </td>
-                <td>
+                <td :data-tutorial-target="isTutorialCreate && index === 0 ? 'document-product' : undefined">
                   <input v-if="isPurchaseOrder" v-model="item.goodsName" :readonly="ui.lockRequestedItems" class="purchase-cell-input" :ref="element => setProductInputRef(index, element)" type="text" autocomplete="off" aria-label="商品" :placeholder="purchaseProductPlaceholder(item)" @focus="activatePurchaseCell(item, 'product'); ui.showProductDropdown(index)" @blur="activePurchaseCell = ''; ui.hideProductDropdown(index)" @input="ui.onProductInput(index); dismissHint(`item-product-${index}`)" @keydown.escape.prevent="ui.closeProductDropdown?.()" />
                   <select v-else-if="isPurchase" v-model="item.productId" class="purchase-cell-select" :ref="element => setProductInputRef(index, element)" :aria-label="isMaterial ? '物料' : '商品'" @focus="activatePurchaseCell(item, 'product')" @blur="activePurchaseCell = ''" @change="ui.onProductChange(item); dismissHint(`item-product-${index}`)">
                     <option value="">{{ purchaseCellPlaceholder(item, 'product', ui.form.storeId ? `请选择${isMaterial ? '物料' : '商品'}` : '请先选择门店') }}</option>
@@ -197,7 +197,7 @@
                 </template>
                 <td v-if="showLineAmounts" class="right"><template v-if="isPurchaseOrder"><input v-if="item.productId" :value="item.amount" :ref="element => setFieldRef(`item-amount-${index}`, element)" aria-label="金额" type="number" readonly /><span v-else class="blank-cell"></span></template><template v-else>{{ item.productId ? money(item.amount) : '' }}</template></td>
                 <template v-if="showTaxColumns && !isPurchaseOrder"><td v-if="!isSale" class="right">{{ item.productId ? money(item.taxAmount) : '' }}</td><td class="right">{{ item.productId ? money(item[ui.config.includedField]) : '' }}</td></template>
-                <template v-if="isPurchase"><td><input v-model="item.batchNo" :ref="element => setFieldRef(`item-batch-${index}`, element)" aria-label="批次号" type="text" maxlength="80" /></td><td><input v-model="item.binCode" aria-label="货位编码" type="text" maxlength="80" /></td></template>
+                <template v-if="isPurchase"><td :data-tutorial-target="isTutorialCreate && index === 0 ? 'document-batch' : undefined"><input v-model="item.batchNo" :ref="element => setFieldRef(`item-batch-${index}`, element)" aria-label="批次号" type="text" maxlength="80" /></td><td><input v-model="item.binCode" aria-label="货位编码" type="text" maxlength="80" /></td></template>
                 <td><input v-if="!isPurchaseOrder || item.productId" v-model="item.remark" :readonly="isWarehouseInboundAudit" aria-label="行备注" type="text" :maxlength="isPurchaseOrder ? 500 : undefined" /><span v-else class="blank-cell"></span></td>
               </tr>
               <tr class="total-row">
@@ -298,7 +298,7 @@
               <span v-if="ui.form.lockedAt" class="red">已锁期</span>
             </template>
             <template v-else><span>入库数量 <strong>{{ money(ui.totalQuantity) }}</strong></span><span>入库金额 <strong>{{ money(ui.totalAmount) }}</strong></span><span v-if="ui.taxEnabled">税额 <strong>{{ money(ui.totalTaxAmount) }}</strong></span><span>价税合计 <strong>{{ money(ui.totalIncludedAmount) }}</strong></span></template>
-            <div v-if="isPurchaseOrder && !ui.readOnly" class="document-actions">
+            <div v-if="isPurchaseOrder && !ui.readOnly" class="document-actions" :data-tutorial-target="isTutorialCreate ? 'document-order-actions' : undefined">
               <button class="btn" type="button" @click="requestClose">取消</button>
               <button v-if="!ui.auditMode" class="btn btn-secondary" type="button" @click="submitDocument($event, 'draft')"><Save :size="16" aria-hidden="true" />保存草稿</button>
               <button class="btn btn-primary" type="submit"><Check v-if="ui.auditMode" :size="16" aria-hidden="true" /><Send v-else :size="16" aria-hidden="true" />{{ ui.saving ? (ui.auditMode ? '审核中...' : '保存中...') : (ui.auditMode ? '补充并审核通过' : '提交审核') }}</button>
@@ -307,7 +307,7 @@
               <button class="btn" type="button" @click="requestClose">取消</button>
               <button class="btn btn-primary" type="submit"><Save :size="16" aria-hidden="true" />{{ ui.saving ? '保存中...' : '保存草稿' }}</button>
             </div>
-            <button v-else-if="!isPurchaseOrder && !isPurchaseReturn" class="btn btn-primary save-button" type="submit">{{ ui.saving ? '保存中...' : '保存并打印' }}</button>
+            <button v-else-if="!isPurchaseOrder && !isPurchaseReturn" class="btn btn-primary save-button" type="submit" :data-tutorial-target="isTutorialCreate ? 'document-save' : undefined">{{ ui.saving ? '保存中...' : '保存并打印' }}</button>
           </div>
         </div>
       </fieldset>
@@ -374,6 +374,7 @@ const isReturn = computed(() => props.documentType === 'sale-return')
 const isPurchase = computed(() => props.documentType === 'purchase')
 const isPurchaseOrder = computed(() => props.documentType === 'purchase-order')
 const isPurchaseApplication = computed(() => isPurchaseOrder.value && props.applicationMode)
+const isTutorialCreate = computed(() => props.action === 'create' && !props.applicationMode && !props.purchaseOrderId)
 const isWarehouseInboundAudit = computed(() => isPurchaseOrder.value && ui.warehouseInboundMode)
 const isPurchaseReturn = computed(() => props.documentType === 'purchase-return')
 const hidePurchaseAmounts = computed(() => isPurchase.value && !ui.readOnly && (props.action === 'create' || !ui.purchaseOrderId))

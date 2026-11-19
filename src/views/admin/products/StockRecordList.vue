@@ -169,6 +169,7 @@
             v-if="!isOutbound"
             class="button button-primary create-button"
             type="button"
+            data-tutorial-target="stock-in-add"
             @click="handleCreate"
           >
             <svg aria-hidden="true" viewBox="0 0 24 24">

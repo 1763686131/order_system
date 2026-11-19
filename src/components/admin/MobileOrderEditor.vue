@@ -21,7 +21,7 @@
         </header>
         <form class="product-dialog-form" @submit.prevent="confirmItem">
           <div class="product-fields">
-            <div class="product-field full-width">
+            <div class="product-field full-width" :data-tutorial-target="creating ? 'mobile-order-item' : undefined">
               <label :for="`${productListId}-input`">商品</label>
               <div class="product-combobox" @focusout="handleProductSearchBlur">
                 <div class="product-search-control">
@@ -96,7 +96,7 @@
           <p v-if="itemError" class="save-error" role="alert">{{ itemError }}</p>
           <footer class="product-dialog-actions">
             <button class="cancel-button" type="button" @click="closeItemDialog">取消</button>
-            <button class="confirm-item-button" type="submit"><Check aria-hidden="true" />修改完成</button>
+            <button class="confirm-item-button" type="submit" :data-tutorial-target="creating ? 'mobile-order-item-apply' : undefined"><Check aria-hidden="true" />修改完成</button>
           </footer>
         </form>
       </section>

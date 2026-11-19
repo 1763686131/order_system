@@ -91,7 +91,12 @@
             </svg>
             导出 Excel
           </button>
-          <button class="button button-primary" type="button" @click="handleAdd">
+          <button
+            class="button button-primary"
+            type="button"
+            :data-tutorial-target="`${entityType}-add`"
+            @click="handleAdd"
+          >
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M12 5v14"></path>
               <path d="M5 12h14"></path>
@@ -419,7 +424,7 @@
             <div class="detail-modal-body">
               <form class="party-form" @submit.prevent="handleSubmit">
                 <section class="form-highlight-section">
-                  <label class="form-field-inline">
+                  <label class="form-field-inline" :data-tutorial-target="!isEditMode ? `${entityType}-store` : undefined">
                     <span class="field-label-inline">
                       <svg aria-hidden="true" viewBox="0 0 24 24">
                         <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
@@ -427,7 +432,7 @@
                       </svg>
                       所属门店 <em v-if="!isSupplier">*</em>
                     </span>
-                    <div v-if="allStores.length" class="store-pill-group">
+                    <div v-if="allStores.length || isSupplier" class="store-pill-group">
                       <button
                         v-if="isSupplier"
                         type="button"
@@ -453,7 +458,7 @@
                 <section class="form-card">
                   <div class="form-card-header"><h4>基本信息</h4></div>
                   <div class="form-card-body">
-                    <div class="form-row">
+                    <div class="form-row" :data-tutorial-target="!isEditMode ? `${entityType}-required-fields` : undefined">
                       <label class="form-field">
                         <span class="field-label">{{ entityConfig.name }}名称 <em>*</em></span>
                         <input v-model.trim="formData.name" type="text" :placeholder="`请输入${entityConfig.name}名称`" required />
@@ -576,7 +581,13 @@
               <span></span>
               <div class="detail-modal-actions">
                 <button class="button button-secondary" type="button" @click="closeEditModal">取消</button>
-                <button class="button button-primary" type="button" :disabled="submitting" @click="handleSubmit">
+                <button
+                  class="button button-primary"
+                  type="button"
+                  :disabled="submitting"
+                  :data-tutorial-target="!isEditMode ? `${entityType}-submit` : undefined"
+                  @click="handleSubmit"
+                >
                   {{ submitting ? '提交中...' : (isEditMode ? '保存' : '创建') }}
                 </button>
               </div>
@@ -925,12 +936,15 @@ const closeDetailModal = () => {
   selectedRecord.value = null
 }
 
-const closeEditModal = () => {
-  if (submitting.value) return
+const dismissEditModal = () => {
   showEditModal.value = false
   isEditMode.value = false
   selectedRecord.value = null
   resetForm()
+}
+
+const closeEditModal = () => {
+  if (!submitting.value) dismissEditModal()
 }
 
 const handleDelete = record => {
@@ -954,6 +968,8 @@ const handleMoneyInput = field => {
 }
 
 const handleSubmit = async () => {
+  if (submitting.value) return
+
   if (!formData.name || (!isSupplier.value && !formData.code) || (!isSupplier.value && !formData.storeId)) {
     showAlert('请填写必填项', 'warning', '提示')
     return
@@ -999,7 +1015,7 @@ const handleSubmit = async () => {
       method: isEditMode.value ? 'PUT' : 'POST',
       data: payload
     })
-    closeEditModal()
+    dismissEditModal()
     showAlert(response?.message || `${entityConfig.value.name}${editing ? '保存成功' : '创建成功'}`, 'success')
     await loadList()
   } catch (error) {

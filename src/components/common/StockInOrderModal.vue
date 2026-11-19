@@ -58,7 +58,7 @@
                 <input :value="typeLabel" type="text" readonly class="readonly" />
               </label>
 
-              <label class="form-field" :class="{ invalid: errors.warehouseId }">
+              <label class="form-field" :class="{ invalid: errors.warehouseId }" :data-tutorial-target="!isEdit ? 'stock-in-warehouse' : undefined">
                 <span>目标仓库 <em>*</em></span>
                 <select v-model="form.warehouseId" @change="handleWarehouseChange">
                   <option value="">请选择仓库</option>
@@ -130,7 +130,7 @@
                   <tr v-for="(row, index) in form.items" :key="row._key" :class="{ 'row-invalid': rowErrors[index] }">
                     <td class="check-col"><input v-model="selectedRows" type="checkbox" :value="row._key" /></td>
                     <td class="index-col">{{ index + 1 }}</td>
-                    <td class="material-cell">
+                    <td class="material-cell" :data-tutorial-target="!isEdit && index === 0 ? 'stock-in-product' : undefined">
                       <select v-model="row.productId" @change="handleProductChange(row)">
                         <option value="">请选择物料</option>
                         <option v-for="product in availableProducts" :key="product.id" :value="product.id">
@@ -223,7 +223,7 @@
           <div class="footer-actions">
             <button type="button" class="btn btn-ghost" :disabled="saving" @click="requestClose">取消 / 关闭</button>
             <button type="button" class="btn btn-secondary" :disabled="saving" @click="saveDraftLocal">保存草稿</button>
-            <button type="button" class="btn btn-primary" :disabled="saving" @click="submitReview">
+            <button type="button" class="btn btn-primary" :disabled="saving" :data-tutorial-target="!isEdit ? 'stock-in-submit' : undefined" @click="submitReview">
               <span v-if="saving" class="spinner"></span>
               {{ saving ? '处理中…' : '提交审核' }}
             </button>

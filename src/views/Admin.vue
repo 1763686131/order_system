@@ -141,12 +141,18 @@
               @open="openNomiChat"
               @open-settings="openNomiSettings"
             />
-            <button v-if="!isMobileViewport" class="icon-btn" title="系统公告">
-              <svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 2L2 7l10 5 10-5-10-5z"/>
-                <path d="M2 17l10 5 10-5"/>
-                <path d="M2 12l10 5 10-5"/>
-              </svg>
+            <button
+              v-if="!isMobileViewport"
+              class="icon-btn tutorial-manual-trigger"
+              type="button"
+              title="教程手册"
+              aria-label="教程手册"
+              aria-haspopup="dialog"
+              aria-controls="admin-tutorial-manual"
+              @click="openTutorialManual($event.currentTarget)"
+            >
+              <BookOpen class="icon-svg" aria-hidden="true" />
+              <span>教程手册</span>
             </button>
             <button
               v-if="canOpenLogisticsCopySettings && !isMobileViewport"
@@ -243,6 +249,7 @@
               @keydown.esc="closeAccountMenu"
             >
               <button
+                ref="accountMenuTriggerRef"
                 class="icon-btn account-menu-trigger"
                 type="button"
                 title="账户菜单"
@@ -286,13 +293,12 @@
                       class="account-menu-item account-menu-mobile-action"
                       type="button"
                       role="menuitem"
-                      @click="closeAccountMenu"
+                      aria-haspopup="dialog"
+                      aria-controls="admin-tutorial-manual"
+                      @click="openTutorialManual(accountMenuTriggerRef)"
                     >
-                      <svg viewBox="0 0 24 24" aria-hidden="true">
-                        <path d="M12 3v18M3 12h18"/>
-                        <path d="M5 5h14v14H5z"/>
-                      </svg>
-                      <span>系统公告</span>
+                      <BookOpen aria-hidden="true" />
+                      <span>教程手册</span>
                     </button>
 
                     <button
@@ -386,6 +392,7 @@
     </div>
 
     <!-- 弹窗组件 -->
+    <AdminTutorialManual ref="tutorialManualRef" />
     <ShippedOrderActionModal ref="shippedActionModal" @refresh="handleRefresh" />
     <StockInOrderModal ref="stockRecordModal" @saved="handleStockRecordSaved" />
     <LogisticsCopySettingsDialog
@@ -404,7 +411,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
-import { Boxes, ChevronDown, ChevronsLeft, FilePenLine, FilePlus2, PackageCheck, RotateCcw } from '@lucide/vue'
+import { BookOpen, Boxes, ChevronDown, ChevronsLeft, FilePenLine, FilePlus2, PackageCheck, RotateCcw } from '@lucide/vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useOrderDraftStore } from '@/stores/orderDraft'
@@ -422,6 +429,7 @@ import {
   ADMIN_SALES_ORDER_PERMISSIONS,
   ADMIN_LOGISTICS_COPY_PERMISSIONS
 } from '@/utils/accessControl'
+import AdminTutorialManual from '@/components/admin/AdminTutorialManual.vue'
 import ChatWindow from '@/components/admin/ChatWindow.vue'
 import DirectoryPanel from '@/components/admin/DirectoryPanel.vue'
 import MessageInbox from '@/components/admin/MessageInbox.vue'
@@ -460,7 +468,9 @@ const {
 } = provideAdminStickyPanel(mainContentRef, topHeaderRef)
 const avatarLoadFailed = ref(false)
 const accountMenuRef = ref(null)
+const accountMenuTriggerRef = ref(null)
 const accountMenuOpen = ref(false)
+const tutorialManualRef = ref(null)
 const directoryPanelRef = ref(null)
 const messageInboxRef = ref(null)
 const notificationInboxRef = ref(null)
@@ -617,6 +627,14 @@ const toggleAccountMenu = () => {
 
 const closeAccountMenu = () => {
   accountMenuOpen.value = false
+}
+
+const openTutorialManual = trigger => {
+  closeAccountMenu()
+  directoryPanelRef.value?.close()
+  messageInboxRef.value?.close()
+  notificationInboxRef.value?.close()
+  tutorialManualRef.value?.open(trigger)
 }
 
 const handleAccountMenuClickOutside = event => {
@@ -1861,6 +1879,15 @@ const logout = async () => {
   outline-offset: 2px;
 }
 
+.tutorial-manual-trigger {
+  width: auto;
+  min-width: 36px;
+  gap: 6px;
+  padding: 0 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 .icon-svg {
   width: 18px;
   height: 18px;
@@ -2211,6 +2238,12 @@ const logout = async () => {
 
   .header-actions {
     gap: 8px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .tutorial-manual-trigger span {
+    display: none;
   }
 }
 

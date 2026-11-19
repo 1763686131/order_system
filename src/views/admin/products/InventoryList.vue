@@ -42,7 +42,7 @@
           <button v-if="canManageProducts" class="btn btn-danger" type="button" :disabled="selectedCount === 0 || deleting || loading" @click="handleBatchDelete">
             <Trash2 :size="16" aria-hidden="true" />批量删除
           </button>
-          <button v-if="canManageProducts" class="btn btn-primary" type="button" :disabled="deleting || loading" @click="handleNew">
+          <button v-if="canManageProducts" class="btn btn-primary" type="button" data-tutorial-target="product-add" :disabled="deleting || loading" @click="handleNew">
             <Plus :size="16" aria-hidden="true" />新增{{ entityLabel }}
           </button>
         </div>

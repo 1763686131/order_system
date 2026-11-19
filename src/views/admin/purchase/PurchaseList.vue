@@ -386,7 +386,12 @@
           <button v-if="isInbound" class="button button-ghost" type="button" @click="router.push({ name: 'admin-purchase-inbound-application-create' })">
             <Plus :size="16" aria-hidden="true" />申请采购
           </button>
-          <button class="button button-primary" type="button" @click="createRecord">
+          <button
+            class="button button-primary"
+            type="button"
+            :data-tutorial-target="isInbound ? 'purchase-inbound-add' : 'purchase-order-add'"
+            @click="createRecord"
+          >
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M12 5v14"></path>
               <path d="M5 12h14"></path>

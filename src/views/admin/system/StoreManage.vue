@@ -2,7 +2,7 @@
   <div class="store-management-page">
     <!-- 操作栏 -->
     <div class="action-bar">
-      <button class="btn-new" @click="handleNew">
+      <button class="btn-new" data-tutorial-target="store-add" @click="handleNew">
         <span class="icon">+</span> 新增门店
       </button>
     </div>

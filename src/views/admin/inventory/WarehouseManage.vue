@@ -5,7 +5,7 @@
       <div class="header-actions">
         <div class="store-filter">
           <label class="filter-label">选择门店：</label>
-          <select v-model="selectedStoreId" @change="handleStoreChange" class="store-select">
+          <select v-model="selectedStoreId" @change="handleStoreChange" class="store-select" data-tutorial-target="warehouse-store">
             <option value="">全部门店</option>
             <option v-for="store in stores" :key="store.id" :value="store.id">
               {{ store.name }}
@@ -14,6 +14,7 @@
         </div>
         <button
           class="btn-add-warehouse"
+          data-tutorial-target="warehouse-add"
           @click="handleAddWarehouse"
           :disabled="!selectedStoreId"
           :class="{ disabled: !selectedStoreId }"
@@ -97,7 +98,7 @@
           <button class="btn-close" @click="closeWarehouseModal">×</button>
         </div>
         <div class="modal-body">
-          <div class="form-group">
+          <div class="form-group" :data-tutorial-target="!isEditMode ? 'warehouse-code' : undefined">
             <label class="form-label">仓库ID:</label>
             <input
               v-model="warehouseForm.code"
@@ -131,7 +132,7 @@
         </div>
         <div class="modal-footer">
           <button class="btn-cancel" @click="closeWarehouseModal">取消</button>
-          <button class="btn-save" @click="saveWarehouse">保存</button>
+          <button class="btn-save" :data-tutorial-target="!isEditMode ? 'warehouse-save' : undefined" @click="saveWarehouse">保存</button>
         </div>
       </div>
     </div>

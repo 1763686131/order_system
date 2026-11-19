@@ -6,7 +6,7 @@
         <h2>银行账户</h2>
         <p class="sub-text">管理企业银行账户信息</p>
       </div>
-      <button type="button" class="btn-primary" @click="openAddDialog">
+      <button type="button" class="btn-primary" data-tutorial-target="bank-account-add" @click="openAddDialog">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
           <path d="M12 5v14m-7-7h14"></path>
         </svg>
@@ -161,7 +161,7 @@
 
           <form class="modal-body" @submit.prevent="handleSubmit">
             <div class="form-grid-two-col">
-              <label class="field-group">
+              <label class="field-group" :data-tutorial-target="!isEditMode ? 'bank-account-store' : undefined">
                 <span>所属门店 <em>*</em></span>
                 <select v-model="formData.storeId" required>
                   <option value="">请选择门店</option>
@@ -181,7 +181,7 @@
                 />
               </label>
 
-              <label class="field-group">
+              <label class="field-group" :data-tutorial-target="!isEditMode ? 'bank-account-number' : undefined">
                 <span>账号 <em>*</em></span>
                 <input
                   v-model.trim="formData.accountNumber"
@@ -210,7 +210,7 @@
                 />
               </label>
 
-              <label class="field-group">
+              <label class="field-group" :data-tutorial-target="!isEditMode ? 'bank-account-balance' : undefined">
                 <span>账户余额 <em>*</em></span>
                 <input
                   v-model.number="formData.balance"
@@ -307,7 +307,7 @@
 
             <footer class="modal-footer">
               <button type="button" class="btn-cancel" @click="closeDialog">取消</button>
-              <button type="submit" class="btn-confirm" :disabled="submitting">
+              <button type="submit" class="btn-confirm" :disabled="submitting" :data-tutorial-target="!isEditMode ? 'bank-account-submit' : undefined">
                 {{ submitting ? '提交中...' : (isEditMode ? '修改' : '添加') }}
               </button>
             </footer>

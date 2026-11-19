@@ -12,7 +12,7 @@
         <form class="wizard-form" @submit.prevent="nextStep">
           <div class="wizard-body">
             <template v-if="step === 1">
-              <fieldset class="store-options">
+              <fieldset class="store-options" data-tutorial-target="mobile-order-store">
                 <legend class="sr-only">选择门店</legend>
                 <label v-for="store in availableStores" :key="store.id" class="choice-option">
                   <input v-model="form.storeId" type="radio" name="create-store" :value="store.id" :aria-label="store.name" />
@@ -46,7 +46,7 @@
                 </fieldset>
                 <p v-if="!filteredCustomers.length" class="empty-message" role="status">{{ customerSearch ? '暂无匹配客户' : '该门店暂无客户，请先添加客户。' }}</p>
               </div>
-              <label class="field">
+              <label class="field" data-tutorial-target="mobile-order-warehouse">
                 <span>仓库</span>
                 <select v-model="form.warehouseId" aria-label="仓库" required>
                   <option value="">请选择仓库</option>
@@ -84,7 +84,7 @@
           <footer class="wizard-actions">
             <button type="button" class="secondary-button" @click="emit('cancel')">取消</button>
             <button v-if="step === 2" type="button" class="secondary-button back-button" @click="step = 1; validationError = ''"><ArrowLeft aria-hidden="true" />上一步</button>
-            <button class="primary-button" type="submit" :disabled="step === 1 ? !selectedStore : loading || !!loadError || !selectedCustomer || !selectedWarehouse">
+            <button class="primary-button" type="submit" :data-tutorial-target="step === 1 ? 'mobile-order-store-next' : 'mobile-order-start'" :disabled="step === 1 ? !selectedStore : loading || !!loadError || !selectedCustomer || !selectedWarehouse">
               {{ step === 1 ? '下一步' : '开始填写' }}<ArrowRight aria-hidden="true" />
             </button>
           </footer>

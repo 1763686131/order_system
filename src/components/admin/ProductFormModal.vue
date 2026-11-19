@@ -25,7 +25,7 @@
         <div v-show="currentTab === 0" class="tab-content">
           <!-- 第一行：门店 + 状态 -->
           <div class="form-row">
-            <div class="form-group half">
+            <div class="form-group half" :data-tutorial-target="!isEdit ? 'product-stores' : undefined">
               <label class="required">门店:</label>
               <div class="checkbox-group">
                 <label v-for="store in stores" :key="store.id" class="checkbox-item">
@@ -45,7 +45,7 @@
           </div>
 
           <!-- 第二行：仓库 + 分类 -->
-          <div class="form-row">
+          <div class="form-row" :data-tutorial-target="!isEdit ? 'product-warehouse' : undefined">
             <div class="form-group half">
               <label class="required">仓库:</label>
               <select
@@ -81,7 +81,7 @@
           </div>
 
           <!-- 第三行：商品名称 + 编号 -->
-          <div class="form-row">
+          <div class="form-row" :data-tutorial-target="!isEdit ? 'product-name' : undefined">
             <div class="form-group half">
               <label class="required">{{ entityLabel }}名称:</label>
               <input
@@ -126,7 +126,7 @@
 
           <!-- 第五行：单位 -->
           <div class="form-row">
-            <div class="form-group full">
+            <div class="form-group full" :data-tutorial-target="!isEdit ? 'product-unit' : undefined">
               <label class="required">单位:</label>
               <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                 <label
@@ -495,7 +495,7 @@
       <!-- 弹窗底部 -->
       <div class="modal-footer">
         <button class="btn-cancel" @click="handleClose">取消</button>
-        <button class="btn-save" @click="handleSave">保存</button>
+        <button class="btn-save" :data-tutorial-target="!isEdit ? 'product-save' : undefined" @click="handleSave">保存</button>
         <button class="btn-save-continue" @click="handleSaveAndContinue">保存并继续新增</button>
       </div>
     </div>

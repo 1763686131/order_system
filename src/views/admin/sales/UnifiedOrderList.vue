@@ -200,6 +200,7 @@
             v-if="mode === 'finance' && canCreateSalesOrders"
             class="button button-primary create-button mobile-overflow-action"
             type="button"
+            data-tutorial-target="sales-add"
             @click="handleAdd"
           >
             <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -662,7 +663,7 @@
               <span>{{ getStoreName(order) }}</span>
               <span>{{ getWarehouseName(order.warehouse_id) }}</span>
             </div>
-            <div class="mobile-order-contact-row">
+            <div class="mobile-order-contact-row" :data-tutorial-target="isMobileOrderDraft(order.id) ? 'mobile-order-contact' : undefined">
               <div class="mobile-order-field">
                 <span>收货人</span>
                 <input
@@ -716,6 +717,7 @@
                   class="mobile-order-add-product"
                   type="button"
                   :disabled="editor.saving || !editor.unitsReady"
+                  :data-tutorial-target="isMobileOrderDraft(order.id) ? 'mobile-order-add-item' : undefined"
                   @click="editor.addItem()"
                 ><Plus aria-hidden="true" />新增商品</button>
               </div>
@@ -723,6 +725,7 @@
                 v-for="(item, index) in editor.order.order_goods?.length || isMobileOrderDraft(order.id) ? editor.order.order_goods : getMobileGoodsItems(order)"
                 :key="`${order.id}-mobile-item-${index}`"
                 class="mobile-order-product"
+                :data-tutorial-target="isMobileOrderDraft(order.id) && index === 0 ? 'mobile-order-item-added' : undefined"
                 :class="{ 'is-editing': isMobileOrderEditing(order.id) }"
               >
                 <strong class="mobile-order-product-name">{{ getGoodsItemName(item) }}</strong>
@@ -839,7 +842,7 @@
             <p v-if="isMobileOrderEditing(order.id) && editor.error" class="mobile-order-save-error" role="alert">{{ editor.error }}</p>
             <footer v-if="isMobileOrderEditing(order.id)" class="mobile-order-actions">
               <button class="mobile-order-action cancel-button" type="button" :disabled="editor.saving" @click="editor.cancel()">取消</button>
-              <button class="mobile-order-action mobile-order-save-button save-button" type="submit" :disabled="editor.saving"><Check aria-hidden="true" />{{ editor.saving ? '保存中...' : isMobileOrderDraft(order.id) ? '完成提交' : '修改完成' }}</button>
+              <button class="mobile-order-action mobile-order-save-button save-button" type="submit" :disabled="editor.saving" :data-tutorial-target="isMobileOrderDraft(order.id) ? 'mobile-order-submit' : undefined"><Check aria-hidden="true" />{{ editor.saving ? '保存中...' : isMobileOrderDraft(order.id) ? '完成提交' : '修改完成' }}</button>
             </footer>
             <footer v-else class="mobile-order-actions">
               <button
@@ -966,6 +969,7 @@
         :class="{ 'is-dragging': mobileCreateFabDragging }"
         :style="mobileCreateFabStyle"
         type="button"
+        data-tutorial-target="sales-add"
         :aria-label="addButtonText"
         @pointerdown="handleMobileCreateFabPointerDown"
         @pointermove="handleMobileCreateFabPointerMove"

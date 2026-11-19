@@ -9,7 +9,7 @@
 
       <!-- 弹窗内容 -->
       <div class="modal-body">
-        <div class="form-row">
+        <div class="form-row" :data-tutorial-target="!isEdit ? 'store-code' : undefined">
           <label class="form-label required">门店编码:</label>
           <div class="form-control">
             <input
@@ -23,7 +23,7 @@
           </div>
         </div>
 
-        <div class="form-row">
+        <div class="form-row" :data-tutorial-target="!isEdit ? 'store-name' : undefined">
           <label class="form-label required">门店名称:</label>
           <div class="form-control">
             <input
@@ -121,7 +121,7 @@
       <!-- 弹窗底部 -->
       <div class="modal-footer">
         <button class="btn-cancel" @click="handleClose">取消</button>
-        <button class="btn-save" @click="handleSave">保存</button>
+        <button class="btn-save" :data-tutorial-target="!isEdit ? 'store-save' : undefined" @click="handleSave">保存</button>
       </div>
     </div>
   </div>
