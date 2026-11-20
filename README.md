@@ -115,6 +115,10 @@ Windows 防火墙拦截时，可在可信的专用网络中允许该 EXE 入站�
 
 改完功能后，在资源管理器中双击 [build-windows-exe.bat](scripts/build-windows-exe.bat) 即可重新打包。脚本会使用 `.exe-build.local\venv` 中的 Python，完成或报错后会保留窗口。
 
+EXE 的文件图标来自 [appicon.png](scripts/icon/appicon.png)。替换该 PNG 后重新打包即可更新图标，脚本会自动转换成 Windows 所需的 ICO 格式。
+
+打包完成后会通知资源管理器刷新 EXE。如果仍显示旧图标，在输出目录按 `F5`，或将 EXE 改成一个新文件名，让资源管理器重新读取图标。
+
 在新开发机上，先安装 Node.js 和 Windows x64 Python 3.12 或 3.13，在项目根目录配置一次打包环境：
 
 ```powershell
@@ -478,7 +482,9 @@ order_system/
 ├─ scripts/
 │  ├─ build-windows-exe.bat           # 在资源管理器中双击重新打包
 │  ├─ build-windows-exe.py            # 运行 Vite 构建，并用 PyInstaller 生成单文件 EXE
-│  └─ windows-exe-requirements.txt    # EXE 专用的 PyInstaller 和 Waitress 依赖
+│  ├─ windows-exe-requirements.txt    # EXE 打包、图标转换和服务依赖
+│  └─ icon/
+│     └─ appicon.png                 # 打包时转换为 Windows EXE 文件图标
 ├─ .exe-build.local/                 # 本机打包目录，由开发机生成
 │  ├─ venv/                           # 双击打包脚本使用的 Python 虚拟环境
 │  ├─ work/                           # PyInstaller 构建中间文件
