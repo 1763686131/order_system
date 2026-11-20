@@ -20,6 +20,7 @@ from utils.bank_account_helpers import (
 )
 from utils.permission_catalog import ADMIN_SALES_ORDER_PERMISSIONS
 from utils.notifications import create_audit_notifications, complete_audit_notifications
+from utils.runtime_paths import upload_directory
 from datetime import datetime
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import os
@@ -31,10 +32,7 @@ from queue import Queue, Empty
 orders_bp = Blueprint('orders', __name__, url_prefix='/api/orders')
 
 # 文件上传目录
-if os.path.exists('/app/frontend/index.html') and os.path.isdir('/app/uploads'):
-    BASE_UPLOAD_DIR = '/app/uploads'
-else:
-    BASE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', 'uploads')
+BASE_UPLOAD_DIR = upload_directory()
 
 # 线程锁
 orders_lock = threading.Lock()

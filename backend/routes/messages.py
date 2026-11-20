@@ -11,19 +11,13 @@ from werkzeug.utils import secure_filename
 from utils.auth import get_current_user, require_admin_permission
 from utils.db import get_db
 from utils.permission_catalog import ADMIN_MESSAGE_PERMISSIONS
+from utils.runtime_paths import upload_directory
 
 
 messages_bp = Blueprint("messages", __name__, url_prefix="/api/admin/messages")
 
 MAX_ATTACHMENT_SIZE = 10 * 1024 * 1024
-if os.path.exists("/app/frontend/index.html") and os.path.isdir("/app/uploads"):
-    UPLOAD_ROOT = "/app/uploads"
-else:
-    UPLOAD_ROOT = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        "uploads",
-    )
-ATTACHMENT_ROOT = os.path.join(UPLOAD_ROOT, "chat-attachments")
+ATTACHMENT_ROOT = os.path.join(upload_directory(), "chat-attachments")
 
 
 def _employee_id():

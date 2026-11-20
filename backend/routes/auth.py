@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from flask import Blueprint, jsonify, request, session
+from flask import Blueprint, current_app, jsonify, request, session
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from utils.auth import (
@@ -37,6 +37,10 @@ def _validate_credentials(data, require_name=False):
     return username, password, display_name
 
 
+def _can_bootstrap_here():
+    return not current_app.config.get("BOOTSTRAP_LOOPBACK_ONLY") or request.remote_addr == "127.0.0.1"
+
+
 def _active_super_admin_count(conn):
     return conn.execute(
         """
@@ -57,6 +61,8 @@ def _active_super_admin_count(conn):
 def bootstrap_status():
     with get_db() as conn:
         setup_required = _active_super_admin_count(conn) == 0
+    if setup_required and not _can_bootstrap_here():
+        return jsonify(success=False, message="请先在运行 EXE 的电脑上创建管理员，再刷新此页面。"), 403
     return jsonify(
         {
             "success": True,
@@ -68,6 +74,8 @@ def bootstrap_status():
 
 @auth_bp.route("/bootstrap", methods=["POST"])
 def bootstrap():
+    if not _can_bootstrap_here():
+        return jsonify(success=False, message="请在运行 EXE 的电脑上创建管理员。"), 403
     data = request.get_json(silent=True) or {}
     try:
         username, password, display_name = _validate_credentials(

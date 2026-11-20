@@ -8,18 +8,16 @@ import os
 import secrets
 import webbrowser
 from threading import Timer
+from utils.runtime_paths import data_directory, frontend_directory, is_desktop, upload_directory
 
 
 def _load_secret_key():
-    configured_key = str(os.environ.get("APP_SECRET_KEY") or "").strip()
-    if configured_key:
-        return configured_key
+    if not is_desktop():
+        configured_key = str(os.environ.get("APP_SECRET_KEY") or "").strip()
+        if configured_key:
+            return configured_key
 
-    if os.path.isdir("/app/data"):
-        secret_path = "/app/data/.app_secret_key"
-    else:
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        secret_path = os.path.join(project_root, "data", ".app_secret_key")
+    secret_path = os.path.join(data_directory(require_frontend=False), ".app_secret_key")
 
     os.makedirs(os.path.dirname(secret_path), exist_ok=True)
     try:
@@ -66,7 +64,7 @@ CORS(
     app,
     resources={
         r"/api/*": {
-            "origins": cors_origins,
+            "origins": [] if is_desktop() else cors_origins,
             "allow_headers": [
                 "Content-Type",
                 "X-Client-Surface",
@@ -80,13 +78,7 @@ CORS(
 )
 
 # 前端静态文件路径
-if os.path.exists('/app/frontend/index.html'):
-    FRONTEND_DIR = '/app/frontend'
-else:
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    FRONTEND_DIR = os.path.join(BASE_DIR, 'frontend')
-
-FRONTEND_PATH = os.path.join(FRONTEND_DIR, 'index.html')
+FRONTEND_DIR = frontend_directory()
 
 # ==========================================
 # 导入并注册所有路由模块
@@ -235,10 +227,7 @@ def uploaded_file(filename):
         )
         return send_from_directory(root, filename.removeprefix('bank-cards/icons/'))
 
-    upload_root = '/app/uploads'
-    if not os.path.isdir(upload_root):
-        upload_root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'uploads')
-    return send_from_directory(upload_root, filename)
+    return send_from_directory(upload_directory(require_frontend=False), filename)
 
 # ==========================================
 # 前端静态文件路由（必须放在最后）

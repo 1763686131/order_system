@@ -103,6 +103,28 @@
 
 ## 快速开始
 
+### Windows 单文件演示版
+
+在 Windows 10/11（x64）双击 `OrderSystem-Demo.exe`，选择「仅本机」或「局域网启动」。EXE 内置服务端和网页，运行时无需安装 Python、Node.js 或 Docker。
+
+启动器会打开本机网页，首次使用时按提示创建管理员。选择「局域网启动」后，同一内网中的电脑或手机可在浏览器打开窗口显示的地址，例如 `http://192.168.1.23:17899`，登录后查看和录入数据。保持服务窗口运行，点击「退出」即停止服务。
+
+Windows 防火墙拦截时，可在可信的专用网络中允许该 EXE 入站访问。局域网模式使用 HTTP，适合可信内网演示。默认端口为 `17899`，被占用时以窗口显示的实际端口为准。
+
+首次启动生成空白业务数据库。数据库、附件和日志存放在服务端的 `%LOCALAPPDATA%\OrderSystemDemo`，重新启动或更换 EXE 后仍可继续使用。
+
+改完功能后，在资源管理器中双击 [build-windows-exe.bat](scripts/build-windows-exe.bat) 即可重新打包。脚本会使用 `.exe-build.local\venv` 中的 Python，完成或报错后会保留窗口。
+
+在新开发机上，先安装 Node.js 和 Windows x64 Python 3.12 或 3.13，在项目根目录配置一次打包环境：
+
+```powershell
+npm ci
+py -3.13 -m venv .exe-build.local\venv
+.\.exe-build.local\venv\Scripts\python.exe -m pip install -r backend/requirements.txt -r scripts/windows-exe-requirements.txt
+```
+
+使用 Python 3.12 时，将上面的 `-3.13` 改为 `-3.12`。产物为 `release/windows/OrderSystem-Demo.exe`，重新打包前请退出正在从该目录运行的演示版。
+
 ### 环境要求
 
 - Node.js `20.19.0+` 或 `22.12.0+`
@@ -195,6 +217,9 @@ Windows 本地环境可运行：
 order_system/
 ├─ backend/
 │  ├─ app.py                         # Flask 入口、蓝图注册和静态文件服务
+│  ├─ desktop.py                     # Windows EXE 入口，初始化数据目录、启动服务并打开浏览器
+│  ├─ desktop_dialog.py              # Windows 原生启动选项、访问地址和退出窗口
+│  ├─ desktop_network.py             # 本机与局域网监听、端口选择和请求访问限制
 │  ├─ routes/
 │  │  ├─ auth.py                     # 初始化、登录、退出、当前账号和密码修改
 │  │  ├─ access.py                   # 权限目录、角色组、成员和数据范围
@@ -250,6 +275,8 @@ order_system/
 │  │  ├─ ai_secrets.py               # AI 密钥 Fernet 加密、解密和旧配置兼容
 │  │  ├─ user_helpers.py             # 当前用户和账号关系辅助逻辑
 │  │  ├─ db.py                       # SQLite 连接、建表和结构升级
+│  │  ├─ base_schema.py              # EXE 首次启动时创建空库所需的基础业务表
+│  │  ├─ runtime_paths.py            # 区分 EXE、本地 Python 和 Docker 的网页、数据及附件路径
 │  │  ├─ supplier_ledger.py          # 采购入库应付、供应商流水和来源汇总
 │  │  ├─ supplier_settlement.py      # 付款、余额核销、银行及发票共同校验
 │  │  ├─ purchase_pricing.py         # 采购含税单价、税额和金额计算
@@ -305,6 +332,9 @@ order_system/
 │  │  │  └─ GuGuTouchTools.vue       # 触屏悬浮、日期筛选、原材料录入入口和退出登录
 │  │  ├─ admin/
 │  │  │  ├─ BusinessDocumentForm.vue # 销售、销售退货、采购申请、采购入库和采购退货共用录入界面
+│  │  │  ├─ AdminTutorialManual.vue  # 后台教程手册、按权限显示主题并切换引导步骤
+│  │  │  ├─ TutorialSpotlight.vue     # 实时高亮页面目标并显示逐步操作提示
+│  │  │  ├─ tutorialTopics.js         # 教程顺序、跳转路线、目标元素与各步说明
 │  │  │  ├─ MobileOrderCreateWizard.vue # 移动端新增销售订单的门店、客户、仓库和单据信息问答
 │  │  │  ├─ MobileOrderEditor.vue    # 移动端订单草稿、商品搜索与明细弹窗、金额计算和最终提交
 │  │  │  ├─ MaterialOutboundAuditModal.vue # 原材料出库后台新增、修改与批量明细
@@ -405,6 +435,12 @@ order_system/
 ├─ Settings/
 │  └─ order-backend.tar              # 后端 Docker 离线镜像，包含 Python 运行环境和依赖
 ├─ docs/
+│  ├─ screenshots/                   # README 界面预览使用的网页截图
+│  │  ├─ dashboard.png               # 后台经营概览
+│  │  ├─ sales-orders.png            # 销售订单列表与筛选
+│  │  ├─ finished-stock.png          # 成品库存与库存汇总
+│  │  ├─ tutorial-guide.png           # 新建门店的实时高亮引导
+│  │  └─ mobile-orders.png           # 手机端销售订单卡片与商品明细
 │  ├─ API接口文档.md                 # 完整 API 参数、响应、权限和业务规则
 │  ├─ BUG及优化文档.md               # 问题与优化记录
 │  ├─ 打印机项目实现.md              # 打印模板、预览、浏览器打印和 C-Lodop 实现
@@ -434,6 +470,38 @@ order_system/
 ├─ 版本更新日志.md
 └─ README.md
 ```
+
+### 打包与部署
+
+```text
+order_system/
+├─ scripts/
+│  ├─ build-windows-exe.bat           # 在资源管理器中双击重新打包
+│  ├─ build-windows-exe.py            # 运行 Vite 构建，并用 PyInstaller 生成单文件 EXE
+│  └─ windows-exe-requirements.txt    # EXE 专用的 PyInstaller 和 Waitress 依赖
+├─ .exe-build.local/                 # 本机打包目录，由开发机生成
+│  ├─ venv/                           # 双击打包脚本使用的 Python 虚拟环境
+│  ├─ work/                           # PyInstaller 构建中间文件
+│  └─ OrderSystem-Demo.spec           # 打包脚本生成的 PyInstaller 配置
+├─ release/
+│  └─ windows/
+│     └─ OrderSystem-Demo.exe        # 生成的 Windows 单文件演示版
+├─ dist/                             # Vite 构建输出，作为 EXE 的网页资源
+├─ frontend/                         # 本地 Flask 和 Docker 部署读取的静态网页
+├─ vite.config.js                    # Vite 构建与开发代理配置
+├─ package.json                       # 前端依赖和构建命令
+├─ package-lock.json                  # 前端依赖锁定文件
+├─ backend/
+│  ├─ Dockerfile                     # 后端 Docker 镜像构建配置
+│  ├─ requirements.txt               # 本地 Python 和 Docker 的后端依赖
+│  └─ start.bat                      # Windows 本地 Docker 启动脚本
+├─ docker-compose.yml                # NAS 部署的服务及宿主机挂载配置
+├─ start-nas.sh                      # NAS 上的 Docker Compose 启动脚本
+└─ Settings/
+   └─ order-backend.tar              # 可选的 Docker 离线镜像
+```
+
+Windows EXE 的环境配置和双击打包步骤见 [Windows 单文件演示版](#windows-单文件演示版)。Docker 部署步骤见 [Docker 启动后端](#docker-启动后端)。
 
 ### 商品与库存菜单对应关系
 

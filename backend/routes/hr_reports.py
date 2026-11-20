@@ -11,20 +11,13 @@ import unicodedata
 from datetime import datetime, timedelta
 from utils.auth import current_identity
 from utils.db import get_db
-from utils.system_settings import get_report_path, inspect_directory, normalize_server_path
+from utils.system_settings import get_default_report_path, get_report_path, inspect_directory, normalize_server_path
 import mimetypes
 
 hr_reports_bp = Blueprint('hr_reports', __name__, url_prefix='/api/hr/reports')
 
-# 文件存储路径配置
-if os.path.exists('/app/frontend/index.html') and os.path.isdir('/app/uploads'):
-    UPLOAD_BASE_PATH = '/app/uploads/hr_reports'
-else:
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    UPLOAD_BASE_PATH = os.path.join(BASE_DIR, 'uploads', 'hr_reports')
-
 # 确保上传目录存在
-os.makedirs(UPLOAD_BASE_PATH, exist_ok=True)
+os.makedirs(get_default_report_path(), exist_ok=True)
 
 
 def get_reports_root():

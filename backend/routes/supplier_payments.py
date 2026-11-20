@@ -8,6 +8,7 @@ from flask import Blueprint, current_app, jsonify, request, send_from_directory
 
 from utils.auth import current_identity, require_admin_permission, require_any_admin_permission
 from utils.db import get_db
+from utils.runtime_paths import upload_directory
 from utils.supplier_ledger import (
     FinanceError, amount, balance, business_date, cents, check_scope, effective_sql,
     idempotent_result, now, save_operation, scope_sql,
@@ -458,10 +459,7 @@ def attachment_root():
     configured = current_app.config.get("SUPPLIER_FINANCE_UPLOAD_DIR")
     if configured:
         return configured
-    root = "/app/uploads" if os.path.isdir("/app/uploads") else os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads"
-    )
-    return os.path.join(root, "supplier-finance")
+    return os.path.join(upload_directory(require_frontend=False), "supplier-finance")
 
 
 @supplier_payments_bp.route("/supplier-finance/attachments/<token>")

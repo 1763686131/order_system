@@ -17,6 +17,7 @@ from utils.bank_account_helpers import (
     resolve_settlement_account,
 )
 from utils.system_settings import get_payment_receipt_attachment_path
+from utils.runtime_paths import upload_directory
 
 
 payment_receipts_bp = Blueprint(
@@ -29,13 +30,7 @@ MONEY_QUANT = Decimal('0.01')
 _write_lock = threading.Lock()
 ALLOWED_IMAGE_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.webp', '.gif'}
 
-if os.path.exists('/app/frontend/index.html') and os.path.isdir('/app/uploads'):
-    BASE_UPLOAD_DIR = '/app/uploads'
-else:
-    BASE_UPLOAD_DIR = os.path.join(
-        os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-        'uploads'
-    )
+BASE_UPLOAD_DIR = upload_directory()
 
 
 def _money(value, field_name='金额'):

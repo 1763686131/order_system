@@ -4,33 +4,26 @@ import os
 from datetime import datetime
 
 from utils.db import get_db
+from utils.runtime_paths import is_desktop, upload_directory
 
 
 REPORT_PATH_KEY = "reports.path"
-DEFAULT_DOCUMENT_PATH = "/var/data/documents"
-DEFAULT_RECEIPT_PATH = "/var/data/receipts"
-
-
-def _default_upload_root():
-    if os.path.exists("/app/frontend/index.html") and os.path.isdir("/app/uploads"):
-        return "/app/uploads"
-    project_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
-    return os.path.join(project_root, "uploads")
+_UPLOAD_ROOT = upload_directory()
+DEFAULT_DOCUMENT_PATH = os.path.join(_UPLOAD_ROOT, "documents") if is_desktop() else "/var/data/documents"
+DEFAULT_RECEIPT_PATH = os.path.join(_UPLOAD_ROOT, "receipts") if is_desktop() else "/var/data/receipts"
 
 
 DEFAULT_BANK_CARD_BG_PATH = os.path.join(
-    _default_upload_root(), "bank-cards", "backgrounds"
+    _UPLOAD_ROOT, "bank-cards", "backgrounds"
 )
 DEFAULT_BANK_ICON_PATH = os.path.join(
-    _default_upload_root(), "bank-cards", "icons"
+    _UPLOAD_ROOT, "bank-cards", "icons"
 )
 DEFAULT_PAYMENT_RECEIPT_ATTACHMENT_PATH = os.path.join(
-    _default_upload_root(), "payment-receipts"
+    _UPLOAD_ROOT, "payment-receipts"
 )
 DEFAULT_SUPPLIER_PAYMENT_ATTACHMENT_PATH = os.path.join(
-    _default_upload_root(), "supplier-payments"
+    _UPLOAD_ROOT, "supplier-payments"
 )
 PAYMENT_RECEIPT_ATTACHMENT_PATH_KEY = "payment_receipts.attachment_path"
 SUPPLIER_PAYMENT_ATTACHMENT_PATH_KEY = "supplier_payments.attachment_path"
@@ -38,11 +31,7 @@ SUPPLIER_PAYMENT_ATTACHMENT_PATH_KEY = "supplier_payments.attachment_path"
 
 def get_default_report_path():
     """Return the path used before an administrator chooses a custom folder."""
-    if os.path.exists("/app/frontend/index.html") and os.path.isdir("/app/uploads"):
-        return "/app/uploads/hr_reports"
-
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    return os.path.join(project_root, "uploads", "hr_reports")
+    return os.path.join(_UPLOAD_ROOT, "hr_reports")
 
 
 def get_setting(key, default=""):

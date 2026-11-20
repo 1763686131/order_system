@@ -6,15 +6,9 @@ import json
 import sqlite3
 from contextlib import contextmanager
 from threading import Lock
+from utils.runtime_paths import data_directory
 
-# 数据库路径配置
-# utils/db.py -> backend/utils/ -> backend/ -> project_root/
-if os.path.exists('/app/frontend/index.html') and os.path.isdir('/app/data'):
-    DB_PATH = '/app/data/order_system.db'
-else:
-    # 从 backend/utils/ 向上两级到项目根目录，再进入 data/
-    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    DB_PATH = os.path.join(project_root, 'data', 'order_system.db')
+DB_PATH = os.path.join(data_directory(), 'order_system.db')
 
 _schema_lock = Lock()
 _schema_ready = False

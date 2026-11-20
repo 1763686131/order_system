@@ -6,6 +6,7 @@ import os
 import re
 import uuid
 from datetime import datetime
+from utils.runtime_paths import upload_directory
 
 
 MAX_AVATAR_BYTES = 5 * 1024 * 1024
@@ -18,16 +19,7 @@ _DATA_URL_PATTERN = re.compile(
 )
 
 
-def _upload_root():
-    if os.path.exists("/app/frontend/index.html") and os.path.isdir("/app/uploads"):
-        return "/app/uploads"
-    project_root = os.path.dirname(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
-    return os.path.join(project_root, "uploads")
-
-
-UPLOAD_ROOT = _upload_root()
+UPLOAD_ROOT = upload_directory()
 AVATAR_ROOT = os.path.join(UPLOAD_ROOT, AVATAR_DIRECTORY_NAME)
 
 
